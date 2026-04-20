@@ -2,7 +2,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
   @moduledoc """
   ReAct tool the LLM can call to search long-term memory.
 
-  Calls `Gralkor.Client.memory_search/3` with `group_id` sanitized
+  Calls the client's `memory_search/3` callback with `group_id` sanitized
   from `context[:agent_id]` and `session_id` read from `context[:session_id]`
   (planted by `JidoGralkor.Plugin` on `ai.react.query` — the Jido thread id).
 

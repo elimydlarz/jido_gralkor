@@ -82,3 +82,30 @@ JidoGralkor.Actions.MemoryAdd
   if the background Task's client call fails
     then the failure is logged (best-effort storage)
 ```
+
+### Actions.MemoryBuildIndices
+
+```
+JidoGralkor.Actions.MemoryBuildIndices
+  then the action's description tells the LLM DO NOT CALL unless the user has explicitly asked to rebuild Gralkor's graph indices (operator-maintenance action)
+  when invoked
+    then Gralkor.Client.impl().build_indices/0 is called (whole-graph, no arguments)
+    when the client returns {:ok, %{status: status}}
+      then the action result reports success with the status string
+    when the client returns {:error, reason}
+      then the action returns {:error, reason} (propagated)
+```
+
+### Actions.MemoryBuildCommunities
+
+```
+JidoGralkor.Actions.MemoryBuildCommunities
+  then the action's description tells the LLM DO NOT CALL unless the user has explicitly asked to build Gralkor communities (expensive operator-maintenance action)
+  when invoked
+    then group_id is derived from context.agent_id via Gralkor.Client.sanitize_group_id/1
+    then Gralkor.Client.impl().build_communities/1 is called with that group_id
+    when the client returns {:ok, %{communities: c, edges: e}}
+      then the action result reports the community and edge counts
+    when the client returns {:error, reason}
+      then the action returns {:error, reason} (propagated)
+```

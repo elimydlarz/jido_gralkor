@@ -140,6 +140,8 @@ end
 - `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (recall) and `ai.request.completed` / `ai.request.failed` (capture). Stateless — `mount/2` returns `{:ok, nil}`.
 - `JidoGralkor.Actions.MemorySearch` — `use Jido.Action, name: "memory_search"`. The ReAct tool. Short-circuits when no thread is committed yet.
 - `JidoGralkor.Actions.MemoryAdd` — `use Jido.Action, name: "memory_add"`. Fire-and-forget.
+- `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description explicitly tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
+- `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's partition.
 
 Detailed behaviour lives in [`CLAUDE.md`](./CLAUDE.md) under `## Test Trees`.
 
