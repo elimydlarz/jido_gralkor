@@ -104,7 +104,7 @@ defmodule JidoGralkor.CanonicalTest do
       events = [
         %{
           kind: :llm_completed,
-          data: %{text:[%{type: "text", text: "hello"}, %{type: "text", text: "world"}]}
+          data: %{text: [%{type: "text", text: "hello"}, %{type: "text", text: "world"}]}
         }
       ]
 
