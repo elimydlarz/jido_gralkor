@@ -71,7 +71,7 @@ defmodule JidoGralkor.CanonicalTest do
     test "ignores events whose :kind is not memory-worthy" do
       events = [
         %{kind: :telemetry_ping, data: %{anything: "x"}},
-        %{kind: :llm_completed, data: %{text:"kept"}}
+        %{kind: :llm_completed, data: %{text: "kept"}}
       ]
 
       behaviours =
