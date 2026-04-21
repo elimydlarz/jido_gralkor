@@ -151,7 +151,7 @@ defmodule JidoGralkor.Plugin do
   end
 
   defp inject_session_id(%Signal{data: data} = signal, session_id) do
-    existing_context = Map.get(data, :tool_context, %{}) || %{}
+    existing_context = Map.get(data, :tool_context, %{})
     new_context = Map.put(existing_context, :session_id, session_id)
     %{signal | data: Map.put(data, :tool_context, new_context)}
   end
