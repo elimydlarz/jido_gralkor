@@ -102,7 +102,7 @@ defmodule MyApp.ChatAgent do
 end
 ```
 
-That's it. The plugin's `:__memory__` slot replaces Jido's built-in memory plugin. Your agent now auto-recalls relevant facts before every LLM call, auto-captures every turn after completion (the ReAct event trace is normalised into Gralkor's canonical `{role, content}` message shape via `JidoGralkor.Canonical` — `user`, `behaviour` for thinking / tool calls / tool results, `assistant` for the final answer), and exposes `memory_search` / `memory_add` as callable tools.
+That's it. The plugin's `:__memory__` slot replaces Jido's built-in memory plugin. Your agent now auto-recalls relevant facts before every LLM call, auto-captures every turn after completion or failure (the ReAct event trace is normalised into Gralkor's canonical `{role, content}` message shape via `JidoGralkor.Canonical` — `user`, `behaviour` for thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` message on failed turns so the failure stays visible to downstream distillation), and exposes `memory_search` / `memory_add` as callable tools.
 
 ## What happens at runtime
 
