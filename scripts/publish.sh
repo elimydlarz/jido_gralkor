@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 level="${1:-}"
 if [[ -z "$level" || ! "$level" =~ ^(major|minor|patch|current)$ ]]; then
-  echo "Usage: mix publish <major|minor|patch|current>" >&2
+  echo "Usage: ./scripts/publish.sh <major|minor|patch|current>" >&2
   exit 1
 fi
 
