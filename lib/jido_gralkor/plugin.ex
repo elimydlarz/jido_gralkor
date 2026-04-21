@@ -22,10 +22,16 @@ defmodule JidoGralkor.Plugin do
   turn completes.
 
   Capture fires on `ai.request.completed` / `ai.request.failed`: the
-  full request trace and assistant answer are bundled into a turn and
-  sent to Gralkor, which keeps the rolling conversation buffer
-  server-side keyed by `session_id`. Capture is skipped if the thread
-  isn't present (first-turn failure with nothing committed).
+  full request trace and assistant answer are normalised via
+  `JidoGralkor.Canonical.to_messages/3` into Gralkor's canonical
+  `[%Gralkor.Message{role, content}]` shape and shipped to the server,
+  which keeps the rolling conversation buffer keyed by `session_id`.
+  The `<gralkor-memory>…</gralkor-memory>` recall envelope this plugin
+  prepended earlier in the turn is stripped during canonicalisation
+  so recalled facts don't appear in the episode body and feed back
+  through Graphiti extraction. Capture is skipped if the thread isn't
+  present (first-turn failure with nothing committed) or if the
+  canonical message list is empty.
 
   Gralkor errors raise — the caller sees the real error, per the
   project's fail-fast rule.
@@ -40,9 +46,14 @@ defmodule JidoGralkor.Plugin do
     description: "Gralkor-backed long-term memory",
     capabilities: [:memory]
 
+  require Logger
+
   alias Gralkor.Client
+  alias JidoGralkor.Canonical
   alias Jido.AI.Request
   alias Jido.Signal
+
+  @no_thread_warning_hint "jido_ai commits state.thread on :request_completed, not at :ai.react.query — see susu-2 JIDO_CHANGE_SUGGESTIONS.md §2"
 
   @impl Jido.Plugin
   def mount(_agent, _config), do: {:ok, nil}
@@ -54,6 +65,10 @@ defmodule JidoGralkor.Plugin do
 
     case thread_id(agent) do
       nil ->
+        Logger.warning(
+          "[jido_gralkor] skipping recall — no thread committed yet for agent #{inspect(agent.id)} (#{@no_thread_warning_hint})"
+        )
+
         {:ok, :continue}
 
       session_id ->
@@ -94,6 +109,10 @@ defmodule JidoGralkor.Plugin do
         :ok
 
       is_nil(thread_id(agent)) ->
+        Logger.warning(
+          "[jido_gralkor] skipping capture — no thread committed yet for agent #{inspect(agent.id)} (#{@no_thread_warning_hint})"
+        )
+
         :ok
 
       true ->
@@ -103,18 +122,18 @@ defmodule JidoGralkor.Plugin do
             _ -> ""
           end
 
-        group_id = Client.sanitize_group_id(agent.id)
-        session_id = thread_id(agent)
+        messages = Canonical.to_messages(user_query, events, assistant_answer || "")
 
-        turn = %{
-          user_query: user_query,
-          assistant_answer: assistant_answer || "",
-          events: events
-        }
+        if messages == [] do
+          :ok
+        else
+          group_id = Client.sanitize_group_id(agent.id)
+          session_id = thread_id(agent)
 
-        case Client.impl().capture(session_id, group_id, turn) do
-          :ok -> :ok
-          {:error, reason} -> raise "Gralkor capture failed: #{inspect(reason)}"
+          case Client.impl().capture(session_id, group_id, messages) do
+            :ok -> :ok
+            {:error, reason} -> raise "Gralkor capture failed: #{inspect(reason)}"
+          end
         end
     end
   end

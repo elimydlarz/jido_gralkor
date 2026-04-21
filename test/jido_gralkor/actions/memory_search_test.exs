@@ -1,6 +1,8 @@
 defmodule JidoGralkor.Actions.MemorySearchTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
+
   alias Gralkor.Client.InMemory
   alias JidoGralkor.Actions.MemorySearch
 
@@ -43,21 +45,33 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   end
 
   describe "when session_id is absent from context (first query before a thread is committed)" do
-    test "returns an explicit non-result message and does not call the client" do
-      assert {:ok, %{result: result}} =
-               MemorySearch.run(%{query: "q"}, %{agent_id: "01USER"})
+    test "returns an explicit non-result message, does not call the client, and logs a warning" do
+      log =
+        capture_log(fn ->
+          assert {:ok, %{result: result}} =
+                   MemorySearch.run(%{query: "q"}, %{agent_id: "01USER"})
 
-      assert result =~ "NON-RESULT"
-      assert result =~ "long-term memory was NOT queried"
+          assert result =~ "NON-RESULT"
+          assert result =~ "long-term memory was NOT queried"
+        end)
+
       assert InMemory.searches() == []
+      assert log =~ "[jido_gralkor] memory_search short-circuited"
+      assert log =~ "01USER"
+      assert log =~ "JIDO_CHANGE_SUGGESTIONS.md"
     end
 
     test "same when session_id is blank" do
-      assert {:ok, %{result: result}} =
-               MemorySearch.run(%{query: "q"}, %{agent_id: "01USER", session_id: ""})
+      log =
+        capture_log(fn ->
+          assert {:ok, %{result: result}} =
+                   MemorySearch.run(%{query: "q"}, %{agent_id: "01USER", session_id: ""})
 
-      assert result =~ "NON-RESULT"
+          assert result =~ "NON-RESULT"
+        end)
+
       assert InMemory.searches() == []
+      assert log =~ "[jido_gralkor] memory_search short-circuited"
     end
   end
 end

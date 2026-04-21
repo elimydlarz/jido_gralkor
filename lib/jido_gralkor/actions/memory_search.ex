@@ -23,14 +23,22 @@ defmodule JidoGralkor.Actions.MemorySearch do
       query: [type: :string, required: true, doc: "The search query"]
     ]
 
+  require Logger
+
   alias Gralkor.Client
 
   @no_session_result "Memory search did not run: this conversation's session has not been established yet. This is a NON-RESULT, not an empty result — long-term memory was NOT queried. Do not claim you have no memory of prior interactions; either tell the user you cannot check memory right now, or answer without relying on prior context."
+
+  @no_session_warning_hint "jido_ai commits state.thread on :request_completed, not at :ai.react.query — see susu-2 JIDO_CHANGE_SUGGESTIONS.md §2"
 
   @impl true
   def run(%{query: query}, context) do
     case Map.get(context, :session_id) do
       blank when blank in [nil, ""] ->
+        Logger.warning(
+          "[jido_gralkor] memory_search short-circuited — no session_id in ReAct tool context for agent #{inspect(Map.get(context, :agent_id))} (#{@no_session_warning_hint})"
+        )
+
         {:ok, %{result: @no_session_result}}
 
       session_id ->
