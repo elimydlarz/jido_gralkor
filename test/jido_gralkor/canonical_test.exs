@@ -50,9 +50,9 @@ defmodule JidoGralkor.CanonicalTest do
 
     test "preserves event order in the emitted behaviour messages" do
       events = [
-        %{kind: :llm_completed, data: %{text:"first thought"}},
+        %{kind: :llm_completed, data: %{text: "first thought"}},
         %{kind: :tool_completed, data: %{tool_name: "t", result: "r"}},
-        %{kind: :llm_completed, data: %{text:"second thought"}}
+        %{kind: :llm_completed, data: %{text: "second thought"}}
       ]
 
       behaviours =
