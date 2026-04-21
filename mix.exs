@@ -50,8 +50,20 @@ defmodule JidoGralkor.MixProject do
     [
       "test.unit": ["test --exclude integration --exclude functional"],
       "test.integration": ["test --only integration"],
-      "test.functional": ["test --only functional"]
+      "test.functional": ["test --only functional"],
+      publish: &publish/1
     ]
+  end
+
+  defp publish(args) do
+    level =
+      case args do
+        [l] when l in ["major", "minor", "patch", "current"] -> l
+        _ -> Mix.raise("Usage: mix publish <major|minor|patch|current>")
+      end
+
+    {_, 0} =
+      System.cmd("bash", ["scripts/publish.sh", level], into: IO.stream(:stdio, :line))
   end
 
   defp description do
