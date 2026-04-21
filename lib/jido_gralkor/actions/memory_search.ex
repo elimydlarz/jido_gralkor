@@ -42,7 +42,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
         {:ok, %{result: @no_session_result}}
 
       session_id ->
-        group_id = context |> Map.get(:agent_id, "") |> Client.sanitize_group_id()
+        group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
 
         case Client.impl().memory_search(group_id, session_id, query) do
           {:ok, text} -> {:ok, %{result: text}}
