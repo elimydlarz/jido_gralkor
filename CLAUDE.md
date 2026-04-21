@@ -79,23 +79,30 @@ JidoGralkor.Plugin
 
 ```
 JidoGralkor.Canonical.to_messages/3
-  when both the user query and the assistant answer are empty and there are no events
-    then returns []
-  when the user query wraps a <gralkor-memory>…</gralkor-memory> envelope
-    then the envelope is stripped before the user message is emitted
-  when the events contain a :llm_completed event
-    then a behaviour message with "thought: <text>" is emitted, preserving order
-  when the events contain a :tool_completed event
-    then a behaviour message with "tool <name> → <result>" is emitted, preserving order
-  when the events contain an unknown :kind
-    then that event is ignored (telemetry-only signals don't become memory)
-  when the assistant answer is empty
-    then no trailing assistant message is emitted
-  when the assistant answer is present
-    then the final message is an assistant-role message with the trimmed answer
-  then messages are ordered user → behaviour(s) → assistant
-  when an LLM event carries Anthropic-style list-shaped content blocks
-    then the text blocks are concatenated with spaces into the rendered "thought: …" message
+  when the outcome is {:completed, answer}
+    when user query, answer, and events are all empty
+      then returns []
+    when the user query wraps a <gralkor-memory>…</gralkor-memory> envelope
+      then the envelope is stripped before the user message is emitted
+    when the events contain a :llm_completed event
+      then a behaviour message with "thought: <text>" is emitted, preserving order
+    when the events contain a :tool_completed event
+      then a behaviour message with "tool <name> → <result>" is emitted, preserving order
+    when the events contain an unknown :kind
+      then that event is ignored (telemetry-only signals don't become memory)
+    when the answer is empty
+      then no trailing assistant message is emitted
+    when the answer is present
+      then the final message is an assistant-role message with the trimmed answer
+    then messages are ordered user → behaviour(s) → assistant
+    when an LLM event carries Anthropic-style list-shaped content blocks
+      then the text blocks are concatenated with spaces into the rendered "thought: …" message
+  when the outcome is {:failed, error}
+    then a terminal behaviour message "request failed: <error>" is emitted in place of the
+      assistant message, so the failure is visible to downstream distillation rather than the
+      turn ending in silence (error rendered via the same formatter used for tool results)
+    then no assistant-role message is emitted
+    then messages are ordered user → behaviour(s from events) → "request failed: …"
 ```
 
 ### Actions.MemorySearch
