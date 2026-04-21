@@ -19,7 +19,7 @@ defmodule JidoGralkor.CanonicalTest do
     end
 
     test "emits a 'thought: …' behaviour message for :llm_completed events" do
-      events = [%{kind: :llm_completed, data: %{content: "considering options"}}]
+      events = [%{kind: :llm_completed, data: %{text:"considering options"}}]
 
       messages = Canonical.to_messages("q", events, "a")
 
@@ -50,9 +50,9 @@ defmodule JidoGralkor.CanonicalTest do
 
     test "preserves event order in the emitted behaviour messages" do
       events = [
-        %{kind: :llm_completed, data: %{content: "first thought"}},
+        %{kind: :llm_completed, data: %{text:"first thought"}},
         %{kind: :tool_completed, data: %{tool_name: "t", result: "r"}},
-        %{kind: :llm_completed, data: %{content: "second thought"}}
+        %{kind: :llm_completed, data: %{text:"second thought"}}
       ]
 
       behaviours =
@@ -71,7 +71,7 @@ defmodule JidoGralkor.CanonicalTest do
     test "ignores events whose :kind is not memory-worthy" do
       events = [
         %{kind: :telemetry_ping, data: %{anything: "x"}},
-        %{kind: :llm_completed, data: %{content: "kept"}}
+        %{kind: :llm_completed, data: %{text:"kept"}}
       ]
 
       behaviours =
@@ -90,7 +90,7 @@ defmodule JidoGralkor.CanonicalTest do
 
     test "orders messages user → behaviour(s) → assistant" do
       events = [
-        %{kind: :llm_completed, data: %{content: "t"}},
+        %{kind: :llm_completed, data: %{text:"t"}},
         %{kind: :tool_completed, data: %{tool_name: "x", result: "r"}}
       ]
 
@@ -104,7 +104,7 @@ defmodule JidoGralkor.CanonicalTest do
       events = [
         %{
           kind: :llm_completed,
-          data: %{content: [%{type: "text", text: "hello"}, %{type: "text", text: "world"}]}
+          data: %{text:[%{type: "text", text: "hello"}, %{type: "text", text: "world"}]}
         }
       ]
 
