@@ -17,6 +17,12 @@ def deps do
 end
 ```
 
+Then fetch:
+
+```bash
+mix deps.get
+```
+
 This transitively pulls `:jido`, `:jido_ai`, and `:gralkor_ex`.
 
 ## Required configuration
