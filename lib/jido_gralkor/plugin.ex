@@ -59,9 +59,11 @@ defmodule JidoGralkor.Plugin do
   def mount(_agent, _config), do: {:ok, nil}
 
   @impl Jido.Plugin
-  def handle_signal(%Signal{type: "ai.react.query", data: data} = signal, %{agent: agent}) do
+  def handle_signal(
+        %Signal{type: "ai.react.query", data: %{query: query}} = signal,
+        %{agent: agent}
+      ) do
     group_id = Client.sanitize_group_id(agent.id)
-    query = Map.get(data, :query, "")
 
     case thread_id(agent) do
       nil ->
