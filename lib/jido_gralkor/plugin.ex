@@ -90,15 +90,33 @@ defmodule JidoGralkor.Plugin do
     end
   end
 
-  def handle_signal(%Signal{type: type, data: data}, %{agent: agent})
-      when type in ["ai.request.completed", "ai.request.failed"] do
-    capture_turn(agent, Map.get(data, :request_id), Map.get(data, :result, ""))
+  def handle_signal(
+        %Signal{
+          type: "ai.request.completed",
+          data: %{request_id: request_id, result: result}
+        },
+        %{agent: agent}
+      )
+      when is_binary(request_id) and is_binary(result) do
+    capture_turn(agent, request_id, {:completed, result})
+    {:ok, :continue}
+  end
+
+  def handle_signal(
+        %Signal{
+          type: "ai.request.failed",
+          data: %{request_id: request_id, error: error}
+        },
+        %{agent: agent}
+      )
+      when is_binary(request_id) do
+    capture_turn(agent, request_id, {:failed, error})
     {:ok, :continue}
   end
 
   def handle_signal(_signal, _context), do: {:ok, :continue}
 
-  defp capture_turn(agent, request_id, assistant_answer) when is_binary(request_id) do
+  defp capture_turn(agent, request_id, outcome) do
     events =
       agent.state
       |> Map.get(:__strategy__, %{})
@@ -126,7 +144,7 @@ defmodule JidoGralkor.Plugin do
             _ -> ""
           end
 
-        case Canonical.to_messages(user_query, events, assistant_answer || "") do
+        case Canonical.to_messages(user_query, events, outcome) do
           [] ->
             :ok
 
@@ -140,8 +158,6 @@ defmodule JidoGralkor.Plugin do
         end
     end
   end
-
-  defp capture_turn(_agent, _request_id, _answer), do: :ok
 
   defp thread_id(agent) do
     case Map.get(agent.state, :__thread__) do
