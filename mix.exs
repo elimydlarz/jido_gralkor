@@ -13,15 +13,20 @@ defmodule JidoGralkor.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       aliases: aliases(),
-      preferred_cli_env: [
-        "test.unit": :test,
-        "test.integration": :test,
-        "test.functional": :test
-      ],
       description: description(),
       package: package(),
       source_url: @source_url,
       docs: docs()
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        "test.unit": :test,
+        "test.integration": :test,
+        "test.functional": :test
+      ]
     ]
   end
 
