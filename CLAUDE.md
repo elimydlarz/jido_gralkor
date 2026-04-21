@@ -51,7 +51,7 @@ JidoGralkor.Plugin
         jido_ai fix (susu-2 JIDO_CHANGE_SUGGESTIONS.md §2) — once that lands, this skip
         path and its warning both go away
   when an agent turn completes
-    then the user query, event trace, and assistant answer are normalised via
+    then the user query, event trace, and `{:completed, answer}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list is sent to
       Gralkor for capture with the thread's session_id and the principal's group_id
     when the turn's query was enriched with a recalled memory block earlier in the turn (so
@@ -60,7 +60,11 @@ JidoGralkor.Plugin
         original request rather than Gralkor's recall output round-tripping back through Graphiti
         extraction
   when an agent turn fails
-    then the turn is still canonicalised and sent to Gralkor for capture
+    then the user query, event trace, and `{:failed, error}` outcome are normalised via
+      `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list — ending in
+      a `"request failed: …"` behaviour message instead of an assistant message — is sent to
+      Gralkor for capture, so the failure is visible to downstream distillation rather than
+      silently dropped
     when the agent has no committed thread yet (first-turn failure)
       then capture is skipped
       and a Logger.warning is emitted naming the agent id and pointing at the upstream
