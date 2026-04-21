@@ -82,7 +82,7 @@ JidoGralkor.Canonical.to_messages/3
   when the events contain a :llm_completed event
     then a behaviour message with "thought: <text>" is emitted, preserving order
   when the events contain a :tool_completed event
-    then a behaviour message with "tool <name>(<input>) → <result>" is emitted, preserving order
+    then a behaviour message with "tool <name> → <result>" is emitted, preserving order
   when the events contain an unknown :kind
     then that event is ignored (telemetry-only signals don't become memory)
   when the assistant answer is empty
