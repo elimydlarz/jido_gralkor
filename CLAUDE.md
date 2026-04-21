@@ -15,7 +15,7 @@ Two direct Hex deps (three with `:ex_doc` for dev docs):
 
 - `{:jido, "~> 2.2"}` — `Jido.Plugin`, `Jido.Action`, `Jido.Signal` (struct + pattern match).
 - `{:jido_ai, "~> 2.1"}` — `Jido.AI.Request.get_request/2` (used once in the plugin to look up the user query for a completed `request_id`).
-- `{:gralkor_ex, "~> 1.3"}` — `Gralkor.Client` (behaviour + `sanitize_group_id/1` + `impl/0` resolver). The plugin calls `recall/3` + `capture/3`; actions call `memory_search/3` + `memory_add/3` + `build_indices/0` + `build_communities/1`. `end_session/1` and `health_check/0` are not used here — consumers call those directly from their own agent lifecycle / supervision tree.
+- `{:gralkor_ex, "~> 2.0"}` — `Gralkor.Client` (behaviour + `sanitize_group_id/1` + `impl/0` resolver). The plugin calls `recall/3` + `capture/3`; actions call `memory_search/3` + `memory_add/3` + `build_indices/0` + `build_communities/1`. `end_session/1` and `health_check/0` are not used here — consumers call those directly from their own agent lifecycle / supervision tree.
 
 ## Testing
 
