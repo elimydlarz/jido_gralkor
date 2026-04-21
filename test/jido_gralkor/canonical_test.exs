@@ -90,7 +90,7 @@ defmodule JidoGralkor.CanonicalTest do
 
     test "orders messages user → behaviour(s) → assistant" do
       events = [
-        %{kind: :llm_completed, data: %{text:"t"}},
+        %{kind: :llm_completed, data: %{text: "t"}},
         %{kind: :tool_completed, data: %{tool_name: "x", result: "r"}}
       ]
 
