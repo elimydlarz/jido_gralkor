@@ -20,18 +20,20 @@ defmodule JidoGralkor.Canonical do
 
   @memory_prefix ~r/<gralkor-memory[\s\S]*?<\/gralkor-memory>\n*/
 
+  @type outcome :: {:completed, String.t()} | {:failed, term()}
+
   @doc """
   Normalise a Jido/ReAct turn into a list of canonical Gralkor messages.
 
   Returns `[]` when there's nothing worth persisting — callers use that
   to skip the capture call entirely.
   """
-  @spec to_messages(String.t(), list(map()), String.t()) :: [Message.t()]
-  def to_messages(user_query, events, assistant_answer) do
+  @spec to_messages(String.t(), list(map()), outcome()) :: [Message.t()]
+  def to_messages(user_query, events, outcome) do
     []
     |> prepend_message("user", strip_memory_prefix(user_query))
     |> prepend_behaviours(events)
-    |> prepend_message("assistant", assistant_answer)
+    |> prepend_outcome(outcome)
     |> Enum.reverse()
   end
 
@@ -40,6 +42,14 @@ defmodule JidoGralkor.Canonical do
       "" -> messages
       trimmed -> [Message.new(role, trimmed) | messages]
     end
+  end
+
+  defp prepend_outcome(messages, {:completed, answer}) when is_binary(answer) do
+    prepend_message(messages, "assistant", answer)
+  end
+
+  defp prepend_outcome(messages, {:failed, error}) do
+    [Message.new("behaviour", "request failed: " <> format_result(error)) | messages]
   end
 
   defp prepend_behaviours(messages, events) do
