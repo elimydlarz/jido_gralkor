@@ -106,11 +106,13 @@ defmodule JidoGralkor.Plugin do
       |> Map.get(request_id, %{events: []})
       |> Map.get(:events, [])
 
+    session_id = thread_id(agent)
+
     cond do
       events == [] ->
         :ok
 
-      is_nil(thread_id(agent)) ->
+      is_nil(session_id) ->
         Logger.warning(
           "[jido_gralkor] skipping capture — no thread committed yet for agent #{inspect(agent.id)} (#{@no_thread_warning_hint})"
         )
@@ -130,7 +132,6 @@ defmodule JidoGralkor.Plugin do
 
           messages ->
             group_id = Client.sanitize_group_id(agent.id)
-            session_id = thread_id(agent)
 
             case Client.impl().capture(session_id, group_id, messages) do
               :ok -> :ok
