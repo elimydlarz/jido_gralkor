@@ -138,7 +138,7 @@ end
 ## What's in the library
 
 - `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (recall) and `ai.request.completed` / `ai.request.failed` (capture). Stateless — `mount/2` returns `{:ok, nil}`.
-- `JidoGralkor.Canonical` — translates a Jido/ReAct turn (user query + event trace + assistant answer) into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape. Strips the `<gralkor-memory>…</gralkor-memory>` envelope the plugin prepended during recall, filters telemetry-only events, and renders surviving `:llm_completed` / `:tool_completed` events as `behaviour` messages. The server never sees Jido-shaped events; shape concerns live here.
+- `JidoGralkor.Canonical` — translates a Jido/ReAct turn (user query + event trace + turn outcome `{:completed, answer}` or `{:failed, error}`) into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape. Strips the `<gralkor-memory>…</gralkor-memory>` envelope the plugin prepended during recall, filters telemetry-only events, renders surviving `:llm_completed` / `:tool_completed` events as `behaviour` messages, and terminates the list with either an `assistant` answer (completed) or a `"request failed: …"` `behaviour` (failed). The server never sees Jido-shaped events; shape concerns live here.
 - `JidoGralkor.Actions.MemorySearch` — `use Jido.Action, name: "memory_search"`. The ReAct tool. Short-circuits when no thread is committed yet.
 - `JidoGralkor.Actions.MemoryAdd` — `use Jido.Action, name: "memory_add"`. Fire-and-forget.
 - `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description explicitly tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
