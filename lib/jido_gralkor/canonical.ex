@@ -26,42 +26,26 @@ defmodule JidoGralkor.Canonical do
   Returns `[]` when there's nothing worth persisting — callers use that
   to skip the capture call entirely.
   """
-  @spec to_messages(String.t() | nil, list(map()), String.t() | nil) :: [Message.t()]
+  @spec to_messages(String.t(), list(map()), String.t()) :: [Message.t()]
   def to_messages(user_query, events, assistant_answer) do
     []
-    |> maybe_append_user(user_query)
-    |> append_behaviours(events || [])
-    |> maybe_append_assistant(assistant_answer)
+    |> prepend_message("user", strip_memory_prefix(user_query))
+    |> prepend_behaviours(events)
+    |> prepend_message("assistant", assistant_answer)
+    |> Enum.reverse()
   end
 
-  defp maybe_append_user(messages, nil), do: messages
-
-  defp maybe_append_user(messages, query) when is_binary(query) do
-    cleaned = query |> strip_memory_prefix() |> String.trim()
-
-    if cleaned == "" do
-      messages
-    else
-      messages ++ [Message.new("user", cleaned)]
+  defp prepend_message(messages, role, content) do
+    case String.trim(content) do
+      "" -> messages
+      trimmed -> [Message.new(role, trimmed) | messages]
     end
   end
 
-  defp maybe_append_assistant(messages, nil), do: messages
-
-  defp maybe_append_assistant(messages, answer) when is_binary(answer) do
-    trimmed = String.trim(answer)
-
-    if trimmed == "" do
-      messages
-    else
-      messages ++ [Message.new("assistant", trimmed)]
-    end
-  end
-
-  defp append_behaviours(messages, events) do
+  defp prepend_behaviours(messages, events) do
     events
     |> Enum.flat_map(&render_event/1)
-    |> Enum.reduce(messages, fn content, acc -> acc ++ [Message.new("behaviour", content)] end)
+    |> Enum.reduce(messages, fn content, acc -> [Message.new("behaviour", content) | acc] end)
   end
 
   defp render_event(%{kind: :llm_completed, data: data}) do
@@ -72,49 +56,29 @@ defmodule JidoGralkor.Canonical do
   end
 
   defp render_event(%{kind: :tool_completed, data: data}) do
-    name = Map.get(data, :tool_name) || Map.get(data, "tool_name") || "tool"
-    input = Map.get(data, :input) || Map.get(data, "input")
-    result = Map.get(data, :result) || Map.get(data, "result")
-
-    input_part =
-      case input do
-        nil -> ""
-        "" -> ""
-        other -> "(" <> inspect(other) <> ")"
-      end
+    name = Map.get(data, :tool_name, "tool")
 
     result_part =
-      case result do
+      case Map.get(data, :result) do
         nil -> ""
         "" -> ""
         other -> " → " <> format_result(other)
       end
 
-    ["tool " <> name <> input_part <> result_part]
+    ["tool " <> name <> result_part]
   end
 
-  defp render_event(%{kind: _}), do: []
   defp render_event(_), do: []
 
   defp extract_text(data) when is_map(data) do
-    value =
-      Map.get(data, :content) ||
-        Map.get(data, "content") ||
-        Map.get(data, :text) ||
-        Map.get(data, "text") ||
-        ""
-
-    cond do
-      is_binary(value) -> String.trim(value)
-      is_list(value) -> value |> Enum.map_join(" ", &stringify_block/1) |> String.trim()
-      true -> value |> inspect() |> String.trim()
+    case Map.get(data, :text, "") do
+      value when is_binary(value) -> String.trim(value)
+      value when is_list(value) -> value |> Enum.map_join(" ", &stringify_block/1) |> String.trim()
+      value -> value |> inspect() |> String.trim()
     end
   end
 
-  defp extract_text(_), do: ""
-
   defp stringify_block(%{text: text}) when is_binary(text), do: text
-  defp stringify_block(%{"text" => text}) when is_binary(text), do: text
   defp stringify_block(other) when is_binary(other), do: other
   defp stringify_block(other), do: inspect(other)
 
