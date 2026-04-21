@@ -152,6 +152,16 @@ end
 
 Detailed behaviour lives in [`CLAUDE.md`](https://github.com/elimydlarz/jido_gralkor/blob/main/CLAUDE.md) under `## Test Trees`.
 
+## Publishing (maintainers)
+
+Run the script directly — it needs a real TTY for Hex's OTP prompt:
+
+```bash
+./scripts/publish.sh patch   # or minor | major | current
+```
+
+Bumps `@version` in `mix.exs`, runs `mix hex.publish --yes`, commits the bump, and tags `jido-gralkor-v<version>` locally. Push with `git push --follow-tags`.
+
 ## License
 
 MIT.
