@@ -122,7 +122,7 @@ defmodule JidoGralkor.PluginTest do
       InMemory.set_capture(:ok)
 
       events = [
-        %{kind: :llm_completed, data: %{content: "thinking"}},
+        %{kind: :llm_completed, data: %{text: "thinking"}},
         %{kind: :tool_completed, data: %{tool_name: "memory_search", result: "..."}}
       ]
 
