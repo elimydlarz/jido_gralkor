@@ -19,7 +19,7 @@ defmodule JidoGralkor.CanonicalTest do
     end
 
     test "emits a 'thought: …' behaviour message for :llm_completed events" do
-      events = [%{kind: :llm_completed, data: %{text:"considering options"}}]
+      events = [%{kind: :llm_completed, data: %{text: "considering options"}}]
 
       messages = Canonical.to_messages("q", events, "a")
 
