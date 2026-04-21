@@ -122,18 +122,18 @@ defmodule JidoGralkor.Plugin do
             _ -> ""
           end
 
-        messages = Canonical.to_messages(user_query, events, assistant_answer || "")
+        case Canonical.to_messages(user_query, events, assistant_answer || "") do
+          [] ->
+            :ok
 
-        if messages == [] do
-          :ok
-        else
-          group_id = Client.sanitize_group_id(agent.id)
-          session_id = thread_id(agent)
+          messages ->
+            group_id = Client.sanitize_group_id(agent.id)
+            session_id = thread_id(agent)
 
-          case Client.impl().capture(session_id, group_id, messages) do
-            :ok -> :ok
-            {:error, reason} -> raise "Gralkor capture failed: #{inspect(reason)}"
-          end
+            case Client.impl().capture(session_id, group_id, messages) do
+              :ok -> :ok
+              {:error, reason} -> raise "Gralkor capture failed: #{inspect(reason)}"
+            end
         end
     end
   end
