@@ -12,26 +12,32 @@ defmodule JidoGralkor.Plugin do
   partitioning is per-principal.
 
   Recall fires on `ai.react.query`: if a thread is already committed in
-  agent state, recall Gralkor for the current thread's session; inject
-  the session id into the signal's `tool_context` so in-turn tool calls
-  (e.g. `MemorySearch`) key on the same session. On the very first
-  query of a fresh agent, `ThreadAgent.append` hasn't yet run (the
-  ReAct strategy calls it inside `@start`, after the plugin hook), so
-  there's nothing to recall against — the plugin passes the signal
-  through unchanged and lets capture establish the session when the
-  turn completes.
+  agent state, recall Gralkor for the current thread's session and
+  stash the returned memory block (when present) on the signal's
+  `tool_context` under the key `:__gralkor_memory__`. The thread's
+  session id is stashed alongside it under `:session_id` so in-turn
+  tool calls (e.g. `MemorySearch`) key on the same session. The
+  plugin does not mutate `:query` — the recalled memory is delivered
+  to the LLM by a request transformer at prompt-build time (see
+  `Jido.AI.Reasoning.ReAct.RequestTransformer` and
+  `Jido.AI.PromptBuilder`), keeping `:query` the user's actual words
+  everywhere downstream (buffer, request store, capture). On the very
+  first query of a fresh agent, `ThreadAgent.append` hasn't yet run
+  (the ReAct strategy calls it inside `@start`, after the plugin
+  hook), so there's nothing to recall against — the plugin passes the
+  signal through unchanged and lets capture establish the session
+  when the turn completes.
 
   Capture fires on `ai.request.completed` / `ai.request.failed`: the
   full request trace and assistant answer are normalised via
   `JidoGralkor.Canonical.to_messages/3` into Gralkor's canonical
   `[%Gralkor.Message{role, content}]` shape and shipped to the server,
   which keeps the rolling conversation buffer keyed by `session_id`.
-  The `<gralkor-memory>…</gralkor-memory>` recall envelope this plugin
-  prepended earlier in the turn is stripped during canonicalisation
-  so recalled facts don't appear in the episode body and feed back
-  through Graphiti extraction. Capture is skipped if the thread isn't
-  present (first-turn failure with nothing committed) or if the
-  canonical message list is empty.
+  Because nothing in the turn mutates `:query` to add harness context,
+  canonicalisation doesn't strip envelopes — the user message it
+  persists is the user's actual words. Capture is skipped if the
+  thread isn't present (first-turn failure with nothing committed) or
+  if the canonical message list is empty.
 
   Gralkor errors raise — the caller sees the real error, per the
   project's fail-fast rule.
@@ -74,15 +80,18 @@ defmodule JidoGralkor.Plugin do
         {:ok, :continue}
 
       session_id ->
-        signal_with_session = inject_session_id(signal, session_id)
+        signal_with_session = merge_tool_context(signal, %{session_id: session_id})
 
         case Client.impl().recall(group_id, session_id, query) do
           {:ok, nil} ->
             {:ok, {:continue, signal_with_session}}
 
           {:ok, memory_block} when is_binary(memory_block) ->
-            new_data = Map.put(signal_with_session.data, :query, memory_block <> "\n\n" <> query)
-            {:ok, {:continue, %{signal_with_session | data: new_data}}}
+            {:ok,
+             {:continue,
+              merge_tool_context(signal_with_session, %{
+                :__gralkor_memory__ => memory_block
+              })}}
 
           {:error, reason} ->
             raise "Gralkor recall failed: #{inspect(reason)}"
@@ -166,9 +175,9 @@ defmodule JidoGralkor.Plugin do
     end
   end
 
-  defp inject_session_id(%Signal{data: data} = signal, session_id) do
+  defp merge_tool_context(%Signal{data: data} = signal, extras) when is_map(extras) do
     existing_context = Map.get(data, :tool_context, %{})
-    new_context = Map.put(existing_context, :session_id, session_id)
+    new_context = Map.merge(existing_context, extras)
     %{signal | data: Map.put(data, :tool_context, new_context)}
   end
 end

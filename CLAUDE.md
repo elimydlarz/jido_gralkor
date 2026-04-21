@@ -4,8 +4,8 @@ Jido-side adapter for the Gralkor memory server. Ships three modules that let an
 
 ## Mental Model
 
-- **`JidoGralkor.Plugin`** — `use Jido.Plugin, name: "gralkor", state_key: :__memory__, singleton: true, actions: []`. Claims the `:__memory__` slot. Does recall on `ai.react.query` (prepends any returned memory block to the query; plants `session_id` on `tool_context`) and capture on `ai.request.completed` / `ai.request.failed`. For capture, the plugin hands the user query, the full ReAct event trace, and a turn outcome — `{:completed, answer}` or `{:failed, error}` — to `JidoGralkor.Canonical.to_messages/3`, which normalises the turn into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape (roles: `"user" | "assistant" | "behaviour"`). That list is what gets sent to Gralkor — the server has no opinion about Jido-shaped events. The two signal types are handled by separate `handle_signal` clauses that pattern-match their payload shape (`:result` vs `:error`); malformed signals fall through to the catchall. `session_id` is the current Jido thread id (read from `agent.state[:__thread__].id`, populated by `Jido.Thread.Plugin`) — the plugin does not mint its own identifier. `group_id` is `Gralkor.Client.sanitize_group_id(agent.id)` (per-principal memory partition). No plugin state — `mount/2` returns `{:ok, nil}`. Gralkor errors raise so callers see them per fail-fast. Consumers must mount `Jido.Thread.Plugin` on their `use Jido` supervisor; otherwise there's no thread id to read.
-- **`JidoGralkor.Canonical`** — the adapter-only module that translates a Jido/ReAct turn into Gralkor's canonical message shape. Strips the `<gralkor-memory>…</gralkor-memory>` envelope the plugin itself prepended during recall (so recalled facts don't leak into episodes), filters events that aren't memory-worthy, and renders surviving `:llm_completed` / `:tool_completed` events as `behaviour` messages with content the distillation LLM can read (`"thought: …"`, `"tool NAME → RESULT"`). The turn outcome terminates the message list: `{:completed, answer}` becomes the trailing `"assistant"` message; `{:failed, error}` becomes a terminal `"behaviour"` message `"request failed: …"` so the failure is visible to downstream distillation rather than silently swallowed. Returns `[]` when nothing is worth persisting; the plugin uses that to skip the capture call entirely.
+- **`JidoGralkor.Plugin`** — `use Jido.Plugin, name: "gralkor", state_key: :__memory__, singleton: true, actions: []`. Claims the `:__memory__` slot. Does recall on `ai.react.query` (stashes any returned memory block on the signal's `tool_context` under `:__gralkor_memory__`, alongside the thread's `:session_id`) and capture on `ai.request.completed` / `ai.request.failed`. The plugin never mutates `:query` — memory is delivered to the LLM by a `Jido.AI.Reasoning.ReAct.RequestTransformer` at prompt-build time (consumer-owned; see `Jido.AI.PromptBuilder`), so `:query` stays the user's actual words everywhere downstream (buffer, request store, capture). For capture, the plugin hands the user query, the full ReAct event trace, and a turn outcome — `{:completed, answer}` or `{:failed, error}` — to `JidoGralkor.Canonical.to_messages/3`, which normalises the turn into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape (roles: `"user" | "assistant" | "behaviour"`). That list is what gets sent to Gralkor — the server has no opinion about Jido-shaped events. The two signal types are handled by separate `handle_signal` clauses that pattern-match their payload shape (`:result` vs `:error`); malformed signals fall through to the catchall. `session_id` is the current Jido thread id (read from `agent.state[:__thread__].id`, populated by `Jido.Thread.Plugin`) — the plugin does not mint its own identifier. `group_id` is `Gralkor.Client.sanitize_group_id(agent.id)` (per-principal memory partition). No plugin state — `mount/2` returns `{:ok, nil}`. Gralkor errors raise so callers see them per fail-fast. Consumers must mount `Jido.Thread.Plugin` on their `use Jido` supervisor; otherwise there's no thread id to read.
+- **`JidoGralkor.Canonical`** — the adapter-only module that translates a Jido/ReAct turn into Gralkor's canonical message shape. Takes `user_query` at face value — whatever string was registered with the request is what gets persisted — because the plugin and the rest of the pipeline keep `:query` the user's actual words (no envelope stripping is needed or performed here; harness-injected context is added at prompt-build time in the `RequestTransformer`, not in the query). Filters events that aren't memory-worthy, and renders surviving `:llm_completed` / `:tool_completed` events as `behaviour` messages with content the distillation LLM can read (`"thought: …"`, `"tool NAME → RESULT"`). The turn outcome terminates the message list: `{:completed, answer}` becomes the trailing `"assistant"` message; `{:failed, error}` becomes a terminal `"behaviour"` message `"request failed: …"` so the failure is visible to downstream distillation rather than silently swallowed. Returns `[]` when nothing is worth persisting; the plugin uses that to skip the capture call entirely.
 - **`JidoGralkor.Actions.MemorySearch`** — `use Jido.Action, name: "memory_search"`. The ReAct tool. Reads `session_id` from `context[:session_id]` (planted by the plugin on `ai.react.query` — the Jido thread id) and derives `group_id` from `context[:agent_id]`. If `session_id` is absent or blank (LLM called the tool on the very first query of a fresh agent, before the strategy committed a thread), short-circuits with an explicit "did not run" non-result message without calling the client. Otherwise calls `Gralkor.Client.impl().memory_search/3`; propagates `{:error, reason}` on client failure.
 - **`JidoGralkor.Actions.MemoryAdd`** — `use Jido.Action, name: "memory_add"`. Fire-and-forget ReAct tool: spawns a `Task` that calls `Gralkor.Client.impl().memory_add/3` and logs on failure; returns `{:ok, %{result: "Queued for storage."}}` immediately. The server-side write invokes Graphiti entity/edge extraction (LLM + graph update, tens of seconds) — far longer than the agent should wait before replying, and Jido has no native async tool calls.
 
@@ -37,16 +37,16 @@ JidoGralkor.Plugin
   then the session_id is the Jido thread id read from agent.state[:__thread__].id — the plugin does not mint its own id (no ULID at mount, no agent-lifecycle token); Jido's thread lifecycle is the single source of truth
   then mount/2 returns {:ok, nil} — the plugin holds no state of its own
   when an agent turn begins
-    then Gralkor is asked to recall memory for the agent's group_id and the thread's session_id with the query
+    then Gralkor is asked to recall memory for the agent's group_id and the thread's session_id with the query, which is passed through unchanged (no envelope stripping, no mutation — the plugin's contract is that `:query` is already the user's actual words)
     then the thread's session_id is planted on the signal's tool_context for downstream tool calls
     when recall returns a memory block
-      then the turn's query is enriched by prepending the memory block
+      then the block is stashed on the signal's tool_context under `:__gralkor_memory__` for a downstream `RequestTransformer` to fold into the LLM prompt; `:query` itself is not mutated
     when recall returns nothing
-      then the turn's query passes through unchanged aside from the injected session_id
+      then the signal passes through with only the session_id stashed on tool_context; `:query` is unchanged
     if recall fails
       then the callback raises so the caller sees the real error
     when the agent has no committed thread yet (first query on a fresh agent — ReAct strategy's ThreadAgent.append runs inside @start, after plugin hooks)
-      then recall is skipped and the signal passes through unchanged (no session_id is fabricated)
+      then recall is skipped and the signal passes through unchanged (no session_id is fabricated, no memory stashed)
       and a Logger.warning is emitted naming the agent id and pointing at the upstream
         jido_ai fix (susu-2 JIDO_CHANGE_SUGGESTIONS.md §2) — once that lands, this skip
         path and its warning both go away
@@ -54,11 +54,6 @@ JidoGralkor.Plugin
     then the user query, event trace, and `{:completed, answer}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list is sent to
       Gralkor for capture with the thread's session_id and the principal's group_id
-    when the turn's query was enriched with a recalled memory block earlier in the turn (so
-      `Request.query` starts with `<gralkor-memory>…</gralkor-memory>\n\n…`)
-      then the captured user content strips that prefix so the episode body records the user's
-        original request rather than Gralkor's recall output round-tripping back through Graphiti
-        extraction
   when an agent turn fails
     then the user query, event trace, and `{:failed, error}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list — ending in
@@ -87,8 +82,9 @@ JidoGralkor.Canonical.to_messages/3
   when the outcome is {:completed, answer}
     when user query, answer, and events are all empty
       then returns []
-    when the user query wraps a <gralkor-memory>…</gralkor-memory> envelope
-      then the envelope is stripped before the user message is emitted
+    then the user message content is the `user_query` as given (no envelope stripping — the
+      plugin's contract is that `:query` is the user's actual words; harness context lives in
+      the `RequestTransformer`, not the query)
     when the events contain a :tool_completed event
       then a behaviour message with "tool <name> → <result>" is emitted, preserving order
     when the events contain an unknown :kind

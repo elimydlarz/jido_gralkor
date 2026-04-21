@@ -69,18 +69,21 @@ defmodule JidoGralkor.PluginTest do
       assert data.tool_context.session_id == "thr-xyz"
     end
 
-    test "when recall returns a memory block, the turn's query is enriched by prepending the memory block" do
-      InMemory.set_recall({:ok, "<gralkor-memory>remembered facts</gralkor-memory>"})
+    test "when recall returns a memory block, the block is stashed on tool_context under :__gralkor_memory__ and :query is untouched" do
+      memory_block = "Facts:\n- Eli supports Hawthorn."
+      InMemory.set_recall({:ok, memory_block})
       signal = Signal.new!("ai.react.query", %{query: "hello"}, source: "/test")
 
       assert {:ok, {:continue, %Signal{data: new_data} = new_signal}} =
                Plugin.handle_signal(signal, context(agent("user-01", thread_id: "thr-1")))
 
       assert new_signal.type == "ai.react.query"
-      assert new_data.query == "<gralkor-memory>remembered facts</gralkor-memory>\n\nhello"
+      assert new_data.query == "hello"
+      assert new_data.tool_context[:__gralkor_memory__] == memory_block
+      assert new_data.tool_context.session_id == "thr-1"
     end
 
-    test "when recall returns nothing, the turn's query passes through unchanged aside from the injected session_id" do
+    test "when recall returns nothing, :query passes through and tool_context only carries session_id (no :__gralkor_memory__ key)" do
       InMemory.set_recall({:ok, nil})
       signal = Signal.new!("ai.react.query", %{query: "hello"}, source: "/test")
 
@@ -89,6 +92,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert data.query == "hello"
       assert data.tool_context.session_id == "thr-1"
+      refute Map.has_key?(data.tool_context, :__gralkor_memory__)
     end
 
     test "if recall fails, the callback raises so the caller sees the real error" do
@@ -154,39 +158,6 @@ defmodule JidoGralkor.PluginTest do
       assert List.last(messages) == %Message{role: "assistant", content: "you said hi"}
     end
 
-    test "when the turn's query was enriched with a memory block earlier in the turn, the captured user content strips that block so the episode body records the user's original request" do
-      InMemory.set_capture(:ok)
-      request_id = "req-enriched"
-
-      original_query = "(User's name: Eli.)\n\nI'm just testing automatic injection."
-
-      enriched_query =
-        "<gralkor-memory trust=\"untrusted\">\nFacts:\n- Eli witnessed Lance Franklin kick his 100th goal.\n</gralkor-memory>\n\n" <>
-          original_query
-
-      ag =
-        agent("user-42",
-          thread_id: "thr-42",
-          request_traces: %{
-            request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
-          },
-          requests: %{request_id => %{query: enriched_query, status: :pending, result: nil}}
-        )
-
-      signal =
-        Signal.new!(
-          "ai.request.completed",
-          %{request_id: request_id, result: "a"},
-          source: "/test"
-        )
-
-      assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
-
-      assert [[_session_id, _group_id, messages]] = InMemory.captures()
-      user_msg = Enum.find(messages, &(&1.role == "user"))
-      assert user_msg.content == original_query
-      refute user_msg.content =~ "<gralkor-memory"
-    end
   end
 
   describe "when an agent turn fails" do

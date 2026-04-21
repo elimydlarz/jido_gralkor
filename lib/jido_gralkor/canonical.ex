@@ -5,11 +5,16 @@ defmodule JidoGralkor.Canonical do
   Gralkor accepts a flat list of `%Gralkor.Message{role, content}` where
   `role ∈ {"user", "assistant", "behaviour"}`. Adapter responsibility:
 
-    * strip adapter-injected text the server should never see
-      (the `<gralkor-memory>…</gralkor-memory>` recall envelope);
     * render the Jido ReAct event trace into `"behaviour"` messages
       using whatever textual form reads well for distillation;
     * filter events that aren't memory-worthy.
+
+  The `user_query` passed in is expected to be the user's actual words —
+  not enriched with memory blocks, identity envelopes, or any other
+  harness-injected context. In the hexagonal split, prompt-time
+  enrichment belongs in a `Jido.AI.Reasoning.ReAct.RequestTransformer`
+  that wraps context for the LLM but leaves `:query` alone, so downstream
+  state (buffer, request store, capture) never carries injected junk.
 
   The server never branches on interior structure — only on role. The
   LLM is forgiving about the exact `behaviour` wording, so the rendering
@@ -17,8 +22,6 @@ defmodule JidoGralkor.Canonical do
   """
 
   alias Gralkor.Message
-
-  @memory_prefix ~r/<gralkor-memory[\s\S]*?<\/gralkor-memory>\n*/
 
   @type outcome :: {:completed, String.t()} | {:failed, term()}
 
@@ -31,7 +34,7 @@ defmodule JidoGralkor.Canonical do
   @spec to_messages(String.t(), list(map()), outcome()) :: [Message.t()]
   def to_messages(user_query, events, outcome) do
     []
-    |> prepend_message("user", strip_memory_prefix(user_query))
+    |> prepend_message("user", user_query)
     |> prepend_behaviours(events)
     |> prepend_outcome(outcome)
     |> Enum.reverse()
@@ -98,6 +101,4 @@ defmodule JidoGralkor.Canonical do
   defp format_result({:error, inner}), do: "error " <> format_result(inner)
   defp format_result(value) when is_binary(value), do: value
   defp format_result(value), do: inspect(value)
-
-  defp strip_memory_prefix(query), do: Regex.replace(@memory_prefix, query, "")
 end

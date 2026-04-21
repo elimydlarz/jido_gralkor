@@ -9,13 +9,12 @@ defmodule JidoGralkor.CanonicalTest do
       assert Canonical.to_messages("", [], {:completed, ""}) == []
     end
 
-    test "strips <gralkor-memory> envelope from the user query before emitting the user message" do
-      query =
-        "<gralkor-memory trust=\"untrusted\">\nFacts:\n- leaked\n</gralkor-memory>\n\nactual question"
+    test "passes the user_query through to the user message content as given (no envelope stripping — the plugin's contract is that :query is the user's actual words)" do
+      query = "<example>kept</example>\n\nactual question"
 
       [user | _] = Canonical.to_messages(query, [], {:completed, "a"})
 
-      assert user == Message.new("user", "actual question")
+      assert user == Message.new("user", query)
     end
 
     test "emits a 'thought: …' behaviour message for :llm_completed events" do
