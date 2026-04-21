@@ -190,7 +190,7 @@ defmodule JidoGralkor.PluginTest do
   end
 
   describe "when an agent turn fails" do
-    test "the turn is still sent to Gralkor for capture" do
+    test "the turn is captured with the failure surfaced as a terminal 'request failed: …' behaviour message" do
       InMemory.set_capture(:ok)
       request_id = "req-fail"
 
@@ -212,8 +212,16 @@ defmodule JidoGralkor.PluginTest do
 
       assert [[session_id, _group_id, messages]] = InMemory.captures()
       assert session_id == "thr-fail"
+
       user_msg = Enum.find(messages, &(&1.role == "user"))
       assert user_msg.content == "original question"
+
+      assert List.last(messages) == %Message{
+               role: "behaviour",
+               content: "request failed: :boom"
+             }
+
+      refute Enum.any?(messages, &(&1.role == "assistant"))
     end
 
     test "first-turn failure with no thread committed skips capture and logs a warning" do
