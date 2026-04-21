@@ -79,13 +79,16 @@ JidoGralkor.Plugin
 
 ```
 JidoGralkor.Canonical.to_messages/3
+  when a :llm_completed event has a non-empty tool_calls list
+    then a behaviour message "thought: <text>" is emitted for it, preserving order
+  when a :llm_completed event has an empty tool_calls list
+    then no "thought:" behaviour is emitted for it (the text is the turn's answer, and in
+      a completed outcome will already be carried by the trailing assistant message)
   when the outcome is {:completed, answer}
     when user query, answer, and events are all empty
       then returns []
     when the user query wraps a <gralkor-memory>…</gralkor-memory> envelope
       then the envelope is stripped before the user message is emitted
-    when the events contain a :llm_completed event
-      then a behaviour message with "thought: <text>" is emitted, preserving order
     when the events contain a :tool_completed event
       then a behaviour message with "tool <name> → <result>" is emitted, preserving order
     when the events contain an unknown :kind
@@ -125,6 +128,7 @@ JidoGralkor.Actions.MemorySearch
 
 ```
 JidoGralkor.Actions.MemoryAdd
+  then source_description is a required tool parameter (alongside content) — the LLM must say where each stored insight came from, so no context-less memories land in the graph
   when invoked
     then the action returns {:ok, %{result: "Queued for storage."}} without waiting on the client
     then the client's memory_add is called in a background Task with the sanitized group_id, content, and source_description

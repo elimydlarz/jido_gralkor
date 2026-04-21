@@ -19,7 +19,9 @@ defmodule JidoGralkor.CanonicalTest do
     end
 
     test "emits a 'thought: …' behaviour message for :llm_completed events" do
-      events = [%{kind: :llm_completed, data: %{text: "considering options"}}]
+      events = [
+        %{kind: :llm_completed, data: %{text: "considering options", tool_calls: [%{name: "t"}]}}
+      ]
 
       messages = Canonical.to_messages("q", events, {:completed, "a"})
 
@@ -49,9 +51,9 @@ defmodule JidoGralkor.CanonicalTest do
 
     test "preserves event order in the emitted behaviour messages" do
       events = [
-        %{kind: :llm_completed, data: %{text: "first thought"}},
+        %{kind: :llm_completed, data: %{text: "first thought", tool_calls: [%{name: "t"}]}},
         %{kind: :tool_completed, data: %{tool_name: "t", result: "r"}},
-        %{kind: :llm_completed, data: %{text: "second thought"}}
+        %{kind: :llm_completed, data: %{text: "second thought", tool_calls: [%{name: "t"}]}}
       ]
 
       behaviours =
@@ -70,7 +72,7 @@ defmodule JidoGralkor.CanonicalTest do
     test "ignores events whose :kind is not memory-worthy" do
       events = [
         %{kind: :telemetry_ping, data: %{anything: "x"}},
-        %{kind: :llm_completed, data: %{text: "kept"}}
+        %{kind: :llm_completed, data: %{text: "kept", tool_calls: [%{name: "t"}]}}
       ]
 
       behaviours =
@@ -89,7 +91,7 @@ defmodule JidoGralkor.CanonicalTest do
 
     test "orders messages user → behaviour(s) → assistant" do
       events = [
-        %{kind: :llm_completed, data: %{text: "t"}},
+        %{kind: :llm_completed, data: %{text: "t", tool_calls: [%{name: "x"}]}},
         %{kind: :tool_completed, data: %{tool_name: "x", result: "r"}}
       ]
 
@@ -103,7 +105,10 @@ defmodule JidoGralkor.CanonicalTest do
       events = [
         %{
           kind: :llm_completed,
-          data: %{text: [%{type: "text", text: "hello"}, %{type: "text", text: "world"}]}
+          data: %{
+            text: [%{type: "text", text: "hello"}, %{type: "text", text: "world"}],
+            tool_calls: [%{name: "t"}]
+          }
         }
       ]
 
@@ -112,6 +117,17 @@ defmodule JidoGralkor.CanonicalTest do
         |> Enum.find(&(&1.role == "behaviour"))
 
       assert behaviour.content == "thought: hello world"
+    end
+  end
+
+  describe "to_messages/3 — :llm_completed tool_calls discrimination" do
+    test "on a completed turn, a :llm_completed with empty tool_calls emits no 'thought:' behaviour" do
+      events = [%{kind: :llm_completed, data: %{text: "direct answer", tool_calls: []}}]
+
+      messages = Canonical.to_messages("q", events, {:completed, "direct answer"})
+
+      assert Enum.map(messages, & &1.role) == ["user", "assistant"]
+      refute Enum.any?(messages, &(&1.role == "behaviour" and &1.content =~ "thought"))
     end
   end
 
@@ -133,7 +149,7 @@ defmodule JidoGralkor.CanonicalTest do
 
     test "keeps the user query and event trace ahead of the failure marker" do
       events = [
-        %{kind: :llm_completed, data: %{text: "thinking"}},
+        %{kind: :llm_completed, data: %{text: "thinking", tool_calls: [%{name: "t"}]}},
         %{kind: :tool_completed, data: %{tool_name: "t", result: {:error, :nope}}}
       ]
 

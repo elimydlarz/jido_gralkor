@@ -22,7 +22,7 @@ defmodule JidoGralkor.Actions.MemoryAdd do
         "reasoning and conclusions you want to preserve.",
     schema: [
       content: [type: :string, required: true, doc: "The information to store"],
-      source_description: [type: :string, required: false, doc: "Where this came from"]
+      source_description: [type: :string, required: true, doc: "Where this came from"]
     ]
 
   require Logger
@@ -31,11 +31,9 @@ defmodule JidoGralkor.Actions.MemoryAdd do
   @impl true
   def run(params, context) do
     group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
-    source = Map.get(params, :source_description)
-    content = params.content
 
     Task.start(fn ->
-      case Client.impl().memory_add(group_id, content, source) do
+      case Client.impl().memory_add(group_id, params.content, params.source_description) do
         :ok ->
           :ok
 

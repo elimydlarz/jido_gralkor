@@ -58,12 +58,14 @@ defmodule JidoGralkor.Canonical do
     |> Enum.reduce(messages, fn content, acc -> [Message.new("behaviour", content) | acc] end)
   end
 
-  defp render_event(%{kind: :llm_completed, data: data}) do
+  defp render_event(%{kind: :llm_completed, data: %{tool_calls: [_ | _]} = data}) do
     case extract_text(data) do
       "" -> []
       text -> ["thought: " <> text]
     end
   end
+
+  defp render_event(%{kind: :llm_completed}), do: []
 
   defp render_event(%{kind: :tool_completed, data: data}) do
     name = Map.get(data, :tool_name, "tool")

@@ -15,7 +15,10 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
     InMemory.set_memory_add(:ok)
 
     assert {:ok, %{result: "Queued for storage."}} =
-             MemoryAdd.run(%{content: "Eli prefers tea"}, %{agent_id: "01USER"})
+             MemoryAdd.run(
+               %{content: "Eli prefers tea", source_description: "user preference"},
+               %{agent_id: "01USER"}
+             )
   end
 
   test "spawns a background Task that calls the client with sanitized group_id, content, and source_description" do
@@ -29,22 +32,20 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
     assert eventually(fn -> InMemory.adds() == [["user_id", "reflection", "agent thought"]] end)
   end
 
-  test "source_description is nil when not provided" do
-    InMemory.set_memory_add(:ok)
-
-    MemoryAdd.run(%{content: "reflection"}, %{agent_id: "01USER"})
-
-    assert eventually(fn -> InMemory.adds() == [["01USER", "reflection", nil]] end)
-  end
-
   test "if the background Task's client call fails, the failure is logged" do
     InMemory.set_memory_add({:error, :boom})
 
     log =
       capture_log(fn ->
-        MemoryAdd.run(%{content: "something"}, %{agent_id: "01USER"})
+        MemoryAdd.run(
+          %{content: "something", source_description: "agent thought"},
+          %{agent_id: "01USER"}
+        )
 
-        assert eventually(fn -> InMemory.adds() == [["01USER", "something", nil]] end)
+        assert eventually(fn ->
+                 InMemory.adds() == [["01USER", "something", "agent thought"]]
+               end)
+
         # Give Logger.error time to flush after the Task's client call.
         Process.sleep(50)
       end)
