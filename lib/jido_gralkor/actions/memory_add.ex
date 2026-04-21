@@ -30,8 +30,7 @@ defmodule JidoGralkor.Actions.MemoryAdd do
 
   @impl true
   def run(params, context) do
-    agent_id = Map.get(context, :agent_id, "")
-    group_id = Client.sanitize_group_id(agent_id)
+    group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
     source = Map.get(params, :source_description)
     content = params.content
 
