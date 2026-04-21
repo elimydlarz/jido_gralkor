@@ -25,7 +25,7 @@ defmodule JidoGralkor.Actions.MemoryBuildCommunities do
 
   @impl true
   def run(_params, context) do
-    group_id = context |> Map.get(:agent_id, "") |> Client.sanitize_group_id()
+    group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
 
     case Client.impl().build_communities(group_id) do
       {:ok, %{communities: communities, edges: edges}} ->
