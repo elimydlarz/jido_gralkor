@@ -29,13 +29,12 @@ defmodule JidoGralkor.CanonicalTest do
              end)
     end
 
-    test "emits a 'tool NAME(INPUT) → RESULT' behaviour message for :tool_completed events" do
+    test "emits a 'tool NAME → RESULT' behaviour message for :tool_completed events" do
       events = [
         %{
           kind: :tool_completed,
           data: %{
             tool_name: "memory_search",
-            input: %{query: "x"},
             result: {:ok, "3 facts"}
           }
         }
