@@ -1,7 +1,7 @@
 defmodule JidoGralkor.MixProject do
   use Mix.Project
 
-  @version "1.0.4"
+  @version "1.0.5"
   @source_url "https://github.com/elimydlarz/jido_gralkor"
 
   def project do
@@ -38,7 +38,7 @@ defmodule JidoGralkor.MixProject do
     [
       {:jido, "~> 2.2"},
       {:jido_ai, "~> 2.1"},
-      {:gralkor_ex, "~> 2.0.3"},
+      {:gralkor_ex, "~> 2.0.4"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
   end
