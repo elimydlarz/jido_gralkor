@@ -11,9 +11,16 @@ project_root="$(pwd)"
 mix_file="$project_root/mix.exs"
 
 if [[ -z "${DRY_RUN:-}" ]]; then
+  : "${HEX_API_KEY:=${SUSU_ENG_HEX_TOKEN:-}}"
+  if [[ -z "$HEX_API_KEY" ]]; then
+    echo "Error: neither HEX_API_KEY nor SUSU_ENG_HEX_TOKEN is set — refusing to publish (would fall back to OTP)." >&2
+    exit 1
+  fi
+  export HEX_API_KEY
+
   whoami_cmd="${PUBLISH_HEX_WHOAMI_CMD:-mix hex.user whoami}"
   if ! $whoami_cmd </dev/null >/dev/null 2>&1; then
-    echo "Error: not logged in to Hex. Run 'mix hex.user auth' first." >&2
+    echo "Error: Hex rejected HEX_API_KEY (whoami failed). Regenerate the key with 'mix hex.user key generate --key-name susu-eng-publish' and re-export SUSU_ENG_HEX_TOKEN." >&2
     exit 1
   fi
 fi
