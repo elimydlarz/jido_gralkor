@@ -18,11 +18,11 @@ if [[ -z "${DRY_RUN:-}" ]]; then
   fi
   export HEX_API_KEY
 
-  whoami_cmd="${PUBLISH_HEX_WHOAMI_CMD:-mix hex.user whoami}"
-  if ! $whoami_cmd </dev/null >/dev/null 2>&1; then
-    echo "Error: Hex rejected HEX_API_KEY (whoami failed). Regenerate the key with 'mix hex.user key generate --key-name susu-eng-publish' and re-export SUSU_ENG_HEX_TOKEN." >&2
-    exit 1
-  fi
+  # Isolate HEX_HOME so a cached oauth_token in ~/.hex/hex.config (Hex 2.x)
+  # can't take precedence over HEX_API_KEY and re-impose 2FA on publish.
+  HEX_HOME="$(mktemp -d "${TMPDIR:-/tmp}/hex-home.XXXXXX")"
+  export HEX_HOME
+  trap 'rm -rf "$HEX_HOME"' EXIT
 fi
 
 read_version() {
