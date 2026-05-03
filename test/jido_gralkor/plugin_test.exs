@@ -31,7 +31,7 @@ defmodule JidoGralkor.PluginTest do
   defp context(agent), do: %{agent: agent}
 
   test "the session_id is the Jido thread id — the plugin does not mint its own" do
-    InMemory.set_recall({:ok, nil})
+    InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
     signal = Signal.new!("ai.react.query", %{query: "q"}, source: "/test")
 
     assert {:ok, {:continue, %Signal{data: data}}} =
@@ -47,7 +47,7 @@ defmodule JidoGralkor.PluginTest do
 
   describe "when an agent turn begins, when a thread has committed to agent state" do
     test "Gralkor is asked to recall memory for the agent's group_id and the thread's session_id with the query" do
-      InMemory.set_recall({:ok, nil})
+      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
 
       signal = Signal.new!("ai.react.query", %{query: "new question"}, source: "/test")
 
@@ -60,7 +60,7 @@ defmodule JidoGralkor.PluginTest do
     end
 
     test "the thread's session_id is planted on the signal's tool_context for downstream tool calls" do
-      InMemory.set_recall({:ok, nil})
+      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
       assert {:ok, {:continue, %Signal{data: data}}} =
@@ -72,7 +72,7 @@ defmodule JidoGralkor.PluginTest do
 
   describe "when an agent turn begins, when no thread has committed yet" do
     test "Gralkor is asked to recall memory for the agent's group_id and a nil session_id with the query" do
-      InMemory.set_recall({:ok, nil})
+      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
 
       signal = Signal.new!("ai.react.query", %{query: "first question"}, source: "/test")
 
@@ -89,7 +89,7 @@ defmodule JidoGralkor.PluginTest do
     end
 
     test "no session_id is planted on the signal's tool_context" do
-      InMemory.set_recall({:ok, nil})
+      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
       assert {:ok, {:continue, %Signal{data: data}}} =
@@ -112,35 +112,6 @@ defmodule JidoGralkor.PluginTest do
       assert new_data.query == "hello"
       assert new_data.tool_context[:__gralkor_memory__] == memory_block
       assert new_data.tool_context.session_id == "thr-1"
-    end
-  end
-
-  describe "when an agent turn begins, when recall returns nothing, when a thread had committed before recall" do
-    test "the signal passes through with session_id stashed and :query unchanged" do
-      InMemory.set_recall({:ok, nil})
-      signal = Signal.new!("ai.react.query", %{query: "hello"}, source: "/test")
-
-      assert {:ok, {:continue, %Signal{data: data}}} =
-               Plugin.handle_signal(signal, context(agent("user-01", thread_id: "thr-1")))
-
-      assert data.query == "hello"
-      assert data.tool_context.session_id == "thr-1"
-      refute Map.has_key?(data.tool_context, :__gralkor_memory__)
-    end
-  end
-
-  describe "when an agent turn begins, when recall returns nothing, when no thread had committed before recall" do
-    test "the signal passes through with nothing added to tool_context and :query unchanged" do
-      InMemory.set_recall({:ok, nil})
-      signal = Signal.new!("ai.react.query", %{query: "hello"}, source: "/test")
-
-      assert {:ok, {:continue, %Signal{data: data}}} =
-               Plugin.handle_signal(signal, context(agent("user-01", thread_id: nil)))
-
-      assert data.query == "hello"
-      tool_context = Map.get(data, :tool_context, %{})
-      refute Map.has_key?(tool_context, :session_id)
-      refute Map.has_key?(tool_context, :__gralkor_memory__)
     end
   end
 

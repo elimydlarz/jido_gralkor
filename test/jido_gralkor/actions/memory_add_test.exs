@@ -11,10 +11,10 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
     :ok
   end
 
-  test "returns {:ok, %{result: \"Queued for storage.\"}} immediately without waiting on the client" do
+  test "returns immediately without waiting on the client" do
     InMemory.set_memory_add(:ok)
 
-    assert {:ok, %{result: "Queued for storage."}} =
+    assert {:ok, %{result: "Ingesting."}} =
              MemoryAdd.run(
                %{content: "Eli prefers tea", source_description: "user preference"},
                %{agent_id: "01USER"}

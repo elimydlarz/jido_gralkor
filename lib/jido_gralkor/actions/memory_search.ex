@@ -2,18 +2,18 @@ defmodule JidoGralkor.Actions.MemorySearch do
   @moduledoc """
   ReAct tool the LLM can call to search long-term memory.
 
-  Calls the client's `memory_search/3` callback with `group_id` sanitized
-  from `context[:agent_id]` and `session_id` read from `context[:session_id]`
-  (planted by `JidoGralkor.Plugin` on `ai.react.query` — the Jido thread id).
+  Calls `Gralkor.Client.recall/3` — the same path `JidoGralkor.Plugin`
+  uses for auto-recall. There is no separate manual-search endpoint.
+  `group_id` is sanitized from `context[:agent_id]` and `session_id` is
+  read from `context[:session_id]` (planted by the plugin on
+  `ai.react.query`).
 
-  If `session_id` is absent or blank (the LLM called the tool on the very
-  first query of a fresh agent, before the ReAct strategy committed a
-  thread to agent state) the action short-circuits with an explicit
-  non-result message — there is no session buffer to interpret against
-  yet, and Gralkor requires a real session id. The message tells the LLM
-  the search did not run, so it doesn't read an empty payload as "no
-  memory exists" and confidently lie to the user. Errors from the client
-  propagate.
+  Short-circuits with an explicit non-result message when `session_id`
+  is absent or blank (first query of a fresh agent, before the ReAct
+  strategy committed a thread). Otherwise returns the memory block the
+  server produced (always a wrapped block — the server collapses "no
+  facts" and "no relevant facts" to a `"No relevant memories found."`
+  body inside the same `<gralkor-memory>` envelope). Errors propagate.
   """
 
   use Jido.Action,
@@ -44,8 +44,8 @@ defmodule JidoGralkor.Actions.MemorySearch do
       session_id ->
         group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
 
-        case Client.impl().memory_search(group_id, session_id, query) do
-          {:ok, text} -> {:ok, %{result: text}}
+        case Client.impl().recall(group_id, session_id, query) do
+          {:ok, memory_block} -> {:ok, %{result: memory_block}}
           {:error, reason} -> {:error, reason}
         end
     end

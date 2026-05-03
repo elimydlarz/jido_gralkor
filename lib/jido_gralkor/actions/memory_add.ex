@@ -7,8 +7,8 @@ defmodule JidoGralkor.Actions.MemoryAdd do
   agent wants to preserve explicitly.
 
   Fire-and-forget: the HTTP call to Gralkor is spawned in a background
-  `Task` and the action returns `:ok` immediately. The server-side
-  write invokes Graphiti's entity/edge extraction (LLM + graph update),
+  `Task` and the action returns immediately. The server-side write
+  invokes Graphiti's entity/edge extraction (LLM + graph update),
   which takes tens of seconds — far longer than the agent should wait
   before replying. Failures are logged; best-effort storage is the
   contract. Jido does not have native async tool calls.
@@ -42,6 +42,6 @@ defmodule JidoGralkor.Actions.MemoryAdd do
       end
     end)
 
-    {:ok, %{result: "Queued for storage."}}
+    {:ok, %{result: "Ingesting."}}
   end
 end

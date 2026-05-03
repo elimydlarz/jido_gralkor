@@ -85,9 +85,6 @@ defmodule JidoGralkor.Plugin do
       end
 
     case Client.impl().recall(group_id, session_id, query) do
-      {:ok, nil} ->
-        {:ok, {:continue, signal_with_session}}
-
       {:ok, memory_block} when is_binary(memory_block) ->
         {:ok,
          {:continue,
