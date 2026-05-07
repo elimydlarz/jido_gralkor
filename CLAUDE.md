@@ -36,13 +36,15 @@ mix test.functional
 ```
 JidoGralkor.Plugin
   then the session_id is the Jido thread id read from agent.state[:__thread__].id — the plugin does not mint its own id (no ULID at mount, no agent-lifecycle token); Jido's thread lifecycle is the single source of truth
-  then mount/2 returns {:ok, nil} — the plugin holds no state of its own
+  if mount/2 is called without an :agent_name opt or with a blank :agent_name
+    then it raises ArgumentError (every consumer must supply the agent's name; there is no fallback)
+  then mount/2 returns {:ok, %{agent_name: opts[:agent_name]}}
   when an agent turn begins
     when a thread has committed to agent state
-      then Gralkor is asked to recall memory for the agent's group_id and the thread's session_id with the query, which is passed through unchanged (no envelope stripping, no mutation — the plugin's contract is that `:query` is already the user's actual words)
+      then Gralkor is asked to recall memory for the agent's group_id, the thread's session_id, the query (which is passed through unchanged — no envelope stripping, no mutation; the plugin's contract is that `:query` is already the user's actual words), and the configured agent_name
       and the thread's session_id is planted on the signal's tool_context for downstream tool calls
     when no thread has committed yet (first query on a fresh agent — ReAct strategy's ThreadAgent.append runs inside @start, after plugin hooks)
-      then Gralkor is asked to recall memory for the agent's group_id and a nil session_id with the query, which is passed through unchanged
+      then Gralkor is asked to recall memory for the agent's group_id, a nil session_id, the query (passed through unchanged), and the configured agent_name
       and no session_id is planted on the signal's tool_context
     when recall returns a memory block
       then the block is stashed on the signal's tool_context under `:__gralkor_memory__` for a downstream `RequestTransformer` to fold into the LLM prompt; `:query` itself is not mutated
@@ -52,12 +54,12 @@ JidoGralkor.Plugin
   when an agent turn completes
     then the user query, event trace, and `{:completed, answer}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list is sent to
-      Gralkor for capture with the thread's session_id and the principal's group_id
+      Gralkor for capture with the thread's session_id, the principal's group_id, and the configured agent_name
   when an agent turn fails
     then the user query, event trace, and `{:failed, error}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list — ending in
       a `"request failed: …"` behaviour message instead of an assistant message — is sent to
-      Gralkor for capture, so the failure is visible to downstream distillation rather than
+      Gralkor for capture with the thread's session_id, the principal's group_id, and the configured agent_name, so the failure is visible to downstream distillation rather than
       silently dropped
     when the agent has no committed thread yet (first-turn failure)
       then capture is skipped

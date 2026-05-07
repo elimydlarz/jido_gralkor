@@ -17,9 +17,14 @@ defmodule JidoGralkor.PluginTest do
     thread_id = Keyword.get(opts, :thread_id, "thr-default")
     request_traces = Keyword.get(opts, :request_traces, %{})
     requests = Keyword.get(opts, :requests, %{})
+    agent_name = Keyword.get(opts, :agent_name, "TestAgent")
 
     state =
-      %{__strategy__: %{request_traces: request_traces}, requests: requests}
+      %{
+        __strategy__: %{request_traces: request_traces},
+        requests: requests,
+        __memory__: %{agent_name: agent_name}
+      }
       |> maybe_put(:__thread__, if(thread_id, do: %{id: thread_id}, else: nil))
 
     %{id: id, state: state}
@@ -38,11 +43,24 @@ defmodule JidoGralkor.PluginTest do
              Plugin.handle_signal(signal, context(agent("user-1", thread_id: "thr-exact")))
 
     assert data.tool_context.session_id == "thr-exact"
-    assert [[_, "thr-exact", _]] = InMemory.recalls()
+    assert [[_, _agent_name, "thr-exact", _]] = InMemory.recalls()
   end
 
-  test "mount/2 returns {:ok, nil} — the plugin holds no state of its own" do
-    assert {:ok, nil} = Plugin.mount(%{id: "user-1", state: %{}}, %{})
+  test "mount/2 returns {:ok, %{agent_name: ...}} when given a non-blank :agent_name opt" do
+    assert {:ok, %{agent_name: "Susu"}} =
+             Plugin.mount(%{id: "user-1", state: %{}}, agent_name: "Susu")
+  end
+
+  test "mount/2 raises ArgumentError when :agent_name is missing" do
+    assert_raise ArgumentError, fn ->
+      Plugin.mount(%{id: "user-1", state: %{}}, [])
+    end
+  end
+
+  test "mount/2 raises ArgumentError when :agent_name is blank" do
+    assert_raise ArgumentError, fn ->
+      Plugin.mount(%{id: "user-1", state: %{}}, agent_name: "  ")
+    end
   end
 
   describe "when an agent turn begins, when a thread has committed to agent state" do
@@ -53,8 +71,9 @@ defmodule JidoGralkor.PluginTest do
 
       Plugin.handle_signal(signal, context(agent("user-abc", thread_id: "thr-xyz")))
 
-      assert [[group_id, session_id, query]] = InMemory.recalls()
+      assert [[group_id, agent_name, session_id, query]] = InMemory.recalls()
       assert group_id == "user_abc"
+      assert agent_name == "TestAgent"
       assert session_id == "thr-xyz"
       assert query == "new question"
     end
@@ -81,7 +100,7 @@ defmodule JidoGralkor.PluginTest do
           Plugin.handle_signal(signal, context(agent("user-abc", thread_id: nil)))
         end)
 
-      assert [[group_id, session_id, query]] = InMemory.recalls()
+      assert [[group_id, _agent_name, session_id, query]] = InMemory.recalls()
       assert group_id == "user_abc"
       assert session_id == nil
       assert query == "first question"
@@ -143,7 +162,7 @@ defmodule JidoGralkor.PluginTest do
           assert {:ok, {:continue, %Signal{data: data}}} =
                    Plugin.handle_signal(signal, context(agent("user-02", thread_id: nil)))
 
-          refute Map.has_key?(data, :tool_context)
+          refute Map.has_key?(data.tool_context, :session_id)
           assert data.query == "hello"
         end)
 
@@ -180,7 +199,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
 
-      assert [[session_id, group_id, messages]] = InMemory.captures()
+      assert [[session_id, group_id, _agent_name, messages]] = InMemory.captures()
       assert session_id == "thr-42"
       assert group_id == "user_42"
       assert [%Message{role: "user", content: "what did I say?"} | rest] = messages
@@ -211,7 +230,7 @@ defmodule JidoGralkor.PluginTest do
 
       Plugin.handle_signal(signal, context(ag))
 
-      assert [[session_id, _group_id, messages]] = InMemory.captures()
+      assert [[session_id, _group_id, _agent_name, messages]] = InMemory.captures()
       assert session_id == "thr-fail"
 
       user_msg = Enum.find(messages, &(&1.role == "user"))

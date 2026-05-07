@@ -43,8 +43,9 @@ defmodule JidoGralkor.Actions.MemorySearch do
 
       session_id ->
         group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
+        agent_name = Map.fetch!(context, :agent_name)
 
-        case Client.impl().recall(group_id, session_id, query) do
+        case Client.impl().recall(group_id, agent_name, session_id, query) do
           {:ok, memory_block} -> {:ok, %{result: memory_block}}
           {:error, reason} -> {:error, reason}
         end

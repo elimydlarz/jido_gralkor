@@ -68,7 +68,20 @@ defmodule JidoGralkor.Plugin do
   @no_thread_warning_hint "jido_ai commits state.thread on :request_completed, not at :ai.react.query — see susu-2 JIDO_CHANGE_SUGGESTIONS.md §2"
 
   @impl Jido.Plugin
-  def mount(_agent, _config), do: {:ok, nil}
+  def mount(_agent, opts) do
+    agent_name = fetch_agent_name(opts)
+
+    unless is_binary(agent_name) and String.trim(agent_name) != "" do
+      raise ArgumentError,
+            "JidoGralkor.Plugin requires :agent_name (non-blank string), got #{inspect(agent_name)}"
+    end
+
+    {:ok, %{agent_name: agent_name}}
+  end
+
+  defp fetch_agent_name(opts) when is_list(opts), do: Keyword.get(opts, :agent_name)
+  defp fetch_agent_name(opts) when is_map(opts), do: Map.get(opts, :agent_name)
+  defp fetch_agent_name(_), do: nil
 
   @impl Jido.Plugin
   def handle_signal(
@@ -77,14 +90,15 @@ defmodule JidoGralkor.Plugin do
       ) do
     group_id = Client.sanitize_group_id(agent.id)
     session_id = thread_id(agent)
+    agent_name = agent_name(agent)
 
     signal_with_session =
       case session_id do
-        nil -> signal
-        id -> merge_tool_context(signal, %{session_id: id})
+        nil -> merge_tool_context(signal, %{agent_name: agent_name})
+        id -> merge_tool_context(signal, %{session_id: id, agent_name: agent_name})
       end
 
-    case Client.impl().recall(group_id, session_id, query) do
+    case Client.impl().recall(group_id, agent_name, session_id, query) do
       {:ok, memory_block} when is_binary(memory_block) ->
         {:ok,
          {:continue,
@@ -162,11 +176,18 @@ defmodule JidoGralkor.Plugin do
           messages ->
             group_id = Client.sanitize_group_id(agent.id)
 
-            case Client.impl().capture(session_id, group_id, messages) do
+            case Client.impl().capture(session_id, group_id, agent_name(agent), messages) do
               :ok -> :ok
               {:error, reason} -> raise "Gralkor capture failed: #{inspect(reason)}"
             end
         end
+    end
+  end
+
+  defp agent_name(agent) do
+    case Map.get(agent.state, :__memory__) do
+      %{agent_name: name} when is_binary(name) -> name
+      _ -> raise "JidoGralkor.Plugin state missing — mount/2 must run before recall/capture"
     end
   end
 

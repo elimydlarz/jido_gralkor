@@ -17,7 +17,8 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     assert {:ok, %{result: "Facts:\n- Eli likes tea"}} =
              MemorySearch.run(%{query: "preferences"}, %{
                agent_id: "01USER",
-               session_id: "thr-1"
+               session_id: "thr-1",
+               agent_name: "TestAgent"
              })
   end
 
@@ -27,20 +28,23 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     assert {:error, :boom} =
              MemorySearch.run(%{query: "preferences"}, %{
                agent_id: "01USER",
-               session_id: "thr-1"
+               session_id: "thr-1",
+               agent_name: "TestAgent"
              })
   end
 
-  test "passes sanitized group_id from agent_id and session_id from context to recall" do
+  test "passes sanitized group_id, agent_name, and session_id from context to recall" do
     InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
 
     MemorySearch.run(%{query: "q"}, %{
       agent_id: "user-with-hyphens",
-      session_id: "thr-xyz"
+      session_id: "thr-xyz",
+      agent_name: "Susu"
     })
 
-    assert [[group_id, session_id, "q"]] = InMemory.recalls()
+    assert [[group_id, agent_name, session_id, "q"]] = InMemory.recalls()
     assert group_id == "user_with_hyphens"
+    assert agent_name == "Susu"
     assert session_id == "thr-xyz"
   end
 
