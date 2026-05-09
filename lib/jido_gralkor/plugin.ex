@@ -175,12 +175,35 @@ defmodule JidoGralkor.Plugin do
 
           messages ->
             group_id = Client.sanitize_group_id(agent.id)
+            user_name = user_name!(agent)
 
-            case Client.impl().capture(session_id, group_id, agent_name(agent), messages) do
+            case Client.impl().capture(
+                   session_id,
+                   group_id,
+                   agent_name(agent),
+                   user_name,
+                   messages
+                 ) do
               :ok -> :ok
               {:error, reason} -> raise "Gralkor capture failed: #{inspect(reason)}"
             end
         end
+    end
+  end
+
+  defp user_name!(agent) do
+    case Map.get(agent.state, :user_name) do
+      name when is_binary(name) ->
+        if String.trim(name) == "" do
+          raise ArgumentError,
+                "JidoGralkor.Plugin: agent.state[:user_name] is blank — the consumer must populate it (e.g. from `tool_context[:name]` in `on_before_cmd`) before any turn that captures"
+        else
+          name
+        end
+
+      other ->
+        raise ArgumentError,
+              "JidoGralkor.Plugin: agent.state[:user_name] missing (got #{inspect(other)}) — the consumer must populate it (e.g. from `tool_context[:name]` in `on_before_cmd`) before any turn that captures"
     end
   end
 

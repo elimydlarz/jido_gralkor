@@ -18,12 +18,14 @@ defmodule JidoGralkor.PluginTest do
     request_traces = Keyword.get(opts, :request_traces, %{})
     requests = Keyword.get(opts, :requests, %{})
     agent_name = Keyword.get(opts, :agent_name, "TestAgent")
+    user_name = Keyword.get(opts, :user_name, "Eli")
 
     state =
       %{
         __strategy__: %{request_traces: request_traces},
         requests: requests,
-        __memory__: %{agent_name: agent_name}
+        __memory__: %{agent_name: agent_name},
+        user_name: user_name
       }
       |> maybe_put(:__thread__, if(thread_id, do: %{id: thread_id}, else: nil))
 
@@ -199,7 +201,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
 
-      assert [[session_id, group_id, _agent_name, messages]] = InMemory.captures()
+      assert [[session_id, group_id, _agent_name, _user_name, messages]] = InMemory.captures()
       assert session_id == "thr-42"
       assert group_id == "user_42"
       assert [%Message{role: "user", content: "what did I say?"} | rest] = messages
@@ -207,6 +209,96 @@ defmodule JidoGralkor.PluginTest do
       assert List.last(messages) == %Message{role: "assistant", content: "you said hi"}
     end
 
+    test "the user_name read from agent.state[:user_name] is forwarded to capture" do
+      InMemory.set_capture(:ok)
+      request_id = "req-username"
+
+      ag =
+        agent("user-42",
+          user_name: "Eli",
+          thread_id: "thr-42",
+          request_traces: %{
+            request_id => %{
+              events: [%{kind: :llm_completed, data: %{}}],
+              truncated?: false
+            }
+          },
+          requests: %{request_id => %{query: "hi", status: :pending, result: nil}}
+        )
+
+      signal =
+        Signal.new!(
+          "ai.request.completed",
+          %{request_id: request_id, result: "yo"},
+          source: "/test"
+        )
+
+      Plugin.handle_signal(signal, context(ag))
+
+      assert [[_session_id, _group_id, _agent_name, "Eli", _messages]] = InMemory.captures()
+    end
+
+    test "if agent.state[:user_name] is missing then capture raises ArgumentError" do
+      InMemory.set_capture(:ok)
+      request_id = "req-no-user"
+
+      ag = %{
+        id: "user-42",
+        state: %{
+          __strategy__: %{
+            request_traces: %{
+              request_id => %{
+                events: [%{kind: :llm_completed, data: %{}}],
+                truncated?: false
+              }
+            }
+          },
+          requests: %{request_id => %{query: "hi", status: :pending, result: nil}},
+          __memory__: %{agent_name: "TestAgent"},
+          __thread__: %{id: "thr-42"}
+        }
+      }
+
+      signal =
+        Signal.new!(
+          "ai.request.completed",
+          %{request_id: request_id, result: "yo"},
+          source: "/test"
+        )
+
+      assert_raise ArgumentError, ~r/user_name/, fn ->
+        Plugin.handle_signal(signal, context(ag))
+      end
+    end
+
+    test "if agent.state[:user_name] is blank then capture raises ArgumentError" do
+      InMemory.set_capture(:ok)
+      request_id = "req-blank-user"
+
+      ag =
+        agent("user-42",
+          user_name: "   ",
+          thread_id: "thr-42",
+          request_traces: %{
+            request_id => %{
+              events: [%{kind: :llm_completed, data: %{}}],
+              truncated?: false
+            }
+          },
+          requests: %{request_id => %{query: "hi", status: :pending, result: nil}}
+        )
+
+      signal =
+        Signal.new!(
+          "ai.request.completed",
+          %{request_id: request_id, result: "yo"},
+          source: "/test"
+        )
+
+      assert_raise ArgumentError, ~r/user_name/, fn ->
+        Plugin.handle_signal(signal, context(ag))
+      end
+    end
   end
 
   describe "when an agent turn fails" do
@@ -230,7 +322,7 @@ defmodule JidoGralkor.PluginTest do
 
       Plugin.handle_signal(signal, context(ag))
 
-      assert [[session_id, _group_id, _agent_name, messages]] = InMemory.captures()
+      assert [[session_id, _group_id, _agent_name, _user_name, messages]] = InMemory.captures()
       assert session_id == "thr-fail"
 
       user_msg = Enum.find(messages, &(&1.role == "user"))

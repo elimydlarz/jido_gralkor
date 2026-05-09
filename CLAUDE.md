@@ -16,7 +16,37 @@ Two direct Hex deps (three with `:ex_doc` for dev docs):
 
 - `{:jido, "~> 2.2"}` — `Jido.Plugin`, `Jido.Action`, `Jido.Signal` (struct + pattern match).
 - `{:jido_ai, "~> 2.1"}` — `Jido.AI.Request.get_request/2` (used once in the plugin to look up the user query for a completed `request_id`).
-- `{:gralkor_ex, "~> 2.0"}` — `Gralkor.Client` (behaviour + `sanitize_group_id/1` + `impl/0` resolver). The plugin and the `MemorySearch` action both call `recall/3`; the plugin also calls `capture/3`; other actions call `memory_add/3` + `build_indices/0` + `build_communities/1`; `JidoGralkor.Lifecycle` calls `end_session/1`. `health_check/0` is not used here — consumers call it directly from their own supervision tree.
+- `{:gralkor_ex, "~> 2.0"}` — `Gralkor.Client` (behaviour + `sanitize_group_id/1` + `impl/0` resolver). The plugin and the `MemorySearch` action both call `recall/3`; the plugin also calls `capture/5` (forwarding `user_name` from `agent.state[:user_name]`); other actions call `memory_add/3` + `build_indices/0` + `build_communities/1`; `JidoGralkor.Lifecycle` calls `end_session/1`. `health_check/0` is not used here — consumers call it directly from their own supervision tree.
+
+## Configuring Gralkor
+
+`:jido_gralkor` is the integration point for operators who run a Jido agent on top of Gralkor. Two operator-facing knobs decide what `:gralkor_ex`'s embedded runtime does at boot — both live under `:gralkor_ex` application env (because `:gralkor_ex` boots before `:jido_gralkor` and reads its config eagerly), but they are documented here because this is the layer operators interact with when wiring an agent.
+
+Pick **one** of the two backends:
+
+**Embedded FalkorDB (development / local).** Set `GRALKOR_DATA_DIR` to a directory the BEAM can write to. `:gralkor_ex` constructs an in-process `falkordblite` instance, which spawns a `redis-server` grandchild under that directory.
+
+```bash
+GRALKOR_DATA_DIR=/var/lib/gralkor mix start
+```
+
+**Remote FalkorDB (production).** Set `:gralkor_ex, :falkordb` in `config/runtime.exs` to a keyword list with at least `:host` and `:port`; optionally `:username`, `:password`, and `:ssl` (default `false`; set `true` for FalkorDB Cloud or any TLS-fronted endpoint). `:gralkor_ex` connects directly via the network and does not import `redislite` or spawn any local redis-server.
+
+```elixir
+# config/runtime.exs
+config :gralkor_ex,
+  falkordb: [
+    host: System.fetch_env!("FALKORDB_HOST"),
+    port: String.to_integer(System.fetch_env!("FALKORDB_PORT")),
+    username: System.get_env("FALKORDB_USERNAME"),
+    password: System.get_env("FALKORDB_PASSWORD"),
+    ssl: System.get_env("FALKORDB_SSL") == "true"
+  ]
+```
+
+Remote wins when both are configured. Misconfiguration (non-keyword value, missing host/port, blank host, non-positive port) raises `ArgumentError` at app start before any child is supervised — operator typos surface immediately, not under the first user request.
+
+Optional model overrides (`GRALKOR_LLM_MODEL`, `GRALKOR_EMBEDDER_MODEL`) and the test-only InMemory client pin (`config :gralkor_ex, client: Gralkor.Client.InMemory`) are documented in `gralkor/CLAUDE.md`.
 
 ## Testing
 
@@ -39,6 +69,7 @@ JidoGralkor.Plugin
   if mount/2 is called without an :agent_name opt or with a blank :agent_name
     then it raises ArgumentError (every consumer must supply the agent's name; there is no fallback)
   then mount/2 returns {:ok, %{agent_name: opts[:agent_name]}}
+  user_name is read per-turn from `agent.state[:user_name]` — the consumer's responsibility to populate (e.g. via on_before_cmd from the signal's tool_context). Convention key, not a mount opt, because the user behind an agent can change between turns (multi-user deployments), and graph-quality depends on naming the right human in each captured episode.
   when an agent turn begins
     when a thread has committed to agent state
       then Gralkor is asked to recall memory for the agent's group_id, the thread's session_id, the query (which is passed through unchanged — no envelope stripping, no mutation; the plugin's contract is that `:query` is already the user's actual words), and the configured agent_name
@@ -54,12 +85,14 @@ JidoGralkor.Plugin
   when an agent turn completes
     then the user query, event trace, and `{:completed, answer}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list is sent to
-      Gralkor for capture with the thread's session_id, the principal's group_id, and the configured agent_name
+      Gralkor for capture with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]`
+    if `agent.state[:user_name]` is missing or blank
+      then capture raises ArgumentError (the consumer's contract violation surfaces immediately rather than persisting an episode under a generic "User" label that would corrupt the graph)
   when an agent turn fails
     then the user query, event trace, and `{:failed, error}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list — ending in
       a `"request failed: …"` behaviour message instead of an assistant message — is sent to
-      Gralkor for capture with the thread's session_id, the principal's group_id, and the configured agent_name, so the failure is visible to downstream distillation rather than
+      Gralkor for capture with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]`, so the failure is visible to downstream distillation rather than
       silently dropped
     when the agent has no committed thread yet (first-turn failure)
       then capture is skipped

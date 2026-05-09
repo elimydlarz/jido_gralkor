@@ -38,7 +38,7 @@ defmodule JidoGralkor.MixProject do
     [
       {:jido, "~> 2.2"},
       {:jido_ai, "~> 2.1"},
-      {:gralkor_ex, "~> 2.1.3"},
+      {:gralkor_ex, path: "../gralkor/ex"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
   end

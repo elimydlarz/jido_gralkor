@@ -27,33 +27,34 @@ This transitively pulls `:jido`, `:jido_ai`, and `:gralkor_ex`.
 
 ## Required configuration
 
-Four things the consumer must set up.
+Three things the consumer must set up.
 
-**1. Environment variables for `:gralkor_ex`.** The Gralkor server reads these when it boots (under its own supervisor inside the `:gralkor_ex` application):
+**1. A FalkorDB backend for `:gralkor_ex`.** `:gralkor_ex` runs Graphiti in-process via Pythonx and connects to FalkorDB either as an embedded `falkordblite` child or over the network. Pick one:
 
 ```bash
-export GRALKOR_DATA_DIR=/var/lib/<your-app>/gralkor   # required, writable
+# Embedded — falkordblite spawns a redis-server grandchild under this dir
+export GRALKOR_DATA_DIR=/var/lib/<your-app>/gralkor   # writable
 export GOOGLE_API_KEY=...                              # or ANTHROPIC / OPENAI / GROQ
-# optional: GRALKOR_URL (default http://127.0.0.1:4000)
 ```
-
-**2. App env for the `Gralkor.Client` HTTP adapter.** `jido_gralkor` calls `Gralkor.Client.impl/0` which resolves from `Application.get_env(:gralkor_ex, :client)` (defaults to `Gralkor.Client.HTTP`). The HTTP adapter reads its URL from `:gralkor_ex, :client_http`. Wire it in your `Application.start/2`:
 
 ```elixir
-def start(_type, _args) do
-  url = System.get_env("GRALKOR_URL", "http://127.0.0.1:4000")
-  Application.put_env(:gralkor_ex, :client_http, url: url)
-  # ...
-end
+# Remote — point at a managed FalkorDB. config/runtime.exs
+config :gralkor_ex,
+  falkordb: [
+    host: System.fetch_env!("FALKORDB_HOST"),
+    port: String.to_integer(System.fetch_env!("FALKORDB_PORT")),
+    username: System.get_env("FALKORDB_USERNAME"),
+    password: System.get_env("FALKORDB_PASSWORD")
+  ]
 ```
 
-In tests, swap the adapter for the in-memory twin:
+Remote wins when both are set. Misconfigured `:falkordb` (non-keyword, missing host/port) raises `ArgumentError` at app start.
+
+**2. In-memory client in tests.** Swap the adapter for the in-memory twin:
 
 ```elixir
 # config/test.exs
-config :gralkor_ex,
-  client: Gralkor.Client.InMemory,
-  client_http: [url: "http://gralkor.test"]
+config :gralkor_ex, client: Gralkor.Client.InMemory
 ```
 
 And start the twin once in `test/test_helper.exs`:
@@ -71,15 +72,7 @@ defmodule MyApp.Jido do
 end
 ```
 
-**4. `Gralkor.Connection` in your supervision tree.** Blocks startup until the Python server responds healthy; sits idle afterwards.
-
-```elixir
-children = [
-  Gralkor.Connection,   # before anything that will talk to Gralkor
-  MyApp.Jido,
-  # ...
-]
-```
+`:gralkor_ex` auto-supervises its native runtime (Python → GraphitiPool → CaptureBuffer) when a FalkorDB backend is configured — no `Gralkor.Connection` to wire and no readiness gate to add. By the time `Application.start/2` returns, `Gralkor.Client` is ready.
 
 ## Wire it on your agent
 
