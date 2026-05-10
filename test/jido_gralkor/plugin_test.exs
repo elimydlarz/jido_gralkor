@@ -38,14 +38,12 @@ defmodule JidoGralkor.PluginTest do
   defp context(agent), do: %{agent: agent}
 
   test "the session_id is the Jido thread id — the plugin does not mint its own" do
-    InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
     signal = Signal.new!("ai.react.query", %{query: "q"}, source: "/test")
 
     assert {:ok, {:continue, %Signal{data: data}}} =
              Plugin.handle_signal(signal, context(agent("user-1", thread_id: "thr-exact")))
 
     assert data.tool_context.session_id == "thr-exact"
-    assert [[_, _agent_name, "thr-exact", _]] = InMemory.recalls()
   end
 
   test "mount/2 returns {:ok, %{agent_name: ...}} when given a non-blank :agent_name opt" do
@@ -66,109 +64,51 @@ defmodule JidoGralkor.PluginTest do
   end
 
   describe "when an agent turn begins, when a thread has committed to agent state" do
-    test "Gralkor is asked to recall memory for the agent's group_id and the thread's session_id with the query" do
-      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
-
-      signal = Signal.new!("ai.react.query", %{query: "new question"}, source: "/test")
-
-      Plugin.handle_signal(signal, context(agent("user-abc", thread_id: "thr-xyz")))
-
-      assert [[group_id, agent_name, session_id, query]] = InMemory.recalls()
-      assert group_id == "user_abc"
-      assert agent_name == "TestAgent"
-      assert session_id == "thr-xyz"
-      assert query == "new question"
-    end
-
-    test "the thread's session_id is planted on the signal's tool_context for downstream tool calls" do
-      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
+    test "the thread's session_id and agent_name are planted on the signal's tool_context" do
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
       assert {:ok, {:continue, %Signal{data: data}}} =
                Plugin.handle_signal(signal, context(agent("user-abc", thread_id: "thr-xyz")))
 
       assert data.tool_context.session_id == "thr-xyz"
+      assert data.tool_context.agent_name == "TestAgent"
+    end
+
+    test "the plugin does not call recall on its own (recall is the LLM's job)" do
+      signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
+
+      Plugin.handle_signal(signal, context(agent("user-abc", thread_id: "thr-xyz")))
+
+      assert InMemory.recalls() == []
+    end
+
+    test "the query is left untouched on the signal" do
+      signal = Signal.new!("ai.react.query", %{query: "hello"}, source: "/test")
+
+      assert {:ok, {:continue, %Signal{data: data}}} =
+               Plugin.handle_signal(signal, context(agent("user-abc", thread_id: "thr-xyz")))
+
+      assert data.query == "hello"
     end
   end
 
   describe "when an agent turn begins, when no thread has committed yet" do
-    test "Gralkor is asked to recall memory for the agent's group_id and a nil session_id with the query" do
-      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
-
-      signal = Signal.new!("ai.react.query", %{query: "first question"}, source: "/test")
-
-      log =
-        capture_log(fn ->
-          Plugin.handle_signal(signal, context(agent("user-abc", thread_id: nil)))
-        end)
-
-      assert [[group_id, _agent_name, session_id, query]] = InMemory.recalls()
-      assert group_id == "user_abc"
-      assert session_id == nil
-      assert query == "first question"
-      refute log =~ "skipping recall"
-    end
-
-    test "no session_id is planted on the signal's tool_context" do
-      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
+    test "only the configured agent_name is planted on tool_context (no session_id)" do
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
       assert {:ok, {:continue, %Signal{data: data}}} =
                Plugin.handle_signal(signal, context(agent("user-abc", thread_id: nil)))
 
-      refute data |> Map.get(:tool_context, %{}) |> Map.has_key?(:session_id)
-    end
-  end
-
-  describe "when an agent turn begins, when recall returns a memory block" do
-    test "the block is stashed on tool_context under :__gralkor_memory__ and :query is untouched" do
-      memory_block = "Facts:\n- Eli supports Hawthorn."
-      InMemory.set_recall({:ok, memory_block})
-      signal = Signal.new!("ai.react.query", %{query: "hello"}, source: "/test")
-
-      assert {:ok, {:continue, %Signal{data: new_data} = new_signal}} =
-               Plugin.handle_signal(signal, context(agent("user-01", thread_id: "thr-1")))
-
-      assert new_signal.type == "ai.react.query"
-      assert new_data.query == "hello"
-      assert new_data.tool_context[:__gralkor_memory__] == memory_block
-      assert new_data.tool_context.session_id == "thr-1"
-    end
-  end
-
-  describe "when an agent turn begins, if recall fails" do
-    test "the turn continues without :__gralkor_memory__ and a Logger.warning is emitted" do
-      InMemory.set_recall({:error, :gralkor_unreachable})
-      signal = Signal.new!("ai.react.query", %{query: "hello"}, source: "/test")
-
-      log =
-        capture_log(fn ->
-          assert {:ok, {:continue, %Signal{data: data}}} =
-                   Plugin.handle_signal(signal, context(agent("user-01", thread_id: "thr-1")))
-
-          refute Map.has_key?(Map.get(data, :tool_context, %{}), :__gralkor_memory__)
-          assert data.tool_context.session_id == "thr-1"
-          assert data.query == "hello"
-        end)
-
-      assert log =~ "[jido_gralkor] recall failed"
-      assert log =~ "gralkor_unreachable"
+      assert data.tool_context.agent_name == "TestAgent"
+      refute Map.has_key?(data.tool_context, :session_id)
     end
 
-    test "with no thread committed, the turn continues with nothing added to tool_context and a warning is logged" do
-      InMemory.set_recall({:error, :gralkor_unreachable})
-      signal = Signal.new!("ai.react.query", %{query: "hello"}, source: "/test")
+    test "the plugin still does not call recall" do
+      signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
-      log =
-        capture_log(fn ->
-          assert {:ok, {:continue, %Signal{data: data}}} =
-                   Plugin.handle_signal(signal, context(agent("user-02", thread_id: nil)))
+      Plugin.handle_signal(signal, context(agent("user-abc", thread_id: nil)))
 
-          refute Map.has_key?(data.tool_context, :session_id)
-          assert data.query == "hello"
-        end)
-
-      assert log =~ "[jido_gralkor] recall failed"
+      assert InMemory.recalls() == []
     end
   end
 

@@ -1,6 +1,6 @@
 # jido_gralkor
 
-Connect a [Jido](https://hex.pm/packages/jido) agent to [Gralkor](https://hex.pm/packages/gralkor) — a temporally-aware, knowledge-graph memory server (Graphiti + FalkorDB) — with three drop-in modules. This is the entry point for Jido devs who want long-term memory: the library handles session identity, recall-on-query, capture-on-completion, and the two ReAct tools the LLM calls for explicit lookup and recording. You write your agent's prompt, model, and business tools; `jido_gralkor` covers the memory wiring.
+Connect a [Jido](https://hex.pm/packages/jido) agent to [Gralkor](https://hex.pm/packages/gralkor) — a temporally-aware, knowledge-graph memory server (Graphiti + FalkorDB) — with a small set of drop-in modules. This is the entry point for Jido devs who want long-term memory: the library handles session identity, capture-on-completion, the `memory_search` / `memory_add` ReAct tools, and a tiny `RequestTransformer` helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries. You write your agent's prompt, model, and business tools; `jido_gralkor` covers the memory wiring.
 
 Two sibling packages are involved and both are required:
 
@@ -101,7 +101,7 @@ defmodule MyApp.ChatAgent do
 end
 ```
 
-That's it. The plugin's `:__memory__` slot replaces Jido's built-in memory plugin. Your agent now auto-recalls relevant facts before every LLM call, auto-captures every turn after completion or failure (the ReAct event trace is normalised into Gralkor's canonical `{role, content}` message shape via `JidoGralkor.Canonical` — `user`, `behaviour` for thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` message on failed turns so the failure stays visible to downstream distillation), and exposes `memory_search` / `memory_add` as callable tools.
+That's it. The plugin's `:__memory__` slot replaces Jido's built-in memory plugin. The plugin plants `:session_id` and `:agent_name` on the per-turn `tool_context` so `memory_search` can find them; recall itself is the LLM's job — call `JidoGralkor.ReAct.maybe_force_memory_search/2` from your strategy's `request_transformer` to pin `tool_choice` to `memory_search` on iteration 1 so the agent authors a focused query in-thread instead of the harness embedding raw user text. Capture still runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `{role, content}` message shape via `JidoGralkor.Canonical` — `user`, `behaviour` for thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` message on failed turns so the failure stays visible to downstream distillation.
 
 ## What happens at runtime
 
@@ -109,7 +109,7 @@ That's it. The plugin's `:__memory__` slot replaces Jido's built-in memory plugi
 
 **Group partitioning.** `group_id` is `Gralkor.Client.sanitize_group_id(agent.id)` (hyphens replaced with underscores — a RediSearch constraint). Per-agent graph partition; agents never see each other's memory.
 
-**First-turn bootstrap.** On the very first query of a fresh agent, `Jido.Thread.Plugin` hasn't yet committed a thread (the ReAct strategy's `ThreadAgent.append` runs inside `@start`, after the plugin hook). The plugin passes the signal through unchanged and lets capture establish the session when the turn completes. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result — the LLM is told the search did not run, so it can't read an empty payload as "no memory exists" and confidently lie.
+**First-turn bootstrap.** On the very first query of a fresh agent, `Jido.Thread.Plugin` hasn't yet committed a thread (the ReAct strategy's `ThreadAgent.append` runs inside `@start`, after the plugin hook). The plugin plants only `:agent_name` (no `:session_id`) and lets capture establish the session when the turn completes. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result — the LLM is told the search did not run, so it can't read an empty payload as "no memory exists" and confidently lie. `memory_search` likewise short-circuits when invoked with a blank `query`, which protects forced-tool-call paths from the LLM emitting empty arguments.
 
 **Ending a session.** When your app decides a conversation is over (e.g. user issues `/reset`), call `Gralkor.Client.impl().end_session(session_id)` directly — this flushes the server-side capture buffer for that session now instead of waiting for the idle window. `jido_gralkor` doesn't own session lifecycle; your agent's chat facade does.
 

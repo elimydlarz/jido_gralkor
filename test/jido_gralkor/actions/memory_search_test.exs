@@ -48,6 +48,39 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     assert session_id == "thr-xyz"
   end
 
+  describe "when the query is blank or missing (defensive against forced-tool-call paths)" do
+    test "returns an explicit no-query non-result, does not call the client, and logs a warning" do
+      log =
+        capture_log(fn ->
+          assert {:ok, %{result: result}} =
+                   MemorySearch.run(%{query: ""}, %{
+                     agent_id: "01USER",
+                     session_id: "thr-1",
+                     agent_name: "Susu"
+                   })
+
+          assert result =~ "no query was provided"
+          assert result =~ "NON-RESULT"
+        end)
+
+      assert InMemory.recalls() == []
+      assert log =~ "[jido_gralkor] memory_search short-circuited"
+      assert log =~ "blank query"
+    end
+
+    test "whitespace-only query is treated as blank" do
+      assert {:ok, %{result: result}} =
+               MemorySearch.run(%{query: "   "}, %{
+                 agent_id: "01USER",
+                 session_id: "thr-1",
+                 agent_name: "Susu"
+               })
+
+      assert result =~ "no query was provided"
+      assert InMemory.recalls() == []
+    end
+  end
+
   describe "when session_id is absent from context (first query before a thread is committed)" do
     test "returns an explicit non-result message, does not call the client, and logs a warning" do
       log =

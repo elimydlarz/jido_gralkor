@@ -4,49 +4,32 @@ defmodule JidoGralkor.Plugin do
   memory. Claims the `:__memory__` slot so it is the only memory plugin
   attached to the agent.
 
-  `session_id` is the current Jido thread id, read from
-  `agent.state[:__thread__].id`. One Jido thread per Gralkor session —
-  the capture buffer rotates naturally when the thread rotates, and
-  concurrent agents for the same principal never collide on the buffer.
-  `group_id` is `sanitize_group_id(agent.id)` since memory graph
-  partitioning is per-principal.
+  On `ai.react.query` the plugin plants two values on the signal's
+  `tool_context` so the `MemorySearch` ReAct tool can find them:
 
-  Recall fires on `ai.react.query`: Gralkor is always called with the
-  agent's `group_id` and the current thread's session id (or `nil`
-  when no thread has committed yet — first query of a fresh agent,
-  before the ReAct strategy's `ThreadAgent.append` runs inside
-  `@start`). When a thread is committed, its session id is planted on
-  the signal's `tool_context` so in-turn tool calls (e.g.
-  `MemorySearch`) key on the same session; when it isn't, no session
-  id is planted. The returned memory block (when present) is stashed
-  on `tool_context` under `:__gralkor_memory__` regardless of thread
-  state. The plugin does not mutate `:query` — the recalled memory is
-  delivered to the LLM by a request transformer at prompt-build time
-  (see `Jido.AI.Reasoning.ReAct.RequestTransformer` and
-  `Jido.AI.PromptBuilder`), keeping `:query` the user's actual words
-  everywhere downstream (buffer, request store, capture).
+    * `:session_id` — the current Jido thread id (read from
+      `agent.state[:__thread__].id`). Absent when no thread is
+      committed yet (first query of a fresh agent, before the ReAct
+      strategy's `ThreadAgent.append` runs inside `@start`); on that
+      turn `MemorySearch` short-circuits with a non-result message.
+    * `:agent_name` — the value supplied at mount.
+
+  The plugin does **not** call `Gralkor.Client.recall/3` on its own.
+  Recall is the LLM's job, invoked through the `MemorySearch` tool.
+  Consumers force it on the first ReAct iteration via
+  `JidoGralkor.ReAct.maybe_force_memory_search/2` from their
+  `Jido.AI.Reasoning.ReAct.RequestTransformer`.
 
   Capture fires on `ai.request.completed` / `ai.request.failed`: the
   full request trace and assistant answer are normalised via
   `JidoGralkor.Canonical.to_messages/3` into Gralkor's canonical
   `[%Gralkor.Message{role, content}]` shape and shipped to the server,
   which keeps the rolling conversation buffer keyed by `session_id`.
-  Because nothing in the turn mutates `:query` to add harness context,
-  canonicalisation doesn't strip envelopes — the user message it
-  persists is the user's actual words. Capture is skipped if the
-  thread isn't present (first-turn failure with nothing committed) or
-  if the canonical message list is empty.
-
-  Recall failures are best-effort under the retry-ownership doctrine
-  (see `gralkor/TEST_TREES.md › Retry ownership`): if the Vertex-upstream
-  retries at the google-genai SDK exhaust, `Client.recall/3` returns
-  `{:error, _}` and the plugin logs a warning and continues the turn
-  without `:__gralkor_memory__`. Retrying here would amplify load
-  without a meaningful chance of success, and failing the turn would
-  turn a memory outage into a user-facing outage. Capture failures still
-  raise (Gralkor capture is server-side buffered and its retry lives in
-  the capture buffer, not here — a raise from `capture/3` means the
-  server is unreachable, which is a different failure class).
+  Capture is skipped if the thread isn't present (first-turn failure
+  with nothing committed) or if the canonical message list is empty.
+  Capture failures raise (Gralkor capture is server-side buffered and
+  its retry lives in the capture buffer, not here — a raise from
+  `capture/3` means the server is unreachable).
   """
 
   use Jido.Plugin,
@@ -84,35 +67,16 @@ defmodule JidoGralkor.Plugin do
   defp fetch_agent_name(_), do: nil
 
   @impl Jido.Plugin
-  def handle_signal(
-        %Signal{type: "ai.react.query", data: %{query: query}} = signal,
-        %{agent: agent}
-      ) do
-    group_id = Client.sanitize_group_id(agent.id)
-    session_id = thread_id(agent)
+  def handle_signal(%Signal{type: "ai.react.query"} = signal, %{agent: agent}) do
     agent_name = agent_name(agent)
 
-    signal_with_session =
-      case session_id do
-        nil -> merge_tool_context(signal, %{agent_name: agent_name})
-        id -> merge_tool_context(signal, %{session_id: id, agent_name: agent_name})
+    extras =
+      case thread_id(agent) do
+        nil -> %{agent_name: agent_name}
+        id -> %{session_id: id, agent_name: agent_name}
       end
 
-    case Client.impl().recall(group_id, agent_name, session_id, query) do
-      {:ok, memory_block} when is_binary(memory_block) ->
-        {:ok,
-         {:continue,
-          merge_tool_context(signal_with_session, %{
-            :__gralkor_memory__ => memory_block
-          })}}
-
-      {:error, reason} ->
-        Logger.warning(
-          "[jido_gralkor] recall failed — continuing turn without memory context: #{inspect(reason)}"
-        )
-
-        {:ok, {:continue, signal_with_session}}
-    end
+    {:ok, {:continue, merge_tool_context(signal, extras)}}
   end
 
   def handle_signal(
