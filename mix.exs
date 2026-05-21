@@ -1,7 +1,7 @@
 defmodule JidoGralkor.MixProject do
   use Mix.Project
 
-  @version "2.0.1"
+  @version "3.0.0"
   @source_url "https://github.com/elimydlarz/jido_gralkor"
 
   def project do
@@ -13,6 +13,7 @@ defmodule JidoGralkor.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       aliases: aliases(),
+      test_coverage: [summary: [threshold: 0]],
       description: description(),
       package: package(),
       source_url: @source_url,
@@ -31,14 +32,19 @@ defmodule JidoGralkor.MixProject do
   end
 
   def application do
-    [extra_applications: [:logger]]
+    [
+      mod: {Gralkor.Application, []},
+      extra_applications: [:logger, :inets, :ssl]
+    ]
   end
 
   defp deps do
     [
       {:jido, "~> 2.2"},
       {:jido_ai, "~> 2.1"},
-      {:gralkor_ex, "~> 3.1"},
+      {:pythonx, "~> 0.4"},
+      {:req_llm, "~> 1.0"},
+      {:jason, "~> 1.4"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
   end
@@ -66,7 +72,7 @@ defmodule JidoGralkor.MixProject do
         "GitHub" => @source_url,
         "Issues" => "#{@source_url}/issues"
       },
-      files: ~w(lib mix.exs README.md CHANGELOG.md .formatter.exs)
+      files: ~w(lib config mix.exs README.md CHANGELOG.md .formatter.exs)
     ]
   end
 
