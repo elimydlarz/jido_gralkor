@@ -42,7 +42,6 @@ defmodule JidoGralkor.Plugin do
       JidoGralkor.Actions.MemoryBuildIndices,
       JidoGralkor.Actions.MemoryBuildCommunities
     ],
-    signal_patterns: ["ai.react.query", "ai.request.completed", "ai.request.failed"],
     description: "Gralkor-backed long-term memory",
     capabilities: [:memory]
 

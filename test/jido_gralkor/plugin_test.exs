@@ -46,6 +46,12 @@ defmodule JidoGralkor.PluginTest do
            ]
   end
 
+  test "a consumer agent that mounts the plugin compiles (no Jido route conflicts)" do
+    instance = Jido.Plugin.Instance.new({Plugin, %{agent_name: "Test"}})
+    routes = Jido.Plugin.Routes.expand_routes(instance)
+    assert {:ok, _resolved} = Jido.Plugin.Routes.detect_conflicts(routes)
+  end
+
   test "the session_id is the Jido thread id — the plugin does not mint its own" do
     signal = Signal.new!("ai.react.query", %{query: "q"}, source: "/test")
 
@@ -310,6 +316,17 @@ defmodule JidoGralkor.PluginTest do
       assert log =~ "[jido_gralkor] skipping capture"
       assert log =~ "user-01"
       assert log =~ "JIDO_CHANGE_SUGGESTIONS.md"
+    end
+  end
+
+  describe "when a signal of any other type arrives" do
+    test "handle_signal/2 returns {:ok, :continue} with no captures and no recalls" do
+      ag = agent("user-other", thread_id: "thr-other")
+      signal = Signal.new!("ai.llm.delta", %{token: "x"}, source: "/test")
+
+      assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
+      assert InMemory.captures() == []
+      assert InMemory.recalls() == []
     end
   end
 

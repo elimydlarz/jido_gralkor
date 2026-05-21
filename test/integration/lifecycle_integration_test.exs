@@ -8,11 +8,9 @@ defmodule JidoGralkor.LifecycleIntegrationTest do
   alias JidoGralkor.LifecycleTestAgent
   alias JidoGralkor.LifecycleTestJido
 
-  @idle_ms 150
-
   setup do
     InMemory.reset()
-    InMemory.set_end_session(:ok)
+    InMemory.set_flush(:ok)
 
     {:ok, jido} = Jido.start(name: LifecycleTestJido, otp_app: :jido_gralkor)
 
@@ -29,14 +27,15 @@ defmodule JidoGralkor.LifecycleIntegrationTest do
     :ok
   end
 
-  defp start_agent(opts) do
+  defp start_agent do
     id = "agent-#{System.unique_integer([:positive])}"
 
     {:ok, pid} =
       Jido.start_agent(
         LifecycleTestJido,
         LifecycleTestAgent,
-        Keyword.merge([id: id, lifecycle_mod: JidoGralkor.Lifecycle], opts)
+        id: id,
+        lifecycle_mod: JidoGralkor.Lifecycle
       )
 
     {pid, id}
@@ -66,70 +65,26 @@ defmodule JidoGralkor.LifecycleIntegrationTest do
     end
   end
 
-  describe "while the AgentServer is wired with JidoGralkor.Lifecycle and a positive idle_timeout, while a thread is committed, when the idle window elapses without :touch" do
-    test "then the AgentServer terminates and end_session fires once with the thread id" do
-      {pid, _id} = start_agent(idle_timeout: @idle_ms)
-      thread_id = "thread-elapse"
-      seed_thread(pid, thread_id)
-
-      assert eventually(fn -> not Process.alive?(pid) end, @idle_ms * 10)
-      assert eventually(fn -> InMemory.end_sessions() == [[thread_id]] end)
-    end
-  end
-
-  describe "while the AgentServer is wired with JidoGralkor.Lifecycle and a positive idle_timeout, while a thread is committed, when :touch arrives before each elapse" do
-    test "then the AgentServer stays alive and end_session is not called" do
-      {pid, _id} = start_agent(idle_timeout: @idle_ms)
-      thread_id = "thread-touch"
-      seed_thread(pid, thread_id)
-
-      for _ <- 1..5 do
-        Process.sleep(div(@idle_ms, 3))
-        :ok = Jido.AgentServer.touch(pid)
-      end
-
-      assert Process.alive?(pid)
-      assert InMemory.end_sessions() == []
-
-      GenServer.stop(pid, :shutdown, 5_000)
-    end
-  end
-
-  describe "while the AgentServer is wired with JidoGralkor.Lifecycle and a positive idle_timeout, while a thread is committed, when GenServer.stop(:shutdown) is invoked" do
-    test "then end_session fires with the thread id" do
-      {pid, _id} = start_agent(idle_timeout: @idle_ms * 100)
+  describe "while a thread is committed, when the AgentServer is stopped gracefully" do
+    test "then `Gralkor.Client.flush` is invoked once with the thread id" do
+      {pid, _id} = start_agent()
       thread_id = "thread-stop"
       seed_thread(pid, thread_id)
 
       :ok = GenServer.stop(pid, :shutdown, 5_000)
 
-      assert eventually(fn -> InMemory.end_sessions() == [[thread_id]] end)
+      assert eventually(fn -> InMemory.flushes() == [[thread_id]] end)
     end
   end
 
-  describe "while the AgentServer is wired with JidoGralkor.Lifecycle and a positive idle_timeout, while no thread is committed (first turn), when GenServer.stop is invoked" do
-    test "then the AgentServer terminates and end_session is not called" do
-      {pid, _id} = start_agent(idle_timeout: @idle_ms * 100)
+  describe "while no thread is committed, when the AgentServer is stopped gracefully" do
+    test "then `Gralkor.Client.flush` is not invoked" do
+      {pid, _id} = start_agent()
 
       :ok = GenServer.stop(pid, :shutdown, 5_000)
 
       Process.sleep(50)
-      assert InMemory.end_sessions() == []
-    end
-  end
-
-  describe "while the AgentServer is wired with a non-positive idle_timeout" do
-    test "then no idle timer is armed (verified by elapsing well past any plausible window)" do
-      {pid, _id} = start_agent(idle_timeout: 0)
-      thread_id = "thread-no-timer"
-      seed_thread(pid, thread_id)
-
-      Process.sleep(@idle_ms * 4)
-
-      assert Process.alive?(pid)
-      assert InMemory.end_sessions() == []
-
-      GenServer.stop(pid, :shutdown, 5_000)
+      assert InMemory.flushes() == []
     end
   end
 end
