@@ -260,7 +260,8 @@ defmodule Gralkor.GraphitiPool do
       falkor_db: falkor_db,
       shared: shared,
       construct_instance: construct_instance,
-      interpret_fn: interpret_fn
+      interpret_fn: interpret_fn,
+      ontology_cache: %{}
     }
 
     if warmup?, do: do_warmup(state)
