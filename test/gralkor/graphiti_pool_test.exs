@@ -304,4 +304,51 @@ defmodule Gralkor.GraphitiPoolTest do
       File.rm_rf!(data_dir)
     end
   end
+
+  describe "ex-graphiti-pool > ontology materialisation" do
+    @describetag :integration
+
+    defmodule OntologyForGraphitiTest do
+      use Gralkor.Ontology, entities: :strict, relationships: :scoped
+
+      entity User do
+        field :handle, :string, required: true
+      end
+
+      entity Preference do
+        field :description, :string, required: true
+      end
+
+      from User do
+        prefers Preference do
+          field :since, :string
+        end
+      end
+    end
+
+    test "materialises an ontology into graphiti-shaped dicts and reuses them on the second call" do
+      data_dir =
+        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+
+      File.mkdir_p!(data_dir)
+
+      {:ok, pid} =
+        GraphitiPool.start_link(name: nil, falkordb_spec: {:embedded, data_dir}, warmup: false)
+
+      try do
+        first = GenServer.call(pid, {:materialise, OntologyForGraphitiTest}, :infinity)
+        second = GenServer.call(pid, {:materialise, OntologyForGraphitiTest}, :infinity)
+
+        assert is_map(first)
+        assert Map.has_key?(first, "entity_types")
+        assert Map.has_key?(first, "edge_types")
+        assert Map.has_key?(first, "edge_type_map")
+        assert first["excluded_entity_types"] == ["Entity"]
+        assert first === second
+      after
+        GenServer.stop(pid)
+        File.rm_rf!(data_dir)
+      end
+    end
+  end
 end
