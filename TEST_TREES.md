@@ -494,12 +494,35 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
     if any warmup call raises or returns {:error, _}
       then it is caught and logged at :warning as "[gralkor] warmup failed (non-fatal): <reason>"
       and boot proceeds (best-effort)
-  for/1 (group_id) — also driven by search/4, add_episode/4, build_indices/1, build_communities/2, which all delegate to it
+  for/1 (group_id) — also driven by search/4, add_episode/5, build_indices/1, build_communities/2, which all delegate to it
     when called against an embedded spec
       then the Graphiti instance for the sanitized group_id is looked up from a shared ETS cache; on first use it is constructed and inserted, then lives for the lifetime of the GenServer
       then concurrent callers proceed in parallel
     when called against a remote spec
       then a fresh AsyncFalkorDB and Graphiti instance scoped to the sanitized group_id are constructed and returned, then discarded by the caller after the operation that needed it returns
+  add_episode/5 (group_id, content, source_description, ontology)
+    when called with ontology=nil
+      then graphiti's add_episode is invoked without entity_types, edge_types, edge_type_map, or excluded_entity_types — behaviour is identical to the pre-ontology slice
+    when called with an ontology module
+      then `ontology.__ontology__/0` is read once and translated into graphiti's Pydantic dicts on first encounter; on subsequent calls with the same module, the cached dicts are reused (no Pydantic reconstruction)
+      then `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types` are forwarded to graphiti's add_episode as appropriate (see ontology materialisation)
+  ontology materialisation
+    a Pythonx-side translator builds graphiti-shaped dicts from an ex-ontology-payload
+    when the payload's :entity_types entry has fields with `required: true`
+      then the materialised Pydantic class declares that field without a default
+    when the payload's :entity_types entry has fields with `required: false`
+      then the materialised Pydantic class declares that field with a default of None
+    when the payload's :edge_type_map is non-empty
+      then graphiti's add_episode is invoked with `edge_type_map={(src, dst): [edge_names…]}` translated from the list-of-pairs
+    when the payload's :edge_type_map is []
+      then graphiti's add_episode is invoked without `edge_type_map` (graphiti's default — every named edge allowed everywhere — applies)
+    when the payload's :excluded_entity_types is ["Entity"]
+      then graphiti's add_episode is invoked with `excluded_entity_types=["Entity"]` (no generic Entity extraction)
+    when the payload's :excluded_entity_types is nil
+      then graphiti's add_episode is invoked without `excluded_entity_types`
+    caching
+      then materialised dicts are keyed by the ontology module name (an atom rendered to its string form)
+      then concurrent calls for the same ontology module reuse the cached dicts without re-running Pydantic class construction
 ```
 
 ## Configuration (embedded Gralkor adapter)
