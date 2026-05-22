@@ -214,19 +214,19 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > memory_add/3" do
+      describe "ex-client > memory_add/4" do
         test "when the backend acknowledges the add then :ok is returned" do
           unquote(setup_block).()
           configure_memory_add(:ok)
 
-          assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual")
+          assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual", nil)
         end
 
         test "if the backend fails then {:error, reason} is returned" do
           unquote(setup_block).()
           configure_memory_add({:error, :extract_failed})
 
-          assert {:error, :extract_failed} = client().memory_add("group-1", "x", nil)
+          assert {:error, :extract_failed} = client().memory_add("group-1", "x", nil, nil)
         end
       end
 
