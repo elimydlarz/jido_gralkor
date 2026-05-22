@@ -56,19 +56,38 @@ defmodule JidoGralkor.Plugin do
 
   @impl Jido.Plugin
   def mount(_agent, opts) do
-    agent_name = fetch_agent_name(opts)
+    agent_name = fetch_opt(opts, :agent_name)
 
     unless is_binary(agent_name) and String.trim(agent_name) != "" do
       raise ArgumentError,
             "JidoGralkor.Plugin requires :agent_name (non-blank string), got #{inspect(agent_name)}"
     end
 
-    {:ok, %{agent_name: agent_name}}
+    ontology = fetch_opt(opts, :ontology)
+    validate_ontology!(ontology)
+
+    {:ok, %{agent_name: agent_name, ontology: ontology}}
   end
 
-  defp fetch_agent_name(opts) when is_list(opts), do: Keyword.get(opts, :agent_name)
-  defp fetch_agent_name(opts) when is_map(opts), do: Map.get(opts, :agent_name)
-  defp fetch_agent_name(_), do: nil
+  defp fetch_opt(opts, key) when is_list(opts), do: Keyword.get(opts, key)
+  defp fetch_opt(opts, key) when is_map(opts), do: Map.get(opts, key)
+  defp fetch_opt(_, _), do: nil
+
+  defp validate_ontology!(nil), do: :ok
+
+  defp validate_ontology!(module) when is_atom(module) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :__ontology__, 0) do
+      :ok
+    else
+      raise ArgumentError,
+            "JidoGralkor.Plugin :ontology must be a module declared with `use Gralkor.Ontology`, got #{inspect(module)}"
+    end
+  end
+
+  defp validate_ontology!(other) do
+    raise ArgumentError,
+          "JidoGralkor.Plugin :ontology must be a module or nil, got #{inspect(other)}"
+  end
 
   @impl Jido.Plugin
   def handle_signal(%Signal{type: "ai.react.query"} = signal, %{agent: agent}) do
