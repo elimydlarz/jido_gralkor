@@ -9,8 +9,8 @@ defmodule Gralkor.CaptureBufferTest do
   setup do
     test_pid = self()
 
-    flush_callback = fn group_id, agent_name, user_name, turns ->
-      send(test_pid, {:flushed, group_id, agent_name, user_name, turns})
+    flush_callback = fn group_id, agent_name, user_name, ontology, turns ->
+      send(test_pid, {:flushed, group_id, agent_name, user_name, ontology, turns})
       :ok
     end
 
