@@ -292,17 +292,20 @@ ex-flush-and-await (src: lib/gralkor/client/native.ex#flush_and_await/2; unit: t
 ## Tools (embedded Gralkor adapter)
 
 ```
-ex-memory-add (src: lib/gralkor/client/native.ex#memory_add/3; unit: test/gralkor/client/native_test.exs)
+ex-memory-add (src: lib/gralkor/client/native.ex#memory_add/4; unit: test/gralkor/client/native_test.exs)
   request shape
-    when called with group_id, content, source_description
+    when called with group_id, content, source_description, ontology
       then group_id is sanitized before ingestion
   then auto-generates name ("manual-add-" + timestamp_ms)
-  then auto-generates idempotency_key (UUID v4)
-  then calls Gralkor.GraphitiPool.add_episode with source=:text scoped to the sanitized group_id
-  then passes current ontology (entity_types, edge_types, edge_type_map)
-  then returns {:ok, %{status: "stored"}}
-  when source_description is omitted (nil)
+  then auto-generates idempotency_key from `System.unique_integer([:positive, :monotonic])` rendered as a string
+  then calls Gralkor.GraphitiPool.add_episode with source=:text scoped to the sanitized group_id, forwarding the ontology as the final arg
+  then returns :ok on success
+  when source_description is nil
     then defaults to "manual"
+  when ontology is nil
+    then GraphitiPool.add_episode is invoked with ontology=nil — graphiti receives no entity_types/edge_types/edge_type_map/excluded_entity_types (behaviour identical to pre-ontology slice)
+  when ontology is a module declared with `use Gralkor.Ontology`
+    then the module's `__ontology__/0` payload is forwarded; GraphitiPool builds (and caches) the Pydantic dicts and passes them to graphiti — see ex-graphiti-pool > ontology materialisation
 
 ex-build-indices (src: lib/gralkor/client/native.ex#build_indices/0; unit: test/gralkor/client/native_test.exs)
   then calls Gralkor.GraphitiPool.build_indices_and_constraints (operates on the whole graph)
