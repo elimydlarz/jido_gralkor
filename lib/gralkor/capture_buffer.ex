@@ -174,11 +174,11 @@ defmodule Gralkor.CaptureBuffer do
         Logger.info("[gralkor] flush — session:#{session_id} empty")
         {:reply, :ok, state}
 
-      {{group, agent, user, turns}, entries} ->
+      {{group, agent, user, ontology, turns}, entries} ->
         Logger.info("[gralkor] flush scheduled — session:#{session_id} turns:#{length(turns)}")
 
         Task.start(fn ->
-          do_flush(group, agent, user, turns, state.flush_callback, state.retries)
+          do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
         end)
 
         {:reply, :ok, %{state | entries: entries}}
@@ -191,14 +191,14 @@ defmodule Gralkor.CaptureBuffer do
         Logger.info("[gralkor] flush_and_await — session:#{session_id} empty")
         {:reply, :ok, state}
 
-      {{group, agent, user, turns}, entries} ->
+      {{group, agent, user, ontology, turns}, entries} ->
         Logger.info(
           "[gralkor] flush_and_await — session:#{session_id} turns:#{length(turns)} timeout_ms:#{timeout_ms}"
         )
 
         task =
           Task.async(fn ->
-            do_flush(group, agent, user, turns, state.flush_callback, state.retries)
+            do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
           end)
 
         case Task.yield(task, timeout_ms) || Task.shutdown(task, :brutal_kill) do
@@ -215,17 +215,21 @@ defmodule Gralkor.CaptureBuffer do
 
           nil ->
             Logger.warning("[gralkor] flush_and_await timeout — session:#{session_id}")
+
             {:reply, {:error, :timeout},
-             %{state | entries: Map.put(entries, session_id, {group, agent, user, turns})}}
+             %{
+               state
+               | entries: Map.put(entries, session_id, {group, agent, user, ontology, turns})
+             }}
         end
     end
   end
 
   def handle_call(:flush_all, _from, state) do
     tasks =
-      for {_session_id, {group, agent, user, turns}} <- state.entries do
+      for {_session_id, {group, agent, user, ontology, turns}} <- state.entries do
         Task.async(fn ->
-          do_flush(group, agent, user, turns, state.flush_callback, state.retries)
+          do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
         end)
       end
 
@@ -235,8 +239,8 @@ defmodule Gralkor.CaptureBuffer do
 
   @impl true
   def terminate(_reason, state) do
-    for {_session_id, {group, agent, user, turns}} <- state.entries do
-      do_flush(group, agent, user, turns, state.flush_callback, state.retries)
+    for {_session_id, {group, agent, user, ontology, turns}} <- state.entries do
+      do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
     end
 
     :ok
@@ -244,12 +248,12 @@ defmodule Gralkor.CaptureBuffer do
 
   # ── Flush worker ────────────────────────────────────────────
 
-  defp do_flush(group, agent, user, turns, cb, retries) do
-    do_flush(group, agent, user, turns, cb, retries, System.monotonic_time(:millisecond))
+  defp do_flush(group, agent, user, ontology, turns, cb, retries) do
+    do_flush(group, agent, user, ontology, turns, cb, retries, System.monotonic_time(:millisecond))
   end
 
-  defp do_flush(group, agent, user, turns, cb, retries, t0) do
-    case safe_invoke(cb, group, agent, user, turns) do
+  defp do_flush(group, agent, user, ontology, turns, cb, retries, t0) do
+    case safe_invoke(cb, group, agent, user, ontology, turns) do
       :ok ->
         elapsed = System.monotonic_time(:millisecond) - t0
         Logger.info("[gralkor] capture flushed — turns:#{length(turns)} elapsed:#{elapsed}ms")
@@ -264,7 +268,7 @@ defmodule Gralkor.CaptureBuffer do
         err
 
       {:error, _reason} ->
-        retry(group, agent, user, turns, cb, retries, t0)
+        retry(group, agent, user, ontology, turns, cb, retries, t0)
 
       {:exception, exception, stacktrace} ->
         Logger.warning(
@@ -272,24 +276,24 @@ defmodule Gralkor.CaptureBuffer do
             Exception.format(:error, exception, stacktrace)
         )
 
-        retry(group, agent, user, turns, cb, retries, t0)
+        retry(group, agent, user, ontology, turns, cb, retries, t0)
     end
   end
 
-  defp safe_invoke(cb, group, agent, user, turns) do
-    cb.(group, agent, user, turns)
+  defp safe_invoke(cb, group, agent, user, ontology, turns) do
+    cb.(group, agent, user, ontology, turns)
   rescue
     e -> {:exception, e, __STACKTRACE__}
   end
 
-  defp retry(_group, _agent, _user, _turns, _cb, [], _t0) do
+  defp retry(_group, _agent, _user, _ontology, _turns, _cb, [], _t0) do
     Logger.error("[gralkor] capture exhausted")
     {:error, :exhausted}
   end
 
-  defp retry(group, agent, user, turns, cb, [delay | rest], t0) do
+  defp retry(group, agent, user, ontology, turns, cb, [delay | rest], t0) do
     Process.sleep(delay)
-    do_flush(group, agent, user, turns, cb, rest, t0)
+    do_flush(group, agent, user, ontology, turns, cb, rest, t0)
   end
 
   defp raise_if_blank!(field, name) when is_binary(name) do
