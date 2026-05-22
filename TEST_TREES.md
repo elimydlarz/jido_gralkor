@@ -157,7 +157,7 @@ ex-capture-buffer (src: lib/gralkor/capture_buffer.ex; unit: test/gralkor/captur
       then returns []
   flush/1 (session_id)
     when called for a session_id with buffered turns
-      then the flush callback is scheduled with (group_id, agent_name, user_name, [[Message]]) derived from the entry
+      then the flush callback is scheduled with (group_id, agent_name, user_name, ontology, [[Message]]) derived from the entry
       and the call returns without awaiting the scheduled flush
       and the entry is removed from the buffer
       and subsequent turns_for/1 calls return []
