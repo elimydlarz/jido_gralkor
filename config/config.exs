@@ -11,7 +11,7 @@ config :pythonx, :uv_init,
   version = "0.0.0"
   requires-python = "==3.12.*"
   dependencies = [
-    "graphiti-core[falkordb,google-genai]>=0.28.2",
+    "graphiti-core[falkordb,google-genai]>=0.29.1",
     "falkordblite"
   ]
   """
