@@ -135,6 +135,48 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your co
 
 **`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 
+## Declaring a custom ontology
+
+By default jido_gralkor passes no ontology to graphiti — it extracts generic entities and edges. To shape extraction against your domain, declare a `Gralkor.Ontology` module and pass it at mount.
+
+```elixir
+defmodule MyApp.Ontology do
+  use Gralkor.Ontology, entities: :strict, relationships: :scoped
+
+  entity User do
+    field :handle,   :string, required: true, doc: "stable login handle"
+    field :timezone, :string,                  doc: "IANA tz"
+  end
+
+  entity Preference do
+    field :description, :string, required: true
+  end
+
+  from User do
+    prefers Preference do
+      field :since, :string, doc: "date first observed"
+    end
+
+    trusts User
+  end
+end
+```
+
+- `entity Foo do field … end` declares an entity. `field :name, :type, opts` supports `:string | :integer | :float | :boolean`, plus `required: true` and `doc:` (rendered as the Pydantic field description).
+- `from Source do verb Target [do field … end] end` declares outgoing relationships from `Source`. The verb's name becomes the edge type in graphiti (`prefers` → `"PREFERS"`, `relates_to` → `"RELATES_TO"`). The optional `do` block carries edge properties.
+- Same verb in multiple `from` blocks becomes one edge type with multiple endpoint pairs.
+- `entities: :strict` excludes graphiti's generic `Entity` extraction — only your declared types survive. `entities: :open` lets graphiti extract generic Entity nodes alongside yours.
+- `relationships: :scoped` populates graphiti's `edge_type_map` from your declared `(src, dst)` pairs, so named edges only fire between declared endpoints. `relationships: :open` drops the map; graphiti's default applies. Either way, graphiti always extracts edge candidates — generic fall-through edges between unconstrained pairs are not closed off.
+- Both opts are required at `use` — no defaults; pick deliberately.
+
+Mount it on the plugin:
+
+```elixir
+plugins: [{JidoGralkor.Plugin, %{agent_name: "Susu", ontology: MyApp.Ontology}}]
+```
+
+That's it. The ontology is planted on `tool_context` for every `ai.react.query` and forwarded automatically to every write — capture flushes plus the `MemoryAdd` ReAct tool. graphiti receives `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types` translated from the module's compile-time payload (built once per ontology module, cached by name).
+
 ## Testing against the in-memory twin
 
 `Gralkor.Client.InMemory` is a real implementation of `Gralkor.Client` (not a mock) that stores canned responses and records every call. Your agent's integration tests can hit it without any network:
