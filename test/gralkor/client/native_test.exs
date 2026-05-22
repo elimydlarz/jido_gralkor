@@ -166,7 +166,7 @@ defmodule Gralkor.Client.NativeTest do
   describe "ex-capture > observability > when test mode is enabled" do
     setup do
       Application.put_env(:gralkor_ex, :test, true)
-      pid = start_supervised!({CaptureBuffer, [flush_callback: fn _g, _a, _u, _t -> :ok end]})
+      pid = start_supervised!({CaptureBuffer, [flush_callback: fn _g, _a, _u, _o, _t -> :ok end]})
       on_exit(fn -> Application.delete_env(:gralkor_ex, :test) end)
       {:ok, buffer: pid}
     end
@@ -190,7 +190,7 @@ defmodule Gralkor.Client.NativeTest do
 
   describe "ex-capture > observability > when test mode is disabled" do
     setup do
-      pid = start_supervised!({CaptureBuffer, [flush_callback: fn _g, _a, _u, _t -> :ok end]})
+      pid = start_supervised!({CaptureBuffer, [flush_callback: fn _g, _a, _u, _o, _t -> :ok end]})
       {:ok, buffer: pid}
     end
 

@@ -209,7 +209,7 @@ defmodule Gralkor.CaptureBufferTest do
     setup do
       test_pid = self()
 
-      slow_callback = fn _g, _a, _u, _t ->
+      slow_callback = fn _g, _a, _u, _o, _t ->
         send(test_pid, :callback_started)
         Process.sleep(5_000)
         :ok
@@ -234,7 +234,7 @@ defmodule Gralkor.CaptureBufferTest do
     setup do
       test_pid = self()
 
-      err_callback = fn _g, _a, _u, _t ->
+      err_callback = fn _g, _a, _u, _o, _t ->
         send(test_pid, :callback_invoked)
         {:error, :capture_client_4xx}
       end
@@ -287,7 +287,7 @@ defmodule Gralkor.CaptureBufferTest do
 
       attempts = :counters.new(1, [])
 
-      flush_callback = fn _g, _a, _u, _t ->
+      flush_callback = fn _g, _a, _u, _o, _t ->
         n = :counters.get(attempts, 1) + 1
         :counters.add(attempts, 1, 1)
         send(test_pid, {:attempt, n})
@@ -320,7 +320,7 @@ defmodule Gralkor.CaptureBufferTest do
 
   describe "ex-capture-buffer > retry schedule when the flush callback succeeds (first attempt or after retries)" do
     setup do
-      flush_callback = fn _g, _a, _u, _t -> :ok end
+      flush_callback = fn _g, _a, _u, _o, _t -> :ok end
       :ok = stop_supervised(CaptureBuffer)
       {:ok, _} = start_supervised({CaptureBuffer, flush_callback: flush_callback, retries: []})
       :ok
@@ -347,7 +347,7 @@ defmodule Gralkor.CaptureBufferTest do
       test_pid = self()
       attempts = :counters.new(1, [])
 
-      flush_callback = fn _g, _a, _u, _t ->
+      flush_callback = fn _g, _a, _u, _o, _t ->
         :counters.add(attempts, 1, 1)
         send(test_pid, {:attempt, :counters.get(attempts, 1)})
         {:error, :capture_client_4xx}
@@ -375,7 +375,7 @@ defmodule Gralkor.CaptureBufferTest do
       test_pid = self()
       attempts = :counters.new(1, [])
 
-      flush_callback = fn _g, _a, _u, _t ->
+      flush_callback = fn _g, _a, _u, _o, _t ->
         :counters.add(attempts, 1, 1)
         send(test_pid, {:attempt, :counters.get(attempts, 1)})
         {:error, {:upstream_llm, :rate_limited}}
@@ -400,7 +400,7 @@ defmodule Gralkor.CaptureBufferTest do
 
   describe "ex-capture-buffer > retry schedule when the flush callback fails after 3 retries" do
     setup do
-      flush_callback = fn _g, _a, _u, _t -> raise "still broken" end
+      flush_callback = fn _g, _a, _u, _o, _t -> raise "still broken" end
       :ok = stop_supervised(CaptureBuffer)
 
       {:ok, _} =
