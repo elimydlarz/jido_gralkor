@@ -1,18 +1,17 @@
 # jido_gralkor
 
-Connect a [Jido](https://hex.pm/packages/jido) agent to [Gralkor](https://hex.pm/packages/gralkor) — a temporally-aware, knowledge-graph memory server (Graphiti + FalkorDB) — with a small set of drop-in modules. This is the entry point for Jido devs who want long-term memory: the library handles session identity, capture-on-completion, the `memory_search` / `memory_add` ReAct tools, and a tiny `RequestTransformer` helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries. You write your agent's prompt, model, and business tools; `jido_gralkor` covers the memory wiring.
+Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded [Gralkor](https://github.com/elimydlarz/gralkor) memory adapter — Graphiti + FalkorDB driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), no external server to run.
 
-Two sibling packages are involved and both are required:
+You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, and a context-rotation primitive for long-running agents.
 
-- **[`gralkor_ex`](https://hex.pm/packages/gralkor_ex)** — the memory server itself. Auto-supervises its own Python/FastAPI child; exposes a loopback HTTP API, plus the `Gralkor.Client` Elixir port + `HTTP` adapter + `InMemory` test twin + a `Connection` boot-readiness GenServer + an `OrphanReaper` for `mix start` abort-recovery. You supervise Gralkor — don't list `Gralkor.Server` as a child yourself, the `:gralkor_ex` application does that. See [gralkor_ex's docs](https://hexdocs.pm/gralkor_ex) for what the memory system is and how it works.
-- **`jido_gralkor`** — this package. The Jido-shaped glue: one plugin + two actions that turn `Gralkor.Client` into a transparent memory layer on your Jido agent.
+As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one. Consumers no longer need a separate `{:gralkor_ex, ...}` line — `{:jido_gralkor, "~> 3.0"}` is the whole memory stack.
 
 ## Install
 
 ```elixir
 def deps do
   [
-    {:jido_gralkor, "~> 0.1"}
+    {:jido_gralkor, "~> 3.0"}
   ]
 end
 ```
@@ -23,13 +22,13 @@ Then fetch:
 mix deps.get
 ```
 
-This transitively pulls `:jido`, `:jido_ai`, and `:gralkor_ex`.
+This transitively pulls `:jido`, `:jido_ai`, `:pythonx`, `:req_llm`, and `:jason`. Pythonx materialises its venv (with `graphiti-core` + `falkordblite` from PyPI) on first boot — ~3 s the first time, ~21 ms thereafter.
 
 ## Required configuration
 
 Three things the consumer must set up.
 
-**1. A FalkorDB backend for `:gralkor_ex`.** `:gralkor_ex` runs Graphiti in-process via Pythonx and connects to FalkorDB either as an embedded `falkordblite` child or over the network. Pick one:
+**1. A FalkorDB backend.** Graphiti runs in-process via Pythonx and connects to FalkorDB either as an embedded `falkordblite` child or over the network. Pick one:
 
 ```bash
 # Embedded — falkordblite spawns a redis-server grandchild under this dir
@@ -44,11 +43,14 @@ config :gralkor_ex,
     host: System.fetch_env!("FALKORDB_HOST"),
     port: String.to_integer(System.fetch_env!("FALKORDB_PORT")),
     username: System.get_env("FALKORDB_USERNAME"),
-    password: System.get_env("FALKORDB_PASSWORD")
+    password: System.get_env("FALKORDB_PASSWORD"),
+    ssl: System.get_env("FALKORDB_SSL") == "true"
   ]
 ```
 
-Remote wins when both are set. Misconfigured `:falkordb` (non-keyword, missing host/port) raises `ArgumentError` at app start.
+Remote wins when both are set. `:ssl` defaults to `false`; set `true` for FalkorDB Cloud or any TLS-fronted endpoint. Misconfigured `:falkordb` (non-keyword, missing host/port, blank host, non-positive port) raises `ArgumentError` at app start.
+
+The `:gralkor_ex` application-env atom is preserved as an internal config namespace from before the 3.0.0 merge so existing operator configs keep working without churn. The owning OTP application is now `:jido_gralkor`.
 
 **2. In-memory client in tests.** Swap the adapter for the in-memory twin:
 
@@ -64,6 +66,8 @@ And start the twin once in `test/test_helper.exs`:
 ExUnit.start()
 ```
 
+When `:gralkor_ex, :client` is pinned to `Gralkor.Client.InMemory`, the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer) does not start. No FalkorDB backend required in tests.
+
 **3. `Jido.Thread.Plugin` on your `use Jido` supervisor.** The plugin reads `session_id` from `agent.state[:__thread__].id`, so the thread plugin must be active:
 
 ```elixir
@@ -72,7 +76,7 @@ defmodule MyApp.Jido do
 end
 ```
 
-`:gralkor_ex` auto-supervises its native runtime (Python → GraphitiPool → CaptureBuffer) when a FalkorDB backend is configured — no `Gralkor.Connection` to wire and no readiness gate to add. By the time `Application.start/2` returns, `Gralkor.Client` is ready.
+`:jido_gralkor` auto-supervises its native runtime (Python → GraphitiPool → CaptureBuffer) when a FalkorDB backend is configured — no separate `Gralkor.Server` to wire into your supervision tree, and no readiness gate to add. By the time `Application.start/2` returns, `Gralkor.Client` is ready.
 
 ## Wire it on your agent
 
@@ -90,32 +94,46 @@ defmodule MyApp.ChatAgent do
        system_prompt: """
        You are a helpful assistant with long-term memory.
 
-       Each user message may be preceded by a <gralkor-memory> block
-       listing facts and interpretation from earlier turns. Use it to
-       answer naturally — the user does not see it. Call memory_search
-       for deeper lookups and memory_add when you want to record a new
-       insight explicitly.
-       """},
+       Use memory_search when answering benefits from past context.
+       Use memory_add to record explicit insights you want to preserve
+       beyond the conversation that's already being auto-captured.
+       """,
+       request_transformer: MyApp.ChatAgent.RequestTransformer},
     default_plugins: %{__memory__: false},
-    plugins: [{JidoGralkor.Plugin, %{}}]
+    plugins: [{JidoGralkor.Plugin, %{agent_name: "Susu"}}]
+
+  # Optional: pin tool_choice to memory_search on iteration 1 so the agent
+  # itself authors a focused recall query in-thread.
+  defmodule RequestTransformer do
+    @behaviour Jido.AI.Reasoning.ReAct.RequestTransformer
+
+    @impl true
+    def transform_request(_messages, overrides, _runtime_context, state) do
+      JidoGralkor.ReAct.maybe_force_memory_search(overrides, state)
+    end
+  end
 end
 ```
 
-That's it. The plugin's `:__memory__` slot replaces Jido's built-in memory plugin. The plugin plants `:session_id` and `:agent_name` on the per-turn `tool_context` so `memory_search` can find them; recall itself is the LLM's job — call `JidoGralkor.ReAct.maybe_force_memory_search/2` from your strategy's `request_transformer` to pin `tool_choice` to `memory_search` on iteration 1 so the agent authors a focused query in-thread instead of the harness embedding raw user text. Capture still runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `{role, content}` message shape via `JidoGralkor.Canonical` — `user`, `behaviour` for thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` message on failed turns so the failure stays visible to downstream distillation.
+That's it. The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed) and the configured `:agent_name` on the signal's `tool_context` so `MemorySearch` can find them. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
+
+The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your consumer's responsibility to populate (e.g. via `on_before_cmd` from the signal's `tool_context`) so distill renders user lines under the human's actual name rather than a generic "User".
 
 ## What happens at runtime
 
-**Session identity.** `session_id` is the current Jido thread id (read from `agent.state[:__thread__].id`, populated by `Jido.Thread.Plugin`). The plugin does not mint its own identifier — Jido's thread lifecycle is the single source of truth. One Jido conversation thread per Gralkor session, so concurrent agents for the same principal never share a capture buffer, and the session rotates naturally when the thread rotates.
+**Session identity.** `session_id` is the current Jido thread id (read from `agent.state[:__thread__].id`, populated by `Jido.Thread.Plugin`). The plugin does not mint its own identifier — Jido's thread lifecycle is the single source of truth.
 
 **Group partitioning.** `group_id` is `Gralkor.Client.sanitize_group_id(agent.id)` (hyphens replaced with underscores — a RediSearch constraint). Per-agent graph partition; agents never see each other's memory.
 
-**First-turn bootstrap.** On the very first query of a fresh agent, `Jido.Thread.Plugin` hasn't yet committed a thread (the ReAct strategy's `ThreadAgent.append` runs inside `@start`, after the plugin hook). The plugin plants only `:agent_name` (no `:session_id`) and lets capture establish the session when the turn completes. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result — the LLM is told the search did not run, so it can't read an empty payload as "no memory exists" and confidently lie. `memory_search` likewise short-circuits when invoked with a blank `query`, which protects forced-tool-call paths from the LLM emitting empty arguments.
+**First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants only `:agent_name` (no `:session_id`) and lets capture establish the session when the turn completes. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
 
-**Ending a session.** When your app decides a conversation is over (e.g. user issues `/reset`), call `Gralkor.Client.impl().end_session(session_id)` directly — this flushes the server-side capture buffer for that session now instead of waiting for the idle window. `jido_gralkor` doesn't own session lifecycle; your agent's chat facade does.
+**Death-triggered flush.** `JidoGralkor.Lifecycle` is an optional `Jido.AgentServer.Lifecycle` implementation. When wired as `lifecycle_mod:` on the agent, graceful termination of the AgentServer fires `Gralkor.Client.flush/1` for the active thread so an orphaned agent doesn't strand its capture buffer. No idle-timer machinery — Jido's `AgentServer` owns `:idle_timeout` directly.
 
-**Fail-fast.** Gralkor errors raise. If `/recall` or `/capture` returns an error, the plugin raises and the caller sees it. Your supervision tree decides how to react.
+**Context rotation.** `JidoGralkor.ContextRotator.rotate_now/2` synchronously flushes the active session via `flush_and_await/2`, installs a fresh Jido thread, and seeds the rotated thread with the most-recent `:keep_last_n` pre-flush entries plus any turns that landed during the flush. The agent process is never stopped. Use it from a `/new` chat command or a small wrapper GenServer that fires on an interval.
 
-**`memory_add` is async.** The tool returns `"Queued for storage."` immediately and does the HTTP call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
+**Fail-fast.** Gralkor errors raise. Your supervision tree decides how to react.
+
+**`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 
 ## Testing against the in-memory twin
 
@@ -128,26 +146,40 @@ setup do
 end
 
 test "agent recalls stored context" do
-  Gralkor.Client.InMemory.set_recall({:ok, "<gralkor-memory>known fact</gralkor-memory>"})
-  Gralkor.Client.InMemory.set_capture(:ok)
-  # ... exercise your agent, assert on responses, inspect InMemory.recalls() / captures()
+  Gralkor.Client.InMemory.configure_recall({:ok, "<gralkor-memory>known fact</gralkor-memory>"})
+  Gralkor.Client.InMemory.configure_capture(:ok)
+  # ... exercise your agent, assert on responses, inspect recorded calls
 end
 ```
 
+The same `Gralkor.ClientContract` macro suite is run against both the in-memory twin and the production `Gralkor.Client.Native` adapter, so both satisfy an identical contract.
+
 ## What's in the library
 
-- `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (recall) and `ai.request.completed` / `ai.request.failed` (capture). Stateless — `mount/2` returns `{:ok, nil}`.
-- `JidoGralkor.Canonical` — translates a Jido/ReAct turn (user query + event trace + turn outcome `{:completed, answer}` or `{:failed, error}`) into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape. Strips the `<gralkor-memory>…</gralkor-memory>` envelope the plugin prepended during recall, filters telemetry-only events, renders surviving `:llm_completed` / `:tool_completed` events as `behaviour` messages, and terminates the list with either an `assistant` answer (completed) or a `"request failed: …"` `behaviour` (failed). The server never sees Jido-shaped events; shape concerns live here.
-- `JidoGralkor.Actions.MemorySearch` — `use Jido.Action, name: "memory_search"`. The ReAct tool. Short-circuits when no thread is committed yet.
-- `JidoGralkor.Actions.MemoryAdd` — `use Jido.Action, name: "memory_add"`. Fire-and-forget.
-- `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description explicitly tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
+The Jido glue:
+
+- `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (planting session+agent on tool_context) and `ai.request.completed` / `ai.request.failed` (capture).
+- `JidoGralkor.ReAct` — `maybe_force_memory_search/2` helper. Folds `tool_choice: %{type: "function", function: %{name: "memory_search"}}` into ReAct overrides on iteration 1; passes through unchanged on iterations 2+.
+- `JidoGralkor.Canonical` — normalises a Jido/ReAct turn into the canonical `[%Gralkor.Message{role, content}]` shape.
+- `JidoGralkor.Lifecycle` — `Jido.AgentServer.Lifecycle` impl whose sole job is the death-triggered flush.
+- `JidoGralkor.ContextRotator` — synchronous `rotate_now/2` for in-life context consolidation.
+- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls `Gralkor.Client.recall/4`. Short-circuits when no thread is committed or the query is blank.
+- `JidoGralkor.Actions.MemoryAdd` — fire-and-forget ReAct tool.
+- `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
 - `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's partition.
 
-Detailed behaviour lives in [`CLAUDE.md`](https://github.com/elimydlarz/jido_gralkor/blob/main/CLAUDE.md) under `## Test Trees`.
+The embedded Gralkor adapter (under `lib/gralkor/`):
+
+- `Gralkor.Client` — behaviour, `sanitize_group_id/1`, `impl/0` app-env resolver.
+- `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, `GraphitiPool`, and `req_llm`.
+- `Gralkor.Client.InMemory` — test twin.
+- `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Message`, `Gralkor.InterpretParseFailed` — the embedded pipelines (capture buffer, distill, interpret, recall) that drive Graphiti.
+
+Detailed behaviour for every module lives in [`CLAUDE.md`](https://github.com/elimydlarz/jido_gralkor/blob/main/CLAUDE.md) under `## Test Trees`.
 
 ## Publishing (maintainers)
 
-Run the script directly — it needs a real TTY for Hex's OTP prompt:
+`:jido_gralkor` is published to the public Hex registry, owned by the `gralkor` Hex organization. Future releases use a `gralkor`-scoped org key (`GRALKOR_HEX_TOKEN`) loaded from the workspace `.env`; see the workspace `publish` skill for the full release flow.
 
 ```bash
 ./scripts/publish.sh patch   # or minor | major | current

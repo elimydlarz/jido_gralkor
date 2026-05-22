@@ -1,0 +1,266 @@
+defmodule Gralkor.ClientContract do
+  @moduledoc """
+  Shared port contract for `Gralkor.Client`.
+
+  Both `Gralkor.Client.InMemory` and `Gralkor.Client.Native` import this and
+  must pass it. Reifies the `ex-client` tree in `gralkor/TEST_TREES.md`. The
+  describe/it hierarchy mirrors the tree verbatim.
+
+  Usage from a per-adapter test file:
+
+      use ExUnit.Case, async: false
+      import Gralkor.ClientContract
+
+      setup do
+        # boot the adapter under test, return any per-test setup
+      end
+
+      run_contract(fn -> :ok end)
+  """
+
+  defmacro run_contract(do: setup_block) do
+    quote do
+      describe "ex-client > recall/4 with a non-blank string session_id" do
+        test "when the backend returns a memory block then {:ok, block} is returned" do
+          unquote(setup_block).()
+
+          configure_recall({:ok, "<gralkor-memory>some block</gralkor-memory>"})
+
+          assert {:ok, "<gralkor-memory>some block</gralkor-memory>"} =
+                   client().recall("group-1", "TestAgent", "session-1", "what is X?")
+        end
+
+        test "if the backend fails then {:error, reason} is returned" do
+          unquote(setup_block).()
+          configure_recall({:error, :backend_down})
+
+          assert {:error, :backend_down} =
+                   client().recall("group-1", "TestAgent", "session-1", "what?")
+        end
+      end
+
+      describe "ex-client > recall/4 with a nil session_id" do
+        test "when the backend returns a memory block then {:ok, block} is returned" do
+          unquote(setup_block).()
+          configure_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
+
+          assert {:ok, "<gralkor-memory>x</gralkor-memory>"} =
+                   client().recall("group-1", "TestAgent", nil, "anything?")
+        end
+
+        test "if the backend fails then {:error, reason} is returned" do
+          unquote(setup_block).()
+          configure_recall({:error, :nope})
+
+          assert {:error, :nope} = client().recall("group-1", "TestAgent", nil, "q")
+        end
+      end
+
+      describe "ex-client > recall/4 if agent_name is missing or blank" do
+        test "raises ArgumentError when agent_name is blank" do
+          unquote(setup_block).()
+          configure_recall({:ok, "should-not-be-returned"})
+
+          assert_raise ArgumentError, ~r/agent_name/, fn ->
+            client().recall("group-1", "", "session-1", "q")
+          end
+        end
+
+        test "raises ArgumentError when agent_name is whitespace-only" do
+          unquote(setup_block).()
+          configure_recall({:ok, "should-not-be-returned"})
+
+          assert_raise ArgumentError, ~r/agent_name/, fn ->
+            client().recall("group-1", "   ", "session-1", "q")
+          end
+        end
+
+        test "raises ArgumentError when agent_name is nil" do
+          unquote(setup_block).()
+          configure_recall({:ok, "should-not-be-returned"})
+
+          assert_raise ArgumentError, ~r/agent_name/, fn ->
+            client().recall("group-1", nil, "session-1", "q")
+          end
+        end
+      end
+
+      describe "ex-client > capture/5" do
+        test "when the backend acknowledges the capture then :ok is returned" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          assert :ok =
+                   client().capture("session-1", "group-1", "TestAgent", "Eli", [
+                     Gralkor.Message.new("user", "hi")
+                   ])
+        end
+
+        test "if the backend fails then {:error, reason} is returned" do
+          unquote(setup_block).()
+          configure_capture({:error, :write_failed})
+
+          assert {:error, :write_failed} =
+                   client().capture("session-1", "group-1", "TestAgent", "Eli", [
+                     Gralkor.Message.new("user", "hi")
+                   ])
+        end
+      end
+
+      describe "ex-client > capture/5 if agent_name is missing or blank" do
+        test "raises ArgumentError when agent_name is blank" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          assert_raise ArgumentError, ~r/agent_name/, fn ->
+            client().capture("session-1", "group-1", "", "Eli", [
+              Gralkor.Message.new("user", "hi")
+            ])
+          end
+        end
+
+        test "raises ArgumentError when agent_name is nil" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          assert_raise ArgumentError, ~r/agent_name/, fn ->
+            client().capture("session-1", "group-1", nil, "Eli", [
+              Gralkor.Message.new("user", "hi")
+            ])
+          end
+        end
+      end
+
+      describe "ex-client > capture/5 if user_name is missing or blank" do
+        test "raises ArgumentError when user_name is blank" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          assert_raise ArgumentError, ~r/user_name/, fn ->
+            client().capture("session-1", "group-1", "TestAgent", "", [
+              Gralkor.Message.new("user", "hi")
+            ])
+          end
+        end
+
+        test "raises ArgumentError when user_name is nil" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          assert_raise ArgumentError, ~r/user_name/, fn ->
+            client().capture("session-1", "group-1", "TestAgent", nil, [
+              Gralkor.Message.new("user", "hi")
+            ])
+          end
+        end
+      end
+
+      describe "ex-client > flush/1" do
+        test "then :ok is returned before the flush completes" do
+          unquote(setup_block).()
+          configure_flush(:ok)
+
+          assert :ok = client().flush("session-1")
+        end
+
+        test "if the backend later fails then the failure is not observable through the return value" do
+          unquote(setup_block).()
+          configure_flush({:error, :flush_failed})
+
+          # fire-and-forget — the contract is that the return value is :ok
+          # before the backend has finished. The error path exists in the
+          # backend but is not surfaced here. Implementations that don't have
+          # an asynchronous backend still satisfy this by returning :ok
+          # immediately even when configured for failure later.
+          assert client().flush("session-1") in [:ok, {:error, :flush_failed}]
+        end
+      end
+
+      describe "ex-client > flush_and_await/2 when the flush completes within the timeout" do
+        test "then :ok is returned" do
+          unquote(setup_block).()
+          configure_flush_and_await(:ok)
+
+          assert :ok = client().flush_and_await("session-1", 5_000)
+        end
+
+        test "and a subsequent recall/4 for the same group surfaces the just-flushed turns" do
+          unquote(setup_block).()
+          configure_flush_and_await(:ok)
+          configure_recall({:ok, "<gralkor-memory>just-flushed-turn</gralkor-memory>"})
+
+          assert :ok = client().flush_and_await("session-1", 5_000)
+
+          assert {:ok, "<gralkor-memory>just-flushed-turn</gralkor-memory>"} =
+                   client().recall("group-1", "TestAgent", "session-1", "what did we discuss?")
+        end
+      end
+
+      describe "ex-client > flush_and_await/2 when the flush does not complete within the timeout" do
+        test "then {:error, :timeout} is returned" do
+          unquote(setup_block).()
+          configure_flush_and_await({:error, :timeout})
+
+          assert {:error, :timeout} = client().flush_and_await("session-1", 50)
+        end
+      end
+
+      describe "ex-client > flush_and_await/2 if the backend fails before the timeout" do
+        test "then {:error, reason} is returned" do
+          unquote(setup_block).()
+          configure_flush_and_await({:error, :backend_down})
+
+          assert {:error, :backend_down} = client().flush_and_await("session-1", 5_000)
+        end
+      end
+
+      describe "ex-client > memory_add/3" do
+        test "when the backend acknowledges the add then :ok is returned" do
+          unquote(setup_block).()
+          configure_memory_add(:ok)
+
+          assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual")
+        end
+
+        test "if the backend fails then {:error, reason} is returned" do
+          unquote(setup_block).()
+          configure_memory_add({:error, :extract_failed})
+
+          assert {:error, :extract_failed} = client().memory_add("group-1", "x", nil)
+        end
+      end
+
+      describe "ex-client > build_indices/0" do
+        test "when the backend acknowledges the rebuild then {:ok, %{status: ...}} is returned" do
+          unquote(setup_block).()
+          configure_build_indices({:ok, %{status: "built"}})
+
+          assert {:ok, %{status: "built"}} = client().build_indices()
+        end
+
+        test "if the backend fails then {:error, reason} is returned" do
+          unquote(setup_block).()
+          configure_build_indices({:error, :nope})
+
+          assert {:error, :nope} = client().build_indices()
+        end
+      end
+
+      describe "ex-client > build_communities/1" do
+        test "when the backend returns counts then {:ok, %{communities: …, edges: …}} is returned" do
+          unquote(setup_block).()
+          configure_build_communities({:ok, %{communities: 3, edges: 7}})
+
+          assert {:ok, %{communities: 3, edges: 7}} = client().build_communities("group-1")
+        end
+
+        test "if the backend fails then {:error, reason} is returned" do
+          unquote(setup_block).()
+          configure_build_communities({:error, :upstream})
+
+          assert {:error, :upstream} = client().build_communities("group-1")
+        end
+      end
+    end
+  end
+end

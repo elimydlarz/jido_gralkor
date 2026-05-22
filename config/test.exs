@@ -1,6 +1,6 @@
 import Config
 
-config :logger, level: :warning
+config :logger, level: :info
 
 config :gralkor_ex,
   client: Gralkor.Client.InMemory,

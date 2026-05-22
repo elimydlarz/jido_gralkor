@@ -1,0 +1,53 @@
+defmodule JidoGralkor.Actions.ErrorEncoderCompatTest do
+  @moduledoc """
+  Wire contract: every `{:error, reason}` our actions are allowed to return must
+  survive `Jido.AI.Signal.Helpers.normalize_error/4` → `Jason.encode!/1` without
+  crashing the AgentServer.
+
+  In jido_ai 2.1.0 `normalize_error`'s `%{message: …}` clause did `Map.drop`
+  on the struct reason, which preserves `__struct__`; `Jason.encode!` then
+  raised `Protocol.UndefinedError`, killing the AgentServer. Fixed upstream
+  on `main` (refactor commit `d60699c0`, 2026-05-21) by reordering clauses
+  and routing `Jido.Action.Error.*` through `Jido.Error.to_map/1`. Until the
+  fix is published and pinned (last release: v2.1.0), this test pins our
+  side of the contract — every `{:error, reason}` shape any of our actions
+  can produce must encode cleanly. Plan to simplify or delete once jido_ai
+  > 2.1.0 ships and we bump.
+  """
+
+  use ExUnit.Case, async: true
+
+  alias Jido.AI.Signal.Helpers, as: SignalHelpers
+
+  # Every error reason any of `JidoGralkor.Actions.*` can produce today.
+  # If you add a new error path, append it here.
+  @reasons [
+    # Gralkor.Recall.recall/5
+    :recall_deadline_expired,
+    # Gralkor.GraphitiPool.{search,add_episode,build_indices,build_communities}
+    {:python, "Python exception raised\n\n  Traceback (most recent call last):\n    File \"<string>\", line 2, in <module>\n  RuntimeError: boom\n"},
+    # Gralkor.CaptureBuffer.flush_and_await/2
+    :timeout,
+    # InMemory test twin scenarios
+    :boom,
+    # Defensive: a bare binary reason (some adapters may return strings)
+    "Gralkor server unreachable"
+  ]
+
+  for reason <- @reasons do
+    @reason reason
+    test "error reason #{inspect(reason)} survives normalize_error → Jason.encode!" do
+      envelope =
+        SignalHelpers.normalize_error(@reason, :execution_error, "Tool execution failed", %{
+          tool_name: "memory_search"
+        })
+
+      payload = %{ok: false, error: envelope}
+
+      assert is_binary(Jason.encode!(payload))
+      assert is_map(envelope)
+      refute is_struct(envelope[:details]),
+             "envelope :details must not be a struct — Jason.encode! would crash"
+    end
+  end
+end
