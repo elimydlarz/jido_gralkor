@@ -170,6 +170,7 @@ defmodule JidoGralkor.Plugin do
                    group_id,
                    agent_name(agent),
                    user_name,
+                   ontology(agent),
                    messages
                  ) do
               :ok -> :ok
