@@ -176,4 +176,21 @@ defmodule Gralkor.Client.Native do
     raise ArgumentError,
           "Gralkor.Client.Native: #{field} must be a non-blank string, got #{inspect(value)}"
   end
+
+  defp raise_unless_ontology_or_nil!(nil), do: :ok
+
+  defp raise_unless_ontology_or_nil!(module) when is_atom(module) do
+    if function_exported?(module, :__ontology__, 0) or
+         (Code.ensure_loaded?(module) and function_exported?(module, :__ontology__, 0)) do
+      :ok
+    else
+      raise ArgumentError,
+            "Gralkor.Client.Native: ontology must be a module declared via `use Gralkor.Ontology`, got #{inspect(module)}"
+    end
+  end
+
+  defp raise_unless_ontology_or_nil!(other) do
+    raise ArgumentError,
+          "Gralkor.Client.Native: ontology must be a module or nil, got #{inspect(other)}"
+  end
 end
