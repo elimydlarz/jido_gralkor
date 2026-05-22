@@ -595,7 +595,8 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
       and the buffered turns are still available to flush on a later call
     if the backend fails before the timeout
       then {:error, reason} is returned
-  when memory_add/3 is called with group_id, content, and source_description
+  when memory_add/4 is called with group_id, content, source_description, and ontology
+    ontology is a module declared with `use Gralkor.Ontology`, or nil
     when the backend acknowledges the add
       then :ok is returned
     if the backend fails
