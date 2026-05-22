@@ -45,7 +45,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
         )
 
         assert eventually(fn ->
-                 InMemory.adds() == [["01USER", "something", "agent thought"]]
+                 InMemory.adds() == [["01USER", "something", "agent thought", nil]]
                end)
 
         # Give Logger.error time to flush after the Task's client call.
