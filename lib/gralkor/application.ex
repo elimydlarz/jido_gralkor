@@ -49,9 +49,9 @@ defmodule Gralkor.Application do
   @doc false
   def build_flush_callback(_config, deps \\ []) do
     distill_fn = Keyword.get_lazy(deps, :distill_fn, &Native.distill_callback/0)
-    add_episode_fn = Keyword.get(deps, :add_episode_fn, &GraphitiPool.add_episode/3)
+    add_episode_fn = Keyword.get(deps, :add_episode_fn, &GraphitiPool.add_episode/4)
 
-    fn group_id, agent_name, user_name, turns ->
+    fn group_id, agent_name, user_name, ontology, turns ->
       body = Distill.format_transcript(turns, distill_fn, agent_name, user_name)
 
       cond do
@@ -60,7 +60,7 @@ defmodule Gralkor.Application do
 
         true ->
           t0 = System.monotonic_time(:millisecond)
-          result = add_episode_fn.(group_id, body, "captured")
+          result = add_episode_fn.(group_id, body, "captured", ontology)
           ms = System.monotonic_time(:millisecond) - t0
 
           Logger.info(
