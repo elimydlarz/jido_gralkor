@@ -427,8 +427,8 @@ defmodule Gralkor.CaptureBufferTest do
     test "Gralkor.CaptureBuffer.terminate/2 drains every pending entry via the flush callback before returning" do
       test_pid = self()
 
-      flush_callback = fn group, agent, user, turns ->
-        send(test_pid, {:flushed, group, agent, user, turns})
+      flush_callback = fn group, agent, user, ontology, turns ->
+        send(test_pid, {:flushed, group, agent, user, ontology, turns})
         :ok
       end
 
