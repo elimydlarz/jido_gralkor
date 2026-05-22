@@ -396,17 +396,25 @@ defmodule Gralkor.GraphitiPool do
     def decode(value):
         return value.decode("utf-8") if isinstance(value, (bytes, bytearray)) else value
 
+    def get(d, key):
+        if key in d:
+            return d[key]
+        bkey = key.encode("utf-8")
+        if bkey in d:
+            return d[bkey]
+        return None
+
     classes = {}
     for spec in specs:
-        name = decode(spec["name"])
+        name = decode(get(spec, "name"))
         annotations = {}
         defaults = {}
-        for f in spec["fields"]:
-            fname = decode(f["name"])
-            ftype_key = decode(f["type"])
+        for f in (get(spec, "fields") or []):
+            fname = decode(get(f, "name"))
+            ftype_key = decode(get(f, "type"))
             py_type = type_map[ftype_key]
-            required = bool(f["required"])
-            doc_raw = f.get("doc")
+            required = bool(get(f, "required"))
+            doc_raw = get(f, "doc")
             doc = decode(doc_raw) if doc_raw is not None else None
             if required:
                 annotations[fname] = py_type
