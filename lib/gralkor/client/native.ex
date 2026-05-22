@@ -55,15 +55,16 @@ defmodule Gralkor.Client.Native do
   end
 
   @impl Gralkor.Client
-  def capture(session_id, group_id, agent_name, user_name, msgs) do
+  def capture(session_id, group_id, agent_name, user_name, ontology, msgs) do
     raise_if_blank!(:session_id, session_id)
     raise_if_blank!(:agent_name, agent_name)
     raise_if_blank!(:user_name, user_name)
+    raise_unless_ontology_or_nil!(ontology)
 
     if Application.get_env(:gralkor_ex, :test, false),
       do: Logger.info("[gralkor] [test] capture messages: #{format_test_messages(msgs)}")
 
-    CaptureBuffer.append(session_id, group_id, agent_name, user_name, msgs)
+    CaptureBuffer.append(session_id, group_id, agent_name, user_name, ontology, msgs)
   end
 
   defp format_test_messages(msgs) do
