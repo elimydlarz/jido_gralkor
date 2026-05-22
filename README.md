@@ -215,6 +215,7 @@ The embedded Gralkor adapter (under `lib/gralkor/`):
 - `Gralkor.Client` — behaviour, `sanitize_group_id/1`, `impl/0` app-env resolver.
 - `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, `GraphitiPool`, and `req_llm`.
 - `Gralkor.Client.InMemory` — test twin.
+- `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
 - `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Message`, `Gralkor.InterpretParseFailed` — the embedded pipelines (capture buffer, distill, interpret, recall) that drive Graphiti.
 
 Detailed behaviour for every module lives in [`CLAUDE.md`](https://github.com/elimydlarz/jido_gralkor/blob/main/CLAUDE.md) under `## Test Trees`.
