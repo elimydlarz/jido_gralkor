@@ -693,9 +693,9 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
   user_name is read per-turn from `agent.state[:user_name]` — the consumer's responsibility to populate (e.g. via on_before_cmd from the signal's tool_context). Convention key, not a mount opt, because the user behind an agent can change between turns (multi-user deployments), and graph-quality depends on naming the right human in each captured episode.
   when an agent turn begins
     when a thread has committed to agent state
-      then the thread's session_id and the configured agent_name are planted on the signal's tool_context so the `MemorySearch` ReAct tool can find them; the plugin does not call `Gralkor.Client.recall/3` on its own (recall is the LLM's job — see `JidoGralkor.ReAct` and the consumer's `RequestTransformer` for how `memory_search` is forced on iteration 1)
+      then the thread's session_id, the configured agent_name, and the configured ontology (which may be nil) are planted on the signal's tool_context so the `MemorySearch` and `MemoryAdd` ReAct tools can find them; the plugin does not call `Gralkor.Client.recall/3` on its own (recall is the LLM's job — see `JidoGralkor.ReAct` and the consumer's `RequestTransformer` for how `memory_search` is forced on iteration 1)
     when no thread has committed yet (first query on a fresh agent — ReAct strategy's ThreadAgent.append runs inside @start, after plugin hooks)
-      then only the configured agent_name is planted on tool_context; no session_id is planted, and `MemorySearch` short-circuits with a non-result message on this turn
+      then the configured agent_name and ontology are planted on tool_context; no session_id is planted, and `MemorySearch` short-circuits with a non-result message on this turn
   when an agent turn completes
     then the user query, event trace, and `{:completed, answer}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list is sent to
