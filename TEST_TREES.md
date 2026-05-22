@@ -862,7 +862,9 @@ JidoGralkor.Actions.MemoryAdd (src: lib/jido_gralkor/actions/memory_add.ex; unit
   then source_description is a required tool parameter (alongside content) — the LLM must say where each stored insight came from, so no context-less memories land in the graph
   when invoked
     then the action returns {:ok, %{result: "Ingesting."}} without waiting on the client
-    then the client's memory_add is called in a background Task with the sanitized group_id, content, and source_description
+    then the client's memory_add is called in a background Task with the sanitized group_id, content, source_description, and the ontology read from context[:ontology]
+    when context[:ontology] is absent or nil
+      then memory_add is called with ontology=nil (current pre-ontology behaviour)
   if the background Task's client call fails
     then the failure is logged (best-effort storage)
 ```
