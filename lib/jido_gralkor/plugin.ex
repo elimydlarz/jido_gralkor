@@ -92,11 +92,12 @@ defmodule JidoGralkor.Plugin do
   @impl Jido.Plugin
   def handle_signal(%Signal{type: "ai.react.query"} = signal, %{agent: agent}) do
     agent_name = agent_name(agent)
+    ontology = ontology(agent)
 
     extras =
       case thread_id(agent) do
-        nil -> %{agent_name: agent_name}
-        id -> %{session_id: id, agent_name: agent_name}
+        nil -> %{agent_name: agent_name, ontology: ontology}
+        id -> %{session_id: id, agent_name: agent_name, ontology: ontology}
       end
 
     {:ok, {:continue, merge_tool_context(signal, extras)}}
