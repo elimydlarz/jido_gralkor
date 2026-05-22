@@ -80,7 +80,7 @@ defmodule Gralkor.ApplicationTest do
 
       [_python, _pool, {Gralkor.CaptureBuffer, opts}] = App.children()
 
-      assert is_function(Keyword.fetch!(opts, :flush_callback), 4)
+      assert is_function(Keyword.fetch!(opts, :flush_callback), 5)
     end
   end
 
@@ -151,7 +151,7 @@ defmodule Gralkor.ApplicationTest do
   describe "ex-capture > flush > when the distilled episode body is empty" do
     @tag :capture_log
     test "no episode is added and nothing is logged" do
-      add_episode_fn = fn _g, _b, _s -> flunk("add_episode should not be called") end
+      add_episode_fn = fn _g, _b, _s, _o -> flunk("add_episode should not be called") end
 
       cb =
         App.build_flush_callback(nil,
@@ -161,7 +161,7 @@ defmodule Gralkor.ApplicationTest do
 
       logs =
         ExUnit.CaptureLog.capture_log([level: :debug], fn ->
-          assert :ok = cb.("g", "TestAgent", "Eli", [])
+          assert :ok = cb.("g", "TestAgent", "Eli", nil, [])
         end)
 
       refute logs =~ "[gralkor] capture flushed"
@@ -172,7 +172,7 @@ defmodule Gralkor.ApplicationTest do
   describe "ex-capture > flush > when the episode is added" do
     @tag :capture_log
     test "logs the group, body size, and how long the add took" do
-      add_episode_fn = fn _g, _b, _s -> :ok end
+      add_episode_fn = fn _g, _b, _s, _o -> :ok end
 
       cb =
         App.build_flush_callback(nil,
@@ -184,7 +184,7 @@ defmodule Gralkor.ApplicationTest do
 
       logs =
         ExUnit.CaptureLog.capture_log([level: :info], fn ->
-          assert :ok = cb.("g1", "TestAgent", "Eli", turns)
+          assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
         end)
 
       assert logs =~ "[gralkor] capture flushed"
@@ -203,7 +203,7 @@ defmodule Gralkor.ApplicationTest do
 
     @tag :capture_log
     test "also logs the distilled episode body" do
-      add_episode_fn = fn _g, _b, _s -> :ok end
+      add_episode_fn = fn _g, _b, _s, _o -> :ok end
 
       cb =
         App.build_flush_callback(nil,
@@ -215,7 +215,7 @@ defmodule Gralkor.ApplicationTest do
 
       logs =
         ExUnit.CaptureLog.capture_log(fn ->
-          assert :ok = cb.("g1", "TestAgent", "Eli", turns)
+          assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
         end)
 
       assert logs =~ "[gralkor] [test] capture flush body:"
@@ -229,14 +229,14 @@ defmodule Gralkor.ApplicationTest do
       cb =
         App.build_flush_callback(nil,
           distill_fn: fn _ -> {:ok, "behaviour summary"} end,
-          add_episode_fn: fn _g, _b, _s -> :ok end
+          add_episode_fn: fn _g, _b, _s, _o -> :ok end
         )
 
       turns = [[Gralkor.Message.new("user", "hi")]]
 
       logs =
         ExUnit.CaptureLog.capture_log(fn ->
-          assert :ok = cb.("g1", "TestAgent", "Eli", turns)
+          assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
         end)
 
       refute logs =~ "[gralkor] [test]"
