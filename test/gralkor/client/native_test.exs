@@ -176,7 +176,7 @@ defmodule Gralkor.Client.NativeTest do
       logs =
         ExUnit.CaptureLog.capture_log(fn ->
           :ok =
-            Native.capture("s1", "g", "TestAgent", "Eli", [
+            Native.capture("s1", "g", "TestAgent", "Eli", nil, [
               Message.new("user", "hello"),
               Message.new("assistant", "hi there")
             ])
