@@ -38,12 +38,15 @@ defmodule Gralkor.CaptureBuffer do
   produces a named user node rather than collapsing every user into a
   generic "User" entity.
   """
-  def append(session_id, group_id, agent_name, user_name, msgs)
+  def append(session_id, group_id, agent_name, user_name, ontology, msgs)
       when is_binary(session_id) and is_binary(group_id) and is_list(msgs) do
     raise_if_blank!(:agent_name, agent_name)
     raise_if_blank!(:user_name, user_name)
 
-    case GenServer.call(__MODULE__, {:append, session_id, group_id, agent_name, user_name, msgs}) do
+    case GenServer.call(
+           __MODULE__,
+           {:append, session_id, group_id, agent_name, user_name, ontology, msgs}
+         ) do
       :ok ->
         :ok
 
@@ -61,6 +64,11 @@ defmodule Gralkor.CaptureBuffer do
         raise ArgumentError,
               "session #{inspect(session_id)} is bound to user #{inspect(bound_user)}; " <>
                 "refusing to append under user #{inspect(new_user)}"
+
+      {:ontology_mismatch, new_ontology, bound_ontology} ->
+        raise ArgumentError,
+              "session #{inspect(session_id)} is bound to ontology #{inspect(bound_ontology)}; " <>
+                "refusing to append under ontology #{inspect(new_ontology)}"
     end
   end
 
