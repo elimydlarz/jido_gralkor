@@ -27,12 +27,18 @@ defmodule Gralkor.Client do
   @type agent_name :: String.t()
   @type messages :: [Gralkor.Message.t()]
   @type user_name :: String.t()
+  @type ontology :: module() | nil
 
   @callback recall(group_id(), agent_name(), session_id() | nil, query :: String.t()) ::
               {:ok, String.t()} | {:error, term()}
-  @callback capture(session_id(), group_id(), agent_name(), user_name(), messages()) ::
+  @callback capture(session_id(), group_id(), agent_name(), user_name(), ontology(), messages()) ::
               :ok | {:error, term()}
-  @callback memory_add(group_id(), content :: String.t(), source_description :: String.t() | nil) ::
+  @callback memory_add(
+              group_id(),
+              content :: String.t(),
+              source_description :: String.t() | nil,
+              ontology()
+            ) ::
               :ok | {:error, term()}
   @callback flush(session_id()) :: :ok | {:error, term()}
   @callback flush_and_await(session_id(), timeout_ms :: pos_integer()) ::
