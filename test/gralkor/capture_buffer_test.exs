@@ -21,7 +21,7 @@ defmodule Gralkor.CaptureBufferTest do
   describe "ex-capture-buffer > append/5 when called for a new session_id" do
     test "an entry is created bound to the sanitized group_id, agent_name, user_name, and the turn" do
       msgs = [Message.new("user", "hi")]
-      :ok = CaptureBuffer.append("session-1", "group-1", "Susu", "Eli", msgs)
+      :ok = CaptureBuffer.append("session-1", "group-1", "Susu", "Eli", nil, msgs)
 
       assert [^msgs] = CaptureBuffer.turns_for("session-1")
     end
@@ -45,8 +45,8 @@ defmodule Gralkor.CaptureBufferTest do
     test "the new turn is appended and prior turns remain buffered" do
       t1 = [Message.new("user", "first")]
       t2 = [Message.new("user", "second")]
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", t1)
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", t2)
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, t1)
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, t2)
 
       assert [^t1, ^t2] = CaptureBuffer.turns_for("s")
     end
@@ -136,7 +136,7 @@ defmodule Gralkor.CaptureBufferTest do
   describe "ex-capture-buffer > flush/1 when called for a session_id with buffered turns" do
     test "the flush callback is scheduled with (group_id, agent_name, user_name, [[Message]]) and the call returns without awaiting" do
       msgs = [Message.new("user", "hi")]
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", msgs)
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, msgs)
 
       :ok = CaptureBuffer.flush("s")
 
