@@ -31,9 +31,10 @@ defmodule JidoGralkor.Actions.MemoryAdd do
   @impl true
   def run(params, context) do
     group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
+    ontology = Map.get(context, :ontology)
 
     Task.start(fn ->
-      case Client.impl().memory_add(group_id, params.content, params.source_description) do
+      case Client.impl().memory_add(group_id, params.content, params.source_description, ontology) do
         :ok ->
           :ok
 
