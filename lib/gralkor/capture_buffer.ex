@@ -116,37 +116,55 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   @impl true
-  def handle_call({:append, session_id, group_id, agent_name, user_name, msgs}, _from, state) do
+  def handle_call(
+        {:append, session_id, group_id, agent_name, user_name, ontology, msgs},
+        _from,
+        state
+      ) do
     sanitized = Client.sanitize_group_id(group_id)
 
     case Map.get(state.entries, session_id) do
       nil ->
         entries =
-          Map.put(state.entries, session_id, {sanitized, agent_name, user_name, [msgs]})
+          Map.put(
+            state.entries,
+            session_id,
+            {sanitized, agent_name, user_name, ontology, [msgs]}
+          )
 
         {:reply, :ok, %{state | entries: entries}}
 
-      {^sanitized, ^agent_name, ^user_name, turns} ->
+      {^sanitized, ^agent_name, ^user_name, ^ontology, turns} ->
         entries =
-          Map.put(state.entries, session_id, {sanitized, agent_name, user_name, turns ++ [msgs]})
+          Map.put(
+            state.entries,
+            session_id,
+            {sanitized, agent_name, user_name, ontology, turns ++ [msgs]}
+          )
 
         {:reply, :ok, %{state | entries: entries}}
 
-      {other_group, _bound_agent, _bound_user, _turns} when other_group != sanitized ->
+      {other_group, _bound_agent, _bound_user, _bound_ontology, _turns}
+      when other_group != sanitized ->
         {:reply, {:group_mismatch, sanitized, other_group}, state}
 
-      {^sanitized, bound_agent, _bound_user, _turns} when bound_agent != agent_name ->
+      {^sanitized, bound_agent, _bound_user, _bound_ontology, _turns}
+      when bound_agent != agent_name ->
         {:reply, {:agent_mismatch, agent_name, bound_agent}, state}
 
-      {^sanitized, ^agent_name, bound_user, _turns} ->
+      {^sanitized, ^agent_name, bound_user, _bound_ontology, _turns}
+      when bound_user != user_name ->
         {:reply, {:user_mismatch, user_name, bound_user}, state}
+
+      {^sanitized, ^agent_name, ^user_name, bound_ontology, _turns} ->
+        {:reply, {:ontology_mismatch, ontology, bound_ontology}, state}
     end
   end
 
   def handle_call({:turns_for, session_id}, _from, state) do
     case Map.get(state.entries, session_id) do
       nil -> {:reply, [], state}
-      {_group, _agent, _user, turns} -> {:reply, turns, state}
+      {_group, _agent, _user, _ontology, turns} -> {:reply, turns, state}
     end
   end
 
