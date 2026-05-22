@@ -131,9 +131,9 @@ ex-interpret-context (src: lib/gralkor/interpret.ex; unit: test/gralkor/interpre
 ex-capture-buffer (src: lib/gralkor/capture_buffer.ex; unit: test/gralkor/capture_buffer_test.exs)
   the buffer holds turns until an explicit flush — session lifetime is owned by the consumer;
   there is no idle-flush policy
-  append/5 (session_id, group_id, agent_name, user_name, messages)
+  append/6 (session_id, group_id, agent_name, user_name, ontology, messages)
     when called for a new session_id
-      then an entry is created bound to the sanitized group_id, the agent_name, the user_name, and the turn (list of Messages)
+      then an entry is created bound to the sanitized group_id, the agent_name, the user_name, the ontology (a module or nil), and the turn (list of Messages)
     when called again for the same session_id
       then the new turn is appended to the existing entry and prior turns remain buffered
     when called for multiple session_ids
@@ -144,6 +144,8 @@ ex-capture-buffer (src: lib/gralkor/capture_buffer.ex; unit: test/gralkor/captur
       then raises ArgumentError (same invariant as group_id)
     when called for an existing session_id with a different user_name
       then raises ArgumentError (same invariant as agent_name — the user identity for a session is fixed at first append; a session that started as Eli cannot mid-stream become Alice without a graph-quality contradiction)
+    when called for an existing session_id with a different ontology module (or non-nil vs nil)
+      then raises ArgumentError (the ontology is part of the session contract — switching mid-stream would mix entity/edge schemas in one episode, destroying interpretability)
     if agent_name is missing or blank
       then raises ArgumentError
     if user_name is missing or blank
