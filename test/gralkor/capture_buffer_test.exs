@@ -27,14 +27,14 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "the group_id is stored in sanitized form (hyphens → underscores)" do
-      :ok = CaptureBuffer.append("s", "with-hyphens", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s", "with-hyphens", "Susu", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.flush("s")
 
       assert_receive {:flushed, "with_hyphens", "Susu", "Eli", _turns}
     end
 
     test "the agent_name and user_name are forwarded to the flush callback" do
-      :ok = CaptureBuffer.append("s", "g", "Gralkor", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s", "g", "Gralkor", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.flush("s")
 
       assert_receive {:flushed, "g", "Gralkor", "Eli", _turns}
@@ -54,8 +54,8 @@ defmodule Gralkor.CaptureBufferTest do
 
   describe "ex-capture-buffer > append/5 when called for multiple session_ids" do
     test "each session_id has an independent entry" do
-      :ok = CaptureBuffer.append("a", "g", "Susu", "Eli", [Message.new("user", "a-msg")])
-      :ok = CaptureBuffer.append("b", "g", "Susu", "Eli", [Message.new("user", "b-msg")])
+      :ok = CaptureBuffer.append("a", "g", "Susu", "Eli", nil, [Message.new("user", "a-msg")])
+      :ok = CaptureBuffer.append("b", "g", "Susu", "Eli", nil, [Message.new("user", "b-msg")])
 
       assert [[%Message{content: "a-msg"}]] = CaptureBuffer.turns_for("a")
       assert [[%Message{content: "b-msg"}]] = CaptureBuffer.turns_for("b")
@@ -64,30 +64,30 @@ defmodule Gralkor.CaptureBufferTest do
 
   describe "ex-capture-buffer > append/5 when called for an existing session_id with a different group_id" do
     test "raises (sessions are not re-bindable across groups)" do
-      :ok = CaptureBuffer.append("s", "g1", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s", "g1", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       assert_raise ArgumentError, ~r/group/i, fn ->
-        CaptureBuffer.append("s", "g2", "Susu", "Eli", [Message.new("user", "y")])
+        CaptureBuffer.append("s", "g2", "Susu", "Eli", nil, [Message.new("user", "y")])
       end
     end
   end
 
   describe "ex-capture-buffer > append/5 when called for an existing session_id with a different agent_name" do
     test "raises (sessions are not re-bindable across agents)" do
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       assert_raise ArgumentError, ~r/agent/i, fn ->
-        CaptureBuffer.append("s", "g", "Other", "Eli", [Message.new("user", "y")])
+        CaptureBuffer.append("s", "g", "Other", "Eli", nil, [Message.new("user", "y")])
       end
     end
   end
 
   describe "ex-capture-buffer > append/5 when called for an existing session_id with a different user_name" do
     test "raises (sessions are not re-bindable across users)" do
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       assert_raise ArgumentError, ~r/user/i, fn ->
-        CaptureBuffer.append("s", "g", "Susu", "Alice", [Message.new("user", "y")])
+        CaptureBuffer.append("s", "g", "Susu", "Alice", nil, [Message.new("user", "y")])
       end
     end
   end
@@ -95,13 +95,13 @@ defmodule Gralkor.CaptureBufferTest do
   describe "ex-capture-buffer > append/5 if agent_name is missing or blank" do
     test "raises ArgumentError on blank agent_name" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
-        CaptureBuffer.append("s", "g", "", "Eli", [Message.new("user", "x")])
+        CaptureBuffer.append("s", "g", "", "Eli", nil, [Message.new("user", "x")])
       end
     end
 
     test "raises ArgumentError on nil agent_name" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
-        CaptureBuffer.append("s", "g", nil, "Eli", [Message.new("user", "x")])
+        CaptureBuffer.append("s", "g", nil, "Eli", nil, [Message.new("user", "x")])
       end
     end
   end
@@ -109,13 +109,13 @@ defmodule Gralkor.CaptureBufferTest do
   describe "ex-capture-buffer > append/5 if user_name is missing or blank" do
     test "raises ArgumentError on blank user_name" do
       assert_raise ArgumentError, ~r/user_name/, fn ->
-        CaptureBuffer.append("s", "g", "Susu", "", [Message.new("user", "x")])
+        CaptureBuffer.append("s", "g", "Susu", "", nil, [Message.new("user", "x")])
       end
     end
 
     test "raises ArgumentError on nil user_name" do
       assert_raise ArgumentError, ~r/user_name/, fn ->
-        CaptureBuffer.append("s", "g", "Susu", nil, [Message.new("user", "x")])
+        CaptureBuffer.append("s", "g", "Susu", nil, nil, [Message.new("user", "x")])
       end
     end
   end
@@ -126,7 +126,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "when the session has been flushed, returns []" do
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.flush("s")
 
       assert [] = CaptureBuffer.turns_for("s")
@@ -144,15 +144,15 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "the entry is removed from the buffer" do
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.flush("s")
 
       assert [] = CaptureBuffer.turns_for("s")
     end
 
     test "a [gralkor] flush scheduled — session:<id> turns:<n> line is emitted at :info" do
-      :ok = CaptureBuffer.append("sess-x", "g", "Susu", "Eli", [Message.new("user", "a")])
-      :ok = CaptureBuffer.append("sess-x", "g", "Susu", "Eli", [Message.new("user", "b")])
+      :ok = CaptureBuffer.append("sess-x", "g", "Susu", "Eli", nil, [Message.new("user", "a")])
+      :ok = CaptureBuffer.append("sess-x", "g", "Susu", "Eli", nil, [Message.new("user", "b")])
 
       log =
         capture_log([level: :info], fn ->
@@ -185,7 +185,7 @@ defmodule Gralkor.CaptureBufferTest do
 
   describe "ex-capture-buffer > flush_and_await/2 when called for a session_id with buffered turns and the flush callback returns :ok within the timeout" do
     test "returns :ok and consumes the entry" do
-      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", [Message.new("user", "1")])
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
 
       assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
       assert_receive {:flushed, "g", "Susu", "Eli", [[%Message{content: "1"}]]}, 1_000
@@ -194,7 +194,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "logs a flush-completed event at :info" do
-      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", [Message.new("user", "1")])
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
 
       logs =
         capture_log(fn ->
@@ -221,7 +221,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "returns {:error, :timeout} and the entry remains available to flush later" do
-      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       assert {:error, :timeout} = CaptureBuffer.flush_and_await("s1", 50)
       assert_receive :callback_started, 1_000
@@ -245,7 +245,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "propagates the error without retry and consumes the entry" do
-      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       assert {:error, :capture_client_4xx} = CaptureBuffer.flush_and_await("s1", 1_000)
       assert_receive :callback_invoked, 500
@@ -267,8 +267,8 @@ defmodule Gralkor.CaptureBufferTest do
 
   describe "ex-capture-buffer > flush_all/0" do
     test "when called with pending entries, every entry is flushed and awaited" do
-      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", [Message.new("user", "1")])
-      :ok = CaptureBuffer.append("s2", "g", "Susu", "Eli", [Message.new("user", "2")])
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
+      :ok = CaptureBuffer.append("s2", "g", "Susu", "Eli", nil, [Message.new("user", "2")])
 
       :ok = CaptureBuffer.flush_all()
 
@@ -308,7 +308,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "when the flush callback raises an internal error then retries with the configured backoff" do
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.flush("s")
 
       assert_receive {:attempt, 1}, 200
@@ -327,9 +327,9 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "logs [gralkor] capture flushed — turns:<n> elapsed:<ms> at :info" do
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", [Message.new("user", "a")])
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", [Message.new("user", "b")])
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", [Message.new("user", "c")])
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "a")])
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "b")])
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "c")])
 
       log =
         capture_log([level: :info], fn ->
@@ -362,7 +362,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "does not retry — the call is contract-error and dropped" do
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.flush("s")
 
       assert_receive {:attempt, 1}, 200
@@ -390,7 +390,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "does not retry — would amplify load on the struggling upstream" do
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.flush("s")
 
       assert_receive {:attempt, 1}, 200
@@ -410,7 +410,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "logs [gralkor] capture exhausted at :error and drops" do
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       log =
         capture_log(fn ->
@@ -437,8 +437,8 @@ defmodule Gralkor.CaptureBufferTest do
       {:ok, pid} =
         start_supervised({CaptureBuffer, flush_callback: flush_callback, retries: []})
 
-      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", [Message.new("user", "1")])
-      :ok = CaptureBuffer.append("s2", "g", "Susu", "Eli", [Message.new("user", "2")])
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
+      :ok = CaptureBuffer.append("s2", "g", "Susu", "Eli", nil, [Message.new("user", "2")])
 
       :ok = stop_supervised(CaptureBuffer)
       refute Process.alive?(pid)
