@@ -312,6 +312,115 @@ defmodule Gralkor.GraphitiPool do
     :ok
   end
 
+  # ── Ontology materialisation ────────────────────────────────
+
+  defp build_ontology_dicts(%{
+         entity_types: entity_types,
+         edge_types: edge_types,
+         edge_type_map: edge_type_map,
+         excluded_entity_types: excluded_entity_types
+       }) do
+    {entity_dict, _} =
+      Pythonx.eval(
+        ontology_build_script(),
+        %{"specs" => Enum.map(entity_types, &spec_for_python/1)}
+      )
+
+    {edge_dict, _} =
+      Pythonx.eval(
+        ontology_build_script(),
+        %{"specs" => Enum.map(edge_types, &spec_for_python/1)}
+      )
+
+    {edge_type_map_dict, _} =
+      Pythonx.eval(
+        """
+        result = {}
+        for entry in pairs:
+            src = entry["src"].decode("utf-8") if isinstance(entry["src"], (bytes, bytearray)) else entry["src"]
+            tgt = entry["dst"].decode("utf-8") if isinstance(entry["dst"], (bytes, bytearray)) else entry["dst"]
+            names = []
+            for n in entry["names"]:
+                names.append(n.decode("utf-8") if isinstance(n, (bytes, bytearray)) else n)
+            result[(src, tgt)] = names
+        result
+        """,
+        %{"pairs" => Enum.map(edge_type_map, &edge_pair_for_python/1)}
+      )
+
+    excluded =
+      case excluded_entity_types do
+        nil -> nil
+        list when is_list(list) -> list
+      end
+
+    %{
+      "entity_types" => entity_dict,
+      "edge_types" => edge_dict,
+      "edge_type_map" => edge_type_map_dict,
+      "excluded_entity_types" => excluded
+    }
+  end
+
+  defp spec_for_python(%{name: name, fields: fields}) do
+    %{
+      "name" => name,
+      "fields" =>
+        Enum.map(fields, fn %{name: fname, type: ftype, required: required, doc: doc} ->
+          %{
+            "name" => Atom.to_string(fname),
+            "type" => Atom.to_string(ftype),
+            "required" => required,
+            "doc" => doc
+          }
+        end)
+    }
+  end
+
+  defp edge_pair_for_python({{src, dst}, names}) do
+    %{"src" => src, "dst" => dst, "names" => names}
+  end
+
+  defp ontology_build_script do
+    """
+    from typing import Optional
+    from pydantic import BaseModel, Field
+
+    type_map = {
+        "string": str,
+        "integer": int,
+        "float": float,
+        "boolean": bool,
+    }
+
+    def decode(value):
+        return value.decode("utf-8") if isinstance(value, (bytes, bytearray)) else value
+
+    classes = {}
+    for spec in specs:
+        name = decode(spec["name"])
+        annotations = {}
+        defaults = {}
+        for f in spec["fields"]:
+            fname = decode(f["name"])
+            ftype_key = decode(f["type"])
+            py_type = type_map[ftype_key]
+            required = bool(f["required"])
+            doc_raw = f.get("doc")
+            doc = decode(doc_raw) if doc_raw is not None else None
+            if required:
+                annotations[fname] = py_type
+                defaults[fname] = Field(..., description=doc) if doc else Field(...)
+            else:
+                annotations[fname] = Optional[py_type]
+                defaults[fname] = Field(default=None, description=doc) if doc else Field(default=None)
+        namespace = {"__annotations__": annotations, **defaults}
+        cls = type(name, (BaseModel,), namespace)
+        classes[name] = cls
+    classes
+    """
+  end
+
   # ── Defaults: real Pythonx-backed construction ──────────────
 
   defp default_construct_falkor_db({:embedded, data_dir}) do
