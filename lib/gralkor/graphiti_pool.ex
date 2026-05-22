@@ -335,13 +335,22 @@ defmodule Gralkor.GraphitiPool do
     {edge_type_map_dict, _} =
       Pythonx.eval(
         """
+        def decode(value):
+            return value.decode("utf-8") if isinstance(value, (bytes, bytearray)) else value
+
+        def get(d, key):
+            if key in d:
+                return d[key]
+            bkey = key.encode("utf-8")
+            if bkey in d:
+                return d[bkey]
+            return None
+
         result = {}
         for entry in pairs:
-            src = entry["src"].decode("utf-8") if isinstance(entry["src"], (bytes, bytearray)) else entry["src"]
-            tgt = entry["dst"].decode("utf-8") if isinstance(entry["dst"], (bytes, bytearray)) else entry["dst"]
-            names = []
-            for n in entry["names"]:
-                names.append(n.decode("utf-8") if isinstance(n, (bytes, bytearray)) else n)
+            src = decode(get(entry, "src"))
+            tgt = decode(get(entry, "dst"))
+            names = [decode(n) for n in (get(entry, "names") or [])]
             result[(src, tgt)] = names
         result
         """,
