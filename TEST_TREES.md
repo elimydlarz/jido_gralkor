@@ -321,6 +321,112 @@ ex-build-communities (src: lib/gralkor/client/native.ex#build_communities/1; uni
   (admin-only)
 ```
 
+## Ontology DSL (embedded Gralkor adapter)
+
+```
+ex-ontology (src: lib/gralkor/ontology.ex; unit: test/gralkor/ontology_test.exs)
+  the DSL — a consumer declares an ontology by `use Gralkor.Ontology, entities: …, relationships: …`
+  and naming entities and outgoing relationship blocks. The macro produces a compile-time
+  artefact (see ex-ontology-payload) that the Pythonx layer translates into graphiti's
+  entity_types/edge_types/edge_type_map/excluded_entity_types at first use.
+
+  `use Gralkor.Ontology, entities:, relationships:`
+    if :entities is not provided
+      then CompileError is raised naming :entities and the allowed values (:strict, :open)
+    if :entities is provided as any value other than :strict or :open
+      then CompileError is raised naming the bad value
+    if :relationships is not provided
+      then CompileError is raised naming :relationships and the allowed values (:scoped, :open)
+    if :relationships is provided as any value other than :scoped or :open
+      then CompileError is raised naming the bad value
+    (no defaults — declaring an ontology is a deliberate act, and the open/closed semantics
+     for entities vs relationships are independent enough that picking one default invariably
+     surprises the consumer who needed the other)
+
+  `entity Foo do … end`
+    when Foo is an alias
+      then the entity is named with the alias' last segment as a string ("Foo"); no real module Foo is defined
+    inside the block
+      when `field :name, :type` is called
+        then a field with that name and type is added to the entity
+        when called with `required: true`
+          then the field is required (Pythonx side: a Pydantic field with no default)
+        when called without :required or with `required: false`
+          then the field is optional (Pythonx side: defaults to None)
+        when called with `doc: "…"`
+          then the doc string is recorded as the field's description
+        if :type is not in the supported set (:string, :integer, :float, :boolean)
+          then CompileError is raised naming the bad type
+      if a field name collides with another field in the same entity
+        then CompileError is raised naming the duplicate
+      if a non-field expression (e.g. `prefers Foo`) appears inside the `entity` block
+        then CompileError is raised — relationships do not live inside `entity` blocks (they go in `from` blocks)
+    if `entity Foo` is declared more than once in the same ontology
+      then CompileError is raised naming the duplicate entity
+
+  `from Source do … end`
+    when Source is an alias
+      then the block declares outgoing relationships from the entity named with the alias' last segment
+    inside the block
+      when `verb Target` is called with no do-block
+        then a relationship is added with name = uppercase snake of the verb ("prefers" → "PREFERS"), endpoint (Source → Target), and no edge properties
+      when `verb Target do … end` is called
+        then a relationship is added with the same name/endpoint, and the do-block's `field` calls become edge properties (same `field` semantics as inside `entity`)
+      if Target is not an alias
+        then CompileError is raised
+      if the verb's uppercase-snake name collides with a previously declared verb whose edge-property schema (field names, types, required flags) differs
+        then CompileError is raised naming the conflict
+      when the same verb appears in multiple `from` blocks with matching property schemas
+        then one edge type is declared and `:edge_type_map` gains one entry per (Source, Target) pair where the verb appeared
+    if `from Source` references an alias that does not match any declared entity
+      then CompileError is raised at end-of-module naming the unknown source
+    if a relationship target alias does not match any declared entity
+      then CompileError is raised at end-of-module naming the unknown target
+
+  verb-to-name casing
+    when the verb is a single lowercase word ("prefers")
+      then the edge name is uppercase ("PREFERS")
+    when the verb has underscores ("relates_to")
+      then the edge name preserves underscores and uppercases each segment ("RELATES_TO")
+
+  `__ontology__/0`
+    then returns the materialised payload (see ex-ontology-payload)
+    then the payload is computed at compile time — calling `__ontology__/0` is a constant lookup
+
+ex-ontology-payload (src: lib/gralkor/ontology.ex; unit: test/gralkor/ontology_test.exs)
+  the value an ontology module's `__ontology__/0` returns — the Elixir-side spec the Pythonx
+  layer translates into graphiti's dicts. The Elixir side never builds Pydantic classes.
+
+  shape
+    then a map with keys :entity_types, :edge_types, :edge_type_map, :excluded_entity_types
+    then :entity_types is a list of %{name: String.t(), fields: [field()]} entries, one per declared entity, in declaration order
+    then :edge_types is a list of %{name: String.t(), fields: [field()]} entries, one per declared verb (deduplicated across `from` blocks), in first-declaration order
+    then :edge_type_map is a list of {{source_name, target_name}, [edge_name]} pairs preserving declaration order across `from` blocks
+    then :excluded_entity_types is ["Entity"] when `entities: :strict`, else nil
+    then a field() entry is %{name: atom(), type: atom(), required: boolean(), doc: String.t() | nil}
+
+  `relationships: :open`
+    then :edge_type_map is []
+      (the Pythonx side translates an empty list to "omit edge_type_map", which lets graphiti's
+       default — every named edge allowed everywhere — apply)
+
+  `relationships: :scoped`
+    then :edge_type_map carries exactly the declared (source, target) → [edge_name] entries
+
+  `entities: :open`
+    then :excluded_entity_types is nil (graphiti also extracts generic Entity)
+
+  `entities: :strict`
+    then :excluded_entity_types is ["Entity"] (only declared types are extracted)
+
+  empty ontology
+    when no entities and no relationships are declared
+      then :entity_types is []
+      and :edge_types is []
+      and :edge_type_map is []
+      and :excluded_entity_types follows the entities: opt (nil for :open, ["Entity"] for :strict)
+```
+
 ## Startup (embedded Gralkor adapter)
 
 ```
