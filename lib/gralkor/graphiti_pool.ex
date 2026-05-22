@@ -293,6 +293,19 @@ defmodule Gralkor.GraphitiPool do
   end
 
   @impl true
+  def handle_call({:materialise, module}, _from, state) do
+    case Map.fetch(state.ontology_cache, module) do
+      {:ok, dicts} ->
+        {:reply, dicts, state}
+
+      :error ->
+        payload = module.__ontology__()
+        dicts = build_ontology_dicts(payload)
+        {:reply, dicts, %{state | ontology_cache: Map.put(state.ontology_cache, module, dicts)}}
+    end
+  end
+
+  @impl true
   def terminate(_reason, state) do
     unregister_table(self())
     :ets.delete(state.table)
