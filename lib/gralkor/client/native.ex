@@ -93,10 +93,11 @@ defmodule Gralkor.Client.Native do
   end
 
   @impl Gralkor.Client
-  def memory_add(group_id, content, source_description) do
+  def memory_add(group_id, content, source_description, ontology) do
+    raise_unless_ontology_or_nil!(ontology)
     source = source_description || "manual"
 
-    case GraphitiPool.add_episode(group_id, content, source) do
+    case GraphitiPool.add_episode(group_id, content, source, ontology) do
       :ok -> :ok
       {:error, _} = err -> err
     end
