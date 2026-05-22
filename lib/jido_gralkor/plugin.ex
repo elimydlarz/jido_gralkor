@@ -203,6 +203,13 @@ defmodule JidoGralkor.Plugin do
     end
   end
 
+  defp ontology(agent) do
+    case Map.get(agent.state, :__memory__) do
+      %{ontology: ontology} -> ontology
+      _ -> nil
+    end
+  end
+
   defp thread_id(agent) do
     case Map.get(agent.state, :__thread__) do
       %{id: id} when is_binary(id) -> id
