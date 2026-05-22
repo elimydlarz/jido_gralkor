@@ -38,6 +38,7 @@ One context only — the Jido↔Gralkor adaptation. No domain logic, no memory p
 - The iter-1 `tool_choice` forcing is a workaround: `Jido.AI.Reasoning.ReAct.Config` lacks a `:preamble_tool` knob, and `tool_choice` is applied uniformly across the ReAct loop today. The helper exists to pin it for one iteration without forking the strategy.
 - The plugin captures on every turn, regardless of whether tools were called, because distillation (in `:gralkor_ex`) decides what's memory-worthy — we don't gate at this layer.
 - Interpret output budget knobs live under `:gralkor_ex` app env (read each recall by `Gralkor.Client.Native`), not under `:jido_gralkor` config. The plugin is documentation-only for that knob; the adapter holds the actual config surface.
+- `Gralkor.Ontology` declares each relationship once (`from Source do verb Target end`) and derives graphiti's `edge_types` + `edge_type_map` automatically. Graphiti's split between those two dicts is the modelled-once-mentioned-twice trap the DSL exists to remove. `relationships: :scoped` does not forbid generic edges — graphiti always extracts edge candidates and only constrains *which named class* they conform to between declared `(src, dst)` pairs; closing the world on edges would require post-filtering not yet implemented.
 
 ## Temporal View
 
