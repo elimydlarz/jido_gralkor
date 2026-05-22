@@ -88,11 +88,17 @@ defmodule Gralkor.GraphitiPool do
 
   @doc """
   Ingest one episode (text content) into `group_id` via graphiti's
-  `add_episode`. Auto-generates `name` and `idempotency_key`.
+  `add_episode`. Auto-generates `name` and `idempotency_key`. When
+  `ontology` is a module declared with `use Gralkor.Ontology`, its payload
+  is materialised into graphiti's `entity_types`, `edge_types`,
+  `edge_type_map`, and `excluded_entity_types` (cached per ontology module
+  in the GenServer state).
   """
-  @spec add_episode(GenServer.server(), String.t(), String.t(), String.t()) ::
+  @spec add_episode(GenServer.server(), String.t(), String.t(), String.t(), module() | nil) ::
           :ok | {:error, term()}
-  def add_episode(server \\ __MODULE__, group_id, content, source_description)
+  def add_episode(server \\ __MODULE__, group_id, content, source_description, ontology \\ nil)
+
+  def add_episode(server, group_id, content, source_description, ontology)
       when is_binary(group_id) and is_binary(content) and is_binary(source_description) do
     instance = __MODULE__.for(server, group_id)
 
@@ -100,6 +106,12 @@ defmodule Gralkor.GraphitiPool do
     idempotency_key = "key-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
 
     sanitized = Client.sanitize_group_id(group_id)
+
+    ontology_dicts =
+      case ontology do
+        nil -> nil
+        module when is_atom(module) -> GenServer.call(server, {:materialise, module}, :infinity)
+      end
 
     {_, _} =
       Pythonx.eval(
@@ -111,16 +123,30 @@ defmodule Gralkor.GraphitiPool do
         s = source.decode('utf-8') if isinstance(source, (bytes, bytearray)) else source
         n = name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name
         gid = group.decode('utf-8') if isinstance(group, (bytes, bytearray)) else group
+        kwargs = dict(
+          name=n,
+          episode_body=c,
+          source=EpisodeType.text,
+          source_description=s,
+          group_id=gid,
+          reference_time=datetime.now(timezone.utc),
+        )
+        if ontology_dicts is not None:
+            et = ontology_dicts.get("entity_types")
+            edt = ontology_dicts.get("edge_types")
+            edm = ontology_dicts.get("edge_type_map")
+            ex_et = ontology_dicts.get("excluded_entity_types")
+            if et:
+                kwargs["entity_types"] = et
+            if edt:
+                kwargs["edge_types"] = edt
+            if edm:
+                kwargs["edge_type_map"] = edm
+            if ex_et:
+                kwargs["excluded_entity_types"] = ex_et
         import traceback, sys
         try:
-            asyncio._gralkor_run(g.add_episode(
-              name=n,
-              episode_body=c,
-              source=EpisodeType.text,
-              source_description=s,
-              group_id=gid,
-              reference_time=datetime.now(timezone.utc),
-            ))
+            asyncio._gralkor_run(g.add_episode(**kwargs))
         except BaseException:
             print("[gralkor-debug] add_episode raised:", file=sys.stderr)
             traceback.print_exc()
@@ -133,7 +159,8 @@ defmodule Gralkor.GraphitiPool do
           "source" => source_description,
           "name" => name,
           "group" => sanitized,
-          "_idem" => idempotency_key
+          "_idem" => idempotency_key,
+          "ontology_dicts" => ontology_dicts
         }
       )
 
