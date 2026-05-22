@@ -30,14 +30,14 @@ defmodule Gralkor.CaptureBufferTest do
       :ok = CaptureBuffer.append("s", "with-hyphens", "Susu", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.flush("s")
 
-      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", _turns}
+      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", nil, _turns}
     end
 
     test "the agent_name and user_name are forwarded to the flush callback" do
       :ok = CaptureBuffer.append("s", "g", "Gralkor", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.flush("s")
 
-      assert_receive {:flushed, "g", "Gralkor", "Eli", _turns}
+      assert_receive {:flushed, "g", "Gralkor", "Eli", nil, _turns}
     end
   end
 
@@ -140,7 +140,7 @@ defmodule Gralkor.CaptureBufferTest do
 
       :ok = CaptureBuffer.flush("s")
 
-      assert_receive {:flushed, "g", "Susu", "Eli", [^msgs]}, 1_000
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, [^msgs]}, 1_000
     end
 
     test "the entry is removed from the buffer" do
@@ -157,7 +157,7 @@ defmodule Gralkor.CaptureBufferTest do
       log =
         capture_log([level: :info], fn ->
           :ok = CaptureBuffer.flush("sess-x")
-          assert_receive {:flushed, _, _, _, _}, 1_000
+          assert_receive {:flushed, _, _, _, _, _}, 1_000
         end)
 
       assert log =~ "[info]"
@@ -169,7 +169,7 @@ defmodule Gralkor.CaptureBufferTest do
     test "returns without scheduling any flush" do
       :ok = CaptureBuffer.flush("never-existed")
 
-      refute_receive {:flushed, _, _, _, _}, 100
+      refute_receive {:flushed, _, _, _, _, _}, 100
     end
 
     test "a [gralkor] flush — session:<id> empty line is emitted at :info" do
@@ -188,7 +188,7 @@ defmodule Gralkor.CaptureBufferTest do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
 
       assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
-      assert_receive {:flushed, "g", "Susu", "Eli", [[%Message{content: "1"}]]}, 1_000
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "1"}]]}, 1_000
 
       assert [] = CaptureBuffer.turns_for("s1")
     end
@@ -261,7 +261,7 @@ defmodule Gralkor.CaptureBufferTest do
         end)
 
       assert logs =~ "[gralkor] flush_and_await — session:unknown empty"
-      refute_receive {:flushed, _, _, _, _}, 100
+      refute_receive {:flushed, _, _, _, _, _}, 100
     end
   end
 
@@ -272,8 +272,8 @@ defmodule Gralkor.CaptureBufferTest do
 
       :ok = CaptureBuffer.flush_all()
 
-      assert_receive {:flushed, "g", "Susu", "Eli", [[%Message{content: "1"}]]}, 1_000
-      assert_receive {:flushed, "g", "Susu", "Eli", [[%Message{content: "2"}]]}, 1_000
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "1"}]]}, 1_000
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "2"}]]}, 1_000
     end
 
     test "when called with no entries, returns immediately" do
@@ -443,8 +443,8 @@ defmodule Gralkor.CaptureBufferTest do
       :ok = stop_supervised(CaptureBuffer)
       refute Process.alive?(pid)
 
-      assert_received {:flushed, "g", "Susu", "Eli", [[%Message{content: "1"}]]}
-      assert_received {:flushed, "g", "Susu", "Eli", [[%Message{content: "2"}]]}
+      assert_received {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "1"}]]}
+      assert_received {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "2"}]]}
     end
   end
 end
