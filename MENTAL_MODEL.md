@@ -19,6 +19,7 @@
 - *agent_name* — the assistant's display name; required at mount; renders all assistant turns in graphiti.
 - *user_name* — the human's name per turn; stashed on `agent.state[:user_name]` by the consumer.
 - *forced recall* — the iter-1 `tool_choice` override that pins `memory_search` on the first ReAct iteration.
+- *ontology* — a module declared with `use Gralkor.Ontology, entities: …, relationships: …` that names the entity types and outgoing relationships graphiti should extract from captured episodes. Configured once at plugin mount; applied automatically to every `add_episode` call.
 
 ## Bounded Contexts
 
