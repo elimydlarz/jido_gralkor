@@ -10,6 +10,7 @@
 - **`JidoGralkor.Canonical.to_messages/3`** — normalises a Jido/ReAct turn into Gralkor's `[%Message{role, content}]` shape.
 - **`JidoGralkor.Lifecycle`** — graceful-shutdown flush via `Gralkor.Client.flush/1`.
 - **`JidoGralkor.ContextRotator`** — synchronous rotate-on-demand (flush + fresh thread + compaction signal).
+- **`Gralkor.Ontology`** — compile-time DSL for declaring graphiti custom-entity ontologies (`entity Foo do … end`, `from Source do verb Target end`). The consumer's ontology module is passed at mount and threaded automatically through every write (capture flush + `MemoryAdd`).
 
 ## Ubiquitous Language
 
