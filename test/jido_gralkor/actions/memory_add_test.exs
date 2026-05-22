@@ -29,7 +29,9 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
       %{agent_id: "user-id"}
     )
 
-    assert eventually(fn -> InMemory.adds() == [["user_id", "reflection", "agent thought"]] end)
+    assert eventually(fn ->
+             InMemory.adds() == [["user_id", "reflection", "agent thought", nil]]
+           end)
   end
 
   test "if the background Task's client call fails, the failure is logged" do
