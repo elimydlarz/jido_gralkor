@@ -58,32 +58,38 @@ defmodule Gralkor.OntologyExtractionTest do
   """
 
   setup_all do
-    if System.get_env("GOOGLE_API_KEY") in [nil, ""] do
-      {:skip, "GOOGLE_API_KEY not set; copy .env.example to .env"}
-    else
-      data_dir =
-        Path.join(System.tmp_dir!(), "gralkor_ontology_#{System.unique_integer([:positive])}")
+    data_dir =
+      Path.join(System.tmp_dir!(), "gralkor_ontology_#{System.unique_integer([:positive])}")
 
-      File.mkdir_p!(data_dir)
-      System.put_env("GRALKOR_DATA_DIR", data_dir)
+    File.mkdir_p!(data_dir)
+    System.put_env("GRALKOR_DATA_DIR", data_dir)
 
-      {:ok, _python} = start_supervised(Gralkor.Python)
+    original_client = Application.get_env(:jido_gralkor, :client)
+    Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
 
-      {:ok, _pool} =
-        start_supervised(
-          {GraphitiPool,
-           [
-             falkordb_spec: {:embedded, data_dir},
-             llm_model: Config.llm_model(),
-             embedder_model: Config.embedder_model(),
-             interpret_fn: Native.interpret_callback(),
-             warmup: false
-           ]}
-        )
+    on_exit(fn ->
+      case original_client do
+        nil -> Application.delete_env(:jido_gralkor, :client)
+        mod -> Application.put_env(:jido_gralkor, :client, mod)
+      end
+    end)
 
-      on_exit(fn -> File.rm_rf!(data_dir) end)
-      :ok
-    end
+    {:ok, _python} = start_supervised(Gralkor.Python)
+
+    {:ok, _pool} =
+      start_supervised(
+        {GraphitiPool,
+         [
+           falkordb_spec: {:embedded, data_dir},
+           llm_model: Config.llm_model(),
+           embedder_model: Config.embedder_model(),
+           interpret_fn: Native.interpret_callback(),
+           warmup: false
+         ]}
+      )
+
+    on_exit(fn -> File.rm_rf!(data_dir) end)
+    :ok
   end
 
   describe "ontology-extraction > strict ontology" do
