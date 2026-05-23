@@ -916,8 +916,7 @@ JidoGralkor.Actions error-encoder compat (unit: test/jido_gralkor/actions/error_
 jido-memory-journey (functional: test/functional/jido_memory_journey_test.exs)
   prerequisites
     given the application has booted Gralkor.Python with a real PythonX runtime, real graphiti-core, real falkordblite, and the configured LLM (req_llm)
-    when no LLM API key is configured for the chosen provider
-      then the suite is skipped
+    (no skip clause — missing config surfaces as a test failure, per the Fail-fast rule; the suite is opt-in via `mix test.functional`)
   round-trip
     given Gralkor.Client.memory_add/3 stores "Eli prefers concise explanations" under group "jido-test"
       when Gralkor.Client.recall/3 is called with a fresh session_id and a related query
