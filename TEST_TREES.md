@@ -953,8 +953,7 @@ ontology-extraction (functional: test/functional/ontology_extraction_test.exs)
   prerequisites
     given the application has booted real Pythonx + graphiti-core + falkordblite
     given a real LLM API key is configured for the chosen provider
-    when no LLM API key is configured
-      then the suite is skipped
+    (no skip clause — missing config surfaces as a test failure, per the Fail-fast rule)
   fixture
     a single episode body asserting that "Eli" (handle "eli") has a strong preference
     for concise, structured responses, suitable for the LLM to extract one User entity,
