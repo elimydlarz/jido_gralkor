@@ -22,3 +22,6 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 jido_gralkor-*.tar
 
+# Local environment file (loaded by test_helper.exs); commit .env.example only.
+.env
+
