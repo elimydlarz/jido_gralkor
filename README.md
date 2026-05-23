@@ -38,7 +38,7 @@ export GOOGLE_API_KEY=...                              # or ANTHROPIC / OPENAI /
 
 ```elixir
 # Remote — point at a managed FalkorDB. config/runtime.exs
-config :gralkor_ex,
+config :jido_gralkor,
   falkordb: [
     host: System.fetch_env!("FALKORDB_HOST"),
     port: String.to_integer(System.fetch_env!("FALKORDB_PORT")),
@@ -50,13 +50,11 @@ config :gralkor_ex,
 
 Remote wins when both are set. `:ssl` defaults to `false`; set `true` for FalkorDB Cloud or any TLS-fronted endpoint. Misconfigured `:falkordb` (non-keyword, missing host/port, blank host, non-positive port) raises `ArgumentError` at app start.
 
-The `:gralkor_ex` application-env atom is preserved as an internal config namespace from before the 3.0.0 merge so existing operator configs keep working without churn. The owning OTP application is now `:jido_gralkor`.
-
 **2. In-memory client in tests.** Swap the adapter for the in-memory twin:
 
 ```elixir
 # config/test.exs
-config :gralkor_ex, client: Gralkor.Client.InMemory
+config :jido_gralkor, client: Gralkor.Client.InMemory
 ```
 
 And start the twin once in `test/test_helper.exs`:
@@ -66,7 +64,7 @@ And start the twin once in `test/test_helper.exs`:
 ExUnit.start()
 ```
 
-When `:gralkor_ex, :client` is pinned to `Gralkor.Client.InMemory`, the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer) does not start. No FalkorDB backend required in tests.
+When `:jido_gralkor, :client` is pinned to `Gralkor.Client.InMemory`, the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer) does not start. No FalkorDB backend required in tests.
 
 **3. `Jido.Thread.Plugin` on your `use Jido` supervisor.** The plugin reads `session_id` from `agent.state[:__thread__].id`, so the thread plugin must be active:
 
