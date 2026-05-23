@@ -2,12 +2,12 @@ defmodule Gralkor.Config do
   @moduledoc """
   Configuration for the embedded Gralkor runtime.
 
-  Two operator-facing knobs decide what `:gralkor_ex` does at boot:
+  Two operator-facing knobs decide what `:jido_gralkor` does at boot:
 
     * The FalkorDB connection — either embedded (`falkordblite` spawns a local
       `redis-server` child under a directory chosen by `GRALKOR_DATA_DIR`) or
       remote (network `host:port` plus optional credentials, set via the
-      `:gralkor_ex, :falkordb` application env). Remote wins when both are
+      `:jido_gralkor, :falkordb` application env). Remote wins when both are
       configured. See `falkordb_spec/0`.
     * The LLM and embedder models — set via the `GRALKOR_LLM_MODEL` and
       `GRALKOR_EMBEDDER_MODEL` env vars in `"provider:model"` form (operator
@@ -42,7 +42,7 @@ defmodule Gralkor.Config do
   """
   @spec falkordb_spec() :: falkordb_spec() | nil
   def falkordb_spec do
-    case Application.get_env(:gralkor_ex, :falkordb) do
+    case Application.get_env(:jido_gralkor, :falkordb) do
       nil ->
         embedded_spec()
 
@@ -68,7 +68,7 @@ defmodule Gralkor.Config do
   def validate_falkordb!(kw) do
     unless Keyword.keyword?(kw) do
       raise ArgumentError,
-            "expected :gralkor_ex, :falkordb to be a keyword list with :host and :port; got #{inspect(kw)}"
+            "expected :jido_gralkor, :falkordb to be a keyword list with :host and :port; got #{inspect(kw)}"
     end
 
     host = Keyword.get(kw, :host)
@@ -76,12 +76,12 @@ defmodule Gralkor.Config do
 
     unless is_binary(host) and host != "" do
       raise ArgumentError,
-            ":gralkor_ex, :falkordb requires :host (non-blank string); got #{inspect(host)}"
+            ":jido_gralkor, :falkordb requires :host (non-blank string); got #{inspect(host)}"
     end
 
     unless is_integer(port) and port > 0 do
       raise ArgumentError,
-            ":gralkor_ex, :falkordb requires :port (positive integer); got #{inspect(port)}"
+            ":jido_gralkor, :falkordb requires :port (positive integer); got #{inspect(port)}"
     end
 
     kw

@@ -175,7 +175,7 @@ defmodule Gralkor.Recall do
     )
   end
 
-  defp test_mode?, do: Application.get_env(:gralkor_ex, :test, false)
+  defp test_mode?, do: Application.get_env(:jido_gralkor, :test, false)
 
   defp raise_if_blank_agent!(name) when is_binary(name) do
     if String.trim(name) == "" do

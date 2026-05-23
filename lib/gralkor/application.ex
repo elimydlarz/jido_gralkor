@@ -19,7 +19,7 @@ defmodule Gralkor.Application do
   @doc false
   def children do
     cond do
-      Application.get_env(:gralkor_ex, :client) == Gralkor.Client.InMemory ->
+      Application.get_env(:jido_gralkor, :client) == Gralkor.Client.InMemory ->
         []
 
       true ->
@@ -67,7 +67,7 @@ defmodule Gralkor.Application do
             "[gralkor] capture flushed — group:#{group_id} bodyChars:#{String.length(body)} #{ms}ms"
           )
 
-          if Application.get_env(:gralkor_ex, :test, false),
+          if Application.get_env(:jido_gralkor, :test, false),
             do: Logger.info("[gralkor] [test] capture flush body: #{body}")
 
           result

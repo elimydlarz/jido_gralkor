@@ -7,7 +7,7 @@ config :logger, :default_formatter,
 config :pythonx, :uv_init,
   pyproject_toml: """
   [project]
-  name = "gralkor_ex"
+  name = "jido_gralkor"
   version = "0.0.0"
   requires-python = "==3.12.*"
   dependencies = [

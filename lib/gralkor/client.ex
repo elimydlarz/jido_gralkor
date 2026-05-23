@@ -14,7 +14,7 @@ defmodule Gralkor.Client do
   `recall/4`, for callers that must observe completion before rotating
   state (e.g. session-id rotation in `JidoGralkor.ContextRotator`).
 
-  The concrete adapter is resolved from `Application.get_env(:gralkor_ex, :client)`;
+  The concrete adapter is resolved from `Application.get_env(:jido_gralkor, :client)`;
   defaults to `Gralkor.Client.Native` (in-process via Pythonx). Tests swap in
   `Gralkor.Client.InMemory`.
 
@@ -49,7 +49,7 @@ defmodule Gralkor.Client do
               | {:error, term()}
 
   @spec impl() :: module()
-  def impl, do: Application.get_env(:gralkor_ex, :client, Gralkor.Client.Native)
+  def impl, do: Application.get_env(:jido_gralkor, :client, Gralkor.Client.Native)
 
   @spec sanitize_group_id(String.t()) :: String.t()
   def sanitize_group_id(id) when is_binary(id), do: String.replace(id, "-", "_")

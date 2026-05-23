@@ -33,13 +33,13 @@ defmodule Gralkor.Client.Native do
     ]
 
     opts =
-      case Application.get_env(:gralkor_ex, :recall_deadline_ms) do
+      case Application.get_env(:jido_gralkor, :recall_deadline_ms) do
         nil -> opts
         ms when is_integer(ms) -> Keyword.put(opts, :deadline_ms, ms)
       end
 
     opts =
-      case Application.get_env(:gralkor_ex, :interpret_max_output_tokens) do
+      case Application.get_env(:jido_gralkor, :interpret_max_output_tokens) do
         nil ->
           opts
 
@@ -48,7 +48,7 @@ defmodule Gralkor.Client.Native do
 
         other ->
           raise ArgumentError,
-                "Gralkor.Client.Native: :gralkor_ex, :interpret_max_output_tokens must be a positive integer, got #{inspect(other)}"
+                "Gralkor.Client.Native: :jido_gralkor, :interpret_max_output_tokens must be a positive integer, got #{inspect(other)}"
       end
 
     Recall.recall(group_id, agent_name, session_id, query, opts)
@@ -61,7 +61,7 @@ defmodule Gralkor.Client.Native do
     raise_if_blank!(:user_name, user_name)
     raise_unless_ontology_or_nil!(ontology)
 
-    if Application.get_env(:gralkor_ex, :test, false),
+    if Application.get_env(:jido_gralkor, :test, false),
       do: Logger.info("[gralkor] [test] capture messages: #{format_test_messages(msgs)}")
 
     CaptureBuffer.append(session_id, group_id, agent_name, user_name, ontology, msgs)
