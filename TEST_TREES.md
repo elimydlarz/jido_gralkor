@@ -949,6 +949,37 @@ jido-memory-journey (functional: test/functional/jido_memory_journey_test.exs)
 ```
 
 ```
+ontology-extraction (functional: test/functional/ontology_extraction_test.exs)
+  prerequisites
+    given the application has booted real Pythonx + graphiti-core + falkordblite
+    given a real LLM API key is configured for the chosen provider
+    when no LLM API key is configured
+      then the suite is skipped
+  fixture
+    a single episode body asserting that "Eli" (handle "eli") has a strong preference
+    for concise, structured responses, suitable for the LLM to extract one User entity,
+    one Preference entity, and a PREFERS relationship between them
+  strict ontology (entities: :strict, relationships: :scoped)
+    when memory_add ingests the fixture under a strict ontology declaring User + Preference + PREFERS
+      then at least one node in the graph carries the "User" label
+      and at least one node carries the "Preference" label
+      and every node has at least one label other than "Entity"
+        (graphiti always appends "Entity" to every saved node; strict mode means no node is *only* "Entity")
+      and at least one edge of type "PREFERS" exists
+  open ontology (entities: :open, relationships: :open)
+    when memory_add ingests the same fixture under an open ontology declaring the same types
+      then at least one node carries the "User" label
+      and at least one node carries the "Preference" label
+        (the suite does not assert about generic-only nodes — entities: :open lets them appear, and
+         extraction is LLM-driven, so their presence is non-deterministic)
+  no ontology
+    when memory_add ingests the same fixture with ontology=nil
+      then no node carries the "User" or "Preference" label
+        (those types are never declared, so graphiti has no schema to assign them)
+      and the graph still contains generic entity nodes — pre-ontology behaviour preserved
+```
+
+```
 ex-remote-falkordb-journey (functional: test/functional/remote_falkordb_journey_test.exs)
   same consumer-visible round-trip as jido-memory-journey, but against a real network FalkorDB instead of the embedded falkordblite — proves the {:remote, kw} branch of Gralkor.GraphitiPool.default_construct_falkor_db actually drives graphiti against a remote graph
   prerequisites
