@@ -9,7 +9,7 @@ defmodule Gralkor.ConfigTest do
     original_data_dir = System.get_env("GRALKOR_DATA_DIR")
     original_llm = System.get_env("GRALKOR_LLM_MODEL")
     original_embedder = System.get_env("GRALKOR_EMBEDDER_MODEL")
-    original_falkordb = Application.get_env(:gralkor_ex, :falkordb)
+    original_falkordb = Application.get_env(:jido_gralkor, :falkordb)
 
     on_exit(fn ->
       restore_env("GRALKOR_DATA_DIR", original_data_dir)
@@ -17,15 +17,15 @@ defmodule Gralkor.ConfigTest do
       restore_env("GRALKOR_EMBEDDER_MODEL", original_embedder)
 
       case original_falkordb do
-        nil -> Application.delete_env(:gralkor_ex, :falkordb)
-        v -> Application.put_env(:gralkor_ex, :falkordb, v)
+        nil -> Application.delete_env(:jido_gralkor, :falkordb)
+        v -> Application.put_env(:jido_gralkor, :falkordb, v)
       end
     end)
 
     System.delete_env("GRALKOR_DATA_DIR")
     System.delete_env("GRALKOR_LLM_MODEL")
     System.delete_env("GRALKOR_EMBEDDER_MODEL")
-    Application.delete_env(:gralkor_ex, :falkordb)
+    Application.delete_env(:jido_gralkor, :falkordb)
     :ok
   end
 
@@ -54,18 +54,18 @@ defmodule Gralkor.ConfigTest do
 
   describe "falkordb-connection > when :falkordb is set with :host and :port" do
     test "returns {:remote, kw} with the keyword list unchanged" do
-      Application.put_env(:gralkor_ex, :falkordb, host: "falkor.example", port: 6379)
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
       assert Config.falkordb_spec() == {:remote, [host: "falkor.example", port: 6379]}
     end
 
     test "remote wins when GRALKOR_DATA_DIR is also set" do
       System.put_env("GRALKOR_DATA_DIR", "/tmp/should_be_ignored")
-      Application.put_env(:gralkor_ex, :falkordb, host: "falkor.example", port: 6379)
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
       assert {:remote, _} = Config.falkordb_spec()
     end
 
     test "carries username and password through" do
-      Application.put_env(:gralkor_ex, :falkordb,
+      Application.put_env(:jido_gralkor, :falkordb,
         host: "falkor.example",
         port: 6379,
         username: "alice",
@@ -80,27 +80,27 @@ defmodule Gralkor.ConfigTest do
 
   describe "falkordb-connection > when :falkordb is misconfigured" do
     test "raises when :host is missing" do
-      Application.put_env(:gralkor_ex, :falkordb, port: 6379)
+      Application.put_env(:jido_gralkor, :falkordb, port: 6379)
       assert_raise ArgumentError, ~r/:host/, fn -> Config.falkordb_spec() end
     end
 
     test "raises when :port is missing" do
-      Application.put_env(:gralkor_ex, :falkordb, host: "falkor.example")
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example")
       assert_raise ArgumentError, ~r/:port/, fn -> Config.falkordb_spec() end
     end
 
     test "raises when :host is blank" do
-      Application.put_env(:gralkor_ex, :falkordb, host: "", port: 6379)
+      Application.put_env(:jido_gralkor, :falkordb, host: "", port: 6379)
       assert_raise ArgumentError, ~r/:host/, fn -> Config.falkordb_spec() end
     end
 
     test "raises when :port is not a positive integer" do
-      Application.put_env(:gralkor_ex, :falkordb, host: "h", port: 0)
+      Application.put_env(:jido_gralkor, :falkordb, host: "h", port: 0)
       assert_raise ArgumentError, ~r/:port/, fn -> Config.falkordb_spec() end
     end
 
     test "raises when :falkordb is not a keyword list" do
-      Application.put_env(:gralkor_ex, :falkordb, "falkor://host:6379")
+      Application.put_env(:jido_gralkor, :falkordb, "falkor://host:6379")
       assert_raise ArgumentError, ~r/keyword list/, fn -> Config.falkordb_spec() end
     end
   end

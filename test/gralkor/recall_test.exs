@@ -357,8 +357,8 @@ defmodule Gralkor.RecallTest do
 
   describe "ex-recall > observability > when test mode is enabled" do
     setup do
-      Application.put_env(:gralkor_ex, :test, true)
-      on_exit(fn -> Application.delete_env(:gralkor_ex, :test) end)
+      Application.put_env(:jido_gralkor, :test, true)
+      on_exit(fn -> Application.delete_env(:jido_gralkor, :test) end)
       :ok
     end
 

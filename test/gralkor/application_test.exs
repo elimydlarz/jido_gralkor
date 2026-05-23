@@ -7,8 +7,8 @@ defmodule Gralkor.ApplicationTest do
 
   setup do
     original_env = System.get_env("GRALKOR_DATA_DIR")
-    original_client = Application.get_env(:gralkor_ex, :client)
-    original_falkordb = Application.get_env(:gralkor_ex, :falkordb)
+    original_client = Application.get_env(:jido_gralkor, :client)
+    original_falkordb = Application.get_env(:jido_gralkor, :falkordb)
 
     on_exit(fn ->
       case original_env do
@@ -17,18 +17,18 @@ defmodule Gralkor.ApplicationTest do
       end
 
       case original_client do
-        nil -> Application.delete_env(:gralkor_ex, :client)
-        v -> Application.put_env(:gralkor_ex, :client, v)
+        nil -> Application.delete_env(:jido_gralkor, :client)
+        v -> Application.put_env(:jido_gralkor, :client, v)
       end
 
       case original_falkordb do
-        nil -> Application.delete_env(:gralkor_ex, :falkordb)
-        v -> Application.put_env(:gralkor_ex, :falkordb, v)
+        nil -> Application.delete_env(:jido_gralkor, :falkordb)
+        v -> Application.put_env(:jido_gralkor, :falkordb, v)
       end
     end)
 
-    Application.delete_env(:gralkor_ex, :client)
-    Application.delete_env(:gralkor_ex, :falkordb)
+    Application.delete_env(:jido_gralkor, :client)
+    Application.delete_env(:jido_gralkor, :falkordb)
     :ok
   end
 
@@ -57,7 +57,7 @@ defmodule Gralkor.ApplicationTest do
 
     test "the same set is returned when client is explicitly Gralkor.Client.Native" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
-      Application.put_env(:gralkor_ex, :client, Gralkor.Client.Native)
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
 
       assert [
                {Gralkor.Python, [reap_orphans: true]},
@@ -86,7 +86,7 @@ defmodule Gralkor.ApplicationTest do
 
   describe "ex-application > start/2 child specs > when :falkordb is set (remote)" do
     test "the supervisor includes Gralkor.Python with reap_orphans: false, GraphitiPool with the remote spec, and CaptureBuffer" do
-      Application.put_env(:gralkor_ex, :falkordb, host: "falkor.example", port: 6379)
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
       [{Gralkor.Python, [reap_orphans: false]}, {Gralkor.GraphitiPool, opts}, {Gralkor.CaptureBuffer, _}] =
         App.children()
@@ -97,7 +97,7 @@ defmodule Gralkor.ApplicationTest do
 
     test "remote wins over GRALKOR_DATA_DIR when both are set" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
-      Application.put_env(:gralkor_ex, :falkordb, host: "falkor.example", port: 6379)
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
       [{Gralkor.Python, [reap_orphans: false]}, {Gralkor.GraphitiPool, opts}, _] = App.children()
 
@@ -105,7 +105,7 @@ defmodule Gralkor.ApplicationTest do
     end
 
     test "username and password are carried through to the remote spec" do
-      Application.put_env(:gralkor_ex, :falkordb,
+      Application.put_env(:jido_gralkor, :falkordb,
         host: "falkor.example",
         port: 6379,
         username: "alice",
@@ -120,29 +120,29 @@ defmodule Gralkor.ApplicationTest do
     end
 
     test "raises ArgumentError when :falkordb is missing :host" do
-      Application.put_env(:gralkor_ex, :falkordb, port: 6379)
+      Application.put_env(:jido_gralkor, :falkordb, port: 6379)
 
       assert_raise ArgumentError, ~r/:host/, fn -> App.children() end
     end
 
     test "raises ArgumentError when :falkordb is missing :port" do
-      Application.put_env(:gralkor_ex, :falkordb, host: "falkor.example")
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example")
 
       assert_raise ArgumentError, ~r/:port/, fn -> App.children() end
     end
 
     test "raises ArgumentError when :falkordb is not a keyword list" do
-      Application.put_env(:gralkor_ex, :falkordb, "falkor://host:6379")
+      Application.put_env(:jido_gralkor, :falkordb, "falkor://host:6379")
 
       assert_raise ArgumentError, ~r/keyword list/, fn -> App.children() end
     end
   end
 
-  describe "ex-application > start/2 child specs > when `:gralkor_ex, :client` is configured to Gralkor.Client.InMemory" do
+  describe "ex-application > start/2 child specs > when `:jido_gralkor, :client` is configured to Gralkor.Client.InMemory" do
     test "the supervisor includes no children regardless of GRALKOR_DATA_DIR or :falkordb" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
-      Application.put_env(:gralkor_ex, :falkordb, host: "falkor.example", port: 6379)
-      Application.put_env(:gralkor_ex, :client, Gralkor.Client.InMemory)
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
 
       assert [] = App.children()
     end
@@ -196,8 +196,8 @@ defmodule Gralkor.ApplicationTest do
 
   describe "ex-capture > flush > when test mode is enabled" do
     setup do
-      Application.put_env(:gralkor_ex, :test, true)
-      on_exit(fn -> Application.delete_env(:gralkor_ex, :test) end)
+      Application.put_env(:jido_gralkor, :test, true)
+      on_exit(fn -> Application.delete_env(:jido_gralkor, :test) end)
       :ok
     end
 

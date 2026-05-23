@@ -57,13 +57,13 @@ defmodule Gralkor.Client.NativeTest do
 
   describe "ex-client-native > interpret output budget > if :interpret_max_output_tokens is set to a non-positive or non-integer value" do
     setup do
-      original = Application.get_env(:gralkor_ex, :interpret_max_output_tokens)
+      original = Application.get_env(:jido_gralkor, :interpret_max_output_tokens)
 
       on_exit(fn ->
         if original == nil do
-          Application.delete_env(:gralkor_ex, :interpret_max_output_tokens)
+          Application.delete_env(:jido_gralkor, :interpret_max_output_tokens)
         else
-          Application.put_env(:gralkor_ex, :interpret_max_output_tokens, original)
+          Application.put_env(:jido_gralkor, :interpret_max_output_tokens, original)
         end
       end)
 
@@ -71,7 +71,7 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "raises ArgumentError on zero" do
-      Application.put_env(:gralkor_ex, :interpret_max_output_tokens, 0)
+      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, 0)
 
       assert_raise ArgumentError, ~r/interpret_max_output_tokens/, fn ->
         Native.recall("g", "TestAgent", "s1", "q")
@@ -79,7 +79,7 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "raises ArgumentError on negative" do
-      Application.put_env(:gralkor_ex, :interpret_max_output_tokens, -1)
+      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, -1)
 
       assert_raise ArgumentError, ~r/interpret_max_output_tokens/, fn ->
         Native.recall("g", "TestAgent", "s1", "q")
@@ -87,7 +87,7 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "raises ArgumentError on non-integer" do
-      Application.put_env(:gralkor_ex, :interpret_max_output_tokens, "lots")
+      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, "lots")
 
       assert_raise ArgumentError, ~r/interpret_max_output_tokens/, fn ->
         Native.recall("g", "TestAgent", "s1", "q")
@@ -165,9 +165,9 @@ defmodule Gralkor.Client.NativeTest do
 
   describe "ex-capture > observability > when test mode is enabled" do
     setup do
-      Application.put_env(:gralkor_ex, :test, true)
+      Application.put_env(:jido_gralkor, :test, true)
       pid = start_supervised!({CaptureBuffer, [flush_callback: fn _g, _a, _u, _o, _t -> :ok end]})
-      on_exit(fn -> Application.delete_env(:gralkor_ex, :test) end)
+      on_exit(fn -> Application.delete_env(:jido_gralkor, :test) end)
       {:ok, buffer: pid}
     end
 

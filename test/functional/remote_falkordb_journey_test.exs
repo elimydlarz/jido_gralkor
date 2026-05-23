@@ -35,8 +35,8 @@ defmodule Gralkor.RemoteFalkorDbJourneyTest do
          "FALKORDB_TEST_HOST not set — start a local FalkorDB and export FALKORDB_TEST_HOST/PORT (see ex-remote-falkordb-journey)"}
 
       true ->
-        Application.put_env(:gralkor_ex, :recall_deadline_ms, 60_000)
-        on_exit(fn -> Application.delete_env(:gralkor_ex, :recall_deadline_ms) end)
+        Application.put_env(:jido_gralkor, :recall_deadline_ms, 60_000)
+        on_exit(fn -> Application.delete_env(:jido_gralkor, :recall_deadline_ms) end)
 
         host = System.fetch_env!("FALKORDB_TEST_HOST")
         port = System.get_env("FALKORDB_TEST_PORT", "6379") |> String.to_integer()
