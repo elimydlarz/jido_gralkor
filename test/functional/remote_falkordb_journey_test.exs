@@ -8,8 +8,9 @@ defmodule Gralkor.RemoteFalkorDbJourneyTest do
 
   Reifies `ex-remote-falkordb-journey` in `gralkor/TEST_TREES.md`.
 
-  Skipped unless `FALKORDB_TEST_HOST` / `FALKORDB_TEST_PORT` are set
-  (e.g. `docker run -p 6380:6379 falkordb/falkordb`).
+  Requires `GOOGLE_API_KEY` and `FALKORDB_TEST_HOST` / `FALKORDB_TEST_PORT`
+  to be set (e.g. `docker run -p 6380:6379 falkordb/falkordb`). Missing
+  prerequisites surface as a test failure, not a skip.
   """
 
   use ExUnit.Case, async: false
