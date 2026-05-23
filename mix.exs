@@ -26,7 +26,8 @@ defmodule JidoGralkor.MixProject do
       preferred_envs: [
         "test.unit": :test,
         "test.integration": :test,
-        "test.functional": :test
+        "test.functional": :test,
+        "test.journey": :test
       ]
     ]
   end
