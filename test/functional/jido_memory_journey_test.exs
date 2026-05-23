@@ -50,13 +50,13 @@ defmodule Gralkor.JidoMemoryJourneyTest do
            ]}
         )
 
-      flush_callback = fn group_id, agent_name, user_name, turns ->
+      flush_callback = fn group_id, agent_name, user_name, ontology, turns ->
         body = Distill.format_transcript(turns, Native.distill_callback(), agent_name, user_name)
 
         if body == "" do
           :ok
         else
-          GraphitiPool.add_episode(group_id, body, "captured")
+          GraphitiPool.add_episode(group_id, body, "captured", ontology)
         end
       end
 
