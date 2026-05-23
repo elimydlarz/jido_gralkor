@@ -55,9 +55,10 @@ defmodule JidoGralkor.MixProject do
 
   defp aliases do
     [
-      "test.unit": ["test --exclude integration --exclude functional"],
+      "test.unit": ["test --exclude integration --exclude functional --exclude journey"],
       "test.integration": ["test --only integration"],
-      "test.functional": ["test --only functional"]
+      "test.functional": ["test --only functional"],
+      "test.journey": ["test --only journey"]
     ]
   end
 
