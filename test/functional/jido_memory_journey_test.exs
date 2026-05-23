@@ -17,7 +17,7 @@ defmodule Gralkor.JidoMemoryJourneyTest do
   alias Gralkor.GraphitiPool
   alias Gralkor.Message
 
-  @moduletag :functional
+  @moduletag :journey
   @moduletag timeout: 300_000
 
   setup_all do
