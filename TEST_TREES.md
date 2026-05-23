@@ -985,8 +985,7 @@ ex-remote-falkordb-journey (functional: test/functional/remote_falkordb_journey_
       and `:jido_gralkor, :falkordb` is set to that host/port (with optional :username/:password)
       and GRALKOR_DATA_DIR is unset so the embedded path is not also armed
       and a real LLM API key is configured for the chosen provider
-    when FALKORDB_TEST_HOST is unset
-      then the suite is skipped (the unit tests in falkordb-connection cover the spec-loading shape)
+    (no skip clause — missing FALKORDB_TEST_HOST or GOOGLE_API_KEY surfaces as a test failure, per the Fail-fast rule; the suite is opt-in via `mix test.functional`)
   boot
     when the application boots
       then Gralkor.Python initialises with reap_orphans: false (no redislite reaping runs)
