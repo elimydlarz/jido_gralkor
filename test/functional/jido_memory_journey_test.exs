@@ -21,51 +21,54 @@ defmodule Gralkor.JidoMemoryJourneyTest do
   @moduletag timeout: 300_000
 
   setup_all do
-    if System.get_env("GOOGLE_API_KEY") in [nil, ""] do
-      {:skip, "GOOGLE_API_KEY not set; copy .env.example to .env"}
-    else
-      # Real Gemini calls + interpret can run 10-15s; production keeps the
-      # 12s deadline because that's the consumer's tolerance, but functional
-      # tests assert semantic correctness, not latency.
-      Application.put_env(:jido_gralkor, :recall_deadline_ms, 60_000)
-      on_exit(fn -> Application.delete_env(:jido_gralkor, :recall_deadline_ms) end)
+    Application.put_env(:jido_gralkor, :recall_deadline_ms, 60_000)
+    on_exit(fn -> Application.delete_env(:jido_gralkor, :recall_deadline_ms) end)
 
-      data_dir =
-        Path.join(System.tmp_dir!(), "gralkor_journey_#{System.unique_integer([:positive])}")
+    original_client = Application.get_env(:jido_gralkor, :client)
+    Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
 
-      File.mkdir_p!(data_dir)
-      System.put_env("GRALKOR_DATA_DIR", data_dir)
-
-      {:ok, _python} = start_supervised(Gralkor.Python)
-
-      {:ok, _pool} =
-        start_supervised(
-          {GraphitiPool,
-           [
-             falkordb_spec: {:embedded, data_dir},
-             llm_model: Config.llm_model(),
-             embedder_model: Config.embedder_model(),
-             interpret_fn: Native.interpret_callback(),
-             warmup: false
-           ]}
-        )
-
-      flush_callback = fn group_id, agent_name, user_name, ontology, turns ->
-        body = Distill.format_transcript(turns, Native.distill_callback(), agent_name, user_name)
-
-        if body == "" do
-          :ok
-        else
-          GraphitiPool.add_episode(group_id, body, "captured", ontology)
-        end
+    on_exit(fn ->
+      case original_client do
+        nil -> Application.delete_env(:jido_gralkor, :client)
+        mod -> Application.put_env(:jido_gralkor, :client, mod)
       end
+    end)
 
-      {:ok, _buffer} = start_supervised({CaptureBuffer, [flush_callback: flush_callback]})
+    data_dir =
+      Path.join(System.tmp_dir!(), "gralkor_journey_#{System.unique_integer([:positive])}")
 
-      on_exit(fn -> File.rm_rf!(data_dir) end)
+    File.mkdir_p!(data_dir)
+    System.put_env("GRALKOR_DATA_DIR", data_dir)
 
-      %{group_id: "journey_#{System.unique_integer([:positive])}"}
+    {:ok, _python} = start_supervised(Gralkor.Python)
+
+    {:ok, _pool} =
+      start_supervised(
+        {GraphitiPool,
+         [
+           falkordb_spec: {:embedded, data_dir},
+           llm_model: Config.llm_model(),
+           embedder_model: Config.embedder_model(),
+           interpret_fn: Native.interpret_callback(),
+           warmup: false
+         ]}
+      )
+
+    flush_callback = fn group_id, agent_name, user_name, ontology, turns ->
+      body = Distill.format_transcript(turns, Native.distill_callback(), agent_name, user_name)
+
+      if body == "" do
+        :ok
+      else
+        GraphitiPool.add_episode(group_id, body, "captured", ontology)
+      end
     end
+
+    {:ok, _buffer} = start_supervised({CaptureBuffer, [flush_callback: flush_callback]})
+
+    on_exit(fn -> File.rm_rf!(data_dir) end)
+
+    %{group_id: "journey_#{System.unique_integer([:positive])}"}
   end
 
   describe "jido-memory-journey > round-trip" do
