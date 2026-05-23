@@ -26,59 +26,59 @@ defmodule Gralkor.RemoteFalkorDbJourneyTest do
   @moduletag timeout: 300_000
 
   setup_all do
-    cond do
-      System.get_env("GOOGLE_API_KEY") in [nil, ""] ->
-        {:skip, "GOOGLE_API_KEY not set; copy .env.example to .env"}
+    Application.put_env(:jido_gralkor, :recall_deadline_ms, 60_000)
+    on_exit(fn -> Application.delete_env(:jido_gralkor, :recall_deadline_ms) end)
 
-      System.get_env("FALKORDB_TEST_HOST") in [nil, ""] ->
-        {:skip,
-         "FALKORDB_TEST_HOST not set — start a local FalkorDB and export FALKORDB_TEST_HOST/PORT (see ex-remote-falkordb-journey)"}
+    original_client = Application.get_env(:jido_gralkor, :client)
+    Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
 
-      true ->
-        Application.put_env(:jido_gralkor, :recall_deadline_ms, 60_000)
-        on_exit(fn -> Application.delete_env(:jido_gralkor, :recall_deadline_ms) end)
+    on_exit(fn ->
+      case original_client do
+        nil -> Application.delete_env(:jido_gralkor, :client)
+        mod -> Application.put_env(:jido_gralkor, :client, mod)
+      end
+    end)
 
-        host = System.fetch_env!("FALKORDB_TEST_HOST")
-        port = System.get_env("FALKORDB_TEST_PORT", "6379") |> String.to_integer()
+    host = System.fetch_env!("FALKORDB_TEST_HOST")
+    port = System.get_env("FALKORDB_TEST_PORT", "6379") |> String.to_integer()
 
-        falkordb_kw =
-          [host: host, port: port]
-          |> maybe_put(:username, System.get_env("FALKORDB_TEST_USERNAME"))
-          |> maybe_put(:password, System.get_env("FALKORDB_TEST_PASSWORD"))
-          |> Keyword.put(:ssl, System.get_env("FALKORDB_TEST_SSL") in ["true", "1", "yes"])
+    falkordb_kw =
+      [host: host, port: port]
+      |> maybe_put(:username, System.get_env("FALKORDB_TEST_USERNAME"))
+      |> maybe_put(:password, System.get_env("FALKORDB_TEST_PASSWORD"))
+      |> Keyword.put(:ssl, System.get_env("FALKORDB_TEST_SSL") in ["true", "1", "yes"])
 
-        {:ok, _python} = start_supervised({Gralkor.Python, [reap_orphans: false]})
+    {:ok, _python} = start_supervised({Gralkor.Python, [reap_orphans: false]})
 
-        {:ok, _pool} =
-          start_supervised(
-            {GraphitiPool,
-             [
-               falkordb_spec: {:remote, falkordb_kw},
-               llm_model: Config.llm_model(),
-               embedder_model: Config.embedder_model(),
-               interpret_fn: Native.interpret_callback(),
-               warmup: false
-             ]}
-          )
+    {:ok, _pool} =
+      start_supervised(
+        {GraphitiPool,
+         [
+           falkordb_spec: {:remote, falkordb_kw},
+           llm_model: Config.llm_model(),
+           embedder_model: Config.embedder_model(),
+           interpret_fn: Native.interpret_callback(),
+           warmup: false
+         ]}
+      )
 
-        flush_callback = fn group_id, agent_name, user_name, turns ->
-          body =
-            Distill.format_transcript(turns, Native.distill_callback(), agent_name, user_name)
+    flush_callback = fn group_id, agent_name, user_name, ontology, turns ->
+      body =
+        Distill.format_transcript(turns, Native.distill_callback(), agent_name, user_name)
 
-          if body == "" do
-            :ok
-          else
-            GraphitiPool.add_episode(group_id, body, "captured")
-          end
-        end
-
-        {:ok, _buffer} = start_supervised({CaptureBuffer, [flush_callback: flush_callback]})
-
-        %{
-          group_id: "remote_journey_#{System.unique_integer([:positive])}",
-          baseline_redislite_pids: list_redislite_pids()
-        }
+      if body == "" do
+        :ok
+      else
+        GraphitiPool.add_episode(group_id, body, "captured", ontology)
+      end
     end
+
+    {:ok, _buffer} = start_supervised({CaptureBuffer, [flush_callback: flush_callback]})
+
+    %{
+      group_id: "remote_journey_#{System.unique_integer([:positive])}",
+      baseline_redislite_pids: list_redislite_pids()
+    }
   end
 
   defp maybe_put(kw, _key, nil), do: kw
