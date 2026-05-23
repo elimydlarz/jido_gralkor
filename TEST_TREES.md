@@ -435,27 +435,27 @@ ex-ontology-payload (src: lib/gralkor/ontology.ex; unit: test/gralkor/ontology_t
 ```
 ex-application (src: lib/gralkor/application.ex; unit: test/gralkor/application_test.exs)
   start/2 child specs
-    consumers opt in by setting either `:gralkor_ex, :falkordb` (remote FalkorDB) or `GRALKOR_DATA_DIR` (embedded falkordblite)
-    when `:gralkor_ex, :falkordb` is set as a keyword list with `:host` and `:port`
+    consumers opt in by setting either `:jido_gralkor, :falkordb` (remote FalkorDB) or `GRALKOR_DATA_DIR` (embedded falkordblite)
+    when `:jido_gralkor, :falkordb` is set as a keyword list with `:host` and `:port`
       then the supervisor includes (in order):
         Gralkor.Python (synchronous boot — see ex-python-runtime; smoke-imports graphiti_core; does NOT import or reap redislite in remote mode)
         Gralkor.GraphitiPool (constructed with the remote spec — connects via host/port/credentials, no embedded redis-server is spawned)
         Gralkor.CaptureBuffer
       then `GRALKOR_DATA_DIR` is ignored even if also set (remote wins)
-    when `:gralkor_ex, :falkordb` is unset and GRALKOR_DATA_DIR is set, with `:gralkor_ex, :client` unset or `Gralkor.Client.Native`
+    when `:jido_gralkor, :falkordb` is unset and GRALKOR_DATA_DIR is set, with `:jido_gralkor, :client` unset or `Gralkor.Client.Native`
       then the supervisor includes (in order):
         Gralkor.Python (synchronous boot — see ex-python-runtime; reaps redislite orphans, smoke-imports graphiti_core)
         Gralkor.GraphitiPool (constructed with the embedded spec — falkordblite spawns redis-server child)
         Gralkor.CaptureBuffer
       then Application.start/2 returns only after all three have initialised
         (consumers do not need a separate readiness gate — there is no Gralkor.Connection)
-    when neither `:gralkor_ex, :falkordb` nor GRALKOR_DATA_DIR is set
+    when neither `:jido_gralkor, :falkordb` nor GRALKOR_DATA_DIR is set
       then the supervisor includes no children
         (consumer / library has not opted in; tests start specific children via start_supervised; production sets one of the two)
-    when `:gralkor_ex, :client` is configured to `Gralkor.Client.InMemory`
+    when `:jido_gralkor, :client` is configured to `Gralkor.Client.InMemory`
       then the supervisor includes no children regardless of GRALKOR_DATA_DIR or `:falkordb`
-        (consumer has explicitly opted out of the native runtime; this matters because dotenv-loaders shipped by sibling deps — e.g. `:req_llm` — populate GRALKOR_DATA_DIR from `.env` before `:gralkor_ex` boots, so test configs that pin the InMemory client must not also be forced into the native boot path)
-    when `:gralkor_ex, :falkordb` is set to a value that is not a keyword list, or is missing `:host` or `:port`
+        (consumer has explicitly opted out of the native runtime; this matters because dotenv-loaders shipped by sibling deps — e.g. `:req_llm` — populate GRALKOR_DATA_DIR from `.env` before `:jido_gralkor` boots, so test configs that pin the InMemory client must not also be forced into the native boot path)
+    when `:jido_gralkor, :falkordb` is set to a value that is not a keyword list, or is missing `:host` or `:port`
       then Application.start/2 raises ArgumentError before any child starts (fail-fast on operator misconfig)
 
 ex-python-runtime (src: lib/gralkor/python.ex; unit: test/gralkor/python_test.exs)
@@ -627,9 +627,9 @@ ex-sanitize-group-id (src: lib/gralkor/client.ex; unit: test/gralkor/client/nati
     then it is returned unchanged
 
 ex-impl-resolver (src: lib/gralkor/client.ex; unit: test/gralkor/client/native_test.exs and test/gralkor/client/in_memory_test.exs)
-  when :gralkor_ex/:client is unset in app env
+  when :jido_gralkor/:client is unset in app env
     then Gralkor.Client.Native is returned
-  when :gralkor_ex/:client is configured to a module
+  when :jido_gralkor/:client is configured to a module
     then that module is returned
 
 ex-client-native (src: lib/gralkor/client/native.ex; integration: test/gralkor/client/native_test.exs)
@@ -639,8 +639,8 @@ ex-client-native (src: lib/gralkor/client/native.ex; integration: test/gralkor/c
   when recall is called with a nil session_id
     then Gralkor.Recall is invoked with no session_id and the conversation context is empty
   interpret output budget
-    then :gralkor_ex, :interpret_max_output_tokens is read each call from app env (not at boot, so operators can change it without restarting) and, when set, forwarded to Gralkor.Recall as the output_token_budget option
-    if :gralkor_ex, :interpret_max_output_tokens is set to a non-positive integer or a non-integer value
+    then :jido_gralkor, :interpret_max_output_tokens is read each call from app env (not at boot, so operators can change it without restarting) and, when set, forwarded to Gralkor.Recall as the output_token_budget option
+    if :jido_gralkor, :interpret_max_output_tokens is set to a non-positive integer or a non-integer value
       then the call raises ArgumentError at the port boundary (configuration error surfaces immediately, not as a downstream LLM failure)
   if capture is called with a blank string session_id
     then the call raises with ArgumentError
@@ -984,7 +984,7 @@ ex-remote-falkordb-journey (functional: test/functional/remote_falkordb_journey_
   same consumer-visible round-trip as jido-memory-journey, but against a real network FalkorDB instead of the embedded falkordblite — proves the {:remote, kw} branch of Gralkor.GraphitiPool.default_construct_falkor_db actually drives graphiti against a remote graph
   prerequisites
     given a real FalkorDB is reachable at FALKORDB_TEST_HOST:FALKORDB_TEST_PORT (e.g. `docker run -p 6379:6379 falkordb/falkordb`)
-      and `:gralkor_ex, :falkordb` is set to that host/port (with optional :username/:password)
+      and `:jido_gralkor, :falkordb` is set to that host/port (with optional :username/:password)
       and GRALKOR_DATA_DIR is unset so the embedded path is not also armed
       and a real LLM API key is configured for the chosen provider
     when FALKORDB_TEST_HOST is unset

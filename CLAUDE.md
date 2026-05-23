@@ -23,25 +23,25 @@ Five direct Hex deps (six with `:ex_doc` for dev docs):
 - `{:req_llm, "~> 1.0"}` — LLM client used by the embedded Distill + Interpret pipelines (provider-portable via `response_model`-bearing Pydantic schemas).
 - `{:jason, "~> 1.4"}` — JSON parsing for the embedded pipelines.
 
-**Embedded Gralkor adapter (internal, not a separate Hex package).** As of May 2026, the `Gralkor.*` modules — `Gralkor.Client` (behaviour + `sanitize_group_id/1` + `impl/0` resolver), `Gralkor.Client.Native`, `Gralkor.Client.InMemory`, `Gralkor.Ontology` (compile-time DSL for declaring graphiti custom-entity ontologies — see `ex-ontology` in `TEST_TREES.md`), `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Application` — live inside `:jido_gralkor` (under `lib/gralkor/`). The plugin and the `MemorySearch` action both call `Gralkor.Client.impl().recall/4` (ontology applies to writes only); the plugin also calls `capture/6` (forwarding `user_name` from `agent.state[:user_name]` and the mount-opt `:ontology` from plugin state); other actions call `memory_add/4` + `build_indices/0` + `build_communities/1`; `JidoGralkor.Lifecycle` calls `flush/1`. The OTP `mod:` is `Gralkor.Application` (it supervises `Gralkor.Python` → `GraphitiPool` → `CaptureBuffer` when a FalkorDB backend is configured; empty children otherwise). Consumer config still lives under the `:gralkor_ex` Application atom (`config :gralkor_ex, falkordb: …`) because the atom is a stable namespace key — the historical name is preserved for zero-churn consumer migration; the legacy `:gralkor_ex` Hex package is deprecated and points here.
+**Embedded Gralkor adapter (internal, not a separate Hex package).** The `Gralkor.*` modules — `Gralkor.Client` (behaviour + `sanitize_group_id/1` + `impl/0` resolver), `Gralkor.Client.Native`, `Gralkor.Client.InMemory`, `Gralkor.Ontology` (compile-time DSL for declaring graphiti custom-entity ontologies — see `ex-ontology` in `TEST_TREES.md`), `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Application` — live inside `:jido_gralkor` (under `lib/gralkor/`). The plugin and the `MemorySearch` action both call `Gralkor.Client.impl().recall/4` (ontology applies to writes only); the plugin also calls `capture/6` (forwarding `user_name` from `agent.state[:user_name]` and the mount-opt `:ontology` from plugin state); other actions call `memory_add/4` + `build_indices/0` + `build_communities/1`; `JidoGralkor.Lifecycle` calls `flush/1`. The OTP `mod:` is `Gralkor.Application` — it supervises `Gralkor.Python` → `GraphitiPool` → `CaptureBuffer` when a FalkorDB backend is configured; empty children otherwise. Consumer config and all `Application.{get,put,delete}_env/1,2,3` reads live under the `:jido_gralkor` atom — the single, unified namespace matching the OTP application name.
 
 ## Configuring Gralkor
 
-`:jido_gralkor` is the integration point for operators who run a Jido agent on top of Gralkor. Operator-facing knobs live under `:gralkor_ex` application env (because `:gralkor_ex` boots before `:jido_gralkor` and reads its config eagerly), but they are documented here because this is the layer operators interact with when wiring an agent.
+`:jido_gralkor` is the integration point for operators who run a Jido agent on top of Gralkor. All operator-facing knobs live under the `:jido_gralkor` application env.
 
 Pick **one** of the two backends:
 
-**Embedded FalkorDB (development / local).** Set `GRALKOR_DATA_DIR` to a directory the BEAM can write to. `:gralkor_ex` constructs an in-process `falkordblite` instance, which spawns a `redis-server` grandchild under that directory.
+**Embedded FalkorDB (development / local).** Set `GRALKOR_DATA_DIR` to a directory the BEAM can write to. The adapter constructs an in-process `falkordblite` instance, which spawns a `redis-server` grandchild under that directory.
 
 ```bash
 GRALKOR_DATA_DIR=/var/lib/gralkor mix start
 ```
 
-**Remote FalkorDB (production).** Set `:gralkor_ex, :falkordb` in `config/runtime.exs` to a keyword list with at least `:host` and `:port`; optionally `:username`, `:password`, and `:ssl` (default `false`; set `true` for FalkorDB Cloud or any TLS-fronted endpoint). `:gralkor_ex` connects directly via the network and does not import `redislite` or spawn any local redis-server.
+**Remote FalkorDB (production).** Set `:jido_gralkor, :falkordb` in `config/runtime.exs` to a keyword list with at least `:host` and `:port`; optionally `:username`, `:password`, and `:ssl` (default `false`; set `true` for FalkorDB Cloud or any TLS-fronted endpoint). The adapter connects directly via the network and does not import `redislite` or spawn any local redis-server.
 
 ```elixir
 # config/runtime.exs
-config :gralkor_ex,
+config :jido_gralkor,
   falkordb: [
     host: System.fetch_env!("FALKORDB_HOST"),
     port: String.to_integer(System.fetch_env!("FALKORDB_PORT")),
@@ -53,18 +53,18 @@ config :gralkor_ex,
 
 Remote wins when both are configured. Misconfiguration (non-keyword value, missing host/port, blank host, non-positive port) raises `ArgumentError` at app start before any child is supervised — operator typos surface immediately, not under the first user request.
 
-**Interpret output budget (optional).** Set `:gralkor_ex, :interpret_max_output_tokens` to a positive integer to override the per-recall LLM output ceiling used by the interpret pipeline. Default is `2000`; raise it if your agent's recall queries surface many candidate facts and you observe `Gralkor.InterpretParseFailed` (the parser refuses truncated responses rather than passing through half-JSON). Lower it to cap latency and cost on narrower workloads.
+**Interpret output budget (optional).** Set `:jido_gralkor, :interpret_max_output_tokens` to a positive integer to override the per-recall LLM output ceiling used by the interpret pipeline. Default is `2000`; raise it if your agent's recall queries surface many candidate facts and you observe `Gralkor.InterpretParseFailed` (the parser refuses truncated responses rather than passing through half-JSON). Lower it to cap latency and cost on narrower workloads.
 
 ```elixir
 # config/runtime.exs
-config :gralkor_ex, interpret_max_output_tokens: 2000
+config :jido_gralkor, interpret_max_output_tokens: 2000
 ```
 
-Optional model overrides (`GRALKOR_LLM_MODEL`, `GRALKOR_EMBEDDER_MODEL`) and the test-only InMemory client pin (`config :gralkor_ex, client: Gralkor.Client.InMemory`) are documented in `gralkor/CLAUDE.md`.
+Optional model overrides (`GRALKOR_LLM_MODEL`, `GRALKOR_EMBEDDER_MODEL`) are read straight from `System.get_env/1` by `Gralkor.Config`. The test-only InMemory client pin is `config :jido_gralkor, client: Gralkor.Client.InMemory`.
 
 ## Testing
 
-Test trees use `Gralkor.Client.InMemory` (shipped in `lib/` of `:gralkor_ex`) as the client. `config/test.exs` sets `config :gralkor_ex, client: Gralkor.Client.InMemory`; `test_helper.exs` starts the GenServer once globally. Tests call `InMemory.reset/0` in `setup` and configure canned responses per scenario.
+Test trees use `Gralkor.Client.InMemory` (shipped in `lib/`) as the client. `config/test.exs` sets `config :jido_gralkor, client: Gralkor.Client.InMemory`; `test_helper.exs` starts the GenServer once globally. Tests call `InMemory.reset/0` in `setup` and configure canned responses per scenario.
 
 ```bash
 mix test          # all tests (excludes :integration and :functional by default)

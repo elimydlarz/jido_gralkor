@@ -23,7 +23,7 @@
 
 ## Bounded Contexts
 
-One context only — the Jido↔Gralkor adaptation. No domain logic, no memory pipelines (those live in `:gralkor_ex`).
+One context only — the Jido↔Gralkor adaptation. The memory pipelines (`Gralkor.*` under `lib/gralkor/`) are embedded but logically separate: they hold the domain logic; the `JidoGralkor.*` modules are pure framework glue.
 
 ## Invariants
 
@@ -36,8 +36,8 @@ One context only — the Jido↔Gralkor adaptation. No domain logic, no memory p
 ## Decision Rationale
 
 - The iter-1 `tool_choice` forcing is a workaround: `Jido.AI.Reasoning.ReAct.Config` lacks a `:preamble_tool` knob, and `tool_choice` is applied uniformly across the ReAct loop today. The helper exists to pin it for one iteration without forking the strategy.
-- The plugin captures on every turn, regardless of whether tools were called, because distillation (in `:gralkor_ex`) decides what's memory-worthy — we don't gate at this layer.
-- Interpret output budget knobs live under `:gralkor_ex` app env (read each recall by `Gralkor.Client.Native`), not under `:jido_gralkor` config. The plugin is documentation-only for that knob; the adapter holds the actual config surface.
+- The plugin captures on every turn, regardless of whether tools were called, because the embedded `Gralkor.Distill` decides what's memory-worthy — we don't gate at this layer.
+- All operator-facing knobs (`:falkordb`, `:client`, `:interpret_max_output_tokens`, `:recall_deadline_ms`, `:test`) live under the `:jido_gralkor` app env — single namespace matching the OTP application. `Gralkor.Client.Native` reads them per call so operators can change them without restarting.
 - `Gralkor.Ontology` declares each relationship once (`from Source do verb Target end`) and derives graphiti's `edge_types` + `edge_type_map` automatically. Graphiti's split between those two dicts is the modelled-once-mentioned-twice trap the DSL exists to remove. `relationships: :scoped` does not forbid generic edges — graphiti always extracts edge candidates and only constrains *which named class* they conform to between declared `(src, dst)` pairs; closing the world on edges would require post-filtering not yet implemented.
 
 ## Temporal View
