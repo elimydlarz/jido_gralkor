@@ -94,7 +94,8 @@ defmodule Gralkor.RemoteFalkorDbJourneyTest do
         Client.impl().memory_add(
           group_id,
           "Eli works at Anthropic in Sydney. He prefers concise technical explanations over verbose ones.",
-          "manual"
+          "manual",
+          nil
         )
 
       session_id = "session_#{System.unique_integer([:positive])}"
