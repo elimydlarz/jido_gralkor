@@ -102,7 +102,7 @@ defmodule Gralkor.JidoMemoryJourneyTest do
       session_id = "session_#{System.unique_integer([:positive])}"
 
       :ok =
-        Client.impl().capture(session_id, group_id, "TestAgent", "Eli", [
+        Client.impl().capture(session_id, group_id, "TestAgent", "Eli", nil, [
           Message.new(
             "user",
             "Important context: Eli's favourite colour is teal, and Eli drives a blue Subaru Outback."
