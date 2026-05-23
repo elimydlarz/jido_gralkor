@@ -67,10 +67,11 @@ Optional model overrides (`GRALKOR_LLM_MODEL`, `GRALKOR_EMBEDDER_MODEL`) are rea
 Test trees use `Gralkor.Client.InMemory` (shipped in `lib/`) as the client. `config/test.exs` sets `config :jido_gralkor, client: Gralkor.Client.InMemory`; `test_helper.exs` starts the GenServer once globally. Tests call `InMemory.reset/0` in `setup` and configure canned responses per scenario.
 
 ```bash
-mix test          # all tests (excludes :integration and :functional by default)
-mix test.unit
+mix test          # all tests except :journey (unit + integration + functional run by default)
+mix test.unit       # only :unit (excludes integration, functional, journey)
 mix test.integration
 mix test.functional
+mix test.journey    # opt-in: full end-to-end journey suites (real LLM, slow, costly)
 ```
 
 ## Test Trees
