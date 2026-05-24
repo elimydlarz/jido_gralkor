@@ -96,7 +96,7 @@ defmodule Gralkor.GraphitiPool do
   """
   @spec add_episode(GenServer.server(), String.t(), String.t(), String.t(), module() | nil) ::
           :ok | {:error, term()}
-  def add_episode(server \\ __MODULE__, group_id, content, source_description, ontology \\ nil)
+  def add_episode(server \\ __MODULE__, group_id, content, source_description, ontology)
 
   def add_episode(server, group_id, content, source_description, ontology)
       when is_binary(group_id) and is_binary(content) and is_binary(source_description) do
