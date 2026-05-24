@@ -49,11 +49,13 @@ defmodule Gralkor.Python do
   def init(opts) do
     list_orphans = Keyword.get(opts, :list_orphans, &list_redislite_orphans/0)
     kill_pid = Keyword.get(opts, :kill_pid, &sigkill/1)
+    uv_init = Keyword.get(opts, :uv_init, &ensure_initialised/0)
     smoke_import = Keyword.get(opts, :smoke_import, &smoke_import_graphiti/0)
     install_loop? = Keyword.get(opts, :install_loop, true)
     reap_orphans? = Keyword.get(opts, :reap_orphans, true)
 
     with :ok <- maybe_reap(reap_orphans?, list_orphans, kill_pid),
+         :ok <- uv_init.(),
          :ok <- smoke_import.(),
          :ok <- maybe_install_loop(install_loop?) do
       {:ok, %{}}
@@ -64,6 +66,25 @@ defmodule Gralkor.Python do
 
   defp maybe_reap(false, _list, _kill), do: :ok
   defp maybe_reap(true, list, kill), do: reap_redislite_orphans(list, kill)
+
+  @doc """
+  Materialise the uv-managed venv and initialise the PythonX interpreter from
+  the jido_gralkor-owned `@pyproject_toml`. Idempotent within a VM: a flag in
+  `:persistent_term` short-circuits the second call so we never hit the NIF's
+  "already been initialized" guard when more than one `Gralkor.Python` boots.
+  """
+  @spec ensure_initialised() :: :ok | {:error, term()}
+  def ensure_initialised do
+    if :persistent_term.get({__MODULE__, :uv_inited}, false) do
+      :ok
+    else
+      Pythonx.uv_init(@pyproject_toml)
+      :persistent_term.put({__MODULE__, :uv_inited}, true)
+      :ok
+    end
+  rescue
+    e -> {:error, {:uv_init, Exception.message(e)}}
+  end
 
   defp maybe_install_loop(false), do: :ok
   defp maybe_install_loop(true), do: install_async_runtime()
