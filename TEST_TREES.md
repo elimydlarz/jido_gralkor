@@ -428,6 +428,51 @@ ex-ontology-payload (src: lib/gralkor/ontology.ex; unit: test/gralkor/ontology_t
       and :edge_types is []
       and :edge_type_map is []
       and :excluded_entity_types follows the entities: opt (nil for :open, ["Entity"] for :strict)
+
+ex-ontology-graphiti-spec (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/ontology_graphiti_spec_test.exs)
+  Gralkor.GraphitiPool.graphiti_boundary_spec/1 — the pure projection from an ex-ontology-payload
+  to the plain data handed across the Pythonx boundary. It decides which of graphiti's add_episode
+  kwargs (entity_types, edge_types, edge_type_map, excluded_entity_types) are populated and in what
+  shape. No Pythonx, no LLM — this is the deterministic contract the materialisation half trusts.
+  A kwarg is populated iff its payload collection is present; the Pythonx side never re-decides
+  inclusion, it materialises exactly what the spec carries.
+
+  entity_types / edge_types
+    when the payload declares entities
+      then the spec carries :entity_types as a list of %{"name" => String.t(), "fields" => [field]} in declaration order
+    when the payload declares no entities
+      then the spec omits :entity_types entirely (add_episode is invoked without it)
+    when the payload declares relationship verbs
+      then the spec carries :edge_types as a list of %{"name" => String.t(), "fields" => [field]} in first-declaration order
+    when the payload declares no relationship verbs
+      then the spec omits :edge_types entirely
+    a field entry is %{"name" => String.t(), "type" => String.t(), "required" => boolean(), "doc" => String.t() | nil}
+      when a field is required
+        then its entry carries "required" => true
+      when a field is optional
+        then its entry carries "required" => false
+      when a field has a doc string
+        then its entry carries "doc" => that string
+      when a field has no doc string
+        then its entry carries "doc" => nil
+
+  edge_type_map
+    when the payload's :edge_type_map is non-empty
+      then the spec carries :edge_type_map as a list of %{"src" => String.t(), "dst" => String.t(), "names" => [String.t()]} translated from the {{src, dst}, [names]} pairs in order
+    when the payload's :edge_type_map is []
+      then the spec omits :edge_type_map entirely (graphiti's default — every named edge allowed everywhere — applies)
+
+  excluded_entity_types
+    when the payload's :excluded_entity_types is ["Entity"]
+      then the spec carries :excluded_entity_types as ["Entity"]
+    when the payload's :excluded_entity_types is nil
+      then the spec omits :excluded_entity_types entirely
+
+  empty ontology
+    when the payload declares no entities, no verbs, and :excluded_entity_types is nil
+      then the spec is empty — add_episode is invoked with none of the four ontology kwargs
+    when the payload declares nothing but :excluded_entity_types is ["Entity"] (entities: :strict)
+      then the spec carries only :excluded_entity_types
 ```
 
 ## Startup (embedded Gralkor adapter)
