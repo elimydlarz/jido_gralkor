@@ -76,6 +76,19 @@ mix test.journey    # opt-in: full end-to-end journey suites (real LLM, slow, co
 
 Real LLM (and graphiti-core extraction) calls live only in the opt-in `:functional` and `:journey` tiers; a default `mix test` is deterministic. The boundary contract those tiers used to be the sole proof of — which graphiti `add_episode` kwargs an ontology populates — is now pinned deterministically by `ex-ontology-graphiti-spec` (`Gralkor.GraphitiPool.graphiti_boundary_spec/1`, pure, no Pythonx). The functional `ontology-extraction` suite remains the proof that a real LLM honours the declared schema.
 
+### Mutation testing
+
+`{:muzak, only: :test}` (pinned to the `elixir-1.19` branch of the `elimydlarz/muzak` fork — upstream `1.1.1` is unmaintained since 2022 and breaks on Elixir 1.19; the fork replaces Muzak's frozen 2400-line copy of `Code.Formatter` with a thin wrapper over the public `Code.string_to_quoted_with_comments!/2` + `Code.quoted_to_algebra/2`, fixes the `ExUnit.Server.modules_loaded` arity change, and disables the `test_helper` autorun so it doesn't crash on teardown).
+
+```bash
+mix muzak                      # sample up to 1000 mutations across lib/, run the suite (excl. :functional/:journey) against each
+mix muzak --only lib/path.ex   # scope to one file (also --only lib/path.ex:LINE)
+mix muzak --mutations N        # cap the sample size (fast local check)
+mix muzak --seed N             # reproducible mutation sample
+```
+
+A mutation that no test fails on is a **survivor** — a gap in the suite. Each mutation restarts the app stack, so full runs take tens of minutes; scope with `--only` for fast feedback. The runner relies on `test_helper.exs` keeping `InMemory.start_link` idempotent (it re-requires the helper per mutation).
+
 ## Test Trees
 
 See [TEST_TREES.md](TEST_TREES.md) — the canonical contract between intent and tests for this project.
