@@ -551,18 +551,11 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
       then `ontology.__ontology__/0` is read once and translated into graphiti's Pydantic dicts on first encounter; on subsequent calls with the same module, the cached dicts are reused (no Pydantic reconstruction)
       then `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types` are forwarded to graphiti's add_episode as appropriate (see ontology materialisation)
   ontology materialisation (the Pythonx-backed half — the pure inclusion/shape decision is ex-ontology-graphiti-spec)
-    graphiti_boundary_spec/1 decides which kwargs are populated and in what shape (pure); the GenServer then
-    materialises the selected :entity_types/:edge_types into Pydantic classes via Pythonx and the selected
-    :edge_type_map into graphiti's tuple-keyed dict, and forwards exactly those kwargs to add_episode
-    when a selected entity/edge field is required
-      then the materialised Pydantic class declares that field without a default
-    when a selected entity/edge field is optional
-      then the materialised Pydantic class declares that field with a default of None
-    forwarding
-      then exactly the kwargs ex-ontology-graphiti-spec selected are forwarded to graphiti's add_episode — a kwarg the spec omitted is never passed
-    caching
-      then materialised dicts are keyed by the ontology module name (an atom rendered to its string form)
-      then concurrent calls for the same ontology module reuse the cached dicts without re-running Pydantic class construction
+    when an ontology module is materialised
+      then graphiti_boundary_spec/1 selects the kwargs and the GenServer renders the selected :entity_types/:edge_types into Pydantic classes and the selected :edge_type_map into graphiti's tuple-keyed dict
+      and the materialised dict carries exactly the string-rendered keys the spec selected — a strict+scoped ontology yields all four; an open ontology omits "edge_type_map" and "excluded_entity_types"
+      and the dict is keyed by the ontology module name (an atom rendered to its string form) and reused on the next call for the same module without re-running Pydantic class construction
+    (the Pydantic field rendering — required → no default, optional → default None — and graphiti's honouring of the declared schema are proven by the ontology-extraction journey, which holds a real LLM to the schema; they are not re-asserted here)
 ```
 
 ## Configuration (embedded Gralkor adapter)
