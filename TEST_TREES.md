@@ -458,7 +458,7 @@ ex-ontology-graphiti-spec (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor
 
   edge_type_map
     when the payload's :edge_type_map is non-empty
-      then the spec carries :edge_type_map as a list of %{"src" => String.t(), "dst" => String.t(), "names" => [String.t()]} translated from the {{src, dst}, [names]} pairs in order
+      then the spec carries :edge_type_map as a list of src/dst/names maps in order
     when the payload's :edge_type_map is []
       then the spec omits :edge_type_map entirely (graphiti's default — every named edge allowed everywhere — applies)
 
