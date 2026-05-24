@@ -178,9 +178,9 @@ defmodule Gralkor.OntologyExtractionTest do
         """
         import asyncio
         records, _, _ = asyncio._gralkor_run(
-            g.driver.execute_query("MATCH ()-[r]->() RETURN type(r) AS type")
+            g.driver.execute_query("MATCH ()-[r:RELATES_TO]->() WHERE r.name IS NOT NULL RETURN r.name AS name")
         )
-        [r['type'] for r in records]
+        [r['name'] for r in records]
         """,
         %{"g" => instance}
       )
