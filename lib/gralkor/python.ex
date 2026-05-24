@@ -29,6 +29,17 @@ defmodule Gralkor.Python do
 
   require Logger
 
+  @pyproject_toml """
+  [project]
+  name = "jido_gralkor"
+  version = "0.0.0"
+  requires-python = "==3.12.*"
+  dependencies = [
+    "graphiti-core[falkordb,google-genai]>=0.29.1",
+    "falkordblite"
+  ]
+  """
+
   def start_link(opts \\ []) do
     name = Keyword.get(opts, :name, __MODULE__)
     GenServer.start_link(__MODULE__, opts, if(name, do: [name: name], else: []))
