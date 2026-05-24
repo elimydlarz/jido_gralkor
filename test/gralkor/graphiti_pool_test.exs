@@ -305,10 +305,10 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "ex-graphiti-pool > ontology materialisation" do
+  describe "ex-graphiti-pool > ontology materialisation > when an ontology module is materialised" do
     @describetag :integration
 
-    defmodule OntologyForGraphitiTest do
+    defmodule StrictOntologyForGraphitiTest do
       use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
       entity User do
@@ -326,7 +326,23 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
 
-    test "materialises an ontology into graphiti-shaped dicts and reuses them on the second call" do
+    defmodule OpenOntologyForGraphitiTest do
+      use Gralkor.Ontology, entities: :open, relationships: :open
+
+      entity User do
+        field :handle, :string, required: true
+      end
+
+      entity Preference do
+        field :description, :string, required: true
+      end
+
+      from User do
+        prefers Preference
+      end
+    end
+
+    test "then the dict carries exactly the string-rendered keys the spec selected (strict → all four; open → no edge_type_map/excluded), keyed by module and reused without re-running Pydantic construction" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 
@@ -336,15 +352,18 @@ defmodule Gralkor.GraphitiPoolTest do
         GraphitiPool.start_link(name: nil, falkordb_spec: {:embedded, data_dir}, warmup: false)
 
       try do
-        first = GenServer.call(pid, {:materialise, OntologyForGraphitiTest}, :infinity)
-        second = GenServer.call(pid, {:materialise, OntologyForGraphitiTest}, :infinity)
+        strict = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
+        strict_again = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
+        open = GenServer.call(pid, {:materialise, OpenOntologyForGraphitiTest}, :infinity)
 
-        assert is_map(first)
-        assert Map.has_key?(first, "entity_types")
-        assert Map.has_key?(first, "edge_types")
-        assert Map.has_key?(first, "edge_type_map")
-        assert first["excluded_entity_types"] == ["Entity"]
-        assert first === second
+        assert Enum.sort(Map.keys(strict)) ==
+                 ["edge_type_map", "edge_types", "entity_types", "excluded_entity_types"]
+
+        assert strict["excluded_entity_types"] == ["Entity"]
+
+        assert Enum.sort(Map.keys(open)) == ["edge_types", "entity_types"]
+
+        assert strict === strict_again
       after
         GenServer.stop(pid)
         File.rm_rf!(data_dir)
