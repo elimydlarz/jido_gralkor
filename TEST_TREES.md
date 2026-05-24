@@ -996,7 +996,9 @@ ontology-extraction (functional: test/functional/ontology_extraction_test.exs)
       and at least one node carries the "Preference" label
       and every node has at least one label other than "Entity"
         (graphiti always appends "Entity" to every saved node; strict mode means no node is *only* "Entity")
-      and at least one edge of type "PREFERS" exists
+      and at least one entity edge carries the semantic type "PREFERS"
+        (graphiti stores every entity→entity edge with the Cypher relationship type RELATES_TO and keeps the
+         ontology edge type in the `name` property — so the assertion reads r.name on RELATES_TO edges, not type(r))
   open ontology (entities: :open, relationships: :open)
     when memory_add ingests the same fixture under an open ontology declaring the same types
       then at least one node carries the "User" label
