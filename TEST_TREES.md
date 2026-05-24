@@ -410,7 +410,7 @@ ex-ontology-payload (src: lib/gralkor/ontology.ex; unit: test/gralkor/ontology_t
 
   `relationships: :open`
     then :edge_type_map is []
-      (the Pythonx side translates an empty list to "omit edge_type_map", which lets graphiti's
+      (ex-ontology-graphiti-spec omits :edge_type_map for an empty list, which lets graphiti's
        default — every named edge allowed everywhere — apply)
 
   `relationships: :scoped`
