@@ -24,7 +24,6 @@ defmodule JidoGralkor.MixProject do
   def cli do
     [
       preferred_envs: [
-        muzak: :test,
         "test.unit": :test,
         "test.integration": :test,
         "test.functional": :test,
