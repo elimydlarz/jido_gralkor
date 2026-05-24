@@ -67,12 +67,14 @@ Optional model overrides (`GRALKOR_LLM_MODEL`, `GRALKOR_EMBEDDER_MODEL`) are rea
 Test trees use `Gralkor.Client.InMemory` (shipped in `lib/`) as the client. `config/test.exs` sets `config :jido_gralkor, client: Gralkor.Client.InMemory`; `test_helper.exs` starts the GenServer once globally. Tests call `InMemory.reset/0` in `setup` and configure canned responses per scenario.
 
 ```bash
-mix test          # all tests except :journey (unit + integration + functional run by default)
+mix test          # default run: unit + integration, excluding :functional and :journey — no real LLM/graphiti calls
 mix test.unit       # only :unit (excludes integration, functional, journey)
 mix test.integration
-mix test.functional
+mix test.functional # opt-in: real Pythonx + graphiti-core + real LLM (slow, costly)
 mix test.journey    # opt-in: full end-to-end journey suites (real LLM, slow, costly)
 ```
+
+Real LLM (and graphiti-core extraction) calls live only in the opt-in `:functional` and `:journey` tiers; a default `mix test` is deterministic. The boundary contract those tiers used to be the sole proof of — which graphiti `add_episode` kwargs an ontology populates — is now pinned deterministically by `ex-ontology-graphiti-spec` (`Gralkor.GraphitiPool.graphiti_boundary_spec/1`, pure, no Pythonx). The functional `ontology-extraction` suite remains the proof that a real LLM honours the declared schema.
 
 ## Test Trees
 
