@@ -49,11 +49,56 @@ defmodule Gralkor.PythonTest do
                  reap_orphans: false,
                  list_orphans: list_orphans,
                  kill_pid: kill_pid,
+                 uv_init: fn -> :ok end,
                  smoke_import: fn -> :ok end,
                  install_loop: false
                )
 
       assert :counters.get(called, 1) == 0
+    end
+  end
+
+  describe "ex-python-runtime > venv init" do
+    test "init/1 materialises the venv after reaping orphans and before smoke-importing" do
+      order = :ets.new(:order, [:public, :ordered_set])
+      seq = :counters.new(1, [])
+
+      record = fn step ->
+        :counters.add(seq, 1, 1)
+        :ets.insert(order, {:counters.get(seq, 1), step})
+      end
+
+      assert {:ok, _} =
+               Python.init(
+                 reap_orphans: true,
+                 list_orphans: fn ->
+                   record.(:reap)
+                   []
+                 end,
+                 kill_pid: fn _ -> :ok end,
+                 uv_init: fn ->
+                   record.(:uv_init)
+                   :ok
+                 end,
+                 smoke_import: fn ->
+                   record.(:smoke_import)
+                   :ok
+                 end,
+                 install_loop: false
+               )
+
+      steps = order |> :ets.tab2list() |> Enum.map(fn {_, step} -> step end)
+      assert steps == [:reap, :uv_init, :smoke_import]
+    end
+
+    test "init/1 stops with {:boot_failed, _} when venv init fails" do
+      assert {:stop, {:boot_failed, {:uv_init, "boom"}}} =
+               Python.init(
+                 reap_orphans: false,
+                 uv_init: fn -> {:error, {:uv_init, "boom"}} end,
+                 smoke_import: fn -> :ok end,
+                 install_loop: false
+               )
     end
   end
 
