@@ -47,7 +47,8 @@ defmodule JidoGralkor.MixProject do
       {:pythonx, "~> 0.4"},
       {:req_llm, "~> 1.0"},
       {:jason, "~> 1.4"},
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:muzak, "~> 1.1", only: :test}
     ]
   end
 
