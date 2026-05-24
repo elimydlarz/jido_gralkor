@@ -993,7 +993,7 @@ ontology-extraction (functional: test/functional/ontology_extraction_test.exs)
   prerequisites
     given the application has booted real Pythonx + graphiti-core + falkordblite
     given a real LLM API key is configured for the chosen provider
-    (no skip clause — missing config surfaces as a test failure, per the Fail-fast rule)
+    (no skip clause — missing config surfaces as a test failure, per the Fail-fast rule; the suite is opt-in via `mix test.functional` — `:functional` is excluded from the default `mix test` run alongside `:journey`, so no real LLM/graphiti calls happen on a default run. The deterministic ex-ontology-graphiti-spec covers the inclusion/shape contract on every run; this tier is the proof graphiti actually honours the schema.)
   fixture
     a single episode body asserting that "Eli" (handle "eli") has a strong preference
     for concise, structured responses, suitable for the LLM to extract one User entity,
