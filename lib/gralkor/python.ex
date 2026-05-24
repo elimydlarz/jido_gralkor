@@ -29,16 +29,9 @@ defmodule Gralkor.Python do
 
   require Logger
 
-  @pyproject_toml """
-  [project]
-  name = "jido_gralkor"
-  version = "0.0.0"
-  requires-python = "==3.12.*"
-  dependencies = [
-    "graphiti-core[falkordb,google-genai]>=0.29.1",
-    "falkordblite"
-  ]
-  """
+  @pyproject_path Path.join([__DIR__, "..", "..", "priv", "python", "pyproject.toml"])
+  @external_resource @pyproject_path
+  @pyproject_toml File.read!(@pyproject_path)
 
   def start_link(opts \\ []) do
     name = Keyword.get(opts, :name, __MODULE__)
