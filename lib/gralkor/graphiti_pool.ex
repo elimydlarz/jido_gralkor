@@ -314,25 +314,45 @@ defmodule Gralkor.GraphitiPool do
 
   # ── Ontology materialisation ────────────────────────────────
 
-  defp build_ontology_dicts(%{
-         entity_types: entity_types,
-         edge_types: edge_types,
-         edge_type_map: edge_type_map,
-         excluded_entity_types: excluded_entity_types
-       }) do
-    {entity_dict, _} =
-      Pythonx.eval(
-        ontology_build_script(),
-        %{"specs" => Enum.map(entity_types, &spec_for_python/1)}
-      )
+  @doc """
+  Pure projection from an `__ontology__/0` payload to the plain data handed
+  across the Pythonx boundary. A graphiti `add_episode` kwarg
+  (`entity_types`, `edge_types`, `edge_type_map`, `excluded_entity_types`) is
+  populated iff its payload collection is present; the Pythonx side never
+  re-decides inclusion, it materialises exactly what this spec carries. No
+  Pythonx, no LLM — this is the deterministic contract the materialisation
+  half trusts.
+  """
+  @spec graphiti_boundary_spec(map()) :: %{optional(atom()) => term()}
+  def graphiti_boundary_spec(%{
+        entity_types: entity_types,
+        edge_types: edge_types,
+        edge_type_map: edge_type_map,
+        excluded_entity_types: excluded_entity_types
+      }) do
+    [
+      {:entity_types, entity_types != [], Enum.map(entity_types, &spec_for_python/1)},
+      {:edge_types, edge_types != [], Enum.map(edge_types, &spec_for_python/1)},
+      {:edge_type_map, edge_type_map != [], Enum.map(edge_type_map, &edge_pair_for_python/1)},
+      {:excluded_entity_types, excluded_entity_types != nil, excluded_entity_types}
+    ]
+    |> Enum.filter(fn {_key, present?, _value} -> present? end)
+    |> Map.new(fn {key, _present?, value} -> {key, value} end)
+  end
 
-    {edge_dict, _} =
-      Pythonx.eval(
-        ontology_build_script(),
-        %{"specs" => Enum.map(edge_types, &spec_for_python/1)}
-      )
+  defp build_ontology_dicts(payload) do
+    payload
+    |> graphiti_boundary_spec()
+    |> Map.new(fn {key, value} -> {Atom.to_string(key), materialise_boundary(key, value)} end)
+  end
 
-    {edge_type_map_dict, _} =
+  defp materialise_boundary(key, specs) when key in [:entity_types, :edge_types] do
+    {classes, _} = Pythonx.eval(ontology_build_script(), %{"specs" => specs})
+    classes
+  end
+
+  defp materialise_boundary(:edge_type_map, pairs) do
+    {dict, _} =
       Pythonx.eval(
         """
         def decode(value):
@@ -354,22 +374,13 @@ defmodule Gralkor.GraphitiPool do
             result[(src, tgt)] = names
         result
         """,
-        %{"pairs" => Enum.map(edge_type_map, &edge_pair_for_python/1)}
+        %{"pairs" => pairs}
       )
 
-    excluded =
-      case excluded_entity_types do
-        nil -> nil
-        list when is_list(list) -> list
-      end
-
-    %{
-      "entity_types" => entity_dict,
-      "edge_types" => edge_dict,
-      "edge_type_map" => edge_type_map_dict,
-      "excluded_entity_types" => excluded
-    }
+    dict
   end
+
+  defp materialise_boundary(:excluded_entity_types, list), do: list
 
   defp spec_for_python(%{name: name, fields: fields}) do
     %{
