@@ -342,7 +342,7 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
 
-    test "then the dict carries exactly the string-rendered keys the spec selected (strict → all four; open → no edge_type_map/excluded), keyed by module and reused without re-running Pydantic construction" do
+    test "then the dict carries exactly the spec-selected keys (omitting unselected) and reuses them per module" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 
