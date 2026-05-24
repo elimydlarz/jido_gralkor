@@ -439,11 +439,11 @@ ex-ontology-graphiti-spec (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor
 
   entity_types / edge_types
     when the payload declares entities
-      then the spec carries :entity_types as a list of %{"name" => String.t(), "fields" => [field]} in declaration order
+      then the spec carries :entity_types as a list of name/fields maps in declaration order
     when the payload declares no entities
       then the spec omits :entity_types entirely (add_episode is invoked without it)
     when the payload declares relationship verbs
-      then the spec carries :edge_types as a list of %{"name" => String.t(), "fields" => [field]} in first-declaration order
+      then the spec carries :edge_types as a list of name/fields maps in first-declaration order
     when the payload declares no relationship verbs
       then the spec omits :edge_types entirely
     a field entry is %{"name" => String.t(), "type" => String.t(), "required" => boolean(), "doc" => String.t() | nil}
