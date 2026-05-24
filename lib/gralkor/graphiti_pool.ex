@@ -132,18 +132,9 @@ defmodule Gralkor.GraphitiPool do
           reference_time=datetime.now(timezone.utc),
         )
         if ontology_dicts is not None:
-            et = ontology_dicts.get("entity_types")
-            edt = ontology_dicts.get("edge_types")
-            edm = ontology_dicts.get("edge_type_map")
-            ex_et = ontology_dicts.get("excluded_entity_types")
-            if et:
-                kwargs["entity_types"] = et
-            if edt:
-                kwargs["edge_types"] = edt
-            if edm:
-                kwargs["edge_type_map"] = edm
-            if ex_et:
-                kwargs["excluded_entity_types"] = ex_et
+            for k, v in ontology_dicts.items():
+                key = k.decode('utf-8') if isinstance(k, (bytes, bytearray)) else k
+                kwargs[key] = v
         import traceback, sys
         try:
             asyncio._gralkor_run(g.add_episode(**kwargs))
