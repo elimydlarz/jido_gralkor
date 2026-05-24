@@ -2,7 +2,7 @@ defmodule Gralkor.Python do
   @moduledoc """
   PythonX runtime owner for the embedded Gralkor stack.
 
-  Two responsibilities, both in `init/1`:
+  Responsibilities, all in `init/1`:
 
     1. **Reap redislite orphans.** `falkordblite` (loaded into PythonX in this
        BEAM) spawns a `redis-server` grandchild. A hard BEAM SIGKILL leaves
@@ -11,13 +11,16 @@ defmodule Gralkor.Python do
        so anything matching is by definition not ours-yet, and the path is
        unique to falkordblite.
 
-    2. **Smoke-import `graphiti_core`** through PythonX so any venv / import
-       failure surfaces at boot rather than on the first real call.
+    2. **Materialise the venv + initialise the interpreter** via
+       `Pythonx.uv_init/2` from the jido_gralkor-owned `@pyproject_toml`. This
+       is what makes the embedded Python stack self-contained: the consumer
+       (e.g. susu) configures nothing about Python — the graphiti-core pin is
+       jido_gralkor's private detail. Guarded against re-init (the Pythonx NIF
+       throws "already been initialized" on a second call) so multiple boots
+       in one VM — as functional-test modules do — are safe.
 
-    Pythonx's interpreter + venv materialisation are configured in
-    `config/config.exs` via `:pythonx, :uv_init` and start automatically with
-    the `:pythonx` OTP application; `Gralkor.Python` does not duplicate that
-    work.
+    3. **Smoke-import `graphiti_core`** through PythonX so any venv / import
+       failure surfaces at boot rather than on the first real call.
 
   See `ex-python-runtime` in `gralkor/TEST_TREES.md`.
   """
