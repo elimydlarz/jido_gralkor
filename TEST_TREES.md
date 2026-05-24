@@ -551,20 +551,16 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
     when called with an ontology module
       then `ontology.__ontology__/0` is read once and translated into graphiti's Pydantic dicts on first encounter; on subsequent calls with the same module, the cached dicts are reused (no Pydantic reconstruction)
       then `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types` are forwarded to graphiti's add_episode as appropriate (see ontology materialisation)
-  ontology materialisation
-    a Pythonx-side translator builds graphiti-shaped dicts from an ex-ontology-payload
-    when the payload's :entity_types entry has fields with `required: true`
+  ontology materialisation (the Pythonx-backed half — the pure inclusion/shape decision is ex-ontology-graphiti-spec)
+    graphiti_boundary_spec/1 decides which kwargs are populated and in what shape (pure); the GenServer then
+    materialises the selected :entity_types/:edge_types into Pydantic classes via Pythonx and the selected
+    :edge_type_map into graphiti's tuple-keyed dict, and forwards exactly those kwargs to add_episode
+    when a selected entity/edge field is required
       then the materialised Pydantic class declares that field without a default
-    when the payload's :entity_types entry has fields with `required: false`
+    when a selected entity/edge field is optional
       then the materialised Pydantic class declares that field with a default of None
-    when the payload's :edge_type_map is non-empty
-      then graphiti's add_episode is invoked with `edge_type_map={(src, dst): [edge_names…]}` translated from the list-of-pairs
-    when the payload's :edge_type_map is []
-      then graphiti's add_episode is invoked without `edge_type_map` (graphiti's default — every named edge allowed everywhere — applies)
-    when the payload's :excluded_entity_types is ["Entity"]
-      then graphiti's add_episode is invoked with `excluded_entity_types=["Entity"]` (no generic Entity extraction)
-    when the payload's :excluded_entity_types is nil
-      then graphiti's add_episode is invoked without `excluded_entity_types`
+    forwarding
+      then exactly the kwargs ex-ontology-graphiti-spec selected are forwarded to graphiti's add_episode — a kwarg the spec omitted is never passed
     caching
       then materialised dicts are keyed by the ontology module name (an atom rendered to its string form)
       then concurrent calls for the same ontology module reuse the cached dicts without re-running Pydantic class construction
