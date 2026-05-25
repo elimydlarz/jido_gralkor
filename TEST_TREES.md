@@ -739,6 +739,19 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
       then {:ok, %{communities: non_neg_integer(), edges: non_neg_integer()}} is returned
     if the backend fails
       then {:error, reason} is returned
+  when generalise/2 is called with a group_id and a transcript
+    when the pipeline completes
+      then :ok is returned (best-effort — failures are logged)
+    if the pipeline fails (upstream LLM)
+      then :ok is still returned (generalisation is fire-and-forget)
+  when search_generalisations/3 is called with a group_id, query, and max_results
+    then the backend searches the "#{group_id}:gen" partition
+    when generalisations are found
+      then {:ok, [%Generalisation{}]} is returned with decoded metadata
+    when no generalisations are found
+      then {:ok, []} is returned
+    if the backend fails
+      then {:error, reason} is returned
   agent_name validation
     if recall/4 or capture/5 is called with a missing or blank agent_name
       then ArgumentError is raised at the port boundary (no backend call is made)
