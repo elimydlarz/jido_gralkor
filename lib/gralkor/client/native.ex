@@ -83,6 +83,11 @@ defmodule Gralkor.Client.Native do
   end
 
   @impl Gralkor.Client
+  def memory_add(group_id, content, source_description) do
+    memory_add(group_id, content, source_description, Config.ontology())
+  end
+
+  @impl Gralkor.Client
   def memory_add(group_id, content, source_description, ontology) do
     raise_unless_ontology_or_nil!(ontology)
     source = source_description || "manual"
