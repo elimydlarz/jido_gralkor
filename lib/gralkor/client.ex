@@ -53,6 +53,9 @@ defmodule Gralkor.Client do
   @callback build_communities(group_id()) ::
               {:ok, %{communities: non_neg_integer(), edges: non_neg_integer()}}
               | {:error, term()}
+  @callback generalise(group_id(), transcript :: String.t()) :: :ok | {:error, term()}
+  @callback search_generalisations(group_id(), query :: String.t(), max_results :: pos_integer()) ::
+              {:ok, [Gralkor.Generalisation.t()]} | {:error, term()}
 
   @spec impl() :: module()
   def impl, do: Application.get_env(:jido_gralkor, :client, Gralkor.Client.Native)
