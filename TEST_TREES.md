@@ -249,8 +249,9 @@ ex-capture (src: lib/gralkor/client/native.ex#capture/5; unit: test/gralkor/clie
   capture takes no ontology argument — the ontology is a deployment-wide config concern (ex-config-ontology), never a per-call or per-agent value
   then returns :ok immediately (does not call distill synchronously)
   observability
-    when test mode is enabled
-      then logs the captured messages
+    capture emits no per-turn log (even in test mode) — logging every buffered turn
+      floods the consumer's logs; the captured content is shown at flush instead
+      (see "flush > when test mode is enabled")
   flush (fires from flush/1, flush_and_await/2, and shutdown only)
     when the distilled episode body is empty
       then no episode is added
@@ -1004,6 +1005,7 @@ ontology-extraction (functional: test/functional/ontology_extraction_test.exs)
     a single episode body asserting that "Eli" (handle "eli") has a strong preference
     for concise, structured responses, suitable for the LLM to extract one User entity,
     one Preference entity, and a PREFERS relationship between them
+  each scenario selects its ontology via the client's per-call override (the 4-arg memory_add) so the three runs stay independent of global config; the no-ontology scenario uses the bare memory_add (3-arg) with nothing configured
   strict ontology (entities: :strict, relationships: :scoped)
     when memory_add ingests the fixture under a strict ontology declaring User + Preference + PREFERS
       then at least one node in the graph carries the "User" label
