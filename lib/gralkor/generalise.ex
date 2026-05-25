@@ -188,6 +188,7 @@ defmodule Gralkor.Generalise do
         Logger.warning("[gralkor] generalise evaluate failed: #{inspect(reason)}")
         :ok
     end
+    end
   end
 
   defp persist_decisions(decisions, hypotheses, existing_by_idx, add_fn, remove_fn, partition) do
