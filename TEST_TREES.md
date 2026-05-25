@@ -748,7 +748,7 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
   when an agent turn completes
     then the user query, event trace, and `{:completed, answer}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list is sent to
-      Gralkor for capture with the thread's session_id, the principal's group_id, the configured agent_name, the user_name read from `agent.state[:user_name]`, and the configured ontology (or nil)
+      Gralkor for capture with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the configured global ontology)
     if `agent.state[:user_name]` is missing or blank
       then capture raises ArgumentError (the consumer's contract violation surfaces immediately rather than persisting an episode under a generic "User" label that would corrupt the graph)
   when an agent turn fails
