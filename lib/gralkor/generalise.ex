@@ -20,18 +20,12 @@ defmodule Gralkor.Generalise do
 
   @type group_id :: String.t()
 
-  @type hypothesise_fn :: (String.t() -> {:ok, [%{content: String.t(), confidence: float()}]} | {:error, term()})
-  @type search_gen_fn :: (String.t(), String.t(), pos_integer() -> {:ok, [String.t()]} | {:error, term()})
-  @type evaluate_fn :: (String.t() -> {:ok, [map()]} | {:error, term()})
-  @type add_episode_fn :: (String.t(), String.t(), String.t(), module() | nil, keyword()) -> :ok | {:error, term()}
-  @type remove_episode_fn :: (String.t(), String.t()) -> :ok | {:error, term()}
-
   @type opts :: [
-          hypothesise_fn: hypothesise_fn(),
-          search_gen_fn: search_gen_fn(),
-          evaluate_fn: evaluate_fn(),
-          add_episode_fn: add_episode_fn(),
-          remove_episode_fn: remove_episode_fn(),
+          hypothesise_fn: function(),
+          search_gen_fn: function(),
+          evaluate_fn: function(),
+          add_episode_fn: function(),
+          remove_episode_fn: function(),
           min_confidence: float(),
           max_gen_results: pos_integer()
         ]
