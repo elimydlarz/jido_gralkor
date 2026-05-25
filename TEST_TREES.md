@@ -296,19 +296,23 @@ ex-flush-and-await (src: lib/gralkor/client/native.ex#flush_and_await/2; unit: t
 ## Tools (embedded Gralkor adapter)
 
 ```
-ex-memory-add (src: lib/gralkor/client/native.ex#memory_add/4; unit: test/gralkor/client/native_test.exs)
+ex-memory-add (src: lib/gralkor/client/native.ex#memory_add; unit: test/gralkor/client/native_test.exs)
   request shape
-    when called with group_id, content, source_description, ontology
+    when called with group_id, content, source_description and no ontology override
       then group_id is sanitized before ingestion
+      and the ontology applied is the configured global ontology (Gralkor.Config.ontology/0)
+    when called with group_id, content, source_description and an explicit ontology override
+      then group_id is sanitized before ingestion
+      and the override is the ontology applied — the configured global ontology is not consulted
   then auto-generates name ("manual-add-" + timestamp_ms)
   then auto-generates idempotency_key from `System.unique_integer([:positive, :monotonic])` rendered as a string
-  then calls Gralkor.GraphitiPool.add_episode with source=:text scoped to the sanitized group_id, forwarding the ontology as the final arg
+  then calls Gralkor.GraphitiPool.add_episode with source=:text scoped to the sanitized group_id, forwarding the resolved ontology as the final arg
   then returns :ok on success
   when source_description is nil
     then defaults to "manual"
-  when ontology is nil
+  when the resolved ontology is nil (no override and none configured)
     then GraphitiPool.add_episode is invoked with ontology=nil — graphiti receives no entity_types/edge_types/edge_type_map/excluded_entity_types (behaviour identical to pre-ontology slice)
-  when ontology is a module declared with `use Gralkor.Ontology`
+  when the resolved ontology is a module declared with `use Gralkor.Ontology`
     then the module's `__ontology__/0` payload is forwarded; GraphitiPool builds (and caches) the Pydantic dicts and passes them to graphiti — see ex-graphiti-pool > ontology materialisation
 
 ex-build-indices (src: lib/gralkor/client/native.ex#build_indices/0; unit: test/gralkor/client/native_test.exs)
