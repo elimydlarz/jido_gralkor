@@ -711,7 +711,6 @@ ex-client-native (src: lib/gralkor/client/native.ex; integration: test/gralkor/c
   if flush_and_await is called with a non-positive timeout_ms
     then the call raises with ArgumentError
   (per-operation deadline behaviour is described in ex-timeouts; flush_and_await is governed by the caller-supplied timeout, not the global deadline)
-  runs the shared ex-client port contract (via test/support/gralkor_client_contract.ex)
 
 ex-client-in-memory (src: lib/gralkor/client/in_memory.ex; unit: test/gralkor/client/in_memory_test.exs)
   when an operation is called
