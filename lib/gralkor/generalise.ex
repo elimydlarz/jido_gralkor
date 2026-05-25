@@ -166,8 +166,7 @@ defmodule Gralkor.Generalise do
       hypotheses
       |> Enum.with_index()
       |> Enum.map(fn {h, idx} ->
-        existing = Map.get(existing_by_idx, idx, [])
-        %{hypothesis: h, index: idx, existing: existing}
+        %{hypothesis: h, index: idx}
       end)
 
     if test_mode?(),
