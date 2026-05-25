@@ -77,21 +77,42 @@ defmodule Gralkor.Recall do
 
   defp do_recall(sanitized_group, agent_name, session_id, query, max_results, opts) do
     search_fn = Keyword.fetch!(opts, :search_fn)
+    gen_search_fn = Keyword.get(opts, :gen_search_fn)
     interpret_fn = Keyword.fetch!(opts, :interpret_fn)
     turns_fn = Keyword.fetch!(opts, :turns_fn)
 
     t0 = System.monotonic_time(:millisecond)
     conversation = load_conversation(session_id, turns_fn)
 
-    {search_result, search_ms} = time(fn -> search_fn.(sanitized_group, query, max_results) end)
+    gen_max = max(div(max_results, 3), 1)
+
+    # Run main search and optional gen search in parallel
+    main_task = Task.async(fn -> search_fn.(sanitized_group, query, max_results) end)
+
+    gen_task =
+      if gen_search_fn do
+        Task.async(fn -> gen_search_fn.(sanitized_group, query, gen_max) end)
+      end
+
+    {search_result, search_ms} = time(fn -> Task.await(main_task, :infinity) end)
+
+    gen_result =
+      if gen_task do
+        case Task.yield(gen_task, 5_000) || Task.shutdown(gen_task, :brutal_kill) do
+          {:ok, result} -> result
+          nil -> {:error, :gen_search_timeout}
+        end
+      else
+        {:ok, []}
+      end
 
     {body, n_facts, interpret_ms} =
-      case search_result do
-        {:ok, []} ->
+      case {search_result, gen_result} do
+        {{:ok, []}, {:ok, []}} ->
           {@no_facts_body, 0, 0}
 
-        {:ok, facts} when is_list(facts) ->
-          facts_text = format_facts(facts)
+        {{:ok, facts}, {:ok, gens}} when is_list(facts) and is_list(gens) ->
+          facts_text = format_facts(facts ++ gens)
 
           interpret_opts =
             case Keyword.fetch(opts, :output_token_budget) do
@@ -115,8 +136,42 @@ defmodule Gralkor.Recall do
             list -> {Enum.join(list, "\n"), length(list), ms}
           end
 
-        {:error, reason} ->
+        {{:error, reason}, _} ->
           throw({:search_failed, reason})
+
+        {_, {:error, reason}} ->
+          # Gen search failed — proceed with just facts
+          Logger.warning("[gralkor] recall gen search failed: #{inspect(reason)}")
+
+          case search_result do
+            {:ok, facts} when is_list(facts) ->
+              facts_text = format_facts(facts)
+
+              interpret_opts =
+                case Keyword.fetch(opts, :output_token_budget) do
+                  {:ok, budget} -> [output_token_budget: budget]
+                  :error -> []
+                end
+
+              {relevant, ms} =
+                time(fn ->
+                  Interpret.interpret_facts(
+                    conversation,
+                    facts_text,
+                    interpret_fn,
+                    agent_name,
+                    interpret_opts
+                  )
+                end)
+
+              case relevant do
+                [] -> {@no_facts_body, 0, ms}
+                list -> {Enum.join(list, "\n"), length(list), ms}
+              end
+
+            _ ->
+              {@no_facts_body, 0, 0}
+          end
       end
 
     block = wrap(body)
