@@ -755,7 +755,7 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
     then the user query, event trace, and `{:failed, error}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list — ending in
       a `"request failed: …"` behaviour message instead of an assistant message — is sent to
-      Gralkor for capture with the thread's session_id, the principal's group_id, the configured agent_name, the user_name read from `agent.state[:user_name]`, and the configured ontology (or nil), so the failure is visible to downstream distillation rather than
+      Gralkor for capture with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the configured global ontology), so the failure is visible to downstream distillation rather than
       silently dropped
     when the agent has no committed thread yet (first-turn failure)
       then capture is skipped
