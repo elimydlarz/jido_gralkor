@@ -212,10 +212,12 @@ The Jido glue:
 The embedded Gralkor adapter (under `lib/gralkor/`):
 
 - `Gralkor.Client` — behaviour, `sanitize_group_id/1`, `impl/0` app-env resolver.
-- `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, `GraphitiPool`, and `req_llm`.
+- `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, `GraphitiPool`, `Generalise`, and `req_llm`.
 - `Gralkor.Client.InMemory` — test twin.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
-- `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Message`, `Gralkor.InterpretParseFailed` — the embedded pipelines (capture buffer, distill, interpret, recall) that drive Graphiti.
+- `Gralkor.Generalise` — hypothesise → evaluate → persist pipeline. On flush, reviews the distilled transcript, hypothesises cross-episode patterns via LLM, searches existing generalisations in a separate `:gen` graphiti partition to rule candidates in or out, and saves the strongest. Generalisations form a hierarchy (broadens / narrows) with deduplication.
+- `Gralkor.Generalisation` — struct and wire format (`GEN|v1|{json}\ncontent`) for storing generalisations as graphiti episodes with controlled UUIDs (enabling update via re-extraction and delete via `remove_episode`).
+- `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Message`, `Gralkor.InterpretParseFailed`, `Gralkor.GeneralisationParseFailed` — the embedded pipelines (capture buffer, distill, interpret, recall, generalise) that drive Graphiti.
 
 Detailed behaviour for every module lives in [`CLAUDE.md`](https://github.com/elimydlarz/jido_gralkor/blob/main/CLAUDE.md) under `## Test Trees`.
 
