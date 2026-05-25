@@ -28,6 +28,7 @@ defmodule Gralkor.Client.Native do
 
     opts = [
       search_fn: search_fn(),
+      gen_search_fn: gen_recall_search_fn(),
       interpret_fn: interpret_fn(),
       turns_fn: turns_fn()
     ]
