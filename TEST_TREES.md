@@ -619,9 +619,9 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
       then {:ok, block} is returned
     if the backend fails
       then {:error, reason} is returned
-  when capture/6 is called with session_id, group_id, agent_name, user_name, ontology, and messages
+  when capture/5 is called with session_id, group_id, agent_name, user_name, and messages
     messages is a list of canonical Gralkor.Message structs (role ∈ {"user", "assistant", "behaviour"}, content: String.t())
-    ontology is a module declared with `use Gralkor.Ontology`, or nil
+    capture carries no ontology argument — the write applies the configured global ontology (ex-config-ontology)
     when the backend acknowledges the capture
       then :ok is returned
     if the backend fails
