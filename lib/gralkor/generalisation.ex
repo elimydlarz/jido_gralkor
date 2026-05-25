@@ -44,8 +44,6 @@ defmodule Gralkor.Generalisation do
 
   @prefix_v1 "GEN|v1|"
 
-  @json_keys ~w(id level confidence generalises)
-
   @doc """
   Encodes a `%Generalisation{}` struct into an episode body string suitable for
   `GraphitiPool.add_episode/5`. The returned string has the metadata prefix as
