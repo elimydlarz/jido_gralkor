@@ -146,7 +146,8 @@ defmodule Gralkor.GraphitiPool do
             for k, v in ontology_dicts.items():
                 kwargs[_dec(k)] = [_dec(i) for i in v] if isinstance(v, list) else v
         if uuid is not None:
-            kwargs['uuid'] = uuid
+            uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
+            kwargs['uuid'] = uid
         import traceback, sys
         try:
             asyncio._gralkor_run(g.add_episode(**kwargs))
