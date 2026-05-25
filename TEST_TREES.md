@@ -78,6 +78,74 @@ ex-recall (src: lib/gralkor/recall.ex; unit: test/gralkor/recall_test.exs)
         then also logs the resulting memory block
   (rate-limit / transient upstream errors: req_llm owns the retry. ex layer adds nothing.)
 
+ex-generalisation (src: lib/gralkor/generalisation.ex; unit: test/gralkor/generalisation_test.exs)
+  struct
+    then fields: id (String.t()), content (String.t()), level (non_neg_integer()), confidence (float()), generalises ([String.t()], default []), created_at (String.t() | nil, default nil)
+    then id doubles as the graphiti episode UUID for update/delete
+  encode/1
+    then produces a GEN|v1| prefix followed by JSON metadata then newline then free-text content
+    then JSON metadata includes id, level, confidence, and generalises (array of ids)
+    then generalises defaults to [] when empty
+  decode/1
+    when the raw string starts with GEN|v1|
+      then returns {:ok, %Generalisation{}, plain_content}
+      and plain content is trimmed of leading/trailing whitespace
+      when content has embedded newlines
+        then all lines after the first are preserved as plain content
+    when JSON is malformed
+      then raises GeneralisationParseFailed
+    when required fields are missing (id, level, confidence)
+      then raises GeneralisationParseFailed
+    when the raw string lacks the GEN|v1| prefix
+      then returns {:error, :not_a_generalisation}
+    when the raw string is empty
+      then returns {:error, :not_a_generalisation}
+
+ex-generalise (src: lib/gralkor/generalise.ex; unit: test/gralkor/generalise_test.exs)
+  pipeline orchestration — all external dependencies (LLM calls, search, add/remove episode) injected via opts
+  hypothesise
+    when the LLM returns candidates
+      then only candidates at or above min_confidence (default 0.3) are evaluated
+      then candidates are sorted by confidence descending
+    when all candidates are below min_confidence
+      then nothing is persisted
+    when the LLM returns no candidates
+      then nothing is persisted
+  evaluate > save
+    when action is "save"
+      then a new generalisation is persisted at level 0 with empty generalises
+      and the body is encoded via Generalisation.encode/1
+  evaluate > broadens
+    when action is "broadens"
+      then a new generalisation is persisted with level = existing.level + 1
+      and generalises references the existing id
+      and the existing generalisation remains active
+  evaluate > narrows
+    when action is "narrows"
+      then a new generalisation is persisted with level = existing.level + 1
+      and generalises references the existing id
+      and the existing generalisation remains active
+  evaluate > contradicts
+    when action is "contradicts" and remove_episode_fn is provided
+      then the existing generalisation is removed via remove_episode_fn before the new one is saved
+  evaluate > skip
+    when action is "skip"
+      then no episode is added
+  level calculation
+    when existing_id is found in all_existing
+      then level = existing.level + 1
+    when existing_id is not found
+      then level defaults to 0
+  error handling
+    when hypothesise LLM fails
+      then generalise returns :ok (best-effort — failure is logged)
+    when evaluate LLM fails
+      then generalise returns :ok (best-effort)
+    when search fails for a hypothesis
+      then it continues with empty existing list
+    when add_episode fails
+      then it logs the failure and continues (other decisions unaffected)
+
 ex-interpret (src: lib/gralkor/interpret.ex; unit: test/gralkor/interpret_test.exs)
   interpret_facts/5 takes conversation messages, formatted facts, an LLM client (interpret_fn), an agent_name, and an opts keyword list
     if agent_name is missing or blank
