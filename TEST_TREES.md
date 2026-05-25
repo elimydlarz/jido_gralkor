@@ -636,6 +636,11 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
     when called with an ontology module
       then `ontology.__ontology__/0` is read once and translated into graphiti's Pydantic dicts on first encounter; on subsequent calls with the same module, the cached dicts are reused (no Pydantic reconstruction)
       then `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types` are forwarded to graphiti's add_episode as appropriate (see ontology materialisation)
+    when called with opts[:uuid]
+      then the uuid is forwarded to graphiti's add_episode(..., uuid=...), enabling episode identity control (update via re-extraction)
+  remove_episode/3 (server, group_id, episode_uuid)
+    when called
+      then graphiti's remove_episode(uuid) is invoked, deleting the episode and its orphaned edges/nodes
   ontology materialisation (the Pythonx-backed half — the pure inclusion/shape decision is ex-ontology-graphiti-spec)
     when an ontology module is materialised
       then the dict carries exactly the spec-selected keys (omitting unselected) and reuses them per module
