@@ -180,4 +180,31 @@ defmodule Gralkor.ConfigTest do
       refute stderr =~ "Using unverified model"
     end
   end
+
+  describe "ex-config-ontology > when :jido_gralkor, :ontology is unset" do
+    test "returns nil" do
+      assert Config.ontology() == nil
+    end
+  end
+
+  describe "ex-config-ontology > when :jido_gralkor, :ontology is a module declared via use Gralkor.Ontology" do
+    test "returns that module" do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+      assert Config.ontology() == Gralkor.TestOntologies.Strict
+    end
+  end
+
+  describe "ex-config-ontology > if :jido_gralkor, :ontology is a module that does not export __ontology__/0, or any non-module value" do
+    test "raises ArgumentError naming a module that is not an ontology" do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
+
+      assert_raise ArgumentError, ~r/NotAnOntology/, fn -> Config.ontology() end
+    end
+
+    test "raises ArgumentError naming a non-module value" do
+      Application.put_env(:jido_gralkor, :ontology, "MyApp.Ontology")
+
+      assert_raise ArgumentError, ~r/MyApp\.Ontology/, fn -> Config.ontology() end
+    end
+  end
 end
