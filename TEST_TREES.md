@@ -234,18 +234,19 @@ ex-format-transcript (src: lib/gralkor/distill.ex; unit: test/gralkor/distill_te
   then the LLM call uses a structured-output schema with a single "behaviour" field
   then turns with behaviour are distilled in parallel via Task.async_stream
 
-ex-capture (src: lib/gralkor/client/native.ex#capture/6; unit: test/gralkor/client/native_test.exs)
+ex-capture (src: lib/gralkor/client/native.ex#capture/5; unit: test/gralkor/client/native_test.exs)
   request shape
-    when called with session_id, group_id, agent_name, user_name, ontology, messages
+    when called with session_id, group_id, agent_name, user_name, messages
       then group_id is sanitized
-      and Gralkor.CaptureBuffer.append/6 is invoked with the sanitized group_id, the agent_name, the user_name, the ontology, and the messages
+      and the configured global ontology (Gralkor.Config.ontology/0) is resolved
+      and Gralkor.CaptureBuffer.append/6 is invoked with the sanitized group_id, the agent_name, the user_name, the resolved ontology, and the messages
   if session_id is missing or blank
     then raises ArgumentError
   if agent_name is missing or blank
     then raises ArgumentError
   if user_name is missing or blank
     then raises ArgumentError
-  ontology is a module declared with `use Gralkor.Ontology`, or nil — no other shape is accepted (no per-call ontology spec; ontologies are always module references)
+  capture takes no ontology argument — the ontology is a deployment-wide config concern (ex-config-ontology), never a per-call or per-agent value
   then returns :ok immediately (does not call distill synchronously)
   observability
     when test mode is enabled
