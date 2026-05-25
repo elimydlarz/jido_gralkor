@@ -189,7 +189,10 @@ defmodule Gralkor.Generalise do
     end
   end
 
-  defp persist_decisions(decisions, _hypotheses, existing_by_idx, add_fn, remove_fn, partition) do
+  defp persist_decisions(decisions, all_existing, add_fn, remove_fn, partition) do
+    # Index existing by id for fast lookup
+    existing_by_id = Map.new(all_existing, fn g -> {g.id, g} end)
+
     Enum.each(decisions, fn decision ->
       action = normalize_action(Map.get(decision, :action))
       idx = Map.get(decision, :hypothesis_index)
@@ -204,15 +207,13 @@ defmodule Gralkor.Generalise do
         a when a in [:save, :broadens, :narrows, :contradicts] ->
           generalises = if existing_id, do: [existing_id], else: []
 
-          child_levels =
-            if existing_id do
-              existing = Map.get(existing_by_idx, idx, [])
-              level_for(existing, existing_id)
-            else
-              []
+          child_level =
+            case Map.get(existing_by_id, existing_id) do
+              nil -> -1
+              gen -> gen.level
             end
 
-          level = (Enum.max(child_levels, fn -> -1 end)) + 1
+          level = child_level + 1
 
           gen = %Generalisation{
             id: generate_id(),
