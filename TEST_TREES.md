@@ -581,6 +581,13 @@ ex-application (src: lib/gralkor/application.ex; unit: test/gralkor/application_
         (consumer has explicitly opted out of the native runtime; this matters because dotenv-loaders shipped by sibling deps — e.g. `:req_llm` — populate GRALKOR_DATA_DIR from `.env` before `:jido_gralkor` boots, so test configs that pin the InMemory client must not also be forced into the native boot path)
     when `:jido_gralkor, :falkordb` is set to a value that is not a keyword list, or is missing `:host` or `:port`
       then Application.start/2 raises ArgumentError before any child starts (fail-fast on operator misconfig)
+  build_flush_callback/2
+    then the returned callback distills turns via Distill.format_transcript, then calls add_episode_fn with source "captured"
+    when generalise_fn is provided in deps and add_episode_fn returns :ok
+      then a fire-and-forget Task.start calls generalise_fn.(group_id, transcript_body)
+      and the generalise failure does not affect the flush result
+    when generalise_fn is nil (default)
+      then no generalise step runs (backward compatible)
 
 ex-python-runtime (src: lib/gralkor/python.ex; unit: test/gralkor/python_test.exs)
   Gralkor.Python's init/1 runs the boot sequence synchronously and returns only when ready
