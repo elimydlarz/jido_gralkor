@@ -50,6 +50,7 @@ defmodule Gralkor.Application do
   def build_flush_callback(_config, deps \\ []) do
     distill_fn = Keyword.get_lazy(deps, :distill_fn, &Native.distill_callback/0)
     add_episode_fn = Keyword.get(deps, :add_episode_fn, &GraphitiPool.add_episode/4)
+    generalise_fn = Keyword.get(deps, :generalise_fn)
 
     fn group_id, agent_name, user_name, ontology, turns ->
       body = Distill.format_transcript(turns, distill_fn, agent_name, user_name)
@@ -69,6 +70,10 @@ defmodule Gralkor.Application do
 
           if Application.get_env(:jido_gralkor, :test, false),
             do: Logger.info("[gralkor] [test] capture flush body: #{body}")
+
+          if result == :ok && generalise_fn do
+            Task.start(fn -> generalise_fn.(group_id, body) end)
+          end
 
           result
       end
