@@ -225,7 +225,7 @@ defmodule Gralkor.Generalise do
 
           body = Generalisation.encode(gen)
 
-          if action == :contradicts and existing_id and remove_fn do
+          if action == :contradicts && existing_id && remove_fn do
             Logger.info("[gralkor] generalise contradict — removing #{existing_id}")
             remove_fn.(partition, existing_id)
           end
