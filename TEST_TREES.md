@@ -57,6 +57,14 @@ ex-recall (src: lib/gralkor/recall.ex; unit: test/gralkor/recall_test.exs)
               then memory_block body is "No relevant memories found."
       and memory_block wraps body in <gralkor-memory trust="untrusted">...</gralkor-memory>
       and memory_block includes the further-querying instruction
+      when gen_search_fn is provided in opts
+        then a parallel Task.async searches the ":gen" partition with max_results / 3 (min 1)
+        and gen results are combined with regular facts before interpretation
+        and gen search has a 5s yield deadline (independent of the main recall deadline)
+        when gen search fails or times out
+          then recall proceeds with only regular facts
+      when gen_search_fn is absent
+        then no gen search is performed (backward compatible)
   recall deadline
     then recall completes within 12_000ms (matches the consumer's worst-case tolerance — see Susu.ChatAgent)
     if the budget is exhausted before the call returns
