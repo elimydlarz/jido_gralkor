@@ -174,6 +174,39 @@ defmodule Gralkor.GraphitiPool do
     e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
   end
 
+  @doc """
+  Remove an episode and its orphaned edges/nodes from the graph.
+
+  Calls graphiti's `remove_episode(uuid)` which deletes the episode, its
+  entity edges that were created by that episode, and any entity nodes
+  referenced only by the deleted episode.
+  """
+  @spec remove_episode(GenServer.server(), String.t(), String.t()) :: :ok | {:error, term()}
+  def remove_episode(server \\ __MODULE__, group_id, episode_uuid)
+      when is_binary(group_id) and is_binary(episode_uuid) do
+    instance = __MODULE__.for(server, group_id)
+
+    Pythonx.eval(
+      """
+      import asyncio
+      import traceback, sys
+      uid = episode_uuid.decode('utf-8') if isinstance(episode_uuid, (bytes, bytearray)) else episode_uuid
+      try:
+          asyncio._gralkor_run(g.remove_episode(uid))
+      except BaseException:
+          print("[gralkor-debug] remove_episode raised:", file=sys.stderr)
+          traceback.print_exc()
+          raise
+      None
+      """,
+      %{"g" => instance, "episode_uuid" => episode_uuid}
+    )
+
+    :ok
+  rescue
+    e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
+  end
+
   @doc "Build indices and constraints across the whole graph."
   @spec build_indices(GenServer.server()) :: {:ok, %{status: String.t()}} | {:error, term()}
   def build_indices(server \\ __MODULE__) do
