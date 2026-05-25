@@ -11,7 +11,7 @@ defmodule Gralkor.GeneraliseTest do
   defp ok_add, do: fn _group, _body, _source, _ont, _opts -> :ok end
   defp ok_remove, do: fn _group, _uuid -> :ok end
 
-  defp default_opts(extras \\ []) do
+  defp default_opts(extras) do
     Keyword.merge(
       [
         hypothesise_fn: ok_hypothesise([]),
@@ -26,7 +26,6 @@ defmodule Gralkor.GeneraliseTest do
 
   describe "ex-generalise > hypothesise" do
     test "when the LLM returns no candidates, nothing is persisted" do
-      add_called? = ref(false)
       add_fn = fn _g, _b, _s, _ont, _opts ->
         Process.put(:add_episode_called, true)
         :ok
@@ -43,12 +42,9 @@ defmodule Gralkor.GeneraliseTest do
         %{content: "vague preference", confidence: 0.25}
       ]
 
-      add_called? = Process.get(:add_episode_called)
-
       assert :ok = Generalise.generalise("g", "some transcript",
         default_opts(hypothesise_fn: ok_hypothesise(below), min_confidence: 0.3))
 
-      # No add should be called since all were below threshold
       refute Process.get(:add_episode_called, false)
     end
 
@@ -85,11 +81,10 @@ defmodule Gralkor.GeneraliseTest do
         }
       ]
 
-      add_fn = fn _group, body, _source, _ont, opts ->
+      add_fn = fn _group, body, _source, _ont, _opts ->
         assert body =~ "User prefers dark mode"
         assert body =~ "GEN|v1|"
 
-        # Verify level is 0 for new independent generalisation
         {:ok, gen, _plain} = Gralkor.Generalisation.decode(body)
         assert gen.level == 0
         assert gen.confidence == 0.85
@@ -203,15 +198,13 @@ defmodule Gralkor.GeneraliseTest do
         }
       ]
 
-      remove_called = ref(false)
-
       assert :ok = Generalise.generalise("g", "transcript",
         default_opts(
           hypothesise_fn: ok_hypothesise(candidates),
           search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
           evaluate_fn: ok_evaluate(decisions),
           add_episode_fn: ok_add(),
-          remove_episode_fn: fn partition, uuid ->
+          remove_episode_fn: fn _partition, uuid ->
             Process.put(:remove_called, true)
             assert uuid == "gen-outdated"
             :ok
@@ -226,8 +219,6 @@ defmodule Gralkor.GeneraliseTest do
     test "a skip decision does not persist anything" do
       candidates = [%{content: "Some weak pattern", confidence: 0.5}]
       decisions = [%{hypothesis_index: 0, action: "skip", confidence: 0.5, content: "Some weak pattern"}]
-
-      add_called = ref(false)
 
       assert :ok = Generalise.generalise("g", "transcript",
         default_opts(
