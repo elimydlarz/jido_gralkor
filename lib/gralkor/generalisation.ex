@@ -53,12 +53,14 @@ defmodule Gralkor.Generalisation do
   """
   @spec encode(t()) :: String.t()
   def encode(%__MODULE__{} = gen) do
-    meta =
-      gen
-      |> Map.take(@json_keys)
-      |> Jason.encode!()
+    meta = %{
+      "id" => gen.id,
+      "level" => gen.level,
+      "confidence" => gen.confidence,
+      "generalises" => gen.generalises
+    }
 
-    "#{@prefix_v1}#{meta}\n#{gen.content}"
+    "#{@prefix_v1}#{Jason.encode!(meta)}\n#{gen.content}"
   end
 
   @doc """
