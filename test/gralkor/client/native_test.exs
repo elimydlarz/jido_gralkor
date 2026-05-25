@@ -198,10 +198,15 @@ defmodule Gralkor.Client.NativeTest do
       end)
     end
 
-    test "when :ontology is unset, memory_add/3 gets past the guard (nil is valid)" do
+    test "when :ontology is unset, memory_add/3 passes the ontology guard and reaches GraphitiPool" do
       Application.delete_env(:jido_gralkor, :ontology)
 
-      assert_raise RuntimeError, ~r/graphiti/, fn ->
+      # memory_add/3 delegates to memory_add/4 with Config.ontology() → nil.
+      # The ontology guard (raise_unless_ontology_or_nil!) accepts nil, so the call
+      # proceeds to GraphitiPool.add_episode, which crashes because no OTP stack is
+      # running. That crash proves the guard passed — an ontology rejection would
+      # be ArgumentError, not a GenServer-not-started error.
+      assert_raise ArgumentError, ~r/GraphitiPool/, fn ->
         Native.memory_add("g", "content", "manual")
       end
     end
