@@ -78,7 +78,9 @@ Real LLM (and graphiti-core extraction) calls live only in the opt-in `:function
 
 ### Mutation testing
 
-`{:muzak, only: :test}` (pinned to the `elixir-1.19` branch of the `elimydlarz/muzak` fork — upstream `1.1.1` is unmaintained since 2022 and breaks on Elixir 1.19; the fork replaces Muzak's frozen 2400-line copy of `Code.Formatter` with a thin wrapper over the public `Code.string_to_quoted_with_comments!/2` + `Code.quoted_to_algebra/2`, fixes the `ExUnit.Server.modules_loaded` arity change, and disables the `test_helper` autorun so it doesn't crash on teardown).
+`{:muzak, git: "git@github.com:elimydlarz/muzak.git", branch: "elixir-1.19", only: :test}` — upstream `1.1.1` is unmaintained since 2022 and breaks on Elixir 1.19; the fork replaces Muzak's frozen 2400-line copy of `Code.Formatter` with a thin wrapper over the public `Code.string_to_quoted_with_comments!/2` + `Code.quoted_to_algebra/2`, fixes the `ExUnit.Server.modules_loaded` arity change, and disables the `test_helper` autorun so it doesn't crash on teardown.
+
+**Why a private SSH git dep, not Hex:** upstream Muzak is licensed **CC-BY-NC-ND-4.0** — the **NoDerivatives** clause forbids *distributing* a modified version, so the patched fork can't be published to Hex or kept in a public repo. The fork lives in the **private** repo `elimydlarz/muzak`; CC permits producing adaptations for private, non-commercial use. Consequence: `MIX_ENV=test mix deps.get` (and therefore `mix test`) needs SSH access to that private repo — outside collaborators without access can't fetch the test deps. The **NonCommercial** clause also applies if this is ever used commercially (Muzak Pro is the licensed path for that). Do not publish this dep or make the fork public.
 
 ```bash
 mix muzak                      # sample up to 1000 mutations across lib/, run the suite (excl. :functional/:journey) against each
