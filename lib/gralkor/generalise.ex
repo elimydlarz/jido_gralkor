@@ -283,10 +283,10 @@ defmodule Gralkor.Generalise do
         "(no existing generalisations in memory)"
       else
         "Existing generalisations in memory:\n" <>
-          Enum.map(all_existing, fn g ->
+          (Enum.map(all_existing, fn g ->
             "  - [#{g.id}] (level:#{g.level} confidence:#{g.confidence}) #{g.content}"
           end)
-          |> Enum.join("\n")
+          |> Enum.join("\n"))
       end
 
     entries =
