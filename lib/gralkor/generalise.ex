@@ -133,8 +133,8 @@ defmodule Gralkor.Generalise do
   defp do_persist(hypotheses, search_fn, evaluate_fn, add_fn, remove_fn, partition, max_results) do
     if hypotheses == [] do
       Logger.info("[gralkor] generalise no hypotheses above confidence threshold — nothing to persist")
-      return :ok
-    end
+      :ok
+    else
 
     # Search for existing generalisations related to each hypothesis
     existing_by_idx =
