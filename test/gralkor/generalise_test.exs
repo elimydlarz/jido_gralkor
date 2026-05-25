@@ -50,13 +50,13 @@ defmodule Gralkor.GeneraliseTest do
 
     test "only candidates at or above min_confidence are evaluated" do
       mixed = [
-        %{content: "below", confidence: 0.2},
+        %{content: "xyzzy-below-threshold-unique", confidence: 0.2},
         %{content: "above", confidence: 0.7}
       ]
 
       eval_fn = fn prompt ->
         assert prompt =~ "above"
-        refute prompt =~ "below"
+        refute prompt =~ "xyzzy-below-threshold-unique"
         {:ok, []}
       end
 
