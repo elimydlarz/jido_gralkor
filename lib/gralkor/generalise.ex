@@ -254,12 +254,6 @@ defmodule Gralkor.Generalise do
   defp normalize_action(other) when is_atom(other), do: other
   defp normalize_action(_), do: :unknown
 
-  defp level_for(existing, id) do
-    Enum.flat_map(existing, fn g ->
-      if g.id == id, do: [g.level], else: []
-    end)
-  end
-
   defp generate_id do
     "gen-" <> Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)
   end
