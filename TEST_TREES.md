@@ -58,7 +58,7 @@ ex-recall (src: lib/gralkor/recall.ex; unit: test/gralkor/recall_test.exs)
       and memory_block wraps body in <gralkor-memory trust="untrusted">...</gralkor-memory>
       and memory_block includes the further-querying instruction
   recall deadline
-    then recall completes within 12_000ms (matches the consumer's worst-case tolerance — see Susu2.ChatAgent)
+    then recall completes within 12_000ms (matches the consumer's worst-case tolerance — see Susu.ChatAgent)
     if the budget is exhausted before the call returns
       then in-flight upstream work is cancelled
       and {:error, :recall_deadline_expired} is returned
@@ -248,10 +248,7 @@ ex-capture (src: lib/gralkor/client/native.ex#capture/5; unit: test/gralkor/clie
     then raises ArgumentError
   capture takes no ontology argument — the ontology is a deployment-wide config concern (ex-config-ontology), never a per-call or per-agent value
   then returns :ok immediately (does not call distill synchronously)
-  observability
-    capture emits no per-turn log (even in test mode) — logging every buffered turn
-      floods the consumer's logs; the captured content is shown at flush instead
-      (see "flush > when test mode is enabled")
+  (capture itself logs nothing per-turn — captured content is observable at flush; see "flush" below)
   flush (fires from flush/1, flush_and_await/2, and shutdown only)
     when the distilled episode body is empty
       then no episode is added
@@ -761,7 +758,7 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
     when the agent has no committed thread yet (first-turn failure)
       then capture is skipped
       and a Logger.warning is emitted naming the agent id and pointing at the upstream
-        jido_ai fix (susu-2 JIDO_CHANGE_SUGGESTIONS.md §2)
+        jido_ai fix (susu JIDO_CHANGE_SUGGESTIONS.md §2)
   when the completed turn has no events in its request trace
     then no capture is sent (simple chit-chat turns with no tool usage don't populate memory)
   when a signal of any other type arrives
@@ -897,7 +894,7 @@ JidoGralkor.Actions.MemorySearch (src: lib/jido_gralkor/actions/memory_search.ex
   when invoked without a session_id (or with a blank one) in context
     then the client is not called and the action returns {:ok, %{result: <no-session non-result message>}}
     and a Logger.warning is emitted naming the agent id and pointing at the upstream
-      jido_ai fix (susu-2 JIDO_CHANGE_SUGGESTIONS.md §2)
+      jido_ai fix (susu JIDO_CHANGE_SUGGESTIONS.md §2)
   when the client returns {:ok, memory_block}
     then the action returns {:ok, %{result: memory_block}}
   when the client returns {:error, reason}
@@ -1078,7 +1075,7 @@ retry-ownership (stack-wide invariant; unit: none — other tree nodes in this f
     owner for the capture chain: ex-capture-buffer (1s / 2s / 4s exponential)
     for all other chains: no owner — the failure surfaces immediately
   failure class: consumer-budget expired (the outermost timeout at the consumer)
-    owner: the consumer (Susu2.ChatAgent 30 s ask_sync)
+    owner: the consumer (Susu.ChatAgent 30 s ask_sync)
       then returns to the user; logs at :warn; does not retry
 ```
 

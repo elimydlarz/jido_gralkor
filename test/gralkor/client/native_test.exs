@@ -3,7 +3,6 @@ defmodule Gralkor.Client.NativeTest do
 
   require Logger
 
-  alias Gralkor.CaptureBuffer
   alias Gralkor.Client.Native
   alias Gralkor.Message
 
@@ -160,48 +159,6 @@ defmodule Gralkor.Client.NativeTest do
       assert_raise ArgumentError, ~r/timeout_ms/, fn ->
         Native.flush_and_await("s1", nil)
       end
-    end
-  end
-
-  describe "ex-capture > observability > when test mode is enabled" do
-    setup do
-      Application.put_env(:jido_gralkor, :test, true)
-      pid = start_supervised!({CaptureBuffer, [flush_callback: fn _g, _a, _u, _o, _t -> :ok end]})
-      on_exit(fn -> Application.delete_env(:jido_gralkor, :test) end)
-      {:ok, buffer: pid}
-    end
-
-    @tag :capture_log
-    test "logs the captured messages" do
-      logs =
-        ExUnit.CaptureLog.capture_log(fn ->
-          :ok =
-            Native.capture("s1", "g", "TestAgent", "Eli", nil, [
-              Message.new("user", "hello"),
-              Message.new("assistant", "hi there")
-            ])
-        end)
-
-      assert logs =~ "[gralkor] [test] capture messages:"
-      assert logs =~ "(user, \"hello\")"
-      assert logs =~ "(assistant, \"hi there\")"
-    end
-  end
-
-  describe "ex-capture > observability > when test mode is disabled" do
-    setup do
-      pid = start_supervised!({CaptureBuffer, [flush_callback: fn _g, _a, _u, _o, _t -> :ok end]})
-      {:ok, buffer: pid}
-    end
-
-    @tag :capture_log
-    test "does not log the captured messages" do
-      logs =
-        ExUnit.CaptureLog.capture_log(fn ->
-          :ok = Native.capture("s1", "g", "TestAgent", "Eli", nil, [Message.new("user", "hello")])
-        end)
-
-      refute logs =~ "[gralkor] [test]"
     end
   end
 end

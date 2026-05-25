@@ -9,8 +9,6 @@ defmodule Gralkor.Client.Native do
 
   @behaviour Gralkor.Client
 
-  require Logger
-
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Config
@@ -61,17 +59,10 @@ defmodule Gralkor.Client.Native do
     raise_if_blank!(:user_name, user_name)
     raise_unless_ontology_or_nil!(ontology)
 
-    if Application.get_env(:jido_gralkor, :test, false),
-      do: Logger.info("[gralkor] [test] capture messages: #{format_test_messages(msgs)}")
-
+    # Capture is silent per-turn — what actually lands in memory is logged at
+    # flush time instead (see `build_flush_callback/2`, gated on the same :test
+    # flag). Logging every buffered turn here just floods the consumer's logs.
     CaptureBuffer.append(session_id, group_id, agent_name, user_name, ontology, msgs)
-  end
-
-  defp format_test_messages(msgs) do
-    msgs
-    |> Enum.map(fn %Gralkor.Message{role: r, content: c} -> "(#{r}, #{inspect(c)})" end)
-    |> Enum.join(", ")
-    |> then(&("[" <> &1 <> "]"))
   end
 
   @impl Gralkor.Client
