@@ -93,13 +93,20 @@ defmodule Gralkor.GraphitiPool do
   is materialised into graphiti's `entity_types`, `edge_types`,
   `edge_type_map`, and `excluded_entity_types` (cached per ontology module
   in the GenServer state).
-  """
-  @spec add_episode(GenServer.server(), String.t(), String.t(), String.t(), module() | nil) ::
-          :ok | {:error, term()}
-  def add_episode(server \\ __MODULE__, group_id, content, source_description, ontology)
 
-  def add_episode(server, group_id, content, source_description, ontology)
-      when is_binary(group_id) and is_binary(content) and is_binary(source_description) do
+  ## Options
+
+    * `:uuid` — optional episode UUID forwarded to graphiti's `add_episode`.
+      When given, graphiti fetches the existing episode and re-runs extraction
+      against it (update path). When nil (default), graphiti generates a new
+      UUID.
+  """
+  @spec add_episode(GenServer.server(), String.t(), String.t(), String.t(), module() | nil, keyword()) ::
+          :ok | {:error, term()}
+  def add_episode(server \\ __MODULE__, group_id, content, source_description, ontology, opts \\ [])
+
+  def add_episode(server, group_id, content, source_description, ontology, opts)
+      when is_binary(group_id) and is_binary(content) and is_binary(source_description) and is_list(opts) do
     instance = __MODULE__.for(server, group_id)
 
     name = "manual-add-" <> Integer.to_string(System.system_time(:millisecond))
@@ -112,6 +119,9 @@ defmodule Gralkor.GraphitiPool do
         nil -> nil
         module when is_atom(module) -> GenServer.call(server, {:materialise, module}, :infinity)
       end
+
+    uuid = Keyword.get(opts, :uuid)
+    uuid_line = if uuid, do: "kwargs['uuid'] = uuid", else: ""
 
     {_, _} =
       Pythonx.eval(
@@ -152,7 +162,8 @@ defmodule Gralkor.GraphitiPool do
           "name" => name,
           "group" => sanitized,
           "_idem" => idempotency_key,
-          "ontology_dicts" => ontology_dicts
+          "ontology_dicts" => ontology_dicts,
+          "uuid" => uuid
         }
       )
 
