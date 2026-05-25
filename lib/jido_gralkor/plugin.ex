@@ -63,41 +63,21 @@ defmodule JidoGralkor.Plugin do
             "JidoGralkor.Plugin requires :agent_name (non-blank string), got #{inspect(agent_name)}"
     end
 
-    ontology = fetch_opt(opts, :ontology)
-    validate_ontology!(ontology)
-
-    {:ok, %{agent_name: agent_name, ontology: ontology}}
+    {:ok, %{agent_name: agent_name}}
   end
 
   defp fetch_opt(opts, key) when is_list(opts), do: Keyword.get(opts, key)
   defp fetch_opt(opts, key) when is_map(opts), do: Map.get(opts, key)
   defp fetch_opt(_, _), do: nil
 
-  defp validate_ontology!(nil), do: :ok
-
-  defp validate_ontology!(module) when is_atom(module) do
-    if Code.ensure_loaded?(module) and function_exported?(module, :__ontology__, 0) do
-      :ok
-    else
-      raise ArgumentError,
-            "JidoGralkor.Plugin :ontology must be a module declared with `use Gralkor.Ontology`, got #{inspect(module)}"
-    end
-  end
-
-  defp validate_ontology!(other) do
-    raise ArgumentError,
-          "JidoGralkor.Plugin :ontology must be a module or nil, got #{inspect(other)}"
-  end
-
   @impl Jido.Plugin
   def handle_signal(%Signal{type: "ai.react.query"} = signal, %{agent: agent}) do
     agent_name = agent_name(agent)
-    ontology = ontology(agent)
 
     extras =
       case thread_id(agent) do
-        nil -> %{agent_name: agent_name, ontology: ontology}
-        id -> %{session_id: id, agent_name: agent_name, ontology: ontology}
+        nil -> %{agent_name: agent_name}
+        id -> %{session_id: id, agent_name: agent_name}
       end
 
     {:ok, {:continue, merge_tool_context(signal, extras)}}
@@ -170,7 +150,6 @@ defmodule JidoGralkor.Plugin do
                    group_id,
                    agent_name(agent),
                    user_name,
-                   ontology(agent),
                    messages
                  ) do
               :ok -> :ok
@@ -200,13 +179,6 @@ defmodule JidoGralkor.Plugin do
     case Map.get(agent.state, :__memory__) do
       %{agent_name: name} when is_binary(name) -> name
       _ -> raise "JidoGralkor.Plugin state missing — mount/2 must run before recall/capture"
-    end
-  end
-
-  defp ontology(agent) do
-    case Map.get(agent.state, :__memory__) do
-      %{ontology: ontology} -> ontology
-      _ -> nil
     end
   end
 

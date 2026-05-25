@@ -156,7 +156,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
 
-      assert [[session_id, group_id, _agent_name, _user_name, _ontology, messages]] = InMemory.captures()
+      assert [[session_id, group_id, _agent_name, _user_name, messages]] = InMemory.captures()
       assert session_id == "thr-42"
       assert group_id == "user_42"
       assert [%Message{role: "user", content: "what did I say?"} | rest] = messages
@@ -190,7 +190,7 @@ defmodule JidoGralkor.PluginTest do
 
       Plugin.handle_signal(signal, context(ag))
 
-      assert [[_session_id, _group_id, _agent_name, "Eli", _ontology, _messages]] = InMemory.captures()
+      assert [[_session_id, _group_id, _agent_name, "Eli", _messages]] = InMemory.captures()
     end
 
     test "if agent.state[:user_name] is missing then capture raises ArgumentError" do
@@ -277,7 +277,7 @@ defmodule JidoGralkor.PluginTest do
 
       Plugin.handle_signal(signal, context(ag))
 
-      assert [[session_id, _group_id, _agent_name, _user_name, _ontology, messages]] = InMemory.captures()
+      assert [[session_id, _group_id, _agent_name, _user_name, messages]] = InMemory.captures()
       assert session_id == "thr-fail"
 
       user_msg = Enum.find(messages, &(&1.role == "user"))
@@ -343,7 +343,9 @@ defmodule JidoGralkor.PluginTest do
         )
 
       signal =
-        Signal.new!("ai.request.completed", %{request_id: request_id, result: "a"}, source: "/test")
+        Signal.new!("ai.request.completed", %{request_id: request_id, result: "a"},
+          source: "/test"
+        )
 
       Plugin.handle_signal(signal, context(ag))
 
@@ -366,7 +368,9 @@ defmodule JidoGralkor.PluginTest do
         )
 
       signal =
-        Signal.new!("ai.request.completed", %{request_id: request_id, result: "a"}, source: "/test")
+        Signal.new!("ai.request.completed", %{request_id: request_id, result: "a"},
+          source: "/test"
+        )
 
       assert_raise RuntimeError, ~r/Gralkor capture failed.*gralkor_unreachable/, fn ->
         Plugin.handle_signal(signal, context(ag))

@@ -135,7 +135,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your co
 
 ## Declaring a custom ontology
 
-By default jido_gralkor passes no ontology to graphiti — it extracts generic entities and edges. To shape extraction against your domain, declare a `Gralkor.Ontology` module and pass it at mount.
+By default jido_gralkor passes no ontology to graphiti — it extracts generic entities and edges. To shape extraction against your domain, declare a `Gralkor.Ontology` module and set it as a deployment-wide config value.
 
 ```elixir
 defmodule MyApp.Ontology do
@@ -167,13 +167,14 @@ end
 - `relationships: :scoped` populates graphiti's `edge_type_map` from your declared `(src, dst)` pairs, so named edges only fire between declared endpoints. `relationships: :open` drops the map; graphiti's default applies. Either way, graphiti always extracts edge candidates — generic fall-through edges between unconstrained pairs are not closed off.
 - Both opts are required at `use` — no defaults; pick deliberately.
 
-Mount it on the plugin:
+Configure it once for the deployment:
 
 ```elixir
-plugins: [{JidoGralkor.Plugin, %{agent_name: "Susu", ontology: MyApp.Ontology}}]
+# config/runtime.exs
+config :jido_gralkor, ontology: MyApp.Ontology
 ```
 
-That's it. The ontology is planted on `tool_context` for every `ai.react.query` and forwarded automatically to every write — capture flushes plus the `MemoryAdd` ReAct tool. graphiti receives `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types` translated from the module's compile-time payload (built once per ontology module, cached by name).
+That's it — the plugin mount stays `%{agent_name: "Susu"}`, with no ontology threaded through it. `Gralkor.Client` resolves the configured ontology on **every** write — capture flushes plus the `memory_add` ReAct tool — so all ingestion shares one schema. graphiti receives `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types` translated from the module's compile-time payload (built once per ontology module, cached by name). A programmatic caller that needs a different ontology for a single add can pass it as the 4th argument to `Gralkor.Client.memory_add/4`.
 
 ## Testing against the in-memory twin
 

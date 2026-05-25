@@ -85,13 +85,13 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > capture/6" do
+      describe "ex-client > capture/5" do
         test "when the backend acknowledges the capture then :ok is returned" do
           unquote(setup_block).()
           configure_capture(:ok)
 
           assert :ok =
-                   client().capture("session-1", "group-1", "TestAgent", "Eli", nil, [
+                   client().capture("session-1", "group-1", "TestAgent", "Eli", [
                      Gralkor.Message.new("user", "hi")
                    ])
         end
@@ -101,19 +101,19 @@ defmodule Gralkor.ClientContract do
           configure_capture({:error, :write_failed})
 
           assert {:error, :write_failed} =
-                   client().capture("session-1", "group-1", "TestAgent", "Eli", nil, [
+                   client().capture("session-1", "group-1", "TestAgent", "Eli", [
                      Gralkor.Message.new("user", "hi")
                    ])
         end
       end
 
-      describe "ex-client > capture/6 if agent_name is missing or blank" do
+      describe "ex-client > capture/5 if agent_name is missing or blank" do
         test "raises ArgumentError when agent_name is blank" do
           unquote(setup_block).()
           configure_capture(:ok)
 
           assert_raise ArgumentError, ~r/agent_name/, fn ->
-            client().capture("session-1", "group-1", "", "Eli", nil, [
+            client().capture("session-1", "group-1", "", "Eli", [
               Gralkor.Message.new("user", "hi")
             ])
           end
@@ -124,20 +124,20 @@ defmodule Gralkor.ClientContract do
           configure_capture(:ok)
 
           assert_raise ArgumentError, ~r/agent_name/, fn ->
-            client().capture("session-1", "group-1", nil, "Eli", nil, [
+            client().capture("session-1", "group-1", nil, "Eli", [
               Gralkor.Message.new("user", "hi")
             ])
           end
         end
       end
 
-      describe "ex-client > capture/6 if user_name is missing or blank" do
+      describe "ex-client > capture/5 if user_name is missing or blank" do
         test "raises ArgumentError when user_name is blank" do
           unquote(setup_block).()
           configure_capture(:ok)
 
           assert_raise ArgumentError, ~r/user_name/, fn ->
-            client().capture("session-1", "group-1", "TestAgent", "", nil, [
+            client().capture("session-1", "group-1", "TestAgent", "", [
               Gralkor.Message.new("user", "hi")
             ])
           end
@@ -148,7 +148,7 @@ defmodule Gralkor.ClientContract do
           configure_capture(:ok)
 
           assert_raise ArgumentError, ~r/user_name/, fn ->
-            client().capture("session-1", "group-1", "TestAgent", nil, nil, [
+            client().capture("session-1", "group-1", "TestAgent", nil, [
               Gralkor.Message.new("user", "hi")
             ])
           end
@@ -214,19 +214,42 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > memory_add/4" do
+      describe "ex-client > memory_add with no ontology override" do
         test "when the backend acknowledges the add then :ok is returned" do
           unquote(setup_block).()
           configure_memory_add(:ok)
 
-          assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual", nil)
+          assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual")
         end
 
         test "if the backend fails then {:error, reason} is returned" do
           unquote(setup_block).()
           configure_memory_add({:error, :extract_failed})
 
-          assert {:error, :extract_failed} = client().memory_add("group-1", "x", nil, nil)
+          assert {:error, :extract_failed} = client().memory_add("group-1", "x", nil)
+        end
+      end
+
+      describe "ex-client > memory_add with an ontology override" do
+        test "when the backend acknowledges the add then :ok is returned" do
+          unquote(setup_block).()
+          configure_memory_add(:ok)
+
+          assert :ok =
+                   client().memory_add(
+                     "group-1",
+                     "Eli prefers concise",
+                     "manual",
+                     Gralkor.TestOntologies.Strict
+                   )
+        end
+
+        test "if the backend fails then {:error, reason} is returned" do
+          unquote(setup_block).()
+          configure_memory_add({:error, :extract_failed})
+
+          assert {:error, :extract_failed} =
+                   client().memory_add("group-1", "x", nil, Gralkor.TestOntologies.Strict)
         end
       end
 

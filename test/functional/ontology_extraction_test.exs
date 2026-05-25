@@ -135,7 +135,7 @@ defmodule Gralkor.OntologyExtractionTest do
     test "nodes are generic Entity, no User or Preference labels" do
       group_id = "ontology_none_#{System.unique_integer([:positive])}"
 
-      :ok = Client.impl().memory_add(group_id, @fixture, "fixture", nil)
+      :ok = Client.impl().memory_add(group_id, @fixture, "fixture")
 
       node_labels = node_labels(group_id)
 
