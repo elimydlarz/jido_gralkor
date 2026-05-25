@@ -172,14 +172,14 @@ defmodule Gralkor.Generalise do
     if test_mode?(),
       do: Logger.info("[gralkor] [test] generalise eval inputs: #{length(eval_inputs)}")
 
-    case evaluate_fn.(evaluate_prompt(eval_inputs)) do
+    case evaluate_fn.(evaluate_prompt(eval_inputs, all_existing)) do
       {:ok, decisions} ->
         Logger.info("[gralkor] generalise evaluated — decisions:#{length(decisions)}")
 
         if test_mode?() and decisions != [],
           do: Logger.info("[gralkor] [test] generalise decisions: #{inspect(decisions)}")
 
-        persist_decisions(decisions, hypotheses, existing_by_idx, add_fn, remove_fn, partition)
+        persist_decisions(decisions, all_existing, add_fn, remove_fn, partition)
         :ok
 
       {:error, reason} ->
