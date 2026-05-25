@@ -9,7 +9,7 @@ defmodule Gralkor.Client.NativeTest do
   describe "ex-client-native > if capture is called with a blank string session_id" do
     test "raises ArgumentError" do
       assert_raise ArgumentError, ~r/session_id/, fn ->
-        Native.capture("", "g", "TestAgent", "Eli", nil, [Message.new("user", "x")])
+        Native.capture("", "g", "TestAgent", "Eli", [Message.new("user", "x")])
       end
     end
   end
@@ -17,7 +17,7 @@ defmodule Gralkor.Client.NativeTest do
   describe "ex-client-native > if capture is called with a nil session_id" do
     test "raises ArgumentError" do
       assert_raise ArgumentError, ~r/session_id/, fn ->
-        Native.capture(nil, "g", "TestAgent", "Eli", nil, [Message.new("user", "x")])
+        Native.capture(nil, "g", "TestAgent", "Eli", [Message.new("user", "x")])
       end
     end
   end
@@ -25,7 +25,7 @@ defmodule Gralkor.Client.NativeTest do
   describe "ex-client-native > if capture is called with a blank agent_name" do
     test "raises ArgumentError" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Native.capture("s1", "g", "", "Eli", nil, [Message.new("user", "x")])
+        Native.capture("s1", "g", "", "Eli", [Message.new("user", "x")])
       end
     end
   end
@@ -33,7 +33,7 @@ defmodule Gralkor.Client.NativeTest do
   describe "ex-client-native > if capture is called with a nil agent_name" do
     test "raises ArgumentError" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Native.capture("s1", "g", nil, "Eli", nil, [Message.new("user", "x")])
+        Native.capture("s1", "g", nil, "Eli", [Message.new("user", "x")])
       end
     end
   end
@@ -41,7 +41,7 @@ defmodule Gralkor.Client.NativeTest do
   describe "ex-client-native > if capture is called with a blank user_name" do
     test "raises ArgumentError" do
       assert_raise ArgumentError, ~r/user_name/, fn ->
-        Native.capture("s1", "g", "TestAgent", "", nil, [Message.new("user", "x")])
+        Native.capture("s1", "g", "TestAgent", "", [Message.new("user", "x")])
       end
     end
   end
@@ -49,7 +49,7 @@ defmodule Gralkor.Client.NativeTest do
   describe "ex-client-native > if capture is called with a nil user_name" do
     test "raises ArgumentError" do
       assert_raise ArgumentError, ~r/user_name/, fn ->
-        Native.capture("s1", "g", "TestAgent", nil, nil, [Message.new("user", "x")])
+        Native.capture("s1", "g", "TestAgent", nil, [Message.new("user", "x")])
       end
     end
   end
@@ -158,6 +158,51 @@ defmodule Gralkor.Client.NativeTest do
     test "raises ArgumentError when timeout_ms is missing" do
       assert_raise ArgumentError, ~r/timeout_ms/, fn ->
         Native.flush_and_await("s1", nil)
+      end
+    end
+  end
+
+  describe "ex-memory-add > ontology validation" do
+    test "raises ArgumentError when ontology is a module that does not export __ontology__/0" do
+      assert_raise ArgumentError, ~r/NotAnOntology/, fn ->
+        Native.memory_add("g", "content", "manual", Gralkor.TestOntologies.NotAnOntology)
+      end
+    end
+
+    test "raises ArgumentError when ontology is a non-module value" do
+      assert_raise ArgumentError, ~r/not-a-module/, fn ->
+        Native.memory_add("g", "content", "manual", "not-a-module")
+      end
+    end
+  end
+
+  describe "ex-memory-add > arity" do
+    test "memory_add/3 is exported" do
+      assert function_exported?(Native, :memory_add, 3)
+    end
+
+    test "memory_add/4 is exported" do
+      assert function_exported?(Native, :memory_add, 4)
+    end
+  end
+
+  describe "ex-memory-add > memory_add/3 delegates to memory_add/4 with Config.ontology/0" do
+    setup do
+      original = Application.get_env(:jido_gralkor, :ontology)
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :ontology)
+          v -> Application.put_env(:jido_gralkor, :ontology, v)
+        end
+      end)
+    end
+
+    test "when :ontology is unset, memory_add/3 gets past the guard (nil is valid)" do
+      Application.delete_env(:jido_gralkor, :ontology)
+
+      assert_raise RuntimeError, ~r/graphiti/, fn ->
+        Native.memory_add("g", "content", "manual")
       end
     end
   end
