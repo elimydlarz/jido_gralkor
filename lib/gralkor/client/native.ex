@@ -53,16 +53,15 @@ defmodule Gralkor.Client.Native do
   end
 
   @impl Gralkor.Client
-  def capture(session_id, group_id, agent_name, user_name, ontology, msgs) do
+  def capture(session_id, group_id, agent_name, user_name, msgs) do
     raise_if_blank!(:session_id, session_id)
     raise_if_blank!(:agent_name, agent_name)
     raise_if_blank!(:user_name, user_name)
-    raise_unless_ontology_or_nil!(ontology)
 
     # Capture is silent per-turn — what actually lands in memory is logged at
     # flush time instead (see `build_flush_callback/2`, gated on the same :test
     # flag). Logging every buffered turn here just floods the consumer's logs.
-    CaptureBuffer.append(session_id, group_id, agent_name, user_name, ontology, msgs)
+    CaptureBuffer.append(session_id, group_id, agent_name, user_name, Config.ontology(), msgs)
   end
 
   @impl Gralkor.Client
