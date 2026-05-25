@@ -137,30 +137,29 @@ defmodule Gralkor.Generalise do
     else
 
     # Search for existing generalisations related to each hypothesis
-    existing_by_idx =
+    all_existing =
       hypotheses
       |> Enum.with_index()
-      |> Enum.map(fn {h, idx} ->
+      |> Enum.flat_map(fn {h, idx} ->
         query = Map.get(h, :content, "")
         case search_fn.(partition, query, max_results) do
           {:ok, raw} ->
-            decoded =
-              Enum.reduce(raw, [], fn fact, acc ->
-                case Generalisation.decode(fact) do
-                  {:ok, gen, _plain} -> [gen | acc]
-                  {:error, :not_a_generalisation} -> acc
-                end
-              end)
-              |> Enum.reverse()
-
-            {idx, decoded}
+            Enum.reduce(raw, [], fn fact, acc ->
+              case Generalisation.decode(fact) do
+                {:ok, gen, _plain} -> [gen | acc]
+                {:error, :not_a_generalisation} -> acc
+              end
+            end)
+            |> Enum.reverse()
 
           {:error, reason} ->
             Logger.warning("[gralkor] generalise search failed for hypothesis ##{idx}: #{inspect(reason)}")
-            {idx, []}
+            []
         end
       end)
-      |> Map.new()
+      |> Enum.uniq_by(& &1.id)
+
+    Logger.info("[gralkor] generalise found #{length(all_existing)} unique existing generalisations")
 
     # Build evaluate prompt: hypothesis + existing generalisations
     eval_inputs =
