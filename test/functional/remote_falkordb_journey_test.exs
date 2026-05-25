@@ -1,16 +1,18 @@
 defmodule Gralkor.RemoteFalkorDbJourneyTest do
   @moduledoc """
   End-to-end functional test for the remote FalkorDB path: real PythonX
-  runtime, real graphiti-core, real Gemini, real network FalkorDB
+  runtime, real graphiti-core, real network FalkorDB
   reached via `falkordb.asyncio.FalkorDB(host:, port:, ...)`. Mirrors
   `jido_memory_journey_test.exs` but proves the `{:remote, kw}` branch
   of `Gralkor.GraphitiPool.default_construct_falkor_db/1`.
 
   Reifies `ex-remote-falkordb-journey` in `gralkor/TEST_TREES.md`.
 
-  Requires `GOOGLE_API_KEY` and `FALKORDB_TEST_HOST` / `FALKORDB_TEST_PORT`
-  to be set (e.g. `docker run -p 6380:6379 falkordb/falkordb`). Missing
-  prerequisites surface as a test failure, not a skip.
+  Requires `DEEPSEEK_API_KEY` (for Elixir-side req_llm calls) and
+  `GOOGLE_API_KEY` (for graphiti's Python-side Gemini clients), plus
+  `FALKORDB_TEST_HOST` / `FALKORDB_TEST_PORT` to be set (e.g.
+  `docker run -p 6380:6379 falkordb/falkordb`). Missing prerequisites
+  surface as a test failure, not a skip.
   """
 
   use ExUnit.Case, async: false
@@ -56,8 +58,8 @@ defmodule Gralkor.RemoteFalkorDbJourneyTest do
         {GraphitiPool,
          [
            falkordb_spec: {:remote, falkordb_kw},
-           llm_model: Config.llm_model(),
-           embedder_model: Config.embedder_model(),
+           llm_model: %{provider: :google, id: "gemini-3.1-flash-lite"},
+           embedder_model: %{provider: :google, id: "gemini-embedding-2-preview"},
            interpret_fn: Native.interpret_callback(),
            warmup: false
          ]}

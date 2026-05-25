@@ -1,8 +1,10 @@
 defmodule Gralkor.JidoMemoryJourneyTest do
   @moduledoc """
   End-to-end functional test: real PythonX runtime, real graphiti-core, real
-  embedded falkordblite, real Gemini via req_llm and via graphiti's bundled
-  clients. Reads `GOOGLE_API_KEY` from `.env` (loaded by `test_helper.exs`).
+  embedded falkordblite. Elixir-side (distill, interpret) uses DeepSeek via
+  req_llm (reads DEEPSEEK_API_KEY from `.env`). Python-side graphiti clients
+  (entity/edge extraction, embeddings, reranker) are still hard-wired to
+  Google Gemini and need GOOGLE_API_KEY.
 
   Reifies the `jido-memory-journey` tree.
   """
@@ -47,8 +49,8 @@ defmodule Gralkor.JidoMemoryJourneyTest do
         {GraphitiPool,
          [
            falkordb_spec: {:embedded, data_dir},
-           llm_model: Config.llm_model(),
-           embedder_model: Config.embedder_model(),
+           llm_model: %{provider: :google, id: "gemini-3.1-flash-lite"},
+           embedder_model: %{provider: :google, id: "gemini-embedding-2-preview"},
            interpret_fn: Native.interpret_callback(),
            warmup: false
          ]}
