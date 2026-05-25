@@ -176,6 +176,17 @@ config :jido_gralkor, ontology: MyApp.Ontology
 
 That's it — the plugin mount stays `%{agent_name: "Susu"}`, with no ontology threaded through it. `Gralkor.Client` resolves the configured ontology on **every** write — capture flushes plus the `memory_add` ReAct tool — so all ingestion shares one schema. graphiti receives `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types` translated from the module's compile-time payload (built once per ontology module, cached by name). A programmatic caller that needs a different ontology for a single add can pass it as the 4th argument to `Gralkor.Client.memory_add/4`.
 
+## Optional: generalisation threshold
+
+After each flush, `Gralkor.Generalise` hypothesises cross-episode patterns and persists the strongest above a configurable confidence threshold (default `0.3`). Raise it to be more conservative, lower to capture more:
+
+```elixir
+# config/runtime.exs
+config :jido_gralkor, generalise_min_confidence: 0.5
+```
+
+Generalisations are stored in a separate graphiti partition (`"#{group_id}:gen"`) and surfaced alongside regular facts during recall with a `<generalisation>` prefix so the interpret LLM can treat them as higher-level patterns.
+
 ## Testing against the in-memory twin
 
 `Gralkor.Client.InMemory` is a real implementation of `Gralkor.Client` (not a mock) that stores canned responses and records every call. Your agent's integration tests can hit it without any network:
