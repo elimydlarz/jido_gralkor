@@ -643,8 +643,14 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
       and the buffered turns are still available to flush on a later call
     if the backend fails before the timeout
       then {:error, reason} is returned
-  when memory_add/4 is called with group_id, content, source_description, and ontology
-    ontology is a module declared with `use Gralkor.Ontology`, or nil
+  when memory_add is called with group_id, content, and source_description (no ontology override)
+    then the write applies the configured global ontology (ex-config-ontology), so a caller is never required to supply one
+    when the backend acknowledges the add
+      then :ok is returned
+    if the backend fails
+      then {:error, reason} is returned
+  when memory_add is called with an additional ontology override (a module declared with `use Gralkor.Ontology`)
+    then the override is applied to the write, the configured global ontology is not consulted (this override is the only per-call ontology surface, and it exists only on the client — the memory_add tool/action does not expose it)
     when the backend acknowledges the add
       then :ok is returned
     if the backend fails
