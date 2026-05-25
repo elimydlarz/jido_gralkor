@@ -579,6 +579,16 @@ ex-config-defaults (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.e
       then it parses to %{provider: :provider, id: "model"}
     if the env var is set to a value missing the ":" separator or with a blank half
       then llm_model/0 / embedder_model/0 raises ArgumentError naming the env var and the bad value
+
+ex-config-ontology (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.exs)
+  Gralkor.Config.ontology/0 resolves the optional deployment-wide ontology from app env (`:jido_gralkor, :ontology`)
+  the ontology is a single global config value — it is never read from agent state, mount opts, or per-call context (those couplings are the fakery this resolver removes); every write path (capture, memory_add) reads it from here
+    when `:jido_gralkor, :ontology` is unset
+      then returns nil (no ontology — every write behaves identically to the pre-ontology slice)
+    when `:jido_gralkor, :ontology` is a module declared via `use Gralkor.Ontology`
+      then returns that module
+    if `:jido_gralkor, :ontology` is a module that does not export `__ontology__/0`, or any non-module value
+      then raises ArgumentError naming the bad value (fail-fast on operator misconfig, at the write boundary rather than as a downstream graphiti failure)
 ```
 
 ## Timeouts (embedded Gralkor adapter)
