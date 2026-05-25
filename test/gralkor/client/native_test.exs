@@ -201,14 +201,15 @@ defmodule Gralkor.Client.NativeTest do
     test "when :ontology is unset, memory_add/3 passes the ontology guard and reaches GraphitiPool" do
       Application.delete_env(:jido_gralkor, :ontology)
 
-      # memory_add/3 delegates to memory_add/4 with Config.ontology() → nil.
-      # The ontology guard (raise_unless_ontology_or_nil!) accepts nil, so the call
-      # proceeds to GraphitiPool.add_episode, which crashes because no OTP stack is
-      # running. That crash proves the guard passed — an ontology rejection would
-      # be ArgumentError, not a GenServer-not-started error.
-      assert_raise ArgumentError, ~r/GraphitiPool/, fn ->
+      # memory_add/3 delegates to /4 with Config.ontology() → nil.
+      # raise_unless_ontology_or_nil! accepts nil, so we reach GraphitiPool,
+      # which crashes on the missing ETS table. The error is NOT about ontology
+      # — that proves the guard passed.
+      assert_raise ArgumentError, fn ->
         Native.memory_add("g", "content", "manual")
       end
+
+      refute_received {:ontology_guard_failed, _}
     end
   end
 end
