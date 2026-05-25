@@ -191,7 +191,7 @@ defmodule Gralkor.Generalise do
     end
   end
 
-  defp persist_decisions(decisions, hypotheses, existing_by_idx, add_fn, remove_fn, partition) do
+  defp persist_decisions(decisions, _hypotheses, existing_by_idx, add_fn, remove_fn, partition) do
     Enum.each(decisions, fn decision ->
       action = normalize_action(Map.get(decision, :action))
       idx = Map.get(decision, :hypothesis_index)
