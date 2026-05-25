@@ -109,6 +109,41 @@ defmodule Gralkor.Client.Native do
     GraphitiPool.build_communities(sanitized)
   end
 
+  @impl Gralkor.Client
+  def generalise(group_id, transcript) do
+    opts = [
+      hypothesise_fn: hypothesise_gen_fn(),
+      evaluate_fn: evaluate_gen_fn(),
+      search_gen_fn: search_gen_fn(),
+      add_episode_fn: &GraphitiPool.add_episode/4,
+      remove_episode_fn: &GraphitiPool.remove_episode/2
+    ]
+
+    Generalise.generalise(group_id, transcript, opts)
+  end
+
+  @impl Gralkor.Client
+  def search_generalisations(group_id, query, max_results) do
+    sanitized = Client.sanitize_group_id(group_id)
+    gen_partition = "#{sanitized}:gen"
+
+    case GraphitiPool.search(gen_partition, query, max_results) do
+      {:ok, raw_facts} ->
+        gens =
+          Enum.flat_map(raw_facts, fn fact ->
+            case Generalisation.decode(fact.fact) do
+              {:ok, gen, _plain} -> [gen]
+              {:error, :not_a_generalisation} -> []
+            end
+          end)
+
+        {:ok, gens}
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
   # ── Wiring ──────────────────────────────────────────────────
 
   defp search_fn do
