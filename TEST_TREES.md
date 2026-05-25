@@ -1022,7 +1022,7 @@ ontology-extraction (functional: test/functional/ontology_extraction_test.exs)
         (the suite does not assert about generic-only nodes — entities: :open lets them appear, and
          extraction is LLM-driven, so their presence is non-deterministic)
   no ontology
-    when memory_add ingests the same fixture with ontology=nil
+    when memory_add ingests the same fixture with no override and no configured ontology (resolved ontology is nil)
       then no node carries the "User" or "Preference" label
         (those types are never declared, so graphiti has no schema to assign them)
       and the graph still contains generic entity nodes — pre-ontology behaviour preserved
