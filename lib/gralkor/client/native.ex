@@ -196,6 +196,75 @@ defmodule Gralkor.Client.Native do
 
   defp turns_fn, do: &CaptureBuffer.turns_for/1
 
+  defp hypothesise_gen_fn do
+    model = Config.llm_model()
+    schema = Generalise.hypothesise_schema()
+
+    fn prompt ->
+      case ReqLLM.generate_object(model, prompt, schema) do
+        {:ok, response} ->
+          object = ReqLLM.Response.object(response)
+          candidates = Map.get(object, :generalisations) || Map.get(object, "generalisations") || []
+          {:ok, candidates}
+
+        {:error, _} = err ->
+          err
+      end
+    end
+  end
+
+  defp evaluate_gen_fn do
+    model = Config.llm_model()
+    schema = Generalise.evaluate_schema()
+
+    fn prompt ->
+      case ReqLLM.generate_object(model, prompt, schema) do
+        {:ok, response} ->
+          object = ReqLLM.Response.object(response)
+          decisions = Map.get(object, :decisions) || Map.get(object, "decisions") || []
+          {:ok, decisions}
+
+        {:error, _} = err ->
+          err
+      end
+    end
+  end
+
+  defp search_gen_fn do
+    fn partition, query, max_results ->
+      case GraphitiPool.search(partition, query, max_results) do
+        {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Map.get(&1, :fact))}
+        {:error, _} = err -> err
+      end
+    end
+  end
+
+  defp gen_recall_search_fn do
+    fn group_id, query, max_results ->
+      sanitized = Client.sanitize_group_id(group_id)
+      gen_partition = "#{sanitized}:gen"
+
+      case GraphitiPool.search(gen_partition, query, max_results) do
+        {:ok, raw_facts} ->
+          formatted =
+            Enum.flat_map(raw_facts, fn fact ->
+              case Generalisation.decode(fact.fact) do
+                {:ok, gen, _plain} ->
+                  ["<generalisation> #{gen.content} (confidence: #{gen.confidence}) (level: #{gen.level})"]
+
+                {:error, :not_a_generalisation} ->
+                  []
+              end
+            end)
+
+          {:ok, formatted}
+
+        {:error, _} = err ->
+          err
+      end
+    end
+  end
+
   defp raise_if_blank!(field, value) when is_binary(value) do
     if String.trim(value) == "" do
       raise ArgumentError,
