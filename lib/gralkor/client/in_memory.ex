@@ -44,6 +44,14 @@ defmodule Gralkor.Client.InMemory do
   def set_build_communities(response),
     do: GenServer.call(__MODULE__, {:set, :build_communities, response})
 
+  @doc "Set the response for the next (and all subsequent) `generalise/2` calls."
+  def set_generalise(response),
+    do: GenServer.call(__MODULE__, {:set, :generalise, response})
+
+  @doc "Set the response for the next (and all subsequent) `search_generalisations/3` calls."
+  def set_search_generalisations(response),
+    do: GenServer.call(__MODULE__, {:set, :search_generalisations, response})
+
   def recalls, do: GenServer.call(__MODULE__, {:calls, :recall})
   def captures, do: GenServer.call(__MODULE__, {:calls, :capture})
   def adds, do: GenServer.call(__MODULE__, {:calls, :memory_add})
