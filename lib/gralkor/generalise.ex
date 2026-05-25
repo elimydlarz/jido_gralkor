@@ -302,7 +302,6 @@ defmodule Gralkor.Generalise do
         #{Map.get(h, :content, "")}
         """
       end)
-      end)
       |> Enum.join("\n---\n")
 
     """
@@ -320,6 +319,8 @@ defmodule Gralkor.Generalise do
     - confidence: final confidence score (may differ from hypothesis)
     - content: the final content to save (may be refined from the hypothesis)
     - existing_id: required for broadens/narrows/contradicts — the id of the affected existing generalisation
+
+    #{existing_section}
 
     #{entries}
     """
