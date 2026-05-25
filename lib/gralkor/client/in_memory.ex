@@ -115,6 +115,14 @@ defmodule Gralkor.Client.InMemory do
   def build_communities(group_id),
     do: GenServer.call(__MODULE__, {:call, :build_communities, [group_id]})
 
+  @impl Gralkor.Client
+  def generalise(group_id, transcript),
+    do: GenServer.call(__MODULE__, {:call, :generalise, [group_id, transcript]})
+
+  @impl Gralkor.Client
+  def search_generalisations(group_id, query, max_results),
+    do: GenServer.call(__MODULE__, {:call, :search_generalisations, [group_id, query, max_results]})
+
   # ── GenServer ──────────────────────────────────────────────
 
   @impl GenServer
