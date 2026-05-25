@@ -294,7 +294,7 @@ ex-flush-and-await (src: lib/gralkor/client/native.ex#flush_and_await/2; unit: t
 ## Tools (embedded Gralkor adapter)
 
 ```
-ex-memory-add (src: lib/gralkor/client/native.ex#memory_add; unit: test/gralkor/client/native_test.exs)
+ex-memory-add (src: lib/gralkor/client/native.ex#memory_add; unit: test/gralkor/client/native_test.exs; integration: none; functional: test/functional/ontology_extraction_test.exs)
   request shape
     when called with group_id, content, source_description and no ontology override
       then group_id is sanitized before ingestion
