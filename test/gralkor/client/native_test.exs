@@ -202,14 +202,12 @@ defmodule Gralkor.Client.NativeTest do
       Application.delete_env(:jido_gralkor, :ontology)
 
       # memory_add/3 delegates to /4 with Config.ontology() → nil.
-      # raise_unless_ontology_or_nil! accepts nil, so we reach GraphitiPool,
-      # which crashes on the missing ETS table. The error is NOT about ontology
-      # — that proves the guard passed.
-      assert_raise ArgumentError, fn ->
+      # raise_unless_ontology_or_nil! accepts nil, so we reach GraphitiPool.
+      # The crash is about ETS (no OTP stack), NOT about ontology — that
+      # proves the guard passed.
+      assert_raise ArgumentError, ~r/ETS/, fn ->
         Native.memory_add("g", "content", "manual")
       end
-
-      refute_received {:ontology_guard_failed, _}
     end
   end
 end
