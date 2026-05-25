@@ -48,7 +48,7 @@ defmodule JidoGralkor.MixProject do
       {:req_llm, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
-      {:muzak, github: "elimydlarz/muzak", branch: "elixir-1.19", only: :test}
+      {:muzak, git: "git@github.com:elimydlarz/muzak.git", branch: "elixir-1.19", only: :test}
     ]
   end
 
