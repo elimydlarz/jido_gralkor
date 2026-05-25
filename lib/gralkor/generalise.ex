@@ -283,26 +283,25 @@ defmodule Gralkor.Generalise do
     """
   end
 
-  defp evaluate_prompt(inputs) do
-    entries =
-      Enum.map(inputs, fn %{hypothesis: h, index: idx, existing: existing} ->
-        existing_text =
-          if existing == [] do
-            "  (no existing generalisations found)"
-          else
-            Enum.map(existing, fn g ->
-              "  - [#{g.id}] (level:#{g.level} confidence:#{g.confidence}) #{g.content}"
-            end)
-            |> Enum.join("\n")
-          end
+  defp evaluate_prompt(inputs, all_existing) do
+    existing_section =
+      if all_existing == [] do
+        "(no existing generalisations in memory)"
+      else
+        "Existing generalisations in memory:\n" <>
+          Enum.map(all_existing, fn g ->
+            "  - [#{g.id}] (level:#{g.level} confidence:#{g.confidence}) #{g.content}"
+          end)
+          |> Enum.join("\n")
+      end
 
+    entries =
+      Enum.map(inputs, fn %{hypothesis: h, index: idx} ->
         """
         Hypothesis ##{idx} (confidence: #{Map.get(h, :confidence, 0)}):
         #{Map.get(h, :content, "")}
-
-        Existing generalisations:
-        #{existing_text}
         """
+      end)
       end)
       |> Enum.join("\n---\n")
 
