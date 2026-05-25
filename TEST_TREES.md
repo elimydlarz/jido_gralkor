@@ -737,13 +737,8 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
   then the session_id is the Jido thread id read from agent.state[:__thread__].id — the plugin does not mint its own id (no ULID at mount, no agent-lifecycle token); Jido's thread lifecycle is the single source of truth
   if mount/2 is called without an :agent_name opt or with a blank :agent_name
     then it raises ArgumentError (every consumer must supply the agent's name; there is no fallback)
-  when mount/2 is called with an :ontology opt
-    then the ontology module is recorded on the plugin state
-    if the value is not a module that exports `__ontology__/0` (i.e. not declared via `use Gralkor.Ontology`)
-      then it raises ArgumentError naming the bad value (fail-fast on consumer typos rather than at first write)
-  when mount/2 is called without an :ontology opt
-    then the ontology defaults to nil and downstream writes pass nil to Gralkor.Client (current behaviour preserved)
-  then mount/2 returns {:ok, %{agent_name: opts[:agent_name], ontology: opts[:ontology] || nil}}
+  then mount/2 returns {:ok, %{agent_name: opts[:agent_name]}}
+  mount/2 accepts no :ontology opt — ontology is deployment-wide config (ex-config-ontology), not per-agent state; the plugin neither records nor threads it
   user_name is read per-turn from `agent.state[:user_name]` — the consumer's responsibility to populate (e.g. via on_before_cmd from the signal's tool_context). Convention key, not a mount opt, because the user behind an agent can change between turns (multi-user deployments), and graph-quality depends on naming the right human in each captured episode.
   when an agent turn begins
     when a thread has committed to agent state
