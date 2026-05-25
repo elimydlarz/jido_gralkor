@@ -666,10 +666,10 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
     if the backend fails
       then {:error, reason} is returned
   agent_name validation
-    if recall/4 or capture/6 is called with a missing or blank agent_name
+    if recall/4 or capture/5 is called with a missing or blank agent_name
       then ArgumentError is raised at the port boundary (no backend call is made)
   user_name validation
-    if capture/6 is called with a missing or blank user_name
+    if capture/5 is called with a missing or blank user_name
       then ArgumentError is raised at the port boundary (no backend call is made)
 
 ex-sanitize-group-id (src: lib/gralkor/client.ex; unit: test/gralkor/client/native_test.exs and test/gralkor/client/in_memory_test.exs)
