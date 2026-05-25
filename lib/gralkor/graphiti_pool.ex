@@ -121,7 +121,6 @@ defmodule Gralkor.GraphitiPool do
       end
 
     uuid = Keyword.get(opts, :uuid)
-    uuid_line = if uuid, do: "kwargs['uuid'] = uuid", else: ""
 
     {_, _} =
       Pythonx.eval(
