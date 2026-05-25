@@ -14,6 +14,8 @@ defmodule Gralkor.Client.Native do
   alias Gralkor.Config
   alias Gralkor.Distill
   alias Gralkor.Format
+  alias Gralkor.Generalise
+  alias Gralkor.Generalisation
   alias Gralkor.GraphitiPool
   alias Gralkor.Interpret
   alias Gralkor.Recall
