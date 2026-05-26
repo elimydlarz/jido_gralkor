@@ -27,7 +27,7 @@ defmodule JidoGralkor.ReActTest do
   end
 
   describe "when overrides has no :llm_opts key on iteration 1" do
-    test "then :llm_opts is added with [tool_choice: {:tool, \"memory_search\"}]" do
+    test "then :llm_opts is added with [tool_choice: %{type: \"function\", function: %{name: \"memory_search\"}}]" do
       out = ReAct.maybe_force_memory_search(%{}, state(1))
 
       assert out.llm_opts == [tool_choice: %{type: "function", function: %{name: "memory_search"}}]
