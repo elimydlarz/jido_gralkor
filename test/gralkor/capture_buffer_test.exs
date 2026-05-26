@@ -92,7 +92,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6if agent_name is missing or blank" do
+  describe "ex-capture-buffer > append/6 ifagent_name is missing or blank" do
     test "raises ArgumentError on blank agent_name" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
         CaptureBuffer.append("s", "g", "", "Eli", nil, [Message.new("user", "x")])
@@ -106,7 +106,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6if user_name is missing or blank" do
+  describe "ex-capture-buffer > append/6 ifuser_name is missing or blank" do
     test "raises ArgumentError on blank user_name" do
       assert_raise ArgumentError, ~r/user_name/, fn ->
         CaptureBuffer.append("s", "g", "Susu", "", nil, [Message.new("user", "x")])
