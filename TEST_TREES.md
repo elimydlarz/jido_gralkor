@@ -1202,11 +1202,9 @@ publish-jido-gralkor (src: scripts/publish.sh; unit: none)
 
 ex-generalise-journey (src: lib/gralkor/generalise.ex, lib/gralkor/graphiti_pool.ex; journey: test/functional/generalise_journey_test.exs)
   after flush with generalise_fn wired
-    then generalisations land in the `:gen` graphiti partition and are searchable via GraphitiPool.search
-    and decoded Generalisation structs carry the correct level, confidence, and generalises fields
-    and recall with gen_search_fn surfaces generalisations in the memory block
-  generalisation lifecycle
-    then a generalisation saved with a known UUID is findable via search
-    then remove_episode deletes it from the partition
-    after removal, the generalisation no longer appears in search results
+    then the generalise pipeline runs and saves episodes to a `_gen` graphiti partition
+    and the generalisation content is searchable via GraphitiPool.search against the `_gen` partition
+  direct add_episode to _gen partition
+    then a generalisation stored via add_episode is findable via GraphitiPool.search
+    and the plain content appears in extracted edge facts
 ```
