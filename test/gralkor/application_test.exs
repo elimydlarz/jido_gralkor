@@ -250,7 +250,7 @@ defmodule Gralkor.ApplicationTest do
 
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "distilled body"} end,
+          distill_fn: fn _ -> {:ok, "summary"} end,
           add_episode_fn: add_fn,
           generalise_fn: fn group_id, body ->
             send(test_pid, {:generalise_called, group_id, body})
@@ -261,8 +261,8 @@ defmodule Gralkor.ApplicationTest do
 
       assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
 
-      # generalise_fn fires via Task.start — wait for the message
-      assert_receive {:generalise_called, "g1", "distilled body"}, 500
+      assert_receive {:generalise_called, "g1", body}, 500
+      assert body =~ "Eli: hi"
     end
 
     test "when generalise_fn is nil (default), no generalise step runs" do
@@ -270,7 +270,7 @@ defmodule Gralkor.ApplicationTest do
 
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "distilled body"} end,
+          distill_fn: fn _ -> {:ok, "summary"} end,
           add_episode_fn: add_fn
         )
 
@@ -284,7 +284,7 @@ defmodule Gralkor.ApplicationTest do
 
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "distilled body"} end,
+          distill_fn: fn _ -> {:ok, "summary"} end,
           add_episode_fn: add_fn,
           generalise_fn: fn _group_id, _body ->
             send(test_pid, {:generalise_called})
@@ -295,7 +295,6 @@ defmodule Gralkor.ApplicationTest do
 
       {:error, :disk_full} = cb.("g1", "TestAgent", "Eli", nil, turns)
 
-      # Give Task.start a moment to fire
       Process.sleep(50)
       refute_received {:generalise_called}
     end
