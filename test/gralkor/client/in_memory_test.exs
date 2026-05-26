@@ -53,4 +53,11 @@ defmodule Gralkor.Client.InMemoryTest do
       assert {:error, :not_configured} = InMemory.recall("g", "TestAgent", "s", "q")
     end
   end
+
+  describe "ex-impl-resolver > when :jido_gralkor/:client is configured to a module" do
+    test "that module is returned" do
+      assert Application.get_env(:jido_gralkor, :client) == Gralkor.Client.InMemory
+      assert Gralkor.Client.impl() == Gralkor.Client.InMemory
+    end
+  end
 end
