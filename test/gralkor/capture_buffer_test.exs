@@ -41,7 +41,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 when calledagain for the same session_id" do
+  describe "ex-capture-buffer > append/6 when called again for the same session_id" do
     test "the new turn is appended and prior turns remain buffered" do
       t1 = [Message.new("user", "first")]
       t2 = [Message.new("user", "second")]
