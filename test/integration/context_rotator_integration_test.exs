@@ -113,8 +113,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "while a thread is committed and the flush fails" do
-    test "the error is propagated and the active session id is unchanged" do
+  describe "while a thread is committed, when rotate_now/2 is called and the flush fails" do
+    test "then the error is propagated as {:error, reason} and the active session id is unchanged and the agent process is still running" do
       InMemory.set_flush_and_await({:error, :backend_down})
       pid = start_agent()
       seed_thread(pid, "pre-rotation")
