@@ -242,4 +242,62 @@ defmodule Gralkor.ApplicationTest do
       refute logs =~ "[gralkor] [test]"
     end
   end
+
+  describe "ex-application > build_flush_callback > when generalise_fn is provided" do
+    test "after add_episode_fn returns :ok, generalise_fn is called with (group_id, body)" do
+      add_fn = fn _g, _b, _s, _o -> :ok end
+      test_pid = self()
+
+      cb =
+        App.build_flush_callback(nil,
+          distill_fn: fn _ -> {:ok, "distilled body"} end,
+          add_episode_fn: add_fn,
+          generalise_fn: fn group_id, body ->
+            send(test_pid, {:generalise_called, group_id, body})
+          end
+        )
+
+      turns = [[Gralkor.Message.new("user", "hi")]]
+
+      assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
+
+      # generalise_fn fires via Task.start — wait for the message
+      assert_receive {:generalise_called, "g1", "distilled body"}, 500
+    end
+
+    test "when generalise_fn is nil (default), no generalise step runs" do
+      add_fn = fn _g, _b, _s, _o -> :ok end
+
+      cb =
+        App.build_flush_callback(nil,
+          distill_fn: fn _ -> {:ok, "distilled body"} end,
+          add_episode_fn: add_fn
+        )
+
+      turns = [[Gralkor.Message.new("user", "hi")]]
+      assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
+    end
+
+    test "when add_episode_fn fails, generalise_fn is NOT called" do
+      add_fn = fn _g, _b, _s, _o -> {:error, :disk_full} end
+      test_pid = self()
+
+      cb =
+        App.build_flush_callback(nil,
+          distill_fn: fn _ -> {:ok, "distilled body"} end,
+          add_episode_fn: add_fn,
+          generalise_fn: fn _group_id, _body ->
+            send(test_pid, {:generalise_called})
+          end
+        )
+
+      turns = [[Gralkor.Message.new("user", "hi")]]
+
+      {:error, :disk_full} = cb.("g1", "TestAgent", "Eli", nil, turns)
+
+      # Give Task.start a moment to fire
+      Process.sleep(50)
+      refute_received {:generalise_called}
+    end
+  end
 end
