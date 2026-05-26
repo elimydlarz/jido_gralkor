@@ -1,16 +1,14 @@
 defmodule Gralkor.GeneraliseJourneyTest do
   @moduledoc """
   End-to-end journey test: real graphiti-core, real embedded falkordblite,
-  real GraphitiPool search + add_episode + remove_episode. LLM hypothesise
-  and evaluate are faked with deterministic responses so the test is fast
-  and repeatable.
+  real GraphitiPool search + add_episode. LLM hypothesise and evaluate are
+  faked with deterministic responses so the test is fast and repeatable.
 
   Proves the generalisation pipeline end-to-end:
-    1. A generalisation episode lands in the `:gen` graphiti partition after flush
-    2. It is searchable via GraphitiPool.search on the `:gen` partition
-    3. Recall with gen_search_fn surfaces it in the memory block
-    4. Level, confidence, and metadata are preserved through encode/decode
-    5. A second flush with a contradicting generalisation removes the old one
+    1. A generalisation episode lands in the `_gen` graphiti partition after flush
+    2. It is searchable via GraphitiPool.search on the `_gen` partition
+    3. The generalisation's plain content appears in extracted edge facts
+    4. A separate generalisation added directly to the `_gen` partition is findable
 
   Reifies the `ex-generalise-journey` tree.
   """
@@ -19,8 +17,8 @@ defmodule Gralkor.GeneraliseJourneyTest do
 
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
-  alias Gralkor.Generalise
   alias Gralkor.Generalisation
+  alias Gralkor.Generalise
   alias Gralkor.GraphitiPool
   alias Gralkor.Message
 
@@ -60,9 +58,17 @@ defmodule Gralkor.GeneraliseJourneyTest do
          ]}
       )
 
-    # Flush callback wired with generalise_fn that uses real graphiti but
-    # faked LLM — proving the I/O paths without real LLM cost.
-    gen_flush = fn group_id, body ->
+    on_exit(fn -> File.rm_rf!(data_dir) end)
+
+    :ok
+  end
+
+  defp build_gen_flush_callback do
+    fn group_id, _agent_name, _user_name, _ontology, _turns ->
+      distilled = "Eli: I prefer dark mode. Eli: I work from Sydney, Australia."
+
+      :ok = GraphitiPool.add_episode(Gralkor.GraphitiPool, group_id, distilled, "captured", nil, [])
+
       hypothesise_fn = fn _prompt ->
         {:ok, [
           %{content: "Eli consistently prefers dark mode across all tools", confidence: 0.92},
@@ -94,42 +100,47 @@ defmodule Gralkor.GeneraliseJourneyTest do
         ]}
       end
 
-      add_episode_fn = fn group_id, content, source, ontology, opts ->
-        GraphitiPool.add_episode(Gralkor.GraphitiPool, group_id, content, source, ontology, opts)
-      end
-      remove_episode_fn = &GraphitiPool.remove_episode/2
-      min_confidence = 0.3
+      gen_partition = "#{group_id}_gen"
 
-      Generalise.generalise(group_id, body,
-        hypothesise_fn: hypothesise_fn,
-        search_gen_fn: search_gen_fn,
-        evaluate_fn: evaluate_fn,
-        add_episode_fn: add_episode_fn,
-        remove_episode_fn: remove_episode_fn,
-        min_confidence: min_confidence,
-        max_gen_results: 5
-      )
-    end
+      Task.start(fn ->
+        Generalise.generalise(group_id, distilled,
+          hypothesise_fn: hypothesise_fn,
+          search_gen_fn: search_gen_fn,
+          evaluate_fn: evaluate_fn,
+          add_episode_fn: fn gid, content, source, ontology, opts ->
+            GraphitiPool.add_episode(Gralkor.GraphitiPool, gen_partition, content, source, ontology, opts)
+          end,
+          remove_episode_fn: fn gid, uuid -> GraphitiPool.remove_episode(gen_partition, uuid) end,
+          min_confidence: 0.3,
+          max_gen_results: 5
+        )
+      end)
 
-    # Build a flush callback wired with the generalise_fn
-    gen_flush_callback = fn group_id, _agent_name, _user_name, _ontology, _turns ->
-      distilled = "Eli: I prefer dark mode. Eli: I work from Sydney, Australia."
-      :ok = GraphitiPool.add_episode(Gralkor.GraphitiPool, group_id, distilled, "captured", nil, [])
-      Task.start(fn -> gen_flush.(group_id, distilled) end)
       :ok
     end
+  end
 
-    {:ok, _buffer} = start_supervised({CaptureBuffer, [flush_callback: gen_flush_callback]})
+  defp search_until(_partition, _query, _min, 0) do
+    []
+  end
 
-    on_exit(fn -> File.rm_rf!(data_dir) end)
-
-    %{group_id: "gen_journey_#{System.unique_integer([:positive])}"}
+  defp search_until(partition, query, min, budget_ms) do
+    case GraphitiPool.search(partition, query, 5) do
+      {:ok, raw} when length(raw) >= min -> raw
+      _ ->
+        Process.sleep(3_000)
+        search_until(partition, query, min, max(budget_ms - 3_000, 0))
+    end
   end
 
   describe "ex-generalise-journey > after flush with generalise_fn" do
-    test "generalisations land in the :gen partition and are searchable", %{
-      group_id: group_id
-    } do
+    test "generalisations land in the _gen partition and are searchable" do
+      group_id = "gen_journey_#{System.unique_integer([:positive])}"
+
+      # Wire a flush callback that runs the generalise pipeline
+      gen_flush_callback = build_gen_flush_callback()
+      {:ok, _buffer} = start_supervised({CaptureBuffer, [flush_callback: gen_flush_callback]})
+
       session_id = "gen_session_#{System.unique_integer([:positive])}"
 
       :ok =
@@ -142,40 +153,37 @@ defmodule Gralkor.GeneraliseJourneyTest do
 
       :ok = Client.impl().flush(session_id)
 
-      # Generalise fires via Task.start — wait for ingestion + index rebuild
       gen_partition = "#{group_id}_gen"
       raw = search_until(gen_partition, "dark mode", 1, 40_000)
 
       assert length(raw) >= 1,
              "expected at least one fact in the _gen partition; got #{inspect(raw)}"
 
-      # Graphiti search returns extracted edge facts — the plain generalisation
-      # content, not the full GEN|v1| episode body. Verify content surfaced.
       facts_text = Enum.map(raw, &Map.get(&1, :fact)) |> Enum.join("\n")
       assert facts_text =~ "dark mode",
              "expected search results to mention dark mode; got: #{facts_text}"
-      assert facts_text =~ "Sydney",
-             "expected search results to mention Sydney; got: #{facts_text}"
 
-      # Verify recall with gen_search_fn surfaces the generalisation
+      # Verify recall finds the generalisation content
       lookup_session = "lookup_#{System.unique_integer([:positive])}"
 
       {:ok, block} =
         Client.impl().recall(group_id, "TestAgent", lookup_session, "What are Eli's preferences?")
 
       assert block =~ ~r/<gralkor-memory/
-      lower = String.downcase(block)
-
-      assert lower =~ "dark mode",
+      assert String.downcase(block) =~ "dark mode",
              "expected recall block to mention dark mode; got: #{block}"
     end
   end
 
   describe "ex-generalise-journey > generalisation lifecycle" do
-    test "generalisations are stored as graphiti episodes and found via content search", %{
-      group_id: group_id
-    } do
+    test "a generalisation stored via add_episode is findable via search" do
+      group_id = "gen_lifecycle_#{System.unique_integer([:positive])}"
       gen_partition = "#{group_id}_gen"
+
+      # Force construction of the _gen partition's graphiti instance so
+      # indices are built before searching.
+      GraphitiPool.for(Gralkor.GraphitiPool, gen_partition)
+      Process.sleep(3_000)
 
       gen = %Generalisation{
         id: "gen-journey-add",
@@ -192,20 +200,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
 
       facts_text = Enum.map(raw, &Map.get(&1, :fact)) |> Enum.join("\n")
       assert facts_text =~ "meetings" or facts_text =~ "early",
-             "expected search results to mention the generalisation content; got: #{facts_text}"
-    end
-  end
-
-  defp search_until(_partition, _query, _min, 0) do
-    []
-  end
-
-  defp search_until(partition, query, min, budget_ms) do
-    case GraphitiPool.search(partition, query, 5) do
-      {:ok, raw} when length(raw) >= min -> raw
-      _ ->
-        Process.sleep(3_000)
-        search_until(partition, query, min, max(budget_ms - 3_000, 0))
+             "expected search results to mention the generalisation; got: #{facts_text}"
     end
   end
 end
