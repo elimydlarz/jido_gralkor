@@ -101,8 +101,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "while no thread is committed" do
-    test "rotation is a no-op and the agent process is still running" do
+  describe "while no thread is committed, when rotate_now/2 is called" do
+    test "then it returns :ok without invoking the flush and the agent process is still running" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
 
