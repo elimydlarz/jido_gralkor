@@ -789,7 +789,7 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
     if capture/5 is called with a missing or blank user_name
       then ArgumentError is raised at the port boundary (no backend call is made)
 
-ex-sanitize-group-id (src: lib/gralkor/client.ex; unit: test/gralkor/client/native_test.exs and test/gralkor/client/in_memory_test.exs)
+ex-sanitize-group-id (src: lib/gralkor/client.ex; unit: test/gralkor/client/native_test.exs)
   when the id contains hyphens
     then hyphens are replaced with underscores
   when the id has consecutive hyphens
