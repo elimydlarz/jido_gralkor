@@ -142,16 +142,12 @@ defmodule Gralkor.GeneraliseJourneyTest do
 
       :ok = Client.impl().flush(session_id)
 
-      # Generalise fires via Task.start — wait for it to complete
-      Process.sleep(15_000)
-
+      # Generalise fires via Task.start — wait for ingestion + index rebuild
       gen_partition = "#{group_id}_gen"
-
-      # Search the gen partition for generalisations
-      assert {:ok, raw} = GraphitiPool.search(gen_partition, "dark mode", 5)
+      raw = search_until(gen_partition, "dark mode", 1, 20_000)
 
       assert length(raw) >= 1,
-             "expected at least one generalisation in the :gen partition; got #{inspect(raw)}"
+             "expected at least one generalisation in the _gen partition; got #{inspect(raw)}"
 
       gen_entries =
         Enum.flat_map(raw, fn fact ->
@@ -179,7 +175,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
       assert block =~ ~r/<gralkor-memory/
       lower = String.downcase(block)
 
-      assert lower =~ "dark mode" or lower =~ "dark mode",
+      assert lower =~ "dark mode",
              "expected recall block to mention dark mode; got: #{block}"
     end
   end
