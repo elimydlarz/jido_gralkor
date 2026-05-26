@@ -222,21 +222,12 @@ defmodule Gralkor.GeneraliseJourneyTest do
   end
 
   defp search_until(partition, query, min, budget_ms) do
-    IO.puts("[debug] search_until partition=#{partition} query=#{inspect(query)} budget=#{budget_ms}")
+    # Graphiti's vector index is async — force a rebuild before searching
+    GraphitiPool.build_indices()
 
     case GraphitiPool.search(partition, query, 5) do
-      {:ok, raw} ->
-        IO.puts("[debug] search returned #{length(raw)} results: #{inspect(raw)}")
-
-        if length(raw) >= min,
-          do: raw,
-          else: (
-            Process.sleep(2_000)
-            search_until(partition, query, min, max(budget_ms - 2_000, 0))
-          )
-
-      {:error, reason} ->
-        IO.puts("[debug] search error: #{inspect(reason)}")
+      {:ok, raw} when length(raw) >= min -> raw
+      _ ->
         Process.sleep(2_000)
         search_until(partition, query, min, max(budget_ms - 2_000, 0))
     end
