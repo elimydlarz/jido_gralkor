@@ -6,7 +6,7 @@ defmodule JidoGralkor.ReActTest do
   defp state(iter), do: %{iteration: iter}
 
   describe "when state.iteration == 1 (first ReAct turn)" do
-    test "the returned overrides carry llm_opts: [tool_choice: {:tool, \"memory_search\"}], folded into existing :llm_opts" do
+    test "the returned overrides carry llm_opts: [tool_choice: %{type: \"function\", function: %{name: \"memory_search\"}}], folded into existing :llm_opts" do
       overrides = %{messages: [:msg], llm_opts: [other: :preserved]}
 
       out = ReAct.maybe_force_memory_search(overrides, state(1))
