@@ -230,7 +230,7 @@ defmodule Gralkor.Generalise do
             remove_fn.(partition, existing_id)
           end
 
-          case add_fn.(partition, body, "generalisation", nil, uuid: gen.id) do
+          case add_fn.(partition, body, "generalisation", nil, []) do
             :ok ->
               Logger.info(
                 "[gralkor] generalise #{action} — saved (id:#{gen.id} level:#{level} confidence:#{confidence})"
