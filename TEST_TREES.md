@@ -1199,4 +1199,14 @@ publish-jido-gralkor (src: scripts/publish.sh; unit: none)
   when level is current and publish fails
     then no rollback runs
     and mix.exs remains unchanged
+
+ex-generalise-journey (src: lib/gralkor/generalise.ex, lib/gralkor/graphiti_pool.ex; journey: test/functional/generalise_journey_test.exs)
+  after flush with generalise_fn wired
+    then generalisations land in the `:gen` graphiti partition and are searchable via GraphitiPool.search
+    and decoded Generalisation structs carry the correct level, confidence, and generalises fields
+    and recall with gen_search_fn surfaces generalisations in the memory block
+  generalisation lifecycle
+    then a generalisation saved with a known UUID is findable via search
+    then remove_episode deletes it from the partition
+    after removal, the generalisation no longer appears in search results
 ```
