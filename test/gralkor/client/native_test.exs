@@ -3,8 +3,22 @@ defmodule Gralkor.Client.NativeTest do
 
   require Logger
 
+  alias Gralkor.CaptureBuffer
+  alias Gralkor.Client
   alias Gralkor.Client.Native
   alias Gralkor.Message
+
+  defp start_capture_buffer(_ctx) do
+    test_pid = self()
+
+    callback = fn group, agent, user, ontology, turns ->
+      send(test_pid, {:flushed, group, agent, user, ontology, turns})
+      :ok
+    end
+
+    start_supervised!({CaptureBuffer, flush_callback: callback, retries: []})
+    :ok
+  end
 
   describe "ex-client-native > if capture is called with a blank string session_id" do
     test "raises ArgumentError" do
