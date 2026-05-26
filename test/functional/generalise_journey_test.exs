@@ -130,7 +130,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
       session_id = "gen_session_#{System.unique_integer([:positive])}"
 
       :ok =
-        Client.impl().capture(session_id, group_id, "TestAgent", "Eli", nil, [
+        Client.impl().capture(session_id, group_id, "TestAgent", "Eli", [
           Message.new("user", "I prefer dark mode for all my tools."),
           Message.new("assistant", "Got it — dark mode across the board."),
           Message.new("user", "I'm based in Sydney, Australia."),
