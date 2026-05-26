@@ -196,10 +196,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
       body = Generalisation.encode(gen)
       :ok = GraphitiPool.add_episode(Gralkor.GraphitiPool, gen_partition, body, "generalisation", nil, [])
 
-      # Graphiti add_episode is async — wait for ingestion
-      Process.sleep(10_000)
-
-      assert {:ok, raw} = GraphitiPool.search(gen_partition, "meetings early", 5)
+      raw = search_until(gen_partition, "meetings early", 1, 20_000)
       assert length(raw) >= 1, "expected at least one search result; got #{inspect(raw)}"
 
       gen_entries =
