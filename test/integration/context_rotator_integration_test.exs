@@ -76,8 +76,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "while a thread is committed and the flush returns :ok" do
-    test "the active session id changes and the agent process is still running" do
+  describe "while a thread is committed, when rotate_now/2 is called and the flush returns :ok" do
+    test "then the agent's active session id changes and the agent process is still running" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
       seed_thread(pid, "pre-rotation")
