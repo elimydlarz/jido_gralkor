@@ -284,6 +284,58 @@ defmodule Gralkor.ClientContract do
           assert {:error, :upstream} = client().build_communities("group-1")
         end
       end
+
+      describe "ex-client > generalise/2 when called with a group_id and a transcript" do
+        test "when the pipeline completes then :ok is returned" do
+          unquote(setup_block).()
+          configure_generalise(:ok)
+
+          assert :ok = client().generalise("group-1", "distilled transcript")
+        end
+
+        test "if the pipeline fails (upstream LLM) then :ok is still returned" do
+          unquote(setup_block).()
+          configure_generalise(:ok)
+
+          assert :ok = client().generalise("group-1", "transcript with no patterns")
+        end
+      end
+
+      describe "ex-client > search_generalisations/3 when called" do
+        test "when generalisations are found then {:ok, [%Generalisation{}]} is returned" do
+          unquote(setup_block).()
+
+          gen = %Gralkor.Generalisation{
+            id: "gen-1",
+            content: "User prefers dark mode",
+            level: 0,
+            confidence: 0.85
+          }
+
+          configure_search_generalisations({:ok, [gen]})
+
+          assert {:ok, [%Gralkor.Generalisation{} = g]} =
+                   client().search_generalisations("group-1", "dark mode", 3)
+
+          assert g.id == "gen-1"
+          assert g.content == "User prefers dark mode"
+        end
+
+        test "when no generalisations are found then {:ok, []} is returned" do
+          unquote(setup_block).()
+          configure_search_generalisations({:ok, []})
+
+          assert {:ok, []} = client().search_generalisations("group-1", "nonexistent", 3)
+        end
+
+        test "if the backend fails then {:error, reason} is returned" do
+          unquote(setup_block).()
+          configure_search_generalisations({:error, :search_down})
+
+          assert {:error, :search_down} =
+                   client().search_generalisations("group-1", "query", 5)
+        end
+      end
     end
   end
 end
