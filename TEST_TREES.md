@@ -757,7 +757,7 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
     if the pipeline fails (upstream LLM)
       then :ok is still returned (generalisation is fire-and-forget)
   when search_generalisations/3 is called with a group_id, query, and max_results
-    then the backend searches the "#{group_id}:gen" partition
+    then the backend searches the "#{group_id}_gen" partition
     when generalisations are found
       then {:ok, [%Generalisation{}]} is returned with decoded metadata
     when no generalisations are found
