@@ -286,6 +286,22 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
+    test "target that is not an alias raises" do
+      assert_raise CompileError, ~r/verb Target/, fn ->
+        defmodule NonAliasTargetOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+          entity User do
+            field :handle, :string
+          end
+
+          from User do
+            knows "Ghost"
+          end
+        end
+      end
+    end
+
     test "self-reference works (e.g. trusts User inside from User)" do
       defmodule SelfReferenceOntology do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
