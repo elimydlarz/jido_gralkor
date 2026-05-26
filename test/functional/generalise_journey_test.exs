@@ -144,7 +144,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
 
       # Generalise fires via Task.start — wait for ingestion + index rebuild
       gen_partition = "#{group_id}_gen"
-      raw = search_until(gen_partition, "dark mode", 1, 20_000)
+      raw = search_until(gen_partition, "dark mode", 1, 12_000)
 
       assert length(raw) >= 1,
              "expected at least one generalisation in the _gen partition; got #{inspect(raw)}"
@@ -196,7 +196,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
       body = Generalisation.encode(gen)
       :ok = GraphitiPool.add_episode(Gralkor.GraphitiPool, gen_partition, body, "generalisation", nil, [])
 
-      raw = search_until(gen_partition, "meetings early", 1, 20_000)
+      raw = search_until(gen_partition, "meetings early", 1, 12_000)
       assert length(raw) >= 1, "expected at least one search result; got #{inspect(raw)}"
 
       gen_entries =
