@@ -196,7 +196,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
       }
 
       body = Generalisation.encode(gen)
-      :ok = GraphitiPool.add_episode(gen_partition, body, "generalisation", nil, uuid: gen.id)
+      :ok = GraphitiPool.add_episode(gen_partition, body, "generalisation", nil, [uuid: gen.id])
 
       Process.sleep(5_000)
 
