@@ -90,7 +90,7 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
       assert Process.alive?(pid)
     end
 
-    test "InMemory records one flush_and_await for the pre-rotation session id" do
+    test "then InMemory records one flush_and_await for the pre-rotation session id and the configured flush timeout" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
       seed_thread(pid, "pre-rotation")
