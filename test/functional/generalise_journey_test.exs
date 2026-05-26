@@ -145,7 +145,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
       # Generalise fires via Task.start — wait for it to complete
       Process.sleep(15_000)
 
-      gen_partition = "#{group_id}:gen"
+      gen_partition = "#{group_id}_gen"
 
       # Search the gen partition for generalisations
       assert {:ok, raw} = GraphitiPool.search(gen_partition, "dark mode", 5)
@@ -188,7 +188,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
     test "a contradicting generalisation removes the old one via remove_episode", %{
       group_id: group_id
     } do
-      gen_partition = "#{group_id}:gen"
+      gen_partition = "#{group_id}_gen"
 
       # First: create a generalisation directly in the gen partition
       gen = %Generalisation{
