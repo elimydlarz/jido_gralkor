@@ -127,8 +127,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "while a thread has more entries than keep_last_n and the flush returns :ok" do
-    test "the rotated thread is seeded with the most recent keep_last_n entries (everything before them is dropped from the in-memory context)" do
+  describe "while a thread is committed, when rotate_now/2 is called with keep_last_n > 0 and the pre-rotation thread has more entries than keep_last_n" do
+    test "then the rotated thread is seeded with the most recent keep_last_n entries (everything before them is dropped from the in-memory context)" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
 
