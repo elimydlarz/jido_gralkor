@@ -185,7 +185,7 @@ After each flush, `Gralkor.Generalise` hypothesises cross-episode patterns and p
 config :jido_gralkor, generalise_min_confidence: 0.5
 ```
 
-Generalisations are stored in a separate graphiti partition (`"#{group_id}:gen"`) and surfaced alongside regular facts during recall with a `<generalisation>` prefix so the interpret LLM can treat them as higher-level patterns.
+Generalisations are stored in a separate graphiti partition (`"#{group_id}_gen"`) and surfaced alongside regular facts during recall with a `<generalisation>` prefix so the interpret LLM can treat them as higher-level patterns.
 
 ## Testing against the in-memory twin
 
