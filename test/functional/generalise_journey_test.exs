@@ -94,7 +94,9 @@ defmodule Gralkor.GeneraliseJourneyTest do
         ]}
       end
 
-      add_episode_fn = &GraphitiPool.add_episode/4
+      add_episode_fn = fn group_id, body, source, ontology, opts ->
+        GraphitiPool.add_episode(group_id, body, source, ontology, opts)
+      end
       remove_episode_fn = &GraphitiPool.remove_episode/2
       min_confidence = 0.3
 
