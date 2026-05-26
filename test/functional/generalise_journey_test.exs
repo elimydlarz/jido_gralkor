@@ -116,6 +116,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
       distilled = "Eli: I prefer dark mode. Eli: I work from Sydney, Australia."
       :ok = GraphitiPool.add_episode(group_id, distilled, "captured", nil)
       Task.start(fn -> gen_flush.(group_id, distilled) end)
+      :ok
     end
 
     {:ok, _buffer} = start_supervised({CaptureBuffer, [flush_callback: gen_flush_callback]})
