@@ -18,7 +18,7 @@ defmodule Gralkor.CaptureBufferTest do
     %{pid: pid}
   end
 
-  describe "ex-capture-buffer > append/5 when called for a new session_id" do
+  describe "ex-capture-buffer > append/6 when called for a new session_id" do
     test "an entry is created bound to the sanitized group_id, agent_name, user_name, and the turn" do
       msgs = [Message.new("user", "hi")]
       :ok = CaptureBuffer.append("session-1", "group-1", "Susu", "Eli", nil, msgs)
