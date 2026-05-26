@@ -20,6 +20,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Generalise
+  alias Gralkor.Generalisation
   alias Gralkor.GraphitiPool
   alias Gralkor.Message
 
