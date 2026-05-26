@@ -114,7 +114,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
     # Build a flush callback wired with the generalise_fn
     gen_flush_callback = fn group_id, _agent_name, _user_name, _ontology, _turns ->
       distilled = "Eli: I prefer dark mode. Eli: I work from Sydney, Australia."
-      :ok = GraphitiPool.add_episode(group_id, distilled, "captured", nil)
+      :ok = GraphitiPool.add_episode(Gralkor.GraphitiPool, group_id, distilled, "captured", nil, [])
       Task.start(fn -> gen_flush.(group_id, distilled) end)
       :ok
     end
