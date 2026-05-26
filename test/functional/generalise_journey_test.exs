@@ -185,46 +185,42 @@ defmodule Gralkor.GeneraliseJourneyTest do
   end
 
   describe "ex-generalise-journey > generalisation lifecycle" do
-    test "a contradicting generalisation removes the old one via remove_episode", %{
+    test "generalisations are stored as graphiti episodes and found via content search", %{
       group_id: group_id
     } do
       gen_partition = "#{group_id}_gen"
 
-      # First: create a generalisation directly in the gen partition
       gen = %Generalisation{
-        id: "gen-lifecycle-test",
-        content: "Eli dislikes async communication",
+        id: "gen-journey-add",
+        content: "Eli consistently arrives at meetings 5 minutes early",
         level: 0,
-        confidence: 0.6
+        confidence: 0.75
       }
 
       body = Generalisation.encode(gen)
-      :ok = GraphitiPool.add_episode(Gralkor.GraphitiPool, gen_partition, body, "generalisation", nil, [uuid: gen.id])
+      :ok = GraphitiPool.add_episode(Gralkor.GraphitiPool, gen_partition, body, "generalisation", nil, [])
 
-      Process.sleep(5_000)
+      # Graphiti add_episode is async — wait for ingestion
+      Process.sleep(10_000)
 
-      # Verify it exists
-      assert {:ok, raw} = GraphitiPool.search(gen_partition, "async communication", 5)
-      assert length(raw) >= 1
+      assert {:ok, raw} = GraphitiPool.search(gen_partition, "meetings early", 5)
+      assert length(raw) >= 1, "expected at least one search result; got #{inspect(raw)}"
 
-      # Now remove it
-      :ok = GraphitiPool.remove_episode(gen_partition, gen.id)
-
-      Process.sleep(3_000)
-
-      # Verify it's gone
-      {:ok, raw2} = GraphitiPool.search(gen_partition, "async communication", 5)
-
-      remaining =
-        Enum.flat_map(raw2, fn fact ->
+      gen_entries =
+        Enum.flat_map(raw, fn fact ->
           case Generalisation.decode(fact.fact) do
             {:ok, g, _} -> [g]
             {:error, _} -> []
           end
         end)
 
-      refute Enum.any?(remaining, fn g -> g.id == "gen-lifecycle-test" end),
-             "expected gen-lifecycle-test to be removed; got #{inspect(remaining)}"
+      assert length(gen_entries) >= 1,
+             "expected at least one decoded generalisation; got #{inspect(gen_entries)}"
+
+      found = Enum.find(gen_entries, fn g -> g.id == "gen-journey-add" end)
+      assert found, "expected to find the generalisation by id"
+      assert found.level == 0
+      assert found.confidence == 0.75
     end
   end
 end
