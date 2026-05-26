@@ -67,6 +67,25 @@ defmodule Gralkor.GeneraliseTest do
           min_confidence: 0.3
         ))
     end
+
+    test "candidates are sorted by confidence descending before evaluation" do
+      candidates = [
+        %{content: "c_low", confidence: 0.4},
+        %{content: "c_high", confidence: 0.9},
+        %{content: "c_mid", confidence: 0.6}
+      ]
+
+      eval_fn = fn prompt ->
+        pos = fn s -> :binary.match(prompt, s) |> elem(0) end
+        assert pos.("c_high") < pos.("c_mid")
+        assert pos.("c_mid") < pos.("c_low")
+        {:ok, []}
+      end
+
+      assert :ok =
+               Generalise.generalise("g", "transcript",
+                 default_opts(hypothesise_fn: ok_hypothesise(candidates), evaluate_fn: eval_fn))
+    end
   end
 
   describe "ex-generalise > evaluate > save" do
