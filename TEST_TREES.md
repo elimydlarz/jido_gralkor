@@ -629,7 +629,7 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
       then the Graphiti instance for the sanitized group_id is looked up from a shared ETS cache; on first use it is constructed and inserted, then lives for the lifetime of the GenServer
       then concurrent callers proceed in parallel
     when called against a remote spec
-      then a fresh AsyncFalkorDB and Graphiti instance scoped to the sanitized group_id are constructed and returned, then discarded by the caller after the operation that needed it returns
+      then the AsyncFalkorDB is built once at init and the per-group Graphiti instance is cached in shared ETS and reused — nothing is reconstructed per call, exactly as for embedded
   add_episode/5 (group_id, content, source_description, ontology)
     when called with ontology=nil
       then graphiti's add_episode is invoked without entity_types, edge_types, edge_type_map, or excluded_entity_types — behaviour is identical to the pre-ontology slice

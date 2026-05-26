@@ -285,16 +285,11 @@ defmodule Gralkor.GraphitiPool do
 
     shared = construct_shared_clients.(llm_model, embedder_model)
 
-    falkor_db =
-      case falkordb_spec do
-        {:embedded, _} -> construct_falkor_db.(falkordb_spec)
-        {:remote, _} -> nil
-      end
+    falkor_db = construct_falkor_db.(falkordb_spec)
 
     state = %{
       table: table,
       falkordb_spec: falkordb_spec,
-      construct_falkor_db: construct_falkor_db,
       falkor_db: falkor_db,
       shared: shared,
       construct_instance: construct_instance,
@@ -310,21 +305,14 @@ defmodule Gralkor.GraphitiPool do
   @impl true
   def handle_call({:create, sanitized_group_id}, _from, state) do
     instance =
-      case state.falkordb_spec do
-        {:embedded, _} ->
-          case :ets.lookup(state.table, sanitized_group_id) do
-            [{^sanitized_group_id, existing}] ->
-              existing
+      case :ets.lookup(state.table, sanitized_group_id) do
+        [{^sanitized_group_id, existing}] ->
+          existing
 
-            [] ->
-              fresh = state.construct_instance.(state.falkor_db, state.shared, sanitized_group_id)
-              :ets.insert(state.table, {sanitized_group_id, fresh})
-              fresh
-          end
-
-        {:remote, _} ->
-          falkor_db = state.construct_falkor_db.(state.falkordb_spec)
-          state.construct_instance.(falkor_db, state.shared, sanitized_group_id)
+        [] ->
+          fresh = state.construct_instance.(state.falkor_db, state.shared, sanitized_group_id)
+          :ets.insert(state.table, {sanitized_group_id, fresh})
+          fresh
       end
 
     {:reply, instance, state}
@@ -651,21 +639,14 @@ defmodule Gralkor.GraphitiPool do
   defp ensure_warmup_instance(state) do
     sanitized = "warmup"
 
-    case state.falkordb_spec do
-      {:embedded, _} ->
-        case :ets.lookup(state.table, sanitized) do
-          [{^sanitized, instance}] ->
-            instance
+    case :ets.lookup(state.table, sanitized) do
+      [{^sanitized, instance}] ->
+        instance
 
-          [] ->
-            instance = state.construct_instance.(state.falkor_db, state.shared, sanitized)
-            :ets.insert(state.table, {sanitized, instance})
-            instance
-        end
-
-      {:remote, _} ->
-        falkor_db = state.construct_falkor_db.(state.falkordb_spec)
-        state.construct_instance.(falkor_db, state.shared, sanitized)
+      [] ->
+        instance = state.construct_instance.(state.falkor_db, state.shared, sanitized)
+        :ets.insert(state.table, {sanitized, instance})
+        instance
     end
   end
 

@@ -110,7 +110,7 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "for/1 (group_id), when called against a remote spec" do
-    test "then a fresh AsyncFalkorDB and Graphiti instance scoped to the sanitized group_id are constructed and returned, then discarded by the caller after the operation that needed it returns" do
+    test "then the AsyncFalkorDB is built once at init and the per-group Graphiti instance is cached in shared ETS and reused — nothing is reconstructed per call, exactly as for embedded" do
       falkor_db_count = :counters.new(1, [])
       instance_count = :counters.new(1, [])
 
@@ -119,9 +119,9 @@ defmodule Gralkor.GraphitiPoolTest do
         {:stub_falkor_db, :counters.get(falkor_db_count, 1)}
       end
 
-      construct_instance = fn _db, _shared, group ->
+      construct_instance = fn db, _shared, group ->
         :counters.add(instance_count, 1, 1)
-        {:stub_graphiti, group, :counters.get(instance_count, 1)}
+        {:stub_graphiti, group, db, :counters.get(instance_count, 1)}
       end
 
       %{pid: pid, table: table} =
@@ -130,25 +130,30 @@ defmodule Gralkor.GraphitiPoolTest do
             {:remote, host: "h", port: 1, username: "u", password: "p", ssl: false},
           construct_falkor_db: construct_falkor_db,
           construct_instance: construct_instance,
-          warmup: true
+          warmup: false
         )
 
       assert :counters.get(falkor_db_count, 1) == 1,
-             "warmup must construct a fresh AsyncFalkorDB for remote (state.falkor_db is unset)"
-
-      assert :counters.get(instance_count, 1) == 1
+             "remote AsyncFalkorDB is constructed exactly once, at init"
 
       a = GraphitiPool.for(pid, "with-hyphens")
+      assert :counters.get(instance_count, 1) == 1
+      assert match?({:stub_graphiti, "with_hyphens", {:stub_falkor_db, 1}, _}, a)
+
+      assert [{"with_hyphens", ^a}] = :ets.lookup(table, "with_hyphens")
+
       b = GraphitiPool.for(pid, "with-hyphens")
+      assert b == a
+      assert :counters.get(instance_count, 1) == 1
+      assert :counters.get(falkor_db_count, 1) == 1
 
-      assert :counters.get(falkor_db_count, 1) == 3
-      assert :counters.get(instance_count, 1) == 3
-      refute a == b
-      assert match?({:stub_graphiti, "with_hyphens", _}, a)
-      assert match?({:stub_graphiti, "with_hyphens", _}, b)
+      c = GraphitiPool.for(pid, "another")
+      assert :counters.get(instance_count, 1) == 2
+      refute c == a
+      assert :counters.get(falkor_db_count, 1) == 1
 
-      assert :ets.tab2list(table) == [],
-             "nothing (warmup throwaway nor per-operation Graphiti) is cached for remote"
+      assert Enum.sort(Enum.map(:ets.tab2list(table), fn {k, _} -> k end)) ==
+               ["another", "with_hyphens"]
     end
   end
 
