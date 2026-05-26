@@ -128,7 +128,7 @@ defmodule Gralkor.Client.Native do
   @impl Gralkor.Client
   def search_generalisations(group_id, query, max_results) do
     sanitized = Client.sanitize_group_id(group_id)
-    gen_partition = "#{sanitized}:gen"
+    gen_partition = "#{sanitized}_gen"
 
     case GraphitiPool.search(gen_partition, query, max_results) do
       {:ok, raw_facts} ->
@@ -244,7 +244,7 @@ defmodule Gralkor.Client.Native do
   defp gen_recall_search_fn do
     fn group_id, query, max_results ->
       sanitized = Client.sanitize_group_id(group_id)
-      gen_partition = "#{sanitized}:gen"
+      gen_partition = "#{sanitized}_gen"
 
       case GraphitiPool.search(gen_partition, query, max_results) do
         {:ok, raw_facts} ->
