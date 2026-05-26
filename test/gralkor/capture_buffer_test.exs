@@ -41,7 +41,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 whencalled again for the same session_id" do
+  describe "ex-capture-buffer > append/6 when calledagain for the same session_id" do
     test "the new turn is appended and prior turns remain buffered" do
       t1 = [Message.new("user", "first")]
       t2 = [Message.new("user", "second")]
@@ -52,7 +52,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 whencalled for multiple session_ids" do
+  describe "ex-capture-buffer > append/6 when calledfor multiple session_ids" do
     test "each session_id has an independent entry" do
       :ok = CaptureBuffer.append("a", "g", "Susu", "Eli", nil, [Message.new("user", "a-msg")])
       :ok = CaptureBuffer.append("b", "g", "Susu", "Eli", nil, [Message.new("user", "b-msg")])
@@ -62,7 +62,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 whencalled for an existing session_id with a different group_id" do
+  describe "ex-capture-buffer > append/6 when calledfor an existing session_id with a different group_id" do
     test "raises (sessions are not re-bindable across groups)" do
       :ok = CaptureBuffer.append("s", "g1", "Susu", "Eli", nil, [Message.new("user", "x")])
 
@@ -72,7 +72,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 whencalled for an existing session_id with a different agent_name" do
+  describe "ex-capture-buffer > append/6 when calledfor an existing session_id with a different agent_name" do
     test "raises (sessions are not re-bindable across agents)" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
@@ -82,7 +82,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 whencalled for an existing session_id with a different user_name" do
+  describe "ex-capture-buffer > append/6 when calledfor an existing session_id with a different user_name" do
     test "raises (sessions are not re-bindable across users)" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
