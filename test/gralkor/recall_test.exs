@@ -436,11 +436,10 @@ defmodule Gralkor.RecallTest do
 
   describe "ex-recall > when gen_search_fn is provided" do
     test "gen search runs in parallel alongside the main search" do
-      gen_called = Process.put(:gen_called, false)
+      test_pid = self()
 
       gen_fn = fn _g, _q, max_r ->
-        Process.put(:gen_called, true)
-        assert max_r == 3
+        send(test_pid, {:gen_called, max_r})
         {:ok, ["<generalisation> User prefers dark mode (confidence: 0.85) (level: 0)"]}
       end
 
@@ -458,19 +457,20 @@ defmodule Gralkor.RecallTest do
                  )
                )
 
-      assert Process.get(:gen_called, false)
+      assert_receive {:gen_called, 3}, 500
       assert block =~ "<gralkor-memory"
     end
 
     test "gen results are combined with regular facts before interpretation" do
+      test_pid = self()
+
       gen_fn = fn _g, _q, _max ->
         {:ok, ["<generalisation> pattern (confidence: 0.9) (level: 1)"]}
       end
 
-      saw_combined = Process.put(:interpret_saw_gen, false)
-
       interpret_fn = fn prompt, _budget ->
-        if String.contains?(prompt, "<generalisation> pattern"), do: Process.put(:interpret_saw_gen, true)
+        if String.contains?(prompt, "<generalisation> pattern"),
+          do: send(test_pid, :interpret_saw_gen)
         {:ok, ["- some fact (created 2020) — relevant"]}
       end
 
@@ -487,7 +487,7 @@ defmodule Gralkor.RecallTest do
                  )
                )
 
-      assert Process.get(:interpret_saw_gen, false)
+      assert_receive :interpret_saw_gen, 500
       assert block =~ "<gralkor-memory"
     end
 
