@@ -433,4 +433,114 @@ defmodule Gralkor.RecallTest do
       refute logs =~ "[gralkor] [test]"
     end
   end
+
+  describe "ex-recall > when gen_search_fn is provided" do
+    test "gen search runs in parallel alongside the main search" do
+      gen_called = Process.put(:gen_called, false)
+
+      gen_fn = fn _g, _q, max_r ->
+        Process.put(:gen_called, true)
+        assert max_r == 3
+        {:ok, ["<generalisation> User prefers dark mode (confidence: 0.85) (level: 0)"]}
+      end
+
+      assert {:ok, block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "dark mode",
+                 default_opts(
+                   search_fn: ok_search(["- some fact (created 2020)"]),
+                   interpret_fn: ok_interpret(["- some fact (created 2020) — relevant"]),
+                   gen_search_fn: gen_fn,
+                   max_results: 10
+                 )
+               )
+
+      assert Process.get(:gen_called, false)
+      assert block =~ "<gralkor-memory"
+    end
+
+    test "gen results are combined with regular facts before interpretation" do
+      gen_fn = fn _g, _q, _max ->
+        {:ok, ["<generalisation> pattern (confidence: 0.9) (level: 1)"]}
+      end
+
+      saw_combined = Process.put(:interpret_saw_gen, false)
+
+      interpret_fn = fn prompt, _budget ->
+        if String.contains?(prompt, "<generalisation> pattern"), do: Process.put(:interpret_saw_gen, true)
+        {:ok, ["- some fact (created 2020) — relevant"]}
+      end
+
+      assert {:ok, block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "query",
+                 default_opts(
+                   search_fn: ok_search(["- some fact (created 2020)"]),
+                   gen_search_fn: gen_fn,
+                   interpret_fn: interpret_fn
+                 )
+               )
+
+      assert Process.get(:interpret_saw_gen, false)
+      assert block =~ "<gralkor-memory"
+    end
+
+    test "when gen search fails, recall proceeds with only regular facts" do
+      gen_fn = fn _g, _q, _max -> {:error, :gen_down} end
+
+      assert {:ok, block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "query",
+                 default_opts(
+                   search_fn: ok_search(["- some fact (created 2020)"]),
+                   interpret_fn: ok_interpret(["- some fact (created 2020) — relevant"]),
+                   gen_search_fn: gen_fn
+                 )
+               )
+
+      assert block =~ "<gralkor-memory"
+      assert block =~ "some fact"
+    end
+
+    test "when gen search returns empty, recall proceeds normally" do
+      assert {:ok, block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "query",
+                 default_opts(
+                   search_fn: ok_search(["- some fact (created 2020)"]),
+                   interpret_fn: ok_interpret(["- some fact (created 2020) — relevant"]),
+                   gen_search_fn: fn _g, _q, _max -> {:ok, []} end
+                 )
+               )
+
+      assert block =~ "<gralkor-memory"
+    end
+  end
+
+  describe "ex-recall > when gen_search_fn is absent" do
+    test "no gen search is performed (backward compatible)" do
+      assert {:ok, block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "query",
+                 default_opts()
+               )
+
+      assert block =~ "<gralkor-memory"
+    end
+  end
 end
