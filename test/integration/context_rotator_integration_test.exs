@@ -150,8 +150,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "while a thread is committed and keep_last_n is 0" do
-    test "the rotated thread starts empty when all pre-rotation entries were in the flushed set (nothing to preserve)" do
+  describe "while a thread is committed, when rotate_now/2 is called with keep_last_n: 0 and every pre-rotation entry was in the flushed set (no in-flight)" do
+    test "then the rotated thread starts empty" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
 
