@@ -224,4 +224,99 @@ defmodule Gralkor.Client.NativeTest do
       end
     end
   end
+
+  describe "ex-sanitize-group-id > when the id contains hyphens" do
+    test "hyphens are replaced with underscores" do
+      assert Client.sanitize_group_id("a-b-c") == "a_b_c"
+    end
+  end
+
+  describe "ex-sanitize-group-id > when the id has consecutive hyphens" do
+    test "each hyphen is replaced independently" do
+      assert Client.sanitize_group_id("a--b") == "a__b"
+    end
+  end
+
+  describe "ex-sanitize-group-id > when the id has no hyphens" do
+    test "it is returned unchanged" do
+      assert Client.sanitize_group_id("abc") == "abc"
+    end
+  end
+
+  describe "ex-impl-resolver > when :jido_gralkor/:client is unset in app env" do
+    test "Gralkor.Client.Native is returned" do
+      original = Application.get_env(:jido_gralkor, :client)
+      Application.delete_env(:jido_gralkor, :client)
+
+      try do
+        assert Client.impl() == Native
+      after
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :client)
+          v -> Application.put_env(:jido_gralkor, :client, v)
+        end
+      end
+    end
+  end
+
+  describe "ex-capture > request shape > when called with session_id, group_id, agent_name, user_name, messages" do
+    setup :start_capture_buffer
+
+    test "Gralkor.CaptureBuffer.append/6 is invoked with the sanitized group_id, agent_name, user_name, resolved ontology, and the messages" do
+      msgs = [Message.new("user", "hi")]
+
+      assert :ok = Native.capture("s1", "with-hyphens", "Susu", "Eli", msgs)
+      assert [^msgs] = CaptureBuffer.turns_for("s1")
+
+      :ok = CaptureBuffer.flush("s1")
+      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", nil, [^msgs]}
+    end
+  end
+
+  describe "ex-capture > then returns :ok immediately (does not call distill synchronously)" do
+    setup :start_capture_buffer
+
+    test "returns :ok" do
+      assert :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+    end
+  end
+
+  describe "ex-flush > when called with a session_id with buffered turns" do
+    setup :start_capture_buffer
+
+    test "the buffered turns are scheduled for flush and :ok is returned" do
+      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+
+      assert :ok = Native.flush("s1")
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
+    end
+  end
+
+  describe "ex-flush > when called with a session_id with no buffered turns" do
+    setup :start_capture_buffer
+
+    test ":ok is returned and no work is scheduled" do
+      assert :ok = Native.flush("nope")
+      refute_receive {:flushed, _, _, _, _, _}, 100
+    end
+  end
+
+  describe "ex-flush-and-await > when called with a session_id with buffered turns and a positive timeout_ms" do
+    setup :start_capture_buffer
+
+    test ":ok is returned when the flush completes within the timeout" do
+      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+
+      assert :ok = Native.flush_and_await("s1", 1_000)
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
+    end
+  end
+
+  describe "ex-flush-and-await > when called with a session_id with no buffered turns" do
+    setup :start_capture_buffer
+
+    test ":ok is returned" do
+      assert :ok = Native.flush_and_await("nope", 1_000)
+    end
+  end
 end
