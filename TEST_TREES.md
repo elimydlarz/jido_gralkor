@@ -652,6 +652,24 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
 ## Configuration (embedded Gralkor adapter)
 
 ```
+falkordb-connection (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.exs)
+  Gralkor.Config.falkordb_spec/0 resolves the FalkorDB connection from configuration — this is the value Gralkor.Application reads to pick its child specs (see ex-application). Remote wins over embedded when both are set.
+  when neither :falkordb nor GRALKOR_DATA_DIR is set
+    then returns nil (so the supervisor can run with no children)
+  when GRALKOR_DATA_DIR is set and :falkordb is unset
+    then returns {:embedded, expanded_path}
+    then expands ~ in the data dir
+  when :falkordb is set with :host and :port
+    then returns {:remote, kw} with the keyword list unchanged
+    then remote wins when GRALKOR_DATA_DIR is also set
+    then carries username and password through
+  when :falkordb is misconfigured
+    then raises when :host is missing
+    then raises when :port is missing
+    then raises when :host is blank
+    then raises when :port is not a positive integer
+    then raises when :falkordb is not a keyword list
+
 ex-config-defaults (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.exs)
   when the consumer supplies an LLM provider/model
     then that provider/model is used for all LLM calls (Distill, Interpret, graphiti-core inside PythonX)
