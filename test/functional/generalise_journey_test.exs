@@ -216,4 +216,17 @@ defmodule Gralkor.GeneraliseJourneyTest do
       assert found.confidence == 0.75
     end
   end
+
+  defp search_until(_partition, _query, _min, 0) do
+    []
+  end
+
+  defp search_until(partition, query, min, budget_ms) do
+    case GraphitiPool.search(partition, query, 5) do
+      {:ok, raw} when length(raw) >= min -> raw
+      _ ->
+        Process.sleep(2_000)
+        search_until(partition, query, min, max(budget_ms - 2_000, 0))
+    end
+  end
 end
