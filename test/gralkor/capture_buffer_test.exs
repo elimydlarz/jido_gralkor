@@ -423,6 +423,33 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "ex-capture-buffer > linked flush-task exits when a linked task exits :normal" do
+    test "the {:EXIT, pid, :normal} message is ignored, no log line is emitted, and the buffer keeps running",
+         %{pid: pid} do
+      log =
+        capture_log(fn ->
+          send(pid, {:EXIT, self(), :normal})
+          Process.sleep(20)
+        end)
+
+      assert log == ""
+      assert Process.alive?(pid)
+    end
+  end
+
+  describe "ex-capture-buffer > linked flush-task exits if a process exits for any non-:normal reason (or any other unexpected message arrives)" do
+    test "it is logged at :error and the buffer keeps running", %{pid: pid} do
+      log =
+        capture_log(fn ->
+          send(pid, {:EXIT, self(), :boom})
+          Process.sleep(20)
+        end)
+
+      assert log =~ "[error]"
+      assert Process.alive?(pid)
+    end
+  end
+
   describe "ex-capture-buffer > application shutdown when the supervision tree is stopping" do
     test "Gralkor.CaptureBuffer.terminate/2 drains every pending entry via the flush callback before returning" do
       test_pid = self()

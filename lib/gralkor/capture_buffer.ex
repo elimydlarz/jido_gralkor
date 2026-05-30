@@ -238,6 +238,14 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   @impl true
+  def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
+
+  def handle_info(msg, state) do
+    Logger.error("#{__MODULE__} received unexpected message in handle_info/2: #{inspect(msg)}")
+    {:noreply, state}
+  end
+
+  @impl true
   def terminate(_reason, state) do
     for {_session_id, {group, agent, user, ontology, turns}} <- state.entries do
       do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)

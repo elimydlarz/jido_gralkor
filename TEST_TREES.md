@@ -280,6 +280,13 @@ ex-capture-buffer (src: lib/gralkor/capture_buffer.ex; unit: test/gralkor/captur
       then returns immediately
     when one flush fails and another succeeds
       then the successful flush still completes
+  linked flush-task exits (flush_and_await/2 and flush_all/0 run the flush in Task.async, which links the worker; init/1 traps exits, so a terminating worker delivers {:EXIT, pid, reason} to the buffer)
+    when a linked task exits :normal
+      then the {:EXIT, pid, :normal} message is ignored, no log line is emitted, and the buffer keeps running
+        (the flush already replied via Task.yield/await_many; a normal worker exit is not a fault and must not surface as OTP's default handle_info :error line)
+    if a process exits for any non-:normal reason (or any other unexpected message arrives)
+      then it is logged at :error and the buffer keeps running
+        (a genuine crash stays observable — OTP's default behaviour, made explicit so the :normal case alone can be silenced)
   application shutdown
     when the supervision tree is stopping
       then Gralkor.CaptureBuffer.terminate/2 drains every pending entry via the flush callback before returning
