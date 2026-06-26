@@ -43,6 +43,7 @@ defmodule Gralkor.Generalise do
     evaluate_fn = Keyword.fetch!(opts, :evaluate_fn)
     add_episode_fn = Keyword.fetch!(opts, :add_episode_fn)
     remove_episode_fn = Keyword.get(opts, :remove_episode_fn)
+    ontology = Keyword.get(opts, :ontology)
 
     min_confidence = Keyword.get(opts, :min_confidence, @default_min_confidence)
     max_gen_results = Keyword.get(opts, :max_gen_results, @default_max_gen_results)
@@ -57,7 +58,8 @@ defmodule Gralkor.Generalise do
            add_episode_fn,
            remove_episode_fn,
            gen_partition,
-           max_gen_results
+           max_gen_results,
+           ontology
          ) do
       :ok
     else
@@ -130,7 +132,7 @@ defmodule Gralkor.Generalise do
     end
   end
 
-  defp do_persist(hypotheses, search_fn, evaluate_fn, add_fn, remove_fn, partition, max_results) do
+  defp do_persist(hypotheses, search_fn, evaluate_fn, add_fn, remove_fn, partition, max_results, ontology) do
     if hypotheses == [] do
       Logger.info("[gralkor] generalise no hypotheses above confidence threshold — nothing to persist")
       :ok
@@ -179,7 +181,7 @@ defmodule Gralkor.Generalise do
         if test_mode?() and decisions != [],
           do: Logger.info("[gralkor] [test] generalise decisions: #{inspect(decisions)}")
 
-        persist_decisions(decisions, all_existing, add_fn, remove_fn, partition)
+        persist_decisions(decisions, all_existing, add_fn, remove_fn, partition, ontology)
         :ok
 
       {:error, reason} ->
@@ -189,7 +191,7 @@ defmodule Gralkor.Generalise do
     end
   end
 
-  defp persist_decisions(decisions, all_existing, add_fn, remove_fn, partition) do
+  defp persist_decisions(decisions, all_existing, add_fn, remove_fn, partition, ontology) do
     # Index existing by id for fast lookup
     existing_by_id = Map.new(all_existing, fn g -> {g.id, g} end)
 
@@ -230,7 +232,7 @@ defmodule Gralkor.Generalise do
             remove_fn.(partition, existing_id)
           end
 
-          case add_fn.(partition, body, "generalisation", nil, []) do
+          case add_fn.(partition, body, "generalisation", ontology, []) do
             :ok ->
               Logger.info(
                 "[gralkor] generalise #{action} — saved (id:#{gen.id} level:#{level} confidence:#{confidence})"

@@ -590,11 +590,23 @@ ex-application (src: lib/gralkor/application.ex; unit: test/gralkor/application_
       then Application.start/2 raises ArgumentError before any child starts (fail-fast on operator misconfig)
   build_flush_callback/2
     then the returned callback distills turns via Distill.format_transcript, then calls add_episode_fn with source "captured"
+    when add_episode_fn returns :ok
+      then "[gralkor] capture flushed — group:<g> bodyChars:<n> <ms>ms" is logged at :info
+      and :ok is returned
+    when add_episode_fn returns {:error, reason}
+      then no "capture flushed" line is logged (a failed attempt is not mislabelled as a success)
+      and a concise "[gralkor] capture flush failed — group:<g> <reason> (retrying)" is logged at :warning
+      and the {:error, reason} is returned unchanged so the CaptureBuffer retry owns recovery
     when generalise_fn is provided in deps and add_episode_fn returns :ok
       then a fire-and-forget Task.start calls generalise_fn.(group_id, transcript_body)
       and the generalise failure does not affect the flush result
     when generalise_fn is nil (default)
       then no generalise step runs (backward compatible)
+  generalise_fn_for_flush/0 — the composition decision the production tree uses to pick build_flush_callback's generalise_fn dep (config-gated auto-generalise-on-flush; the generalise capability itself stays available regardless via Gralkor.Client.generalise/2, search_generalisations/3, and the recall `<generalisation>` inject — none of those are gated)
+    when `:jido_gralkor, :generalise_on_flush` is true
+      then returns &Gralkor.Client.Native.generalise/2, so build_children wires it into the CaptureBuffer flush_callback and a successful flush fires generalise fire-and-forget
+    when `:jido_gralkor, :generalise_on_flush` is false or unset (default)
+      then returns nil, so no generalise step runs on flush
 
 ex-python-runtime (src: lib/gralkor/python.ex; unit: test/gralkor/python_test.exs)
   Gralkor.Python's init/1 runs the boot sequence synchronously and returns only when ready
@@ -645,9 +657,15 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
       then `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types` are forwarded to graphiti's add_episode as appropriate (see ontology materialisation)
     when called with opts[:uuid]
       then the uuid is forwarded to graphiti's add_episode(..., uuid=...), enabling episode identity control (update via re-extraction)
+    when graphiti's add_episode raises (e.g. a transient FalkorDB connection reset)
+      then {:error, {:python, reason}} is returned with reason summarised to the Python error's class and message — not the full multi-line traceback
+      then the stderr diagnostic is a single concise line — the embedding search vector and full Python traceback are not dumped
   remove_episode/3 (server, group_id, episode_uuid)
     when called
       then graphiti's remove_episode(uuid) is invoked, deleting the episode and its orphaned edges/nodes
+    when graphiti's remove_episode raises
+      then {:error, {:python, reason}} is returned with reason summarised to the Python error's class and message — not the full multi-line traceback
+      then the stderr diagnostic is a single concise line, not a full traceback dump
   ontology materialisation (the Pythonx-backed half — the pure inclusion/shape decision is ex-ontology-graphiti-spec)
     when an ontology module is materialised
       then the dict carries exactly the spec-selected keys (omitting unselected) and reuses them per module

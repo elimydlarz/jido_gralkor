@@ -176,16 +176,33 @@ config :jido_gralkor, ontology: MyApp.Ontology
 
 That's it — the plugin mount stays `%{agent_name: "Susu"}`, with no ontology threaded through it. `Gralkor.Client` resolves the configured ontology on **every** write — capture flushes plus the `memory_add` ReAct tool — so all ingestion shares one schema. graphiti receives `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types` translated from the module's compile-time payload (built once per ontology module, cached by name). A programmatic caller that needs a different ontology for a single add can pass it as the 4th argument to `Gralkor.Client.memory_add/4`.
 
-## Optional: generalisation threshold
+## Generalisation
 
-After each flush, `Gralkor.Generalise` hypothesises cross-episode patterns and persists the strongest above a configurable confidence threshold (default `0.3`). Raise it to be more conservative, lower to capture more:
+`Gralkor.Generalise` hypothesises cross-episode patterns from a flushed transcript, reconciles them against what it already knows, and persists the survivors. Generalisations are stored in a separate graphiti partition (`"#{group_id}_gen"`) and surfaced alongside regular facts during recall with a `<generalisation>` prefix so the interpret LLM can treat them as higher-level patterns. The capability is always available — call `Gralkor.Client.generalise/2` directly, search it with `Gralkor.Client.search_generalisations/3`, and it is injected into recall automatically.
+
+### Optional: run generalisation automatically on flush
+
+Off by default. Set `:generalise_on_flush` to `true` to have a successful capture flush fire generalisation fire-and-forget (it never blocks the turn; failures are logged, not raised):
+
+```elixir
+# config/runtime.exs
+config :jido_gralkor, generalise_on_flush: true
+```
+
+When `false` or unset, no generalisation runs on flush — you drive it yourself via `Gralkor.Client.generalise/2`.
+
+### Optional: confidence threshold
+
+Generalise persists the strongest hypotheses above a configurable confidence threshold (default `0.3`). Raise it to be more conservative, lower to capture more:
 
 ```elixir
 # config/runtime.exs
 config :jido_gralkor, generalise_min_confidence: 0.5
 ```
 
-Generalisations are stored in a separate graphiti partition (`"#{group_id}_gen"`) and surfaced alongside regular facts during recall with a `<generalisation>` prefix so the interpret LLM can treat them as higher-level patterns.
+### Custom ontologies
+
+When a deployment-wide ontology is configured (`config :jido_gralkor, ontology: MyApp.Ontology`), generalisation writes are extracted under that same ontology — generalisations are typed consistently with captured memory. With no ontology configured, generalisations are written untyped, as before.
 
 ## Testing against the in-memory twin
 

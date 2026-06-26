@@ -9,6 +9,7 @@ defmodule Gralkor.ApplicationTest do
     original_env = System.get_env("GRALKOR_DATA_DIR")
     original_client = Application.get_env(:jido_gralkor, :client)
     original_falkordb = Application.get_env(:jido_gralkor, :falkordb)
+    original_gen_on_flush = Application.get_env(:jido_gralkor, :generalise_on_flush)
 
     on_exit(fn ->
       case original_env do
@@ -25,10 +26,16 @@ defmodule Gralkor.ApplicationTest do
         nil -> Application.delete_env(:jido_gralkor, :falkordb)
         v -> Application.put_env(:jido_gralkor, :falkordb, v)
       end
+
+      case original_gen_on_flush do
+        nil -> Application.delete_env(:jido_gralkor, :generalise_on_flush)
+        v -> Application.put_env(:jido_gralkor, :generalise_on_flush, v)
+      end
     end)
 
     Application.delete_env(:jido_gralkor, :client)
     Application.delete_env(:jido_gralkor, :falkordb)
+    Application.delete_env(:jido_gralkor, :generalise_on_flush)
     :ok
   end
 
@@ -243,6 +250,75 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
+  describe "ex-application > build_flush_callback/2 > when add_episode_fn returns :ok" do
+    @tag :capture_log
+    test "logs '[gralkor] capture flushed' at :info and returns :ok" do
+      cb =
+        App.build_flush_callback(nil,
+          distill_fn: fn _ -> {:ok, "summary"} end,
+          add_episode_fn: fn _g, _b, _s, _o -> :ok end
+        )
+
+      turns = [[Gralkor.Message.new("user", "hi")]]
+
+      logs =
+        ExUnit.CaptureLog.capture_log([level: :info], fn ->
+          assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
+        end)
+
+      assert logs =~ "[gralkor] capture flushed"
+      assert logs =~ "group:g1"
+      refute logs =~ "capture flush failed"
+    end
+  end
+
+  describe "ex-application > build_flush_callback/2 > when add_episode_fn returns {:error, reason}" do
+    @tag :capture_log
+    test "does not log 'capture flushed', logs a concise warning, and returns the error unchanged" do
+      cb =
+        App.build_flush_callback(nil,
+          distill_fn: fn _ -> {:ok, "summary"} end,
+          add_episode_fn: fn _g, _b, _s, _o -> {:error, {:python, "ConnectionError: reset by peer"}} end
+        )
+
+      turns = [[Gralkor.Message.new("user", "hi")]]
+
+      logs =
+        ExUnit.CaptureLog.capture_log([level: :info], fn ->
+          assert {:error, {:python, "ConnectionError: reset by peer"}} =
+                   cb.("g1", "TestAgent", "Eli", nil, turns)
+        end)
+
+      refute logs =~ "[gralkor] capture flushed"
+      assert logs =~ "[gralkor] capture flush failed"
+      assert logs =~ "group:g1"
+      assert logs =~ "retrying"
+    end
+
+    @tag :capture_log
+    test "the warning is concise — it does not embed a multi-line traceback blob" do
+      cb =
+        App.build_flush_callback(nil,
+          distill_fn: fn _ -> {:ok, "summary"} end,
+          add_episode_fn: fn _g, _b, _s, _o -> {:error, :disk_full} end
+        )
+
+      turns = [[Gralkor.Message.new("user", "hi")]]
+
+      logs =
+        ExUnit.CaptureLog.capture_log([level: :warning], fn ->
+          assert {:error, :disk_full} = cb.("g1", "TestAgent", "Eli", nil, turns)
+        end)
+
+      flush_line =
+        logs
+        |> String.split("\n")
+        |> Enum.find("", &String.contains?(&1, "capture flush failed"))
+
+      assert flush_line =~ "disk_full"
+    end
+  end
+
   describe "ex-application > build_flush_callback > when generalise_fn is provided" do
     test "after add_episode_fn returns :ok, generalise_fn is called with (group_id, body)" do
       add_fn = fn _g, _b, _s, _o -> :ok end
@@ -297,6 +373,28 @@ defmodule Gralkor.ApplicationTest do
 
       Process.sleep(50)
       refute_received {:generalise_called}
+    end
+  end
+
+  describe "ex-application > generalise_fn_for_flush/0 > when :generalise_on_flush is true" do
+    test "returns &Gralkor.Client.Native.generalise/2, so build_children wires it into the CaptureBuffer flush_callback" do
+      System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
+      Application.put_env(:jido_gralkor, :generalise_on_flush, true)
+
+      assert App.generalise_fn_for_flush() == (&Gralkor.Client.Native.generalise/2)
+
+      [_python, _pool, {Gralkor.CaptureBuffer, opts}] = App.children()
+      assert is_function(Keyword.fetch!(opts, :flush_callback), 5)
+    end
+  end
+
+  describe "ex-application > generalise_fn_for_flush/0 > when :generalise_on_flush is false or unset (default)" do
+    test "returns nil, so no generalise step runs on flush" do
+      Application.delete_env(:jido_gralkor, :generalise_on_flush)
+      assert App.generalise_fn_for_flush() == nil
+
+      Application.put_env(:jido_gralkor, :generalise_on_flush, false)
+      assert App.generalise_fn_for_flush() == nil
     end
   end
 end

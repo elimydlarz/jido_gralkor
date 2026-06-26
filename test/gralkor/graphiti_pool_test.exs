@@ -25,6 +25,77 @@ defmodule Gralkor.GraphitiPoolTest do
     %{pid: pid, table: table}
   end
 
+  describe "add_episode/5, when graphiti's add_episode raises" do
+    test "then {:error, {:python, reason}} is returned with reason summarised to the Python error's class and message — not the full multi-line traceback" do
+      err = %Pythonx.Error{
+        type: nil,
+        value: nil,
+        traceback: nil,
+        lines: [
+          "Traceback (most recent call last):\n",
+          "  File \"/app/graphiti_core/graphiti.py\", line 412, in add_episode\n    await self.driver.execute_query(query, embedding=[0.123, 0.456, 0.789, 0.012])\n",
+          "  File \"/app/redis/asyncio/connection.py\", line 88, in connect\n    raise ConnectionError(msg)\n",
+          "redis.exceptions.ConnectionError: Error 104 connecting to falkor.cloud:6379. Connection reset by peer.\n"
+        ]
+      }
+
+      reason = GraphitiPool.summarise_python_error(err)
+
+      assert reason ==
+               "redis.exceptions.ConnectionError: Error 104 connecting to falkor.cloud:6379. Connection reset by peer."
+
+      refute reason =~ "Traceback"
+      refute reason =~ "embedding="
+      refute reason =~ "\n"
+    end
+
+    test "then {:error, {:python, reason}} is the shape returned by the rescue clause" do
+      err = %Pythonx.Error{
+        type: nil,
+        value: nil,
+        traceback: nil,
+        lines: [
+          "Traceback (most recent call last):\n",
+          "  File \"x.py\", line 1, in <module>\n",
+          "ValueError: bad thing happened\n"
+        ]
+      }
+
+      reason = GraphitiPool.summarise_python_error(err)
+      assert {:error, {:python, ^reason}} = {:error, {:python, reason}}
+      assert reason == "ValueError: bad thing happened"
+    end
+
+    test "when lines is empty it falls back to the Pythonx default message without crashing" do
+      err = %Pythonx.Error{type: nil, value: nil, traceback: nil, lines: []}
+
+      reason = GraphitiPool.summarise_python_error(err)
+      assert is_binary(reason)
+      refute reason == ""
+    end
+  end
+
+  describe "remove_episode/3, when graphiti's remove_episode raises" do
+    test "then {:error, {:python, reason}} is returned with reason summarised to the Python error's class and message — not the full multi-line traceback" do
+      err = %Pythonx.Error{
+        type: nil,
+        value: nil,
+        traceback: nil,
+        lines: [
+          "Traceback (most recent call last):\n",
+          "  File \"/app/graphiti_core/graphiti.py\", line 600, in remove_episode\n    await self.driver.execute_query(delete_query)\n",
+          "RuntimeError: episode not found\n"
+        ]
+      }
+
+      reason = GraphitiPool.summarise_python_error(err)
+
+      assert reason == "RuntimeError: episode not found"
+      refute reason =~ "Traceback"
+      refute reason =~ "\n"
+    end
+  end
+
   describe "for/1 (group_id), when called against an embedded spec" do
     test "then the Graphiti instance for the sanitized group_id is looked up from a shared ETS cache; on first use it is constructed and inserted, then lives for the lifetime of the GenServer" do
       counter = :counters.new(1, [])

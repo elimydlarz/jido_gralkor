@@ -116,6 +116,7 @@ defmodule Gralkor.Client.Native do
       hypothesise_fn: hypothesise_gen_fn(),
       evaluate_fn: evaluate_gen_fn(),
       search_gen_fn: search_gen_fn(),
+      ontology: Config.ontology(),
       add_episode_fn: fn group_id, content, source, ontology, opts ->
         GraphitiPool.add_episode(Gralkor.GraphitiPool, group_id, content, source, ontology, opts)
       end,

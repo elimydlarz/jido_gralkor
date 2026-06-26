@@ -148,12 +148,11 @@ defmodule Gralkor.GraphitiPool do
         if uuid is not None:
             uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
             kwargs['uuid'] = uid
-        import traceback, sys
+        import sys
         try:
             asyncio._gralkor_run(g.add_episode(**kwargs))
-        except BaseException:
-            print("[gralkor-debug] add_episode raised:", file=sys.stderr)
-            traceback.print_exc()
+        except BaseException as e:
+            print(f"[gralkor] add_episode failed: {type(e).__name__}: {e}", file=sys.stderr)
             raise
         None
         """,
@@ -171,7 +170,7 @@ defmodule Gralkor.GraphitiPool do
 
     :ok
   rescue
-    e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
+    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
   end
 
   @doc """
@@ -189,13 +188,12 @@ defmodule Gralkor.GraphitiPool do
     Pythonx.eval(
       """
       import asyncio
-      import traceback, sys
+      import sys
       uid = episode_uuid.decode('utf-8') if isinstance(episode_uuid, (bytes, bytearray)) else episode_uuid
       try:
           asyncio._gralkor_run(g.remove_episode(uid))
-      except BaseException:
-          print("[gralkor-debug] remove_episode raised:", file=sys.stderr)
-          traceback.print_exc()
+      except BaseException as e:
+          print(f"[gralkor] remove_episode failed: {type(e).__name__}: {e}", file=sys.stderr)
           raise
       None
       """,
@@ -204,7 +202,7 @@ defmodule Gralkor.GraphitiPool do
 
     :ok
   rescue
-    e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
+    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
   end
 
   @doc "Build indices and constraints across the whole graph."
@@ -247,6 +245,32 @@ defmodule Gralkor.GraphitiPool do
     {:ok, %{communities: decoded["communities"], edges: decoded["edges"]}}
   rescue
     e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
+  end
+
+  @doc """
+  Build a compact one-line reason from a `Pythonx.Error`.
+
+  `Exception.message/1` on a `Pythonx.Error` joins the *entire* Python
+  traceback (every frame, every embedding vector echoed in a call line) into
+  one multi-line blob. On a transient FalkorDB reset that blob — and the whole
+  embedding search vector inside it — gets dumped to the log via the rescue's
+  `{:error, {:python, reason}}`.
+
+  The struct's `:lines` field is the output of Python's
+  `traceback.format_exception(type, value, traceback)`: a list whose final
+  non-blank entry is the `"ExceptionClass: message"` summary line. We take that
+  one line — the error's class and message — and drop the frames entirely.
+  """
+  @spec summarise_python_error(Pythonx.Error.t()) :: String.t()
+  def summarise_python_error(%Pythonx.Error{lines: lines}) when is_list(lines) do
+    lines
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> List.last()
+    |> case do
+      nil -> "Python exception raised (no detail available)"
+      line -> line
+    end
   end
 
   @fact_keys ~w(fact created_at valid_at invalid_at expired_at)a

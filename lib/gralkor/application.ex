@@ -42,8 +42,16 @@ defmodule Gralkor.Application do
          embedder_model: Config.embedder_model(),
          interpret_fn: Native.interpret_callback()
        ]},
-      {CaptureBuffer, [flush_callback: build_flush_callback(spec)]}
+      {CaptureBuffer,
+       [flush_callback: build_flush_callback(spec, generalise_fn: generalise_fn_for_flush())]}
     ]
+  end
+
+  @doc false
+  def generalise_fn_for_flush do
+    if Application.get_env(:jido_gralkor, :generalise_on_flush, false) do
+      &Native.generalise/2
+    end
   end
 
   @doc false
@@ -64,9 +72,17 @@ defmodule Gralkor.Application do
           result = add_episode_fn.(group_id, body, "captured", ontology)
           ms = System.monotonic_time(:millisecond) - t0
 
-          Logger.info(
-            "[gralkor] capture flushed — group:#{group_id} bodyChars:#{String.length(body)} #{ms}ms"
-          )
+          case result do
+            :ok ->
+              Logger.info(
+                "[gralkor] capture flushed — group:#{group_id} bodyChars:#{String.length(body)} #{ms}ms"
+              )
+
+            {:error, reason} ->
+              Logger.warning(
+                "[gralkor] capture flush failed — group:#{group_id} #{inspect(reason)} (retrying)"
+              )
+          end
 
           if Application.get_env(:jido_gralkor, :test, false),
             do: Logger.info("[gralkor] [test] capture flush body: #{body}")
