@@ -4,7 +4,6 @@ defmodule Gralkor.RecallTest do
   require Logger
 
   alias Gralkor.Client.Native
-  alias Gralkor.Format
   alias Gralkor.GraphitiPool
   alias Gralkor.Message
   alias Gralkor.Recall
