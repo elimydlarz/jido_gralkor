@@ -732,7 +732,10 @@ defmodule Gralkor.RecallTest do
           install_loop_fn: &Gralkor.Python.install_async_runtime/0
         )
 
-      on_exit(fn -> GenServer.stop(pid) end)
+      on_exit(fn ->
+        if Process.alive?(pid), do: GenServer.stop(pid)
+      end)
+
       %{pid: pid}
     end
 
