@@ -63,7 +63,7 @@ defmodule Gralkor.Application do
 
   @doc false
   def build_flush_callback(_config, deps \\ []) do
-    add_episode_fn = Keyword.get(deps, :add_episode_fn, &GraphitiPool.add_episode/4)
+    add_episode_fn = Keyword.get(deps, :add_episode_fn, &GraphitiPool.add_episode/5)
     generalise_fn = Keyword.get(deps, :generalise_fn)
     learn_fn = Keyword.get(deps, :learn_fn)
 
@@ -84,7 +84,7 @@ defmodule Gralkor.Application do
 
         true ->
           t0 = System.monotonic_time(:millisecond)
-          result = add_episode_fn.(group_id, body, "captured", ontology)
+          result = add_episode_fn.(group_id, body, "captured", ontology, [])
           ms = System.monotonic_time(:millisecond) - t0
 
           case result do
@@ -132,10 +132,20 @@ defmodule Gralkor.Application do
   defp write_learnings(_turns, _group_id, _ontology, _agent, _user, nil, _add_episode_fn), do: :ok
 
   defp write_learnings(turns, group_id, ontology, agent_name, user_name, learn_fn, add_episode_fn) do
+    # Learning writes carry the plugin's Learning custom entity type (merged onto
+    # the consumer ontology by GraphitiPool.add_episode via this opt) so graphiti's
+    # extractor emits Learning-typed nodes and SearchFilters(node_labels: ["Learning"])
+    # (ex-recall) returns them. The "captured" transcript write keeps the raw ontology.
     Enum.reduce_while(turns, :ok, fn msgs, :ok ->
       case learn_fn.(msgs, agent_name, user_name) do
         {:ok, %AgentLearning{} = learning} ->
-          case add_episode_fn.(group_id, AgentLearning.to_episode(learning), "learning", ontology) do
+          case add_episode_fn.(
+                 group_id,
+                 AgentLearning.to_episode(learning),
+                 "learning",
+                 ontology,
+                 merge_learning_entity: true
+               ) do
             :ok -> {:cont, :ok}
             {:error, _} = err -> {:halt, err}
           end

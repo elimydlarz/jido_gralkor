@@ -23,6 +23,7 @@ defmodule Gralkor.GraphitiPool do
 
   alias Gralkor.Client
   alias Gralkor.Config
+  alias Gralkor.LearningEntity
 
   @default_table :gralkor_graphiti_instances
 
@@ -55,19 +56,47 @@ defmodule Gralkor.GraphitiPool do
   Run graphiti's hybrid search against `group_id`. Returns
   `{:ok, [%{fact:, created_at:, valid_at:, invalid_at:, expired_at:}]}`
   ready for `Gralkor.Format.format_facts/1`.
+
+  ## Options
+
+    * `:search_filter` — optional `%{node_labels: [String.t()]}` map. When
+      present, a `graphiti_core.search.search_filters.SearchFilters` carrying
+      those `node_labels` is built and forwarded as `g.search`'s
+      `search_filter` kwarg, restricting results to entities stamped with one
+      of those custom-entity labels (e.g. `["Learning"]` for ERL recall). When
+      absent/nil, `g.search` is invoked with `search_filter=None` (graphiti's
+      default hybrid search — the pre-ERL path).
   """
-  @spec search(GenServer.server(), String.t(), String.t(), pos_integer()) ::
+  @spec search(GenServer.server(), String.t(), String.t(), pos_integer(), keyword()) ::
           {:ok, [map()]} | {:error, term()}
-  def search(server \\ __MODULE__, group_id, query, max_results)
-      when is_binary(group_id) and is_binary(query) and is_integer(max_results) do
+  def search(server \\ __MODULE__, group_id, query, max_results, opts \\ [])
+
+  def search(server, group_id, query, max_results, opts)
+      when is_binary(group_id) and is_binary(query) and is_integer(max_results) and is_list(opts) do
     instance = __MODULE__.for(server, group_id)
+
+    filter_map = Keyword.get(opts, :search_filter)
+    node_labels = filter_map && Map.get(filter_map, :node_labels)
+
+    {filter_proxy, _} =
+      if is_list(node_labels) and node_labels != [] do
+        Pythonx.eval(
+          """
+          from graphiti_core.search.search_filters import SearchFilters
+          SearchFilters(node_labels=list(node_labels))
+          """,
+          %{"node_labels" => node_labels}
+        )
+      else
+        Pythonx.eval("None", %{})
+      end
 
     {raw, _} =
       Pythonx.eval(
         """
         import asyncio
         q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
-        edges = asyncio._gralkor_run(g.search(q, num_results=max_results))
+        edges = asyncio._gralkor_run(g.search(q, num_results=max_results, search_filter=search_filter))
         [
           {
             "fact": e.fact,
@@ -78,7 +107,12 @@ defmodule Gralkor.GraphitiPool do
           } for e in edges
         ]
         """,
-        %{"g" => instance, "query" => query, "max_results" => max_results}
+        %{
+          "g" => instance,
+          "query" => query,
+          "max_results" => max_results,
+          "search_filter" => filter_proxy
+        }
       )
 
     {:ok, raw |> Pythonx.decode() |> Enum.map(&atomize_keys/1)}
@@ -113,11 +147,18 @@ defmodule Gralkor.GraphitiPool do
     idempotency_key = "key-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
 
     sanitized = Client.sanitize_group_id(group_id)
+    merge_learning? = Keyword.get(opts, :merge_learning_entity, false)
 
     ontology_dicts =
-      case ontology do
-        nil -> nil
-        module when is_atom(module) -> GenServer.call(server, {:materialise, module}, :infinity)
+      cond do
+        ontology == nil and not merge_learning? ->
+          nil
+
+        ontology == nil and merge_learning? ->
+          GenServer.call(server, {:materialise, nil, true}, :infinity)
+
+        is_atom(ontology) ->
+          GenServer.call(server, {:materialise, ontology, merge_learning?}, :infinity)
       end
 
     uuid = Keyword.get(opts, :uuid)
@@ -343,16 +384,30 @@ defmodule Gralkor.GraphitiPool do
   end
 
   @impl true
-  def handle_call({:materialise, module}, _from, state) do
-    case Map.fetch(state.ontology_cache, module) do
+  def handle_call({:materialise, module, merge_learning?}, _from, state) do
+    cache_key = {module, merge_learning?}
+
+    case Map.fetch(state.ontology_cache, cache_key) do
       {:ok, dicts} ->
         {:reply, dicts, state}
 
       :error ->
-        payload = module.__ontology__()
+        payload =
+          case module do
+            nil -> nil
+            mod when is_atom(mod) -> mod.__ontology__()
+          end
+
+        payload = if merge_learning?, do: LearningEntity.merge_ontology_payload(payload), else: payload
         dicts = build_ontology_dicts(payload)
-        {:reply, dicts, %{state | ontology_cache: Map.put(state.ontology_cache, module, dicts)}}
+        {:reply, dicts, %{state | ontology_cache: Map.put(state.ontology_cache, cache_key, dicts)}}
     end
+  end
+
+  # Backward-compatible single-arg form: no Learning merge. Keeps callers that
+  # don't pass the flag on the pre-ERL path.
+  def handle_call({:materialise, module}, from, state) do
+    handle_call({:materialise, module, false}, from, state)
   end
 
   @impl true

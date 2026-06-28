@@ -543,4 +543,128 @@ defmodule Gralkor.RecallTest do
       assert block =~ "<gralkor-memory"
     end
   end
+
+  describe "ex-recall > when a learning_search_fn is provided in opts" do
+    test "the learning search runs unconditionally over the same group_id, seeded with the raw user query" do
+      test_pid = self()
+
+      search_fn = fn _g, q, max_r ->
+        send(test_pid, {:searched, q, max_r})
+        {:ok, ["- main fact (created 2020)"]}
+      end
+
+      learning_fn = fn _g, q, max_r ->
+        send(test_pid, {:learning_searched, q, max_r})
+        {:ok, ["- learned: batch the writes (succeeded)"]}
+      end
+
+      assert {:ok, _block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "how do I schedule X",
+                 default_opts(
+                   search_fn: search_fn,
+                   interpret_fn: ok_interpret(["- main fact (created 2020) — relevant"]),
+                   learning_search_fn: learning_fn,
+                   max_results: 9
+                 )
+               )
+
+      assert_receive {:searched, "how do I schedule X", 9}, 500
+      # The learning search is seeded with the RAW user query (no classification),
+      # with max_results / 3 (min 1).
+      assert_receive {:learning_searched, "how do I schedule X", 3}, 500
+    end
+
+    test "learning results are combined with regular facts before interpretation" do
+      test_pid = self()
+
+      learning_fn = fn _g, _q, _max ->
+        {:ok, ["- learned: batch the writes (succeeded)"]}
+      end
+
+      interpret_fn = fn prompt, _budget ->
+        if String.contains?(prompt, "learned: batch the writes"),
+          do: send(test_pid, :interpret_saw_learning)
+
+        {:ok, ["- main fact (created 2020) — relevant"]}
+      end
+
+      assert {:ok, _block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "query",
+                 default_opts(
+                   search_fn: ok_search(["- main fact (created 2020)"]),
+                   learning_search_fn: learning_fn,
+                   interpret_fn: interpret_fn
+                 )
+               )
+
+      assert_receive :interpret_saw_learning, 500
+    end
+
+    test "when the learning search fails, recall proceeds with only regular facts" do
+      learning_fn = fn _g, _q, _max -> {:error, :search_down} end
+
+      assert {:ok, block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "query",
+                 default_opts(
+                   search_fn: ok_search(["- some fact (created 2020)"]),
+                   interpret_fn: ok_interpret(["- some fact (created 2020) — relevant"]),
+                   learning_search_fn: learning_fn
+                 )
+               )
+
+      assert block =~ "some fact"
+    end
+
+    test "when the learning search returns empty, recall proceeds normally" do
+      assert {:ok, block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "query",
+                 default_opts(
+                   search_fn: ok_search(["- some fact (created 2020)"]),
+                   interpret_fn: ok_interpret(["- some fact (created 2020) — relevant"]),
+                   learning_search_fn: fn _g, _q, _max -> {:ok, []} end
+                 )
+               )
+
+      assert block =~ "<gralkor-memory"
+    end
+  end
+
+  describe "ex-recall > when learning_search_fn is absent" do
+    test "no learning search is performed (backward compatible)" do
+      test_pid = self()
+
+      search_fn = fn _g, q, _max ->
+        send(test_pid, {:searched, q})
+        {:ok, []}
+      end
+
+      assert {:ok, _block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "only-query",
+                 default_opts(search_fn: search_fn)
+               )
+
+      assert_receive {:searched, "only-query"}, 500
+      refute_received {:searched, _other}
+    end
+  end
 end

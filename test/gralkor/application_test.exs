@@ -162,7 +162,7 @@ defmodule Gralkor.ApplicationTest do
   describe "ex-capture > flush > when the transcript episode body is empty" do
     @tag :capture_log
     test "no episode is added and nothing is logged" do
-      add_episode_fn = fn _g, _b, _s, _o -> flunk("add_episode should not be called") end
+      add_episode_fn = fn _g, _b, _s, _o, _opts -> flunk("add_episode should not be called") end
 
       cb =
         App.build_flush_callback(nil,
@@ -182,7 +182,7 @@ defmodule Gralkor.ApplicationTest do
   describe "ex-capture > flush > when the episode is added" do
     @tag :capture_log
     test "logs the group, body size, and how long the add took" do
-      add_episode_fn = fn _g, _b, _s, _o -> :ok end
+      add_episode_fn = fn _g, _b, _s, _o, _opts -> :ok end
 
       cb =
         App.build_flush_callback(nil,
@@ -212,7 +212,7 @@ defmodule Gralkor.ApplicationTest do
 
     @tag :capture_log
     test "also logs the captured transcript body" do
-      add_episode_fn = fn _g, _b, _s, _o -> :ok end
+      add_episode_fn = fn _g, _b, _s, _o, _opts -> :ok end
 
       cb =
         App.build_flush_callback(nil,
@@ -236,7 +236,7 @@ defmodule Gralkor.ApplicationTest do
     test "does not log the captured transcript body" do
       cb =
         App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o -> :ok end
+          add_episode_fn: fn _g, _b, _s, _o, _opts -> :ok end
         )
 
       turns = [[Gralkor.Message.new("user", "hi")]]
@@ -255,7 +255,7 @@ defmodule Gralkor.ApplicationTest do
     test "logs '[gralkor] capture flushed' at :info and returns :ok" do
       cb =
         App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o -> :ok end
+          add_episode_fn: fn _g, _b, _s, _o, _opts -> :ok end
         )
 
       turns = [[Gralkor.Message.new("user", "hi")]]
@@ -276,7 +276,7 @@ defmodule Gralkor.ApplicationTest do
     test "does not log 'capture flushed', logs a concise warning, and returns the error unchanged" do
       cb =
         App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o ->
+          add_episode_fn: fn _g, _b, _s, _o, _opts ->
             {:error, {:python, "ConnectionError: reset by peer"}}
           end
         )
@@ -299,7 +299,7 @@ defmodule Gralkor.ApplicationTest do
     test "the warning is concise — it does not embed a multi-line traceback blob" do
       cb =
         App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o -> {:error, :disk_full} end
+          add_episode_fn: fn _g, _b, _s, _o, _opts -> {:error, :disk_full} end
         )
 
       turns = [[Gralkor.Message.new("user", "hi")]]
@@ -320,7 +320,7 @@ defmodule Gralkor.ApplicationTest do
 
   describe "ex-application > build_flush_callback > when generalise_fn is provided" do
     test "after add_episode_fn returns :ok, generalise_fn is called with (group_id, body)" do
-      add_fn = fn _g, _b, _s, _o -> :ok end
+      add_fn = fn _g, _b, _s, _o, _opts -> :ok end
       test_pid = self()
 
       cb =
@@ -340,7 +340,7 @@ defmodule Gralkor.ApplicationTest do
     end
 
     test "when generalise_fn is nil (default), no generalise step runs" do
-      add_fn = fn _g, _b, _s, _o -> :ok end
+      add_fn = fn _g, _b, _s, _o, _opts -> :ok end
 
       cb =
         App.build_flush_callback(nil,
@@ -352,7 +352,7 @@ defmodule Gralkor.ApplicationTest do
     end
 
     test "when add_episode_fn fails, generalise_fn is NOT called" do
-      add_fn = fn _g, _b, _s, _o -> {:error, :disk_full} end
+      add_fn = fn _g, _b, _s, _o, _opts -> {:error, :disk_full} end
       test_pid = self()
 
       cb =
@@ -376,7 +376,7 @@ defmodule Gralkor.ApplicationTest do
     setup do
       test_pid = self()
 
-      recording_add = fn group, body, source, ontology ->
+      recording_add = fn group, body, source, ontology, _opts ->
         send(test_pid, {:add, group, body, source, ontology})
         :ok
       end
@@ -418,7 +418,7 @@ defmodule Gralkor.ApplicationTest do
 
     test "when the learning add_episode_fn returns {:error, reason}, the flush callback returns it (not swallowed)",
          %{learning: learning, turn: turn} do
-      add = fn _g, _b, source, _o ->
+      add = fn _g, _b, source, _o, _opts ->
         if source == "learning", do: {:error, :graph_down}, else: :ok
       end
 
@@ -476,7 +476,7 @@ defmodule Gralkor.ApplicationTest do
          } do
       test_pid = self()
 
-      add = fn group, body, source, ontology ->
+      add = fn group, body, source, ontology, _opts ->
         send(test_pid, {:add, group, body, source, ontology})
         if source == "captured", do: {:error, :disk_full}, else: :ok
       end
@@ -507,6 +507,48 @@ defmodule Gralkor.ApplicationTest do
       assert :ok = cb.("g1", "Susu", "Eli", nil, [behaviour_only])
       refute_receive {:add, _, _, "captured", _}, 100
       assert_receive {:add, "g1", _b, "learning", _}
+    end
+
+    test "the learning write signals merge_learning_entity; the captured write does not",
+         %{learning: learning, turn: turn} do
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: fn group, body, source, ontology, opts ->
+            send(self(), {:add, group, body, source, ontology, opts})
+            :ok
+          end,
+          learn_fn: fn _t, _a, _u -> {:ok, learning} end
+        )
+
+      assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn])
+
+      assert_received {:add, "g1", _transcript, "captured", :ont, captured_opts}
+      refute Keyword.get(captured_opts, :merge_learning_entity, false),
+             "captured write must not merge Learning"
+
+      assert_received {:add, "g1", _learning_body, "learning", :ont, learning_opts}
+      assert Keyword.get(learning_opts, :merge_learning_entity) == true,
+             "learning write signals merge_learning_entity: true"
+    end
+
+    test "the learning write signals merge_learning_entity even when no consumer ontology is configured",
+         %{learning: learning, turn: turn} do
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: fn group, body, source, ontology, opts ->
+            send(self(), {:add, group, body, source, ontology, opts})
+            :ok
+          end,
+          learn_fn: fn _t, _a, _u -> {:ok, learning} end
+        )
+
+      assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
+
+      assert_received {:add, "g1", _transcript, "captured", nil, captured_opts}
+      refute Keyword.get(captured_opts, :merge_learning_entity, false)
+
+      assert_received {:add, "g1", _learning_body, "learning", nil, learning_opts}
+      assert Keyword.get(learning_opts, :merge_learning_entity) == true
     end
   end
 

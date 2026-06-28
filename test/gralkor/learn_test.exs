@@ -87,7 +87,7 @@ defmodule Gralkor.LearnTest do
       assert learning.success == false
     end
 
-    test "propagates {:error, reason} from learn_fn (best-effort)" do
+    test "propagates {:error, reason} from learn_fn" do
       assert {:error, :upstream} =
                Learn.learn(turn(), fn _ -> {:error, :upstream} end, "Susu", "Eli")
     end

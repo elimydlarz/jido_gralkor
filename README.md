@@ -204,6 +204,14 @@ config :jido_gralkor, generalise_min_confidence: 0.5
 
 When a deployment-wide ontology is configured (`config :jido_gralkor, ontology: MyApp.Ontology`), generalisation writes are extracted under that same ontology — generalisations are typed consistently with captured memory. With no ontology configured, generalisations are written untyped, as before.
 
+## Experiential learning (ERL) recall
+
+Every captured turn is distilled into a flat `Gralkor.AgentLearning` episode (`problem_kind`, `approach`, `success`, `lesson`) in the same `group_id` as the conversation — this happens unconditionally at flush. `AgentLearning` is the plugin's built-in `Learning` graphiti custom entity type (`Gralkor.LearningEntity`), merged additively onto every learning write's `entity_types` at the materialisation boundary — so even with no consumer ontology configured, learning episodes are typed and stamped with the `"Learning"` node label.
+
+### Unconditional learning search on every recall
+
+There is no opt-in flag. Every recall runs a parallel learning search alongside the main search, seeded with the raw user query and filtered to only `Learning`-labelled episodes via a graphiti `SearchFilters(node_labels: ["Learning"])` — so the interpreter surfaces the `Gralkor.AgentLearning` episodes that came from the same kind of problem, biased toward approaches that succeeded (the bias lives in the learning episode text, not a query primitive). The learning search shares a 5s yield deadline with the generalisation search and degrades to the regular facts if it fails or times out. No LLM classification, no `TaskKind`: the previous `:erl_recall` opt-in flag and its query classifier have been removed — the unconditional path is what ERL now means.
+
 ## Testing against the in-memory twin
 
 `Gralkor.Client.InMemory` is a real implementation of `Gralkor.Client` (not a mock) that stores canned responses and records every call. Your agent's integration tests can hit it without any network:

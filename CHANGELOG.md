@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **ERL recall is now unconditional.** Every recall runs a parallel learning search filtered to the plugin's built-in `Learning` graphiti custom entity type via `SearchFilters(node_labels: ["Learning"])`, seeded with the raw user query. No LLM classification, no opt-in flag.
+- `Gralkor.AgentLearning` is now a real graphiti custom entity type (`Gralkor.LearningEntity`), merged additively onto every learning write's `entity_types` at the materialisation boundary — so ERL applies even with no consumer ontology configured.
+- `Gralkor.GraphitiPool.search/5` now accepts an opts list with `:search_filter` (`%{node_labels: [...]}`) threaded to graphiti's `g.search` as a `SearchFilters`.
+
+### Removed
+- `Gralkor.TaskKind` and the `:jido_gralkor, :erl_recall` opt-in flag — a dormant code path no consumer had ever set. The unconditional learning search replaces it.
+- `ex-task-kind` test tree.
+
+### Changed (other)
+- Graphiti runtime bumped to `graphiti-core[falkordb,google-genai] >= 0.29.2` — a bug-fix release: FalkorDBLite embedded support with Redis pinning, nul-byte stripping from parameters, and RediSearch escaping fixes. No API changes.
+
 ## [4.0.0] - 2026-05-30
 
 ### Added

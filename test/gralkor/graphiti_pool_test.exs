@@ -96,6 +96,96 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "search/5, when called with a search_filter" do
+    test "then graphiti's g.search is invoked with num_results and the search_filter kwarg carrying the node_labels" do
+      # A Pythonx-built fake graphiti whose search coroutine records its kwargs on the
+      # instance, so they survive across Pythonx.eval scopes. The pool's construct_instance
+      # returns it so GraphitiPool.search drives it.
+      {g, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded = {}
+
+              async def search(self, query, num_results=10, search_filter=None):
+                  self.recorded['query'] = query
+                  self.recorded['num_results'] = num_results
+                  self.recorded['has_filter'] = search_filter is not None
+                  self.recorded['node_labels'] = list(search_filter.node_labels) if search_filter is not None else None
+                  return []
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      construct_instance = fn _db, _shared, _group_id -> g end
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: construct_instance,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:ok, []} =
+               GraphitiPool.search(pid, "g1", "how do I deploy a service", 5,
+                 search_filter: %{node_labels: ["Learning"]}
+               )
+
+      {rec, _} =
+        Pythonx.eval(
+          "g.recorded",
+          %{"g" => g}
+        )
+
+      rec = rec |> Pythonx.decode()
+      assert rec["query"] == "how do I deploy a service"
+      assert rec["num_results"] == 5
+      assert rec["has_filter"] == true
+      assert rec["node_labels"] == ["Learning"]
+
+      GenServer.stop(pid)
+    end
+
+    test "then when search_filter is nil, g.search is invoked with search_filter=None (the pre-ERL path)" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded = {}
+
+              async def search(self, query, num_results=10, search_filter=None):
+                  self.recorded['has_filter'] = search_filter is not None
+                  return []
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      construct_instance = fn _db, _shared, _group_id -> g end
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: construct_instance,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:ok, []} = GraphitiPool.search(pid, "g1", "q", 5)
+
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert (rec |> Pythonx.decode())["has_filter"] == false
+
+      GenServer.stop(pid)
+    end
+  end
+
   describe "for/1 (group_id), when called against an embedded spec" do
     test "then the Graphiti instance for the sanitized group_id is looked up from a shared ETS cache; on first use it is constructed and inserted, then lives for the lifetime of the GenServer" do
       counter = :counters.new(1, [])
@@ -440,6 +530,69 @@ defmodule Gralkor.GraphitiPoolTest do
         assert Enum.sort(Map.keys(open)) == ["edge_types", "entity_types"]
 
         assert strict === strict_again
+      after
+        GenServer.stop(pid)
+        File.rm_rf!(data_dir)
+      end
+    end
+
+    test "then materialising with merge_learning_entity: true unions a Learning Pydantic class onto entity_types" do
+      data_dir =
+        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+
+      File.mkdir_p!(data_dir)
+
+      {:ok, pid} =
+        GraphitiPool.start_link(name: nil, falkordb_spec: {:embedded, data_dir}, warmup: false)
+
+      try do
+        merged =
+          GenServer.call(
+            pid,
+            {:materialise, StrictOntologyForGraphitiTest, true},
+            :infinity
+          )
+
+        {names, _} =
+          Pythonx.eval(
+            "[cls.__name__ for cls in entity_types.values()]",
+            %{"entity_types" => merged["entity_types"]}
+          )
+
+        names = names |> Pythonx.decode() |> Enum.sort()
+
+        assert "Learning" in names
+        assert "User" in names
+        assert "Preference" in names
+      after
+        GenServer.stop(pid)
+        File.rm_rf!(data_dir)
+      end
+    end
+
+    test "then materialising nil with merge_learning_entity: true yields a dict carrying only the Learning entity type" do
+      data_dir =
+        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+
+      File.mkdir_p!(data_dir)
+
+      {:ok, pid} =
+        GraphitiPool.start_link(name: nil, falkordb_spec: {:embedded, data_dir}, warmup: false)
+
+      try do
+        merged = GenServer.call(pid, {:materialise, nil, true}, :infinity)
+
+        {names, _} =
+          Pythonx.eval(
+            "[cls.__name__ for cls in entity_types.values()]",
+            %{"entity_types" => merged["entity_types"]}
+          )
+
+        assert (names |> Pythonx.decode() |> List.to_string()) == "Learning"
+
+        refute Map.has_key?(merged, "edge_types")
+        refute Map.has_key?(merged, "edge_type_map")
+        refute Map.has_key?(merged, "excluded_entity_types")
       after
         GenServer.stop(pid)
         File.rm_rf!(data_dir)

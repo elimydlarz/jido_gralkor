@@ -65,6 +65,16 @@ ex-recall (src: lib/gralkor/recall.ex; unit: test/gralkor/recall_test.exs)
           then recall proceeds with only regular facts
       when gen_search_fn is absent
         then no gen search is performed (backward compatible)
+      then a learning search runs unconditionally on every recall (§1 ERL recall — no flag, no LLM classification)
+        and a parallel Task.async searches the same group_id with the learning_search_fn seeded with the raw user query (max_results / 3, min 1); the client-wired learning_search_fn bakes in SearchFilters(node_labels: ["Learning"]) (ex-learning-entity) so only Learning-typed episodes are returned
+        and learning results are combined with regular facts before interpretation
+        and the success bias lives in the learning episode text (ex-agent-learning), not a query primitive — interpret ranks succeeded approaches above failed ones
+        and the learning search shares a 5s yield deadline with the gen search (independent of the main recall deadline)
+        where the learning_search_fn returns the same shape as search_fn and gen_search_fn — {:ok, [string]} (raw fact maps from GraphitiPool.search passed through Format.format_fact/1), so the combined list is homogeneously joinable by Recall's private format_facts/1 (string join), not Format.format_facts/1 (which takes maps) (integration: real GraphitiPool.search → real Format.format_fact/1 → real Recall.format_facts/1 join, no stub at the boundary; test/gralkor/recall_test.exs)
+        when the learning search fails or times out
+          then recall proceeds with only regular facts
+      when learning_search_fn is absent
+        then no learning search is performed (backward compatible)
   recall deadline
     then recall completes within 12_000ms (matches the consumer's worst-case tolerance — see Susu.ChatAgent)
     if the budget is exhausted before the call returns
@@ -205,20 +215,27 @@ ex-interpret-context (src: lib/gralkor/interpret.ex; unit: test/gralkor/interpre
 
 ```
 ERL turns a completed reasoning trace into one flat AgentLearning record, written as a
-separate episode in the same group_id (linked, not partitioned). Learning is UNCONDITIONAL:
-every captured turn is learned from at flush — there is no per-turn opt-in flag. (A custom
-chain-of-thought strategy is the only thing that would ever warrant suppressing learning; none
-exist in any consumer today — susu runs stock ReAct, reget/hdgp have no consumer — so the
-exemption is deferred until a custom CoT actually exists to exempt.) Learnings ride NORMAL
-recall, keyed by the kind of problem: the episode
-text states its problem_kind and its outcome, so a problem-kind-seeded hybrid search surfaces
-it and the success bias lives in the text. There is no recall-by-tag filter, no separate ERL
-partition, and no new retrieval primitive (the structured SearchFilters route is deferred —
-start lean). Tagged artefacts need NO new machinery: a consumer stores them with plain
-Gralkor.Client.memory_add under its own ontology entity, and they ride the same hybrid recall;
-the artefact path extracts no learning. The library is entity-agnostic — it defines no
-Learning/Artefact entity types; the consumer declares them in its own ontology and the
-existing per-write ontology application (ex-config-ontology) operates over whatever it declared.
+separate episode in the same group_id (linked, not partitioned), tagged source_description
+"learning". Learning is UNCONDITIONAL: every captured turn is learned from at flush — there
+is no per-turn opt-in flag, and no :erl_recall flag on the read side either: the learning
+search runs on every recall. (A custom chain-of-thought strategy is the only thing that would
+ever warrant suppressing learning; none exist in any consumer today — susu runs stock ReAct,
+reget/hdgp have no consumer — so the exemption is deferred until a custom CoT actually exists
+to exempt.) Learnings ride NORMAL recall: a parallel search over the same group_id, seeded
+with the raw user query, filtered to the "Learning" custom entity type via
+SearchFilters(node_labels: ["Learning"]) so only learning episodes are returned. The episode
+text still states its problem_kind and its outcome (ex-agent-learning), so a natural-language
+problem description surfaces kindred learnings and the success bias lives in the text; recall
+no longer classifies the query into a problem_kind (Gralkor.TaskKind is deleted). "Learning"
+is a real custom entity type the plugin declares (ex-learning-entity) and merges onto the
+applied ontology at the write boundary, so the extraction LLM emits Learning-typed nodes and
+labels them, making the node_labels filter reliable. There is no separate ERL partition and no
+source_description filter. Tagged artefacts need NO new machinery: a
+consumer stores them with plain Gralkor.Client.memory_add under its own ontology entity, and
+they ride the same hybrid recall; the artefact path extracts no learning. The library is
+entity-agnostic — it defines no Learning/Artefact entity types; the consumer declares them in
+its own ontology and the existing per-write ontology application (ex-config-ontology)
+operates over whatever it declared.
 
 ex-agent-learning (src: lib/gralkor/agent_learning.ex; unit: test/gralkor/agent_learning_test.exs)
   struct
@@ -228,47 +245,55 @@ ex-agent-learning (src: lib/gralkor/agent_learning.ex; unit: test/gralkor/agent_
     then renders the record into a well-formed episode body graphiti can ingest and recall by problem kind
     then the body states the problem_kind verbatim (so a problem-kind-seeded hybrid search surfaces it)
     then the body carries the approach and the lesson verbatim
-      (graphiti links any domain entities the lesson mentions to the Learning node the consumer's ontology declares)
+      (graphiti links any domain entities the lesson mentions to the plugin's Learning node — ex-learning-entity)
     when success is true
       then the body states the outcome as succeeded (the success bias for lean recall lives in this text)
     when success is false
       then the body states the outcome as not having succeeded (rendered without the word "succeeded", so the success bias stays unambiguous)
+
+ex-learning-entity (src: lib/gralkor/learning_entity.ex; unit: test/gralkor/learning_entity_test.exs)
+  The plugin's built-in graphiti custom entity type for ERL. Declared via the ontology machinery (same shape as a consumer entity) and merged onto every learning write's entity_types at the write boundary, independent of whether a consumer ontology is configured.
+  spec/0
+    then returns the entity-types entry for "Learning": %{name: "Learning", fields: [problem_kind, approach, success, lesson]}
+    then problem_kind is a required string (the kind of problem approached)
+    then approach is a required string (the approach taken)
+    then success is a required boolean (whether it succeeded)
+    then lesson is a required string (what was learned)
+      (none of the field names are Graphiti-protected — uuid, name, group_id, labels, created_at, summary, attributes, name_embedding are reserved)
+  merge_entity_types/1
+    when given a consumer entity_types list (possibly empty)
+      then returns the list with the "Learning" entry appended, unless an entry named "Learning" is already present
+    when the list already contains an entry named "Learning"
+      then returns the list unchanged (the plugin's Learning is not forced over a consumer that intentionally declared its own Learning)
+  merge_ontology_payload/1
+    when given a consumer ontology payload map (from __ontology__/0) or nil
+      then returns the payload with entity_types replaced by merge_entity_types(payload.entity_types), preserving edge_types, edge_type_map, and excluded_entity_types
+    when given nil
+      then returns the payload with only the "Learning" entity_types entry (ERL is not gated on a configured ontology)
 
 ex-learn (src: lib/gralkor/learn.ex; unit: test/gralkor/learn_test.exs)
   Gralkor.Learn.learn/4 takes one turn ([Gralkor.Message.t()]), a learn_fn, an agent_name, and a user_name.
   One LLM call emits the whole AgentLearning record; classification and learning are one step (the record is
   one node). It returns {:ok, record} or {:error, reason}, and raises on an unexpected learn_fn shape — it
   never swallows; the caller (ex-application) decides what propagation means.
-  if agent_name is missing or blank
-    then raises ArgumentError
-  if user_name is missing or blank
-    then raises ArgumentError (the trace is fed to an LLM that names the human in the lesson; a generic label corrupts the record)
+  validation
+    if agent_name is missing or blank
+      then raises ArgumentError
+    if user_name is missing or blank
+      then raises ArgumentError (the trace is fed to an LLM that names the human in the lesson; a generic label corrupts the record)
   request shape
     then learn_fn is called with a prompt rendering the turn with role labels
       ("{user_name}: {content}", "{agent_name}: {content}", "{agent_name}: (behaviour: {content})")
     then the prompt asks what was learned that enabled solving the problem (problem_kind, approach, success, lesson)
-  when learn_fn returns {:ok, %{problem_kind, approach, success, lesson}} (atom or string keys)
-    then returns {:ok, %Gralkor.AgentLearning{}} carrying those fields (keys normalised, success coerced to boolean)
-  when learn_fn returns {:error, reason}
-    then returns {:error, reason} (the caller propagates it — see ex-application; never swallowed)
+  result
+    when learn_fn returns {:ok, %{problem_kind, approach, success, lesson}} (atom or string keys)
+      then returns {:ok, %Gralkor.AgentLearning{}} carrying those fields (keys normalised, success coerced to boolean)
+    when learn_fn returns {:error, reason}
+      then returns {:error, reason} (the caller propagates it — see ex-application; never swallowed)
   learn_schema/0
     then a structured-output schema with required fields problem_kind (string), approach (string), success (boolean), lesson (string)
     then the lesson field instructs the model to answer "what did you learn that enabled you to solve this problem?"
 
-ex-task-kind (src: lib/gralkor/task_kind.ex; unit: test/gralkor/task_kind_test.exs)
-  Gralkor.TaskKind.classify/2 classifies an INCOMING task into just its problem_kind — the seed for §1 ERL recall.
-  Cheaper than ex-learn: it emits only the kind, not the full record.
-  classify/2 takes the incoming task text and a classify_fn
-  if the task text is missing or blank
-    then raises ArgumentError
-  request shape
-    then classify_fn is called with a prompt carrying the task text and asking for the kind of problem being approached
-  when classify_fn returns {:ok, problem_kind}
-    then returns {:ok, problem_kind}
-  when classify_fn returns {:error, reason}
-    then returns {:error, reason}
-  classify_schema/0
-    then a structured-output schema with a single required problem_kind (string) field
 ```
 
 ## Capture (embedded Gralkor adapter)
@@ -752,6 +777,12 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
     when graphiti's remove_episode raises
       then {:error, {:python, reason}} is returned with reason summarised to the Python error's class and message — not the full multi-line traceback
       then the stderr diagnostic is a single concise line, not a full traceback dump
+  search/5 (group_id, query, max_results, opts)
+    when called with opts[:search_filter] = %{node_labels: ["Learning"]}
+      then graphiti's g.search is invoked with num_results and the search_filter kwarg carrying the node_labels
+        (a graphiti_core.search.search_filters.SearchFilters is built from the Elixir %{node_labels: [...]} map and forwarded as the search_filter kwarg, restricting results to entities stamped with one of those custom-entity labels — ex-learning-entity for ERL recall)
+    when called without a search_filter (nil)
+      then g.search is invoked with search_filter=None (the pre-ERL path — graphiti's default hybrid search)
   ontology materialisation (the Pythonx-backed half — the pure inclusion/shape decision is ex-ontology-graphiti-spec)
     when an ontology module is materialised
       then the dict carries exactly the spec-selected keys (omitting unselected) and reuses them per module
@@ -925,6 +956,9 @@ ex-client-native (src: lib/gralkor/client/native.ex; integration: test/gralkor/c
     then :jido_gralkor, :interpret_max_output_tokens is read each call from app env (not at boot, so operators can change it without restarting) and, when set, forwarded to Gralkor.Recall as the output_token_budget option
     if :jido_gralkor, :interpret_max_output_tokens is set to a non-positive integer or a non-integer value
       then the call raises ArgumentError at the port boundary (configuration error surfaces immediately, not as a downstream LLM failure)
+  erl recall wiring (§1 — the learning_search_fn behaviour is proven at ex-recall; this is the wiring only, like gen_search_fn/deadline_ms it is not separately unit-tested)
+    then a learning_search_fn is wired into every Gralkor.Recall opts unconditionally — it calls GraphitiPool.search with search_filter: %{node_labels: ["Learning"]} so only the plugin's Learning custom-entity episodes are returned
+      (no flag, no LLM classification, no TaskKind — see ex-learning-entity for the entity type and ex-recall for the orchestration)
   if capture is called with a blank string session_id
     then the call raises with ArgumentError
   if capture is called with a nil session_id

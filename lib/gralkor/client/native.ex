@@ -29,6 +29,11 @@ defmodule Gralkor.Client.Native do
     opts = [
       search_fn: search_fn(),
       gen_search_fn: gen_recall_search_fn(),
+      # ERL recall (§1) runs unconditionally on every recall — no flag, no LLM
+      # classification. The learning search is seeded with the raw user query
+      # and bakes in SearchFilters(node_labels: ["Learning"]) so only the
+      # plugin's Learning custom-entity episodes are returned (ex-learning-entity).
+      learning_search_fn: learning_search_fn(),
       interpret_fn: interpret_fn(),
       turns_fn: turns_fn()
     ]
@@ -198,6 +203,20 @@ defmodule Gralkor.Client.Native do
     fn prompt ->
       case ReqLLM.generate_object(model, prompt, schema) do
         {:ok, response} -> {:ok, ReqLLM.Response.object(response)}
+        {:error, _} = err -> err
+      end
+    end
+  end
+
+  # ERL recall (§1): the learning search filters graphiti to only the plugin's
+  # Learning custom-entity episodes via SearchFilters(node_labels: ["Learning"]),
+  # seeded with the raw user query. Unconditional on every recall — see
+  # ex-recall > orchestration > learning search. Degrades to [] on failure;
+  # Recall.await_aux owns the 5s yield + the [:ok, facts] shape.
+  defp learning_search_fn do
+    fn group_id, query, max_results ->
+      case GraphitiPool.search(group_id, query, max_results, search_filter: %{node_labels: ["Learning"]}) do
+        {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Format.format_fact/1)}
         {:error, _} = err -> err
       end
     end
