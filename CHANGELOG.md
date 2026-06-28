@@ -7,6 +7,9 @@
 - `Gralkor.AgentLearning` is now a real graphiti custom entity type (`Gralkor.LearningEntity`), merged additively onto every learning write's `entity_types` at the materialisation boundary — so ERL applies even with no consumer ontology configured.
 - `Gralkor.GraphitiPool.search/5` now accepts an opts list with `:search_filter` (`%{node_labels: [...]}`) threaded to graphiti's `g.search` as a `SearchFilters`.
 
+### Fixed
+- **ERL learning search silently degraded on every recall.** The client-wired `learning_search_fn` passed `search_filter:` as a positional arg to `GraphitiPool.search/5`; because that function carries defaults on both `server` (1st) and `opts` (5th), the 4-arg call bound the keyword list to `max_results` and failed the guard. The task raised `FunctionClauseError`, `Recall.await_aux` swallowed it, and the learning search returned `[]` on every recall — ERL quietly did nothing, with no crash and no error. The call now passes `search_filter` in the `opts` keyword list with the server supplied explicitly. Pinned by an integration test (`ex-recall > where the real Native.learning_search_fn wiring does not silently degrade`) that exercises the real `Native.recall/4` → real `learning_search_fn` closure → real `GraphitiPool.search` with a `SearchFilters`, asserting no learning-search-failed log and that the filter reaches graphiti.
+
 ### Removed
 - `Gralkor.TaskKind` and the `:jido_gralkor, :erl_recall` opt-in flag — a dormant code path no consumer had ever set. The unconditional learning search replaces it.
 - `ex-task-kind` test tree.
