@@ -724,9 +724,9 @@ defmodule Gralkor.RecallTest do
       %{pid: pid, g: g}
     end
 
-    test "Native.recall/4 runs the real learning_search_fn closure without raising (no learning-search-failed log)" do
+    test "Native.recall/4 runs the real learning_search_fn closure without raising (no learning-search-failed log)",
+         %{g: g} do
       import ExUnit.CaptureLog
-      g = g()
 
       logs =
         capture_log(fn ->
