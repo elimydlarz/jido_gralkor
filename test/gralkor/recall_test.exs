@@ -789,7 +789,7 @@ defmodule Gralkor.RecallTest do
       assert String.contains?(prompt, "learned: batch the writes (succeeded)")
 
       # And the resulting memory block carries the interpreted relevant fact.
-      assert String.contains?(block.body, "X is a thing (created 2020) — relevant")
+      assert block =~ "X is a thing (created 2020) — relevant"
     end
   end
 end
