@@ -670,36 +670,25 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  # Integration seam: the three search fns (search_fn, gen_search_fn,
-  # learning_search_fn) all return {:ok, [string]} — raw fact maps from
-  # GraphitiPool.search passed through Format.format_fact/1 — so the combined
-  # list is homogeneously joinable by Recall's private format_facts/1 (string
-  # join). This test wires the REAL boundary (real GraphitiPool.search → real
-  # Format.format_fact/1 → real Recall.format_facts/1 join) with no stub at the
-  # search-fn return-type seam. A fake graphiti returns raw edge objects; the
-  # search fns mirror exactly how Gralkor.Client.Native wires them. If any fn
-  # returned raw maps instead of strings, Recall.format_facts/1 (Enum.join)
-  # would crash here — the unit tests stub past this boundary and cannot see it.
-  describe "ex-recall > where learning_search_fn returns the same shape as the other search fns (integration)" do
+  # Integration seam: the real Gralkor.Client.Native wiring of learning_search_fn
+  # must not silently degrade. Native.learning_search_fn/0 is private, so the only
+  # way to exercise it end-to-end is through Native.recall/4 — the public path the
+  # plugin uses in production. With a real GraphitiPool (fake graphiti returning []
+  # so the LLM interpret_fn is never called — interpret_combined/5 short-circuits on
+  # empty facts), the real learning_search_fn closure runs against the real
+  # GraphitiPool.search. If the closure's call signature is wrong (e.g. the
+  # search_filter kwarg passed as a positional arg, binding to max_results and
+  # failing the guard), the task raises, Recall.await_aux swallows it and logs
+  # "[gralkor] recall learning search failed: {:exit, ...}" — ERL silently does
+  # nothing on every recall. This test catches that: assert no such failure log.
+  describe "ex-recall > where the real Native.learning_search_fn wiring does not silently degrade (integration)" do
     @describetag :integration
 
     setup do
-      # Fake graphiti whose search coroutine returns graphiti-edge-like objects
-      # with .fact. The main search returns a regular fact; the filtered search
-      # (Learning) returns a learning fact. Real GraphitiPool.search turns these
-      # into raw maps (atomized :fact), exactly as in production.
       {g, _} =
         Pythonx.eval(
           """
           import asyncio
-
-          class _FakeEdge:
-              def __init__(self, fact):
-                  self.fact = fact
-                  self.created_at = None
-                  self.valid_at = None
-                  self.invalid_at = None
-                  self.expired_at = None
 
           class _FakeGraphiti:
               def __init__(self):
@@ -707,21 +696,17 @@ defmodule Gralkor.RecallTest do
 
               async def search(self, query, num_results=10, search_filter=None):
                   self.recorded['has_filter'] = search_filter is not None
-                  if search_filter is not None:
-                      return [_FakeEdge("learned: batch the writes (succeeded)")]
-                  return [_FakeEdge("X is a thing (created 2020)")]
+                  return []
 
           _FakeGraphiti()
           """,
           %{}
         )
 
-      table = :gralkor_graphiti_instances
-
       {:ok, pid} =
         GraphitiPool.start_link(
           name: Gralkor.GraphitiPool,
-          table: table,
+          table: :gralkor_graphiti_instances,
           falkordb_spec: {:embedded, "/tmp/never_used"},
           construct_falkor_db: fn _spec -> :stub_falkor_db end,
           construct_shared_clients: fn _llm, _embedder ->
@@ -739,60 +724,24 @@ defmodule Gralkor.RecallTest do
       %{pid: pid}
     end
 
-    test "the learning search results join with regular facts end-to-end and reach interpret as one string" do
-      test_pid = self()
+    test "Native.recall/4 runs the real learning_search_fn closure without raising (no learning-search-failed log)" do
+      import ExUnit.CaptureLog
 
-      # Mirror Gralkor.Client.Native's wiring verbatim: each search fn calls the
-      # real GraphitiPool.search and applies the real Format.format_fact/1 to the
-      # raw maps it returns. The learning fn additionally bakes in the
-      # SearchFilters(node_labels: ["Learning"]) filter, exactly as Native does.
-      search_fn = fn group_id, query, max_results ->
-        case GraphitiPool.search(group_id, query, max_results) do
-          {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Format.format_fact/1)}
-          {:error, _} = err -> err
-        end
-      end
+      logs =
+        capture_log(fn ->
+          assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "how do I schedule X")
+        end)
 
-      learning_search_fn = fn group_id, query, max_results ->
-        opts = [search_filter: %{node_labels: ["Learning"]}]
+      # The real learning_search_fn closure (Native.learning_search_fn/0) called
+      # GraphitiPool.search with the Learning filter and returned without raising.
+      # If it had raised, Recall.await_aux would have logged:
+      #   "[gralkor] recall learning search failed: {:exit, ...}"
+      refute String.contains?(logs, "learning search failed")
 
-        case GraphitiPool.search(GraphitiPool, group_id, query, max_results, opts) do
-          {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Format.format_fact/1)}
-          {:error, _} = err -> err
-        end
-      end
-
-      # Stub interpret_fn captures the facts_text it receives. If
-      # Recall.format_facts/1 (Enum.join over strings) had crashed on the
-      # combined list, this closure would never be invoked.
-      interpret_fn = fn prompt, _budget ->
-        send(test_pid, {:interpret_prompt, prompt})
-        {:ok, ["- X is a thing (created 2020) — relevant"]}
-      end
-
-      assert {:ok, block} =
-               Recall.recall(
-                 "g",
-                 "TestAgent",
-                 nil,
-                 "how do I schedule X",
-                 default_opts(
-                   search_fn: search_fn,
-                   learning_search_fn: learning_search_fn,
-                   interpret_fn: interpret_fn,
-                   max_results: 9
-                 )
-               )
-
-      assert_receive {:interpret_prompt, prompt}, 1_000
-
-      # Both facts survived the join — the regular fact and the learning fact,
-      # as strings, concatenated by Recall.format_facts/1 (Enum.join "\n").
-      assert String.contains?(prompt, "X is a thing (created 2020)")
-      assert String.contains?(prompt, "learned: batch the writes (succeeded)")
-
-      # And the resulting memory block carries the interpreted relevant fact.
-      assert block =~ "X is a thing (created 2020) — relevant"
+      # And the filtered search was actually invoked with the SearchFilters — the
+      # fake graphiti recorded that a filter was present on the learning call.
+      {rec, _} = Pythonx.eval("g.recorded", %{})
+      assert (rec |> Pythonx.decode())["has_filter"] == true
     end
   end
 end
