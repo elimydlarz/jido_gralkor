@@ -720,7 +720,7 @@ defmodule Gralkor.RecallTest do
 
       {:ok, pid} =
         GraphitiPool.start_link(
-          name: nil,
+          name: Gralkor.GraphitiPool,
           table: table,
           falkordb_spec: {:embedded, "/tmp/never_used"},
           construct_falkor_db: fn _spec -> :stub_falkor_db end,
