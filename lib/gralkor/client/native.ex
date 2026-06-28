@@ -215,9 +215,7 @@ defmodule Gralkor.Client.Native do
   # Recall.await_aux owns the 5s yield + the [:ok, facts] shape.
   defp learning_search_fn do
     fn group_id, query, max_results ->
-      opts = [search_filter: %{node_labels: ["Learning"]}]
-
-      case GraphitiPool.search(GraphitiPool, group_id, query, max_results, opts) do
+      case GraphitiPool.search(group_id, query, max_results, search_filter: %{node_labels: ["Learning"]}) do
         {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Format.format_fact/1)}
         {:error, _} = err -> err
       end
