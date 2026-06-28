@@ -721,11 +721,12 @@ defmodule Gralkor.RecallTest do
         if Process.alive?(pid), do: GenServer.stop(pid)
       end)
 
-      %{pid: pid}
+      %{pid: pid, g: g}
     end
 
     test "Native.recall/4 runs the real learning_search_fn closure without raising (no learning-search-failed log)" do
       import ExUnit.CaptureLog
+      g = g()
 
       logs =
         capture_log(fn ->
@@ -740,7 +741,7 @@ defmodule Gralkor.RecallTest do
 
       # And the filtered search was actually invoked with the SearchFilters — the
       # fake graphiti recorded that a filter was present on the learning call.
-      {rec, _} = Pythonx.eval("g.recorded", %{})
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
       assert (rec |> Pythonx.decode())["has_filter"] == true
     end
   end
