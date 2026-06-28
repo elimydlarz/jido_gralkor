@@ -667,4 +667,127 @@ defmodule Gralkor.RecallTest do
       refute_received {:searched, _other}
     end
   end
+
+  # Integration seam: the three search fns (search_fn, gen_search_fn,
+  # learning_search_fn) all return {:ok, [string]} — raw fact maps from
+  # GraphitiPool.search passed through Format.format_fact/1 — so the combined
+  # list is homogeneously joinable by Recall's private format_facts/1 (string
+  # join). This test wires the REAL boundary (real GraphitiPool.search → real
+  # Format.format_fact/1 → real Recall.format_facts/1 join) with no stub at the
+  # search-fn return-type seam. A fake graphiti returns raw edge objects; the
+  # search fns mirror exactly how Gralkor.Client.Native wires them. If any fn
+  # returned raw maps instead of strings, Recall.format_facts/1 (Enum.join)
+  # would crash here — the unit tests stub past this boundary and cannot see it.
+  describe "ex-recall > where learning_search_fn returns the same shape as the other search fns (integration)" do
+    @describetag :integration
+
+    setup do
+      # Fake graphiti whose search coroutine returns graphiti-edge-like objects
+      # with .fact. The main search returns a regular fact; the filtered search
+      # (Learning) returns a learning fact. Real GraphitiPool.search turns these
+      # into raw maps (atomized :fact), exactly as in production.
+      {g, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+
+          class _FakeEdge:
+              def __init__(self, fact):
+                  self.fact = fact
+                  self.created_at = None
+                  self.valid_at = None
+                  self.invalid_at = None
+                  self.expired_at = None
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded = {}
+
+              async def search(self, query, num_results=10, search_filter=None):
+                  self.recorded['has_filter'] = search_filter is not None
+                  if search_filter is not None:
+                      return [_FakeEdge("learned: batch the writes (succeeded)")]
+                  return [_FakeEdge("X is a thing (created 2020)")]
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      table = :"pool_table_#{System.unique_integer([:positive])}"
+
+      {:ok, pid} =
+        GraphitiPool.start_link(
+          name: nil,
+          table: table,
+          falkordb_spec: {:embedded, "/tmp/never_used"},
+          construct_falkor_db: fn _spec -> :stub_falkor_db end,
+          construct_shared_clients: fn _llm, _embedder ->
+            %{llm_client: nil, embedder: nil, cross_encoder: nil}
+          end,
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      on_exit(fn -> GenServer.stop(pid) end)
+      %{pid: pid}
+    end
+
+    test "the learning search results join with regular facts end-to-end and reach interpret as one string" do
+      test_pid = self()
+
+      # Mirror Gralkor.Client.Native's wiring verbatim: each search fn calls the
+      # real GraphitiPool.search and applies the real Format.format_fact/1 to the
+      # raw maps it returns. The learning fn additionally bakes in the
+      # SearchFilters(node_labels: ["Learning"]) filter, exactly as Native does.
+      search_fn = fn group_id, query, max_results ->
+        case GraphitiPool.search(group_id, query, max_results) do
+          {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Format.format_fact/1)}
+          {:error, _} = err -> err
+        end
+      end
+
+      learning_search_fn = fn group_id, query, max_results ->
+        case GraphitiPool.search(group_id, query, max_results,
+               search_filter: %{node_labels: ["Learning"]}
+             ) do
+          {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Format.format_fact/1)}
+          {:error, _} = err -> err
+        end
+      end
+
+      # Stub interpret_fn captures the facts_text it receives. If
+      # Recall.format_facts/1 (Enum.join over strings) had crashed on the
+      # combined list, this closure would never be invoked.
+      interpret_fn = fn prompt, _budget ->
+        send(test_pid, {:interpret_prompt, prompt})
+        {:ok, ["- X is a thing (created 2020) — relevant"]}
+      end
+
+      assert {:ok, block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "how do I schedule X",
+                 default_opts(
+                   search_fn: search_fn,
+                   learning_search_fn: learning_search_fn,
+                   interpret_fn: interpret_fn,
+                   max_results: 9
+                 )
+               )
+
+      assert_receive {:interpret_prompt, prompt}, 1_000
+
+      # Both facts survived the join — the regular fact and the learning fact,
+      # as strings, concatenated by Recall.format_facts/1 (Enum.join "\n").
+      assert String.contains?(prompt, "X is a thing (created 2020)")
+      assert String.contains?(prompt, "learned: batch the writes (succeeded)")
+
+      # And the resulting memory block carries the interpreted relevant fact.
+      assert String.contains?(block.body, "X is a thing (created 2020) — relevant")
+    end
+  end
 end
