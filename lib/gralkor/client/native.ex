@@ -217,7 +217,7 @@ defmodule Gralkor.Client.Native do
     fn group_id, query, max_results ->
       opts = [search_filter: %{node_labels: ["Learning"]}]
 
-      case GraphitiPool.search(__MODULE__, group_id, query, max_results, opts) do
+      case GraphitiPool.search(GraphitiPool, group_id, query, max_results, opts) do
         {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Format.format_fact/1)}
         {:error, _} = err -> err
       end
