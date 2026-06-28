@@ -716,7 +716,7 @@ defmodule Gralkor.RecallTest do
           %{}
         )
 
-      table = :"pool_table_#{System.unique_integer([:positive])}"
+      table = :gralkor_graphiti_instances
 
       {:ok, pid} =
         GraphitiPool.start_link(
