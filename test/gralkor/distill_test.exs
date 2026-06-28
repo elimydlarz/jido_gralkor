@@ -73,6 +73,9 @@ defmodule Gralkor.DistillTest do
 
   describe "ex-format-transcript > no LLM is involved" do
     test "rendering is pure — format_transcript/3 takes no distill_fn" do
+      IO.inspect(Distill, label: "Distill module")
+      IO.inspect(function_exported?(Distill, :format_transcript, 3), label: "3-arg exported?")
+      IO.inspect(Distill.__info__(:functions) |> Enum.filter(fn {n, _} -> n == :format_transcript end), label: "exports")
       refute function_exported?(Distill, :format_transcript, 4)
       assert function_exported?(Distill, :format_transcript, 3)
     end
