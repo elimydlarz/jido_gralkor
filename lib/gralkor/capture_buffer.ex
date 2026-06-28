@@ -257,7 +257,16 @@ defmodule Gralkor.CaptureBuffer do
   # ── Flush worker ────────────────────────────────────────────
 
   defp do_flush(group, agent, user, ontology, turns, cb, retries) do
-    do_flush(group, agent, user, ontology, turns, cb, retries, System.monotonic_time(:millisecond))
+    do_flush(
+      group,
+      agent,
+      user,
+      ontology,
+      turns,
+      cb,
+      retries,
+      System.monotonic_time(:millisecond)
+    )
   end
 
   defp do_flush(group, agent, user, ontology, turns, cb, retries, t0) do

@@ -12,12 +12,12 @@ defmodule Gralkor.Client.Native do
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Config
-  alias Gralkor.Distill
   alias Gralkor.Format
   alias Gralkor.Generalise
   alias Gralkor.Generalisation
   alias Gralkor.GraphitiPool
   alias Gralkor.Interpret
+  alias Gralkor.Learn
   alias Gralkor.Recall
 
   # ── Client behaviour ────────────────────────────────────────
@@ -64,7 +64,14 @@ defmodule Gralkor.Client.Native do
     # Capture is silent per-turn — what actually lands in memory is logged at
     # flush time instead (see `build_flush_callback/2`, gated on the same :test
     # flag). Logging every buffered turn here just floods the consumer's logs.
-    CaptureBuffer.append(session_id, group_id, agent_name, user_name, Config.ontology(), msgs)
+    CaptureBuffer.append(
+      session_id,
+      group_id,
+      agent_name,
+      user_name,
+      Config.ontology(),
+      msgs
+    )
   end
 
   @impl Gralkor.Client
@@ -175,24 +182,26 @@ defmodule Gralkor.Client.Native do
     end
   end
 
-  defp distill_fn do
+  @doc """
+  Turn one turn into a `Gralkor.AgentLearning` via the configured LLM. Wired
+  into the CaptureBuffer flush callback as the `learn_fn` dep — the flush path
+  calls it for every captured turn (learning is unconditional).
+  """
+  def learn(turn, agent_name, user_name) do
+    Learn.learn(turn, learn_llm_fn(), agent_name, user_name)
+  end
+
+  defp learn_llm_fn do
     model = Config.llm_model()
-    schema = Distill.distill_schema()
+    schema = Learn.learn_schema()
 
     fn prompt ->
       case ReqLLM.generate_object(model, prompt, schema) do
-        {:ok, response} ->
-          object = ReqLLM.Response.object(response)
-          {:ok, Map.get(object, :behaviour) || Map.get(object, "behaviour") || ""}
-
-        {:error, _} = err ->
-          err
+        {:ok, response} -> {:ok, ReqLLM.Response.object(response)}
+        {:error, _} = err -> err
       end
     end
   end
-
-  @doc false
-  def distill_callback, do: distill_fn()
 
   @doc false
   def interpret_callback, do: interpret_fn()
@@ -207,7 +216,10 @@ defmodule Gralkor.Client.Native do
       case ReqLLM.generate_object(model, prompt, schema) do
         {:ok, response} ->
           object = ReqLLM.Response.object(response)
-          candidates = Map.get(object, :generalisations) || Map.get(object, "generalisations") || []
+
+          candidates =
+            Map.get(object, :generalisations) || Map.get(object, "generalisations") || []
+
           {:ok, candidates}
 
         {:error, _} = err ->
@@ -253,7 +265,9 @@ defmodule Gralkor.Client.Native do
             Enum.flat_map(raw_facts, fn fact ->
               case Generalisation.decode(fact.fact) do
                 {:ok, gen, _plain} ->
-                  ["<generalisation> #{gen.content} (confidence: #{gen.confidence}) (level: #{gen.level})"]
+                  [
+                    "<generalisation> #{gen.content} (confidence: #{gen.confidence}) (level: #{gen.level})"
+                  ]
 
                 {:error, :not_a_generalisation} ->
                   []

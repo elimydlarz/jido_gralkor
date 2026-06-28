@@ -91,9 +91,13 @@ defmodule Gralkor.ClientContract do
           configure_capture(:ok)
 
           assert :ok =
-                   client().capture("session-1", "group-1", "TestAgent", "Eli", [
-                     Gralkor.Message.new("user", "hi")
-                   ])
+                   client().capture(
+                     "session-1",
+                     "group-1",
+                     "TestAgent",
+                     "Eli",
+                     [Gralkor.Message.new("user", "hi")]
+                   )
         end
 
         test "if the backend fails then {:error, reason} is returned" do
@@ -101,9 +105,13 @@ defmodule Gralkor.ClientContract do
           configure_capture({:error, :write_failed})
 
           assert {:error, :write_failed} =
-                   client().capture("session-1", "group-1", "TestAgent", "Eli", [
-                     Gralkor.Message.new("user", "hi")
-                   ])
+                   client().capture(
+                     "session-1",
+                     "group-1",
+                     "TestAgent",
+                     "Eli",
+                     [Gralkor.Message.new("user", "hi")]
+                   )
         end
       end
 

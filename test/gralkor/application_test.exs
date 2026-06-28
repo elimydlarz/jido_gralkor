@@ -95,7 +95,11 @@ defmodule Gralkor.ApplicationTest do
     test "the supervisor includes Gralkor.Python with reap_orphans: false, GraphitiPool with the remote spec, and CaptureBuffer" do
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
-      [{Gralkor.Python, [reap_orphans: false]}, {Gralkor.GraphitiPool, opts}, {Gralkor.CaptureBuffer, _}] =
+      [
+        {Gralkor.Python, [reap_orphans: false]},
+        {Gralkor.GraphitiPool, opts},
+        {Gralkor.CaptureBuffer, _}
+      ] =
         App.children()
 
       assert Keyword.fetch!(opts, :falkordb_spec) ==
@@ -155,14 +159,13 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
-  describe "ex-capture > flush > when the distilled episode body is empty" do
+  describe "ex-capture > flush > when the transcript episode body is empty" do
     @tag :capture_log
     test "no episode is added and nothing is logged" do
       add_episode_fn = fn _g, _b, _s, _o -> flunk("add_episode should not be called") end
 
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, ""} end,
           add_episode_fn: add_episode_fn
         )
 
@@ -183,7 +186,6 @@ defmodule Gralkor.ApplicationTest do
 
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "behaviour summary"} end,
           add_episode_fn: add_episode_fn
         )
 
@@ -209,12 +211,11 @@ defmodule Gralkor.ApplicationTest do
     end
 
     @tag :capture_log
-    test "also logs the distilled episode body" do
+    test "also logs the captured transcript body" do
       add_episode_fn = fn _g, _b, _s, _o -> :ok end
 
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "behaviour summary"} end,
           add_episode_fn: add_episode_fn
         )
 
@@ -232,10 +233,9 @@ defmodule Gralkor.ApplicationTest do
 
   describe "ex-capture > flush > when test mode is disabled" do
     @tag :capture_log
-    test "does not log the distilled episode body" do
+    test "does not log the captured transcript body" do
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "behaviour summary"} end,
           add_episode_fn: fn _g, _b, _s, _o -> :ok end
         )
 
@@ -255,7 +255,6 @@ defmodule Gralkor.ApplicationTest do
     test "logs '[gralkor] capture flushed' at :info and returns :ok" do
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "summary"} end,
           add_episode_fn: fn _g, _b, _s, _o -> :ok end
         )
 
@@ -277,8 +276,9 @@ defmodule Gralkor.ApplicationTest do
     test "does not log 'capture flushed', logs a concise warning, and returns the error unchanged" do
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "summary"} end,
-          add_episode_fn: fn _g, _b, _s, _o -> {:error, {:python, "ConnectionError: reset by peer"}} end
+          add_episode_fn: fn _g, _b, _s, _o ->
+            {:error, {:python, "ConnectionError: reset by peer"}}
+          end
         )
 
       turns = [[Gralkor.Message.new("user", "hi")]]
@@ -299,7 +299,6 @@ defmodule Gralkor.ApplicationTest do
     test "the warning is concise — it does not embed a multi-line traceback blob" do
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "summary"} end,
           add_episode_fn: fn _g, _b, _s, _o -> {:error, :disk_full} end
         )
 
@@ -326,7 +325,6 @@ defmodule Gralkor.ApplicationTest do
 
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "summary"} end,
           add_episode_fn: add_fn,
           generalise_fn: fn group_id, body ->
             send(test_pid, {:generalise_called, group_id, body})
@@ -346,7 +344,6 @@ defmodule Gralkor.ApplicationTest do
 
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "summary"} end,
           add_episode_fn: add_fn
         )
 
@@ -360,7 +357,6 @@ defmodule Gralkor.ApplicationTest do
 
       cb =
         App.build_flush_callback(nil,
-          distill_fn: fn _ -> {:ok, "summary"} end,
           add_episode_fn: add_fn,
           generalise_fn: fn _group_id, _body ->
             send(test_pid, {:generalise_called})
@@ -373,6 +369,144 @@ defmodule Gralkor.ApplicationTest do
 
       Process.sleep(50)
       refute_received {:generalise_called}
+    end
+  end
+
+  describe "ex-application > build_flush_callback learning routing" do
+    setup do
+      test_pid = self()
+
+      recording_add = fn group, body, source, ontology ->
+        send(test_pid, {:add, group, body, source, ontology})
+        :ok
+      end
+
+      learning = %Gralkor.AgentLearning{
+        problem_kind: "deploy timeout",
+        approach: "warm cache at boot",
+        success: true,
+        lesson: "cold caches fail the first health check"
+      }
+
+      turn = [
+        Gralkor.Message.new("user", "Q"),
+        Gralkor.Message.new("behaviour", "thinking"),
+        Gralkor.Message.new("assistant", "A")
+      ]
+
+      %{recording_add: recording_add, learning: learning, turn: turn}
+    end
+
+    test "every turn is learned from — each becomes a separate 'learning' episode in the same group/ontology",
+         %{recording_add: add, learning: learning, turn: turn} do
+      turn2 = [Gralkor.Message.new("user", "Q2"), Gralkor.Message.new("assistant", "A2")]
+
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add,
+          learn_fn: fn _turn, _agent, _user -> {:ok, learning} end
+        )
+
+      assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn, turn2])
+
+      assert_receive {:add, "g1", _transcript, "captured", :ont}
+      assert_receive {:add, "g1", body1, "learning", :ont}
+      assert_receive {:add, "g1", body2, "learning", :ont}
+      assert body1 =~ "deploy timeout"
+      assert body2 =~ "cold caches fail the first health check"
+    end
+
+    test "when the learning add_episode_fn returns {:error, reason}, the flush callback returns it (not swallowed)",
+         %{learning: learning, turn: turn} do
+      add = fn _g, _b, source, _o ->
+        if source == "learning", do: {:error, :graph_down}, else: :ok
+      end
+
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add,
+          learn_fn: fn _t, _a, _u -> {:ok, learning} end
+        )
+
+      assert {:error, :graph_down} = cb.("g1", "Susu", "Eli", nil, [turn])
+    end
+
+    test "when learn_fn returns {:error, reason}, the flush callback returns it (not swallowed)",
+         %{
+           recording_add: add,
+           turn: turn
+         } do
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add,
+          learn_fn: fn _t, _a, _u -> {:error, :upstream} end
+        )
+
+      assert {:error, :upstream} = cb.("g1", "Susu", "Eli", nil, [turn])
+    end
+
+    test "when learn_fn raises, the exception propagates (not swallowed)", %{
+      recording_add: add,
+      turn: turn
+    } do
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add,
+          learn_fn: fn _t, _a, _u -> raise "boom" end
+        )
+
+      assert_raise RuntimeError, "boom", fn -> cb.("g1", "Susu", "Eli", nil, [turn]) end
+    end
+
+    test "when learn_fn is nil (default), no learning episode is added", %{
+      recording_add: add,
+      turn: turn
+    } do
+      cb = App.build_flush_callback(nil, add_episode_fn: add)
+
+      assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
+      assert_receive {:add, "g1", _b, "captured", nil}
+      refute_receive {:add, _, _, "learning", _}, 100
+    end
+
+    test "when the captured add fails, no learning episode is written (no double-write on retry)",
+         %{
+           learning: learning,
+           turn: turn
+         } do
+      test_pid = self()
+
+      add = fn group, body, source, ontology ->
+        send(test_pid, {:add, group, body, source, ontology})
+        if source == "captured", do: {:error, :disk_full}, else: :ok
+      end
+
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add,
+          learn_fn: fn _t, _a, _u -> {:ok, learning} end
+        )
+
+      assert {:error, :disk_full} = cb.("g1", "Susu", "Eli", nil, [turn])
+      assert_receive {:add, "g1", _b, "captured", nil}
+      refute_receive {:add, _, _, "learning", _}, 100
+    end
+
+    test "a turn whose transcript is empty still writes the learning", %{
+      recording_add: add,
+      learning: learning
+    } do
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add,
+          learn_fn: fn _t, _a, _u -> {:ok, learning} end
+        )
+
+      behaviour_only = [Gralkor.Message.new("behaviour", "just thinking")]
+
+      assert :ok = cb.("g1", "Susu", "Eli", nil, [behaviour_only])
+      refute_receive {:add, _, _, "captured", _}, 100
+      assert_receive {:add, "g1", _b, "learning", _}
     end
   end
 

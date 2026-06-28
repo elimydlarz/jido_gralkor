@@ -259,10 +259,10 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "ex-capture > request shape > when called with session_id, group_id, agent_name, user_name, messages" do
+  describe "ex-capture > request shape > capture/5" do
     setup :start_capture_buffer
 
-    test "Gralkor.CaptureBuffer.append/6 is invoked with the sanitized group_id, agent_name, user_name, resolved ontology, and the messages" do
+    test "invokes CaptureBuffer.append/6 with sanitized group_id, names, ontology, and messages" do
       msgs = [Message.new("user", "hi")]
 
       assert :ok = Native.capture("s1", "with-hyphens", "Susu", "Eli", msgs)

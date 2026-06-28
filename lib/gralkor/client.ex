@@ -31,7 +31,13 @@ defmodule Gralkor.Client do
 
   @callback recall(group_id(), agent_name(), session_id() | nil, query :: String.t()) ::
               {:ok, String.t()} | {:error, term()}
-  @callback capture(session_id(), group_id(), agent_name(), user_name(), messages()) ::
+  @callback capture(
+              session_id(),
+              group_id(),
+              agent_name(),
+              user_name(),
+              messages()
+            ) ::
               :ok | {:error, term()}
   @callback memory_add(
               group_id(),

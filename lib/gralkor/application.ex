@@ -5,6 +5,7 @@ defmodule Gralkor.Application do
 
   require Logger
 
+  alias Gralkor.AgentLearning
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client.Native
   alias Gralkor.Config
@@ -43,7 +44,13 @@ defmodule Gralkor.Application do
          interpret_fn: Native.interpret_callback()
        ]},
       {CaptureBuffer,
-       [flush_callback: build_flush_callback(spec, generalise_fn: generalise_fn_for_flush())]}
+       [
+         flush_callback:
+           build_flush_callback(spec,
+             generalise_fn: generalise_fn_for_flush(),
+             learn_fn: &Native.learn/3
+           )
+       ]}
     ]
   end
 
@@ -56,16 +63,24 @@ defmodule Gralkor.Application do
 
   @doc false
   def build_flush_callback(_config, deps \\ []) do
-    distill_fn = Keyword.get_lazy(deps, :distill_fn, &Native.distill_callback/0)
     add_episode_fn = Keyword.get(deps, :add_episode_fn, &GraphitiPool.add_episode/4)
     generalise_fn = Keyword.get(deps, :generalise_fn)
+    learn_fn = Keyword.get(deps, :learn_fn)
 
     fn group_id, agent_name, user_name, ontology, turns ->
-      body = Distill.format_transcript(turns, distill_fn, agent_name, user_name)
+      body = Distill.format_transcript(turns, agent_name, user_name)
 
       cond do
         body == "" ->
-          :ok
+          write_learnings(
+            turns,
+            group_id,
+            ontology,
+            agent_name,
+            user_name,
+            learn_fn,
+            add_episode_fn
+          )
 
         true ->
           t0 = System.monotonic_time(:millisecond)
@@ -87,12 +102,47 @@ defmodule Gralkor.Application do
           if Application.get_env(:jido_gralkor, :test, false),
             do: Logger.info("[gralkor] [test] capture flush body: #{body}")
 
-          if result == :ok && generalise_fn do
-            Task.start(fn -> generalise_fn.(group_id, body) end)
-          end
+          case result do
+            :ok ->
+              with :ok <-
+                     write_learnings(
+                       turns,
+                       group_id,
+                       ontology,
+                       agent_name,
+                       user_name,
+                       learn_fn,
+                       add_episode_fn
+                     ) do
+                if generalise_fn, do: Task.start(fn -> generalise_fn.(group_id, body) end)
+                :ok
+              end
 
-          result
+            {:error, _} = err ->
+              err
+          end
       end
     end
+  end
+
+  # Learning: every turn becomes a separate AgentLearning episode in the same
+  # group_id. Fail-fast — a learn_fn error, a learning-write error, or any raise
+  # propagates out so the CaptureBuffer retry/backoff owns recovery; nothing is
+  # swallowed. Runs in append order, only on a path that returns :ok.
+  defp write_learnings(_turns, _group_id, _ontology, _agent, _user, nil, _add_episode_fn), do: :ok
+
+  defp write_learnings(turns, group_id, ontology, agent_name, user_name, learn_fn, add_episode_fn) do
+    Enum.reduce_while(turns, :ok, fn msgs, :ok ->
+      case learn_fn.(msgs, agent_name, user_name) do
+        {:ok, %AgentLearning{} = learning} ->
+          case add_episode_fn.(group_id, AgentLearning.to_episode(learning), "learning", ontology) do
+            :ok -> {:cont, :ok}
+            {:error, _} = err -> {:halt, err}
+          end
+
+        {:error, _} = err ->
+          {:halt, err}
+      end
+    end)
   end
 end

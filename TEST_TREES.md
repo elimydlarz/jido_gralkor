@@ -201,6 +201,76 @@ ex-interpret-context (src: lib/gralkor/interpret.ex; unit: test/gralkor/interpre
     then does NOT inspect or mutate content beyond whitespace trimming
 ```
 
+## Experiential learning (ERL) + tagged artefacts (embedded Gralkor adapter)
+
+```
+ERL turns a completed reasoning trace into one flat AgentLearning record, written as a
+separate episode in the same group_id (linked, not partitioned). Learning is UNCONDITIONAL:
+every captured turn is learned from at flush — there is no per-turn opt-in flag. (A custom
+chain-of-thought strategy is the only thing that would ever warrant suppressing learning; none
+exist in any consumer today — susu runs stock ReAct, reget/hdgp have no consumer — so the
+exemption is deferred until a custom CoT actually exists to exempt.) Learnings ride NORMAL
+recall, keyed by the kind of problem: the episode
+text states its problem_kind and its outcome, so a problem-kind-seeded hybrid search surfaces
+it and the success bias lives in the text. There is no recall-by-tag filter, no separate ERL
+partition, and no new retrieval primitive (the structured SearchFilters route is deferred —
+start lean). Tagged artefacts need NO new machinery: a consumer stores them with plain
+Gralkor.Client.memory_add under its own ontology entity, and they ride the same hybrid recall;
+the artefact path extracts no learning. The library is entity-agnostic — it defines no
+Learning/Artefact entity types; the consumer declares them in its own ontology and the
+existing per-write ontology application (ex-config-ontology) operates over whatever it declared.
+
+ex-agent-learning (src: lib/gralkor/agent_learning.ex; unit: test/gralkor/agent_learning_test.exs)
+  struct
+    then fields: problem_kind (String.t()), approach (String.t()), success (boolean()), lesson (String.t())
+    then it is one flat node — no ERL-internal edges, so ERL recall is single-label, never a traversal
+  to_episode/1
+    then renders the record into a well-formed episode body graphiti can ingest and recall by problem kind
+    then the body states the problem_kind verbatim (so a problem-kind-seeded hybrid search surfaces it)
+    then the body carries the approach and the lesson verbatim
+      (graphiti links any domain entities the lesson mentions to the Learning node the consumer's ontology declares)
+    when success is true
+      then the body states the outcome as succeeded (the success bias for lean recall lives in this text)
+    when success is false
+      then the body states the outcome as not having succeeded (rendered without the word "succeeded", so the success bias stays unambiguous)
+
+ex-learn (src: lib/gralkor/learn.ex; unit: test/gralkor/learn_test.exs)
+  Gralkor.Learn.learn/4 takes one turn ([Gralkor.Message.t()]), a learn_fn, an agent_name, and a user_name.
+  One LLM call emits the whole AgentLearning record; classification and learning are one step (the record is
+  one node). It returns {:ok, record} or {:error, reason}, and raises on an unexpected learn_fn shape — it
+  never swallows; the caller (ex-application) decides what propagation means.
+  if agent_name is missing or blank
+    then raises ArgumentError
+  if user_name is missing or blank
+    then raises ArgumentError (the trace is fed to an LLM that names the human in the lesson; a generic label corrupts the record)
+  request shape
+    then learn_fn is called with a prompt rendering the turn with role labels
+      ("{user_name}: {content}", "{agent_name}: {content}", "{agent_name}: (behaviour: {content})")
+    then the prompt asks what was learned that enabled solving the problem (problem_kind, approach, success, lesson)
+  when learn_fn returns {:ok, %{problem_kind, approach, success, lesson}} (atom or string keys)
+    then returns {:ok, %Gralkor.AgentLearning{}} carrying those fields (keys normalised, success coerced to boolean)
+  when learn_fn returns {:error, reason}
+    then returns {:error, reason} (the caller propagates it — see ex-application; never swallowed)
+  learn_schema/0
+    then a structured-output schema with required fields problem_kind (string), approach (string), success (boolean), lesson (string)
+    then the lesson field instructs the model to answer "what did you learn that enabled you to solve this problem?"
+
+ex-task-kind (src: lib/gralkor/task_kind.ex; unit: test/gralkor/task_kind_test.exs)
+  Gralkor.TaskKind.classify/2 classifies an INCOMING task into just its problem_kind — the seed for §1 ERL recall.
+  Cheaper than ex-learn: it emits only the kind, not the full record.
+  classify/2 takes the incoming task text and a classify_fn
+  if the task text is missing or blank
+    then raises ArgumentError
+  request shape
+    then classify_fn is called with a prompt carrying the task text and asking for the kind of problem being approached
+  when classify_fn returns {:ok, problem_kind}
+    then returns {:ok, problem_kind}
+  when classify_fn returns {:error, reason}
+    then returns {:error, reason}
+  classify_schema/0
+    then a structured-output schema with a single required problem_kind (string) field
+```
+
 ## Capture (embedded Gralkor adapter)
 
 ```
@@ -209,9 +279,9 @@ ex-capture-buffer (src: lib/gralkor/capture_buffer.ex; unit: test/gralkor/captur
   there is no idle-flush policy
   append/6 (session_id, group_id, agent_name, user_name, ontology, messages)
     when called for a new session_id
-      then an entry is created bound to the sanitized group_id, the agent_name, the user_name, the ontology (a module or nil), and the turn (list of Messages)
+      then an entry is created bound to the sanitized group_id, the agent_name, the user_name, the ontology (a module or nil), and the turn (messages)
     when called again for the same session_id
-      then the new turn is appended to the existing entry and prior turns remain buffered
+      then the new turn (messages) is appended to the existing entry and prior turns remain buffered
     when called for multiple session_ids
       then each session_id has an independent entry
     when called for an existing session_id with a different group_id
@@ -228,7 +298,7 @@ ex-capture-buffer (src: lib/gralkor/capture_buffer.ex; unit: test/gralkor/captur
       then raises ArgumentError
   turns_for/1
     when the session has buffered turns
-      then returns [[Gralkor.Message.t()]] in append order
+      then returns [[Gralkor.Message.t()]] in append order — the messages of each turn
     when the session has never been appended to (or was just flushed)
       then returns []
   flush/1 (session_id)
@@ -292,34 +362,26 @@ ex-capture-buffer (src: lib/gralkor/capture_buffer.ex; unit: test/gralkor/captur
       then Gralkor.CaptureBuffer.terminate/2 drains every pending entry via the flush callback before returning
 
 ex-format-transcript (src: lib/gralkor/distill.ex; unit: test/gralkor/distill_test.exs)
-  format_transcript/4 takes [[Gralkor.Message.t()]], a distill_fn, an agent_name, and a user_name
+  format_transcript/3 takes [[Gralkor.Message.t()]], an agent_name, and a user_name.
+  The transcript episode keeps ONLY user/assistant text — behaviour reasoning is never woven in.
+  This REPLACES the prior behaviour-in-transcript distillation: every turn's reasoning routes into a
+  separate AgentLearning episode (see ex-learn / ex-application); the transcript itself carries none of it.
+  There is NO LLM call in this path — rendering is pure.
   if agent_name is missing or blank
     then raises ArgumentError
   if user_name is missing or blank
     then raises ArgumentError (the rendered transcript is fed to graphiti's entity extraction; a generic "User:" label collapses every user across the deployment into one node, destroying graph quality — every consumer must name the human)
   per turn
-    when a turn contains a message with role="behaviour"
-      then all messages in the turn are rendered with role labels ("{user_name}: {content}",
-        "{agent_name}: (behaviour: {content})", "{agent_name}: {content}") and passed to
-        the configured LLM (via req_llm) as the "thinking" prompt
-    when a turn has no behaviour messages
-      then distillation is skipped for that turn (no LLM call)
-  transcript rendering
-    when a turn has behaviour and the LLM call succeeds
-      then it is distilled into a first-person past-tense summary
-      and rendered as "{agent_name}: (behaviour: {summary})" before the assistant text for that turn
-    when distillation fails for a turn (safe_distill)
-      then the behaviour line is silently dropped, user/assistant text preserved
-    when no LLM is configured
-      then behaviour lines are silently omitted, user/assistant text preserved
-    when a turn has no behaviour
-      then rendered as "{user_name}: {content}\n{agent_name}: {content}" with no behaviour line, no LLM call
-  then the LLM call uses a structured-output schema with a single "behaviour" field
-  then turns with behaviour are distilled in parallel via Task.async_stream
+    then user messages render as "{user_name}: {content}"
+    then assistant messages render as "{agent_name}: {content}"
+    then behaviour messages are dropped — no "(behaviour: …)" line, no LLM call
+  when a turn has only behaviour messages
+    then it contributes no lines
+  then turns are joined with newlines
 
-ex-capture (src: lib/gralkor/client/native.ex#capture/5; unit: test/gralkor/client/native_test.exs)
+ex-capture (src: lib/gralkor/client/native.ex#capture; unit: test/gralkor/client/native_test.exs)
   request shape
-    when called with session_id, group_id, agent_name, user_name, messages
+    when capture/5 is called with session_id, group_id, agent_name, user_name, messages
       then group_id is sanitized
       and the configured global ontology (Gralkor.Config.ontology/0) is resolved
       and Gralkor.CaptureBuffer.append/6 is invoked with the sanitized group_id, the agent_name, the user_name, the resolved ontology, and the messages
@@ -333,7 +395,7 @@ ex-capture (src: lib/gralkor/client/native.ex#capture/5; unit: test/gralkor/clie
   then returns :ok immediately (does not call distill synchronously)
   (capture itself logs nothing per-turn — captured content is observable at flush; see "flush" below)
   flush (fires from flush/1, flush_and_await/2, and shutdown only)
-    when the distilled episode body is empty
+    when the transcript episode body is empty
       then no episode is added
       and nothing is logged
     when the episode is added
@@ -341,7 +403,7 @@ ex-capture (src: lib/gralkor/client/native.ex#capture/5; unit: test/gralkor/clie
       and the body size
       and how long the add took
     when test mode is enabled
-      then also logs the distilled episode body
+      then also logs the captured transcript body
 
 ex-flush (src: lib/gralkor/client/native.ex#flush/1; unit: test/gralkor/client/native_test.exs)
   when called with a session_id with buffered turns
@@ -589,7 +651,8 @@ ex-application (src: lib/gralkor/application.ex; unit: test/gralkor/application_
     when `:jido_gralkor, :falkordb` is set to a value that is not a keyword list, or is missing `:host` or `:port`
       then Application.start/2 raises ArgumentError before any child starts (fail-fast on operator misconfig)
   build_flush_callback/2
-    then the returned callback distills turns via Distill.format_transcript, then calls add_episode_fn with source "captured"
+    the returned callback receives (group_id, agent_name, user_name, ontology, turns) where each turn is [Message]
+    then it renders the transcript episode from user/assistant text ONLY via Distill.format_transcript (the messages of every turn; no behaviour, no LLM), then calls add_episode_fn with source "captured"
     when add_episode_fn returns :ok
       then "[gralkor] capture flushed — group:<g> bodyChars:<n> <ms>ms" is logged at :info
       and :ok is returned
@@ -597,7 +660,30 @@ ex-application (src: lib/gralkor/application.ex; unit: test/gralkor/application_
       then no "capture flushed" line is logged (a failed attempt is not mislabelled as a success)
       and a concise "[gralkor] capture flush failed — group:<g> <reason> (retrying)" is logged at :warning
       and the {:error, reason} is returned unchanged so the CaptureBuffer retry owns recovery
-    when generalise_fn is provided in deps and add_episode_fn returns :ok
+      and NO learning episodes are written on this attempt (they are written on the path that returns :ok, so a retried flush never double-writes them)
+    when the transcript body is empty
+      then no captured episode is added and :ok is returned
+    learning (learn_fn dep) — only on a path that returns :ok (empty body, or a successful captured add).
+    Learning is unconditional: every turn is learned from, in append order. Fail-fast — a learning failure is
+    never swallowed; it propagates out of the flush callback so the CaptureBuffer retry/backoff owns recovery
+    (the same failure class and owner as a captured-episode write failure — see the retry schedule in
+    ex-capture-buffer, which drops 4xx/upstream_llm and retries graph-write errors).
+      for each turn (in append order)
+        when learn_fn returns {:ok, learning}
+          then a separate episode is added via add_episode_fn with body AgentLearning.to_episode(learning), source "learning", the same group_id and ontology
+          when that learning add_episode_fn returns {:error, reason}
+            then the flush callback returns {:error, reason} (not swallowed — CaptureBuffer owns retry-vs-drop by class)
+        when learn_fn returns {:error, reason}
+          then the flush callback returns {:error, reason} (not swallowed; learn_fn is not retried here — that is ReqLLM's job at the source)
+        when learn_fn raises or returns an unexpected shape
+          then the exception propagates (an unexpected LLM response is a genuine fault, not a best-effort drop)
+      when learn_fn is nil (default)
+        then no learning episode is added (backward compatible — learning must be wired to fire)
+    known edge — double-write on retry: once the captured episode has been written, a subsequent learning
+      failure propagates and CaptureBuffer retries the whole flush, re-writing the already-written captured
+      episode (graphiti episode writes are not idempotent). Accepted and documented rather than masked with a
+      swallow; revisit with deterministic episode ids only if dup-on-retry is observed in practice.
+    when generalise_fn is provided in deps and the captured add_episode returns :ok
       then a fire-and-forget Task.start calls generalise_fn.(group_id, transcript_body)
       and the generalise failure does not affect the flush result
     when generalise_fn is nil (default)
@@ -748,8 +834,9 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
       then {:ok, block} is returned
     if the backend fails
       then {:error, reason} is returned
-  when capture/5 is called with session_id, group_id, agent_name, user_name, and messages
+  when capture/5 is called with session_id, group_id, agent_name, user_name, messages
     messages is a list of canonical Gralkor.Message structs (role ∈ {"user", "assistant", "behaviour"}, content: String.t())
+    every captured turn is learned from at flush — there is no per-turn ERL flag (learning is unconditional)
     capture carries no ontology argument — the write applies the configured global ontology (ex-config-ontology)
     when the backend acknowledges the capture
       then :ok is returned
@@ -886,17 +973,19 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
       then the thread's session_id and the configured agent_name are planted on the signal's tool_context so the `MemorySearch` ReAct tool can find them (no ontology is planted — writes resolve it from config); the plugin does not call `Gralkor.Client.recall/3` on its own (recall is the LLM's job — see `JidoGralkor.ReAct` and the consumer's `RequestTransformer` for how `memory_search` is forced on iteration 1)
     when no thread has committed yet (first query on a fresh agent — ReAct strategy's ThreadAgent.append runs inside @start, after plugin hooks)
       then the configured agent_name is planted on tool_context; no session_id is planted, and `MemorySearch` short-circuits with a non-result message on this turn
+  every captured turn is learned from at flush — there is no per-turn ERL flag (learning is unconditional;
+    a custom-CoT exemption is deferred until a custom reasoning strategy exists — see the ERL intro)
   when an agent turn completes
     then the user query, event trace, and `{:completed, answer}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list is sent to
-      Gralkor for capture with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the configured global ontology)
+      Gralkor for capture (via `capture/5`) with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the configured global ontology)
     if `agent.state[:user_name]` is missing or blank
       then capture raises ArgumentError (the consumer's contract violation surfaces immediately rather than persisting an episode under a generic "User" label that would corrupt the graph)
   when an agent turn fails
     then the user query, event trace, and `{:failed, error}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list — ending in
       a `"request failed: …"` behaviour message instead of an assistant message — is sent to
-      Gralkor for capture with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the configured global ontology), so the failure is visible to downstream distillation rather than
+      Gralkor for capture (via `capture/5`) with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the configured global ontology), so the failure is visible to downstream distillation rather than
       silently dropped
     when the agent has no committed thread yet (first-turn failure)
       then capture is skipped
@@ -1117,6 +1206,11 @@ jido-memory-journey (functional: test/functional/jido_memory_journey_test.exs)
         then :ok is returned before the episode is ingested
         and the episode eventually lands in the bound group_id
         and a follow-up Gralkor.Client.recall/3 surfaces the turn content
+  ERL round-trip
+    given a captured turn (capture/5) whose reasoning solved a problem
+      when Gralkor.Client.flush/1 is called and the flush callback is wired with learn_fn
+        then a separate AgentLearning episode is written to the same group_id (real ex-learn LLM call)
+        and a follow-up recall keyed on the kind of problem surfaces the learning's lesson
   flush_and_await
     given a pending turn in Gralkor.CaptureBuffer
       when Gralkor.Client.flush_and_await/2 is called with the session_id and a generous timeout

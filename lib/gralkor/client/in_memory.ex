@@ -60,7 +60,9 @@ defmodule Gralkor.Client.InMemory do
   def indices_builds, do: GenServer.call(__MODULE__, {:calls, :build_indices})
   def communities_builds, do: GenServer.call(__MODULE__, {:calls, :build_communities})
   def generalises, do: GenServer.call(__MODULE__, {:calls, :generalise})
-  def search_generalisations_calls, do: GenServer.call(__MODULE__, {:calls, :search_generalisations})
+
+  def search_generalisations_calls,
+    do: GenServer.call(__MODULE__, {:calls, :search_generalisations})
 
   # ── Client behaviour ────────────────────────────────────────
 
@@ -121,7 +123,8 @@ defmodule Gralkor.Client.InMemory do
 
   @impl Gralkor.Client
   def search_generalisations(group_id, query, max_results),
-    do: GenServer.call(__MODULE__, {:call, :search_generalisations, [group_id, query, max_results]})
+    do:
+      GenServer.call(__MODULE__, {:call, :search_generalisations, [group_id, query, max_results]})
 
   # ── GenServer ──────────────────────────────────────────────
 

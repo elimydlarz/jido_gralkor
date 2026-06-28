@@ -4,111 +4,49 @@ defmodule Gralkor.DistillTest do
   alias Gralkor.Distill
   alias Gralkor.Message
 
-  describe "ex-format-transcript > per turn > when a turn contains a behaviour message" do
-    test "all messages are rendered with role labels and passed to the LLM as the thinking prompt" do
-      ref = make_ref()
-      test_pid = self()
-
-      distill_fn = fn prompt ->
-        send(test_pid, {ref, prompt})
-        {:ok, "did stuff"}
-      end
-
-      turns = [
-        [
-          Message.new("user", "hi"),
-          Message.new("behaviour", "thinking out loud"),
-          Message.new("assistant", "hello")
-        ]
-      ]
-
-      _ = Distill.format_transcript(turns, distill_fn, "TestAgent", "Eli")
-
-      assert_receive {^ref, prompt}
-      assert prompt =~ "Eli: hi"
-      assert prompt =~ "TestAgent: (behaviour: thinking out loud)"
-      assert prompt =~ "TestAgent: hello"
-    end
-  end
-
-  describe "ex-format-transcript > per turn > when a turn has no behaviour messages" do
-    test "distillation is skipped for that turn (no LLM call)" do
-      counter = :counters.new(1, [])
-
-      distill_fn = fn _ ->
-        :counters.add(counter, 1, 1)
-        {:ok, "x"}
-      end
-
-      _ =
-        Distill.format_transcript(
-          [[Message.new("user", "hi"), Message.new("assistant", "hello")]],
-          distill_fn,
-          "TestAgent",
-          "Eli"
-        )
-
-      assert :counters.get(counter, 1) == 0
-    end
-  end
-
-  describe "ex-format-transcript > transcript rendering > when a turn has behaviour and the LLM call succeeds" do
-    test "rendered as \"{agent_name}: (behaviour: {summary})\" before the assistant text for that turn" do
-      distill_fn = fn _ -> {:ok, "thought through the problem"} end
-
+  describe "ex-format-transcript > per turn" do
+    test "user messages render as \"{user_name}: {content}\"" do
       result =
-        Distill.format_transcript(
-          [
-            [
-              Message.new("user", "Q?"),
-              Message.new("behaviour", "x"),
-              Message.new("assistant", "A")
-            ]
-          ],
-          distill_fn,
-          "Susu",
-          "Eli"
-        )
+        Distill.format_transcript([[Message.new("user", "hi")]], "Susu", "Eli")
 
-      assert result ==
-               "Eli: Q?\nSusu: (behaviour: thought through the problem)\nSusu: A"
+      assert result == "Eli: hi"
     end
-  end
 
-  describe "ex-format-transcript > transcript rendering > when distillation fails for a turn (safe_distill/1)" do
-    test "the behaviour line is silently dropped, user/assistant text preserved" do
-      distill_fn = fn _ -> {:error, :upstream} end
+    test "assistant messages render as \"{agent_name}: {content}\"" do
+      result =
+        Distill.format_transcript([[Message.new("assistant", "hello")]], "Susu", "Eli")
 
+      assert result == "Susu: hello"
+    end
+
+    test "behaviour messages are dropped — no \"(behaviour: …)\" line" do
       result =
         Distill.format_transcript(
           [
             [
               Message.new("user", "Q"),
-              Message.new("behaviour", "x"),
+              Message.new("behaviour", "secret thinking"),
               Message.new("assistant", "A")
             ]
           ],
-          distill_fn,
           "Susu",
           "Eli"
         )
 
       assert result == "Eli: Q\nSusu: A"
+      refute result =~ "behaviour"
+      refute result =~ "secret thinking"
     end
+  end
 
-    test "exceptions raised by the distill_fn are also caught (safe_distill semantics)" do
-      distill_fn = fn _ -> raise "boom" end
-
+  describe "ex-format-transcript > when a turn has only behaviour messages" do
+    test "it contributes no lines" do
       result =
         Distill.format_transcript(
           [
-            [
-              Message.new("user", "Q"),
-              Message.new("behaviour", "x"),
-              Message.new("assistant", "A")
-            ]
+            [Message.new("behaviour", "thinking")],
+            [Message.new("user", "Q"), Message.new("assistant", "A")]
           ],
-          distill_fn,
           "Susu",
           "Eli"
         )
@@ -117,103 +55,39 @@ defmodule Gralkor.DistillTest do
     end
   end
 
-  describe "ex-format-transcript > transcript rendering > when no LLM is configured" do
-    test "behaviour lines are silently omitted, user/assistant text preserved" do
+  describe "ex-format-transcript > turns are joined with newlines" do
+    test "multi-turn transcript" do
       result =
         Distill.format_transcript(
           [
-            [
-              Message.new("user", "Q"),
-              Message.new("behaviour", "x"),
-              Message.new("assistant", "A")
-            ]
+            [Message.new("user", "Q1"), Message.new("assistant", "A1")],
+            [Message.new("user", "Q2"), Message.new("assistant", "A2")]
           ],
-          nil,
           "Susu",
           "Eli"
         )
 
-      assert result == "Eli: Q\nSusu: A"
+      assert result == "Eli: Q1\nSusu: A1\nEli: Q2\nSusu: A2"
     end
   end
 
-  describe "ex-format-transcript > transcript rendering > when a turn has no behaviour" do
-    test "rendered as \"User: …\\n{agent_name}: …\" with no behaviour line, no LLM call" do
-      counter = :counters.new(1, [])
-
-      distill_fn = fn _ ->
-        :counters.add(counter, 1, 1)
-        {:ok, "x"}
-      end
-
-      result =
-        Distill.format_transcript(
-          [[Message.new("user", "Q"), Message.new("assistant", "A")]],
-          distill_fn,
-          "Susu",
-          "Eli"
-        )
-
-      assert result == "Eli: Q\nSusu: A"
-      assert :counters.get(counter, 1) == 0
-    end
-  end
-
-  describe "ex-format-transcript > parallel distillation across turns with behaviour via Task.async_stream" do
-    test "total time is closer to single-turn time than serial sum" do
-      distill_fn = fn _ ->
-        Process.sleep(100)
-        {:ok, "ok"}
-      end
-
-      turns =
-        for _ <- 1..4 do
-          [
-            Message.new("user", "Q"),
-            Message.new("behaviour", "b"),
-            Message.new("assistant", "A")
-          ]
-        end
-
-      {us, _result} =
-        :timer.tc(fn -> Distill.format_transcript(turns, distill_fn, "TestAgent", "Eli") end)
-
-      ms = div(us, 1000)
-      assert ms < 250, "expected parallel (~100ms + overhead), got #{ms}ms"
+  describe "ex-format-transcript > no LLM is involved" do
+    test "rendering is pure — format_transcript/3 takes no distill_fn" do
+      refute function_exported?(Distill, :format_transcript, 4)
+      assert function_exported?(Distill, :format_transcript, 3)
     end
   end
 
   describe "ex-format-transcript > if agent_name is missing or blank" do
     test "raises ArgumentError on blank agent_name" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Distill.format_transcript(
-          [[Message.new("user", "Q"), Message.new("assistant", "A")]],
-          nil,
-          "",
-          "Eli"
-        )
-      end
-    end
-
-    test "raises ArgumentError on whitespace-only agent_name" do
-      assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Distill.format_transcript(
-          [[Message.new("user", "Q"), Message.new("assistant", "A")]],
-          nil,
-          "   ",
-          "Eli"
-        )
+        Distill.format_transcript([[Message.new("user", "Q")]], "", "Eli")
       end
     end
 
     test "raises ArgumentError on nil agent_name" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Distill.format_transcript(
-          [[Message.new("user", "Q"), Message.new("assistant", "A")]],
-          nil,
-          nil,
-          "Eli"
-        )
+        Distill.format_transcript([[Message.new("user", "Q")]], nil, "Eli")
       end
     end
   end
@@ -221,45 +95,14 @@ defmodule Gralkor.DistillTest do
   describe "ex-format-transcript > if user_name is missing or blank" do
     test "raises ArgumentError on blank user_name" do
       assert_raise ArgumentError, ~r/user_name/, fn ->
-        Distill.format_transcript(
-          [[Message.new("user", "Q"), Message.new("assistant", "A")]],
-          nil,
-          "Susu",
-          ""
-        )
-      end
-    end
-
-    test "raises ArgumentError on whitespace-only user_name" do
-      assert_raise ArgumentError, ~r/user_name/, fn ->
-        Distill.format_transcript(
-          [[Message.new("user", "Q"), Message.new("assistant", "A")]],
-          nil,
-          "Susu",
-          "   "
-        )
+        Distill.format_transcript([[Message.new("user", "Q")]], "Susu", "")
       end
     end
 
     test "raises ArgumentError on nil user_name" do
       assert_raise ArgumentError, ~r/user_name/, fn ->
-        Distill.format_transcript(
-          [[Message.new("user", "Q"), Message.new("assistant", "A")]],
-          nil,
-          "Susu",
-          nil
-        )
+        Distill.format_transcript([[Message.new("user", "Q")]], "Susu", nil)
       end
-    end
-  end
-
-  describe "ex-format-transcript > the LLM call uses a structured-output schema with a single behaviour field" do
-    test "Distill.distill_schema/0 returns a single-key NimbleOptions schema" do
-      schema = Distill.distill_schema()
-
-      assert Keyword.has_key?(schema, :behaviour)
-      assert schema[:behaviour][:type] == :string
-      assert schema[:behaviour][:required] == true
     end
   end
 end

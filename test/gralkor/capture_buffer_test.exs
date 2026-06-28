@@ -27,7 +27,9 @@ defmodule Gralkor.CaptureBufferTest do
     end
 
     test "the group_id is stored in sanitized form (hyphens → underscores)" do
-      :ok = CaptureBuffer.append("s", "with-hyphens", "Susu", "Eli", nil, [Message.new("user", "x")])
+      :ok =
+        CaptureBuffer.append("s", "with-hyphens", "Susu", "Eli", nil, [Message.new("user", "x")])
+
       :ok = CaptureBuffer.flush("s")
 
       assert_receive {:flushed, "with_hyphens", "Susu", "Eli", nil, _turns}

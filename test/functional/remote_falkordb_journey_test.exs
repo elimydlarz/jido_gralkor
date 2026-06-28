@@ -20,8 +20,6 @@ defmodule Gralkor.RemoteFalkorDbJourneyTest do
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Client.Native
-  alias Gralkor.Config
-  alias Gralkor.Distill
   alias Gralkor.GraphitiPool
   alias Gralkor.Message
 
@@ -65,16 +63,8 @@ defmodule Gralkor.RemoteFalkorDbJourneyTest do
          ]}
       )
 
-    flush_callback = fn group_id, agent_name, user_name, ontology, turns ->
-      body =
-        Distill.format_transcript(turns, Native.distill_callback(), agent_name, user_name)
-
-      if body == "" do
-        :ok
-      else
-        GraphitiPool.add_episode(group_id, body, "captured", ontology)
-      end
-    end
+    flush_callback =
+      Gralkor.Application.build_flush_callback({:remote, falkordb_kw}, learn_fn: &Native.learn/3)
 
     {:ok, _buffer} = start_supervised({CaptureBuffer, [flush_callback: flush_callback]})
 
@@ -122,7 +112,7 @@ defmodule Gralkor.RemoteFalkorDbJourneyTest do
       session_id = "session_#{System.unique_integer([:positive])}"
 
       :ok =
-        Client.impl().capture(session_id, group_id, "TestAgent", "Eli", nil, [
+        Client.impl().capture(session_id, group_id, "TestAgent", "Eli", [
           Message.new(
             "user",
             "Important context: Eli's favourite colour is teal, and Eli drives a blue Subaru Outback."

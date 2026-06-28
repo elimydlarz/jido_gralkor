@@ -11,11 +11,10 @@ defmodule Gralkor.JidoMemoryJourneyTest do
 
   use ExUnit.Case, async: false
 
+  alias Gralkor.Application, as: App
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Client.Native
-  alias Gralkor.Config
-  alias Gralkor.Distill
   alias Gralkor.GraphitiPool
   alias Gralkor.Message
 
@@ -56,15 +55,8 @@ defmodule Gralkor.JidoMemoryJourneyTest do
          ]}
       )
 
-    flush_callback = fn group_id, agent_name, user_name, ontology, turns ->
-      body = Distill.format_transcript(turns, Native.distill_callback(), agent_name, user_name)
-
-      if body == "" do
-        :ok
-      else
-        GraphitiPool.add_episode(group_id, body, "captured", ontology)
-      end
-    end
+    flush_callback =
+      App.build_flush_callback({:embedded, data_dir}, learn_fn: &Native.learn/3)
 
     {:ok, _buffer} = start_supervised({CaptureBuffer, [flush_callback: flush_callback]})
 
@@ -107,12 +99,15 @@ defmodule Gralkor.JidoMemoryJourneyTest do
       session_id = "session_#{System.unique_integer([:positive])}"
 
       :ok =
-        Client.impl().capture(session_id, group_id, "TestAgent", "Eli", nil, [
+        Client.impl().capture(session_id, group_id, "TestAgent", "Eli", [
           Message.new(
             "user",
             "Important context: Eli's favourite colour is teal, and Eli drives a blue Subaru Outback."
           ),
-          Message.new("assistant", "Noted — Eli's favourite colour is teal and Eli drives a blue Subaru Outback.")
+          Message.new(
+            "assistant",
+            "Noted — Eli's favourite colour is teal and Eli drives a blue Subaru Outback."
+          )
         ])
 
       :ok = Client.impl().flush(session_id)
@@ -123,12 +118,68 @@ defmodule Gralkor.JidoMemoryJourneyTest do
       lookup_session = "lookup_#{System.unique_integer([:positive])}"
 
       assert {:ok, block} =
-               Client.impl().recall(group_id, "TestAgent", lookup_session, "What car does Eli drive?")
+               Client.impl().recall(
+                 group_id,
+                 "TestAgent",
+                 lookup_session,
+                 "What car does Eli drive?"
+               )
 
       lower = String.downcase(block)
 
       assert lower =~ "subaru" or lower =~ "outback",
              "expected recall to surface a fact about the car; got: #{block}"
+    end
+  end
+
+  describe "jido-memory-journey > ERL round-trip" do
+    test "a captured turn becomes a learning recalled by the kind of problem", %{
+      group_id: group_id
+    } do
+      session_id = "erl_#{System.unique_integer([:positive])}"
+
+      :ok =
+        Client.impl().capture(
+          session_id,
+          group_id,
+          "Susu",
+          "Eli",
+          [
+            Message.new("user", "the nightly database backup keeps failing with a lock timeout"),
+            Message.new(
+              "behaviour",
+              "thought: inspected the cron — the backup job and the vacuum job both start at 02:00 and contend on the same table"
+            ),
+            Message.new(
+              "behaviour",
+              "tool inspect_schedule → backup and vacuum overlap at 02:00"
+            ),
+            Message.new(
+              "assistant",
+              "I moved the vacuum job to 04:00 so it no longer overlaps the backup; the nightly backups now succeed."
+            )
+          ]
+        )
+
+      :ok = Client.impl().flush(session_id)
+
+      # Give the buffer flush + ex-learn LLM call + graphiti add_episode time to land.
+      Process.sleep(60_000)
+
+      lookup = "erl_lookup_#{System.unique_integer([:positive])}"
+
+      assert {:ok, block} =
+               Client.impl().recall(
+                 group_id,
+                 "Susu",
+                 lookup,
+                 "how do I resolve a scheduling conflict between two jobs that causes lock timeouts?"
+               )
+
+      lower = String.downcase(block)
+
+      assert lower =~ "vacuum" or lower =~ "schedul" or lower =~ "overlap" or lower =~ "backup",
+             "expected recall to surface the ERL lesson about rescheduling the conflicting job; got: #{block}"
     end
   end
 end
