@@ -688,6 +688,8 @@ ex-application (src: lib/gralkor/application.ex; unit: test/gralkor/application_
       and NO learning episodes are written on this attempt (they are written on the path that returns :ok, so a retried flush never double-writes them)
     when the transcript body is empty
       then no captured episode is added and :ok is returned
+    when no add_episode_fn dep is provided (the production default — start/2 wires only generalise_fn + learn_fn)
+      then the default add_episode_fn routes the captured/learning write to GraphitiPool.add_episode with the server supplied explicitly, matching the 6-arity clause — GraphitiPool.add_episode carries defaults on server (1st) and opts (6th), so capturing &GraphitiPool.add_episode/5 and calling it with (group_id, body, source, ontology, opts) binds group_id→server, body→group_id, source→content, ontology→source_description, []→ontology and fails the is_binary(source_description) guard; the flush would raise FunctionClauseError on every capture and CaptureBuffer would exhaust after retries, writing nothing (all capture, not just ERL) (integration: real GraphitiPool + fake graphiti recording add_episode; build_flush_callback with no add_episode_fn dep; assert the captured episode reaches graphiti without raising; test/gralkor/application_test.exs)
     learning (learn_fn dep) — only on a path that returns :ok (empty body, or a successful captured add).
     Learning is unconditional: every turn is learned from, in append order. Fail-fast — a learning failure is
     never swallowed; it propagates out of the flush callback so the CaptureBuffer retry/backoff owns recovery
