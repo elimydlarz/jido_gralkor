@@ -166,15 +166,28 @@ defmodule Gralkor.JidoMemoryJourneyTest do
       # Give the buffer flush + ex-learn LLM call + graphiti add_episode time to land.
       Process.sleep(60_000)
 
+      query = "how do I resolve a scheduling conflict between two jobs that causes lock timeouts?"
+
+      # Isolate the filtered ERL recall path: search graphiti directly with the
+      # SearchFilters(node_labels: ["Learning"]) the client bakes into
+      # learning_search_fn. This proves the real graphiti extractor emitted a
+      # Learning-typed node for the AgentLearning episode AND the node_labels
+      # filter retrieves it — the thing the unfiltered main search cannot prove,
+      # since it shares the partition and would surface the episode regardless.
+      assert {:ok, learning_facts} =
+               GraphitiPool.search(GraphitiPool, group_id, query, 5,
+                 search_filter: %{node_labels: ["Learning"]}
+               )
+
+      learning_text = learning_facts |> Enum.map(& &1.fact) |> Enum.join("\n") |> String.downcase()
+
+      assert learning_text =~ "vacuum" or learning_text =~ "schedul" or
+               learning_text =~ "overlap" or learning_text =~ "backup",
+             "expected the Learning-filtered search to return the ERL lesson; got facts: #{inspect(learning_facts)}"
+
       lookup = "erl_lookup_#{System.unique_integer([:positive])}"
 
-      assert {:ok, block} =
-               Client.impl().recall(
-                 group_id,
-                 "Susu",
-                 lookup,
-                 "how do I resolve a scheduling conflict between two jobs that causes lock timeouts?"
-               )
+      assert {:ok, block} = Client.impl().recall(group_id, "Susu", lookup, query)
 
       lower = String.downcase(block)
 
