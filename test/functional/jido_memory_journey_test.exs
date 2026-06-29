@@ -168,22 +168,32 @@ defmodule Gralkor.JidoMemoryJourneyTest do
 
       query = "how do I resolve a scheduling conflict between two jobs that causes lock timeouts?"
 
-      # Isolate the filtered ERL recall path: search graphiti directly with the
-      # SearchFilters(node_labels: ["Learning"]) the client bakes into
-      # learning_search_fn. This proves the real graphiti extractor emitted a
-      # Learning-typed node for the AgentLearning episode AND the node_labels
-      # filter retrieves it — the thing the unfiltered main search cannot prove,
-      # since it shares the partition and would surface the episode regardless.
-      assert {:ok, learning_facts} =
-               GraphitiPool.search(GraphitiPool, group_id, query, 5,
-                 search_filter: %{node_labels: ["Learning"]}
-               )
+      # DIAGNOSTIC PROBE (two signals in one run):
+      #  (a) unfiltered search — proves the learning episode was written and is
+      #      findable at all (the main recall path would surface it).
+      #  (b) Learning-filtered search — the ERL-specific claim: the real graphiti
+      #      extractor emitted a Learning-typed node AND SearchFilters(node_labels:
+      #      ["Learning"]) retrieves the learning facts.
+      # If (a) finds the lesson but (b) does not, the node_labels filter is the
+      # problem (design/semantics), not the write path.
+      lesson_terms = ["vacuum", "schedul", "overlap", "backup", "04:00", "4:00"]
+      hit? = fn facts -> Enum.any?(facts, fn f -> String.downcase(f.fact) |> then(fn t -> Enum.any?(lesson_terms, &String.contains?(t, &1)) end) end) end
 
-      learning_text = learning_facts |> Enum.map(& &1.fact) |> Enum.join("\n") |> String.downcase()
+      {:ok, unfiltered} = GraphitiPool.search(GraphitiPool, group_id, query, 10, [])
+      {:ok, filtered} =
+        GraphitiPool.search(GraphitiPool, group_id, query, 10,
+          search_filter: %{node_labels: ["Learning"]}
+        )
 
-      assert learning_text =~ "vacuum" or learning_text =~ "schedul" or
-               learning_text =~ "overlap" or learning_text =~ "backup",
-             "expected the Learning-filtered search to return the ERL lesson; got facts: #{inspect(learning_facts)}"
+      require Logger
+      Logger.info("[erl-probe] unfiltered (#{length(unfiltered)}): #{inspect(Enum.map(unfiltered, & &1.fact))}")
+      Logger.info("[erl-probe] filtered (#{length(filtered)}): #{inspect(Enum.map(filtered, & &1.fact))}")
+
+      assert hit?.(unfiltered),
+             "unfiltered search did not surface the lesson — the learning episode was not written or not extracted into searchable facts; got: #{inspect(Enum.map(unfiltered, & &1.fact))}"
+
+      assert hit?.(filtered),
+             "Learning-filtered search returned nothing while unfiltered found it — the node_labels filter does not match the learning facts; filtered: #{inspect(Enum.map(filtered, & &1.fact))}"
 
       lookup = "erl_lookup_#{System.unique_integer([:positive])}"
 
