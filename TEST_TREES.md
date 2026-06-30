@@ -780,12 +780,10 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
     when graphiti's remove_episode raises
       then {:error, {:python, reason}} is returned with reason summarised to the Python error's class and message — not the full multi-line traceback
       then the stderr diagnostic is a single concise line, not a full traceback dump
-  search/5 (group_id, query, max_results, opts)
-    when called with opts[:search_filter] = %{node_labels: ["Learning"]}
-      then graphiti's g.search is invoked with num_results and the search_filter kwarg carrying the node_labels
-        (a graphiti_core.search.search_filters.SearchFilters is built from the Elixir %{node_labels: [...]} map and forwarded as the search_filter kwarg, restricting results to entities stamped with one of those custom-entity labels — ex-learning-entity for ERL recall)
-    when called without a search_filter (nil)
-      then g.search is invoked with search_filter=None (the pre-ERL path — graphiti's default hybrid search)
+  search/4 (group_id, query, max_results) — EDGE search (graphiti g.search), returns fact maps
+    when called
+      then g.search is invoked with num_results and the returned edges are rendered as %{fact:, created_at:, valid_at:, invalid_at:, expired_at:} maps ready for Gralkor.Format.format_facts/1
+      (custom-entity NODES like Learning are NOT retrievable here — edge search's node-label filtering matches edges by endpoint and misses standalone nodes; use search_nodes/5 instead)
   search_nodes/5 (group_id, query, max_results, opts) — NODE search (graphiti g.search_ with the NODE_HYBRID_SEARCH_RRF recipe), the primitive for retrieving custom-entity nodes like Learning; edge search (search/5) cannot, since its node_labels filter matches edges by endpoint and misses standalone nodes
     when called with opts[:node_labels] = ["Learning"]
       then g.search_ is invoked (NODE search) with the recipe limit set to max_results and a SearchFilters carrying node_labels, returning {:ok, [%{name:, summary:, attributes:}]} ordered by relevance
