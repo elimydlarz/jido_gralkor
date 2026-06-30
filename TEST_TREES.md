@@ -785,6 +785,11 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
         (a graphiti_core.search.search_filters.SearchFilters is built from the Elixir %{node_labels: [...]} map and forwarded as the search_filter kwarg, restricting results to entities stamped with one of those custom-entity labels — ex-learning-entity for ERL recall)
     when called without a search_filter (nil)
       then g.search is invoked with search_filter=None (the pre-ERL path — graphiti's default hybrid search)
+  search_nodes/5 (group_id, query, max_results, opts) — NODE search (graphiti g.search_ with the NODE_HYBRID_SEARCH_RRF recipe), the primitive for retrieving custom-entity nodes like Learning; edge search (search/5) cannot, since its node_labels filter matches edges by endpoint and misses standalone nodes
+    when called with opts[:node_labels] = ["Learning"]
+      then g.search_ is invoked (NODE search) with the recipe limit set to max_results and a SearchFilters carrying node_labels, returning {:ok, [%{name:, summary:, attributes:}]} ordered by relevance
+    when called without node_labels
+      then g.search_ is invoked with an unfiltered SearchFilters (all nodes eligible)
   ontology materialisation (the Pythonx-backed half — the pure inclusion/shape decision is ex-ontology-graphiti-spec)
     when an ontology module is materialised
       then the dict carries exactly the spec-selected keys (omitting unselected) and reuses them per module
