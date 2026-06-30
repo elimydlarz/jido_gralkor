@@ -208,19 +208,36 @@ defmodule Gralkor.Client.Native do
     end
   end
 
-  # ERL recall (§1): the learning search filters graphiti to only the plugin's
-  # Learning custom-entity episodes via SearchFilters(node_labels: ["Learning"]),
-  # seeded with the raw user query. Unconditional on every recall — see
-  # ex-recall > orchestration > learning search. Degrades to [] on failure;
+  # ERL recall (§1): the learning search uses graphiti NODE search filtered to
+  # the plugin's Learning custom-entity nodes (node_labels: ["Learning"]), seeded
+  # with the raw user query. Node search — not edge search — because a Learning is
+  # a custom-entity NODE; edge search's node_labels filter matches edges by
+  # endpoint and misses standalone Learning nodes. Unconditional on every recall
+  # (see ex-recall > orchestration > learning search). Degrades to [] on failure;
   # Recall.await_aux owns the 5s yield + the [:ok, facts] shape.
   defp learning_search_fn do
     fn group_id, query, max_results ->
-      opts = [search_filter: %{node_labels: ["Learning"]}]
-
-      case GraphitiPool.search(GraphitiPool, group_id, query, max_results, opts) do
-        {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Format.format_fact/1)}
+      case GraphitiPool.search_nodes(GraphitiPool, group_id, query, max_results,
+             node_labels: ["Learning"]
+           ) do
+        {:ok, nodes} -> {:ok, Enum.map(nodes, &format_learning_node/1)}
         {:error, _} = err -> err
       end
+    end
+  end
+
+  defp format_learning_node(%{name: name, summary: summary, attributes: attrs}) do
+    detail =
+      ["lesson", "approach", "problem_kind"]
+      |> Enum.map(fn k -> {k, Map.get(attrs, k)} end)
+      |> Enum.reject(fn {_k, v} -> v in [nil, "", "None"] end)
+      |> Enum.map_join("; ", fn {k, v} -> "#{k}: #{v}" end)
+
+    body = if summary in [nil, ""], do: name, else: summary
+
+    case detail do
+      "" -> "- learning — #{body}"
+      _ -> "- learning — #{body} (#{detail})"
     end
   end
 
