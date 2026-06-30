@@ -53,50 +53,28 @@ defmodule Gralkor.GraphitiPool do
   end
 
   @doc """
-  Run graphiti's hybrid search against `group_id`. Returns
+  Run graphiti's hybrid EDGE search against `group_id`. Returns
   `{:ok, [%{fact:, created_at:, valid_at:, invalid_at:, expired_at:}]}`
   ready for `Gralkor.Format.format_facts/1`.
 
-  ## Options
-
-    * `:search_filter` — optional `%{node_labels: [String.t()]}` map. When
-      present, a `graphiti_core.search.search_filters.SearchFilters` carrying
-      those `node_labels` is built and forwarded as `g.search`'s
-      `search_filter` kwarg, restricting results to entities stamped with one
-      of those custom-entity labels (e.g. `["Learning"]` for ERL recall). When
-      absent/nil, `g.search` is invoked with `search_filter=None` (graphiti's
-      default hybrid search — the pre-ERL path).
+  For retrieving custom-entity *nodes* (e.g. `Learning` for ERL recall) use
+  `search_nodes/5` — edge search's node-label filtering matches edges by
+  endpoint and misses standalone nodes.
   """
-  @spec search(GenServer.server(), String.t(), String.t(), pos_integer(), keyword()) ::
+  @spec search(GenServer.server(), String.t(), String.t(), pos_integer()) ::
           {:ok, [map()]} | {:error, term()}
-  def search(server \\ __MODULE__, group_id, query, max_results, opts \\ [])
+  def search(server \\ __MODULE__, group_id, query, max_results)
 
-  def search(server, group_id, query, max_results, opts)
-      when is_binary(group_id) and is_binary(query) and is_integer(max_results) and is_list(opts) do
+  def search(server, group_id, query, max_results)
+      when is_binary(group_id) and is_binary(query) and is_integer(max_results) and max_results > 0 do
     instance = __MODULE__.for(server, group_id)
-
-    filter_map = Keyword.get(opts, :search_filter)
-    node_labels = filter_map && Map.get(filter_map, :node_labels)
-
-    {filter_proxy, _} =
-      if is_list(node_labels) and node_labels != [] do
-        Pythonx.eval(
-          """
-          from graphiti_core.search.search_filters import SearchFilters
-          SearchFilters(node_labels=list(node_labels))
-          """,
-          %{"node_labels" => node_labels}
-        )
-      else
-        Pythonx.eval("None", %{})
-      end
 
     {raw, _} =
       Pythonx.eval(
         """
         import asyncio
         q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
-        edges = asyncio._gralkor_run(g.search(q, num_results=max_results, search_filter=search_filter))
+        edges = asyncio._gralkor_run(g.search(q, num_results=max_results))
         [
           {
             "fact": e.fact,
@@ -110,8 +88,7 @@ defmodule Gralkor.GraphitiPool do
         %{
           "g" => instance,
           "query" => query,
-          "max_results" => max_results,
-          "search_filter" => filter_proxy
+          "max_results" => max_results
         }
       )
 
