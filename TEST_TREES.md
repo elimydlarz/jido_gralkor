@@ -254,12 +254,13 @@ ex-agent-learning (src: lib/gralkor/agent_learning.ex; unit: test/gralkor/agent_
 ex-learning-entity (src: lib/gralkor/learning_entity.ex; unit: test/gralkor/learning_entity_test.exs)
   The plugin's built-in graphiti custom entity type for ERL. Declared via the ontology machinery (same shape as a consumer entity) and merged onto every learning write's entity_types at the write boundary, independent of whether a consumer ontology is configured.
   spec/0
-    then returns the entity-types entry for "Learning": %{name: "Learning", fields: [problem_kind, approach, success, lesson]}
-    then problem_kind is a required string (the kind of problem approached)
-    then approach is a required string (the approach taken)
-    then success is a required boolean (whether it succeeded)
-    then lesson is a required string (what was learned)
-      (none of the field names are Graphiti-protected — uuid, name, group_id, labels, created_at, summary, attributes, name_embedding are reserved)
+    then returns the entity-types entry for "Learning": %{name: "Learning", description: <non-empty>, fields: [problem_kind, approach, success, lesson]}
+    then carries a non-empty description — graphiti uses the Pydantic class docstring to decide when to extract the entity; without it the extractor never mints a Learning node (proven by ERL not extracting until the docstring was added)
+    then problem_kind is an optional string (the kind of problem approached)
+    then approach is an optional string (the approach taken)
+    then success is an optional boolean (whether it succeeded)
+    then lesson is an optional string (what was learned)
+      (custom-entity attributes are optional per graphiti's docs, so extraction never drops the entity on a missing attribute; none of the field names are Graphiti-protected — uuid, name, group_id, labels, created_at, summary, attributes, name_embedding are reserved)
   merge_entity_types/1
     when given a consumer entity_types list (possibly empty)
       then returns the list with the "Learning" entry appended, unless an entry named "Learning" is already present
