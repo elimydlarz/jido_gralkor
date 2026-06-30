@@ -216,4 +216,68 @@ defmodule Gralkor.JidoMemoryJourneyTest do
              "expected recall to surface the ERL lesson about rescheduling the conflicting job; got: #{block}"
     end
   end
+
+  # THROWAWAY SPIKE — validates the direct-entity redesign mechanism before TDD.
+  # Saves a Learning EntityNode directly (no add_episode, no LLM extraction), then
+  # node-searches with SearchFilters(node_labels: ["Learning"]). Proves the round-
+  # trip the production code will use. Delete after the redesign lands.
+  describe "SPIKE > direct EntityNode save + node search" do
+    test "a directly-saved Learning node is returned by node search filtered to node_labels: [Learning]",
+         %{group_id: group_id} do
+      instance = GraphitiPool.for(GraphitiPool, group_id)
+      gid = Gralkor.Client.sanitize_group_id(group_id)
+
+      {result, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          from graphiti_core.nodes import EntityNode
+          from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
+          from graphiti_core.search.search_filters import SearchFilters
+
+          try:
+              node = EntityNode(
+                  name="scheduling-conflict learning",
+                  group_id=gid,
+                  labels=["Entity", "Learning"],
+                  summary="Moved the vacuum job to 04:00 so it no longer overlaps the nightly backup; backups now succeed.",
+                  attributes={
+                      "problem_kind": "scheduling conflict causing lock timeouts",
+                      "approach": "moved the vacuum job to 04:00",
+                      "success": True,
+                      "lesson": "reschedule overlapping jobs to avoid lock contention",
+                  },
+              )
+              asyncio._gralkor_run(node.generate_name_embedding(g.embedder))
+              asyncio._gralkor_run(node.save(g.driver))
+
+              res = asyncio._gralkor_run(g.search_(
+                  "how do I resolve a scheduling conflict between two jobs causing lock timeouts?",
+                  config=NODE_HYBRID_SEARCH_RRF,
+                  group_ids=[gid],
+                  search_filter=SearchFilters(node_labels=["Learning"]),
+              ))
+              out = [(n.name, list(n.labels), n.summary) for n in res.nodes]
+              result = {"ok": True, "nodes": out}
+          except BaseException as e:
+              import traceback
+              result = {"ok": False, "error": f"{type(e).__name__}: {e}", "tb": traceback.format_exc()}
+          result
+          """,
+          %{"g" => instance, "gid" => gid}
+        )
+
+      decoded = Pythonx.decode(result)
+      require Logger
+      Logger.info("[spike] node-save+search result: #{inspect(decoded)}")
+
+      assert decoded["ok"], "spike raised: #{inspect(decoded["error"])}\n#{decoded["tb"]}"
+
+      nodes = decoded["nodes"]
+      assert is_list(nodes) and nodes != [], "node search returned no Learning nodes: #{inspect(decoded)}"
+
+      labels = nodes |> Enum.flat_map(fn {_name, ls, _summary} -> ls end)
+      assert "Learning" in labels, "returned nodes were not Learning-labeled: #{inspect(nodes)}"
+    end
+  end
 end
