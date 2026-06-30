@@ -414,7 +414,7 @@ defmodule Gralkor.RecallTest do
     end
 
     @tag :capture_log
-    test "for each auxiliary search that runs, logs how many results it returned" do
+    test "for each auxiliary search that runs, logs how many results it returned and the results themselves" do
       logs =
         ExUnit.CaptureLog.capture_log(fn ->
           {:ok, _} =
@@ -434,6 +434,7 @@ defmodule Gralkor.RecallTest do
 
       assert logs =~ "[gralkor] [test] recall gen search — 0 result(s)"
       assert logs =~ "[gralkor] [test] recall learning search — 1 result(s)"
+      assert logs =~ "- learning — a lesson"
     end
   end
 
