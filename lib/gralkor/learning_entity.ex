@@ -16,15 +16,22 @@ defmodule Gralkor.LearningEntity do
 
   @learning_name "Learning"
 
-  @spec spec() :: %{name: String.t(), fields: [map()]}
+  @description "An experiential lesson the agent learned from attempting to solve a problem. " <>
+                 "Extract a Learning entity from any text that records what was learned while " <>
+                 "solving or attempting a task: the kind of problem faced, the approach taken, " <>
+                 "whether it succeeded, and the reusable lesson. There is exactly one Learning " <>
+                 "per such record."
+
+  @spec spec() :: %{name: String.t(), description: String.t(), fields: [map()]}
   def spec do
     %{
       name: @learning_name,
+      description: @description,
       fields: [
-        %{name: :problem_kind, type: :string, required: true, doc: "the kind of problem approached"},
-        %{name: :approach, type: :string, required: true, doc: "the approach taken"},
-        %{name: :success, type: :boolean, required: true, doc: "whether it succeeded"},
-        %{name: :lesson, type: :string, required: true, doc: "what was learned"}
+        %{name: :problem_kind, type: :string, required: false, doc: "the kind of problem approached"},
+        %{name: :approach, type: :string, required: false, doc: "the approach taken"},
+        %{name: :success, type: :boolean, required: false, doc: "whether it succeeded"},
+        %{name: :lesson, type: :string, required: false, doc: "what was learned"}
       ]
     }
   end
