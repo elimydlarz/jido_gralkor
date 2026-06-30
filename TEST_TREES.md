@@ -1249,8 +1249,8 @@ jido-memory-journey (functional: test/functional/jido_memory_journey_test.exs)
   ERL round-trip
     given a captured turn (capture/5) whose reasoning solved a problem
       when Gralkor.Client.flush/1 is called and the flush callback is wired with learn_fn
-        then a separate AgentLearning episode is written to the same group_id (real ex-learn LLM call)
-        and a direct Learning-filtered search (GraphitiPool.search with search_filter: %{node_labels: ["Learning"]}) keyed on the kind of problem returns the lesson — proving the real graphiti extractor emitted a Learning-typed node and the node_labels filter retrieves it; isolates the filtered ERL recall path from the unfiltered main search, which shares the partition and would surface the episode regardless
+        then the learning is written via add_episode with the Learning custom entity type, and graphiti's extractor creates a Learning-labelled node with populated attributes (problem_kind/approach/success/lesson)
+        and a NODE search (GraphitiPool.search_nodes with node_labels: ["Learning"]) keyed on the kind of problem returns that Learning node carrying the lesson — proving the entity was extracted and node-label filtering retrieves it; isolates the ERL recall path from the unfiltered main search, which shares the partition and would surface the episode regardless
         and a follow-up full recall keyed on the kind of problem surfaces the learning's lesson
   flush_and_await
     given a pending turn in Gralkor.CaptureBuffer
