@@ -180,21 +180,27 @@ defmodule Gralkor.JidoMemoryJourneyTest do
       hit? = fn facts -> Enum.any?(facts, fn f -> String.downcase(f.fact) |> then(fn t -> Enum.any?(lesson_terms, &String.contains?(t, &1)) end) end) end
 
       {:ok, unfiltered} = GraphitiPool.search(GraphitiPool, group_id, query, 10, [])
-      {:ok, filtered} =
+      {:ok, learning_filtered} =
         GraphitiPool.search(GraphitiPool, group_id, query, 10,
           search_filter: %{node_labels: ["Learning"]}
         )
 
+      # KEY DISCRIMINATOR: filter by "Entity", the base label EVERY graphiti
+      # entity node carries. If this returns facts but ["Learning"] does not, the
+      # node_labels filter WORKS and "Learning" simply isn't a label that exists
+      # (design mismatch). If this is ALSO empty, node_labels filtering itself is
+      # broken on the FalkorDB driver (graphiti/usage bug).
+      {:ok, entity_filtered} =
+        GraphitiPool.search(GraphitiPool, group_id, query, 10,
+          search_filter: %{node_labels: ["Entity"]}
+        )
+
       require Logger
       Logger.info("[erl-probe] unfiltered (#{length(unfiltered)}): #{inspect(Enum.map(unfiltered, & &1.fact))}")
-      Logger.info("[erl-probe] filtered (#{length(filtered)}): #{inspect(Enum.map(filtered, & &1.fact))}")
+      Logger.info("[erl-probe] Learning-filtered (#{length(learning_filtered)}): #{inspect(Enum.map(learning_filtered, & &1.fact))}")
+      Logger.info("[erl-probe] Entity-filtered (#{length(entity_filtered)}): #{inspect(Enum.map(entity_filtered, & &1.fact))}")
 
-      # ROOT-CAUSE PROBE: list every entity node in the group and its labels,
-      # straight from graphiti. If no node carries the "Learning" label, the
-      # custom-entity-type approach never produced a Learning node (the extractor
-      # cannot classify "this episode is a learning" as an entity). If a Learning
-      # node exists but the filtered search is still empty, the filter semantics
-      # (edge node_labels) are the issue instead.
+      # Raw label dump straight from the FalkorDB graph (best-effort; scalar param).
       instance = GraphitiPool.for(GraphitiPool, group_id)
       sanitized = Gralkor.Client.sanitize_group_id(group_id)
 
@@ -202,25 +208,35 @@ defmodule Gralkor.JidoMemoryJourneyTest do
         Pythonx.eval(
           """
           import asyncio
-          from graphiti_core.nodes import EntityNode
           try:
-              nodes = asyncio._gralkor_run(EntityNode.get_by_group_ids(g.driver, [gid]))
-              result = [(n.name, list(n.labels)) for n in nodes]
+              res = asyncio._gralkor_run(
+                  g.driver.execute_query(
+                      "MATCH (n) WHERE n.group_id = $gid RETURN n.name AS name, labels(n) AS labels",
+                      gid=gid,
+                  )
+              )
+              records = res[0] if isinstance(res, (tuple, list)) else res
+              out = []
+              for r in records:
+                  try:
+                      out.append((r["name"], r["labels"]))
+                  except Exception:
+                      out.append((str(r), None))
+              result = out
           except BaseException as e:
-              result = [("PROBE_ERROR", [f"{type(e).__name__}: {e}"])]
+              result = [("CYPHER_ERROR", f"{type(e).__name__}: {e}")]
           result
           """,
           %{"g" => instance, "gid" => sanitized}
         )
 
-      node_labels = Pythonx.decode(labels_raw)
-      Logger.info("[erl-probe] entity nodes + labels: #{inspect(node_labels)}")
+      Logger.info("[erl-probe] graph nodes + labels: #{inspect(Pythonx.decode(labels_raw))}")
 
       assert hit?.(unfiltered),
-             "unfiltered search did not surface the lesson — the learning episode was not written or not extracted into searchable facts; got: #{inspect(Enum.map(unfiltered, & &1.fact))}"
+             "unfiltered search did not surface the lesson; got: #{inspect(Enum.map(unfiltered, & &1.fact))}"
 
-      assert hit?.(filtered),
-             "Learning-filtered search returned nothing while unfiltered found it — the node_labels filter does not match the learning facts; filtered: #{inspect(Enum.map(filtered, & &1.fact))}; nodes: #{inspect(node_labels)}"
+      assert hit?.(learning_filtered),
+             "Learning-filtered search empty; Entity-filtered had #{length(entity_filtered)} — if Entity>0 the filter works and no Learning label exists (design); if Entity=0 node_labels filtering is broken on FalkorDB"
 
       lookup = "erl_lookup_#{System.unique_integer([:positive])}"
 
