@@ -197,8 +197,40 @@ defmodule Gralkor.JidoMemoryJourneyTest do
 
       require Logger
       Logger.info("[erl-probe] unfiltered (#{length(unfiltered)}): #{inspect(Enum.map(unfiltered, & &1.fact))}")
-      Logger.info("[erl-probe] Learning-filtered (#{length(learning_filtered)}): #{inspect(Enum.map(learning_filtered, & &1.fact))}")
-      Logger.info("[erl-probe] Entity-filtered (#{length(entity_filtered)}): #{inspect(Enum.map(entity_filtered, & &1.fact))}")
+      Logger.info("[erl-probe] Learning-filtered EDGE (#{length(learning_filtered)}): #{inspect(Enum.map(learning_filtered, & &1.fact))}")
+      Logger.info("[erl-probe] Entity-filtered EDGE (#{length(entity_filtered)}): #{inspect(Enum.map(entity_filtered, & &1.fact))}")
+
+      # CRUCIAL: NODE search (not edge search). add_episode may have created a
+      # Learning NODE that edge search misses (no matching edge). This finds the
+      # node directly if it exists.
+      instance = GraphitiPool.for(GraphitiPool, group_id)
+      gid = Gralkor.Client.sanitize_group_id(group_id)
+
+      {node_raw, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
+          from graphiti_core.search.search_filters import SearchFilters
+          gid = gid.decode("utf-8") if isinstance(gid, (bytes, bytearray)) else gid
+          q = query.decode("utf-8") if isinstance(query, (bytes, bytearray)) else query
+          try:
+              learn = asyncio._gralkor_run(g.search_(q, config=NODE_HYBRID_SEARCH_RRF, group_ids=[gid],
+                  search_filter=SearchFilters(node_labels=["Learning"])))
+              alln = asyncio._gralkor_run(g.search_(q, config=NODE_HYBRID_SEARCH_RRF, group_ids=[gid]))
+              result = {
+                  "learning_nodes": [(n.name, list(n.labels)) for n in learn.nodes],
+                  "all_nodes": [(n.name, list(n.labels)) for n in alln.nodes],
+              }
+          except BaseException as e:
+              import traceback
+              result = {"error": f"{type(e).__name__}: {e}", "tb": traceback.format_exc()}
+          result
+          """,
+          %{"g" => instance, "gid" => gid, "query" => query}
+        )
+
+      Logger.info("[erl-probe] NODE search: #{inspect(Pythonx.decode(node_raw))}")
 
       assert hit?.(unfiltered),
              "unfiltered search did not surface the lesson; got: #{inspect(Enum.map(unfiltered, & &1.fact))}"
