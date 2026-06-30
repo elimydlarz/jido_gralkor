@@ -412,6 +412,29 @@ defmodule Gralkor.RecallTest do
 
       refute logs =~ "[gralkor] [test] recall block:"
     end
+
+    @tag :capture_log
+    test "for each auxiliary search that runs, logs how many results it returned" do
+      logs =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:ok, _} =
+            Recall.recall(
+              "g",
+              "TestAgent",
+              "s1",
+              "q",
+              default_opts(
+                search_fn: ok_search(["- f"]),
+                gen_search_fn: fn _g, _q, _m -> {:ok, []} end,
+                learning_search_fn: fn _g, _q, _m -> {:ok, ["- learning — a lesson"]} end,
+                interpret_fn: ok_interpret([])
+              )
+            )
+        end)
+
+      assert logs =~ "[gralkor] [test] recall gen search — 0 result(s)"
+      assert logs =~ "[gralkor] [test] recall learning search — 1 result(s)"
+    end
   end
 
   describe "ex-recall > observability > when test mode is disabled" do
