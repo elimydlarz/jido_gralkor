@@ -11,28 +11,33 @@ defmodule Gralkor.LearningEntityTest do
       assert field_names == [:problem_kind, :approach, :success, :lesson]
     end
 
-    test "problem_kind is a required string" do
+    test "carries a non-empty description (graphiti uses the class docstring to extract the entity)" do
+      assert %{description: description} = LearningEntity.spec()
+      assert is_binary(description) and String.length(description) > 0
+    end
+
+    test "problem_kind is an optional string" do
       field = find_field(LearningEntity.spec(), :problem_kind)
       assert field.type == :string
-      assert field.required == true
+      assert field.required == false
     end
 
-    test "approach is a required string" do
+    test "approach is an optional string" do
       field = find_field(LearningEntity.spec(), :approach)
       assert field.type == :string
-      assert field.required == true
+      assert field.required == false
     end
 
-    test "success is a required boolean" do
+    test "success is an optional boolean" do
       field = find_field(LearningEntity.spec(), :success)
       assert field.type == :boolean
-      assert field.required == true
+      assert field.required == false
     end
 
-    test "lesson is a required string" do
+    test "lesson is an optional string" do
       field = find_field(LearningEntity.spec(), :lesson)
       assert field.type == :string
-      assert field.required == true
+      assert field.required == false
     end
 
     test "no field name is Graphiti-protected" do
