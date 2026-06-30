@@ -200,38 +200,6 @@ defmodule Gralkor.JidoMemoryJourneyTest do
       Logger.info("[erl-probe] Learning-filtered (#{length(learning_filtered)}): #{inspect(Enum.map(learning_filtered, & &1.fact))}")
       Logger.info("[erl-probe] Entity-filtered (#{length(entity_filtered)}): #{inspect(Enum.map(entity_filtered, & &1.fact))}")
 
-      # Raw label dump straight from the FalkorDB graph (best-effort; scalar param).
-      instance = GraphitiPool.for(GraphitiPool, group_id)
-      sanitized = Gralkor.Client.sanitize_group_id(group_id)
-
-      {labels_raw, _} =
-        Pythonx.eval(
-          """
-          import asyncio
-          try:
-              res = asyncio._gralkor_run(
-                  g.driver.execute_query(
-                      "MATCH (n) WHERE n.group_id = $gid RETURN n.name AS name, labels(n) AS labels",
-                      gid=gid,
-                  )
-              )
-              records = res[0] if isinstance(res, (tuple, list)) else res
-              out = []
-              for r in records:
-                  try:
-                      out.append((r["name"], r["labels"]))
-                  except Exception:
-                      out.append((str(r), None))
-              result = out
-          except BaseException as e:
-              result = [("CYPHER_ERROR", f"{type(e).__name__}: {e}")]
-          result
-          """,
-          %{"g" => instance, "gid" => sanitized}
-        )
-
-      Logger.info("[erl-probe] graph nodes + labels: #{inspect(Pythonx.decode(labels_raw))}")
-
       assert hit?.(unfiltered),
              "unfiltered search did not surface the lesson; got: #{inspect(Enum.map(unfiltered, & &1.fact))}"
 
