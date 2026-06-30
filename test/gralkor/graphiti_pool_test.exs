@@ -96,8 +96,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "search/5, when called with a search_filter" do
-    test "then graphiti's g.search is invoked with num_results and the search_filter kwarg carrying the node_labels" do
+  describe "search/4 (edge search)" do
+    test "then graphiti's g.search is invoked with num_results and the edges are returned as fact maps" do
       # A Pythonx-built fake graphiti whose search coroutine records its kwargs on the
       # instance, so they survive across Pythonx.eval scopes. The pool's construct_instance
       # returns it so GraphitiPool.search drives it.
@@ -106,16 +106,22 @@ defmodule Gralkor.GraphitiPoolTest do
           """
           import asyncio
 
+          class _Edge:
+              def __init__(self, fact):
+                  self.fact = fact
+                  self.created_at = None
+                  self.valid_at = None
+                  self.invalid_at = None
+                  self.expired_at = None
+
           class _FakeGraphiti:
               def __init__(self):
                   self.recorded = {}
 
-              async def search(self, query, num_results=10, search_filter=None):
+              async def search(self, query, num_results=10):
                   self.recorded['query'] = query
                   self.recorded['num_results'] = num_results
-                  self.recorded['has_filter'] = search_filter is not None
-                  self.recorded['node_labels'] = list(search_filter.node_labels) if search_filter is not None else None
-                  return []
+                  return [_Edge("X is a thing")]
 
           _FakeGraphiti()
           """,
@@ -131,56 +137,13 @@ defmodule Gralkor.GraphitiPoolTest do
           install_loop_fn: &Gralkor.Python.install_async_runtime/0
         )
 
-      assert {:ok, []} =
-               GraphitiPool.search(pid, "g1", "how do I deploy a service", 5,
-                 search_filter: %{node_labels: ["Learning"]}
-               )
-
-      {rec, _} =
-        Pythonx.eval(
-          "g.recorded",
-          %{"g" => g}
-        )
-
-      rec = rec |> Pythonx.decode()
-      assert rec["query"] == "how do I deploy a service"
-      assert rec["num_results"] == 5
-      assert rec["has_filter"] == true
-      assert rec["node_labels"] == ["Learning"]
-
-      GenServer.stop(pid)
-    end
-
-    test "then when search_filter is nil, g.search is invoked with search_filter=None (the pre-ERL path)" do
-      {g, _} =
-        Pythonx.eval(
-          """
-          class _FakeGraphiti:
-              def __init__(self):
-                  self.recorded = {}
-
-              async def search(self, query, num_results=10, search_filter=None):
-                  self.recorded['has_filter'] = search_filter is not None
-                  return []
-
-          _FakeGraphiti()
-          """,
-          %{}
-        )
-
-      construct_instance = fn _db, _shared, _group_id -> g end
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: construct_instance,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert {:ok, []} = GraphitiPool.search(pid, "g1", "q", 5)
+      assert {:ok, [%{fact: "X is a thing"}]} =
+               GraphitiPool.search(pid, "g1", "how do I deploy a service", 5)
 
       {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      assert (rec |> Pythonx.decode())["has_filter"] == false
+      rec = Pythonx.decode(rec)
+      assert rec["query"] == "how do I deploy a service"
+      assert rec["num_results"] == 5
 
       GenServer.stop(pid)
     end
