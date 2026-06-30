@@ -92,7 +92,7 @@ ex-recall (src: lib/gralkor/recall.ex; unit: test/gralkor/recall_test.exs)
       and how long interpretation took
     when test mode is enabled
       then also logs the raw query
-      and for each auxiliary search that runs (gen search, learning search), logs how many results it returned ("[gralkor] [test] recall <label> — <n> result(s)") — so ERL/gen firing and yield are observable without inferring from the combined fact count
+      and for each auxiliary search that runs (gen search, learning search), logs how many results it returned and the results themselves ("[gralkor] [test] recall <label> — <n> result(s): <inspected facts>") — so ERL/gen firing, yield, and the actual learning content pulled are observable without inferring from the combined fact count or the post-interpretation block
       when facts are returned
         then also logs the resulting memory block
   (rate-limit / transient upstream errors: req_llm owns the retry. ex layer adds nothing.)
