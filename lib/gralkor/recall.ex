@@ -149,7 +149,10 @@ defmodule Gralkor.Recall do
     case Task.yield(task, 5_000) || Task.shutdown(task, :brutal_kill) do
       {:ok, {:ok, facts}} when is_list(facts) ->
         if test_mode?(),
-          do: Logger.info("[gralkor] [test] recall #{label} — #{length(facts)} result(s)")
+          do:
+            Logger.info(
+              "[gralkor] [test] recall #{label} — #{length(facts)} result(s): #{inspect(facts)}"
+            )
 
         facts
 
