@@ -963,8 +963,8 @@ ex-client-native (src: lib/gralkor/client/native.ex; integration: test/gralkor/c
     if :jido_gralkor, :interpret_max_output_tokens is set to a non-positive integer or a non-integer value
       then the call raises ArgumentError at the port boundary (configuration error surfaces immediately, not as a downstream LLM failure)
   erl recall wiring (§1 — the learning_search_fn behaviour is proven at ex-recall; this is the wiring only, like gen_search_fn/deadline_ms it is not separately unit-tested)
-    then a learning_search_fn is wired into every Gralkor.Recall opts unconditionally — it calls GraphitiPool.search with search_filter: %{node_labels: ["Learning"]} so only the plugin's Learning custom-entity episodes are returned
-      (no flag, no LLM classification, no TaskKind — see ex-learning-entity for the entity type and ex-recall for the orchestration)
+    then a learning_search_fn is wired into every Gralkor.Recall opts unconditionally — it calls GraphitiPool.search_nodes with node_labels: ["Learning"] (NODE search) so only the plugin's Learning custom-entity nodes are returned, formatted from name/summary/attributes
+      (no flag, no LLM classification, no TaskKind — see ex-learning-entity for the entity type and ex-recall for the orchestration; node search not edge search — ex-recall explains why)
   if capture is called with a blank string session_id
     then the call raises with ArgumentError
   if capture is called with a nil session_id
