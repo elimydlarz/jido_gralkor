@@ -186,6 +186,115 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "search_nodes/5, when called with node_labels" do
+    test "then graphiti's g.search_ is invoked (NODE search) with the node_labels SearchFilter, returning node name/summary/attributes" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+
+          class _Node:
+              def __init__(self, name, summary, attributes):
+                  self.name = name
+                  self.summary = summary
+                  self.attributes = attributes
+
+          class _Results:
+              def __init__(self, nodes):
+                  self.nodes = nodes
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded = {}
+
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  self.recorded['query'] = query
+                  self.recorded['limit'] = config.limit if config is not None else None
+                  self.recorded['node_labels'] = (
+                      list(search_filter.node_labels)
+                      if search_filter is not None and search_filter.node_labels
+                      else None
+                  )
+                  return _Results([
+                      _Node("resource contention", "rescheduled the vacuum job to 04:00",
+                            {"lesson": "reschedule overlapping jobs", "success": True}),
+                  ])
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      construct_instance = fn _db, _shared, _group_id -> g end
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: construct_instance,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:ok, [node]} =
+               GraphitiPool.search_nodes(pid, "g1", "how do I resolve a scheduling conflict", 5,
+                 node_labels: ["Learning"]
+               )
+
+      assert node.name == "resource contention"
+      assert node.summary == "rescheduled the vacuum job to 04:00"
+      assert node.attributes["lesson"] == "reschedule overlapping jobs"
+
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      rec = Pythonx.decode(rec)
+      assert rec["query"] == "how do I resolve a scheduling conflict"
+      assert rec["limit"] == 5
+      assert rec["node_labels"] == ["Learning"]
+
+      GenServer.stop(pid)
+    end
+
+    test "then when no node_labels are given, g.search_ is invoked with an unfiltered SearchFilters" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _Results:
+              def __init__(self):
+                  self.nodes = []
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded = {}
+
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  self.recorded['node_labels'] = (
+                      list(search_filter.node_labels)
+                      if search_filter is not None and search_filter.node_labels
+                      else None
+                  )
+                  return _Results()
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      construct_instance = fn _db, _shared, _group_id -> g end
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: construct_instance,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:ok, []} = GraphitiPool.search_nodes(pid, "g1", "q", 5)
+
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert (rec |> Pythonx.decode())["node_labels"] == nil
+
+      GenServer.stop(pid)
+    end
+  end
+
   describe "for/1 (group_id), when called against an embedded spec" do
     test "then the Graphiti instance for the sanitized group_id is looked up from a shared ETS cache; on first use it is constructed and inserted, then lives for the lifetime of the GenServer" do
       counter = :counters.new(1, [])
