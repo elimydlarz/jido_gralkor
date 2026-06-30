@@ -121,6 +121,79 @@ defmodule Gralkor.GraphitiPool do
   end
 
   @doc """
+  Node search against `group_id` via graphiti's `search_` with the
+  `NODE_HYBRID_SEARCH_RRF` recipe. Unlike `search/4` (which returns *edges* and
+  whose `node_labels` filter matches edges by endpoint), this returns *nodes* —
+  the right primitive for retrieving custom-entity nodes like `Learning`, which
+  are not reliably reachable through edge search.
+
+  Returns `{:ok, [%{name:, summary:, attributes:}]}` ordered by relevance.
+
+  ## Options
+
+    * `:node_labels` — optional `[String.t()]`. When present, a
+      `SearchFilters(node_labels: …)` restricts results to nodes carrying one of
+      those labels (e.g. `["Learning"]` for ERL recall). When absent, all nodes
+      are eligible.
+  """
+  @spec search_nodes(GenServer.server(), String.t(), String.t(), pos_integer(), keyword()) ::
+          {:ok, [map()]} | {:error, term()}
+  def search_nodes(server \\ __MODULE__, group_id, query, max_results, opts \\ [])
+
+  def search_nodes(server, group_id, query, max_results, opts)
+      when is_binary(group_id) and is_binary(query) and is_integer(max_results) and max_results > 0 and
+             is_list(opts) do
+    instance = __MODULE__.for(server, group_id)
+    node_labels = Keyword.get(opts, :node_labels)
+
+    {raw, _} =
+      Pythonx.eval(
+        """
+        import asyncio
+        from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
+        from graphiti_core.search.search_filters import SearchFilters
+
+        q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
+        gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+        labels = (
+          [l.decode('utf-8') if isinstance(l, (bytes, bytearray)) else l for l in node_labels]
+          if node_labels else None
+        )
+        sf = SearchFilters(node_labels=labels) if labels else SearchFilters()
+        config = NODE_HYBRID_SEARCH_RRF.model_copy(deep=True)
+        config.limit = max_results
+        res = asyncio._gralkor_run(g.search_(q, config=config, group_ids=[gid], search_filter=sf))
+        [
+          {
+            "name": n.name,
+            "summary": n.summary,
+            "attributes": {k: str(v) for k, v in (n.attributes or {}).items()},
+          } for n in res.nodes
+        ]
+        """,
+        %{
+          "g" => instance,
+          "query" => query,
+          "group_id" => group_id,
+          "max_results" => max_results,
+          "node_labels" => node_labels
+        }
+      )
+
+    {:ok, raw |> Pythonx.decode() |> Enum.map(&node_map/1)}
+  rescue
+    e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
+  end
+
+  defp node_map(%{} = m) do
+    %{
+      name: Map.get(m, "name"),
+      summary: Map.get(m, "summary"),
+      attributes: Map.get(m, "attributes") || %{}
+    }
+  end
+
+  @doc """
   Ingest one episode (text content) into `group_id` via graphiti's
   `add_episode`. Auto-generates `name` and `idempotency_key`. When
   `ontology` is a module declared with `use Gralkor.Ontology`, its payload
