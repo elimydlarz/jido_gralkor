@@ -487,8 +487,8 @@ defmodule Gralkor.GraphitiPool do
 
   defp materialise_boundary(:excluded_entity_types, list), do: list
 
-  defp spec_for_python(%{name: name, fields: fields}) do
-    %{
+  defp spec_for_python(%{name: name, fields: fields} = spec) do
+    base = %{
       "name" => name,
       "fields" =>
         Enum.map(fields, fn %{name: fname, type: ftype, required: required, doc: doc} ->
@@ -500,6 +500,11 @@ defmodule Gralkor.GraphitiPool do
           }
         end)
     }
+
+    case Map.get(spec, :description) do
+      nil -> base
+      description -> Map.put(base, "description", description)
+    end
   end
 
   defp edge_pair_for_python({{src, dst}, names}) do
