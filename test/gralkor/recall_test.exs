@@ -673,14 +673,15 @@ defmodule Gralkor.RecallTest do
   # Integration seam: the real Gralkor.Client.Native wiring of learning_search_fn
   # must not silently degrade. Native.learning_search_fn/0 is private, so the only
   # way to exercise it end-to-end is through Native.recall/4 — the public path the
-  # plugin uses in production. With a real GraphitiPool (fake graphiti returning []
-  # so the LLM interpret_fn is never called — interpret_combined/5 short-circuits on
-  # empty facts), the real learning_search_fn closure runs against the real
-  # GraphitiPool.search. If the closure's call signature is wrong (e.g. the
-  # search_filter kwarg passed as a positional arg, binding to max_results and
-  # failing the guard), the task raises, Recall.await_aux swallows it and logs
-  # "[gralkor] recall learning search failed: {:exit, ...}" — ERL silently does
-  # nothing on every recall. This test catches that: assert no such failure log.
+  # plugin uses in production. With a real GraphitiPool (fake graphiti returning no
+  # results so the LLM interpret_fn is never called — interpret_combined/5 short-
+  # circuits on empty facts), the real learning_search_fn closure runs against the
+  # real GraphitiPool.search_nodes. If the closure's call is wrong, the task raises,
+  # Recall.await_aux swallows it and logs "[gralkor] recall learning search failed:
+  # {:exit, ...}" — ERL silently does nothing on every recall. This test catches
+  # that, and asserts the learning search runs as a NODE search filtered to
+  # node_labels: ["Learning"] (the custom-entity node retrieval primitive — edge
+  # search would miss standalone Learning nodes).
   describe "ex-recall > where the real Native.learning_search_fn wiring does not silently degrade (integration)" do
     @describetag :integration
 
@@ -690,13 +691,26 @@ defmodule Gralkor.RecallTest do
           """
           import asyncio
 
+          class _Results:
+              def __init__(self):
+                  self.nodes = []
+
           class _FakeGraphiti:
               def __init__(self):
                   self.recorded = {}
 
+              # main + gen recall use edge search
               async def search(self, query, num_results=10, search_filter=None):
-                  self.recorded['has_filter'] = search_filter is not None
                   return []
+
+              # the learning search uses NODE search (search_nodes -> g.search_)
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  self.recorded['node_labels'] = (
+                      list(search_filter.node_labels)
+                      if search_filter is not None and search_filter.node_labels
+                      else None
+                  )
+                  return _Results()
 
           _FakeGraphiti()
           """,
@@ -724,7 +738,7 @@ defmodule Gralkor.RecallTest do
       %{pid: pid, g: g}
     end
 
-    test "Native.recall/4 runs the real learning_search_fn closure without raising (no learning-search-failed log)",
+    test "Native.recall/4 runs the real learning_search_fn closure as a Learning node search without raising",
          %{g: g} do
       import ExUnit.CaptureLog
 
@@ -734,15 +748,14 @@ defmodule Gralkor.RecallTest do
         end)
 
       # The real learning_search_fn closure (Native.learning_search_fn/0) called
-      # GraphitiPool.search with the Learning filter and returned without raising.
-      # If it had raised, Recall.await_aux would have logged:
-      #   "[gralkor] recall learning search failed: {:exit, ...}"
+      # GraphitiPool.search_nodes and returned without raising. If it had raised,
+      # Recall.await_aux would have logged "[gralkor] recall learning search failed".
       refute String.contains?(logs, "learning search failed")
 
-      # And the filtered search was actually invoked with the SearchFilters — the
-      # fake graphiti recorded that a filter was present on the learning call.
+      # And it ran as a NODE search filtered to node_labels: ["Learning"] — the
+      # fake graphiti recorded the labels its search_ received.
       {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      assert (rec |> Pythonx.decode())["has_filter"] == true
+      assert (rec |> Pythonx.decode())["node_labels"] == ["Learning"]
     end
   end
 end
