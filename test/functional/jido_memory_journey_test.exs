@@ -235,6 +235,8 @@ defmodule Gralkor.JidoMemoryJourneyTest do
           from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
           from graphiti_core.search.search_filters import SearchFilters
 
+          gid = gid.decode("utf-8") if isinstance(gid, (bytes, bytearray)) else gid
+
           try:
               node = EntityNode(
                   name="scheduling-conflict learning",
