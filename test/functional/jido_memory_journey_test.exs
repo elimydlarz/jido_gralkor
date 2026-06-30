@@ -163,155 +163,47 @@ defmodule Gralkor.JidoMemoryJourneyTest do
 
       :ok = Client.impl().flush(session_id)
 
-      # Give the buffer flush + ex-learn LLM call + graphiti add_episode time to land.
+      # Give the buffer flush + ex-learn LLM call + graphiti add_episode (entity
+      # extraction populates the Learning node) time to land.
       Process.sleep(60_000)
 
       query = "how do I resolve a scheduling conflict between two jobs that causes lock timeouts?"
 
-      # DIAGNOSTIC PROBE (two signals in one run):
-      #  (a) unfiltered search — proves the learning episode was written and is
-      #      findable at all (the main recall path would surface it).
-      #  (b) Learning-filtered search — the ERL-specific claim: the real graphiti
-      #      extractor emitted a Learning-typed node AND SearchFilters(node_labels:
-      #      ["Learning"]) retrieves the learning facts.
-      # If (a) finds the lesson but (b) does not, the node_labels filter is the
-      # problem (design/semantics), not the write path.
       lesson_terms = ["vacuum", "schedul", "overlap", "backup", "04:00", "4:00"]
-      hit? = fn facts -> Enum.any?(facts, fn f -> String.downcase(f.fact) |> then(fn t -> Enum.any?(lesson_terms, &String.contains?(t, &1)) end) end) end
 
-      {:ok, unfiltered} = GraphitiPool.search(GraphitiPool, group_id, query, 10, [])
-      {:ok, learning_filtered} =
-        GraphitiPool.search(GraphitiPool, group_id, query, 10,
-          search_filter: %{node_labels: ["Learning"]}
-        )
-
-      # KEY DISCRIMINATOR: filter by "Entity", the base label EVERY graphiti
-      # entity node carries. If this returns facts but ["Learning"] does not, the
-      # node_labels filter WORKS and "Learning" simply isn't a label that exists
-      # (design mismatch). If this is ALSO empty, node_labels filtering itself is
-      # broken on the FalkorDB driver (graphiti/usage bug).
-      {:ok, entity_filtered} =
-        GraphitiPool.search(GraphitiPool, group_id, query, 10,
-          search_filter: %{node_labels: ["Entity"]}
-        )
+      # The ERL-specific contract: the learning was extracted into a Learning
+      # custom-entity NODE (add_episode + Gralkor.LearningEntity), and NODE search
+      # filtered to node_labels: ["Learning"] retrieves it. This is the path the
+      # client's learning_search_fn uses — isolated from the unfiltered main
+      # search, which would surface the episode regardless.
+      {:ok, learning_nodes} =
+        GraphitiPool.search_nodes(GraphitiPool, group_id, query, 5, node_labels: ["Learning"])
 
       require Logger
-      Logger.info("[erl-probe] unfiltered (#{length(unfiltered)}): #{inspect(Enum.map(unfiltered, & &1.fact))}")
-      Logger.info("[erl-probe] Learning-filtered EDGE (#{length(learning_filtered)}): #{inspect(Enum.map(learning_filtered, & &1.fact))}")
-      Logger.info("[erl-probe] Entity-filtered EDGE (#{length(entity_filtered)}): #{inspect(Enum.map(entity_filtered, & &1.fact))}")
+      Logger.info("[erl] learning nodes (#{length(learning_nodes)}): #{inspect(learning_nodes)}")
 
-      # CRUCIAL: NODE search (not edge search). add_episode may have created a
-      # Learning NODE that edge search misses (no matching edge). This finds the
-      # node directly if it exists.
-      instance = GraphitiPool.for(GraphitiPool, group_id)
-      gid = Gralkor.Client.sanitize_group_id(group_id)
+      assert learning_nodes != [],
+             "node search filtered to ['Learning'] returned no nodes — the Learning entity was not extracted"
 
-      {node_raw, _} =
-        Pythonx.eval(
-          """
-          import asyncio
-          from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
-          from graphiti_core.search.search_filters import SearchFilters
-          gid = gid.decode("utf-8") if isinstance(gid, (bytes, bytearray)) else gid
-          q = query.decode("utf-8") if isinstance(query, (bytes, bytearray)) else query
-          try:
-              learn = asyncio._gralkor_run(g.search_(q, config=NODE_HYBRID_SEARCH_RRF, group_ids=[gid],
-                  search_filter=SearchFilters(node_labels=["Learning"])))
-              alln = asyncio._gralkor_run(g.search_(q, config=NODE_HYBRID_SEARCH_RRF, group_ids=[gid]))
-              result = {
-                  "learning_nodes": [(n.name, list(n.labels)) for n in learn.nodes],
-                  "all_nodes": [(n.name, list(n.labels)) for n in alln.nodes],
-              }
-          except BaseException as e:
-              import traceback
-              result = {"error": f"{type(e).__name__}: {e}", "tb": traceback.format_exc()}
-          result
-          """,
-          %{"g" => instance, "gid" => gid, "query" => query}
-        )
+      node_text =
+        learning_nodes
+        |> Enum.map(fn n -> "#{n.name} #{n.summary} #{inspect(n.attributes)}" end)
+        |> Enum.join("\n")
+        |> String.downcase()
 
-      Logger.info("[erl-probe] NODE search: #{inspect(Pythonx.decode(node_raw))}")
+      assert Enum.any?(lesson_terms, &String.contains?(node_text, &1)),
+             "the Learning node did not carry the lesson; got: #{inspect(learning_nodes)}"
 
-      assert hit?.(unfiltered),
-             "unfiltered search did not surface the lesson; got: #{inspect(Enum.map(unfiltered, & &1.fact))}"
-
-      assert hit?.(learning_filtered),
-             "Learning-filtered search empty; Entity-filtered had #{length(entity_filtered)} — if Entity>0 the filter works and no Learning label exists (design); if Entity=0 node_labels filtering is broken on FalkorDB"
-
+      # End-to-end: full recall surfaces the lesson (the learning search feeds the
+      # combined facts into interpretation).
       lookup = "erl_lookup_#{System.unique_integer([:positive])}"
 
       assert {:ok, block} = Client.impl().recall(group_id, "Susu", lookup, query)
 
       lower = String.downcase(block)
 
-      assert lower =~ "vacuum" or lower =~ "schedul" or lower =~ "overlap" or lower =~ "backup",
+      assert Enum.any?(lesson_terms, &String.contains?(lower, &1)),
              "expected recall to surface the ERL lesson about rescheduling the conflicting job; got: #{block}"
-    end
-  end
-
-  # THROWAWAY SPIKE — validates the direct-entity redesign mechanism before TDD.
-  # Saves a Learning EntityNode directly (no add_episode, no LLM extraction), then
-  # node-searches with SearchFilters(node_labels: ["Learning"]). Proves the round-
-  # trip the production code will use. Delete after the redesign lands.
-  describe "SPIKE > direct EntityNode save + node search" do
-    test "a directly-saved Learning node is returned by node search filtered to node_labels: [Learning]",
-         %{group_id: group_id} do
-      instance = GraphitiPool.for(GraphitiPool, group_id)
-      gid = Gralkor.Client.sanitize_group_id(group_id)
-
-      {result, _} =
-        Pythonx.eval(
-          """
-          import asyncio
-          from graphiti_core.nodes import EntityNode
-          from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
-          from graphiti_core.search.search_filters import SearchFilters
-
-          gid = gid.decode("utf-8") if isinstance(gid, (bytes, bytearray)) else gid
-
-          try:
-              node = EntityNode(
-                  name="scheduling-conflict learning",
-                  group_id=gid,
-                  labels=["Entity", "Learning"],
-                  summary="Moved the vacuum job to 04:00 so it no longer overlaps the nightly backup; backups now succeed.",
-                  attributes={
-                      "problem_kind": "scheduling conflict causing lock timeouts",
-                      "approach": "moved the vacuum job to 04:00",
-                      "success": True,
-                      "lesson": "reschedule overlapping jobs to avoid lock contention",
-                  },
-              )
-              asyncio._gralkor_run(node.generate_name_embedding(g.embedder))
-              asyncio._gralkor_run(node.save(g.driver))
-
-              res = asyncio._gralkor_run(g.search_(
-                  "how do I resolve a scheduling conflict between two jobs causing lock timeouts?",
-                  config=NODE_HYBRID_SEARCH_RRF,
-                  group_ids=[gid],
-                  search_filter=SearchFilters(node_labels=["Learning"]),
-              ))
-              out = [(n.name, list(n.labels), n.summary) for n in res.nodes]
-              result = {"ok": True, "nodes": out}
-          except BaseException as e:
-              import traceback
-              result = {"ok": False, "error": f"{type(e).__name__}: {e}", "tb": traceback.format_exc()}
-          result
-          """,
-          %{"g" => instance, "gid" => gid}
-        )
-
-      decoded = Pythonx.decode(result)
-      require Logger
-      Logger.info("[spike] node-save+search result: #{inspect(decoded)}")
-
-      assert decoded["ok"], "spike raised: #{inspect(decoded["error"])}\n#{decoded["tb"]}"
-
-      nodes = decoded["nodes"]
-      assert is_list(nodes) and nodes != [], "node search returned no Learning nodes: #{inspect(decoded)}"
-
-      labels = nodes |> Enum.flat_map(fn {_name, ls, _summary} -> ls end)
-      assert "Learning" in labels, "returned nodes were not Learning-labeled: #{inspect(nodes)}"
     end
   end
 end
