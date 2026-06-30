@@ -537,6 +537,8 @@ defmodule Gralkor.GraphitiPool do
     classes = {}
     for spec in specs:
         name = decode(get(spec, "name"))
+        desc_raw = get(spec, "description")
+        description = decode(desc_raw) if desc_raw is not None else None
         annotations = {}
         defaults = {}
         for f in (get(spec, "fields") or []):
@@ -553,6 +555,8 @@ defmodule Gralkor.GraphitiPool do
                 annotations[fname] = Optional[py_type]
                 defaults[fname] = Field(default=None, description=doc) if doc else Field(default=None)
         namespace = {"__annotations__": annotations, **defaults}
+        if description:
+            namespace["__doc__"] = description
         cls = type(name, (BaseModel,), namespace)
         classes[name] = cls
     classes
