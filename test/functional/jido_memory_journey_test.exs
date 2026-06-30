@@ -189,11 +189,38 @@ defmodule Gralkor.JidoMemoryJourneyTest do
       Logger.info("[erl-probe] unfiltered (#{length(unfiltered)}): #{inspect(Enum.map(unfiltered, & &1.fact))}")
       Logger.info("[erl-probe] filtered (#{length(filtered)}): #{inspect(Enum.map(filtered, & &1.fact))}")
 
+      # ROOT-CAUSE PROBE: list every entity node in the group and its labels,
+      # straight from graphiti. If no node carries the "Learning" label, the
+      # custom-entity-type approach never produced a Learning node (the extractor
+      # cannot classify "this episode is a learning" as an entity). If a Learning
+      # node exists but the filtered search is still empty, the filter semantics
+      # (edge node_labels) are the issue instead.
+      instance = GraphitiPool.for(GraphitiPool, group_id)
+      sanitized = Gralkor.Client.sanitize_group_id(group_id)
+
+      {labels_raw, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          from graphiti_core.nodes import EntityNode
+          try:
+              nodes = asyncio._gralkor_run(EntityNode.get_by_group_ids(g.driver, [gid]))
+              result = [(n.name, list(n.labels)) for n in nodes]
+          except BaseException as e:
+              result = [("PROBE_ERROR", [f"{type(e).__name__}: {e}"])]
+          result
+          """,
+          %{"g" => instance, "gid" => sanitized}
+        )
+
+      node_labels = Pythonx.decode(labels_raw)
+      Logger.info("[erl-probe] entity nodes + labels: #{inspect(node_labels)}")
+
       assert hit?.(unfiltered),
              "unfiltered search did not surface the lesson — the learning episode was not written or not extracted into searchable facts; got: #{inspect(Enum.map(unfiltered, & &1.fact))}"
 
       assert hit?.(filtered),
-             "Learning-filtered search returned nothing while unfiltered found it — the node_labels filter does not match the learning facts; filtered: #{inspect(Enum.map(filtered, & &1.fact))}"
+             "Learning-filtered search returned nothing while unfiltered found it — the node_labels filter does not match the learning facts; filtered: #{inspect(Enum.map(filtered, & &1.fact))}; nodes: #{inspect(node_labels)}"
 
       lookup = "erl_lookup_#{System.unique_integer([:positive])}"
 
