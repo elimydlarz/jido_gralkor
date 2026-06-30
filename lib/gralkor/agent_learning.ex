@@ -30,10 +30,12 @@ defmodule Gralkor.AgentLearning do
   @spec to_episode(t()) :: String.t()
   def to_episode(%__MODULE__{} = learning) do
     """
-    Learning from a #{learning.problem_kind} problem.
-    Approach taken: #{learning.approach}
-    Outcome: the approach #{outcome(learning.success)}.
-    Lesson: #{learning.lesson}
+    The agent recorded a Learning titled "#{learning.problem_kind}".
+    This Learning is a reusable lesson acquired from solving a problem.
+    The Learning's problem kind: #{learning.problem_kind}.
+    The Learning's approach: #{learning.approach}
+    The Learning's outcome: the approach #{outcome(learning.success)}.
+    The Learning's lesson: #{learning.lesson}
     """
     |> String.trim()
   end
