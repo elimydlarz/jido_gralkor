@@ -190,6 +190,9 @@ defmodule Gralkor.GraphitiPool do
             uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
             kwargs['uuid'] = uid
         import sys
+        _et = kwargs.get('entity_types')
+        _et_desc = list(_et.keys()) if isinstance(_et, dict) else (type(_et).__name__ if _et is not None else None)
+        print(f"[gralkor-debug] add_episode source={s!r} group={gid!r} entity_types={_et_desc}", file=sys.stderr)
         try:
             asyncio._gralkor_run(g.add_episode(**kwargs))
         except BaseException as e:
