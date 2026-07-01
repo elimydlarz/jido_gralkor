@@ -17,7 +17,11 @@
 
 ### Removed
 - `Gralkor.TaskKind` and the `:jido_gralkor, :erl_recall` opt-in flag — a dormant code path no consumer had ever set. The unconditional learning search replaces it.
+- `Gralkor.GraphitiPool.search/5`'s `:search_filter` (edge `node_labels`) option — the wrong primitive for custom-entity retrieval, now dead after the move to `search_nodes/5`. `search/5` is now `search/4` (plain edge search).
 - `ex-task-kind` test tree.
+
+### Added
+- Test-mode recall observability: with `config :jido_gralkor, :test, true`, each auxiliary search (gen, learning) logs its result count and contents (`[gralkor] [test] recall learning search — N result(s): …`), so ERL firing and the exact learning content pulled are visible before interpretation.
 
 ### Changed (other)
 - Graphiti runtime bumped to `graphiti-core[falkordb,google-genai] >= 0.29.2` — a bug-fix release: FalkorDBLite embedded support with Redis pinning, nul-byte stripping from parameters, and RediSearch escaping fixes. No API changes.
