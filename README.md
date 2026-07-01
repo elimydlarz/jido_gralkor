@@ -1,6 +1,6 @@
 # jido_gralkor
 
-Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded [Gralkor](https://github.com/elimydlarz/gralkor) memory adapter — Graphiti + FalkorDB driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), no external server to run.
+Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded Gralkor memory adapter — Graphiti + FalkorDB driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), no external server to run.
 
 You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, and an `Ontology` DSL for declaring the entity types and relationships graphiti should extract from captured episodes.
 
