@@ -265,7 +265,12 @@ Detailed behaviour for every module lives in [`CLAUDE.md`](https://github.com/el
 ./scripts/publish.sh patch   # or minor | major | current
 ```
 
-Bumps `@version` in `mix.exs`, runs `mix hex.publish --yes`, commits the bump, and tags `jido-gralkor-v<version>` locally. Push with `git push --follow-tags`.
+Bumps `@version` in `mix.exs`, runs `mix hex.publish --yes`, commits the bump, and tags `jido-gralkor-v<version>` locally. The tag is **lightweight**, so `git push --follow-tags` will *not* push it (that only pushes annotated tags) — push the release tag explicitly:
+
+```bash
+git push                                 # the version-bump commit
+git push origin jido-gralkor-v<version>  # the release tag
+```
 
 ## License
 
