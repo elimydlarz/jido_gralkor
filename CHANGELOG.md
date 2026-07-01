@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-07-01
+
 ### Changed
 - **ERL recall is now unconditional and uses graphiti NODE search.** Every recall runs a parallel learning search over the plugin's built-in `Learning` graphiti custom-entity nodes via `Gralkor.GraphitiPool.search_nodes/5` (graphiti `g.search_` + `NODE_HYBRID_SEARCH_RRF` + `SearchFilters(node_labels: ["Learning"])`), seeded with the raw user query. No LLM classification, no opt-in flag.
 - `Gralkor.AgentLearning` is written via `add_episode` with the `Learning` custom entity type (`Gralkor.LearningEntity`) merged onto `entity_types` — graphiti's extractor creates a `Learning`-labelled node (with `problem_kind`/`approach`/`success`/`lesson` attributes) and connects it to the domain entities it extracts. ERL applies even with no consumer ontology configured.
