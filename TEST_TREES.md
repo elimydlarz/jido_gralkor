@@ -175,6 +175,8 @@ ex-interpret (src: lib/gralkor/interpret.ex; unit: test/gralkor/interpret_test.e
       then raises ArgumentError
     calls interpret_fn with the prompt (built via build_interpretation_context/3 with the agent_name) AND the output_token_budget — interpret_fn has arity 2 so the LLM-side wiring (e.g. req_llm) can pass max_tokens through to the provider
     and the interpretation prompt carries a "respond within {output_token_budget} tokens" instruction so the model self-limits the breadth of its answer
+    and the interpretation prompt gently frames retrieved facts as understandings extracted from earlier conversational context rather than proven claims
+      and asks the LLM to mention that conversational source only where natural, without confidence labels, truth adjudication, or repetitive uncertainty warnings
     and the structured-output schema instructs the LLM to copy each fact line verbatim
       (preserving every timestamp parenthetical, dropping the leading '- ')
       then ' — ' then a one-sentence relevance reason
