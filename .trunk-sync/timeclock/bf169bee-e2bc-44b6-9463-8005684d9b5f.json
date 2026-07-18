@@ -1,9 +1,0 @@
-{
-  "sessionId": "bf169bee-e2bc-44b6-9463-8005684d9b5f",
-  "pid": 95903,
-  "hostname": "Eli Mydlarz",
-  "clockedInAt": "2026-06-28T16:55:16.042Z",
-  "lastActiveAt": "2026-07-01T10:53:21.620Z",
-  "branch": "main",
-  "task": "What partition do we store erl stuff in?"
-}
