@@ -143,9 +143,9 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your co
 
 **`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 
-## Declaring a custom ontology
+## Configure Lenses
 
-By default jido_gralkor passes no ontology to graphiti — it extracts generic entities and edges. To shape extraction against your domain, declare a `Gralkor.Ontology` module and set it as a deployment-wide config value.
+A Lens is an application-owned memory channel. Its definition supplies a name, a graphiti ontology, a scope, and the ingestion process Gralkor invokes when content is sent through it. Register as many Lenses as your application needs:
 
 ```elixir
 defmodule MyApp.Ontology do
@@ -170,6 +170,97 @@ defmodule MyApp.Ontology do
 end
 ```
 
+```elixir
+# config/runtime.exs
+config :jido_gralkor,
+  lenses: [
+    [
+      name: "observations",
+      ontology: MyApp.Ontology,
+      scope: :operator,
+      ingestion: Gralkor.Lens.Ingestion.Store
+    ],
+    [
+      name: "decisions",
+      ontology: MyApp.Ontology,
+      scope: :operator,
+      ingestion: MyApp.DecisionIngestion
+    ],
+    [
+      name: "generalisations",
+      ontology: MyApp.Ontology,
+      scope: :global,
+      ingestion: Gralkor.Lens.Ingestion.Generalise
+    ]
+  ]
+```
+
+`:operator` Lenses are local to the operator and isolated from every other local Lens. `:global` Lenses all write into the same shared global pool. Each global episode records the Lens it arrived through, but searches of `"global"` are intentionally unfiltered and return relevant memory from the whole pool.
+
+`Gralkor.Lens.Ingestion.Store` is the built-in straight-through process. A consumer can define any other ingestion process by implementing one callback:
+
+```elixir
+defmodule MyApp.DecisionIngestion do
+  @behaviour Gralkor.Lens.Ingestion
+
+  @impl true
+  def ingest(request, store) do
+    with {:ok, decisions} <- MyApp.Decisions.extract(request.content) do
+      Enum.reduce_while(decisions, :ok, fn decision, :ok ->
+        case Gralkor.Lens.Store.add(store, decision, request.source_description) do
+          :ok -> {:cont, :ok}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+      end)
+    end
+  end
+end
+```
+
+The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3`, `search/3`, and `remove/2`. The store, rather than consumer code, owns the physical partition, selected ontology, and global provenance.
+
+The plugin mount chooses how an agent uses the registered Lenses:
+
+```elixir
+{JidoGralkor.Plugin,
+ %{
+   agent_name: "Susu",
+   default_lens: "observations",
+   search_targets: ["observations", "global"],
+   generalise_lens: "generalisations"
+ }}
+```
+
+- `default_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
+- `search_targets` is a non-empty list of local Lens names and/or the reserved `"global"` target. A named global Lens is ingestion provenance, not a search filter, so it cannot be used as a target.
+- `generalise_lens` is optional. It submits each flushed transcript to a second Lens independently of the primary capture Lens.
+
+Consumers that ingest or search outside an agent call the same public boundary directly:
+
+```elixir
+:ok =
+  Gralkor.Client.ingest(%Gralkor.Ingest{
+    operator_id: "operator-42",
+    lens: "decisions",
+    content: "We chose Friday.",
+    source_description: "release planning"
+  })
+
+{:ok, memories} =
+  Gralkor.Client.search(%Gralkor.Search{
+    operator_id: "operator-42",
+    query: "When should we release?",
+    targets: ["decisions", "global"],
+    max_results: 10
+  })
+```
+
+Registry and plugin configuration fail fast for blank, duplicate, reserved, or malformed Lens definitions and for unknown or unsound search targets. If no Lens configuration is used, the implicit `"default"` Lens preserves the existing operator partition and deployment-wide `:ontology` behavior.
+
+### Ontology DSL
+
+Each Lens ontology is a module declared with `Gralkor.Ontology`:
+
 - `entity Foo do field … end` declares an entity. `field :name, :type, opts` supports `:string | :integer | :float | :boolean`, plus `required: true` and `doc:` (rendered as the Pydantic field description).
 - `from Source do verb Target [do field … end] end` declares outgoing relationships from `Source`. The verb's name becomes the edge type in graphiti (`prefers` → `"PREFERS"`, `relates_to` → `"RELATES_TO"`). The optional `do` block carries edge properties.
 - Same verb in multiple `from` blocks becomes one edge type with multiple endpoint pairs.
@@ -177,29 +268,13 @@ end
 - `relationships: :scoped` populates graphiti's `edge_type_map` from your declared `(src, dst)` pairs, so named edges only fire between declared endpoints. `relationships: :open` drops the map; graphiti's default applies. Either way, graphiti always extracts edge candidates — generic fall-through edges between unconstrained pairs are not closed off.
 - Both opts are required at `use` — no defaults; pick deliberately.
 
-Configure it once for the deployment:
-
-```elixir
-# config/runtime.exs
-config :jido_gralkor, ontology: MyApp.Ontology
-```
-
-That's it — the plugin mount stays `%{agent_name: "Susu"}`, with no ontology threaded through it. `Gralkor.Client` resolves the configured ontology on **every** write — capture flushes plus the `memory_add` ReAct tool — so all ingestion shares one schema. graphiti receives `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types` translated from the module's compile-time payload (built once per ontology module, cached by name). A programmatic caller that needs a different ontology for a single add can pass it as the 4th argument to `Gralkor.Client.memory_add/4`.
+On each store write, graphiti receives the selected Lens ontology's `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types`, translated from the module's compile-time payload.
 
 ## Generalisation
 
-`Gralkor.Generalise` hypothesises cross-episode patterns from a flushed transcript, reconciles them against what it already knows, and persists the survivors. Generalisations are stored in a separate graphiti partition (`"#{group_id}_gen"`) and surfaced alongside regular facts during recall with a `<generalisation>` prefix so the interpret LLM can treat them as higher-level patterns. The capability is always available — call `Gralkor.Client.generalise/2` directly, search it with `Gralkor.Client.search_generalisations/3`, and it is injected into recall automatically.
+`Gralkor.Lens.Ingestion.Generalise` is a built-in ingestion process for an ordinary Lens. It hypothesises patterns from the submitted transcript, reconciles them against existing episodes in that Lens, and persists the survivors through the Lens-bound store. The Lens definition determines both ontology and scope; generalisation has no special partitioning rule.
 
-### Optional: run generalisation automatically on flush
-
-Off by default. Set `:generalise_on_flush` to `true` to have a successful capture flush fire generalisation fire-and-forget (it never blocks the turn; failures are logged, not raised):
-
-```elixir
-# config/runtime.exs
-config :jido_gralkor, generalise_on_flush: true
-```
-
-When `false` or unset, no generalisation runs on flush — you drive it yourself via `Gralkor.Client.generalise/2`.
+To run it automatically after capture, register a Lens with `ingestion: Gralkor.Lens.Ingestion.Generalise` and select its name as the plugin's `generalise_lens`. To invoke it without the plugin, submit a normal `%Gralkor.Ingest{lens: "generalisations", ...}` request. This is independent of the agent replying: any consumer surface can ingest through the same request.
 
 ### Optional: confidence threshold
 
@@ -210,9 +285,7 @@ Generalise persists the strongest hypotheses above a configurable confidence thr
 config :jido_gralkor, generalise_min_confidence: 0.5
 ```
 
-### Custom ontologies
-
-When a deployment-wide ontology is configured (`config :jido_gralkor, ontology: MyApp.Ontology`), generalisation writes are extracted under that same ontology — generalisations are typed consistently with captured memory. With no ontology configured, generalisations are written untyped, as before.
+The older `Gralkor.Client.generalise/2` and `search_generalisations/3` APIs remain available for compatibility. Lens-based consumers should prefer the unified ingest/search boundary above.
 
 ## Experiential learning (ERL) recall
 
