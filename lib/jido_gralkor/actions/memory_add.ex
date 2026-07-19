@@ -31,20 +31,21 @@ defmodule JidoGralkor.Actions.MemoryAdd do
 
   @impl true
   def run(params, context) do
-    group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
+    operator_id = Map.fetch!(context, :agent_id)
 
     Task.start(fn ->
       result =
         case Map.get(context, :lens) do
           lens when is_binary(lens) ->
             Client.ingest(%Ingest{
-              operator_id: group_id,
+              operator_id: operator_id,
               lens: lens,
               content: params.content,
               source_description: params.source_description
             })
 
           _ ->
+            group_id = Client.sanitize_group_id(operator_id)
             Client.impl().memory_add(group_id, params.content, params.source_description)
         end
 
