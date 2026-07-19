@@ -425,6 +425,15 @@ defmodule Gralkor.GraphitiPool do
 
     shared = construct_shared_clients.(llm_model, embedder_model)
 
+    case falkordb_spec do
+      {:embedded, data_dir} ->
+        File.mkdir_p!(data_dir)
+        File.rm(Path.join(data_dir, "gralkor.db.settings"))
+
+      {:remote, _opts} ->
+        :ok
+    end
+
     falkor_db = construct_falkor_db.(falkordb_spec)
 
     state = %{
@@ -645,11 +654,7 @@ defmodule Gralkor.GraphitiPool do
   # ── Defaults: real Pythonx-backed construction ──────────────
 
   defp default_construct_falkor_db({:embedded, data_dir}) do
-    File.mkdir_p!(data_dir)
     db_path = Path.join(data_dir, "gralkor.db")
-    # See `ex-graphiti-pool > embedded` in TEST_TREES.md and the contract
-    # at gralkor/ts/server/tests/test_redislite_resume_trap.py.
-    _ = File.rm(Path.join(data_dir, "gralkor.db.settings"))
 
     {db, _} =
       Pythonx.eval(
