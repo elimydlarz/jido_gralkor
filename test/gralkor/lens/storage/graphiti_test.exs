@@ -145,5 +145,24 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert {:ok, []} = Graphiti.search(store, "launch window", 7, search_fn: search_fn)
       assert_receive {:graph_search, _, "launch window", 7}
     end
+
+    test "and the graph search result is returned to the caller" do
+      store = %Store{
+        operator_id: "operator-one",
+        lens: %Lens{
+          name: "observations",
+          ontology: Strict,
+          scope: :operator,
+          ingestion: String
+        }
+      }
+
+      search_fn = fn _destination, _query, _max_results ->
+        {:error, :graph_unavailable}
+      end
+
+      assert {:error, :graph_unavailable} =
+               Graphiti.search(store, "launch window", 7, search_fn: search_fn)
+    end
   end
 end
