@@ -25,6 +25,17 @@ defmodule Gralkor.GraphitiPoolTest do
     %{pid: pid, table: table}
   end
 
+  defp start_embedded_pool(data_dir) do
+    GraphitiPool.start_link(
+      name: nil,
+      falkordb_spec: {:embedded, data_dir},
+      warmup: false,
+      construct_shared_clients: fn _llm, _embedder ->
+        %{llm_client: nil, embedder: nil, cross_encoder: nil}
+      end
+    )
+  end
+
   describe "add_episode/5, when graphiti's add_episode raises" do
     test "then {:error, {:python, reason}} is returned with reason summarised to the Python error's class and message — not the full multi-line traceback" do
       err = %Pythonx.Error{
@@ -510,8 +521,7 @@ defmodule Gralkor.GraphitiPoolTest do
         })
       )
 
-      {:ok, pid} =
-        GraphitiPool.start_link(name: nil, falkordb_spec: {:embedded, data_dir}, warmup: false)
+      {:ok, pid} = start_embedded_pool(data_dir)
 
       assert Process.alive?(pid)
 
@@ -531,8 +541,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
       File.mkdir_p!(data_dir)
 
-      {:ok, pid} =
-        GraphitiPool.start_link(name: nil, falkordb_spec: {:embedded, data_dir}, warmup: false)
+      {:ok, pid} = start_embedded_pool(data_dir)
 
       assert Process.alive?(pid)
 
@@ -584,8 +593,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
       File.mkdir_p!(data_dir)
 
-      {:ok, pid} =
-        GraphitiPool.start_link(name: nil, falkordb_spec: {:embedded, data_dir}, warmup: false)
+      {:ok, pid} = start_embedded_pool(data_dir)
 
       try do
         strict = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
@@ -615,8 +623,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
       File.mkdir_p!(data_dir)
 
-      {:ok, pid} =
-        GraphitiPool.start_link(name: nil, falkordb_spec: {:embedded, data_dir}, warmup: false)
+      {:ok, pid} = start_embedded_pool(data_dir)
 
       try do
         merged =
@@ -649,8 +656,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
       File.mkdir_p!(data_dir)
 
-      {:ok, pid} =
-        GraphitiPool.start_link(name: nil, falkordb_spec: {:embedded, data_dir}, warmup: false)
+      {:ok, pid} = start_embedded_pool(data_dir)
 
       try do
         merged = GenServer.call(pid, {:materialise, nil, true}, :infinity)
