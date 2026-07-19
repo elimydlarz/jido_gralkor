@@ -229,4 +229,18 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert_receive {:add_episode, %{lens: %{name: "observations"}}, "second", "project update"}
     end
   end
+
+  describe "where information is submitted directly without a mounted plugin or conversational turn" do
+    test "then the selected Lens's ingestion process runs without requiring an agent response or capture flush" do
+      request = %Ingest{
+        operator_id: "operator-one",
+        lens: "observations",
+        content: "The launch window moved to Friday.",
+        source_description: "project update"
+      }
+
+      assert :ok = Client.ingest(request)
+      assert_receive {:ingested, ^request, %{lens: %{name: "observations"}}}
+    end
+  end
 end
