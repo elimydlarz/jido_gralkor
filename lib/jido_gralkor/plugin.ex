@@ -70,13 +70,17 @@ defmodule JidoGralkor.Plugin do
       default_lens ->
         lens = Client.lens!(default_lens)
         search_targets = validate_search_targets!(fetch_opt(opts, :search_targets))
+        generalise_lens = fetch_opt(opts, :generalise_lens)
+
+        if generalise_lens, do: Client.lens!(generalise_lens)
 
         {:ok,
          %{
            agent_name: agent_name,
            default_lens: default_lens,
            search_targets: search_targets,
-           lens: lens
+           lens: lens,
+           generalise_lens: generalise_lens
          }}
     end
   end
@@ -200,15 +204,30 @@ defmodule JidoGralkor.Plugin do
 
                 lens_name ->
                   Client.lens!(lens_name)
+                  additional_lenses = additional_lenses(agent, lens_name)
 
-                  Client.impl().capture(
-                    session_id,
-                    agent.id,
-                    agent_name(agent),
-                    user_name,
-                    messages,
-                    lens_name
-                  )
+                  case additional_lenses do
+                    [] ->
+                      Client.impl().capture(
+                        session_id,
+                        agent.id,
+                        agent_name(agent),
+                        user_name,
+                        messages,
+                        lens_name
+                      )
+
+                    lenses ->
+                      Client.impl().capture(
+                        session_id,
+                        agent.id,
+                        agent_name(agent),
+                        user_name,
+                        messages,
+                        lens_name,
+                        lenses
+                      )
+                  end
               end
 
             case result do
@@ -255,6 +274,13 @@ defmodule JidoGralkor.Plugin do
         %{default_lens: lens} -> lens
         _ -> nil
       end
+  end
+
+  defp additional_lenses(agent, selected_lens) do
+    case plugin_state(agent) do
+      %{generalise_lens: lens} when is_binary(lens) and lens != selected_lens -> [lens]
+      _ -> []
+    end
   end
 
   defp plugin_state(agent), do: Map.get(agent.state, :__memory__)
