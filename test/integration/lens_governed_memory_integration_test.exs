@@ -548,5 +548,45 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  targets: ["global"]
                })
     end
+
+    test "and results from all selected destinations are combined into one memory response" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      for {lens, content} <- [
+            {"observations", "operator observation"},
+            {"decisions", "operator decision"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: content,
+                   source_description: "test source"
+                 })
+      end
+
+      assert {:ok, ["operator observation", "operator decision"]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["observations", "decisions"]
+               })
+    end
   end
 end
