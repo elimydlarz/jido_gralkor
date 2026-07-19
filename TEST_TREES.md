@@ -1238,8 +1238,7 @@ JidoGralkor.Actions.MemoryBuildCommunities (src: lib/jido_gralkor/actions/memory
 
 ```
 JidoGralkor.Actions error-encoder compat (unit: test/jido_gralkor/actions/error_encoder_compat_test.exs)
-  for every error reason any JidoGralkor.Actions.* module is allowed to produce today
-    normalization returns a plain map and Jason encoding succeeds
+  error reason #{inspect(reason)} survives normalize_error → Jason.encode!
 ```
 
 ## Functional Journey
