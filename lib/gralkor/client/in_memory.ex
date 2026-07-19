@@ -20,7 +20,7 @@ defmodule Gralkor.Client.InMemory do
   @doc "Reset all state — call in `setup`."
   def reset, do: GenServer.call(__MODULE__, :reset)
 
-  @doc "Set the response for the next (and all subsequent) `recall/3` calls."
+  @doc "Set the response for the next (and all subsequent) `recall/4` calls."
   def set_recall(response), do: GenServer.call(__MODULE__, {:set, :recall, response})
 
   @doc "Set the response for the next (and all subsequent) `capture/3` calls."
