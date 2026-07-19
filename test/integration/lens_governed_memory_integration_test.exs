@@ -1437,7 +1437,8 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                Gralkor.Lens.Store.add(
                  store,
                  Gralkor.Generalisation.encode(existing),
-                 "generalisation"
+                 "generalisation",
+                 uuid: existing.id
                )
 
       Application.put_env(:jido_gralkor, :generalise_hypothesise_fn, fn _prompt ->
@@ -1518,10 +1519,11 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  source_description: "captured"
                })
 
-      assert [%{lens: "generalisations", content: encoded}] =
+      assert [%{id: episode_id, lens: "generalisations", content: encoded}] =
                Gralkor.Lens.Storage.InMemory.episodes(:global)
 
       assert {:ok, resulting, _plain} = Gralkor.Generalisation.decode(encoded)
+      assert episode_id == resulting.id
       assert resulting.content == "Eli prefers Friday launches."
 
       assert [] =
@@ -1558,7 +1560,8 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                Gralkor.Lens.Store.add(
                  store,
                  Gralkor.Generalisation.encode(existing),
-                 "generalisation"
+                 "generalisation",
+                 uuid: existing.id
                )
 
       Application.put_env(:jido_gralkor, :generalise_hypothesise_fn, fn _prompt ->
@@ -1586,10 +1589,11 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  source_description: "captured"
                })
 
-      assert [%{content: encoded}] =
+      assert [%{id: episode_id, content: encoded}] =
                Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "generalisations"})
 
       assert {:ok, replacement, _plain} = Gralkor.Generalisation.decode(encoded)
+      assert episode_id == replacement.id
       assert replacement.content == "Friday launches move."
       assert replacement.generalises == ["existing-one"]
     end
