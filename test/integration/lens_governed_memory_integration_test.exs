@@ -1196,4 +1196,76 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert resulting.generalises == ["existing-one"]
     end
   end
+
+  describe "where capture is configured to generalise a flushed transcript through another Lens" do
+    test "then the generalising Lens receives the transcript independently of the Lens that captured it" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: RecordingIngestion
+        ],
+        [
+          name: "generalisations",
+          ontology: ObservationOntology,
+          scope: :global,
+          ingestion: RecordingIngestion
+        ]
+      ])
+
+      start_supervised!(
+        {Gralkor.CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
+         retries: []}
+      )
+
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{},
+                 agent_name: "Susu",
+                 default_lens: "observations",
+                 search_targets: ["observations", "global"],
+                 generalise_lens: "generalisations"
+               )
+
+      request_id = "request-generalise"
+
+      agent = %{
+        id: "operator-one",
+        state: %{
+          __memory__: plugin_state,
+          __thread__: %{id: "session-generalise"},
+          __strategy__: %{
+            request_traces: %{request_id => %{events: [%{kind: :llm_completed, data: %{}}]}}
+          },
+          requests: %{
+            request_id => %{query: "Let's launch Friday.", status: :pending, result: nil}
+          },
+          user_name: "Eli"
+        }
+      }
+
+      signal = %Jido.Signal{
+        id: "signal-generalise",
+        source: "/test",
+        type: "ai.request.completed",
+        data: %{request_id: request_id, result: "Agreed."}
+      }
+
+      assert {:ok, :continue} = Plugin.handle_signal(signal, %{agent: agent})
+      assert length(Gralkor.CaptureBuffer.turns_for("session-generalise")) == 1
+      assert :ok = Gralkor.Client.Native.flush_and_await("session-generalise", 1_000)
+
+      assert_receive {:ingested, %Ingest{lens: "observations", content: transcript}, observation_store}
+
+      assert_receive {:ingested, %Ingest{lens: "generalisations", content: ^transcript},
+                      generalisation_store}
+
+      assert observation_store.lens.scope == :operator
+      assert generalisation_store.lens.scope == :global
+    end
+  end
 end
