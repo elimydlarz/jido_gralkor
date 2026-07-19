@@ -82,7 +82,7 @@ config :jido_gralkor, generalise_min_confidence: 0.5
 config :jido_gralkor, ontology: MyApp.Ontology
 ```
 
-Optional model overrides (`GRALKOR_LLM_MODEL`, `GRALKOR_EMBEDDER_MODEL`) are read straight from `System.get_env/1` by `Gralkor.Config`. The test-only InMemory client pin is `config :jido_gralkor, client: Gralkor.Client.InMemory`.
+Optional model overrides (`GRALKOR_LLM_MODEL`, `GRALKOR_EMBEDDER_MODEL`) are read straight from `System.get_env/1` by `Gralkor.Config`. Deterministic Lens tests pin both `client: Gralkor.Client.InMemory` and `lens_storage: Gralkor.Lens.Storage.InMemory`.
 
 ## Testing
 

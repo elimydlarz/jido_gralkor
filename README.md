@@ -310,6 +310,8 @@ There is no opt-in flag. Every recall runs a parallel learning search alongside 
 
 `Gralkor.Client.InMemory` is a real implementation of `Gralkor.Client` (not a mock) that stores canned responses and records every call. Your agent's integration tests can hit it without any network:
 
+For Lens-aware calls, pair it with `Gralkor.Lens.Storage.InMemory` as shown in Required configuration; `Client.ingest/1` and `search/1` use the Lens storage boundary directly.
+
 ```elixir
 setup do
   Gralkor.Client.InMemory.reset()
