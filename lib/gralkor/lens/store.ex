@@ -16,6 +16,11 @@ defmodule Gralkor.Lens.Store do
     storage().add_episode(store, content, source_description)
   end
 
+  @spec remove(t(), String.t()) :: :ok | {:error, term()}
+  def remove(%__MODULE__{} = store, episode_id) do
+    storage().remove_episode(store, episode_id)
+  end
+
   @spec search(t(), String.t(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}
   def search(%__MODULE__{} = store, query, max_results) do
     storage().search(store, query, max_results)

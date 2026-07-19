@@ -41,6 +41,11 @@ defmodule Gralkor.Lens.Storage.InMemory do
   end
 
   @impl Gralkor.Lens.Storage
+  def remove_episode(%Store{} = store, episode_id) do
+    GenServer.call(__MODULE__, {:remove, key(store), episode_id})
+  end
+
+  @impl Gralkor.Lens.Storage
   def search(
         %Store{operator_id: operator_id, lens: %Lens{name: lens_name, scope: :operator}},
         _query,
@@ -63,10 +68,27 @@ defmodule Gralkor.Lens.Storage.InMemory do
     {:reply, {:ok, contents}, state}
   end
 
+  def handle_call({:remove, key, episode_id}, _from, state) do
+    episodes = state |> Map.get(key, []) |> Enum.reject(&episode_id?(&1, episode_id))
+    {:reply, :ok, Map.put(state, key, episodes)}
+  end
+
   def handle_call({:episodes, key}, _from, state) do
     {:reply, Map.get(state, key, []), state}
   end
 
   @spec episode(String.t(), Lens.t()) :: episode()
   defp episode(content, lens), do: %{content: content, lens: lens.name}
+
+  defp key(%Store{operator_id: operator_id, lens: %Lens{name: lens_name, scope: :operator}}),
+    do: {operator_id, lens_name}
+
+  defp key(%Store{lens: %Lens{scope: :global}}), do: :global
+
+  defp episode_id?(episode, episode_id) do
+    case Gralkor.Generalisation.decode(episode.content) do
+      {:ok, %{id: ^episode_id}, _plain} -> true
+      _ -> false
+    end
+  end
 end

@@ -48,7 +48,7 @@ defmodule Gralkor.Generalise do
     min_confidence = Keyword.get(opts, :min_confidence, @default_min_confidence)
     max_gen_results = Keyword.get(opts, :max_gen_results, @default_max_gen_results)
 
-    gen_partition = "#{group_id}_gen"
+    gen_partition = Keyword.get(opts, :partition, "#{group_id}_gen")
 
     with {:ok, hypotheses} <- do_hypothesise(transcript, hypothesise_fn, min_confidence),
          :ok <- do_persist(

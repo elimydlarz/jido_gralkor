@@ -39,6 +39,15 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     )
   end
 
+  @impl Gralkor.Lens.Storage
+  def remove_episode(%Store{operator_id: operator_id, lens: %Lens{scope: :operator} = lens}, id) do
+    GraphitiPool.remove_episode(local_destination(operator_id, lens.name), id)
+  end
+
+  def remove_episode(%Store{lens: %Lens{scope: :global}}, id) do
+    GraphitiPool.remove_episode("global", id)
+  end
+
   def add_episode(
         %Store{lens: %Lens{scope: :global} = lens},
         content,

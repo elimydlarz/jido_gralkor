@@ -282,6 +282,9 @@ defmodule Gralkor.Client.Native do
     end
   end
 
+  @doc false
+  def generalise_hypothesise_callback, do: hypothesise_gen_fn()
+
   defp evaluate_gen_fn do
     model = Config.llm_model()
     schema = Generalise.evaluate_schema()
@@ -298,6 +301,9 @@ defmodule Gralkor.Client.Native do
       end
     end
   end
+
+  @doc false
+  def generalise_evaluate_callback, do: evaluate_gen_fn()
 
   defp search_gen_fn do
     fn partition, query, max_results ->
