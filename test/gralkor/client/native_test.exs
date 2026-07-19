@@ -299,6 +299,34 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
+  describe "ex-capture > request shape > capture/7 with primary and additional Lenses" do
+    setup :start_capture_buffer
+
+    test "invokes CaptureBuffer.append_lenses/6 with the operator id, names, Lenses, and messages" do
+      msgs = [Message.new("user", "hi")]
+
+      assert :ok =
+               Native.capture(
+                 "s1",
+                 "operator-with-hyphens",
+                 "Susu",
+                 "Eli",
+                 msgs,
+                 "observations",
+                 ["generalisations"]
+               )
+
+      assert [^msgs] = CaptureBuffer.turns_for("s1")
+      assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
+
+      assert_receive {:flushed, "operator-with-hyphens", "Susu", "Eli", "observations",
+                      [^msgs]}
+
+      assert_receive {:flushed, "operator-with-hyphens", "Susu", "Eli", "generalisations",
+                      [^msgs]}
+    end
+  end
+
   describe "ex-capture > then returns :ok immediately (does not call distill synchronously)" do
     setup :start_capture_buffer
 

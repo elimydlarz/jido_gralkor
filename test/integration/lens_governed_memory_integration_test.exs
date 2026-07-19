@@ -1762,6 +1762,50 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert resulting.generalises == ["existing-one"]
     end
 
+    test "and every persisted generalisation uses its encoded id as its Lens-store episode identity" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "generalisations",
+          ontology: GeneralisationOntology,
+          scope: :operator,
+          ingestion: Gralkor.Lens.Ingestion.Generalise
+        ]
+      ])
+
+      Application.put_env(:jido_gralkor, :generalise_hypothesise_fn, fn _prompt ->
+        {:ok, [%{content: "Eli prefers Friday launches.", confidence: 0.9}]}
+      end)
+
+      Application.put_env(:jido_gralkor, :generalise_evaluate_fn, fn _prompt ->
+        {:ok,
+         [
+           %{
+             action: "save",
+             hypothesis_index: 0,
+             confidence: 0.9,
+             content: "Eli prefers Friday launches."
+           }
+         ]}
+      end)
+
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "generalisations",
+                 content: "Eli: Let's launch on Friday.",
+                 source_description: "captured"
+               })
+
+      assert [%{id: episode_id, content: encoded}] =
+               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "generalisations"})
+
+      assert {:ok, persisted, _plain} = Gralkor.Generalisation.decode(encoded)
+      assert episode_id == persisted.id
+    end
+
     test "and the selected Lens determines whether the resulting generalisations are operator-local or global" do
       start_supervised!(Gralkor.Lens.Storage.InMemory)
       Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
