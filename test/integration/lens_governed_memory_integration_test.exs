@@ -709,7 +709,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  search_targets: ["observations"]
                )
 
-      signal = Jido.Signal.new!("ai.react.query", %{query: "remember this"}, source: "/test")
+      signal = %Jido.Signal{type: "ai.react.query", data: %{query: "remember this"}}
 
       agent = %{
         id: "operator-one",
