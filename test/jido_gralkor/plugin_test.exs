@@ -184,7 +184,7 @@ defmodule JidoGralkor.PluginTest do
   end
 
   describe "when an agent turn completes" do
-    test "the turn is sent to Gralkor for capture as canonical messages with the thread's session_id and the principal's group_id" do
+    test "the turn is sent to Gralkor for capture as canonical messages with the thread's session_id and the operator's group_id" do
       InMemory.set_capture(:ok)
 
       events = [

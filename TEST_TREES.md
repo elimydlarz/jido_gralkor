@@ -1060,14 +1060,14 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
       then capture receives the selected Lens and optional additional generalising Lens
     then the user query, event trace, and `{:completed, answer}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list is sent to
-      Gralkor for capture (via `capture/5`) with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the configured global ontology)
+      Gralkor for capture (via `capture/5`) with the thread's session_id, the operator's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the implicit-default ontology)
     if `agent.state[:user_name]` is missing or blank
       then capture raises ArgumentError (the consumer's contract violation surfaces immediately rather than persisting an episode under a generic "User" label that would corrupt the graph)
   when an agent turn fails
     then the user query, event trace, and `{:failed, error}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list — ending in
       a `"request failed: …"` behaviour message instead of an assistant message — is sent to
-      Gralkor for capture (via `capture/5`) with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the configured global ontology), so the failure is visible to downstream distillation rather than
+      Gralkor for capture (via `capture/5`) with the thread's session_id, the operator's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the implicit-default ontology), so the failure is visible to downstream distillation rather than
       silently dropped
     when the agent has no committed thread yet (first-turn failure)
       then capture is skipped
