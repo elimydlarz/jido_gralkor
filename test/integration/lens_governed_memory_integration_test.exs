@@ -99,8 +99,11 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
         {:search, store, query, max_results}
       )
 
-      {:ok, []}
+      Process.get({__MODULE__, :search_result, search_key(store)}, {:ok, []})
     end
+
+    defp search_key(%{lens: :global}), do: :global
+    defp search_key(%{lens: %{name: name}}), do: name
   end
 
   setup do
@@ -296,8 +299,28 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                       }, "one", "project update"}
 
       assert :ok = Client.ingest(request.("many"))
-      assert_receive {:add_episode, %{lens: %{name: "observations"}}, "first", "project update"}
-      assert_receive {:add_episode, %{lens: %{name: "observations"}}, "second", "project update"}
+
+      assert_receive {:add_episode,
+                      %Gralkor.Lens.Store{
+                        operator_id: "operator-one",
+                        lens: %{
+                          name: "observations",
+                          ontology: ObservationOntology,
+                          scope: :operator,
+                          ingestion: VariableWriteIngestion
+                        }
+                      }, "first", "project update"}
+
+      assert_receive {:add_episode,
+                      %Gralkor.Lens.Store{
+                        operator_id: "operator-one",
+                        lens: %{
+                          name: "observations",
+                          ontology: ObservationOntology,
+                          scope: :operator,
+                          ingestion: VariableWriteIngestion
+                        }
+                      }, "second", "project update"}
     end
   end
 
@@ -657,6 +680,72 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                })
     end
 
+    test "and results are concatenated in requested target order without deduplicating repeated matches" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      Process.put(
+        {RecordingStorage, :search_result, "observations"},
+        {:ok, ["shared memory", "observation"]}
+      )
+
+      Process.put(
+        {RecordingStorage, :search_result, "decisions"},
+        {:ok, ["shared memory", "decision"]}
+      )
+
+      assert {:ok, ["shared memory", "decision", "shared memory", "observation"]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["decisions", "observations"]
+               })
+    end
+
+    test "and the same maximum result count is applied to every selected destination" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["observations", "decisions"],
+                 max_results: 3
+               })
+
+      assert_receive {:search, %{lens: %{name: "observations"}}, "memory", 3}
+      assert_receive {:search, %{lens: %{name: "decisions"}}, "memory", 3}
+    end
+
     test "and no unselected operator-local Lens or another operator's local memory can contribute a result" do
       start_supervised!(Gralkor.Lens.Storage.InMemory)
       Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
@@ -696,6 +785,79 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  query: "memory",
                  targets: ["observations"]
                })
+    end
+  end
+
+  describe "when a selected search destination fails" do
+    test "then the first error is returned without a partial result" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      Process.put(
+        {RecordingStorage, :search_result, "observations"},
+        {:ok, ["partial observation"]}
+      )
+
+      Process.put({RecordingStorage, :search_result, "decisions"}, {:error, :unavailable})
+
+      assert {:error, :unavailable} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["observations", "decisions"]
+               })
+    end
+
+    test "and no later destination is searched" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "later",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      Process.put({RecordingStorage, :search_result, "decisions"}, {:error, :unavailable})
+
+      assert {:error, :unavailable} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["observations", "decisions", "later"]
+               })
+
+      assert_receive {:search, %{lens: %{name: "observations"}}, "memory", 10}
+      assert_receive {:search, %{lens: %{name: "decisions"}}, "memory", 10}
+      refute_receive {:search, %{lens: %{name: "later"}}, _, _}
     end
   end
 
