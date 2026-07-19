@@ -9,8 +9,8 @@ The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` l
 - **`JidoGralkor.ReAct.maybe_force_memory_search/2`** — folds `tool_choice` into the consumer's transformer overrides on iter-1, making recall agentic.
 - **`JidoGralkor.Canonical.to_messages/3`** — normalises a Jido/ReAct turn into Gralkor's `[%Message{role, content}]` shape.
 - **`JidoGralkor.Lifecycle`** — graceful-shutdown flush via `Gralkor.Client.flush/1`.
-- **`JidoGralkor.ContextRotator`** — synchronous rotate-on-demand (flush + fresh thread + compaction signal).
-- **`Gralkor.Lens` / `Gralkor.Ingest` / `Gralkor.Search`** — the consumer-facing memory boundary. A registered Lens owns its name, ontology, operator-or-global scope, and ingestion module; the Lens-bound store owns physical partitioning and provenance.
+- **`JidoGralkor.ContextRotator`** — synchronous rotate-on-demand: flush, retain recent and in-flight entries, then install a fresh thread.
+- **`Gralkor.Client` / `Gralkor.Ingest` / `Gralkor.Search`** — the callable Lens boundary and its request values. A registered `Gralkor.Lens` owns its name, ontology, operator-or-global scope, and ingestion module; `Gralkor.Lens.Store` owns physical partitioning and provenance.
 
 ## Ubiquitous Language
 
