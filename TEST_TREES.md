@@ -350,6 +350,9 @@ ex-capture-buffer (src: lib/gralkor/capture_buffer.ex; unit: test/gralkor/captur
   append_lenses/6 (session_id, operator_id, agent_name, user_name, Lens names, messages)
     when one captured turn is routed through a primary and additional Lens
       then each Lens batch receives the turn while turns_for/1 contains it only once
+    when one Lens flush fails
+      then every Lens batch is attempted independently
+      and flush_and_await/2 returns the first failure after every Lens is attempted
   turns_for/1
     when the session has buffered turns
       then returns [[Gralkor.Message.t()]] in append order — the messages of each turn

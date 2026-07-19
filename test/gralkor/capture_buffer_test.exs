@@ -191,6 +191,46 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "ex-capture-buffer > append_lenses/6 when one Lens flush fails" do
+    test "then every Lens batch is attempted independently", %{pid: pid} do
+      restart_with_failing_primary(pid)
+      turn = [Message.new("user", "one turn")]
+
+      assert :ok =
+               CaptureBuffer.append_lenses(
+                 "session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 ["observations", "generalisations"],
+                 turn
+               )
+
+      assert :ok = CaptureBuffer.flush("session")
+      assert_receive {:lens_attempted, "observations", [^turn]}
+      assert_receive {:lens_attempted, "generalisations", [^turn]}
+    end
+
+    test "and flush_and_await/2 returns the first failure after every Lens is attempted", %{pid: pid} do
+      restart_with_failing_primary(pid)
+      turn = [Message.new("user", "one turn")]
+
+      assert :ok =
+               CaptureBuffer.append_lenses(
+                 "session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 ["observations", "generalisations"],
+                 turn
+               )
+
+      assert {:error, :primary_failed} = CaptureBuffer.flush_and_await("session", 1_000)
+      assert_receive {:lens_attempted, "observations", [^turn]}
+      assert_receive {:lens_attempted, "generalisations", [^turn]}
+    end
+  end
+
   describe "ex-capture-buffer > turns_for/1" do
     test "when the session has never been appended to, returns []" do
       assert [] = CaptureBuffer.turns_for("nope")
@@ -202,6 +242,23 @@ defmodule Gralkor.CaptureBufferTest do
 
       assert [] = CaptureBuffer.turns_for("s")
     end
+  end
+
+  defp restart_with_failing_primary(pid) do
+    stop_supervised(pid)
+    test_pid = self()
+
+    lens_flush_callback = fn _operator_id, _agent_name, _user_name, lens, turns ->
+      send(test_pid, {:lens_attempted, lens, turns})
+      if lens == "observations", do: {:error, :primary_failed}, else: :ok
+    end
+
+    start_supervised!(
+      {CaptureBuffer,
+       flush_callback: fn _, _, _, _, _ -> :ok end,
+       lens_flush_callback: lens_flush_callback,
+       retries: []}
+    )
   end
 
   describe "ex-capture-buffer > flush/1 when called for a session_id with buffered turns" do
