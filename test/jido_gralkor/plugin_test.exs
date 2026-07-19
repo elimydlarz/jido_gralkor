@@ -464,4 +464,43 @@ defmodule JidoGralkor.PluginTest do
       end
     end
   end
+
+  defp lens_plugin_state do
+    configure_lenses()
+
+    {:ok, plugin_state} =
+      Plugin.mount(%{id: "operator-one", state: %{}},
+        agent_name: "Susu",
+        default_lens: "observations",
+        search_targets: ["observations", "global"],
+        generalise_lens: "generalisations"
+      )
+
+    plugin_state
+  end
+
+  defp configure_lenses do
+    previous = Application.get_env(:jido_gralkor, :lenses)
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:jido_gralkor, :lenses, previous),
+        else: Application.delete_env(:jido_gralkor, :lenses)
+    end)
+
+    Application.put_env(:jido_gralkor, :lenses, [
+      [
+        name: "observations",
+        ontology: LensOntology,
+        scope: :operator,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ],
+      [
+        name: "generalisations",
+        ontology: LensOntology,
+        scope: :global,
+        ingestion: Gralkor.Lens.Ingestion.Generalise
+      ]
+    ])
+  end
 end
