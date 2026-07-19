@@ -126,7 +126,7 @@ defmodule Gralkor.Client do
 
   @spec lens!(String.t()) :: Lens.t()
   def lens!(name) do
-    lenses = Application.get_env(:jido_gralkor, :lenses, [])
+    lenses = registered_lenses!()
 
     case Enum.find(lenses, fn definition -> Keyword.get(definition, :name) == name end) do
       nil when name == "default" ->
@@ -147,6 +147,61 @@ defmodule Gralkor.Client do
           scope: Keyword.fetch!(definition, :scope),
           ingestion: Keyword.fetch!(definition, :ingestion)
         }
+    end
+  end
+
+  defp registered_lenses! do
+    case Application.get_env(:jido_gralkor, :lenses, []) do
+      lenses when is_list(lenses) ->
+        Enum.each(lenses, &validate_lens!/1)
+        validate_unique_names!(lenses)
+        lenses
+
+      lenses ->
+        raise ArgumentError, "Lens registry must be a list, got #{inspect(lenses)}"
+    end
+  end
+
+  defp validate_lens!(definition) when is_list(definition) do
+    name = Keyword.get(definition, :name)
+    ontology = Keyword.get(definition, :ontology)
+    scope = Keyword.get(definition, :scope)
+    ingestion = Keyword.get(definition, :ingestion)
+
+    unless is_binary(name) and String.trim(name) != "" do
+      raise ArgumentError, "invalid Lens name #{inspect(name)}"
+    end
+
+    if name == "global" do
+      raise ArgumentError, "invalid Lens #{inspect(name)}: name is reserved"
+    end
+
+    unless is_atom(ontology) and Code.ensure_loaded?(ontology) and
+             function_exported?(ontology, :__ontology__, 0) do
+      raise ArgumentError, "invalid Lens #{inspect(name)} ontology #{inspect(ontology)}"
+    end
+
+    unless scope in [:operator, :global] do
+      raise ArgumentError, "invalid Lens #{inspect(name)} scope #{inspect(scope)}"
+    end
+
+    unless is_atom(ingestion) and Code.ensure_loaded?(ingestion) and
+             function_exported?(ingestion, :ingest, 2) do
+      raise ArgumentError, "invalid Lens #{inspect(name)} ingestion #{inspect(ingestion)}"
+    end
+  end
+
+  defp validate_lens!(definition) do
+    raise ArgumentError, "invalid Lens definition #{inspect(definition)}"
+  end
+
+  defp validate_unique_names!(lenses) do
+    lenses
+    |> Enum.group_by(&Keyword.get(&1, :name))
+    |> Enum.find(fn {_name, definitions} -> length(definitions) > 1 end)
+    |> case do
+      nil -> :ok
+      {name, _definitions} -> raise ArgumentError, "duplicate Lens #{inspect(name)}"
     end
   end
 
