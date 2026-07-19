@@ -1108,9 +1108,6 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
          retries: []}
       )
 
-      observation = Client.lens!("observations")
-      generalisation = Client.lens!("generalisations")
-
       assert :ok =
                Gralkor.Client.Native.capture(
                  "session-isolated",
@@ -1118,7 +1115,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  "Susu",
                  "Eli",
                  [%Gralkor.Message{role: "user", content: "Observed rain."}],
-                 observation
+                 "observations"
                )
 
       assert :ok =
@@ -1128,7 +1125,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  "Susu",
                  "Eli",
                  [%Gralkor.Message{role: "user", content: "Rain delays launches."}],
-                 generalisation
+                 "generalisations"
                )
 
       assert :ok = Gralkor.Client.Native.flush_and_await("session-isolated", 1_000)
@@ -1157,9 +1154,6 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
          retries: []}
       )
 
-      observation = Client.lens!("observations")
-      decision = %{observation | name: "decisions"}
-
       assert :ok =
                Gralkor.Client.Native.capture(
                  "session-order",
@@ -1167,7 +1161,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  "Susu",
                  "Eli",
                  [%Gralkor.Message{role: "user", content: "first"}],
-                 observation
+                 "observations"
                )
 
       assert :ok =
@@ -1177,7 +1171,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  "Susu",
                  "Eli",
                  [%Gralkor.Message{role: "user", content: "second"}],
-                 decision
+                 "decisions"
                )
 
       assert [
