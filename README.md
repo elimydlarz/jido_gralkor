@@ -231,6 +231,8 @@ end
 
 The same `Gralkor.ClientContract` macro suite is run against both the in-memory twin and the production `Gralkor.Client.Native` adapter, so both satisfy an identical contract.
 
+Maintainers can exercise the interpretation prompt against a real low-cost model with `mix test.functional test/functional/interpret_epistemic_humility_test.exs`. The suite loads `OPENAI_API_KEY` from `.env`, uses OpenAI `gpt-4.1-mini` through ReqLLM at temperature `0.0`, and starts no Graphiti or FalkorDB runtime. It verifies source preservation across varied accounts, conflict handling without truth adjudication, restraint when provenance is absent, and relevance filtering.
+
 ## What's in the library
 
 The Jido glue:

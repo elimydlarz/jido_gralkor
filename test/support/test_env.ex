@@ -3,9 +3,11 @@ defmodule Gralkor.TestEnv do
   Loads `KEY=VALUE` pairs from `.env` at the project root into the process
   environment, without overwriting variables already set.
 
-  Functional tests (`test/functional/`) and any GraphitiPool/Python integration
-  tests need `GOOGLE_API_KEY` to call Gemini via req_llm and via graphiti's
-  bundled clients. The key lives in `.env` (gitignored) — see `.env.example`.
+  Graphiti-backed functional tests and GraphitiPool/Python integration tests need
+  `GOOGLE_API_KEY` to call Gemini via req_llm and graphiti's bundled clients. The
+  interpretation-only epistemic-humility functional suite needs `OPENAI_API_KEY`
+  for its real gpt-4.1-mini calls through ReqLLM. Keys live in `.env` (gitignored)
+  — see `.env.example`.
   """
 
   def load(path) do

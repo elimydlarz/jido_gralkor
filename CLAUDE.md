@@ -93,6 +93,8 @@ mix test.journey    # opt-in: full end-to-end journey suites (real LLM, slow, co
 
 Real LLM (and graphiti-core extraction) calls live only in the opt-in `:functional` and `:journey` tiers; a default `mix test` is deterministic. The boundary contract those tiers used to be the sole proof of — which graphiti `add_episode` kwargs an ontology populates — is now pinned deterministically by `ex-ontology-graphiti-spec` (`Gralkor.GraphitiPool.graphiti_boundary_spec/1`, pure, no Pythonx). The functional `ontology-extraction` suite remains the proof that a real LLM honours the declared schema.
 
+`test/functional/interpret_epistemic_humility_test.exs` is the focused real-model proof for interpretation behavior. It loads `OPENAI_API_KEY` from `.env`, calls OpenAI `gpt-4.1-mini` through ReqLLM at temperature `0.0`, and covers varied source types, adversarial conflicting accounts, ordinary memories without provenance, and relevance filtering. It starts no Graphiti or FalkorDB runtime. Missing credentials fail fast rather than skip.
+
 ### Mutation testing
 
 `{:muzak, git: "git@github.com:elimydlarz/muzak.git", branch: "elixir-1.19", only: :test}` — upstream `1.1.1` is unmaintained since 2022 and breaks on Elixir 1.19; the fork replaces Muzak's frozen 2400-line copy of `Code.Formatter` with a thin wrapper over the public `Code.string_to_quoted_with_comments!/2` + `Code.quoted_to_algebra/2`, fixes the `ExUnit.Server.modules_loaded` arity change, and disables the `test_helper` autorun so it doesn't crash on teardown.
