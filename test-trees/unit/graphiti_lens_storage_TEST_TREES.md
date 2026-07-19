@@ -23,3 +23,6 @@ when a global Lens store adds an episode
 when the global pool is searched
   then graph search receives the fixed global destination
   and no originating-Lens filter is supplied
+
+when a store bound to a global Lens is searched by its ingestion process
+  then graph search receives the fixed unfiltered global destination

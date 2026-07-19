@@ -316,4 +316,28 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert_receive {:graph_search, "global", "launch window", 7}
     end
   end
+
+  describe "when a store bound to a global Lens is searched by its ingestion process" do
+    test "then graph search receives the fixed unfiltered global destination" do
+      store = %Store{
+        operator_id: "operator-one",
+        lens: %Lens{
+          name: "generalisations",
+          ontology: Strict,
+          scope: :global,
+          ingestion: Gralkor.Lens.Ingestion.Generalise
+        }
+      }
+
+      test_pid = self()
+
+      search_fn = fn destination, query, max_results ->
+        send(test_pid, {:graph_search, destination, query, max_results})
+        {:ok, []}
+      end
+
+      assert {:ok, []} = Graphiti.search(store, "launch window", 7, search_fn: search_fn)
+      assert_receive {:graph_search, "global", "launch window", 7}
+    end
+  end
 end
