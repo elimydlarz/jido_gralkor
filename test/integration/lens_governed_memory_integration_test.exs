@@ -1462,10 +1462,11 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert_receive {:evaluate_prompt, prompt}
       assert prompt =~ "Eli sometimes chooses Friday."
 
-      assert [%{content: encoded}] =
+      assert [%{id: episode_id, content: encoded}] =
                Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "generalisations"})
 
       assert {:ok, resulting, _plain} = Gralkor.Generalisation.decode(encoded)
+      assert episode_id == resulting.id
       assert resulting.content == "Eli prefers Friday launches."
       assert resulting.generalises == ["existing-one"]
     end

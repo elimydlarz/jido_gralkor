@@ -298,6 +298,38 @@ defmodule Gralkor.GeneraliseTest do
     end
   end
 
+  describe "ex-generalise > persistence identity" do
+    test "whenever any decision persists a new generalisation, add_episode receives its encoded id as uuid" do
+      candidates = [%{content: "User prefers dark mode", confidence: 0.85}]
+
+      decisions = [
+        %{
+          hypothesis_index: 0,
+          action: "save",
+          confidence: 0.85,
+          content: "User prefers dark mode"
+        }
+      ]
+
+      add_fn = fn _group, body, _source, _ontology, opts ->
+        {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
+        assert opts[:uuid] == generalisation.id
+        :ok
+      end
+
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   evaluate_fn: ok_evaluate(decisions),
+                   add_episode_fn: add_fn
+                 )
+               )
+    end
+  end
+
   describe "ex-generalise > error handling" do
     test "when hypothesise LLM fails, generalise returns :ok (best-effort)" do
       assert :ok =
