@@ -425,17 +425,17 @@ ex-format-transcript (src: lib/gralkor/distill.ex; unit: test/gralkor/distill_te
 
 ex-capture (src: lib/gralkor/client/native.ex#capture; unit: test/gralkor/client/native_test.exs)
   request shape
-    when capture is called with session_id, principal group_id, Lens, agent_name, user_name, and messages
-      then the principal group_id and Lens identify an isolated Graphiti partition
-      and the Lens's ontology is resolved
-      and the capture buffer receives the partition, Lens ontology, names, and messages
+    when capture/5 is called with session_id, group_id, agent_name, user_name, messages
+      then group_id is sanitized
+      and the configured global ontology (Gralkor.Config.ontology/0) is resolved
+      and Gralkor.CaptureBuffer.append/6 is invoked with the sanitized group_id, the agent_name, the user_name, the resolved ontology, and the messages
   if session_id is missing or blank
     then raises ArgumentError
   if agent_name is missing or blank
     then raises ArgumentError
   if user_name is missing or blank
     then raises ArgumentError
-  capture selects a Lens rather than accepting an ontology module — the configured Lens owns the partition and ontology pairing
+  capture takes no ontology argument — the ontology is a deployment-wide config concern (ex-config-ontology), never a per-call or per-agent value
   then returns :ok immediately (does not call distill synchronously)
   (capture itself logs nothing per-turn — captured content is observable at flush; see "flush" below)
   flush (fires from flush/1, flush_and_await/2, and shutdown only)
@@ -485,14 +485,12 @@ ex-flush-and-await (src: lib/gralkor/client/native.ex#flush_and_await/2; unit: t
 ```
 ex-memory-add (src: lib/gralkor/client/native.ex#memory_add; unit: test/gralkor/client/native_test.exs; integration: none; functional: test/functional/ontology_extraction_test.exs)
   request shape
-    when called with principal group_id, Lens, content, and source_description
-      then the principal group_id and Lens identify an isolated Graphiti partition
-      and the Lens's configured ontology is applied
-    when called without a Lens
-      then the implicit `default` Lens preserves the existing sanitized group_id and configured `:ontology`
+    when called with group_id, content, source_description and no ontology override
+      then group_id is sanitized before ingestion
+      and the ontology applied is the configured global ontology (Gralkor.Config.ontology/0)
     when called with group_id, content, source_description and an explicit ontology override
       then group_id is sanitized before ingestion
-      and the override remains the ontology applied to the implicit `default` Lens for backward compatibility
+      and the override is the ontology applied — the configured global ontology is not consulted
   then auto-generates name ("manual-add-" + timestamp_ms)
   then auto-generates idempotency_key from `System.unique_integer([:positive, :monotonic])` rendered as a string
   then calls Gralkor.GraphitiPool.add_episode with source=:text scoped to the sanitized group_id, forwarding the resolved ontology as the final arg
@@ -853,24 +851,14 @@ ex-config-defaults (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.e
       then llm_model/0 / embedder_model/0 raises ArgumentError naming the env var and the bad value
 
 ex-config-ontology (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.exs)
-  Gralkor.Config.ontology/0 resolves the optional ontology for the implicit `default` Lens from app env (`:jido_gralkor, :ontology`)
-  the value remains the backward-compatible default for consumers that do not configure or select named Lenses
+  Gralkor.Config.ontology/0 resolves the optional deployment-wide ontology from app env (`:jido_gralkor, :ontology`)
+  the ontology is a single global config value — it is never read from agent state, mount opts, or per-call context (those couplings are the fakery this resolver removes); every write path (capture, memory_add) reads it from here
     when `:jido_gralkor, :ontology` is unset
       then returns nil (no ontology — every write behaves identically to the pre-ontology slice)
     when `:jido_gralkor, :ontology` is a module declared via `use Gralkor.Ontology`
       then returns that module
     if `:jido_gralkor, :ontology` is a module that does not export `__ontology__/0`, or any non-module value
       then raises ArgumentError naming the bad value (fail-fast on operator misconfig, at the write boundary rather than as a downstream graphiti failure)
-
-ex-config-lenses (src: none; unit: none)
-  configured Lenses are non-blank names bound to modules declared via `use Gralkor.Ontology`
-    when a named Lens is configured
-      then it resolves to that ontology and a principal-scoped Graphiti partition
-    if a Lens name is blank or its value is not an ontology module
-      then raises ArgumentError naming the invalid Lens before a graph operation
-  the implicit `default` Lens always exists
-    then it resolves to Gralkor.Config.ontology/0
-    and it uses the principal's existing Graphiti partition so existing memory remains reachable
 ```
 
 ## Timeouts (embedded Gralkor adapter)
@@ -901,10 +889,10 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
       then {:ok, block} is returned
     if the backend fails
       then {:error, reason} is returned
-  when capture is called with session_id, principal group_id, Lens, agent_name, user_name, messages
+  when capture/5 is called with session_id, group_id, agent_name, user_name, messages
     messages is a list of canonical Gralkor.Message structs (role ∈ {"user", "assistant", "behaviour"}, content: String.t())
     every captured turn is learned from at flush — there is no per-turn ERL flag (learning is unconditional)
-    the Lens selects the Graphiti partition and ontology for capture, learning, and generalisation writes
+    capture carries no ontology argument — the write applies the configured global ontology (ex-config-ontology)
     when the backend acknowledges the capture
       then :ok is returned
     if the backend fails
@@ -926,14 +914,14 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
       and the buffered turns are still available to flush on a later call
     if the backend fails before the timeout
       then {:error, reason} is returned
-  when memory_add is called with principal group_id, Lens, content, and source_description
-    then the write uses the selected Lens's partition and configured ontology
+  when memory_add is called with group_id, content, and source_description (no ontology override)
+    then the write applies the configured global ontology (ex-config-ontology), so a caller is never required to supply one
     when the backend acknowledges the add
       then :ok is returned
     if the backend fails
       then {:error, reason} is returned
-  when memory_add is called through the backward-compatible ontology override
-    then the override is applied to the implicit `default` Lens write
+  when memory_add is called with an additional ontology override (a module declared with `use Gralkor.Ontology`)
+    then the override is applied to the write, the configured global ontology is not consulted (this override is the only per-call ontology surface, and it exists only on the client — the memory_add tool/action does not expose it)
     when the backend acknowledges the add
       then :ok is returned
     if the backend fails
@@ -1036,12 +1024,11 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
   if mount/2 is called without an :agent_name opt or with a blank :agent_name
     then it raises ArgumentError (every consumer must supply the agent's name; there is no fallback)
   then mount/2 returns {:ok, %{agent_name: opts[:agent_name]}}
-  mount/2 accepts no :ontology opt — ontologies belong to configured Lenses rather than plugin state
-  the active Lens is read per-turn from `agent.state[:lens]`; when absent, the implicit `default` Lens is active
+  mount/2 accepts no :ontology opt — ontology is deployment-wide config (ex-config-ontology), not per-agent state; the plugin neither records nor threads it
   user_name is read per-turn from `agent.state[:user_name]` — the consumer's responsibility to populate (e.g. via on_before_cmd from the signal's tool_context). Convention key, not a mount opt, because the user behind an agent can change between turns (multi-user deployments), and graph-quality depends on naming the right human in each captured episode.
   when an agent turn begins
     when a thread has committed to agent state
-      then the thread's session_id, configured agent_name, and active Lens are planted on the signal's tool_context so the memory actions can find them; the plugin does not call recall on its own
+      then the thread's session_id and the configured agent_name are planted on the signal's tool_context so the `MemorySearch` ReAct tool can find them (no ontology is planted — writes resolve it from config); the plugin does not call `Gralkor.Client.recall/3` on its own (recall is the LLM's job — see `JidoGralkor.ReAct` and the consumer's `RequestTransformer` for how `memory_search` is forced on iteration 1)
     when no thread has committed yet (first query on a fresh agent — ReAct strategy's ThreadAgent.append runs inside @start, after plugin hooks)
       then the configured agent_name is planted on tool_context; no session_id is planted, and `MemorySearch` short-circuits with a non-result message on this turn
   every captured turn is learned from at flush — there is no per-turn ERL flag (learning is unconditional;
@@ -1049,14 +1036,14 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
   when an agent turn completes
     then the user query, event trace, and `{:completed, answer}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list is sent to
-      Gralkor for capture with the thread's session_id, the principal's group_id, the active Lens, the configured agent_name, and the user_name read from `agent.state[:user_name]`
+      Gralkor for capture (via `capture/5`) with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the configured global ontology)
     if `agent.state[:user_name]` is missing or blank
       then capture raises ArgumentError (the consumer's contract violation surfaces immediately rather than persisting an episode under a generic "User" label that would corrupt the graph)
   when an agent turn fails
     then the user query, event trace, and `{:failed, error}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list — ending in
       a `"request failed: …"` behaviour message instead of an assistant message — is sent to
-      Gralkor for capture with the thread's session_id, the principal's group_id, the active Lens, the configured agent_name, and the user_name read from `agent.state[:user_name]`, so the failure is visible to downstream distillation rather than
+      Gralkor for capture (via `capture/5`) with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the configured global ontology), so the failure is visible to downstream distillation rather than
       silently dropped
     when the agent has no committed thread yet (first-turn failure)
       then capture is skipped
@@ -1190,12 +1177,7 @@ JidoGralkor.Canonical.to_messages/3 (src: lib/jido_gralkor/canonical.ex; unit: t
 ```
 JidoGralkor.Actions.MemorySearch (src: lib/jido_gralkor/actions/memory_search.ex; unit: test/jido_gralkor/actions/memory_search_test.exs)
   when invoked with a non-blank query and session_id in context
-    when one or more Lenses are supplied
-      then recall searches only the principal-scoped partitions for those Lenses
-    when no Lenses are supplied
-      then recall searches only context.lens, falling back to the implicit `default` Lens
-    if any supplied Lens is unknown, blank, or the explicit selection is empty
-      then the client is not called and the action returns an error
+    then group_id is derived from context.agent_id via Gralkor.Client.sanitize_group_id/1 and Gralkor.Client.impl().recall/3 is called with that group_id, session_id, and query
   when invoked with a blank or missing query
     then the client is not called and the action returns {:ok, %{result: <no-query non-result message>}}
     and a Logger.warning is emitted (defensive against forced-tool-call paths where the LLM had nothing meaningful to search for)
@@ -1215,13 +1197,9 @@ JidoGralkor.Actions.MemorySearch (src: lib/jido_gralkor/actions/memory_search.ex
 ```
 JidoGralkor.Actions.MemoryAdd (src: lib/jido_gralkor/actions/memory_add.ex; unit: test/jido_gralkor/actions/memory_add_test.exs)
   then source_description is a required tool parameter (alongside content) — the LLM must say where each stored insight came from, so no context-less memories land in the graph
-  when invoked with a Lens
+  when invoked
     then the action returns {:ok, %{result: "Ingesting."}} without waiting on the client
-    then the client's memory_add is called in a background Task with the principal group_id, Lens, content, and source_description
-  when invoked without a Lens
-    then context.lens is selected, falling back to the implicit `default` Lens
-  if the selected Lens is unknown or blank
-    then no background Task or graph write is started and the action returns an error
+    then the client's memory_add is called in a background Task with the sanitized group_id, content, and source_description — and no ontology argument, so the configured global ontology is applied by the client (the tool never reads ontology from context or exposes an override)
   if the background Task's client call fails
     then the failure is logged (best-effort storage)
 ```
@@ -1280,15 +1258,6 @@ jido-memory-journey (functional: test/functional/jido_memory_journey_test.exs)
         then {:ok, block} is returned
         and block is a non-empty <gralkor-memory> block
         and the block references the stored content semantically (contains "concise" or similar)
-  Lens round-trip
-    given two named Lenses use different custom ontologies for the same principal
-      when information is ingested through each Lens
-        then each episode is extracted under its selected Lens's ontology into a distinct principal-scoped Graphiti partition
-      when memory is searched with one selected Lens
-        then only information from that Lens is returned
-      when memory is searched with both selected Lenses
-        then relevant information from both Lenses can be returned in one memory block
-        and information belonging to another principal cannot be returned
   flush
     given a pending turn in Gralkor.CaptureBuffer
       when Gralkor.Client.flush/1 is called with the session_id
