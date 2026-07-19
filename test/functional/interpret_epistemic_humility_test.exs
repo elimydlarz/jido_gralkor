@@ -7,7 +7,7 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
   @moduletag :functional
   @moduletag timeout: 120_000
 
-  @model %{provider: :openai, id: "gpt-5-nano"}
+  @model %{provider: :openai, id: "gpt-4.1-nano"}
 
   setup_all do
     case System.get_env("OPENAI_API_KEY") do
