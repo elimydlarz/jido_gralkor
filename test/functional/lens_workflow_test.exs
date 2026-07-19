@@ -97,7 +97,7 @@ defmodule Gralkor.LensWorkflowFunctionalTest do
   end
 
   describe "given a consumer registers local, global, and generalising Lenses and mounts the plugin with defaults" do
-    test "tools, capture, and search obey the configured Lens workflow" do
+    test "then tools, capture, and search obey the configured Lens workflow" do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",

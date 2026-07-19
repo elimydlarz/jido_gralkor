@@ -2,7 +2,7 @@
 
 Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded Gralkor memory adapter — Graphiti + FalkorDB driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), no external server to run.
 
-You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, and an `Ontology` DSL for declaring the entity types and relationships graphiti should extract from captured episodes.
+You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, and **Lenses**: named, independently configurable ingestion and search channels, each with its own ontology, scope, and consumer-defined ingestion process.
 
 As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one. Consumers no longer need a separate `{:gralkor_ex, ...}` line — `{:jido_gralkor, "~> 4.1"}` is the whole memory stack.
 
@@ -98,7 +98,15 @@ defmodule MyApp.ChatAgent do
        """,
        request_transformer: MyApp.ChatAgent.RequestTransformer},
     default_plugins: %{__memory__: false},
-    plugins: [{JidoGralkor.Plugin, %{agent_name: "Susu"}}]
+    plugins: [
+      {JidoGralkor.Plugin,
+       %{
+         agent_name: "Susu",
+         default_lens: "observations",
+         search_targets: ["observations", "global"],
+         generalise_lens: "generalisations"
+       }}
+    ]
 
   # Optional: pin tool_choice to memory_search on iteration 1 so the agent
   # itself authors a focused recall query in-thread.
@@ -113,7 +121,9 @@ defmodule MyApp.ChatAgent do
 end
 ```
 
-That's it. The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed) and the configured `:agent_name` on the signal's `tool_context` so `MemorySearch` can find them. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
+The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed), `:agent_name`, the selected `:lens`, and `:search_targets` on the signal's `tool_context`. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
+
+Set `tool_context[:lens]` on an individual query to override `default_lens` for that turn. The override becomes authoritative for both `memory_add` and automatic capture. If `generalise_lens` is configured, the same completed turn is also submitted to that Lens without duplicating it in session context.
 
 The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your consumer's responsibility to populate (e.g. via `on_before_cmd` from the signal's `tool_context`) so distill renders user lines under the human's actual name rather than a generic "User".
 
@@ -121,7 +131,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your co
 
 **Session identity.** `session_id` is the current Jido thread id (read from `agent.state[:__thread__].id`, populated by `Jido.Thread.Plugin`). The plugin does not mint its own identifier — Jido's thread lifecycle is the single source of truth.
 
-**Group partitioning.** `group_id` is `Gralkor.Client.sanitize_group_id(agent.id)` (hyphens replaced with underscores — a RediSearch constraint). Per-agent graph partition; agents never see each other's memory.
+**Lens partitioning.** An operator-scoped Lens writes to a partition derived from the operator id and Lens name, so different operators and different local Lenses remain isolated. Every global Lens writes to the one shared `global` partition. Global writes retain their originating Lens name as provenance, but global search deliberately queries the whole pool: use the reserved `"global"` search target, not the name of a global Lens.
 
 **First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants only `:agent_name` (no `:session_id`) and lets capture establish the session when the turn completes. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
 
