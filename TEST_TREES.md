@@ -1043,8 +1043,12 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
     then it raises ArgumentError (every consumer must supply the agent's name; there is no fallback)
   then mount/2 returns {:ok, %{agent_name: opts[:agent_name]}}
   mount/2 accepts no :ontology opt — ontology is deployment-wide config (ex-config-ontology), not per-agent state; the plugin neither records nor threads it
+  when mount/2 selects a default Lens, search targets, and an optional generalising Lens
+    then it resolves the application registry and stores those selections without redefining their ontology, scope, or ingestion
   user_name is read per-turn from `agent.state[:user_name]` — the consumer's responsibility to populate (e.g. via on_before_cmd from the signal's tool_context). Convention key, not a mount opt, because the user behind an agent can change between turns (multi-user deployments), and graph-quality depends on naming the right human in each captured episode.
   when an agent turn begins
+    when the plugin is Lens-aware
+      then the selected Lens and search targets are planted with the agent name and optional session id
     when a thread has committed to agent state
       then the thread's session_id and the configured agent_name are planted on the signal's tool_context so the `MemorySearch` ReAct tool can find them (no ontology is planted — writes resolve it from config); the plugin does not call `Gralkor.Client.recall/3` on its own (recall is the LLM's job — see `JidoGralkor.ReAct` and the consumer's `RequestTransformer` for how `memory_search` is forced on iteration 1)
     when no thread has committed yet (first query on a fresh agent — ReAct strategy's ThreadAgent.append runs inside @start, after plugin hooks)
@@ -1052,6 +1056,8 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
   every captured turn is learned from at flush — there is no per-turn ERL flag (learning is unconditional;
     a custom-CoT exemption is deferred until a custom reasoning strategy exists — see the ERL intro)
   when an agent turn completes
+    when the plugin is Lens-aware
+      then capture receives the selected Lens and optional additional generalising Lens
     then the user query, event trace, and `{:completed, answer}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list is sent to
       Gralkor for capture (via `capture/5`) with the thread's session_id, the principal's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the configured global ontology)

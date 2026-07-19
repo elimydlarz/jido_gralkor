@@ -8,6 +8,10 @@ defmodule JidoGralkor.PluginTest do
   alias Jido.Signal
   alias JidoGralkor.Plugin
 
+  defmodule LensOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+  end
+
   setup_all do
     {:ok, _applications} = Application.ensure_all_started(:jido_signal)
     :ok
@@ -83,6 +87,32 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
+  describe "when mount/2 selects a default Lens, search targets, and an optional generalising Lens" do
+    test "then it resolves the application registry and stores those selections without redefining their ontology, scope, or ingestion" do
+      configure_lenses()
+
+      assert {:ok,
+              %{
+                agent_name: "Susu",
+                default_lens: "observations",
+                search_targets: ["observations", "global"],
+                generalise_lens: "generalisations",
+                lens: %Gralkor.Lens{
+                  name: "observations",
+                  ontology: LensOntology,
+                  scope: :operator,
+                  ingestion: Gralkor.Lens.Ingestion.Store
+                }
+              }} =
+               Plugin.mount(%{id: "operator-one", state: %{}},
+                 agent_name: "Susu",
+                 default_lens: "observations",
+                 search_targets: ["observations", "global"],
+                 generalise_lens: "generalisations"
+               )
+    end
+  end
+
   describe "when an agent turn begins, when a thread has committed to agent state" do
     test "the thread's session_id and agent_name are planted on the signal's tool_context" do
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
@@ -109,6 +139,27 @@ defmodule JidoGralkor.PluginTest do
                Plugin.handle_signal(signal, context(agent("user-abc", thread_id: "thr-xyz")))
 
       assert data.query == "hello"
+    end
+  end
+
+  describe "when an agent turn begins, when the plugin is Lens-aware" do
+    test "then the selected Lens and search targets are planted with the agent name and optional session id" do
+      plugin_state = lens_plugin_state()
+      signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
+
+      lens_agent =
+        agent("operator-one", thread_id: "thread-one")
+        |> put_in([:state, :__memory__], plugin_state)
+
+      assert {:ok, {:continue, %Signal{data: %{tool_context: tool_context}}}} =
+               Plugin.handle_signal(signal, context(lens_agent))
+
+      assert tool_context == %{
+               agent_name: "Susu",
+               lens: "observations",
+               search_targets: ["observations", "global"],
+               session_id: "thread-one"
+             }
     end
   end
 
@@ -258,6 +309,37 @@ defmodule JidoGralkor.PluginTest do
       assert_raise ArgumentError, ~r/user_name/, fn ->
         Plugin.handle_signal(signal, context(ag))
       end
+    end
+  end
+
+  describe "when an agent turn completes, when the plugin is Lens-aware" do
+    test "then capture receives the selected Lens and optional additional generalising Lens" do
+      InMemory.set_capture(:ok)
+      plugin_state = lens_plugin_state()
+      request_id = "request-lens-capture"
+
+      lens_agent =
+        agent("operator-one",
+          agent_name: "Susu",
+          thread_id: "thread-one",
+          request_traces: %{
+            request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
+          },
+          requests: %{request_id => %{query: "Remember this", status: :pending, result: nil}}
+        )
+        |> put_in([:state, :__memory__], plugin_state)
+
+      signal =
+        Signal.new!(
+          "ai.request.completed",
+          %{request_id: request_id, result: "Remembered."},
+          source: "/test"
+        )
+
+      assert {:ok, :continue} = Plugin.handle_signal(signal, context(lens_agent))
+
+      assert [["thread-one", "operator-one", "Susu", "Eli", _messages, "observations",
+               ["generalisations"]]] = InMemory.captures()
     end
   end
 
