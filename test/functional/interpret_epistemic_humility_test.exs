@@ -81,6 +81,23 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
     end
   end
 
+  describe "interpret-epistemic-humility > when sourced memory contains both relevant and irrelevant facts" do
+    test "irrelevant facts are omitted while the relevant fact retains its natural source context" do
+      facts = """
+      - The Atlas project brief says the launch is scheduled for Tuesday.
+      - A restaurant receipt shows that lunch was ramen.
+      """
+
+      results = interpret("On which day is the Atlas launch scheduled?", facts)
+
+      assert [result] = results
+      assert result =~ "Atlas project brief"
+      assert result =~ "Tuesday"
+      refute result =~ "restaurant receipt"
+      refute result =~ "ramen"
+    end
+  end
+
   defp interpret(query, facts) do
     Interpret.interpret_facts(
       [Message.new("user", query)],
