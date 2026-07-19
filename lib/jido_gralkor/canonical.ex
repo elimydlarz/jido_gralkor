@@ -40,6 +40,14 @@ defmodule JidoGralkor.Canonical do
     |> Enum.reverse()
   end
 
+  defp prepend_message(messages, "user", content) do
+    if String.trim(content) == "" do
+      messages
+    else
+      [Message.new("user", content) | messages]
+    end
+  end
+
   defp prepend_message(messages, role, content) do
     case String.trim(content) do
       "" -> messages

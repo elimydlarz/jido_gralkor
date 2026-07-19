@@ -10,7 +10,7 @@ defmodule JidoGralkor.CanonicalTest do
     end
 
     test "passes the user_query through to the user message content as given (no envelope stripping — the plugin's contract is that :query is the user's actual words)" do
-      query = "<example>kept</example>\n\nactual question"
+      query = "  <example>kept</example>\n\nactual question  "
 
       [user | _] = Canonical.to_messages(query, [], {:completed, "a"})
 
