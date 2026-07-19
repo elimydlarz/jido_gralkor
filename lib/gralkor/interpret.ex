@@ -56,7 +56,11 @@ defmodule Gralkor.Interpret do
 
     case interpret_fn.(prompt_with_budget, output_token_budget) do
       {:ok, list} when is_list(list) ->
-        list
+        if Enum.all?(list, &is_binary/1) do
+          list
+        else
+          raise InterpretParseFailed, raw_response: list
+        end
 
       {:error, reason} ->
         raise "interpret failed: #{inspect(reason)}"
