@@ -338,8 +338,17 @@ defmodule JidoGralkor.PluginTest do
 
       assert {:ok, :continue} = Plugin.handle_signal(signal, context(lens_agent))
 
-      assert [["thread-one", "operator-one", "Susu", "Eli", _messages, "observations",
-               ["generalisations"]]] = InMemory.captures()
+      assert [
+               [
+                 "thread-one",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 _messages,
+                 "observations",
+                 ["generalisations"]
+               ]
+             ] = InMemory.captures()
     end
   end
 

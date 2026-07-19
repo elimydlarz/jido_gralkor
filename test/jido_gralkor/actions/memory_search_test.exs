@@ -99,8 +99,9 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                search_targets: ["observations"]
              })
 
-    assert_receive {:lens_search,
-                    %{operator_id: "operator-one", lens: %{name: "observations"}}, "launch", 10}
+    assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "observations"}},
+                    "launch", 10}
+
     assert [] = InMemory.recalls()
   end
 
