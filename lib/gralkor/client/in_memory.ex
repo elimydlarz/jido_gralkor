@@ -74,6 +74,7 @@ defmodule Gralkor.Client.InMemory do
 
   @impl Gralkor.Client
   def capture(session_id, group_id, agent_name, user_name, turn) do
+    raise_if_blank!(:session_id, session_id)
     raise_if_blank!(:agent_name, agent_name)
     raise_if_blank!(:user_name, user_name)
 
@@ -85,6 +86,7 @@ defmodule Gralkor.Client.InMemory do
 
   @impl Gralkor.Client
   def capture(session_id, operator_id, agent_name, user_name, turn, lens) do
+    raise_if_blank!(:session_id, session_id)
     raise_if_blank!(:agent_name, agent_name)
     raise_if_blank!(:user_name, user_name)
 
@@ -96,6 +98,7 @@ defmodule Gralkor.Client.InMemory do
 
   @impl Gralkor.Client
   def capture(session_id, operator_id, agent_name, user_name, turn, lens, additional_lenses) do
+    raise_if_blank!(:session_id, session_id)
     raise_if_blank!(:agent_name, agent_name)
     raise_if_blank!(:user_name, user_name)
 
