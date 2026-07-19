@@ -812,4 +812,53 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       refute result =~ "unselected decision"
     end
   end
+
+  describe "where a turn supplies a registered Lens through plugin context" do
+    test "then that Lens overrides the plugin's default Lens for ingestion during that turn" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: FailingIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: RecordingIngestion
+        ]
+      ])
+
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{},
+                 agent_name: "Susu",
+                 default_lens: "observations",
+                 search_targets: ["observations"]
+               )
+
+      signal = %Jido.Signal{
+        id: "signal-three",
+        source: "/test",
+        type: "ai.react.query",
+        data: %{query: "remember this", tool_context: %{lens: "decisions"}}
+      }
+
+      agent = %{
+        id: "operator-one",
+        state: %{__memory__: plugin_state, __thread__: %{id: "session-one"}}
+      }
+
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
+               Plugin.handle_signal(signal, %{agent: agent})
+
+      assert {:ok, %{result: "Ingesting."}} =
+               JidoGralkor.Actions.MemoryAdd.run(
+                 %{content: "We chose Friday.", source_description: "agent decision"},
+                 Map.put(tool_context, :agent_id, agent.id)
+               )
+
+      assert_receive {:ingested, %Ingest{lens: "decisions"}, %{lens: %{name: "decisions"}}}
+    end
+  end
 end
