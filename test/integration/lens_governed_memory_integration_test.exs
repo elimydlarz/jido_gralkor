@@ -1020,4 +1020,47 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                       }, "A compatible memory.", "legacy caller"}
     end
   end
+
+  describe "if Lens registration contains a blank or duplicate name, the reserved name `global`, an invalid ontology, an invalid scope, or an invalid ingestion process" do
+    test "then configuration resolution raises `ArgumentError` naming the invalid Lens before ingestion or search begins" do
+      invalid_registries = [
+        [[name: " ", ontology: ObservationOntology, scope: :operator, ingestion: RecordingIngestion]],
+        [
+          [
+            name: "observations",
+            ontology: ObservationOntology,
+            scope: :operator,
+            ingestion: RecordingIngestion
+          ],
+          [
+            name: "observations",
+            ontology: ObservationOntology,
+            scope: :operator,
+            ingestion: RecordingIngestion
+          ]
+        ],
+        [[name: "global", ontology: ObservationOntology, scope: :global, ingestion: RecordingIngestion]],
+        [[name: "broken", ontology: String, scope: :operator, ingestion: RecordingIngestion]],
+        [[name: "broken", ontology: ObservationOntology, scope: :tenant, ingestion: RecordingIngestion]],
+        [[name: "broken", ontology: ObservationOntology, scope: :operator, ingestion: String]]
+      ]
+
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      for registry <- invalid_registries do
+        Application.put_env(:jido_gralkor, :lenses, registry)
+
+        assert_raise ArgumentError, ~r/Lens/, fn ->
+          Client.ingest(%Ingest{
+            operator_id: "operator-one",
+            lens: "observations",
+            content: "must not write",
+            source_description: "invalid registry"
+          })
+        end
+
+        refute_receive {:add_episode, _, _, _}
+      end
+    end
+  end
 end
