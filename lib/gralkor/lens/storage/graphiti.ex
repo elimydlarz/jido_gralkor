@@ -39,6 +39,23 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     )
   end
 
+  def add_episode(
+        %Store{lens: %Lens{scope: :global} = lens},
+        content,
+        source_description,
+        opts
+      ) do
+    add_episode_fn = Keyword.get(opts, :add_episode_fn, &graph_add/5)
+
+    add_episode_fn.(
+      "global",
+      content,
+      source_description,
+      lens.ontology,
+      lens: lens.name
+    )
+  end
+
   @impl Gralkor.Lens.Storage
   def search(%Store{} = store, query, max_results) do
     search(store, query, max_results, [])
