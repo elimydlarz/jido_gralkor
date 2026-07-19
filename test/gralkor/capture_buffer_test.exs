@@ -170,6 +170,30 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "ex-capture-buffer > append_lenses/6 when one captured turn is routed through a primary and additional Lens" do
+    test "each Lens batch receives the turn while turns_for/1 contains it only once" do
+      turn = [Message.new("user", "one turn")]
+
+      assert :ok =
+               CaptureBuffer.append_lenses(
+                 "session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 ["observations", "generalisations"],
+                 turn
+               )
+
+      assert [^turn] = CaptureBuffer.turns_for("session")
+      assert :ok = CaptureBuffer.flush_and_await("session", 1_000)
+
+      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "observations", [^turn]}
+
+      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "generalisations",
+                      [^turn]}
+    end
+  end
+
   describe "ex-capture-buffer > turns_for/1" do
     test "when the session has never been appended to, returns []" do
       assert [] = CaptureBuffer.turns_for("nope")
