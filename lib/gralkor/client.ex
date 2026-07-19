@@ -1,18 +1,25 @@
 defmodule Gralkor.Client do
   @moduledoc """
-  Port for talking to a Gralkor backend from Elixir.
+  Public entry point and adapter port for Gralkor memory.
 
-  Operations — recall, capture, flush, flush_and_await, memory_add,
-  build_indices, build_communities. Every failure is reported as
-  `{:error, reason}` so callers can decide how to fail open. Group IDs are
-  sanitised at the edge (`sanitize_group_id/1`) to satisfy FalkorDB's
-  RediSearch constraint.
+  Named Lens operations use `ingest/1` and `search/1`. Ingestion resolves the
+  application-owned Lens definition and invokes its ingestion process with a
+  Lens-bound store. Search combines explicitly selected operator-local Lens
+  destinations and the reserved `"global"` pool; a global Lens name is
+  provenance, not a search boundary.
+
+  The compatibility surface remains `recall/4`, `capture/5`, `flush/1`,
+  `flush_and_await/2`, and `memory_add/3` or `/4`. Lens-aware capture uses
+  `capture/6`, or `capture/7` when the same turn is also routed through
+  additional Lenses. Legacy group IDs are sanitised at their graph boundary
+  (`sanitize_group_id/1`); Lens storage binds the original operator id to its
+  selected Lens instead.
 
   `flush/1` returns `:ok` before the buffered turns have landed
   (fire-and-forget — appropriate for shutdown paths that cannot block).
-  `flush_and_await/2` returns `:ok` only after the episode is queryable via
-  `recall/4`, for callers that must observe completion before rotating
-  state (e.g. session-id rotation in `JidoGralkor.ContextRotator`).
+  `flush_and_await/2` returns `:ok` only after buffered ingestion completes,
+  for callers that must observe completion before rotating state (for example
+  session-id rotation in `JidoGralkor.ContextRotator`).
 
   The concrete adapter is resolved from `Application.get_env(:jido_gralkor, :client)`;
   defaults to `Gralkor.Client.Native` (in-process via Pythonx). Tests swap in

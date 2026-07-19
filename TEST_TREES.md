@@ -67,7 +67,7 @@ ex-recall (src: lib/gralkor/recall.ex; unit: test/gralkor/recall_test.exs)
           then recall proceeds with only regular facts
       when gen_search_fn is absent
         then no gen search is performed (backward compatible)
-      then a learning search runs unconditionally on every recall (§1 ERL recall — no flag, no LLM classification)
+      then a learning search runs unconditionally on every implicit-default recall (§1 ERL recall — no flag, no LLM classification; Lens searches use Client.search/1 instead)
         and a parallel Task.async runs the learning_search_fn over the same group_id seeded with the raw user query (max_results / 3, min 1); the client-wired learning_search_fn does a graphiti NODE search filtered to node_labels: ["Learning"] (ex-graphiti-pool > search_nodes, ex-learning-entity) so only the plugin's Learning custom-entity nodes are returned, each formatted from its name/summary/attributes
         and learning results are combined with regular facts before interpretation
         and the success bias lives in the learning node's summary/attributes (ex-agent-learning), not a query primitive — interpret ranks succeeded approaches above failed ones
@@ -737,7 +737,7 @@ ex-application (src: lib/gralkor/application.ex; unit: test/gralkor/application_
     when no add_episode_fn dep is provided (the production default — start/2 wires only generalise_fn + learn_fn)
       then the default add_episode_fn routes the captured/learning write to GraphitiPool.add_episode with the server supplied explicitly, matching the 6-arity clause — GraphitiPool.add_episode carries defaults on server (1st) and opts (6th), so capturing &GraphitiPool.add_episode/5 and calling it with (group_id, body, source, ontology, opts) binds group_id→server, body→group_id, source→content, ontology→source_description, []→ontology and fails the is_binary(source_description) guard; the flush would raise FunctionClauseError on every capture and CaptureBuffer would exhaust after retries, writing nothing (all capture, not just ERL) (integration: real GraphitiPool + fake graphiti recording add_episode; build_flush_callback with no add_episode_fn dep; assert the captured episode reaches graphiti without raising; test/gralkor/application_test.exs)
     learning (learn_fn dep) — only on a path that returns :ok (empty body, or a successful captured add).
-    Learning is unconditional: every turn is learned from, in append order. Fail-fast — a learning failure is
+    In this implicit-default flush, Learning is unconditional: every turn is learned from, in append order. Fail-fast — a learning failure is
     never swallowed; it propagates out of the flush callback so the CaptureBuffer retry/backoff owns recovery
     (the same failure class and owner as a captured-episode write failure — see the retry schedule in
     ex-capture-buffer, which drops 4xx/upstream_llm and retries graph-write errors).
@@ -935,7 +935,7 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
       then {:error, reason} is returned
   when capture/5 is called with session_id, group_id, agent_name, user_name, messages
     messages is a list of canonical Gralkor.Message structs (role ∈ {"user", "assistant", "behaviour"}, content: String.t())
-    every captured turn is learned from at flush — there is no per-turn ERL flag (learning is unconditional)
+    every turn captured through this implicit-default arity is learned from at its default flush — there is no per-turn ERL flag (learning is unconditional within that pipeline)
     capture carries no ontology argument — the write applies the configured global ontology (ex-config-ontology)
     when the backend acknowledges the capture
       then :ok is returned
@@ -1038,7 +1038,7 @@ ex-client-native (src: lib/gralkor/client/native.ex; integration: test/gralkor/c
     if :jido_gralkor, :interpret_max_output_tokens is set to a non-positive integer or a non-integer value
       then the call raises ArgumentError at the port boundary (configuration error surfaces immediately, not as a downstream LLM failure)
   erl recall wiring (§1 — the learning_search_fn behaviour is proven at ex-recall; this is the wiring only, like gen_search_fn/deadline_ms it is not separately unit-tested)
-    then a learning_search_fn is wired into every Gralkor.Recall opts unconditionally — it calls GraphitiPool.search_nodes with node_labels: ["Learning"] (NODE search) so only the plugin's Learning custom-entity nodes are returned, formatted from name/summary/attributes
+    then a learning_search_fn is wired into every legacy Gralkor.Recall call unconditionally — it calls GraphitiPool.search_nodes with node_labels: ["Learning"] (NODE search) so only the plugin's Learning custom-entity nodes are returned, formatted from name/summary/attributes; Lens searches do not call Gralkor.Recall
       (no flag, no LLM classification, no TaskKind — see ex-learning-entity for the entity type and ex-recall for the orchestration; node search not edge search — ex-recall explains why)
   if capture is called with a blank string session_id
     then the call raises with ArgumentError

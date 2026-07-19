@@ -2,10 +2,15 @@ defmodule JidoGralkor.Actions.MemorySearch do
   @moduledoc """
   ReAct tool the LLM can call to search long-term memory.
 
-  Calls `Gralkor.Client.recall/3`. `group_id` is sanitized from
-  `context[:agent_id]` and `session_id` is read from
-  `context[:session_id]` (planted by `JidoGralkor.Plugin` on
-  `ai.react.query`).
+  In Lens-aware mode, calls `Gralkor.Client.search/1` with the operator id and
+  `context[:search_targets]`, combining results from the selected local Lens
+  destinations and/or the reserved `"global"` pool. Otherwise it calls the
+  configured client's legacy `recall/4`, using a group id sanitised from
+  `context[:agent_id]` and the configured agent name.
+
+  `session_id` is read from `context[:session_id]` (planted by
+  `JidoGralkor.Plugin` on `ai.react.query`) and is required before either mode
+  searches.
 
   Short-circuits with an explicit non-result message when:
 
@@ -15,8 +20,8 @@ defmodule JidoGralkor.Actions.MemorySearch do
       (`tool_choice: memory_search`) where the LLM is required to
       invoke the tool but has nothing meaningful to search for.
 
-  Otherwise returns the memory block the server produced. Errors
-  propagate.
+  Lens results are joined with newlines; legacy recall returns its memory
+  block unchanged. Errors propagate.
   """
 
   use Jido.Action,

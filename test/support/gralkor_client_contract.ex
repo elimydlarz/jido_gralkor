@@ -230,15 +230,16 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > capture/6 and capture/7 validation" do
+      describe "ex-client > session_id validation > if capture/6 or capture/7 is called with a missing or blank session_id" do
         test "raises ArgumentError when session_id is blank" do
           unquote(setup_block).()
           configure_capture(:ok)
 
-          for lens_args <- [["observations"], ["observations", ["generalisations"]]] do
+          for session_id <- ["", nil],
+              lens_args <- [["observations"], ["observations", ["generalisations"]]] do
             assert_raise ArgumentError, ~r/session_id/, fn ->
               apply(client(), :capture, [
-                "",
+                session_id,
                 "operator-1",
                 "TestAgent",
                 "Eli",
@@ -249,16 +250,20 @@ defmodule Gralkor.ClientContract do
           end
         end
 
-        test "raises ArgumentError when agent_name is blank" do
+      end
+
+      describe "ex-client > agent_name validation > if capture/6 or capture/7 is called with a missing or blank agent_name" do
+        test "then ArgumentError is raised at the port boundary" do
           unquote(setup_block).()
           configure_capture(:ok)
 
-          for lens_args <- [["observations"], ["observations", ["generalisations"]]] do
+          for agent_name <- ["", nil],
+              lens_args <- [["observations"], ["observations", ["generalisations"]]] do
             assert_raise ArgumentError, ~r/agent_name/, fn ->
               apply(client(), :capture, [
                 "session-1",
                 "operator-1",
-                "",
+                agent_name,
                 "Eli",
                 [Gralkor.Message.new("user", "hi")]
                 | lens_args
@@ -267,17 +272,21 @@ defmodule Gralkor.ClientContract do
           end
         end
 
-        test "raises ArgumentError when user_name is blank" do
+      end
+
+      describe "ex-client > user_name validation > if capture/6 or capture/7 is called with a missing or blank user_name" do
+        test "then ArgumentError is raised at the port boundary" do
           unquote(setup_block).()
           configure_capture(:ok)
 
-          for lens_args <- [["observations"], ["observations", ["generalisations"]]] do
+          for user_name <- ["", nil],
+              lens_args <- [["observations"], ["observations", ["generalisations"]]] do
             assert_raise ArgumentError, ~r/user_name/, fn ->
               apply(client(), :capture, [
                 "session-1",
                 "operator-1",
                 "TestAgent",
-                "",
+                user_name,
                 [Gralkor.Message.new("user", "hi")]
                 | lens_args
               ])
@@ -286,15 +295,17 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > capture session_id validation" do
-        test "capture/5 raises ArgumentError when session_id is blank" do
+      describe "ex-client > session_id validation > if capture/5 is called with a missing or blank session_id" do
+        test "then ArgumentError is raised at the port boundary" do
           unquote(setup_block).()
           configure_capture(:ok)
 
-          assert_raise ArgumentError, ~r/session_id/, fn ->
-            client().capture("", "group-1", "TestAgent", "Eli", [
-              Gralkor.Message.new("user", "hi")
-            ])
+          for session_id <- ["", nil] do
+            assert_raise ArgumentError, ~r/session_id/, fn ->
+              client().capture(session_id, "group-1", "TestAgent", "Eli", [
+                Gralkor.Message.new("user", "hi")
+              ])
+            end
           end
         end
       end
