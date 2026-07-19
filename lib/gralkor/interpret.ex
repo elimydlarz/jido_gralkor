@@ -47,7 +47,12 @@ defmodule Gralkor.Interpret do
     raise_if_blank!(agent_name)
     output_token_budget = output_token_budget!(opts)
     prompt = build_interpretation_context(messages, facts_text, agent_name, opts)
-    prompt_with_budget = prompt <> "\n\n" <> budget_instruction(output_token_budget)
+
+    prompt_with_budget =
+      Enum.join(
+        [prompt, epistemic_instruction(), budget_instruction(output_token_budget)],
+        "\n\n"
+      )
 
     case interpret_fn.(prompt_with_budget, output_token_budget) do
       {:ok, list} when is_list(list) ->
@@ -113,6 +118,12 @@ defmodule Gralkor.Interpret do
 
   defp budget_instruction(budget) do
     "Respond within #{budget} tokens. Keep each relevance reason short so the full list fits."
+  end
+
+  defp epistemic_instruction do
+    "Treat retrieved memory facts as understandings extracted from source material rather " <>
+      "than proven claims. Mention the source context, when available, only where natural, " <>
+      "without confidence labels, truth adjudication, or repetitive uncertainty warnings."
   end
 
   defp raise_if_blank!(name) when is_binary(name) do
