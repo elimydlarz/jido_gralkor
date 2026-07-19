@@ -14,7 +14,19 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    {:ok, pid} = start_supervised({CaptureBuffer, flush_callback: flush_callback, retries: []})
+    lens_flush_callback = fn operator_id, agent_name, user_name, lens, turns ->
+      send(test_pid, {:lens_flushed, operator_id, agent_name, user_name, lens, turns})
+      :ok
+    end
+
+    {:ok, pid} =
+      start_supervised(
+        {CaptureBuffer,
+         flush_callback: flush_callback,
+         lens_flush_callback: lens_flush_callback,
+         retries: []}
+      )
+
     %{pid: pid}
   end
 
@@ -119,6 +131,42 @@ defmodule Gralkor.CaptureBufferTest do
       assert_raise ArgumentError, ~r/user_name/, fn ->
         CaptureBuffer.append("s", "g", "Susu", nil, nil, [Message.new("user", "x")])
       end
+    end
+  end
+
+  describe "ex-capture-buffer > append_lens/7 when turns in one session select different Lenses" do
+    test "each turn remains Lens-associated while turns_for/1 preserves session append order" do
+      observation = [Message.new("user", "an observation")]
+      decision = [Message.new("user", "a decision")]
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 "session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 observation
+               )
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 "session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "decisions",
+                 decision
+               )
+
+      assert [^observation, ^decision] = CaptureBuffer.turns_for("session")
+
+      assert :ok = CaptureBuffer.flush_and_await("session", 1_000)
+
+      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "observations",
+                      [^observation]}
+
+      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "decisions", [^decision]}
     end
   end
 

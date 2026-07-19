@@ -341,6 +341,12 @@ ex-capture-buffer (src: lib/gralkor/capture_buffer.ex; unit: test/gralkor/captur
       then raises ArgumentError
     if user_name is missing or blank
       then raises ArgumentError
+  append_lens/7 (session_id, operator_id, agent_name, user_name, lens, messages)
+    when turns in one session select different Lenses
+      then each turn remains associated with its selected Lens
+      and turns_for/1 returns every turn in append order across Lenses
+    when the session is flushed
+      then the Lens flush callback receives one batch per Lens containing only that Lens's turns
   turns_for/1
     when the session has buffered turns
       then returns [[Gralkor.Message.t()]] in append order — the messages of each turn
