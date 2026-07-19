@@ -94,6 +94,16 @@ defmodule Gralkor.Ontology do
     required = Keyword.get(opts, :required, false)
     doc = Keyword.get(opts, :doc)
 
+    unless is_boolean(required) do
+      raise CompileError,
+        description: "Gralkor.Ontology: field :required must be boolean, got #{inspect(required)}"
+    end
+
+    unless is_nil(doc) or is_binary(doc) do
+      raise CompileError,
+        description: "Gralkor.Ontology: field :doc must be a string or nil, got #{inspect(doc)}"
+    end
+
     entry =
       Macro.escape(%{name: name, type: type, required: required, doc: doc})
 

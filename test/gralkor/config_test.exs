@@ -101,6 +101,11 @@ defmodule Gralkor.ConfigTest do
       assert_raise ArgumentError, ~r/:host/, fn -> Config.falkordb_spec() end
     end
 
+    test "raises when :host contains only whitespace" do
+      Application.put_env(:jido_gralkor, :falkordb, host: "   ", port: 6379)
+      assert_raise ArgumentError, ~r/:host/, fn -> Config.falkordb_spec() end
+    end
+
     test "raises when :port is not a positive integer" do
       Application.put_env(:jido_gralkor, :falkordb, host: "h", port: 0)
       assert_raise ArgumentError, ~r/:port/, fn -> Config.falkordb_spec() end

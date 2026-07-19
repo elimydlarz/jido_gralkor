@@ -74,7 +74,7 @@ defmodule Gralkor.Config do
     host = Keyword.get(kw, :host)
     port = Keyword.get(kw, :port)
 
-    unless is_binary(host) and host != "" do
+    unless is_binary(host) and String.trim(host) != "" do
       raise ArgumentError,
             ":jido_gralkor, :falkordb requires :host (non-blank string); got #{inspect(host)}"
     end

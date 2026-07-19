@@ -87,6 +87,30 @@ defmodule Gralkor.OntologyTest do
       assert field.doc == "stable login handle"
     end
 
+    test "field required must be boolean" do
+      assert_raise CompileError, ~r/required/, fn ->
+        defmodule InvalidRequiredOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :open
+
+          entity User do
+            field(:handle, :string, required: :truthy)
+          end
+        end
+      end
+    end
+
+    test "field doc must be a string or nil" do
+      assert_raise CompileError, ~r/doc/, fn ->
+        defmodule InvalidDocOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :open
+
+          entity User do
+            field(:handle, :string, doc: 123)
+          end
+        end
+      end
+    end
+
     test "unsupported field type raises" do
       assert_raise CompileError, ~r/atom/, fn ->
         defmodule BadTypeOntology do
