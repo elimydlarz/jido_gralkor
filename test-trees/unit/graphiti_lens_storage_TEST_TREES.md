@@ -2,6 +2,7 @@ Unit: Graphiti Lens storage (src: lib/gralkor/lens/storage/graphiti.ex; unit: te
 
 when an operator-local Lens store adds an episode
   then the graph add receives a deterministic destination unique to the operator and Lens
+  and changing either the operator or Lens produces a distinct destination
   and the graph add receives the episode content, source description, and Lens ontology
   and any supplied episode identity is forwarded to graph add as `uuid`
   and the graph add result is returned to the ingestion process

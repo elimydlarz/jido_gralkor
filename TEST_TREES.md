@@ -792,7 +792,12 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
   Gralkor.GraphitiPool's init/1 runs synchronously
     then `Gralkor.Python.install_async_runtime/0` is invoked (idempotent) so the pool can be booted standalone
     then the graphiti-core LLM client, embedder, and cross-encoder are constructed once via Pythonx and shared across every Graphiti instance for the lifetime of the GenServer
-      where the embedder is constructed with `batch_size=1` regardless of provider
+      where the supported Google embedder is constructed with `batch_size=1`
+    native Graphiti model support
+      when both configured model specs use the Google provider
+        then shared Python-client construction may proceed using their model ids
+      when either configured model spec uses another provider
+        then init raises ArgumentError before any Python client is constructed, naming both model specs
     when started with an embedded spec (`{:embedded, data_dir: dir}`)
       then `<data_dir>/gralkor.db.settings` is removed if present, immediately before constructing AsyncFalkorDB
         (redislite writes this resume-cache file alongside the db on every successful boot, pinning the unix-socket and pidfile of the redis-server it spawned. On the next boot it reads the file and decides "is the previous server still running?" by checking `kill -0 <pidfile_PID>` — a check that returns true for zombies. When that check returns true, redislite skips spawning fresh and blindly reconnects to the cached socket; the connection raises `ConnectionError` and the call fails with no fallback.)
@@ -801,11 +806,16 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
     then warmup runs: search is invoked once with a throwaway query and group_id, then Gralkor.Interpret.interpret_facts is invoked once with an empty conversation and a throwaway facts_text, paying graphiti-core's cold-start cost before consumers can call recall
     then logs "[gralkor] warmup — search:… interpret:… <total>ms" at :info
     if any warmup call raises or returns {:error, _}
-      then it is caught and logged at :warning as "[gralkor] warmup failed (non-fatal): <reason>"
+      then it is caught and logged at :warning as "[gralkor] warmup failed (non-fatal) — <stage>: <reason>"
       and boot proceeds (best-effort)
   for/1 (group_id) — also driven by search/4, add_episode/5, build_indices/1, build_communities/2, which all delegate to it
     when called against an embedded spec
       then the Graphiti instance for the sanitized group_id is looked up from a shared ETS cache; on first use it is constructed and inserted, then lives for the lifetime of the GenServer
+      then construction runs to completion even when it exceeds the GenServer.call default 5s timeout
+      when a fresh per-group Graphiti instance is constructed
+        then build_indices_and_constraints is invoked before the instance is cached and returned
+        if build_indices_and_constraints fails
+          then the failure is non-fatal and the instance is still cached and returned
       then concurrent callers proceed in parallel
     when called against a remote spec
       then the AsyncFalkorDB is built once at init and the per-group Graphiti instance is cached in shared ETS and reused — nothing is reconstructed per call, exactly as for embedded
@@ -819,6 +829,8 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
       then the uuid is forwarded to graphiti's add_episode(..., uuid=...), enabling episode identity control (update via re-extraction)
     when graphiti's add_episode raises (e.g. a transient FalkorDB connection reset)
       then {:error, {:python, reason}} is returned with reason summarised to the Python error's class and message — not the full multi-line traceback
+      when Pythonx supplies no error lines
+        then the reason falls back to "Python exception raised (no detail available)" without crashing
       then the stderr diagnostic is a single concise line — the embedding search vector and full Python traceback are not dumped
   remove_episode/3 (server, group_id, episode_uuid)
     when called
@@ -837,9 +849,9 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
       then g.search_ is invoked with an unfiltered SearchFilters (all nodes eligible)
   ontology materialisation (the Pythonx-backed half — the pure inclusion/shape decision is ex-ontology-graphiti-spec)
     when an ontology module is materialised
-      then the dict carries exactly the spec-selected keys (omitting unselected) and reuses them per module
+      then the graphiti kwargs dict carries exactly the spec-selected keys (omitting unselected) and is reused per `{ontology module, merge_learning?}` cache key
       and graphiti_boundary_spec/1 selects the kwargs; the selected :entity_types/:edge_types are rendered into Pydantic classes and the selected :edge_type_map into graphiti's tuple-keyed dict
-      and a strict+scoped ontology yields all four string-rendered keys, an open ontology omits "edge_type_map" and "excluded_entity_types", and the dict is keyed by the ontology module name (an atom rendered to its string form), reused on the next call without re-running Pydantic class construction
+      and a strict+scoped ontology yields all four string-rendered kwarg keys, an open ontology omits "edge_type_map" and "excluded_entity_types", entity and edge class dicts are keyed by their declared type names, and repeating the same cache key does not rerun Pydantic class construction
     (the Pydantic field rendering — required → no default, optional → default None — and graphiti's honouring of the declared schema are proven by the ontology-extraction journey, which holds a real LLM to the schema; they are not re-asserted here)
 ```
 
@@ -866,7 +878,7 @@ falkordb-connection (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.
 
 ex-config-defaults (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.exs)
   when the consumer supplies an LLM provider/model
-    then that provider/model is used for all LLM calls (Distill, Interpret, graphiti-core inside PythonX)
+    then Config returns that provider/model shape for ReqLLM-side calls; native Graphiti separately enforces its Google-only boundary under ex-graphiti-pool
   when the consumer omits LLM provider/model
     then defaults are applied (single source of truth in Gralkor.Config) — req_llm picks the provider; the embedder and cross-encoder defaults are stable so consumers can rely on them
   model-spec shape (the value Config.llm_model/0 and Config.embedder_model/0 return)
@@ -875,6 +887,7 @@ ex-config-defaults (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.e
       then the default map is returned
     when GRALKOR_LLM_MODEL / GRALKOR_EMBEDDER_MODEL is set to "provider:model"
       then it parses to %{provider: :provider, id: "model"}
+      and the model id may itself contain colons because only the first colon separates provider from id
     if the env var is set to a value missing the ":" separator or with a blank half
       then llm_model/0 / embedder_model/0 raises ArgumentError naming the env var and the bad value
 
