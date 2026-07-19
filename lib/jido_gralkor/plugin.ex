@@ -127,30 +127,30 @@ defmodule JidoGralkor.Plugin do
   def handle_signal(
         %Signal{
           type: "ai.request.completed",
-          data: %{request_id: request_id, result: result}
+          data: %{request_id: request_id, result: result} = data
         },
         %{agent: agent}
       )
       when is_binary(request_id) and is_binary(result) do
-    capture_turn(agent, request_id, {:completed, result})
+    capture_turn(agent, request_id, {:completed, result}, selected_lens(agent, data))
     {:ok, :continue}
   end
 
   def handle_signal(
         %Signal{
           type: "ai.request.failed",
-          data: %{request_id: request_id, error: error}
+          data: %{request_id: request_id, error: error} = data
         },
         %{agent: agent}
       )
       when is_binary(request_id) do
-    capture_turn(agent, request_id, {:failed, error})
+    capture_turn(agent, request_id, {:failed, error}, selected_lens(agent, data))
     {:ok, :continue}
   end
 
   def handle_signal(_signal, _context), do: {:ok, :continue}
 
-  defp capture_turn(agent, request_id, outcome) do
+  defp capture_turn(agent, request_id, outcome, lens) do
     events =
       agent.state
       |> Map.get(:__strategy__, %{})
@@ -183,16 +183,35 @@ defmodule JidoGralkor.Plugin do
             :ok
 
           messages ->
-            group_id = Client.sanitize_group_id(agent.id)
             user_name = user_name!(agent)
 
-            case Client.impl().capture(
-                   session_id,
-                   group_id,
-                   agent_name(agent),
-                   user_name,
-                   messages
-                 ) do
+            result =
+              case lens do
+                nil ->
+                  group_id = Client.sanitize_group_id(agent.id)
+
+                  Client.impl().capture(
+                    session_id,
+                    group_id,
+                    agent_name(agent),
+                    user_name,
+                    messages
+                  )
+
+                lens_name ->
+                  Client.lens!(lens_name)
+
+                  Client.impl().capture(
+                    session_id,
+                    agent.id,
+                    agent_name(agent),
+                    user_name,
+                    messages,
+                    lens_name
+                  )
+              end
+
+            case result do
               :ok -> :ok
               {:error, reason} -> raise "Gralkor capture failed: #{inspect(reason)}"
             end
@@ -228,6 +247,14 @@ defmodule JidoGralkor.Plugin do
       %{default_lens: lens, search_targets: targets} -> %{lens: lens, search_targets: targets}
       _ -> %{}
     end
+  end
+
+  defp selected_lens(agent, data) do
+    get_in(data, [:tool_context, :lens]) ||
+      case plugin_state(agent) do
+        %{default_lens: lens} -> lens
+        _ -> nil
+      end
   end
 
   defp plugin_state(agent), do: Map.get(agent.state, :__memory__)
