@@ -149,6 +149,30 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
+  describe "ex-application > build_lens_flush_callback/1" do
+    test "renders the selected turns and submits the transcript through the selected Lens" do
+      test_pid = self()
+      ingest = fn request -> send(test_pid, {:ingested, request}); :ok end
+      callback = App.build_lens_flush_callback(ingest_fn: ingest)
+
+      turns = [
+        [Gralkor.Message.new("user", "Remember this")],
+        [Gralkor.Message.new("assistant", "I will")]
+      ]
+
+      assert :ok =
+               callback.("operator-one", "Susu", "Eli", "observations", turns)
+
+      assert_receive {:ingested,
+                      %Gralkor.Ingest{
+                        operator_id: "operator-one",
+                        lens: "observations",
+                        content: "Eli: Remember this\nSusu: I will",
+                        source_description: "captured"
+                      }}
+    end
+  end
+
   describe "ex-application > start/2 child specs > when `:jido_gralkor, :client` is configured to Gralkor.Client.InMemory" do
     test "the supervisor includes no children regardless of GRALKOR_DATA_DIR or :falkordb" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())

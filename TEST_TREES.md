@@ -743,6 +743,9 @@ ex-application (src: lib/gralkor/application.ex; unit: test/gralkor/application_
       and the generalise failure does not affect the flush result
     when generalise_fn is nil (default)
       then no generalise step runs (backward compatible)
+  build_lens_flush_callback/1
+    the returned callback receives (operator_id, agent_name, user_name, Lens name, turns)
+    then it renders the selected turns in order and submits the transcript through that Lens with source "captured"
   generalise_fn_for_flush/0 — the composition decision the production tree uses to pick build_flush_callback's generalise_fn dep (config-gated auto-generalise-on-flush; the generalise capability itself stays available regardless via Gralkor.Client.generalise/2, search_generalisations/3, and the recall `<generalisation>` inject — none of those are gated)
     when `:jido_gralkor, :generalise_on_flush` is true
       then returns &Gralkor.Client.Native.generalise/2, so build_children wires it into the CaptureBuffer flush_callback and a successful flush fires generalise fire-and-forget
