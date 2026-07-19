@@ -133,7 +133,7 @@ defmodule Gralkor.ConfigTest do
       assert Config.embedder_model() == %{provider: :openai, id: "text-embedding-3-small"}
     end
 
-    test "model ids may contain colons (provider is split off first only)" do
+    test "and the model id may itself contain colons because only the first colon separates provider from id" do
       System.put_env("GRALKOR_LLM_MODEL", "anthropic:claude-3:opus")
       assert Config.llm_model() == %{provider: :anthropic, id: "claude-3:opus"}
     end

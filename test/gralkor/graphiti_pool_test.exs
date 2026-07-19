@@ -17,6 +17,7 @@ defmodule Gralkor.GraphitiPoolTest do
         %{llm_client: nil, embedder: nil, cross_encoder: nil}
       end,
       construct_instance: fn _db, _shared, group_id -> {:stub_graphiti, group_id} end,
+      initialise_instance: fn _instance -> :ok end,
       warmup: false,
       install_loop_fn: fn -> :ok end
     ]
@@ -80,12 +81,11 @@ defmodule Gralkor.GraphitiPoolTest do
       assert reason == "ValueError: bad thing happened"
     end
 
-    test "when lines is empty it falls back to the Pythonx default message without crashing" do
+    test "when Pythonx supplies no error lines then the reason falls back to \"Python exception raised (no detail available)\" without crashing" do
       err = %Pythonx.Error{type: nil, value: nil, traceback: nil, lines: []}
 
       reason = GraphitiPool.summarise_python_error(err)
-      assert is_binary(reason)
-      refute reason == ""
+      assert reason == "Python exception raised (no detail available)"
     end
   end
 
@@ -318,6 +318,71 @@ defmodule Gralkor.GraphitiPoolTest do
       assert {:stub_graphiti, "slowgroup"} = GraphitiPool.for(pid, "slowgroup")
     end
 
+    test "when a fresh per-group Graphiti instance is constructed then build_indices_and_constraints is invoked before the instance is cached and returned" do
+      {instance, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.initialisation_count = 0
+
+              async def build_indices_and_constraints(self):
+                  self.initialisation_count += 1
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid, table: table} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group -> instance end,
+          initialise_instance: &GraphitiPool.initialise_instance/1,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert ^instance = GraphitiPool.for(pid, "indexed")
+      assert [{"indexed", ^instance}] = :ets.lookup(table, "indexed")
+
+      {count, _} = Pythonx.eval("g.initialisation_count", %{"g" => instance})
+      assert Pythonx.decode(count) == 1
+
+      assert ^instance = GraphitiPool.for(pid, "indexed")
+      {count, _} = Pythonx.eval("g.initialisation_count", %{"g" => instance})
+      assert Pythonx.decode(count) == 1
+    end
+
+    test "when a fresh per-group Graphiti instance is constructed if build_indices_and_constraints fails then the failure is non-fatal and the instance is still cached and returned" do
+      {instance, _} =
+        Pythonx.eval(
+          """
+          class _FailingGraphiti:
+              async def build_indices_and_constraints(self):
+                  raise RuntimeError("index setup unavailable")
+
+          _FailingGraphiti()
+          """,
+          %{}
+        )
+
+      log =
+        capture_log(fn ->
+          %{pid: pid, table: table} =
+            start_pool(
+              construct_instance: fn _db, _shared, _group -> instance end,
+              initialise_instance: &GraphitiPool.initialise_instance/1,
+              install_loop_fn: &Gralkor.Python.install_async_runtime/0
+            )
+
+          assert ^instance = GraphitiPool.for(pid, "best-effort")
+          assert [{"best_effort", ^instance}] = :ets.lookup(table, "best_effort")
+          assert ^instance = GraphitiPool.for(pid, "best-effort")
+        end)
+
+      assert log =~ "build_indices_and_constraints failed (non-fatal)"
+      assert log =~ "RuntimeError: index setup unavailable"
+    end
+
     test "then concurrent callers proceed in parallel" do
       construct_instance = fn _db, _shared, group ->
         Process.sleep(100)
@@ -482,7 +547,7 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "init/1 runs synchronously, if any warmup call raises or returns {:error, _}" do
-    test "then it is caught and logged at :warning as \"[gralkor] warmup failed (non-fatal): <reason>\" and boot proceeds" do
+    test "then it is caught and logged at :warning as \"[gralkor] warmup failed (non-fatal) — <stage>: <reason>\" and boot proceeds" do
       log =
         capture_log(fn ->
           %{pid: pid} = start_pool(interpret_fn: fn _, _ -> :ok end, warmup: true)
@@ -490,7 +555,7 @@ defmodule Gralkor.GraphitiPoolTest do
           GenServer.stop(pid)
         end)
 
-      assert log =~ "[gralkor] warmup failed (non-fatal)"
+      assert log =~ "[gralkor] warmup failed (non-fatal) — search:"
     end
   end
 
@@ -618,7 +683,7 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
 
-    test "then the dict carries exactly the spec-selected keys (omitting unselected) and reuses them per module" do
+    test "then the graphiti kwargs dict carries exactly the spec-selected keys (omitting unselected) and is reused per `{ontology module, merge_learning?}` cache key" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 
@@ -632,16 +697,49 @@ defmodule Gralkor.GraphitiPoolTest do
         strict_again =
           GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
 
-        open = GenServer.call(pid, {:materialise, OpenOntologyForGraphitiTest}, :infinity)
+        strict_merged =
+          GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest, true}, :infinity)
+
+        strict_merged_again =
+          GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest, true}, :infinity)
 
         assert Enum.sort(Map.keys(strict)) ==
                  ["edge_type_map", "edge_types", "entity_types", "excluded_entity_types"]
 
         assert strict["excluded_entity_types"] == ["Entity"]
 
+        assert strict === strict_again
+        assert strict_merged === strict_merged_again
+        refute strict === strict_merged
+      after
+        GenServer.stop(pid)
+        File.rm_rf!(data_dir)
+      end
+    end
+
+    test "and a strict+scoped ontology yields all four string-rendered kwarg keys, an open ontology omits edge_type_map and excluded_entity_types, and entity and edge class dicts are keyed by their declared type names" do
+      data_dir =
+        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+
+      File.mkdir_p!(data_dir)
+      {:ok, pid} = start_embedded_pool(data_dir)
+
+      try do
+        strict = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
+        open = GenServer.call(pid, {:materialise, OpenOntologyForGraphitiTest}, :infinity)
+
+        assert Enum.sort(Map.keys(strict)) ==
+                 ["edge_type_map", "edge_types", "entity_types", "excluded_entity_types"]
+
         assert Enum.sort(Map.keys(open)) == ["edge_types", "entity_types"]
 
-        assert strict === strict_again
+        {type_keys, _} =
+          Pythonx.eval(
+            "[sorted(entity_types.keys()), sorted(edge_types.keys())]",
+            %{"entity_types" => strict["entity_types"], "edge_types" => strict["edge_types"]}
+          )
+
+        assert Pythonx.decode(type_keys) == [["Preference", "User"], ["Prefers"]]
       after
         GenServer.stop(pid)
         File.rm_rf!(data_dir)
