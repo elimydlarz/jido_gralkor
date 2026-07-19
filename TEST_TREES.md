@@ -1174,10 +1174,6 @@ JidoGralkor.ContextRotator (src: lib/jido_gralkor/context_rotator.ex; integratio
     then the rotated thread is seeded with the most recent keep_last_n entries, dropping everything before them
   while a thread is committed, when rotate_now/2 is called with keep_last_n: 0 and every pre-rotation entry was in the flushed set (no in-flight)
     then the rotated thread starts empty
-  while a thread is committed, when rotate_now/2 is called without options
-    then the default flush timeout is used and the rotated thread retains the most recent four entries
-  while a thread is committed, when an entry lands during the flush
-    then the rotated thread retains the configured pre-flush tail followed by the in-flight entry
 ```
 
 ## JidoGralkor Canonical
@@ -1192,7 +1188,6 @@ JidoGralkor.Canonical.to_messages/3 (src: lib/jido_gralkor/canonical.ex; unit: t
     preserves event order in the emitted behaviour messages
     ignores events whose :kind is not memory-worthy
     omits the assistant message when the completed answer is empty
-    trims a present assistant answer
     orders messages user → behaviour(s) → assistant
     handles list-shaped llm content (Anthropic-style blocks) by concatenating text parts
   to_messages/3 — :llm_completed tool_calls discrimination
@@ -1211,11 +1206,9 @@ JidoGralkor.Actions.MemorySearch (src: lib/jido_gralkor/actions/memory_search.ex
   when the client errors the action propagates {:error, reason}
   passes sanitized group_id, agent_name, and session_id from context to recall
   when context contains non-empty search_targets then Gralkor.Client.search/1 is called for the operator, query, and selected Lens targets and its results are joined
-  when a Lens search returns {:error, reason} the action propagates {:error, reason}
   when the query is blank or missing (defensive against forced-tool-call paths)
     returns an explicit no-query non-result, does not call the client, and logs a warning
     whitespace-only query is treated as blank
-    a missing query is treated as blank
   when session_id is absent from context (first query before a thread is committed)
     returns an explicit non-result message, does not call the client, and logs a warning
     same when session_id is blank
@@ -1223,12 +1216,10 @@ JidoGralkor.Actions.MemorySearch (src: lib/jido_gralkor/actions/memory_search.ex
 
 ```
 JidoGralkor.Actions.MemoryAdd (src: lib/jido_gralkor/actions/memory_add.ex; unit: test/jido_gralkor/actions/memory_add_test.exs)
-  source_description is a required tool parameter alongside content
   returns immediately without waiting on the client
   spawns a background Task that calls the client with sanitized group_id, content, and source_description
   when context selects a Lens then Gralkor.Client.ingest/1 is called in a background Task with the operator, Lens, content, and source description
   if the background Task's client call fails, the failure is logged
-  if a Lens ingestion process fails, the background Task logs the failure
 ```
 
 ```
@@ -1242,7 +1233,6 @@ JidoGralkor.Actions.MemoryBuildIndices (src: lib/jido_gralkor/actions/memory_bui
 JidoGralkor.Actions.MemoryBuildCommunities (src: lib/jido_gralkor/actions/memory_build_communities.ex; unit: test/jido_gralkor/actions/memory_build_communities_test.exs)
   the action description tells the LLM DO NOT CALL unless asked
   passes sanitized group_id from context.agent_id to the client
-  when the client returns {:ok, %{communities: communities, edges: edges}}, the action result reports both counts
   when the client returns {:error, reason}, the error is propagated
 ```
 
