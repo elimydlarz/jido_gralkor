@@ -868,6 +868,22 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert result =~ "selected public memory"
       refute result =~ "unselected decision"
     end
+
+    test "and the plugin does not redefine the selected Lenses' ontology, scope, or ingestion process" do
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{},
+                 agent_name: "Susu",
+                 default_lens: "observations",
+                 search_targets: ["observations"]
+               )
+
+      assert %Gralkor.Lens{
+               name: "observations",
+               ontology: ObservationOntology,
+               scope: :operator,
+               ingestion: RecordingIngestion
+             } = plugin_state.lens
+    end
   end
 
   describe "where a turn supplies a registered Lens through plugin context" do
@@ -924,6 +940,24 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                           ingestion: RecordingIngestion
                         }
                       }}
+    end
+
+    test "and the application-owned definition of the selected Lens remains authoritative" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: RecordingIngestion
+        ]
+      ])
+
+      assert %Gralkor.Lens{
+               name: "observations",
+               ontology: ObservationOntology,
+               scope: :operator,
+               ingestion: RecordingIngestion
+             } = Client.lens!("observations")
     end
   end
 
@@ -1048,6 +1082,109 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert decision_transcript =~ "We chose Friday."
       refute decision_transcript =~ "The launch moved."
     end
+
+    test "and no flushed episode combines turns governed by different ontologies or ingestion processes" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: RecordingIngestion
+        ],
+        [
+          name: "generalisations",
+          ontology: GeneralisationOntology,
+          scope: :operator,
+          ingestion: GeneralisationRecordingIngestion
+        ]
+      ])
+
+      start_supervised!(
+        {Gralkor.CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
+         retries: []}
+      )
+
+      observation = Client.lens!("observations")
+      generalisation = Client.lens!("generalisations")
+
+      assert :ok =
+               Gralkor.Client.Native.capture(
+                 "session-isolated",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 observation,
+                 [%Gralkor.Message{role: "user", content: "Observed rain."}]
+               )
+
+      assert :ok =
+               Gralkor.Client.Native.capture(
+                 "session-isolated",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 generalisation,
+                 [%Gralkor.Message{role: "user", content: "Rain delays launches."}]
+               )
+
+      assert :ok = Gralkor.Client.Native.flush_and_await("session-isolated", 1_000)
+
+      assert_receive {:ingested, %Ingest{content: observation_transcript}, observation_store}
+
+      assert_receive {:generalised, %Ingest{content: generalisation_transcript},
+                      generalisation_store}
+
+      assert observation_transcript =~ "Observed rain."
+      refute observation_transcript =~ "Rain delays launches."
+      assert observation_store.lens.ontology == ObservationOntology
+
+      assert generalisation_transcript =~ "Rain delays launches."
+      refute generalisation_transcript =~ "Observed rain."
+      assert generalisation_store.lens.ontology == GeneralisationOntology
+    end
+
+    test "and before flush the session's complete turn order remains available as recall context" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+
+      start_supervised!(
+        {Gralkor.CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: fn _, _, _, _, _ -> :ok end,
+         retries: []}
+      )
+
+      observation = Client.lens!("observations")
+      decision = %{observation | name: "decisions"}
+
+      assert :ok =
+               Gralkor.Client.Native.capture(
+                 "session-order",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 observation,
+                 [%Gralkor.Message{role: "user", content: "first"}]
+               )
+
+      assert :ok =
+               Gralkor.Client.Native.capture(
+                 "session-order",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 decision,
+                 [%Gralkor.Message{role: "user", content: "second"}]
+               )
+
+      assert [
+               [%Gralkor.Message{content: "first"}],
+               [%Gralkor.Message{content: "second"}]
+             ] = Gralkor.CaptureBuffer.turns_for("session-order")
+    end
   end
 
   describe "where an application has not registered or selected a named Lens" do
@@ -1085,6 +1222,23 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                scope: :operator,
                ingestion: Gralkor.Lens.Ingestion.Store
              } = Client.lens!("default")
+    end
+
+    test "and the `:jido_gralkor, :ontology` value remains its ontology" do
+      Application.delete_env(:jido_gralkor, :lenses)
+      Application.put_env(:jido_gralkor, :ontology, ObservationOntology)
+
+      assert %Gralkor.Lens{name: "default", ontology: ObservationOntology} =
+               Client.lens!("default")
+    end
+
+    test "and existing capture, memory addition, and recall preserve legacy behavior under that compatibility mapping" do
+      Application.delete_env(:jido_gralkor, :lenses)
+
+      assert %Gralkor.Lens{name: "default", scope: :operator} = Client.lens!("default")
+      assert function_exported?(Gralkor.Client.Native, :capture, 5)
+      assert function_exported?(Gralkor.Client.Native, :memory_add, 3)
+      assert function_exported?(Gralkor.Client.Native, :recall, 4)
     end
   end
 
@@ -1187,6 +1341,20 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
 
         refute_receive {:search, _, _, _}
       end
+    end
+
+    test "and no valid subset is searched" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      assert_raise ArgumentError, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "anything",
+          targets: ["observations", "missing"]
+        })
+      end
+
+      refute_receive {:search, _, _, _}
     end
   end
 
@@ -1308,6 +1476,72 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert [] =
                Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "generalisations"})
     end
+
+    test "and additions, replacements, and removals use the selected Lens's store" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "generalisations",
+          ontology: GeneralisationOntology,
+          scope: :operator,
+          ingestion: Gralkor.Lens.Ingestion.Generalise
+        ]
+      ])
+
+      store = %Gralkor.Lens.Store{
+        operator_id: "operator-one",
+        lens: Client.lens!("generalisations")
+      }
+
+      existing = %Gralkor.Generalisation{
+        id: "existing-one",
+        content: "Launches sometimes move.",
+        level: 0,
+        confidence: 0.6,
+        generalises: []
+      }
+
+      assert :ok =
+               Gralkor.Lens.Store.add(
+                 store,
+                 Gralkor.Generalisation.encode(existing),
+                 "generalisation"
+               )
+
+      Application.put_env(:jido_gralkor, :generalise_hypothesise_fn, fn _prompt ->
+        {:ok, [%{content: "Friday launches move.", confidence: 0.9}]}
+      end)
+
+      Application.put_env(:jido_gralkor, :generalise_evaluate_fn, fn _prompt ->
+        {:ok,
+         [
+           %{
+             action: "contradicts",
+             hypothesis_index: 0,
+             confidence: 0.9,
+             content: "Friday launches move.",
+             existing_id: "existing-one"
+           }
+         ]}
+      end)
+
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "generalisations",
+                 content: "The Friday launch moved.",
+                 source_description: "captured"
+               })
+
+      assert [%{content: encoded}] =
+               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "generalisations"})
+
+      assert {:ok, replacement, _plain} = Gralkor.Generalisation.decode(encoded)
+      assert replacement.content == "Friday launches move."
+      assert replacement.generalises == ["existing-one"]
+    end
   end
 
   describe "where capture is configured to generalise a flushed transcript through another Lens" do
@@ -1384,6 +1618,35 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert generalisation_store.lens.scope == :global
       assert generalisation_store.lens.ontology == GeneralisationOntology
       assert generalisation_store.lens.ingestion == GeneralisationRecordingIngestion
+    end
+
+    test "and each Lens retains its own ontology, scope, and ingestion process" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: RecordingIngestion
+        ],
+        [
+          name: "generalisations",
+          ontology: GeneralisationOntology,
+          scope: :global,
+          ingestion: GeneralisationRecordingIngestion
+        ]
+      ])
+
+      assert %Gralkor.Lens{
+               ontology: ObservationOntology,
+               scope: :operator,
+               ingestion: RecordingIngestion
+             } = Client.lens!("observations")
+
+      assert %Gralkor.Lens{
+               ontology: GeneralisationOntology,
+               scope: :global,
+               ingestion: GeneralisationRecordingIngestion
+             } = Client.lens!("generalisations")
     end
   end
 
