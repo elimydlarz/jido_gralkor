@@ -29,6 +29,30 @@ defmodule Gralkor.InterpretTest do
       assert prompt =~ "User: what about X?"
       assert prompt =~ "- X is a thing (created 2020)"
     end
+
+    test "the prompt gently frames memory as source-derived understanding rather than proven truth" do
+      ref = make_ref()
+      test_pid = self()
+
+      interpret_fn = fn prompt, _budget ->
+        send(test_pid, {ref, prompt})
+        {:ok, []}
+      end
+
+      _ =
+        Interpret.interpret_facts(
+          [Message.new("user", "what do we know about X?")],
+          "- X is a thing",
+          interpret_fn,
+          "Susu"
+        )
+
+      assert_receive {^ref, prompt}
+      assert prompt =~ ~r/understandings extracted from source material/i
+      assert prompt =~ ~r/rather than proven/i
+      assert prompt =~ ~r/mention the source context.*when available.*only where natural/is
+      assert prompt =~ ~r/without confidence labels, truth adjudication, or repetitive uncertainty warnings/i
+    end
   end
 
   describe "ex-interpret > interpret_facts/5 when the LLM returns relevant facts" do
