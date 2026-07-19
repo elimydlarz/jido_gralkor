@@ -134,7 +134,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append_lens/7 when turns in one session select different Lenses" do
+  describe "ex-capture-buffer > append_lens/6 when turns in one session select different Lenses" do
     test "each turn remains Lens-associated while turns_for/1 preserves session append order" do
       observation = [Message.new("user", "an observation")]
       decision = [Message.new("user", "a decision")]
