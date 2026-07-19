@@ -72,6 +72,36 @@ defmodule Gralkor.CaptureBuffer do
     end
   end
 
+  def append_lens(session_id, operator_id, agent_name, user_name, lens, msgs)
+      when is_binary(session_id) and is_binary(operator_id) and is_list(msgs) do
+    raise_if_blank!(:agent_name, agent_name)
+    raise_if_blank!(:user_name, user_name)
+    raise_if_blank!(:lens, lens)
+
+    case GenServer.call(
+           __MODULE__,
+           {:append_lens, session_id, operator_id, agent_name, user_name, lens, msgs}
+         ) do
+      :ok ->
+        :ok
+
+      {:operator_mismatch, new_operator, bound_operator} ->
+        raise ArgumentError,
+              "session #{inspect(session_id)} is bound to operator #{inspect(bound_operator)}; " <>
+                "refusing to append under operator #{inspect(new_operator)}"
+
+      {:agent_mismatch, new_agent, bound_agent} ->
+        raise ArgumentError,
+              "session #{inspect(session_id)} is bound to agent #{inspect(bound_agent)}; " <>
+                "refusing to append under agent #{inspect(new_agent)}"
+
+      {:user_mismatch, new_user, bound_user} ->
+        raise ArgumentError,
+              "session #{inspect(session_id)} is bound to user #{inspect(bound_user)}; " <>
+                "refusing to append under user #{inspect(new_user)}"
+    end
+  end
+
   @doc "Return the buffered turns for `session_id`, or `[]` if none."
   def turns_for(session_id) when is_binary(session_id) do
     GenServer.call(__MODULE__, {:turns_for, session_id})
@@ -110,7 +140,9 @@ defmodule Gralkor.CaptureBuffer do
     {:ok,
      %{
        entries: %{},
+       lens_entries: %{},
        flush_callback: Keyword.fetch!(opts, :flush_callback),
+       lens_flush_callback: Keyword.get(opts, :lens_flush_callback),
        retries: Keyword.get(opts, :retries, @default_retries)
      }}
   end
@@ -161,9 +193,58 @@ defmodule Gralkor.CaptureBuffer do
     end
   end
 
+  def handle_call(
+        {:append_lens, session_id, operator_id, agent_name, user_name, lens, msgs},
+        _from,
+        state
+      ) do
+    case Map.get(state.lens_entries, session_id) do
+      nil ->
+        entry = %{
+          operator_id: operator_id,
+          agent_name: agent_name,
+          user_name: user_name,
+          turns: [msgs],
+          lens_order: [lens],
+          batches: %{lens => [msgs]}
+        }
+
+        {:reply, :ok, %{state | lens_entries: Map.put(state.lens_entries, session_id, entry)}}
+
+      %{operator_id: ^operator_id, agent_name: ^agent_name, user_name: ^user_name} = entry ->
+        lens_order = if Map.has_key?(entry.batches, lens), do: entry.lens_order, else: entry.lens_order ++ [lens]
+
+        entry = %{
+          entry
+          | turns: entry.turns ++ [msgs],
+            lens_order: lens_order,
+            batches: Map.update(entry.batches, lens, [msgs], &(&1 ++ [msgs]))
+        }
+
+        {:reply, :ok, %{state | lens_entries: Map.put(state.lens_entries, session_id, entry)}}
+
+      %{operator_id: bound_operator} when bound_operator != operator_id ->
+        {:reply, {:operator_mismatch, operator_id, bound_operator}, state}
+
+      %{agent_name: bound_agent} when bound_agent != agent_name ->
+        {:reply, {:agent_mismatch, agent_name, bound_agent}, state}
+
+      %{user_name: bound_user} ->
+        {:reply, {:user_mismatch, user_name, bound_user}, state}
+    end
+  end
+
   def handle_call({:turns_for, session_id}, _from, state) do
     case Map.get(state.entries, session_id) do
-      nil -> {:reply, [], state}
+      nil ->
+        turns =
+          case Map.get(state.lens_entries, session_id) do
+            nil -> []
+            entry -> entry.turns
+          end
+
+        {:reply, turns, state}
+
       {_group, _agent, _user, _ontology, turns} -> {:reply, turns, state}
     end
   end
@@ -186,6 +267,35 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   def handle_call({:flush_and_await, session_id, timeout_ms}, _from, state) do
+    case Map.pop(state.lens_entries, session_id) do
+      {nil, _lens_entries} ->
+        flush_legacy_and_await(session_id, timeout_ms, state)
+
+      {entry, lens_entries} ->
+        Logger.info(
+          "[gralkor] flush_and_await — session:#{session_id} turns:#{length(entry.turns)} timeout_ms:#{timeout_ms}"
+        )
+
+        task =
+          Task.async(fn ->
+            do_flush_lenses(entry, state.lens_flush_callback, state.retries)
+          end)
+
+        case Task.yield(task, timeout_ms) || Task.shutdown(task, :brutal_kill) do
+          {:ok, :ok} ->
+            Logger.info("[gralkor] flush_and_await done — session:#{session_id} outcome:ok")
+            {:reply, :ok, %{state | lens_entries: lens_entries}}
+
+          {:ok, {:error, reason}} ->
+            {:reply, {:error, reason}, %{state | lens_entries: lens_entries}}
+
+          nil ->
+            {:reply, {:error, :timeout}, state}
+        end
+    end
+  end
+
+  defp flush_legacy_and_await(session_id, timeout_ms, state) do
     case Map.pop(state.entries, session_id) do
       {nil, _entries} ->
         Logger.info("[gralkor] flush_and_await — session:#{session_id} empty")
@@ -267,6 +377,25 @@ defmodule Gralkor.CaptureBuffer do
       retries,
       System.monotonic_time(:millisecond)
     )
+  end
+
+  defp do_flush_lenses(entry, callback, retries) when is_function(callback, 5) do
+    Enum.reduce_while(entry.lens_order, :ok, fn lens, :ok ->
+      turns = Map.fetch!(entry.batches, lens)
+
+      case do_flush(
+             entry.operator_id,
+             entry.agent_name,
+             entry.user_name,
+             lens,
+             turns,
+             callback,
+             retries
+           ) do
+        :ok -> {:cont, :ok}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
   end
 
   defp do_flush(group, agent, user, ontology, turns, cb, retries, t0) do
