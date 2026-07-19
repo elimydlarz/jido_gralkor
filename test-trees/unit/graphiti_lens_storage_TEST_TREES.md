@@ -4,3 +4,8 @@ when an operator-local Lens store adds an episode
   then the graph add receives a deterministic destination unique to the operator and Lens
   and the graph add receives the episode content, source description, and Lens ontology
   and the graph add result is returned to the ingestion process
+
+when an operator-local Lens store is searched
+  then graph search receives the same deterministic operator-and-Lens destination
+  and graph search receives the query and result limit
+  and the graph search result is returned to the caller

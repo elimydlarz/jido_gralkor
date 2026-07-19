@@ -97,4 +97,31 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                )
     end
   end
+
+  describe "when an operator-local Lens store is searched" do
+    test "then graph search receives the same deterministic operator-and-Lens destination" do
+      store = %Store{
+        operator_id: "operator-one",
+        lens: %Lens{
+          name: "observations",
+          ontology: Strict,
+          scope: :operator,
+          ingestion: String
+        }
+      }
+
+      test_pid = self()
+
+      search_fn = fn destination, query, max_results ->
+        send(test_pid, {:graph_search, destination, query, max_results})
+        {:ok, []}
+      end
+
+      assert {:ok, []} =
+               Graphiti.search(store, "launch window", 7, search_fn: search_fn)
+
+      assert_receive {:graph_search,
+                      "lens_6f70657261746f722d6f6e65_6f62736572766174696f6e73", _, _}
+    end
+  end
 end
