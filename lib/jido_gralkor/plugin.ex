@@ -65,6 +65,10 @@ defmodule JidoGralkor.Plugin do
 
     case fetch_opt(opts, :default_lens) do
       nil ->
+        if fetch_opt(opts, :search_targets) != nil or fetch_opt(opts, :generalise_lens) != nil do
+          raise ArgumentError, ":default_lens is required when Lens options are configured"
+        end
+
         {:ok, %{agent_name: agent_name}}
 
       default_lens ->
@@ -73,6 +77,10 @@ defmodule JidoGralkor.Plugin do
         generalise_lens = fetch_opt(opts, :generalise_lens)
 
         if generalise_lens, do: Client.lens!(generalise_lens)
+
+        if generalise_lens == default_lens do
+          raise ArgumentError, ":generalise_lens must differ from :default_lens"
+        end
 
         {:ok,
          %{

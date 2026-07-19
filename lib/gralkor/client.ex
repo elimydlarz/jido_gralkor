@@ -210,7 +210,7 @@ defmodule Gralkor.Client do
       raise ArgumentError, "invalid Lens name #{inspect(name)}"
     end
 
-    if name == "global" do
+    if name in ["default", "global"] do
       raise ArgumentError, "invalid Lens #{inspect(name)}: name is reserved"
     end
 
