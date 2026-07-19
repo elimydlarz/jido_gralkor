@@ -31,6 +31,7 @@ defmodule Gralkor.Client do
 
   alias Gralkor.Ingest
   alias Gralkor.Lens
+  alias Gralkor.Lens.Ingestion.Store, as: StoreIngestion
   alias Gralkor.Lens.Store
   alias Gralkor.Search
 
@@ -127,16 +128,26 @@ defmodule Gralkor.Client do
   def lens!(name) do
     lenses = Application.get_env(:jido_gralkor, :lenses, [])
 
-    definition =
-      Enum.find(lenses, fn definition -> Keyword.get(definition, :name) == name end) ||
+    case Enum.find(lenses, fn definition -> Keyword.get(definition, :name) == name end) do
+      nil when name == "default" ->
+        %Lens{
+          name: "default",
+          ontology: Gralkor.Config.ontology(),
+          scope: :operator,
+          ingestion: StoreIngestion
+        }
+
+      nil ->
         raise ArgumentError, "unknown Lens #{inspect(name)}"
 
-    %Lens{
-      name: Keyword.fetch!(definition, :name),
-      ontology: Keyword.fetch!(definition, :ontology),
-      scope: Keyword.fetch!(definition, :scope),
-      ingestion: Keyword.fetch!(definition, :ingestion)
-    }
+      definition ->
+        %Lens{
+          name: Keyword.fetch!(definition, :name),
+          ontology: Keyword.fetch!(definition, :ontology),
+          scope: Keyword.fetch!(definition, :scope),
+          ingestion: Keyword.fetch!(definition, :ingestion)
+        }
+    end
   end
 
   @spec sanitize_group_id(String.t()) :: String.t()
