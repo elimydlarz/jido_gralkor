@@ -787,7 +787,7 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
     when started with an embedded spec (`{:embedded, data_dir: dir}`)
       then `<data_dir>/gralkor.db.settings` is removed if present, immediately before constructing AsyncFalkorDB
         (redislite writes this resume-cache file alongside the db on every successful boot, pinning the unix-socket and pidfile of the redis-server it spawned. On the next boot it reads the file and decides "is the previous server still running?" by checking `kill -0 <pidfile_PID>` — a check that returns true for zombies. When that check returns true, redislite skips spawning fresh and blindly reconnects to the cached socket; the connection raises `ConnectionError` and the call fails with no fallback.)
-      then a single AsyncFalkorDB is constructed via `redislite.async_falkordb_client.AsyncFalkorDB(<data_dir>/gralkor.db)` (falkordblite spawns the redis-server child) and held for the lifetime of the GenServer
+      then the embedded FalkorDB construction boundary receives `<data_dir>/gralkor.db` once and the resulting database is held for the lifetime of the GenServer; functional memory journeys exercise the default redislite-backed constructor
     then warmup runs: search is invoked once with a throwaway query and group_id, then Gralkor.Interpret.interpret_facts is invoked once with an empty conversation and a throwaway facts_text, paying graphiti-core's cold-start cost before consumers can call recall
     then logs "[gralkor] warmup — search:… interpret:… <total>ms" at :info
     if any warmup call raises or returns {:error, _}

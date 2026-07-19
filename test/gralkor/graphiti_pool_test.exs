@@ -25,15 +25,18 @@ defmodule Gralkor.GraphitiPoolTest do
     %{pid: pid, table: table}
   end
 
-  defp start_embedded_pool(data_dir) do
-    GraphitiPool.start_link(
+  defp start_embedded_pool(data_dir, opts \\ []) do
+    defaults = [
       name: nil,
       falkordb_spec: {:embedded, data_dir},
       warmup: false,
+      construct_falkor_db: fn _spec -> :stub_falkor_db end,
       construct_shared_clients: fn _llm, _embedder ->
         %{llm_client: nil, embedder: nil, cross_encoder: nil}
       end
-    )
+    ]
+
+    GraphitiPool.start_link(Keyword.merge(defaults, opts))
   end
 
   describe "add_episode/5, when graphiti's add_episode raises" do
@@ -521,14 +524,19 @@ defmodule Gralkor.GraphitiPoolTest do
         })
       )
 
-      {:ok, pid} = start_embedded_pool(data_dir)
+      settings_path = Path.join(data_dir, "gralkor.db.settings")
+      test_pid = self()
+
+      construct_falkor_db = fn {:embedded, ^data_dir} ->
+        send(test_pid, {:settings_present_at_construction, File.exists?(settings_path)})
+        :stub_falkor_db
+      end
+
+      {:ok, pid} =
+        start_embedded_pool(data_dir, construct_falkor_db: construct_falkor_db)
 
       assert Process.alive?(pid)
-
-      rewritten =
-        data_dir |> Path.join("gralkor.db.settings") |> File.read!() |> Jason.decode!()
-
-      refute rewritten["unixsocket"] == Path.join(stale_tmp, "redis.socket")
+      assert_receive {:settings_present_at_construction, false}
 
       GenServer.stop(pid)
       File.rm_rf!(data_dir)
@@ -541,9 +549,32 @@ defmodule Gralkor.GraphitiPoolTest do
 
       File.mkdir_p!(data_dir)
 
-      {:ok, pid} = start_embedded_pool(data_dir)
+      construction_count = :counters.new(1, [])
+      instance_databases = :ets.new(:instance_databases, [:public, :duplicate_bag])
+
+      construct_falkor_db = fn {:embedded, ^data_dir} ->
+        :counters.add(construction_count, 1, 1)
+        :embedded_database
+      end
+
+      construct_instance = fn database, _shared, group_id ->
+        :ets.insert(instance_databases, {group_id, database})
+        {:stub_graphiti, group_id}
+      end
+
+      {:ok, pid} =
+        start_embedded_pool(data_dir,
+          construct_falkor_db: construct_falkor_db,
+          construct_instance: construct_instance
+        )
 
       assert Process.alive?(pid)
+      assert {:stub_graphiti, "one"} = GraphitiPool.for(pid, "one")
+      assert {:stub_graphiti, "two"} = GraphitiPool.for(pid, "two")
+      assert :counters.get(construction_count, 1) == 1
+
+      assert Enum.sort(:ets.tab2list(instance_databases)) ==
+               [{"one", :embedded_database}, {"two", :embedded_database}]
 
       GenServer.stop(pid)
       File.rm_rf!(data_dir)
