@@ -54,7 +54,7 @@ where an application has not registered or selected a named Lens
   then the implicit `default` Lens preserves the operator's existing memory partition
   and the `:jido_gralkor, :ontology` value remains its ontology
   and an unset `:jido_gralkor, :ontology` preserves generic extraction
-  and existing capture, memory addition, and recall calls continue through that Lens
+  and existing capture, memory addition, and recall preserve legacy behavior under that compatibility mapping
 
 when a transcript is submitted through Gralkor's generalising ingestion process
   then hypotheses are evaluated against generalisations available through the selected Lens
