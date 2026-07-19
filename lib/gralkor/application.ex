@@ -11,6 +11,7 @@ defmodule Gralkor.Application do
   alias Gralkor.Config
   alias Gralkor.Distill
   alias Gralkor.GraphitiPool
+  alias Gralkor.Ingest
 
   @impl true
   def start(_type, _args) do
@@ -49,7 +50,8 @@ defmodule Gralkor.Application do
            build_flush_callback(spec,
              generalise_fn: generalise_fn_for_flush(),
              learn_fn: &Native.learn/3
-           )
+           ),
+         lens_flush_callback: build_lens_flush_callback()
        ]}
     ]
   end
@@ -125,6 +127,22 @@ defmodule Gralkor.Application do
               err
           end
       end
+    end
+  end
+
+  @doc false
+  def build_lens_flush_callback(deps \\ []) do
+    ingest_fn = Keyword.get(deps, :ingest_fn, &Gralkor.Client.ingest/1)
+
+    fn operator_id, agent_name, user_name, lens, turns ->
+      transcript = Distill.format_transcript(turns, agent_name, user_name)
+
+      ingest_fn.(%Ingest{
+        operator_id: operator_id,
+        lens: lens,
+        content: transcript,
+        source_description: "captured"
+      })
     end
   end
 
