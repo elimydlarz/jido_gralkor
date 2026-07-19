@@ -57,7 +57,7 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
 
     case ReqLLM.generate_object(@model, prompt, schema,
            max_tokens: max_tokens,
-           temperature: 0
+           temperature: 0.0
          ) do
       {:ok, response} ->
         object = ReqLLM.Response.object(response)
