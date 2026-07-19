@@ -27,13 +27,28 @@ defmodule JidoGralkor.Actions.MemoryAdd do
 
   require Logger
   alias Gralkor.Client
+  alias Gralkor.Ingest
 
   @impl true
   def run(params, context) do
     group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
 
     Task.start(fn ->
-      case Client.impl().memory_add(group_id, params.content, params.source_description) do
+      result =
+        case Map.get(context, :lens) do
+          lens when is_binary(lens) ->
+            Client.ingest(%Ingest{
+              operator_id: group_id,
+              lens: lens,
+              content: params.content,
+              source_description: params.source_description
+            })
+
+          _ ->
+            Client.impl().memory_add(group_id, params.content, params.source_description)
+        end
+
+      case result do
         :ok ->
           :ok
 

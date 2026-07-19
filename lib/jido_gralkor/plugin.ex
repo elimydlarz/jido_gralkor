@@ -93,6 +93,7 @@ defmodule JidoGralkor.Plugin do
         nil -> %{agent_name: agent_name}
         id -> %{session_id: id, agent_name: agent_name}
       end
+      |> Map.merge(lens_context(agent))
 
     {:ok, {:continue, merge_tool_context(signal, extras)}}
   end
@@ -190,11 +191,20 @@ defmodule JidoGralkor.Plugin do
   end
 
   defp agent_name(agent) do
-    case Map.get(agent.state, :__memory__) do
+    case plugin_state(agent) do
       %{agent_name: name} when is_binary(name) -> name
       _ -> raise "JidoGralkor.Plugin state missing — mount/2 must run before recall/capture"
     end
   end
+
+  defp lens_context(agent) do
+    case plugin_state(agent) do
+      %{default_lens: lens, search_targets: targets} -> %{lens: lens, search_targets: targets}
+      _ -> %{}
+    end
+  end
+
+  defp plugin_state(agent), do: Map.get(agent.state, :__memory__)
 
   defp thread_id(agent) do
     case Map.get(agent.state, :__thread__) do
