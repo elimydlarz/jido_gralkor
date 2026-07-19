@@ -861,4 +861,24 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert_receive {:ingested, %Ingest{lens: "decisions"}, %{lens: %{name: "decisions"}}}
     end
   end
+
+  describe "if a mounted plugin selects an unknown default Lens or invalid search target" do
+    test "then mounting fails before the plugin handles an agent signal" do
+      assert_raise ArgumentError, ~r/unknown Lens/, fn ->
+        Plugin.mount(%{},
+          agent_name: "Susu",
+          default_lens: "missing",
+          search_targets: ["observations"]
+        )
+      end
+
+      assert_raise ArgumentError, ~r/unknown Lens/, fn ->
+        Plugin.mount(%{},
+          agent_name: "Susu",
+          default_lens: "observations",
+          search_targets: ["missing"]
+        )
+      end
+    end
+  end
 end
