@@ -79,6 +79,8 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   end
 
   @spec local_destination(String.t(), String.t()) :: String.t()
+  defp local_destination(operator_id, "default"), do: String.replace(operator_id, "-", "_")
+
   defp local_destination(operator_id, lens_name) do
     "lens_" <> encode(operator_id) <> "_" <> encode(lens_name)
   end
