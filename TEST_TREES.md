@@ -239,11 +239,13 @@ ex-interpret-context (src: lib/gralkor/interpret.ex; unit: test/gralkor/interpre
 ## Experiential learning (ERL) + tagged artefacts (embedded Gralkor adapter)
 
 ```
-ERL turns a completed reasoning trace into one flat AgentLearning record, written as a
-separate episode in the same group_id (linked, not partitioned), tagged source_description
-"learning". Learning is UNCONDITIONAL: every captured turn is learned from at flush — there
-is no per-turn opt-in flag, and no :erl_recall flag on the read side either: the learning
-search runs on every recall. (A custom chain-of-thought strategy is the only thing that would
+In implicit-default mode, ERL turns a completed reasoning trace into one flat AgentLearning
+record, written as a separate episode in the same group_id (linked, not partitioned), tagged
+source_description "learning". Learning is UNCONDITIONAL within that legacy/default pipeline:
+every turn captured through `capture/5` is learned from at its default flush. Its auxiliary
+learning search likewise runs on every legacy `recall/4`; Lens searches use their selected
+Lens destinations instead. There is no per-turn opt-in flag or :erl_recall flag. (A custom
+chain-of-thought strategy is the only thing that would
 ever warrant suppressing learning; none exist in any consumer today — susu runs stock ReAct,
 reget/hdgp have no consumer — so the exemption is deferred until a custom CoT actually exists
 to exempt.) Learnings ride NORMAL recall: a parallel search over the same group_id, seeded
@@ -258,9 +260,10 @@ labels them, making the node_labels filter reliable. There is no separate ERL pa
 source_description filter. Tagged artefacts need NO new machinery: a
 consumer stores them with plain Gralkor.Client.memory_add under its own ontology entity, and
 they ride the same hybrid recall; the artefact path extracts no learning. The library is
-entity-agnostic — it defines no Learning/Artefact entity types; the consumer declares them in
-its own ontology and the existing per-write ontology application (ex-config-ontology)
-operates over whatever it declared.
+entity-agnostic for consumer artefacts: the library defines and merges its built-in Learning
+entity, but defines no Artefact entity type. Consumers declare artefacts in their own ontology,
+and the existing per-write ontology application (ex-config-ontology) operates over whatever
+they declared.
 
 ex-agent-learning (src: lib/gralkor/agent_learning.ex; unit: test/gralkor/agent_learning_test.exs)
   struct
@@ -942,6 +945,16 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
       then raises ArgumentError
     if user_name is missing or blank
       then raises ArgumentError
+  when capture/6 is called with session_id, operator_id, agent_name, user_name, messages, and a Lens name
+    when the backend acknowledges the capture
+      then :ok is returned
+    if the backend fails
+      then {:error, reason} is returned
+  when capture/7 is called with session_id, operator_id, agent_name, user_name, messages, a primary Lens name, and additional Lens names
+    when the backend acknowledges the capture
+      then :ok is returned
+    if the backend fails
+      then {:error, reason} is returned
   when flush/1 is called with a session_id
     then :ok is returned before the flush completes
     if the backend later fails
@@ -991,10 +1004,13 @@ ex-client (src: lib/gralkor/client.ex; unit: test/support/gralkor_client_contrac
     if the backend fails
       then {:error, reason} is returned
   agent_name validation
-    if recall/4 or capture/5 is called with a missing or blank agent_name
+    if recall/4, capture/5, capture/6, or capture/7 is called with a missing or blank agent_name
       then ArgumentError is raised at the port boundary (no backend call is made)
   user_name validation
-    if capture/5 is called with a missing or blank user_name
+    if capture/5, capture/6, or capture/7 is called with a missing or blank user_name
+      then ArgumentError is raised at the port boundary (no backend call is made)
+  session_id validation
+    if capture/5, capture/6, or capture/7 is called with a missing or blank session_id
       then ArgumentError is raised at the port boundary (no backend call is made)
 
 ex-sanitize-group-id (src: lib/gralkor/client.ex; unit: test/gralkor/client/native_test.exs)

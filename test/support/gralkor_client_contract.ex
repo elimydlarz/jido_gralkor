@@ -2,9 +2,10 @@ defmodule Gralkor.ClientContract do
   @moduledoc """
   Shared port contract for `Gralkor.Client`.
 
-  Both `Gralkor.Client.InMemory` and `Gralkor.Client.Native` import this and
-  must pass it. Reifies the `ex-client` tree in `gralkor/TEST_TREES.md`. The
-  describe/it hierarchy mirrors the tree verbatim.
+  `Gralkor.Client.InMemory` imports this executable contract; the Native
+  adapter proves the same public port through its integration tests. Reifies
+  the `ex-client` tree in `gralkor/TEST_TREES.md`. The describe/it hierarchy
+  mirrors the tree verbatim.
 
   Usage from a per-adapter test file:
 
@@ -115,6 +116,72 @@ defmodule Gralkor.ClientContract do
         end
       end
 
+      describe "ex-client > capture/6" do
+        test "when the backend acknowledges the capture then :ok is returned" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          assert :ok =
+                   client().capture(
+                     "session-1",
+                     "operator-1",
+                     "TestAgent",
+                     "Eli",
+                     [Gralkor.Message.new("user", "hi")],
+                     "observations"
+                   )
+        end
+
+        test "if the backend fails then {:error, reason} is returned" do
+          unquote(setup_block).()
+          configure_capture({:error, :write_failed})
+
+          assert {:error, :write_failed} =
+                   client().capture(
+                     "session-1",
+                     "operator-1",
+                     "TestAgent",
+                     "Eli",
+                     [Gralkor.Message.new("user", "hi")],
+                     "observations"
+                   )
+        end
+      end
+
+      describe "ex-client > capture/7" do
+        test "when the backend acknowledges the capture then :ok is returned" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          assert :ok =
+                   client().capture(
+                     "session-1",
+                     "operator-1",
+                     "TestAgent",
+                     "Eli",
+                     [Gralkor.Message.new("user", "hi")],
+                     "observations",
+                     ["generalisations"]
+                   )
+        end
+
+        test "if the backend fails then {:error, reason} is returned" do
+          unquote(setup_block).()
+          configure_capture({:error, :write_failed})
+
+          assert {:error, :write_failed} =
+                   client().capture(
+                     "session-1",
+                     "operator-1",
+                     "TestAgent",
+                     "Eli",
+                     [Gralkor.Message.new("user", "hi")],
+                     "observations",
+                     ["generalisations"]
+                   )
+        end
+      end
+
       describe "ex-client > capture/5 if agent_name is missing or blank" do
         test "raises ArgumentError when agent_name is blank" do
           unquote(setup_block).()
@@ -157,6 +224,75 @@ defmodule Gralkor.ClientContract do
 
           assert_raise ArgumentError, ~r/user_name/, fn ->
             client().capture("session-1", "group-1", "TestAgent", nil, [
+              Gralkor.Message.new("user", "hi")
+            ])
+          end
+        end
+      end
+
+      describe "ex-client > capture/6 and capture/7 validation" do
+        test "raises ArgumentError when session_id is blank" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          for lens_args <- [["observations"], ["observations", ["generalisations"]]] do
+            assert_raise ArgumentError, ~r/session_id/, fn ->
+              apply(client(), :capture, [
+                "",
+                "operator-1",
+                "TestAgent",
+                "Eli",
+                [Gralkor.Message.new("user", "hi")]
+                | lens_args
+              ])
+            end
+          end
+        end
+
+        test "raises ArgumentError when agent_name is blank" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          for lens_args <- [["observations"], ["observations", ["generalisations"]]] do
+            assert_raise ArgumentError, ~r/agent_name/, fn ->
+              apply(client(), :capture, [
+                "session-1",
+                "operator-1",
+                "",
+                "Eli",
+                [Gralkor.Message.new("user", "hi")]
+                | lens_args
+              ])
+            end
+          end
+        end
+
+        test "raises ArgumentError when user_name is blank" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          for lens_args <- [["observations"], ["observations", ["generalisations"]]] do
+            assert_raise ArgumentError, ~r/user_name/, fn ->
+              apply(client(), :capture, [
+                "session-1",
+                "operator-1",
+                "TestAgent",
+                "",
+                [Gralkor.Message.new("user", "hi")]
+                | lens_args
+              ])
+            end
+          end
+        end
+      end
+
+      describe "ex-client > capture session_id validation" do
+        test "capture/5 raises ArgumentError when session_id is blank" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          assert_raise ArgumentError, ~r/session_id/, fn ->
+            client().capture("", "group-1", "TestAgent", "Eli", [
               Gralkor.Message.new("user", "hi")
             ])
           end
