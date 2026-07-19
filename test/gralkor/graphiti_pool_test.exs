@@ -514,6 +514,63 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Enum.uniq(shareds) == [shared]
     end
 
+    test "native Graphiti model support when both configured model specs use the Google provider then shared Python-client construction may proceed using their model ids" do
+      test_pid = self()
+      llm_model = %{provider: :google, id: "gemini-custom"}
+      embedder_model = %{provider: :google, id: "gemini-embedding-custom"}
+
+      %{pid: pid} =
+        start_pool(
+          llm_model: llm_model,
+          embedder_model: embedder_model,
+          construct_shared_clients: fn received_llm, received_embedder ->
+            send(test_pid, {:construct_shared, received_llm, received_embedder})
+            %{llm_client: nil, embedder: nil, cross_encoder: nil}
+          end
+        )
+
+      assert_receive {:construct_shared, ^llm_model, ^embedder_model}
+      assert Process.alive?(pid)
+    end
+
+    test "native Graphiti model support when either configured model spec uses another provider then init raises ArgumentError before any Python client is constructed, naming both model specs" do
+      test_pid = self()
+
+      invalid_pairs = [
+        {%{provider: :openai, id: "gpt-4.1"},
+         %{provider: :google, id: "gemini-embedding-2-preview"}},
+        {%{provider: :google, id: "gemini-3.1-flash-lite"},
+         %{provider: :openai, id: "text-embedding-3-small"}}
+      ]
+
+      Enum.each(invalid_pairs, fn {llm_model, embedder_model} ->
+        table = :"pool_table_#{System.unique_integer([:positive])}"
+
+        assert {:error, {%ArgumentError{} = error, _stacktrace}} =
+                 GraphitiPool.start_link(
+                   name: nil,
+                   table: table,
+                   falkordb_spec: {:embedded, "/tmp/never_used"},
+                   llm_model: llm_model,
+                   embedder_model: embedder_model,
+                   construct_shared_clients: fn _, _ ->
+                     send(test_pid, :python_client_construction_started)
+                     %{llm_client: nil, embedder: nil, cross_encoder: nil}
+                   end,
+                   construct_falkor_db: fn _ -> :stub_falkor_db end,
+                   construct_instance: fn _, _, group -> {:stub_graphiti, group} end,
+                   initialise_instance: fn _ -> :ok end,
+                   install_loop_fn: fn -> :ok end,
+                   warmup: false
+                 )
+
+        message = Exception.message(error)
+        assert message =~ inspect(llm_model)
+        assert message =~ inspect(embedder_model)
+        refute_received :python_client_construction_started
+      end)
+    end
+
     test "then warmup runs: search is invoked once with a throwaway query and group_id, then Gralkor.Interpret.interpret_facts is invoked once" do
       interpret_count = :counters.new(1, [])
 
