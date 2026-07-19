@@ -1,0 +1,80 @@
+defmodule Gralkor.GraphitiEpisodeProvenanceTest do
+  use ExUnit.Case, async: false
+
+  alias Gralkor.GraphitiPool
+
+  defp start_pool(graphiti) do
+    table = :"provenance_pool_#{System.unique_integer([:positive])}"
+
+    opts = [
+      name: nil,
+      table: table,
+      falkordb_spec: {:embedded, "/tmp/never_used"},
+      construct_falkor_db: fn _spec -> :stub_falkor_db end,
+      construct_shared_clients: fn _llm, _embedder ->
+        %{llm_client: nil, embedder: nil, cross_encoder: nil}
+      end,
+      construct_instance: fn _db, _shared, _group_id -> graphiti end,
+      warmup: false,
+      install_loop_fn: &Gralkor.Python.install_async_runtime/0
+    ]
+
+    {:ok, pid} = GraphitiPool.start_link(opts)
+    pid
+  end
+
+  describe "when add_episode receives an originating Lens" do
+    test "then the created Episodic node records that Lens by its returned episode identity" do
+      {graphiti, _} =
+        Pythonx.eval(
+          """
+          class _Episode:
+              uuid = "episode-123"
+
+          class _Result:
+              episode = _Episode()
+
+          class _Driver:
+              def __init__(self):
+                  self.provenance = None
+
+              async def execute_query(self, query, **kwargs):
+                  self.provenance = {"query": query, "kwargs": kwargs}
+                  return [], None, None
+
+          class _Graphiti:
+              def __init__(self):
+                  self.driver = _Driver()
+
+              async def add_episode(self, **kwargs):
+                  return _Result()
+
+          _Graphiti()
+          """,
+          %{}
+        )
+
+      pid = start_pool(graphiti)
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 pid,
+                 "global",
+                 "public fact",
+                 "publication",
+                 nil,
+                 lens: "published-observations"
+               )
+
+      {recorded, _} = Pythonx.eval("g.driver.provenance", %{"g" => graphiti})
+      recorded = Pythonx.decode(recorded)
+
+      assert recorded["kwargs"]["uuid"] == "episode-123"
+      assert recorded["kwargs"]["lens"] == "published-observations"
+      assert recorded["query"] =~ "MATCH (episode:Episodic {uuid: $uuid})"
+      assert recorded["query"] =~ "SET episode.lens = $lens"
+
+      GenServer.stop(pid)
+    end
+  end
+end
