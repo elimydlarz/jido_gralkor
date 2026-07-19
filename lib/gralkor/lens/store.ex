@@ -8,7 +8,7 @@ defmodule Gralkor.Lens.Store do
 
   @type t :: %__MODULE__{
           operator_id: String.t(),
-          lens: Lens.t()
+          lens: Lens.t() | :global
         }
 
   @spec add(t(), String.t(), String.t()) :: :ok | {:error, term()}

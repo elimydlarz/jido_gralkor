@@ -8,7 +8,9 @@ defmodule Gralkor.Lens.Storage.InMemory do
   alias Gralkor.Lens
   alias Gralkor.Lens.Store
 
-  @type state :: %{{String.t(), String.t()} => [String.t()]}
+  @type episode :: %{content: String.t(), lens: String.t()}
+  @type key :: {String.t(), String.t()} | :global
+  @type state :: %{key() => [episode()]}
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
@@ -20,11 +22,19 @@ defmodule Gralkor.Lens.Storage.InMemory do
 
   @impl Gralkor.Lens.Storage
   def add_episode(
-        %Store{operator_id: operator_id, lens: %Lens{name: lens_name, scope: :operator}},
+        %Store{operator_id: operator_id, lens: %Lens{name: lens_name, scope: :operator} = lens},
         content,
         _source_description
       ) do
-    GenServer.call(__MODULE__, {:add, {operator_id, lens_name}, content})
+    GenServer.call(__MODULE__, {:add, {operator_id, lens_name}, episode(content, lens)})
+  end
+
+  def add_episode(
+        %Store{lens: %Lens{scope: :global} = lens},
+        content,
+        _source_description
+      ) do
+    GenServer.call(__MODULE__, {:add, :global, episode(content, lens)})
   end
 
   @impl Gralkor.Lens.Storage
@@ -36,12 +46,21 @@ defmodule Gralkor.Lens.Storage.InMemory do
     GenServer.call(__MODULE__, {:search, {operator_id, lens_name}})
   end
 
+  def search(%Store{lens: :global}, _query, _max_results) do
+    GenServer.call(__MODULE__, {:search, :global})
+  end
+
   @impl true
-  def handle_call({:add, key, content}, _from, state) do
-    {:reply, :ok, Map.update(state, key, [content], &(&1 ++ [content]))}
+  def handle_call({:add, key, episode}, _from, state) do
+    {:reply, :ok, Map.update(state, key, [episode], &(&1 ++ [episode]))}
   end
 
   def handle_call({:search, key}, _from, state) do
-    {:reply, {:ok, Map.get(state, key, [])}, state}
+    contents = state |> Map.get(key, []) |> Enum.map(& &1.content)
+    {:reply, {:ok, contents}, state}
   end
+
+
+  @spec episode(String.t(), Lens.t()) :: episode()
+  defp episode(content, lens), do: %{content: content, lens: lens.name}
 end

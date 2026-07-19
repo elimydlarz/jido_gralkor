@@ -79,6 +79,10 @@ defmodule Gralkor.Client do
   end
 
   @spec search(Search.t()) :: {:ok, [String.t()]} | {:error, term()}
+  def search(%Search{operator_id: operator_id, query: query, targets: ["global"], max_results: max_results}) do
+    Store.search(%Store{operator_id: operator_id, lens: :global}, query, max_results)
+  end
+
   def search(%Search{operator_id: operator_id, query: query, targets: [target], max_results: max_results}) do
     lens = lens!(target)
     Store.search(%Store{operator_id: operator_id, lens: lens}, query, max_results)
