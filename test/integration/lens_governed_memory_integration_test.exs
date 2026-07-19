@@ -508,5 +508,45 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                "public observation"
              ]
     end
+
+    test "and selecting the global pool searches every episode in that pool without filtering by originating Lens" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "published-observations",
+          ontology: ObservationOntology,
+          scope: :global,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "published-decisions",
+          ontology: ObservationOntology,
+          scope: :global,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      for {lens, content} <- [
+            {"published-observations", "public observation"},
+            {"published-decisions", "public decision"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: content,
+                   source_description: "test source"
+                 })
+      end
+
+      assert {:ok, ["public observation", "public decision"]} =
+               Client.search(%Search{
+                 operator_id: "operator-two",
+                 query: "public",
+                 targets: ["global"]
+               })
+    end
   end
 end
