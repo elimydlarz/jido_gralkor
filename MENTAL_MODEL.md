@@ -25,7 +25,7 @@ The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` l
 
 ## Bounded Contexts
 
-One context only — the Jido↔Gralkor adaptation. The memory pipelines (`Gralkor.*` under `lib/gralkor/`) are embedded but logically separate: they hold the domain logic; the `JidoGralkor.*` modules are pure framework glue.
+Two cooperating contexts live in this package: `Gralkor.*` owns the memory domain, while `JidoGralkor.*` adapts Jido signals, threads, actions, and lifecycle into that domain; Graphiti, Pythonx, and FalkorDB remain infrastructure inside the Gralkor context.
 
 ## Invariants
 
