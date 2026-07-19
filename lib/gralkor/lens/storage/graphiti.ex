@@ -19,7 +19,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     add_episode(store, content, source_description, [])
   end
 
-  @spec add_episode(Store.t(), String.t(), String.t(), add_episode_fn: add_episode_fn()) ::
+  @spec add_episode(Store.t(), String.t(), String.t(), keyword()) ::
           :ok | {:error, term()}
   def add_episode(
         %Store{operator_id: operator_id, lens: %Lens{scope: :operator} = lens},
@@ -27,14 +27,14 @@ defmodule Gralkor.Lens.Storage.Graphiti do
         source_description,
         opts
       ) do
-    add_episode_fn = Keyword.get(opts, :add_episode_fn, &graph_add/5)
+    {add_episode_fn, episode_opts} = add_options(opts)
 
     add_episode_fn.(
       local_destination(operator_id, lens.name),
       content,
       source_description,
       lens.ontology,
-      []
+      episode_opts
     )
   end
 
@@ -44,14 +44,14 @@ defmodule Gralkor.Lens.Storage.Graphiti do
         source_description,
         opts
       ) do
-    add_episode_fn = Keyword.get(opts, :add_episode_fn, &graph_add/5)
+    {add_episode_fn, episode_opts} = add_options(opts)
 
     add_episode_fn.(
       "global",
       content,
       source_description,
       lens.ontology,
-      lens: lens.name
+      Keyword.delete(episode_opts, :lens) ++ [lens: lens.name]
     )
   end
 
@@ -123,6 +123,11 @@ defmodule Gralkor.Lens.Storage.Graphiti do
           :ok | {:error, term()}
   defp graph_add(destination, content, source_description, ontology, graph_opts) do
     GraphitiPool.add_episode(destination, content, source_description, ontology, graph_opts)
+  end
+
+  @spec add_options(keyword()) :: {add_episode_fn(), keyword()}
+  defp add_options(opts) do
+    Keyword.pop(opts, :add_episode_fn, &graph_add/5)
   end
 
   @spec graph_search(String.t(), String.t(), pos_integer()) ::

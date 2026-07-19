@@ -29,8 +29,8 @@ defmodule Gralkor.Lens.Ingestion.Generalise do
       search_gen_fn: fn ^store, query, max_results ->
         Store.search(store, query, max_results)
       end,
-      add_episode_fn: fn ^store, content, source, _ontology, _opts ->
-        Store.add(store, content, source)
+      add_episode_fn: fn ^store, content, source, _ontology, opts ->
+        Store.add(store, content, source, opts)
       end,
       remove_episode_fn: fn ^store, episode_id ->
         Store.remove(store, episode_id)

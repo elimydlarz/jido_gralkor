@@ -8,7 +8,11 @@ defmodule Gralkor.Lens.Storage.InMemory do
   alias Gralkor.Lens
   alias Gralkor.Lens.Store
 
-  @type episode :: %{content: String.t(), lens: String.t()}
+  @type episode :: %{
+          required(:content) => String.t(),
+          required(:lens) => String.t(),
+          optional(:id) => String.t()
+        }
   @type key :: {String.t(), String.t()} | :global
   @type state :: %{key() => [episode()]}
 
@@ -29,7 +33,12 @@ defmodule Gralkor.Lens.Storage.InMemory do
         content,
         _source_description
       ) do
-    GenServer.call(__MODULE__, {:add, {operator_id, lens_name}, episode(content, lens)})
+    add_episode(
+      %Store{operator_id: operator_id, lens: lens},
+      content,
+      "",
+      []
+    )
   end
 
   def add_episode(
@@ -37,7 +46,26 @@ defmodule Gralkor.Lens.Storage.InMemory do
         content,
         _source_description
       ) do
-    GenServer.call(__MODULE__, {:add, :global, episode(content, lens)})
+    add_episode(%Store{operator_id: "global", lens: lens}, content, "", [])
+  end
+
+  @impl Gralkor.Lens.Storage
+  def add_episode(
+        %Store{operator_id: operator_id, lens: %Lens{name: lens_name, scope: :operator} = lens},
+        content,
+        _source_description,
+        opts
+      ) do
+    GenServer.call(__MODULE__, {:add, {operator_id, lens_name}, episode(content, lens, opts)})
+  end
+
+  def add_episode(
+        %Store{lens: %Lens{scope: :global} = lens},
+        content,
+        _source_description,
+        opts
+      ) do
+    GenServer.call(__MODULE__, {:add, :global, episode(content, lens, opts)})
   end
 
   @impl Gralkor.Lens.Storage
@@ -81,13 +109,20 @@ defmodule Gralkor.Lens.Storage.InMemory do
     {:reply, Map.get(state, key, []), state}
   end
 
-  @spec episode(String.t(), Lens.t()) :: episode()
-  defp episode(content, lens), do: %{content: content, lens: lens.name}
+  @spec episode(String.t(), Lens.t(), keyword()) :: episode()
+  defp episode(content, lens, opts) do
+    case Keyword.fetch(opts, :uuid) do
+      {:ok, id} -> %{id: id, content: content, lens: lens.name}
+      :error -> %{content: content, lens: lens.name}
+    end
+  end
 
   defp key(%Store{operator_id: operator_id, lens: %Lens{name: lens_name, scope: :operator}}),
     do: {operator_id, lens_name}
 
   defp key(%Store{lens: %Lens{scope: :global}}), do: :global
+
+  defp episode_id?(%{id: id}, episode_id), do: id == episode_id
 
   defp episode_id?(episode, episode_id) do
     case Gralkor.Generalisation.decode(episode.content) do
