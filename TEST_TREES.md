@@ -498,7 +498,10 @@ ex-flush-and-await (src: lib/gralkor/client/native.ex#flush_and_await/2; unit: t
     then raises ArgumentError
   observability
     then a flush-and-await event is logged at :info naming the session id, turn count, and timeout
-    then the outcome (ok / timeout / error) is logged at :info on return
+    when the outcome is ok
+      then it is logged at :info on return
+    when the outcome is timeout or error
+      then it is logged at :warning on return
 ```
 
 ## Tools (embedded Gralkor adapter)

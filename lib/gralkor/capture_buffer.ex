@@ -302,9 +302,14 @@ defmodule Gralkor.CaptureBuffer do
             {:reply, :ok, %{state | lens_entries: lens_entries}}
 
           {:ok, {:error, reason}} ->
+            Logger.warning(
+              "[gralkor] flush_and_await done — session:#{session_id} outcome:error reason:#{inspect(reason)}"
+            )
+
             {:reply, {:error, reason}, %{state | lens_entries: lens_entries}}
 
           nil ->
+            Logger.warning("[gralkor] flush_and_await timeout — session:#{session_id}")
             {:reply, {:error, :timeout}, state}
         end
     end
