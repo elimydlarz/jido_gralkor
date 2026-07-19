@@ -699,4 +699,40 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       end
     end
   end
+
+  describe "when a mounted plugin has a configured default Lens and search targets" do
+    test "then automatic capture and memory addition use the registered default Lens" do
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{},
+                 agent_name: "Susu",
+                 default_lens: "observations",
+                 search_targets: ["observations"]
+               )
+
+      signal = Jido.Signal.new!("ai.react.query", %{query: "remember this"}, source: "/test")
+
+      agent = %{
+        id: "operator-one",
+        state: %{__memory__: plugin_state, __thread__: %{id: "session-one"}}
+      }
+
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
+               Plugin.handle_signal(signal, %{agent: agent})
+
+      assert {:ok, %{result: "Ingesting."}} =
+               JidoGralkor.Actions.MemoryAdd.run(
+                 %{content: "The launch window moved.", source_description: "agent thought"},
+                 Map.put(tool_context, :agent_id, agent.id)
+               )
+
+      assert_receive {:ingested,
+                      %Ingest{
+                        operator_id: "operator-one",
+                        lens: "observations",
+                        content: "The launch window moved.",
+                        source_description: "agent thought"
+                      },
+                      %{lens: %{name: "observations"}}}
+    end
+  end
 end
