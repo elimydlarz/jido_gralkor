@@ -34,7 +34,8 @@ defmodule Gralkor.GraphitiPoolTest do
       construct_falkor_db: fn _spec -> :stub_falkor_db end,
       construct_shared_clients: fn _llm, _embedder ->
         %{llm_client: nil, embedder: nil, cross_encoder: nil}
-      end
+      end,
+      initialise_instance: fn _instance -> :ok end
     ]
 
     GraphitiPool.start_link(Keyword.merge(defaults, opts))
@@ -535,6 +536,8 @@ defmodule Gralkor.GraphitiPoolTest do
 
     test "native Graphiti model support when either configured model spec uses another provider then init raises ArgumentError before any Python client is constructed, naming both model specs" do
       test_pid = self()
+      previous_trap_exit = Process.flag(:trap_exit, true)
+      on_exit(fn -> Process.flag(:trap_exit, previous_trap_exit) end)
 
       invalid_pairs = [
         {%{provider: :openai, id: "gpt-4.1"},
