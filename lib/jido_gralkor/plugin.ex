@@ -4,8 +4,10 @@ defmodule JidoGralkor.Plugin do
   memory. Claims the `:__memory__` slot so it is the only memory plugin
   attached to the agent.
 
-  On `ai.react.query` the plugin plants two values on the signal's
-  `tool_context` so the `MemorySearch` ReAct tool can find them:
+  On `ai.react.query` the plugin plants the current thread's `:session_id`
+  and the configured `:agent_name` on the signal's `tool_context` so the
+  `MemorySearch` ReAct tool can find them. A Lens-aware mount also plants its
+  selected `:lens` and `:search_targets`:
 
     * `:session_id` — the current Jido thread id (read from
       `agent.state[:__thread__].id`). Absent when no thread is
@@ -14,8 +16,10 @@ defmodule JidoGralkor.Plugin do
       turn `MemorySearch` short-circuits with a non-result message.
     * `:agent_name` — the value supplied at mount.
 
-  The plugin does **not** call `Gralkor.Client.recall/3` on its own.
-  Recall is the LLM's job, invoked through the `MemorySearch` tool.
+  The plugin does **not** search memory on its own. Search is the LLM's job,
+  invoked through `MemorySearch`: Lens-aware mounts call
+  `Gralkor.Client.search/1`; implicit-default mounts call the configured
+  client's legacy `recall/4`.
   Consumers force it on the first ReAct iteration via
   `JidoGralkor.ReAct.maybe_force_memory_search/2` from their
   `Jido.AI.Reasoning.ReAct.RequestTransformer`.
@@ -23,13 +27,15 @@ defmodule JidoGralkor.Plugin do
   Capture fires on `ai.request.completed` / `ai.request.failed`: the
   full request trace and assistant answer are normalised via
   `JidoGralkor.Canonical.to_messages/3` into Gralkor's canonical
-  `[%Gralkor.Message{role, content}]` shape and shipped to the server,
-  which keeps the rolling conversation buffer keyed by `session_id`.
+  `[%Gralkor.Message{role, content}]` shape and submitted to the configured
+  client. Implicit-default capture uses `capture/5`; Lens-aware capture uses
+  `capture/6`, or `/7` when an additional generalising Lens is configured.
+  The capture buffer keeps turn order by `session_id` and flushes Lens batches
+  independently.
   Capture is skipped if the thread isn't present (first-turn failure
   with nothing committed) or if the canonical message list is empty.
-  Capture failures raise (Gralkor capture is server-side buffered and
-  its retry lives in the capture buffer, not here — a raise from
-  `capture/3` means the server is unreachable).
+  Capture failures raise; retry and backoff belong to the capture buffer, not
+  this plugin.
   """
 
   use Jido.Plugin,
