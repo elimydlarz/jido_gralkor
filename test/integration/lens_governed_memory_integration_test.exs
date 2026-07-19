@@ -22,9 +22,29 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     end
   end
 
+  defmodule StoreAddingIngestion do
+    alias Gralkor.Lens.Store
+
+    def ingest(request, store) do
+      Store.add(store, request.content, request.source_description)
+    end
+  end
+
+  defmodule RecordingStorage do
+    def add_episode(store, content, source_description) do
+      send(
+        Process.whereis(:lens_governed_memory_integration),
+        {:add_episode, store, content, source_description}
+      )
+
+      :ok
+    end
+  end
+
   setup do
     Process.register(self(), :lens_governed_memory_integration)
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
+    previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
@@ -39,6 +59,11 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       case previous_lenses do
         nil -> Application.delete_env(:jido_gralkor, :lenses)
         lenses -> Application.put_env(:jido_gralkor, :lenses, lenses)
+      end
+
+      case previous_storage do
+        nil -> Application.delete_env(:jido_gralkor, :lens_storage)
+        storage -> Application.put_env(:jido_gralkor, :lens_storage, storage)
       end
     end)
 
@@ -113,6 +138,39 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                           ingestion: RecordingIngestion
                         }
                       }}
+    end
+
+    test "and every episode the process asks the store to add uses the Lens's ontology and storage scope" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      request = %Ingest{
+        operator_id: "operator-one",
+        lens: "observations",
+        content: "The launch window moved to Friday.",
+        source_description: "project update"
+      }
+
+      assert :ok = Client.ingest(request)
+
+      assert_receive {:add_episode,
+                      %Gralkor.Lens.Store{
+                        operator_id: "operator-one",
+                        lens: %Gralkor.Lens{
+                          name: "observations",
+                          ontology: ObservationOntology,
+                          scope: :operator,
+                          ingestion: StoreAddingIngestion
+                        }
+                      }, "The launch window moved to Friday.", "project update"}
     end
   end
 end
