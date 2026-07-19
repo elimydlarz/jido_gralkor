@@ -189,7 +189,7 @@ ex-interpret (src: lib/gralkor/interpret.ex; unit: test/gralkor/interpret_test.e
 
 interpret-epistemic-humility (functional: test/functional/interpret_epistemic_humility_test.exs)
   prerequisites
-    given OPENAI_API_KEY is loaded from .env by test/test_helper.exs and the real OpenAI gpt-4.1-nano model is used through ReqLLM
+    given OPENAI_API_KEY is loaded from .env by test/test_helper.exs and the real OpenAI gpt-4.1-mini model is used through ReqLLM at temperature zero
     if OPENAI_API_KEY is absent or blank
       then the suite fails before making a model call
   when relevant memory contains accounts from sources with different apparent veracity

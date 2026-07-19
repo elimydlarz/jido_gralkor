@@ -7,7 +7,7 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
   @moduletag :functional
   @moduletag timeout: 120_000
 
-  @model %{provider: :openai, id: "gpt-4.1-nano"}
+  @model %{provider: :openai, id: "gpt-4.1-mini"}
 
   setup_all do
     case System.get_env("OPENAI_API_KEY") do
@@ -55,7 +55,10 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
   defp openai_interpret(prompt, max_tokens) do
     schema = Interpret.interpret_schema()
 
-    case ReqLLM.generate_object(@model, prompt, schema, max_tokens: max_tokens) do
+    case ReqLLM.generate_object(@model, prompt, schema,
+           max_tokens: max_tokens,
+           temperature: 0
+         ) do
       {:ok, response} ->
         object = ReqLLM.Response.object(response)
         {:ok, Map.get(object, :relevantFacts) || Map.get(object, "relevantFacts") || []}
