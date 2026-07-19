@@ -133,11 +133,6 @@ defmodule Gralkor.ConfigTest do
       assert Config.embedder_model() == %{provider: :openai, id: "text-embedding-3-small"}
     end
 
-    test "and the model id may itself contain colons because only the first colon separates provider from id" do
-      System.put_env("GRALKOR_LLM_MODEL", "anthropic:claude-3:opus")
-      assert Config.llm_model() == %{provider: :anthropic, id: "claude-3:opus"}
-    end
-
     test "blank env values fall back to defaults" do
       System.put_env("GRALKOR_LLM_MODEL", "")
       assert Config.llm_model() == %{provider: :google, id: "gemini-3.1-flash-lite"}
@@ -183,6 +178,13 @@ defmodule Gralkor.ConfigTest do
         end)
 
       refute stderr =~ "Using unverified model"
+    end
+  end
+
+  describe "ex-config-defaults > model-spec shape > when a model id contains colons" do
+    test "then only the first colon separates provider from id" do
+      System.put_env("GRALKOR_LLM_MODEL", "anthropic:claude-3:opus")
+      assert Config.llm_model() == %{provider: :anthropic, id: "claude-3:opus"}
     end
   end
 

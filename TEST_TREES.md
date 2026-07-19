@@ -890,7 +890,8 @@ ex-config-defaults (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.e
       then the default map is returned
     when GRALKOR_LLM_MODEL / GRALKOR_EMBEDDER_MODEL is set to "provider:model"
       then it parses to %{provider: :provider, id: "model"}
-      and the model id may itself contain colons because only the first colon separates provider from id
+    when a model id contains colons
+      then only the first colon separates provider from id
     if the env var is set to a value missing the ":" separator or with a blank half
       then llm_model/0 / embedder_model/0 raises ArgumentError naming the env var and the bad value
 
