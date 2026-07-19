@@ -32,11 +32,11 @@ Two cooperating contexts live in this package: `Gralkor.*` owns the memory domai
 - Recall is LLM-driven via `MemorySearch`; the plugin never calls `Gralkor.Client.recall/4` directly.
 - `session_id` is the Jido thread id from `agent.state[:__thread__].id` — never minted by the plugin.
 - `agent_name` is required at mount; missing/blank raises `ArgumentError`.
-- `user_name` is read per-turn from `agent.state[:user_name]`; capture raises on missing/blank.
+- When a committed turn produces a non-empty capture, `user_name` is read from `agent.state[:user_name]`; missing/blank raises `ArgumentError`.
 - First-turn-on-fresh-agent: no thread yet → `MemorySearch` short-circuits, capture is skipped, and Lens mounts still plant `agent_name`, `lens`, and `search_targets` without a session id.
-- A local Lens partitions by operator and Lens name; every global Lens writes to the shared global partition.
-- Only the reserved `"global"` target searches the global pool. A global Lens name records ingestion provenance and is not a sound search filter.
-- A Lens ingestion callback controls whether one request causes zero, one, or many store writes; storage failures are returned without falling back to another path.
+- A local Lens store partitions by operator and Lens name; every store write through a global Lens uses the shared global partition.
+- Public search requires a non-empty, fully valid selection before any query begins. Only reserved `"global"` selects the global pool; a global Lens name is provenance, while its ingestion process may query that pool through its bound store.
+- Lens definitions are application-owned and selected by name. The selected callback controls zero, one, or many bound-store writes; `Client.ingest/1` returns its result without an implicit fallback write.
 
 ## Decision Rationale
 
