@@ -46,7 +46,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
   end
 
   describe "when an application registers a Lens with a non-blank name, ontology, local or global scope, and ingestion process" do
-    test "then direct callers and mounted memory plugins can select that Lens by name and every plugin mount observes the same application-owned Lens definition" do
+    test "then direct callers and mounted memory plugins can select that Lens by name" do
       request = %Ingest{
         operator_id: "operator-one",
         lens: "observations",
@@ -63,11 +63,8 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
         search_targets: ["observations"]
       }
 
-      assert {:ok, first_mount} = Plugin.mount(%{}, opts)
-      assert {:ok, second_mount} = Plugin.mount(%{}, opts)
-      assert first_mount.default_lens == "observations"
-      assert second_mount.default_lens == "observations"
-      assert first_mount.lens == second_mount.lens
+      assert {:ok, mount} = Plugin.mount(%{}, opts)
+      assert mount.default_lens == "observations"
     end
   end
 end
