@@ -961,7 +961,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     end
   end
 
-  describe "if a mounted plugin selects an unknown default Lens or invalid search target" do
+  describe "if a mounted plugin selects an unknown default Lens, invalid search target, unknown or duplicate generalising Lens, or Lens options without a default Lens" do
     test "then mounting fails before the plugin handles an agent signal" do
       assert_raise ArgumentError, ~r/unknown Lens/, fn ->
         Plugin.mount(%{},
@@ -977,6 +977,43 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
           default_lens: "observations",
           search_targets: ["missing"]
         )
+      end
+
+      for invalid_targets <- [[], nil, [123]] do
+        assert_raise ArgumentError, fn ->
+          Plugin.mount(%{},
+            agent_name: "Susu",
+            default_lens: "observations",
+            search_targets: invalid_targets
+          )
+        end
+      end
+
+      assert_raise ArgumentError, ~r/unknown Lens/, fn ->
+        Plugin.mount(%{},
+          agent_name: "Susu",
+          default_lens: "observations",
+          search_targets: ["observations"],
+          generalise_lens: "missing"
+        )
+      end
+
+      assert_raise ArgumentError, ~r/differ/, fn ->
+        Plugin.mount(%{},
+          agent_name: "Susu",
+          default_lens: "observations",
+          search_targets: ["observations"],
+          generalise_lens: "observations"
+        )
+      end
+
+      for orphan_opts <- [
+            [search_targets: ["observations"]],
+            [generalise_lens: "observations"]
+          ] do
+        assert_raise ArgumentError, ~r/default_lens/, fn ->
+          Plugin.mount(%{}, Keyword.merge([agent_name: "Susu"], orphan_opts))
+        end
       end
     end
   end
@@ -1267,6 +1304,14 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
             name: "global",
             ontology: ObservationOntology,
             scope: :global,
+            ingestion: RecordingIngestion
+          ]
+        ],
+        [
+          [
+            name: "default",
+            ontology: ObservationOntology,
+            scope: :operator,
             ingestion: RecordingIngestion
           ]
         ],

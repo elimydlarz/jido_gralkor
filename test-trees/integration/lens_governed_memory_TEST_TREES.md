@@ -38,7 +38,7 @@ when a mounted plugin has a configured default Lens and search targets
   and memory search uses the configured search targets
   and the plugin does not redefine the selected Lenses' ontology, scope, or ingestion process
 
-if a mounted plugin selects an unknown default Lens or invalid search target
+if a mounted plugin selects an unknown default Lens, invalid search target, unknown or duplicate generalising Lens, or Lens options without a default Lens
   then mounting fails before the plugin handles an agent signal
 
 where a turn supplies a registered Lens through plugin context
@@ -65,7 +65,7 @@ where capture is configured to generalise a flushed transcript through another L
   then the generalising Lens receives the transcript independently of the Lens that captured it
   and each Lens retains its own ontology, scope, and ingestion process
 
-if Lens registration is invalid (blank, duplicate, reserved, or malformed)
+if Lens registration is invalid (blank, duplicate, reserved `default` or `global`, or malformed)
   then configuration resolution raises `ArgumentError` naming the invalid Lens before ingestion or search begins
 
 if ingestion names an unknown or blank Lens

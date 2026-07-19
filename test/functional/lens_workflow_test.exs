@@ -214,7 +214,17 @@ defmodule Gralkor.LensWorkflowFunctionalTest do
                  source_description: "functional"
                })
 
-      refute result =~ "Another operator's local memory."
+      assert {:ok, operator_one_results} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "local memory",
+                 targets: ["observations"]
+               })
+
+      refute Enum.any?(
+               operator_one_results,
+               &String.contains?(&1, "Another operator's local memory.")
+             )
     end
   end
 
