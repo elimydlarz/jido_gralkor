@@ -161,6 +161,24 @@ defmodule JidoGralkor.PluginTest do
                session_id: "thread-one"
              }
     end
+
+    test "then the selected Lens and search targets are planted without a session id when no thread has committed" do
+      plugin_state = lens_plugin_state()
+      signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
+
+      lens_agent =
+        agent("operator-one", thread_id: nil)
+        |> put_in([:state, :__memory__], plugin_state)
+
+      assert {:ok, {:continue, %Signal{data: %{tool_context: tool_context}}}} =
+               Plugin.handle_signal(signal, context(lens_agent))
+
+      assert tool_context == %{
+               agent_name: "Susu",
+               lens: "observations",
+               search_targets: ["observations", "global"]
+             }
+    end
   end
 
   describe "when an agent turn begins, when the plugin uses implicit-default and no thread has committed yet" do
@@ -309,6 +327,35 @@ defmodule JidoGralkor.PluginTest do
       assert_raise ArgumentError, ~r/user_name/, fn ->
         Plugin.handle_signal(signal, context(ag))
       end
+    end
+
+    test "first-turn completion with events and no thread committed skips capture and logs a warning" do
+      InMemory.set_capture(:ok)
+      request_id = "req-first-complete"
+
+      ag =
+        agent("user-01",
+          thread_id: nil,
+          request_traces: %{
+            request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
+          },
+          requests: %{request_id => %{query: "q", status: :pending, result: nil}}
+        )
+
+      signal =
+        Signal.new!("ai.request.completed", %{request_id: request_id, result: "done"},
+          source: "/test"
+        )
+
+      log =
+        capture_log(fn ->
+          assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
+        end)
+
+      assert InMemory.captures() == []
+      assert log =~ "[jido_gralkor] skipping capture"
+      assert log =~ "user-01"
+      assert log =~ "JIDO_CHANGE_SUGGESTIONS.md"
     end
   end
 
