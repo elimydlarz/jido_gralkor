@@ -796,7 +796,7 @@ defmodule Gralkor.GraphitiPoolTest do
             %{"entity_types" => strict["entity_types"], "edge_types" => strict["edge_types"]}
           )
 
-        assert Pythonx.decode(type_keys) == [["Preference", "User"], ["Prefers"]]
+        assert Pythonx.decode(type_keys) == [["Preference", "User"], ["PREFERS"]]
       after
         GenServer.stop(pid)
         File.rm_rf!(data_dir)

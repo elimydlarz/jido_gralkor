@@ -389,6 +389,31 @@ defmodule Gralkor.GraphitiPool do
     end
   end
 
+  @doc false
+  @spec initialise_instance(any()) :: :ok
+  def initialise_instance(instance) do
+    Pythonx.eval(
+      """
+      import asyncio
+      asyncio._gralkor_run(g.build_indices_and_constraints())
+      """,
+      %{"g" => instance}
+    )
+
+    :ok
+  end
+
+  @doc false
+  @spec validate_native_models!(map(), map()) :: :ok
+  def validate_native_models!(llm_model, embedder_model) do
+    if llm_model[:provider] != :google or embedder_model[:provider] != :google do
+      raise ArgumentError,
+            "Gralkor.GraphitiPool native Graphiti supports Google models only; got llm=#{inspect(llm_model)}, embedder=#{inspect(embedder_model)}"
+    end
+
+    :ok
+  end
+
   @fact_keys ~w(fact created_at valid_at invalid_at expired_at)a
   @fact_keys_strings Enum.map(@fact_keys, &Atom.to_string/1)
 
@@ -409,12 +434,15 @@ defmodule Gralkor.GraphitiPool do
     embedder_model = Keyword.get(opts, :embedder_model, Config.embedder_model())
     interpret_fn = Keyword.get(opts, :interpret_fn)
 
+    validate_native_models!(llm_model, embedder_model)
+
     construct_falkor_db = Keyword.get(opts, :construct_falkor_db, &default_construct_falkor_db/1)
 
     construct_shared_clients =
       Keyword.get(opts, :construct_shared_clients, &default_construct_shared_clients/2)
 
     construct_instance = Keyword.get(opts, :construct_instance, &default_construct_instance/3)
+    initialise_instance = Keyword.get(opts, :initialise_instance, &initialise_instance/1)
     warmup? = Keyword.get(opts, :warmup, true)
     install_loop_fn = Keyword.get(opts, :install_loop_fn, &Gralkor.Python.install_async_runtime/0)
 
@@ -442,6 +470,7 @@ defmodule Gralkor.GraphitiPool do
       falkor_db: falkor_db,
       shared: shared,
       construct_instance: construct_instance,
+      initialise_instance: initialise_instance,
       interpret_fn: interpret_fn,
       ontology_cache: %{}
     }
@@ -459,7 +488,7 @@ defmodule Gralkor.GraphitiPool do
           existing
 
         [] ->
-          fresh = state.construct_instance.(state.falkor_db, state.shared, sanitized_group_id)
+          fresh = construct_initialised_instance(state, sanitized_group_id)
           :ets.insert(state.table, {sanitized_group_id, fresh})
           fresh
       end
@@ -711,18 +740,6 @@ defmodule Gralkor.GraphitiPool do
           embedder=embedder,
           cross_encoder=cross_encoder,
         )
-        # Build indices on this database so the first search can find anything.
-        # FalkorDB indices are per-database; CREATE INDEX is idempotent so running
-        # this every time we construct a fresh instance is cheap.
-        import traceback, sys
-        try:
-            asyncio._gralkor_run(g.build_indices_and_constraints())
-        except BaseException as e:
-            # Best-effort — surface as a warning via the return value rather than
-            # crashing instance construction.
-            print(f"[gralkor] build_indices_and_constraints failed (non-fatal): {e}", file=sys.stderr)
-            print("[gralkor-debug] traceback:", file=sys.stderr)
-            traceback.print_exc()
         g
         """,
         %{
@@ -738,13 +755,8 @@ defmodule Gralkor.GraphitiPool do
   end
 
   defp default_construct_shared_clients(llm_model, embedder_model) do
-    %{provider: llm_provider, id: llm_name} = llm_model
-    %{provider: embedder_provider, id: embedder_name} = embedder_model
-
-    if llm_provider != :google or embedder_provider != :google do
-      raise ArgumentError,
-            "Gralkor.GraphitiPool currently only supports Google models; got llm=#{inspect(llm_model)}, embedder=#{inspect(embedder_model)}"
-    end
+    %{provider: :google, id: llm_name} = llm_model
+    %{provider: :google, id: embedder_name} = embedder_model
 
     {client, _} = Pythonx.eval("from google import genai\ngenai.Client()\n", %{})
 
@@ -816,10 +828,35 @@ defmodule Gralkor.GraphitiPool do
         instance
 
       [] ->
-        instance = state.construct_instance.(state.falkor_db, state.shared, sanitized)
+        instance = construct_initialised_instance(state, sanitized)
         :ets.insert(state.table, {sanitized, instance})
         instance
     end
+  end
+
+  defp construct_initialised_instance(state, sanitized_group_id) do
+    instance = state.construct_instance.(state.falkor_db, state.shared, sanitized_group_id)
+
+    try do
+      state.initialise_instance.(instance)
+    rescue
+      error in Pythonx.Error ->
+        Logger.warning(
+          "[gralkor] build_indices_and_constraints failed (non-fatal): #{summarise_python_error(error)}"
+        )
+
+      error ->
+        Logger.warning(
+          "[gralkor] build_indices_and_constraints failed (non-fatal): #{Exception.message(error)}"
+        )
+    catch
+      kind, reason ->
+        Logger.warning(
+          "[gralkor] build_indices_and_constraints failed (non-fatal): #{kind}: #{inspect(reason)}"
+        )
+    end
+
+    instance
   end
 
   defp warmup_search(instance) do
