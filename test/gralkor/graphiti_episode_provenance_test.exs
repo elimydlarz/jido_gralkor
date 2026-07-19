@@ -3,6 +3,11 @@ defmodule Gralkor.GraphitiEpisodeProvenanceTest do
 
   alias Gralkor.GraphitiPool
 
+  setup_all do
+    {:ok, _applications} = Application.ensure_all_started(:pythonx)
+    :ok
+  end
+
   defp start_pool(graphiti) do
     table = :"provenance_pool_#{System.unique_integer([:positive])}"
 
