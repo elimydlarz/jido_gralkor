@@ -42,6 +42,27 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
     end
   end
 
+  describe "interpret-epistemic-humility > when relevant memory contains conflicting accounts" do
+    test "the conflicting accounts are surfaced together rather than resolved into one asserted fact" do
+      facts = """
+      - The official incident report states that the east gate opened at 08:00.
+      - During the debrief, Kai recalled that the east gate opened at 09:00.
+      """
+
+      results =
+        interpret(
+          "What conflicting accounts exist about when the east gate opened? Include both.",
+          facts
+        )
+
+      assert length(results) == 2
+      assert Enum.any?(results, &String.contains?(&1, "official incident report"))
+      assert Enum.any?(results, &String.contains?(&1, "During the debrief, Kai"))
+      assert Enum.any?(results, &String.contains?(&1, "08:00"))
+      assert Enum.any?(results, &String.contains?(&1, "09:00"))
+    end
+  end
+
   defp interpret(query, facts) do
     Interpret.interpret_facts(
       [Message.new("user", query)],
