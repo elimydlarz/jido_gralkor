@@ -92,15 +92,42 @@ defmodule Gralkor.Client do
   def search(%Search{
         operator_id: operator_id,
         query: query,
-        targets: [_target | _rest] = targets,
+        targets: targets,
         max_results: max_results
       }) do
+    validate_search_targets!(targets)
+
     Enum.reduce_while(targets, {:ok, []}, fn target, {:ok, results} ->
       case search_target(operator_id, target, query, max_results) do
         {:ok, target_results} -> {:cont, {:ok, results ++ target_results}}
         {:error, _reason} = error -> {:halt, error}
       end
     end)
+  end
+
+  defp validate_search_targets!([_target | _rest] = targets) do
+    registered_lenses!()
+
+    Enum.each(targets, fn
+      "global" ->
+        :ok
+
+      target when is_binary(target) ->
+        case lens!(target) do
+          %{scope: :operator} -> :ok
+
+          %{scope: :global} ->
+            raise ArgumentError,
+                  "global Lens #{inspect(target)} is provenance; search the reserved \"global\" target"
+        end
+
+      target ->
+        raise ArgumentError, "invalid search target #{inspect(target)}"
+    end)
+  end
+
+  defp validate_search_targets!(targets) do
+    raise ArgumentError, "search targets must be a non-empty list, got #{inspect(targets)}"
   end
 
   @spec search_target(String.t(), String.t(), String.t(), pos_integer()) ::
