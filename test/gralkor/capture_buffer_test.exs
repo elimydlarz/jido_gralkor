@@ -192,8 +192,8 @@ defmodule Gralkor.CaptureBufferTest do
   end
 
   describe "ex-capture-buffer > append_lenses/6 when one Lens flush fails" do
-    test "then every Lens batch is attempted independently", %{pid: pid} do
-      restart_with_failing_primary(pid)
+    test "then every Lens batch is attempted independently" do
+      restart_with_failing_primary()
       turn = [Message.new("user", "one turn")]
 
       assert :ok =
@@ -211,8 +211,8 @@ defmodule Gralkor.CaptureBufferTest do
       assert_receive {:lens_attempted, "generalisations", [^turn]}
     end
 
-    test "and flush_and_await/2 returns the first failure after every Lens is attempted", %{pid: pid} do
-      restart_with_failing_primary(pid)
+    test "and flush_and_await/2 returns the first failure after every Lens is attempted" do
+      restart_with_failing_primary()
       turn = [Message.new("user", "one turn")]
 
       assert :ok =
@@ -244,8 +244,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  defp restart_with_failing_primary(pid) do
-    stop_supervised(pid)
+  defp restart_with_failing_primary do
+    stop_supervised(CaptureBuffer)
     test_pid = self()
 
     lens_flush_callback = fn _operator_id, _agent_name, _user_name, lens, turns ->
