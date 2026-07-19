@@ -73,6 +73,11 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     search_fn.(local_destination(operator_id, lens.name), query, max_results)
   end
 
+  def search(%Store{lens: :global}, query, max_results, opts) do
+    search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
+    search_fn.("global", query, max_results)
+  end
+
   @spec local_destination(String.t(), String.t()) :: String.t()
   defp local_destination(operator_id, lens_name) do
     "lens_" <> encode(operator_id) <> "_" <> encode(lens_name)
