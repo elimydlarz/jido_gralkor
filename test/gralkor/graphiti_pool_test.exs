@@ -774,7 +774,7 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
 
-    test "and a strict+scoped ontology yields all four string-rendered kwarg keys, an open ontology omits edge_type_map and excluded_entity_types, and entity and edge class dicts are keyed by their declared type names" do
+    test "and graphiti dictionaries use selected kwarg names outside and declared entity/edge type names inside" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 

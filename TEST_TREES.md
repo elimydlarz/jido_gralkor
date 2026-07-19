@@ -854,7 +854,7 @@ ex-graphiti-pool (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti
     when an ontology module is materialised
       then the graphiti kwargs dict carries exactly the spec-selected keys (omitting unselected) and is reused per `{ontology module, merge_learning?}` cache key
       and graphiti_boundary_spec/1 selects the kwargs; the selected :entity_types/:edge_types are rendered into Pydantic classes and the selected :edge_type_map into graphiti's tuple-keyed dict
-      and a strict+scoped ontology yields all four string-rendered kwarg keys, an open ontology omits "edge_type_map" and "excluded_entity_types", entity and edge class dicts are keyed by their declared type names, and repeating the same cache key does not rerun Pydantic class construction
+      and graphiti dictionaries use selected kwarg names outside and declared entity/edge type names inside
     (the Pydantic field rendering — required → no default, optional → default None — and graphiti's honouring of the declared schema are proven by the ontology-extraction journey, which holds a real LLM to the schema; they are not re-asserted here)
 ```
 
