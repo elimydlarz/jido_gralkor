@@ -107,6 +107,19 @@ defmodule Gralkor.InterpretTest do
       end
     end
 
+    test "raises Gralkor.InterpretParseFailed when any list element is not a string" do
+      interpret_fn = fn _, _ -> {:ok, ["valid", 123]} end
+
+      assert_raise InterpretParseFailed, fn ->
+        Interpret.interpret_facts(
+          [Message.new("user", "q")],
+          "- f",
+          interpret_fn,
+          "Susu"
+        )
+      end
+    end
+
     test "raises RuntimeError when the call returns {:error, _} (upstream LLM failure, distinct from parse failure)" do
       interpret_fn = fn _, _ -> {:error, :upstream} end
 
