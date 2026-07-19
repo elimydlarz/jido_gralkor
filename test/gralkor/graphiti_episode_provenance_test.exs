@@ -82,4 +82,53 @@ defmodule Gralkor.GraphitiEpisodeProvenanceTest do
       GenServer.stop(pid)
     end
   end
+
+  describe "where add_episode has no originating Lens" do
+    test "then no provenance update is attempted" do
+      {graphiti, _} =
+        Pythonx.eval(
+          """
+          class _Episode:
+              uuid = "episode-123"
+
+          class _Result:
+              episode = _Episode()
+
+          class _Driver:
+              def __init__(self):
+                  self.provenance = None
+
+              async def execute_query(self, query, **kwargs):
+                  self.provenance = {"query": query, "kwargs": kwargs}
+                  return [], None, None
+
+          class _Graphiti:
+              def __init__(self):
+                  self.driver = _Driver()
+
+              async def add_episode(self, **kwargs):
+                  return _Result()
+
+          _Graphiti()
+          """,
+          %{}
+        )
+
+      pid = start_pool(graphiti)
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 pid,
+                 "operator",
+                 "private fact",
+                 "conversation",
+                 nil
+               )
+
+      {recorded, _} = Pythonx.eval("g.driver.provenance", %{"g" => graphiti})
+      assert Pythonx.decode(recorded) == nil
+
+      GenServer.stop(pid)
+    end
+  end
 end
