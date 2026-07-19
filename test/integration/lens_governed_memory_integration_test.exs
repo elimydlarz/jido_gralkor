@@ -30,6 +30,22 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     end
   end
 
+  defmodule VariableWriteIngestion do
+    alias Gralkor.Lens.Store
+
+    def ingest(%{content: "none"}, _store), do: :ok
+
+    def ingest(%{content: "one", source_description: source_description}, store) do
+      Store.add(store, "one", source_description)
+    end
+
+    def ingest(%{content: "many", source_description: source_description}, store) do
+      with :ok <- Store.add(store, "first", source_description) do
+        Store.add(store, "second", source_description)
+      end
+    end
+  end
+
   defmodule RecordingStorage do
     @behaviour Gralkor.Lens.Storage
 
@@ -174,6 +190,43 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                           ingestion: StoreAddingIngestion
                         }
                       }, "The launch window moved to Friday.", "project update"}
+    end
+
+    test "and the process may add no episodes, one episode, or multiple episodes without changing those bindings" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: VariableWriteIngestion
+        ]
+      ])
+
+      request = fn content ->
+        %Ingest{
+          operator_id: "operator-one",
+          lens: "observations",
+          content: content,
+          source_description: "project update"
+        }
+      end
+
+      assert :ok = Client.ingest(request.("none"))
+      refute_receive {:add_episode, _, _, _}
+
+      assert :ok = Client.ingest(request.("one"))
+
+      assert_receive {:add_episode,
+                      %Gralkor.Lens.Store{
+                        operator_id: "operator-one",
+                        lens: %{name: "observations", ontology: ObservationOntology, scope: :operator}
+                      }, "one", "project update"}
+
+      assert :ok = Client.ingest(request.("many"))
+      assert_receive {:add_episode, %{lens: %{name: "observations"}}, "first", "project update"}
+      assert_receive {:add_episode, %{lens: %{name: "observations"}}, "second", "project update"}
     end
   end
 end
