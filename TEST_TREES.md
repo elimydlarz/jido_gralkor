@@ -1051,20 +1051,20 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
       then the selected Lens and search targets are planted with the agent name and optional session id
     when a thread has committed to agent state
       then the thread's session_id and the configured agent_name are planted on the signal's tool_context so the `MemorySearch` ReAct tool can find them (no ontology is planted — writes resolve it from config); the plugin does not call `Gralkor.Client.recall/3` on its own (recall is the LLM's job — see `JidoGralkor.ReAct` and the consumer's `RequestTransformer` for how `memory_search` is forced on iteration 1)
-    when no thread has committed yet (first query on a fresh agent — ReAct strategy's ThreadAgent.append runs inside @start, after plugin hooks)
+    when the plugin uses implicit-default and no thread has committed yet (first query on a fresh agent — ReAct strategy's ThreadAgent.append runs inside @start, after plugin hooks)
       then the configured agent_name is planted on tool_context; no session_id is planted, and `MemorySearch` short-circuits with a non-result message on this turn
-  every captured turn is learned from at flush — there is no per-turn ERL flag (learning is unconditional;
+  every turn captured through the implicit-default pipeline is learned from at flush — there is no per-turn ERL flag (learning is unconditional;
     a custom-CoT exemption is deferred until a custom reasoning strategy exists — see the ERL intro)
   when an agent turn completes
     when the plugin is Lens-aware
       then capture receives the selected Lens and optional additional generalising Lens
-    then the user query, event trace, and `{:completed, answer}` outcome are normalised via
+    then, in implicit-default mode, the user query, event trace, and `{:completed, answer}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list is sent to
       Gralkor for capture (via `capture/5`) with the thread's session_id, the operator's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the implicit-default ontology)
     if `agent.state[:user_name]` is missing or blank
       then capture raises ArgumentError (the consumer's contract violation surfaces immediately rather than persisting an episode under a generic "User" label that would corrupt the graph)
   when an agent turn fails
-    then the user query, event trace, and `{:failed, error}` outcome are normalised via
+    then, in implicit-default mode, the user query, event trace, and `{:failed, error}` outcome are normalised via
       `JidoGralkor.Canonical.to_messages/3` and the resulting canonical message list — ending in
       a `"request failed: …"` behaviour message instead of an assistant message — is sent to
       Gralkor for capture (via `capture/5`) with the thread's session_id, the operator's group_id, the configured agent_name, and the user_name read from `agent.state[:user_name]` (capture carries no ontology — the write resolves the implicit-default ontology), so the failure is visible to downstream distillation rather than

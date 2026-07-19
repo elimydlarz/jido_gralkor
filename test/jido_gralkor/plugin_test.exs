@@ -163,7 +163,7 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  describe "when an agent turn begins, when no thread has committed yet" do
+  describe "when an agent turn begins, when the plugin uses implicit-default and no thread has committed yet" do
     test "only the configured agent_name is planted on tool_context (no session_id)" do
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
