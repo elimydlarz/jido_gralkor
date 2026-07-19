@@ -23,7 +23,7 @@ when a global Lens adds an episode
   and the episode records the name of the Lens that ingested it
   and the ingestion process does not have to add Lens provenance itself
 
-when a caller searches a non-empty selection of operator-local Lenses and the global pool
+when a caller searches a non-empty selection of operator-local Lenses and the reserved `global` target
   then each selected operator-local Lens is searched only for the requesting operator
   and selecting the global pool searches every episode in that pool without filtering by originating Lens
   and results from all selected destinations are combined into one memory response
@@ -31,7 +31,7 @@ when a caller searches a non-empty selection of operator-local Lenses and the gl
 
 where a global Lens name identifies an episode's origin
   then that name remains attribution rather than a search boundary
-  and the global pool is the only target that selects globally stored memory
+  and `global` is the only target that selects globally stored memory
 
 when a mounted plugin has a configured default Lens and search targets
   then automatic capture and memory addition use the registered default Lens
@@ -65,13 +65,13 @@ where capture is configured to generalise a flushed transcript through another L
   then the generalising Lens receives the transcript independently of the Lens that captured it
   and each Lens retains its own ontology, scope, and ingestion process
 
-if Lens registration contains a blank or duplicate name, the reserved global-pool target, an invalid ontology, an invalid scope, or an invalid ingestion process
+if Lens registration contains a blank or duplicate name, the reserved name `global`, an invalid ontology, an invalid scope, or an invalid ingestion process
   then configuration resolution raises `ArgumentError` naming the invalid Lens before ingestion or search begins
 
 if ingestion names an unknown or blank Lens
   then ingestion fails before an ingestion process or graph write is started
 
-if search supplies an empty selection or a target that is neither a registered operator-local Lens nor the global pool
+if search supplies an empty selection or a target that is neither a registered operator-local Lens nor `global`
   then search fails before any memory query is started
   and no valid subset is searched
 
