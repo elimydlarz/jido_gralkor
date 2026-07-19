@@ -588,5 +588,46 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  targets: ["observations", "decisions"]
                })
     end
+
+    test "and no unselected operator-local Lens or another operator's local memory can contribute a result" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      for {operator_id, lens, content} <- [
+            {"operator-one", "observations", "selected observation"},
+            {"operator-one", "decisions", "unselected decision"},
+            {"operator-two", "observations", "other operator observation"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: operator_id,
+                   lens: lens,
+                   content: content,
+                   source_description: "test source"
+                 })
+      end
+
+      assert {:ok, ["selected observation"]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["observations"]
+               })
+    end
   end
 end
