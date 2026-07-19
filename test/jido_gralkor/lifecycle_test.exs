@@ -13,7 +13,7 @@ defmodule JidoGralkor.LifecycleTest do
     :ok
   end
 
-  defp state(agent_state \\ %{}) do
+  defp state(agent_state) do
     %{agent: %{state: agent_state}}
   end
 

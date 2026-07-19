@@ -13,7 +13,6 @@ defmodule Gralkor.OntologyExtractionTest do
 
   alias Gralkor.Client
   alias Gralkor.Client.Native
-  alias Gralkor.Config
   alias Gralkor.GraphitiPool
 
   @moduletag :functional
