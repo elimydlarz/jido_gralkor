@@ -33,8 +33,17 @@ Three things the consumer must set up.
 ```bash
 # Embedded — falkordblite spawns a redis-server grandchild under this dir
 export GRALKOR_DATA_DIR=/var/lib/<your-app>/gralkor   # writable
-export GOOGLE_API_KEY=...                              # or ANTHROPIC / OPENAI / GROQ
+export GOOGLE_API_KEY=...
 ```
+
+Native Graphiti currently supports Google for both its LLM and embedder. The
+defaults are `google:gemini-3.1-flash-lite` and
+`google:gemini-embedding-2-preview`; optional `GRALKOR_LLM_MODEL` and
+`GRALKOR_EMBEDDER_MODEL` overrides must therefore also use the `google:`
+provider prefix. Startup fails before constructing Python clients when either
+override names another provider. Direct ReqLLM calls may still use an explicit
+non-Google model—for example, the focused interpretation functional suite uses
+OpenAI without starting Graphiti.
 
 ```elixir
 # Remote — point at a managed FalkorDB. config/runtime.exs
@@ -144,7 +153,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your co
 
 **Lens partitioning.** An operator-scoped Lens writes to a partition derived from the operator id and Lens name, so different operators and different local Lenses remain isolated. Every global Lens writes to the one shared `global` partition. Global writes retain their originating Lens name as provenance, but global search deliberately queries the whole pool: use the reserved `"global"` search target, not the name of a global Lens.
 
-**First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus configured `:lens` and `:search_targets`, but no `:session_id`, and lets capture establish the session when the turn completes. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
+**First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus configured `:lens` and `:search_targets`, but no `:session_id`; completed and failed turn capture are both skipped with a warning until a committed thread supplies that identity. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
 
 **Death-triggered flush.** `JidoGralkor.Lifecycle` is an optional `Jido.AgentServer.Lifecycle` implementation. When wired as `lifecycle_mod:` on the agent, graceful termination of the AgentServer fires `Gralkor.Client.flush/1` for the active thread so an orphaned agent doesn't strand its capture buffer. No idle-timer machinery — Jido's `AgentServer` owns `:idle_timeout` directly.
 

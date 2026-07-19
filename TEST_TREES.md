@@ -883,7 +883,7 @@ ex-config-defaults (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.e
   when the consumer supplies an LLM provider/model
     then Config returns that provider/model shape for ReqLLM-side calls; native Graphiti separately enforces its Google-only boundary under ex-graphiti-pool
   when the consumer omits LLM provider/model
-    then defaults are applied (single source of truth in Gralkor.Config) — req_llm picks the provider; the embedder and cross-encoder defaults are stable so consumers can rely on them
+    then supported Google defaults are applied from the single source of truth in Gralkor.Config; ReqLLM, the native Graphiti embedder, and the cross-encoder receive those stable defaults
   model-spec shape (the value Config.llm_model/0 and Config.embedder_model/0 return)
     then the shape is %{provider: atom(), id: String.t()} — the inline-map shape ReqLLM.model/1 accepts without a catalog lookup (and therefore without an "unverified model" IO.warn when the model id is newer than the LLMDB catalog snapshot)
     when GRALKOR_LLM_MODEL / GRALKOR_EMBEDDER_MODEL is unset or blank

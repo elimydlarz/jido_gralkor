@@ -15,7 +15,9 @@ defmodule Gralkor.Config do
       `%{provider: atom(), id: String.t()}` maps — the inline-map shape
       `ReqLLM.model/1` accepts without a catalog lookup (no "unverified model"
       `IO.warn` when the model id is newer than the LLMDB snapshot bundled
-      with `req_llm`).
+      with `req_llm`). Parsing is provider-agnostic, but the native
+      `Gralkor.GraphitiPool` boundary currently accepts Google LLM and embedder
+      specs only; explicit ReqLLM-only calls may use other providers.
   """
 
   # Defaults match server-side gralkor/server/main.py — both stacks pick the
