@@ -123,7 +123,9 @@ defmodule Gralkor.Interpret do
   defp epistemic_instruction do
     "Treat retrieved memory facts as understandings extracted from source material rather " <>
       "than proven claims. Mention the source context, when available, only where natural, " <>
-      "without confidence labels, truth adjudication, or repetitive uncertainty warnings."
+      "without confidence labels, truth adjudication, or repetitive uncertainty warnings. " <>
+      "When retrieved memory facts conflict, preserve the relevant accounts rather than " <>
+      "choosing one as true."
   end
 
   defp raise_if_blank!(name) when is_binary(name) do
