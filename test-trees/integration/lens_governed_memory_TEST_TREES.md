@@ -65,7 +65,7 @@ where capture is configured to generalise a flushed transcript through another L
   then the generalising Lens receives the transcript independently of the Lens that captured it
   and each Lens retains its own ontology, scope, and ingestion process
 
-if Lens registration contains a blank or duplicate name, the reserved name `global`, an invalid ontology, an invalid scope, or an invalid ingestion process
+if Lens registration is invalid (blank, duplicate, reserved, or malformed)
   then configuration resolution raises `ArgumentError` naming the invalid Lens before ingestion or search begins
 
 if ingestion names an unknown or blank Lens

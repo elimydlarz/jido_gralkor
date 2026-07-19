@@ -1021,7 +1021,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     end
   end
 
-  describe "if Lens registration contains a blank or duplicate name, the reserved name `global`, an invalid ontology, an invalid scope, or an invalid ingestion process" do
+  describe "if Lens registration is invalid (blank, duplicate, reserved, or malformed)" do
     test "then configuration resolution raises `ArgumentError` naming the invalid Lens before ingestion or search begins" do
       invalid_registries = [
         [[name: " ", ontology: ObservationOntology, scope: :operator, ingestion: RecordingIngestion]],
