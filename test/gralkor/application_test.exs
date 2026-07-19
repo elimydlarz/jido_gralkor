@@ -626,6 +626,9 @@ defmodule Gralkor.ApplicationTest do
               def __init__(self):
                   self.recorded = {}
 
+              async def build_indices_and_constraints(self):
+                  return None
+
               async def add_episode(self, **kwargs):
                   self.recorded['episode_body'] = kwargs.get('episode_body')
                   self.recorded['source_description'] = kwargs.get('source_description')
