@@ -91,4 +91,28 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert first_mount.lens.ingestion == RecordingIngestion
     end
   end
+
+  describe "when information is submitted through a registered Lens" do
+    test "then the Lens's ingestion process receives the information and a store bound to that Lens" do
+      request = %Ingest{
+        operator_id: "operator-one",
+        lens: "observations",
+        content: "The launch window moved to Friday.",
+        source_description: "project update"
+      }
+
+      assert :ok = Client.ingest(request)
+
+      assert_receive {:ingested, ^request,
+                      %Gralkor.Lens.Store{
+                        operator_id: "operator-one",
+                        lens: %Gralkor.Lens{
+                          name: "observations",
+                          ontology: ObservationOntology,
+                          scope: :operator,
+                          ingestion: RecordingIngestion
+                        }
+                      }}
+    end
+  end
 end
