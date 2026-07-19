@@ -242,5 +242,18 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert {:ok, []} = Graphiti.search(store, "launch window", 7, search_fn: search_fn)
       assert_receive {:graph_search, "global", "launch window", 7}
     end
+
+    test "and no originating-Lens filter is supplied" do
+      store = %Store{operator_id: "operator-one", lens: :global}
+      test_pid = self()
+
+      search_fn = fn destination, query, max_results ->
+        send(test_pid, {:graph_search, destination, query, max_results})
+        {:ok, []}
+      end
+
+      assert {:ok, []} = Graphiti.search(store, "launch window", 7, search_fn: search_fn)
+      assert_receive {:graph_search, "global", "launch window", 7}
+    end
   end
 end
