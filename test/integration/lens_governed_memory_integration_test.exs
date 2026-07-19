@@ -65,7 +65,14 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     end
 
     @impl true
-    def search(_store, _query, _max_results), do: {:ok, []}
+    def search(store, query, max_results) do
+      send(
+        Process.whereis(:lens_governed_memory_integration),
+        {:search, store, query, max_results}
+      )
+
+      {:ok, []}
+    end
   end
 
   setup do
@@ -1080,6 +1087,24 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
 
         refute_receive {:ingested, _, _}
         refute_receive {:add_episode, _, _, _}
+      end
+    end
+  end
+
+  describe "if search supplies an empty selection or a target that is neither a registered operator-local Lens nor `global`" do
+    test "then search fails before any memory query is started" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      for targets <- [[], ["observations", "missing"]] do
+        assert_raise ArgumentError, fn ->
+          Client.search(%Search{
+            operator_id: "operator-one",
+            query: "anything",
+            targets: targets
+          })
+        end
+
+        refute_receive {:search, _, _, _}
       end
     end
   end
