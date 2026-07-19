@@ -133,7 +133,39 @@ defmodule Gralkor.CaptureBufferTest do
   end
 
   describe "ex-capture-buffer > append_lens/6 when turns in one session select different Lenses" do
-    test "each turn remains Lens-associated while turns_for/1 preserves session append order" do
+    test "then each turn remains associated with its selected Lens" do
+      observation = [Message.new("user", "an observation")]
+      decision = [Message.new("user", "a decision")]
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 "session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 observation
+               )
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 "session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "decisions",
+                 decision
+               )
+
+      assert :ok = CaptureBuffer.flush_and_await("session", 1_000)
+
+      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "observations",
+                      [^observation]}
+
+      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "decisions", [^decision]}
+    end
+
+    test "and turns_for/1 returns every turn in append order across Lenses" do
       observation = [Message.new("user", "an observation")]
       decision = [Message.new("user", "a decision")]
 
@@ -158,6 +190,33 @@ defmodule Gralkor.CaptureBufferTest do
                )
 
       assert [^observation, ^decision] = CaptureBuffer.turns_for("session")
+    end
+  end
+
+  describe "ex-capture-buffer > append_lens/6 when the session is flushed" do
+    test "then the Lens flush callback receives one batch per Lens containing only that Lens's turns" do
+      observation = [Message.new("user", "an observation")]
+      decision = [Message.new("user", "a decision")]
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 "session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 observation
+               )
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 "session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "decisions",
+                 decision
+               )
 
       assert :ok = CaptureBuffer.flush_and_await("session", 1_000)
 
