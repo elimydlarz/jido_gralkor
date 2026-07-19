@@ -453,4 +453,60 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                Gralkor.Lens.Storage.InMemory.episodes(:global)
     end
   end
+
+  describe "when a caller searches a non-empty selection of operator-local Lenses and the reserved `global` target" do
+    test "then each selected operator-local Lens is searched only for the requesting operator" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "published-observations",
+          ontology: ObservationOntology,
+          scope: :global,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      for {operator_id, lens, content} <- [
+            {"operator-one", "observations", "operator-one observation"},
+            {"operator-one", "decisions", "operator-one decision"},
+            {"operator-one", "published-observations", "public observation"},
+            {"operator-two", "observations", "operator-two observation"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: operator_id,
+                   lens: lens,
+                   content: content,
+                   source_description: "test source"
+                 })
+      end
+
+      assert {:ok, results} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "observation or decision",
+                 targets: ["observations", "decisions", "global"]
+               })
+
+      assert results == [
+               "operator-one observation",
+               "operator-one decision",
+               "public observation"
+             ]
+    end
+  end
 end
