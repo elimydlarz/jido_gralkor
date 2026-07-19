@@ -423,7 +423,7 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   defp do_flush_lenses(entry, callback, retries) when is_function(callback, 5) do
-    Enum.reduce_while(entry.lens_order, :ok, fn lens, :ok ->
+    Enum.reduce(entry.lens_order, :ok, fn lens, first_result ->
       turns = Map.fetch!(entry.batches, lens)
 
       case do_flush(
@@ -435,8 +435,9 @@ defmodule Gralkor.CaptureBuffer do
              callback,
              retries
            ) do
-        :ok -> {:cont, :ok}
-        {:error, _reason} = error -> {:halt, error}
+        :ok -> first_result
+        {:error, _reason} = error when first_result == :ok -> error
+        {:error, _reason} -> first_result
       end
     end)
   end
