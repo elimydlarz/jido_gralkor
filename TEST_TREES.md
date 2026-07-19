@@ -1207,79 +1207,49 @@ JidoGralkor.Canonical.to_messages/3 (src: lib/jido_gralkor/canonical.ex; unit: t
 
 ```
 JidoGralkor.Actions.MemorySearch (src: lib/jido_gralkor/actions/memory_search.ex; unit: test/jido_gralkor/actions/memory_search_test.exs)
-  when invoked with a non-blank query and session_id in context
-    when context contains non-empty search_targets
-      then Gralkor.Client.search/1 is called for the operator, query, and selected Lens targets and its results are joined
-    when context has no search_targets
-      then group_id is derived from context.agent_id and legacy Gralkor.Client.impl().recall/4 is called with that group_id, agent name, session_id, and query
-  when invoked with a blank or missing query
-    then the client is not called and the action returns {:ok, %{result: <no-query non-result message>}}
-    and a Logger.warning is emitted (defensive against forced-tool-call paths where the LLM had nothing meaningful to search for)
-  when invoked without a session_id (or with a blank one) in context
-    then the client is not called and the action returns {:ok, %{result: <no-session non-result message>}}
-    and a Logger.warning is emitted naming the agent id and pointing at the upstream
-      jido_ai fix (susu JIDO_CHANGE_SUGGESTIONS.md §2)
-  when the client returns {:ok, memory_block}
-    then the action returns {:ok, %{result: memory_block}}
-  when the client returns {:error, reason}
-    then the action returns {:error, reason} (propagated). Our actual error reasons
-      (atoms, `{atom, binary}` tuples) flow through jido_ai's
-      `Jido.AI.Signal.Helpers.normalize_error` + `Jason.encode!` cleanly. The shape
-      invariant is pinned by `test/jido_gralkor/actions/error_encoder_compat_test.exs`.
+  when the client returns {:ok, memory_block} the result wraps the block
+  when the client errors the action propagates {:error, reason}
+  passes sanitized group_id, agent_name, and session_id from context to recall
+  when context contains non-empty search_targets then Gralkor.Client.search/1 is called for the operator, query, and selected Lens targets and its results are joined
+  when a Lens search returns {:error, reason} the action propagates {:error, reason}
+  when the query is blank or missing (defensive against forced-tool-call paths)
+    returns an explicit no-query non-result, does not call the client, and logs a warning
+    whitespace-only query is treated as blank
+    a missing query is treated as blank
+  when session_id is absent from context (first query before a thread is committed)
+    returns an explicit non-result message, does not call the client, and logs a warning
+    same when session_id is blank
 ```
 
 ```
 JidoGralkor.Actions.MemoryAdd (src: lib/jido_gralkor/actions/memory_add.ex; unit: test/jido_gralkor/actions/memory_add_test.exs)
-  then source_description is a required tool parameter (alongside content) — the LLM must say where each stored insight came from, so no context-less memories land in the graph
-  when invoked
-    then the action returns {:ok, %{result: "Ingesting."}} without waiting on the client
-    when context selects a Lens
-      then Gralkor.Client.ingest/1 is called in a background Task with the operator, Lens, content, and source description
-    when context has no Lens
-      then the legacy client's memory_add is called in a background Task with the sanitized group_id, content, and source_description
-  if the background Task's client call fails
-    then the failure is logged (best-effort storage)
+  source_description is a required tool parameter alongside content
+  returns immediately without waiting on the client
+  spawns a background Task that calls the client with sanitized group_id, content, and source_description
+  when context selects a Lens then Gralkor.Client.ingest/1 is called in a background Task with the operator, Lens, content, and source description
+  if the background Task's client call fails, the failure is logged
+  if a Lens ingestion process fails, the background Task logs the failure
 ```
 
 ```
 JidoGralkor.Actions.MemoryBuildIndices (src: lib/jido_gralkor/actions/memory_build_indices.ex; unit: test/jido_gralkor/actions/memory_build_indices_test.exs)
-  then the action's description tells the LLM DO NOT CALL unless the user has explicitly asked to rebuild Gralkor's graph indices (operator-maintenance action)
-  when invoked
-    then Gralkor.Client.impl().build_indices/0 is called (whole-graph, no arguments)
-    when the client returns {:ok, %{status: status}}
-      then the action result reports success with the status string
-    when the client returns {:error, reason}
-      then the action returns {:error, reason} (propagated; same encoder-safe
-        shape invariant as MemorySearch — see
-        `test/jido_gralkor/actions/error_encoder_compat_test.exs`)
+  the action description tells the LLM DO NOT CALL unless asked
+  when the client returns {:ok, %{status: status}}, the action result reports success
+  when the client returns {:error, reason}, the error is propagated
 ```
 
 ```
 JidoGralkor.Actions.MemoryBuildCommunities (src: lib/jido_gralkor/actions/memory_build_communities.ex; unit: test/jido_gralkor/actions/memory_build_communities_test.exs)
-  then the action's description tells the LLM DO NOT CALL unless the user has explicitly asked to build Gralkor communities (expensive operator-maintenance action)
-  when invoked
-    then group_id is derived from context.agent_id via Gralkor.Client.sanitize_group_id/1
-    then Gralkor.Client.impl().build_communities/1 is called with that group_id
-    when the client returns {:ok, %{communities: c, edges: e}}
-      then the action result reports the community and edge counts
-    when the client returns {:error, reason}
-      then the action returns {:error, reason} (propagated; same encoder-safe
-        shape invariant as MemorySearch — see
-        `test/jido_gralkor/actions/error_encoder_compat_test.exs`)
+  the action description tells the LLM DO NOT CALL unless asked
+  passes sanitized group_id from context.agent_id to the client
+  when the client returns {:ok, %{communities: communities, edges: edges}}, the action result reports both counts
+  when the client returns {:error, reason}, the error is propagated
 ```
 
 ```
 JidoGralkor.Actions error-encoder compat (unit: test/jido_gralkor/actions/error_encoder_compat_test.exs)
   for every error reason any JidoGralkor.Actions.* module is allowed to produce today
-    (atoms, `{atom, binary}` tuples, bare binaries — never an exception struct)
-    then `Jido.AI.Signal.Helpers.normalize_error/4` returns a plain map (not a struct)
-    and `Jason.encode!/1` succeeds on that envelope (no `Protocol.UndefinedError`)
-  rationale: pins a latent jido_ai 2.1.0 encoder bug where `normalize_error`'s
-    `%{message: …}` clause did `Map.drop` on the struct, leaving `__struct__` in
-    `:details` so `Jason.encode!` crashed. Fixed upstream on `main` in commit
-    `d60699c0` (refactor of `Jido.AI.Error.normalize/4`); the test stays valuable
-    as a regression guard on our own error shapes until that fix is published and
-    pinned, after which it can be simplified or removed (see jido_gralkor CLAUDE.md).
+    normalization returns a plain map and Jason encoding succeeds
 ```
 
 ## Functional Journey
