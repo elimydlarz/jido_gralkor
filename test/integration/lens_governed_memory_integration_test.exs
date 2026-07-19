@@ -1294,4 +1294,48 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert generalisation_store.lens.scope == :global
     end
   end
+
+  describe "if a Lens's ingestion process fails" do
+    test "then ingestion returns that failure to the caller" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: FailingIngestion
+        ]
+      ])
+
+      assert {:error, :rejected} =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "observations",
+                 content: "Do not store this.",
+                 source_description: "test"
+               })
+    end
+
+    test "and no implicit fallback write bypasses the selected process" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: FailingIngestion
+        ]
+      ])
+
+      assert {:error, :rejected} =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "observations",
+                 content: "Do not store this.",
+                 source_description: "test"
+               })
+
+      refute_receive {:add_episode, _, _, _}
+    end
+  end
 end
