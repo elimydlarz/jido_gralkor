@@ -436,6 +436,8 @@ ex-capture (src: lib/gralkor/client/native.ex#capture; unit: test/gralkor/client
       then group_id is sanitized
       and the configured global ontology (Gralkor.Config.ontology/0) is resolved
       and Gralkor.CaptureBuffer.append/6 is invoked with the sanitized group_id, the agent_name, the user_name, the resolved ontology, and the messages
+    when capture/6 is called with a registered Lens name
+      then Gralkor.CaptureBuffer.append_lens/6 receives the unsanitized operator id, names, Lens, and messages
   if session_id is missing or blank
     then raises ArgumentError
   if agent_name is missing or blank
