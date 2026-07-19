@@ -1099,6 +1099,7 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
     the user_name read from agent.state[:user_name] is forwarded to capture
     if agent.state[:user_name] is missing then capture raises ArgumentError
     if agent.state[:user_name] is blank then capture raises ArgumentError
+    first-turn completion with events and no thread committed skips capture and logs a warning
   when an agent turn completes, when the plugin is Lens-aware
     then capture receives the selected Lens and optional additional generalising Lens
   when an agent turn fails
