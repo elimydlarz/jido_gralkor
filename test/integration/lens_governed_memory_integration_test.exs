@@ -739,5 +739,77 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                       },
                       %{lens: %{name: "observations"}}}
     end
+
+    test "and memory search uses the configured search targets" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "published",
+          ontology: ObservationOntology,
+          scope: :global,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      for {lens, content} <- [
+            {"observations", "selected observation"},
+            {"decisions", "unselected decision"},
+            {"published", "selected public memory"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: content,
+                   source_description: "test"
+                 })
+      end
+
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{},
+                 agent_name: "Susu",
+                 default_lens: "observations",
+                 search_targets: ["observations", "global"]
+               )
+
+      signal = %Jido.Signal{
+        id: "signal-two",
+        source: "/test",
+        type: "ai.react.query",
+        data: %{query: "memory"}
+      }
+
+      agent = %{
+        id: "operator-one",
+        state: %{__memory__: plugin_state, __thread__: %{id: "session-one"}}
+      }
+
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
+               Plugin.handle_signal(signal, %{agent: agent})
+
+      assert {:ok, %{result: result}} =
+               JidoGralkor.Actions.MemorySearch.run(
+                 %{query: "memory"},
+                 Map.put(tool_context, :agent_id, agent.id)
+               )
+
+      assert result =~ "selected observation"
+      assert result =~ "selected public memory"
+      refute result =~ "unselected decision"
+    end
   end
 end
