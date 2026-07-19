@@ -165,4 +165,36 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                Graphiti.search(store, "launch window", 7, search_fn: search_fn)
     end
   end
+
+  describe "when a global Lens store adds an episode" do
+    test "then graph add receives the fixed global destination" do
+      store = %Store{
+        operator_id: "operator-one",
+        lens: %Lens{
+          name: "published-observations",
+          ontology: Strict,
+          scope: :global,
+          ingestion: String
+        }
+      }
+
+      test_pid = self()
+
+      add_episode_fn = fn destination, content, source_description, ontology, opts ->
+        send(
+          test_pid,
+          {:graph_add, destination, content, source_description, ontology, opts}
+        )
+
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.add_episode(store, "public fact", "publication",
+                 add_episode_fn: add_episode_fn
+               )
+
+      assert_receive {:graph_add, "global", _, _, _, _}
+    end
+  end
 end
