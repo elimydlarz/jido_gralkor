@@ -72,6 +72,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     Process.register(self(), :lens_governed_memory_integration)
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
+    previous_client = Application.get_env(:jido_gralkor, :client)
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
@@ -91,6 +92,11 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       case previous_storage do
         nil -> Application.delete_env(:jido_gralkor, :lens_storage)
         storage -> Application.put_env(:jido_gralkor, :lens_storage, storage)
+      end
+
+      case previous_client do
+        nil -> Application.delete_env(:jido_gralkor, :client)
+        client -> Application.put_env(:jido_gralkor, :client, client)
       end
     end)
 
@@ -879,6 +885,107 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
           search_targets: ["missing"]
         )
       end
+    end
+  end
+
+  describe "when turns in one session select different Lenses" do
+    test "then each Lens receives only the turns selected for it" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: RecordingIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: RecordingIngestion
+        ]
+      ])
+
+      lens_flush = fn operator_id, agent_name, user_name, lens, turns ->
+        transcript = Gralkor.Distill.format_transcript(turns, agent_name, user_name)
+
+        Client.ingest(%Ingest{
+          operator_id: operator_id,
+          lens: lens,
+          content: transcript,
+          source_description: "captured"
+        })
+      end
+
+      start_supervised!(
+        {Gralkor.CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: lens_flush,
+         retries: []}
+      )
+
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{},
+                 agent_name: "Susu",
+                 default_lens: "observations",
+                 search_targets: ["observations", "decisions"]
+               )
+
+      requests = %{
+        "request-one" => %{query: "The launch moved.", status: :pending, result: nil},
+        "request-two" => %{query: "We chose Friday.", status: :pending, result: nil}
+      }
+
+      traces = %{
+        "request-one" => %{events: [%{kind: :llm_completed, data: %{}}]},
+        "request-two" => %{events: [%{kind: :llm_completed, data: %{}}]}
+      }
+
+      agent = %{
+        id: "operator-one",
+        state: %{
+          __memory__: plugin_state,
+          __thread__: %{id: "session-one"},
+          __strategy__: %{request_traces: traces},
+          requests: requests,
+          user_name: "Eli"
+        }
+      }
+
+      for {request_id, result, lens} <- [
+            {"request-one", "I noted that.", "observations"},
+            {"request-two", "Decision recorded.", "decisions"}
+          ] do
+        signal = %Jido.Signal{
+          id: "signal-#{request_id}",
+          source: "/test",
+          type: "ai.request.completed",
+          data: %{
+            request_id: request_id,
+            result: result,
+            tool_context: %{lens: lens}
+          }
+        }
+
+        assert {:ok, :continue} = Plugin.handle_signal(signal, %{agent: agent})
+      end
+
+      assert :ok = Gralkor.Client.Native.flush_and_await("session-one", 1_000)
+
+      assert_receive {:ingested,
+                      %Ingest{lens: "observations", content: observation_transcript},
+                      %{lens: %{name: "observations"}}}
+
+      assert observation_transcript =~ "The launch moved."
+      refute observation_transcript =~ "We chose Friday."
+
+      assert_receive {:ingested,
+                      %Ingest{lens: "decisions", content: decision_transcript},
+                      %{lens: %{name: "decisions"}}}
+
+      assert decision_transcript =~ "We chose Friday."
+      refute decision_transcript =~ "The launch moved."
     end
   end
 end
