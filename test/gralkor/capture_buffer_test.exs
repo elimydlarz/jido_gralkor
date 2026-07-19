@@ -225,7 +225,7 @@ defmodule Gralkor.CaptureBufferTest do
                  turn
                )
 
-      assert {:error, :primary_failed} = CaptureBuffer.flush_and_await("session", 1_000)
+      assert {:error, :exhausted} = CaptureBuffer.flush_and_await("session", 1_000)
       assert_receive {:lens_attempted, "observations", [^turn]}
       assert_receive {:lens_attempted, "generalisations", [^turn]}
     end
