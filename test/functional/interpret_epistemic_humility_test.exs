@@ -72,7 +72,7 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
         )
 
       assert [result] = results
-      assert result =~ "Eli prefers aisle seats on overnight flights."
+      assert result =~ "Eli prefers aisle seats on overnight flights"
 
       reason = relevance_reason(result)
 
