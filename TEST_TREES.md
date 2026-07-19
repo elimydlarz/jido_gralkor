@@ -187,6 +187,21 @@ ex-interpret (src: lib/gralkor/interpret.ex; unit: test/gralkor/interpret_test.e
     if the LLM response cannot be parsed against the structured-output schema (truncation, schema mismatch)
       then raises Gralkor.InterpretParseFailed (a distinct exception; no partial list is returned)
 
+interpret-epistemic-humility (functional: test/functional/interpret_epistemic_humility_test.exs)
+  prerequisites
+    given OPENAI_API_KEY is loaded from .env by test/test_helper.exs and the real OpenAI gpt-5-nano model is used through ReqLLM
+    if OPENAI_API_KEY is absent or blank
+      then the suite fails before making a model call
+  when relevant memory contains accounts from sources with different apparent veracity
+    then every account needed to answer the query is retained with its source wording intact
+    and the interpretation does not rank source reliability or decide which account is true
+  when relevant memory contains conflicting accounts
+    then the conflicting accounts are surfaced together rather than resolved into one asserted fact
+  when a relevant memory fact carries no available source context
+    then it is returned with a concise relevance reason and no generic warning about proof, confidence, verification, or reliability
+  when sourced memory contains both relevant and irrelevant facts
+    then irrelevant facts are omitted while the relevant fact retains its natural source context
+
 ex-format-fact (src: lib/gralkor/format.ex; unit: test/gralkor/format_test.exs)
   Gralkor.Format.format_fact/1 takes a map with :fact (required) and optional :created_at, :valid_at, :invalid_at, :expired_at timestamp strings
     then returns "- {fact}" with each present timestamp appended in parentheses in this order: "(created …)", "(valid from …)", "(invalid since …)", "(expired …)"
