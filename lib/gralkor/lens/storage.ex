@@ -9,5 +9,4 @@ defmodule Gralkor.Lens.Storage do
   @callback remove_episode(Store.t(), String.t()) :: :ok | {:error, term()}
   @callback search(Store.t(), String.t(), pos_integer()) ::
               {:ok, [String.t()]} | {:error, term()}
-
 end
