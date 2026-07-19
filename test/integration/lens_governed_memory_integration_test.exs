@@ -402,5 +402,30 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  targets: ["global"]
                })
     end
+
+    test "and the episode records the name of the Lens that ingested it" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "published-observations",
+          ontology: ObservationOntology,
+          scope: :global,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "published-observations",
+                 content: "The public launch window moved to Friday.",
+                 source_description: "public project update"
+               })
+
+      assert [%{content: "The public launch window moved to Friday.", lens: "published-observations"}] =
+               Gralkor.Lens.Storage.InMemory.episodes(:global)
+    end
   end
 end
