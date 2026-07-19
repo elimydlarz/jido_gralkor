@@ -1150,45 +1150,34 @@ JidoGralkor.Lifecycle (integration) (integration: test/integration/lifecycle_int
 ## JidoGralkor ContextRotator
 
 ```
-JidoGralkor.ContextRotator.compute_seed/3 (src: lib/jido_gralkor/context_rotator.ex; unit: test/jido_gralkor/context_rotator_test.exs)
-
-  when called with pre-flush entries, the same entries as current, and a positive keep_last_n smaller than the entry count
-    then returns the last keep_last_n pre-flush entries
-  when called with keep_last_n: 0 and no in-flight entries
-    then returns []
-  when current contains entries with seq beyond the max pre-flush seq (in-flight turns)
-    then those entries are preserved in the seed regardless of keep_last_n
-  when both keep_last_n entries and in-flight entries are present
-    then keep_last_n entries come before in-flight entries in the seed
-  when pre-flush entries is empty and current has entries (any in-flight)
-    then the seed is just the in-flight entries
-  when keep_last_n exceeds the pre-flush length
-    then returns all pre-flush entries (plus any in-flight)
+JidoGralkor.ContextRotator (src: lib/jido_gralkor/context_rotator.ex; unit: test/jido_gralkor/context_rotator_test.exs)
+  compute_seed/3
+    with no in-flight entries, returns the last keep_last_n pre-flush entries
+    with keep_last_n: 0 and no in-flight entries, returns []
+    with in-flight entries (seq beyond max pre-flush seq), preserves them regardless of keep_last_n
+    keep_last_n entries come BEFORE in-flight entries in the seed
+    with empty pre-flush entries, returns just the in-flight entries
+    with keep_last_n > pre-flush length, returns all pre-flush entries (plus any in-flight)
 ```
 
 ```
 JidoGralkor.ContextRotator (src: lib/jido_gralkor/context_rotator.ex; integration: test/integration/context_rotator_integration_test.exs)
 
-The test runs the AgentServer against `Gralkor.Client.InMemory`.
-
-  while a thread is committed
-    when rotate_now/2 is called and the flush returns :ok
-      then the agent's active session id changes
-      and the agent process is still running
-      and InMemory records one flush_and_await for the pre-rotation session id and the configured flush timeout
-    when rotate_now/2 is called with keep_last_n > 0 and the pre-rotation thread has more entries than keep_last_n
-      then the rotated thread is seeded with the most recent keep_last_n entries
-      and everything before them is dropped from the in-memory context
-    when rotate_now/2 is called with keep_last_n: 0 and every pre-rotation entry was in the flushed set (no in-flight)
-      then the rotated thread starts empty
-    when rotate_now/2 is called and the flush fails
-      then the error is propagated as {:error, reason}
-      and the active session id is unchanged
-      and the agent process is still running
-  while no thread is committed
-    when rotate_now/2 is called
-      then it returns :ok without invoking the flush
-      and the agent process is still running
+  while a thread is committed, when rotate_now/2 is called and the flush returns :ok
+    then the agent's active session id changes and the agent process is still running
+    then InMemory records one flush_and_await for the pre-rotation session id and the configured flush timeout
+  while no thread is committed, when rotate_now/2 is called
+    then it returns :ok without invoking the flush and the agent process is still running
+  while a thread is committed, when rotate_now/2 is called and the flush fails
+    then the error is propagated as {:error, reason} and the active session id is unchanged and the agent process is still running
+  while a thread is committed, when rotate_now/2 is called with keep_last_n > 0 and the thread has more entries than keep_last_n
+    then the rotated thread is seeded with the most recent keep_last_n entries, dropping everything before them
+  while a thread is committed, when rotate_now/2 is called with keep_last_n: 0 and every pre-rotation entry was in the flushed set (no in-flight)
+    then the rotated thread starts empty
+  while a thread is committed, when rotate_now/2 is called without options
+    then the default flush timeout is used and the rotated thread retains the most recent four entries
+  while a thread is committed, when an entry lands during the flush
+    then the rotated thread retains the configured pre-flush tail followed by the in-flight entry
 ```
 
 ## JidoGralkor Canonical
