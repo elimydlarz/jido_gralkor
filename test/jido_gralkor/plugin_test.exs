@@ -8,6 +8,11 @@ defmodule JidoGralkor.PluginTest do
   alias Jido.Signal
   alias JidoGralkor.Plugin
 
+  setup_all do
+    {:ok, _applications} = Application.ensure_all_started(:jido_signal)
+    :ok
+  end
+
   setup do
     InMemory.reset()
     :ok
