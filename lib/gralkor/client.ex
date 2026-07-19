@@ -32,6 +32,7 @@ defmodule Gralkor.Client do
   alias Gralkor.Ingest
   alias Gralkor.Lens
   alias Gralkor.Lens.Store
+  alias Gralkor.Search
 
   @callback recall(group_id(), agent_name(), session_id() | nil, query :: String.t()) ::
               {:ok, String.t()} | {:error, term()}
@@ -75,6 +76,12 @@ defmodule Gralkor.Client do
     lens = lens!(lens_name)
     store = %Store{operator_id: request.operator_id, lens: lens}
     lens.ingestion.ingest(request, store)
+  end
+
+  @spec search(Search.t()) :: {:ok, [String.t()]} | {:error, term()}
+  def search(%Search{operator_id: operator_id, query: query, targets: [target], max_results: max_results}) do
+    lens = lens!(target)
+    Store.search(%Store{operator_id: operator_id, lens: lens}, query, max_results)
   end
 
   @spec lens!(String.t()) :: Lens.t()

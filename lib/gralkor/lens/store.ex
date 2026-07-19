@@ -16,6 +16,11 @@ defmodule Gralkor.Lens.Store do
     storage().add_episode(store, content, source_description)
   end
 
+  @spec search(t(), String.t(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}
+  def search(%__MODULE__{} = store, query, max_results) do
+    storage().search(store, query, max_results)
+  end
+
   @spec storage() :: module()
   defp storage do
     Application.get_env(

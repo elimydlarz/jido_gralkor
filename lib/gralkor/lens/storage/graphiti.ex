@@ -36,6 +36,11 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     )
   end
 
+  @impl Gralkor.Lens.Storage
+  def search(_store, _query, _max_results) do
+    raise "NotImplemented: Lens search through Graphiti"
+  end
+
   @spec local_destination(String.t(), String.t()) :: String.t()
   defp local_destination(operator_id, lens_name) do
     "lens_" <> encode(operator_id) <> "_" <> encode(lens_name)
