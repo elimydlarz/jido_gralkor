@@ -17,11 +17,9 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     start_supervised!(
-      {CaptureBuffer,
-       flush_callback: callback,
-       lens_flush_callback: callback,
-       retries: []}
+      {CaptureBuffer, flush_callback: callback, lens_flush_callback: callback, retries: []}
     )
+
     :ok
   end
 
