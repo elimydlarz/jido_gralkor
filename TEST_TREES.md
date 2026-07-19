@@ -912,7 +912,7 @@ ex-timeouts (integration: test/gralkor/client/native_test.exs)
   in-process via PythonX — no transport class, no receive windows. Only two operations carry a
     deadline; everything else runs to completion or crashes the GenServer.
   per-operation deadline
-    Gralkor.Client.recall/3       12_000ms   (see ex-recall > recall deadline)
+    Gralkor.Client.recall/4       12_000ms   (see ex-recall > recall deadline)
     Gralkor.Client.memory_add/3   60_000ms   (graphiti entity/edge extraction)
   if either deadline is exceeded
     then in-flight PythonX work is cancelled (via the GraphitiPool worker)
@@ -1089,7 +1089,7 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
     when the plugin is Lens-aware
       then the selected Lens and search targets are planted with the agent name and optional session id
     when a thread has committed to agent state
-      then the thread's session_id and the configured agent_name are planted on the signal's tool_context so the `MemorySearch` ReAct tool can find them (no ontology is planted — writes resolve it from config); the plugin does not call `Gralkor.Client.recall/3` on its own (recall is the LLM's job — see `JidoGralkor.ReAct` and the consumer's `RequestTransformer` for how `memory_search` is forced on iteration 1)
+      then the thread's session_id and the configured agent_name are planted on the signal's tool_context so the `MemorySearch` ReAct tool can find them (no ontology is planted — writes resolve it from config); the plugin does not call `Gralkor.Client.recall/4` on its own (recall is the LLM's job — see `JidoGralkor.ReAct` and the consumer's `RequestTransformer` for how `memory_search` is forced on iteration 1)
     when the plugin uses implicit-default and no thread has committed yet (first query on a fresh agent — ReAct strategy's ThreadAgent.append runs inside @start, after plugin hooks)
       then the configured agent_name is planted on tool_context; no session_id is planted, and `MemorySearch` short-circuits with a non-result message on this turn
   every turn captured through the implicit-default pipeline is learned from at flush — there is no per-turn ERL flag (learning is unconditional;
@@ -1323,7 +1323,7 @@ jido-memory-journey (functional: test/functional/jido_memory_journey_test.exs)
     (no skip clause — missing config surfaces as a test failure, per the Fail-fast rule; the suite is opt-in via `mix test.functional`)
   round-trip
     given Gralkor.Client.memory_add/3 stores "Eli prefers concise explanations" under group "jido-test"
-      when Gralkor.Client.recall/3 is called with a fresh session_id and a related query
+      when Gralkor.Client.recall/4 is called with a fresh session_id and a related query
         then {:ok, block} is returned
         and block is a non-empty <gralkor-memory> block
         and the block references the stored content semantically (contains "concise" or similar)
@@ -1332,7 +1332,7 @@ jido-memory-journey (functional: test/functional/jido_memory_journey_test.exs)
       when Gralkor.Client.flush/1 is called with the session_id
         then :ok is returned before the episode is ingested
         and the episode eventually lands in the bound group_id
-        and a follow-up Gralkor.Client.recall/3 surfaces the turn content
+        and a follow-up Gralkor.Client.recall/4 surfaces the turn content
   ERL round-trip
     given a captured turn (capture/5) whose reasoning solved a problem
       when Gralkor.Client.flush/1 is called and the flush callback is wired with learn_fn
@@ -1343,18 +1343,18 @@ jido-memory-journey (functional: test/functional/jido_memory_journey_test.exs)
     given a pending turn in Gralkor.CaptureBuffer
       when Gralkor.Client.flush_and_await/2 is called with the session_id and a generous timeout
         then :ok is returned only after the episode is queryable
-        and an immediate follow-up Gralkor.Client.recall/3 surfaces the turn content
+        and an immediate follow-up Gralkor.Client.recall/4 surfaces the turn content
   graceful-shutdown flush
     given a pending turn in Gralkor.CaptureBuffer (no idle elapsed)
       when the supervision tree stops (Application.stop or supervisor shutdown)
         then Gralkor.CaptureBuffer.terminate/2 awaits flush_all/0
         and the episode lands before the BEAM exits
       when the application is started again
-        then a follow-up Gralkor.Client.recall/3 surfaces the previously-flushed episode
+        then a follow-up Gralkor.Client.recall/4 surfaces the previously-flushed episode
   runtime crash recovery
     when Gralkor.Python (the PythonX runtime owner) crashes
       then the supervisor restarts it
-      and the next Gralkor.Client.recall/3 call returns {:ok, _} within the boot window
+      and the next Gralkor.Client.recall/4 call returns {:ok, _} within the boot window
 ```
 
 ```
@@ -1405,14 +1405,14 @@ ex-remote-falkordb-journey (functional: test/functional/remote_falkordb_journey_
       and Gralkor.GraphitiPool constructs falkordb.asyncio.FalkorDB(host:, port:, username:, password:, ssl:) — no `redislite/bin/redis-server` grandchild appears in the BEAM's process tree at any point
   round-trip
     given Gralkor.Client.memory_add/3 stores a fact under a fresh group_id
-      when Gralkor.Client.recall/3 is called with a fresh session_id and a related query
+      when Gralkor.Client.recall/4 is called with a fresh session_id and a related query
         then {:ok, block} is returned
         and the block references the stored content semantically
   flush_and_await (remote)
     given a pending turn in Gralkor.CaptureBuffer
       when Gralkor.Client.flush_and_await/2 is called with the session_id
         then :ok is returned only after the episode is queryable in the remote FalkorDB
-        and an immediate follow-up Gralkor.Client.recall/3 surfaces the turn content
+        and an immediate follow-up Gralkor.Client.recall/4 surfaces the turn content
   shutdown
     when the application stops
       then Gralkor.CaptureBuffer.terminate/2 awaits flush_all/0 and the AsyncFalkorDB driver closes cleanly
