@@ -1140,13 +1140,10 @@ JidoGralkor.Lifecycle (src: lib/jido_gralkor/lifecycle.ex; unit: test/jido_gralk
 
 ```
 JidoGralkor.Lifecycle (integration) (integration: test/integration/lifecycle_integration_test.exs)
-  while the AgentServer is wired with JidoGralkor.Lifecycle
-    while a thread is committed
-      when the AgentServer is stopped gracefully
-        then `Gralkor.Client.flush` is invoked once with the thread id
-    while no thread is committed
-      when the AgentServer is stopped gracefully
-        then `Gralkor.Client.flush` is not invoked
+  while a thread is committed, when the AgentServer is stopped gracefully
+    then `Gralkor.Client.flush` is invoked once with the thread id
+  while no thread is committed, when the AgentServer is stopped gracefully
+    then `Gralkor.Client.flush` is not invoked
 ```
 
 ## JidoGralkor ContextRotator
