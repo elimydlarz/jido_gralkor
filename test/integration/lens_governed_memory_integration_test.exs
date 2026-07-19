@@ -73,6 +73,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
     previous_client = Application.get_env(:jido_gralkor, :client)
+    previous_ontology = Application.get_env(:jido_gralkor, :ontology)
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
@@ -97,6 +98,11 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       case previous_client do
         nil -> Application.delete_env(:jido_gralkor, :client)
         client -> Application.put_env(:jido_gralkor, :client, client)
+      end
+
+      case previous_ontology do
+        nil -> Application.delete_env(:jido_gralkor, :ontology)
+        ontology -> Application.put_env(:jido_gralkor, :ontology, ontology)
       end
     end)
 
@@ -986,6 +992,32 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
 
       assert decision_transcript =~ "We chose Friday."
       refute decision_transcript =~ "The launch moved."
+    end
+  end
+
+  describe "where an application has not registered or selected a named Lens" do
+    test "then the implicit `default` Lens preserves the operator's existing memory partition" do
+      Application.delete_env(:jido_gralkor, :lenses)
+      Application.put_env(:jido_gralkor, :ontology, ObservationOntology)
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "default",
+                 content: "A compatible memory.",
+                 source_description: "legacy caller"
+               })
+
+      assert_receive {:add_episode,
+                      %Gralkor.Lens.Store{
+                        operator_id: "operator-one",
+                        lens: %Gralkor.Lens{
+                          name: "default",
+                          ontology: ObservationOntology,
+                          scope: :operator
+                        }
+                      }, "A compatible memory.", "legacy caller"}
     end
   end
 end
