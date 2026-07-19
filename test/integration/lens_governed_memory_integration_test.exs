@@ -5,6 +5,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
 
   alias Gralkor.Client
   alias Gralkor.Ingest
+  alias Gralkor.Search
   alias JidoGralkor.Plugin
 
   defmodule ObservationOntology do
@@ -265,6 +266,37 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       }
 
       assert {:error, :rejected} = Client.ingest(request)
+    end
+  end
+
+  describe "when an operator-local Lens adds an episode" do
+    test "then the episode is available only through that Lens for that operator" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "observations",
+                 content: "The launch window moved to Friday.",
+                 source_description: "project update"
+               })
+
+      assert {:ok, ["The launch window moved to Friday."]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "launch window",
+                 targets: ["observations"]
+               })
     end
   end
 end
