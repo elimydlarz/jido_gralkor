@@ -330,5 +330,40 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  targets: ["observations"]
                })
     end
+
+    test "and another operator-local Lens belonging to the same operator cannot observe it" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "observations",
+                 content: "The launch window moved to Friday.",
+                 source_description: "project update"
+               })
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "launch window",
+                 targets: ["decisions"]
+               })
+    end
   end
 end
