@@ -250,19 +250,20 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   def handle_call({:flush, session_id}, _from, state) do
-    case Map.pop(state.entries, session_id) do
-      {nil, _entries} ->
-        Logger.info("[gralkor] flush — session:#{session_id} empty")
-        {:reply, :ok, state}
+    case Map.pop(state.lens_entries, session_id) do
+      {nil, _lens_entries} ->
+        flush_legacy(session_id, state)
 
-      {{group, agent, user, ontology, turns}, entries} ->
-        Logger.info("[gralkor] flush scheduled — session:#{session_id} turns:#{length(turns)}")
+      {entry, lens_entries} ->
+        Logger.info(
+          "[gralkor] flush scheduled — session:#{session_id} turns:#{length(entry.turns)}"
+        )
 
         Task.start(fn ->
-          do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
+          do_flush_lenses(entry, state.lens_flush_callback, state.retries)
         end)
 
-        {:reply, :ok, %{state | entries: entries}}
+        {:reply, :ok, %{state | lens_entries: lens_entries}}
     end
   end
 
@@ -292,6 +293,65 @@ defmodule Gralkor.CaptureBuffer do
           nil ->
             {:reply, {:error, :timeout}, state}
         end
+    end
+  end
+
+  def handle_call(:flush_all, _from, state) do
+    legacy_tasks =
+      for {_session_id, {group, agent, user, ontology, turns}} <- state.entries do
+        Task.async(fn ->
+          do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
+        end)
+      end
+
+    lens_tasks =
+      for {_session_id, entry} <- state.lens_entries do
+        Task.async(fn ->
+          do_flush_lenses(entry, state.lens_flush_callback, state.retries)
+        end)
+      end
+
+    Task.await_many(legacy_tasks ++ lens_tasks, :infinity)
+    {:reply, :ok, %{state | entries: %{}, lens_entries: %{}}}
+  end
+
+  @impl true
+  def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
+
+  def handle_info(msg, state) do
+    Logger.error("#{__MODULE__} received unexpected message in handle_info/2: #{inspect(msg)}")
+    {:noreply, state}
+  end
+
+  @impl true
+  def terminate(_reason, state) do
+    for {_session_id, {group, agent, user, ontology, turns}} <- state.entries do
+      do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
+    end
+
+    for {_session_id, entry} <- state.lens_entries do
+      do_flush_lenses(entry, state.lens_flush_callback, state.retries)
+    end
+
+    :ok
+  end
+
+  # ── Flush worker ────────────────────────────────────────────
+
+  defp flush_legacy(session_id, state) do
+    case Map.pop(state.entries, session_id) do
+      {nil, _entries} ->
+        Logger.info("[gralkor] flush — session:#{session_id} empty")
+        {:reply, :ok, state}
+
+      {{group, agent, user, ontology, turns}, entries} ->
+        Logger.info("[gralkor] flush scheduled — session:#{session_id} turns:#{length(turns)}")
+
+        Task.start(fn ->
+          do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
+        end)
+
+        {:reply, :ok, %{state | entries: entries}}
     end
   end
 
@@ -334,37 +394,6 @@ defmodule Gralkor.CaptureBuffer do
         end
     end
   end
-
-  def handle_call(:flush_all, _from, state) do
-    tasks =
-      for {_session_id, {group, agent, user, ontology, turns}} <- state.entries do
-        Task.async(fn ->
-          do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
-        end)
-      end
-
-    Task.await_many(tasks, :infinity)
-    {:reply, :ok, %{state | entries: %{}}}
-  end
-
-  @impl true
-  def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
-
-  def handle_info(msg, state) do
-    Logger.error("#{__MODULE__} received unexpected message in handle_info/2: #{inspect(msg)}")
-    {:noreply, state}
-  end
-
-  @impl true
-  def terminate(_reason, state) do
-    for {_session_id, {group, agent, user, ontology, turns}} <- state.entries do
-      do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
-    end
-
-    :ok
-  end
-
-  # ── Flush worker ────────────────────────────────────────────
 
   defp do_flush(group, agent, user, ontology, turns, cb, retries) do
     do_flush(
