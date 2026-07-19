@@ -10,6 +10,9 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   @type add_episode_fn ::
           (String.t(), String.t(), String.t(), module() | nil, keyword() ->
              :ok | {:error, term()})
+  @type search_fn ::
+          (String.t(), String.t(), pos_integer() ->
+             {:ok, [String.t()]} | {:error, term()})
 
   @impl true
   def add_episode(%Store{} = store, content, source_description) do
@@ -37,8 +40,20 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   end
 
   @impl Gralkor.Lens.Storage
-  def search(_store, _query, _max_results) do
-    raise "NotImplemented: Lens search through Graphiti"
+  def search(%Store{} = store, query, max_results) do
+    search(store, query, max_results, [])
+  end
+
+  @spec search(Store.t(), String.t(), pos_integer(), search_fn: search_fn()) ::
+          {:ok, [String.t()]} | {:error, term()}
+  def search(
+        %Store{operator_id: operator_id, lens: %Lens{scope: :operator} = lens},
+        query,
+        max_results,
+        opts
+      ) do
+    search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
+    search_fn.(local_destination(operator_id, lens.name), query, max_results)
   end
 
   @spec local_destination(String.t(), String.t()) :: String.t()
@@ -53,5 +68,14 @@ defmodule Gralkor.Lens.Storage.Graphiti do
           :ok | {:error, term()}
   defp graph_add(destination, content, source_description, ontology, graph_opts) do
     GraphitiPool.add_episode(destination, content, source_description, ontology, graph_opts)
+  end
+
+  @spec graph_search(String.t(), String.t(), pos_integer()) ::
+          {:ok, [String.t()]} | {:error, term()}
+  defp graph_search(destination, query, max_results) do
+    case GraphitiPool.search(destination, query, max_results) do
+      {:ok, facts} -> {:ok, Enum.map(facts, &Gralkor.Format.format_fact/1)}
+      {:error, _reason} = error -> error
+    end
   end
 end
