@@ -29,6 +29,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
   require Logger
 
   alias Gralkor.Client
+  alias Gralkor.Search
 
   @no_session_result "Memory search did not run: this conversation's session has not been established yet. This is a NON-RESULT, not an empty result — long-term memory was NOT queried. Do not claim you have no memory of prior interactions; either tell the user you cannot check memory right now, or answer without relying on prior context."
 
@@ -57,12 +58,27 @@ defmodule JidoGralkor.Actions.MemorySearch do
         {:ok, %{result: @no_session_result}}
 
       true ->
-        group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
-        agent_name = Map.fetch!(context, :agent_name)
+        case Map.get(context, :search_targets) do
+          [_target | _rest] = targets ->
+            request = %Search{
+              operator_id: Map.fetch!(context, :agent_id),
+              query: query,
+              targets: targets
+            }
 
-        case Client.impl().recall(group_id, agent_name, session_id, query) do
-          {:ok, memory_block} -> {:ok, %{result: memory_block}}
-          {:error, reason} -> {:error, reason}
+            case Client.search(request) do
+              {:ok, results} -> {:ok, %{result: Enum.join(results, "\n")}}
+              {:error, reason} -> {:error, reason}
+            end
+
+          _ ->
+            group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
+            agent_name = Map.fetch!(context, :agent_name)
+
+            case Client.impl().recall(group_id, agent_name, session_id, query) do
+              {:ok, memory_block} -> {:ok, %{result: memory_block}}
+              {:error, reason} -> {:error, reason}
+            end
         end
     end
   end
