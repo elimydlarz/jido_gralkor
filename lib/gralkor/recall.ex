@@ -61,6 +61,9 @@ defmodule Gralkor.Recall do
       end)
 
     case Task.yield(task, deadline_ms) || Task.shutdown(task, :brutal_kill) do
+      {:ok, {:error, reason}} ->
+        {:error, reason}
+
       {:ok, result} ->
         log_result(result)
 
@@ -112,7 +115,9 @@ defmodule Gralkor.Recall do
 
     case search_result do
       {:error, reason} ->
-        throw({:search_failed, reason})
+        shutdown_aux(gen_task)
+        shutdown_aux(learning_task)
+        {:error, reason}
 
       {:ok, facts} when is_list(facts) ->
         combined =
@@ -131,17 +136,10 @@ defmodule Gralkor.Recall do
           total_ms: System.monotonic_time(:millisecond) - t0
         }
     end
-  catch
-    {:search_failed, reason} ->
-      %{
-        block: wrap(@no_facts_body),
-        n_facts: 0,
-        search_ms: 0,
-        interpret_ms: 0,
-        total_ms: 0,
-        error: reason
-      }
   end
+
+  defp shutdown_aux(nil), do: :ok
+  defp shutdown_aux(task), do: Task.shutdown(task, :brutal_kill)
 
   defp await_aux(nil, _label), do: []
 
