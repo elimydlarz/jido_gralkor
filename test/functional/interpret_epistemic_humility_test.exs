@@ -63,6 +63,24 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
     end
   end
 
+  describe "interpret-epistemic-humility > when a relevant memory fact carries no available source context" do
+    test "it has a concise relevance reason without a generic epistemic warning" do
+      results =
+        interpret(
+          "Which seat should I book for Eli on an overnight flight?",
+          "- Eli prefers aisle seats on overnight flights."
+        )
+
+      assert [result] = results
+      assert result =~ "Eli prefers aisle seats on overnight flights."
+
+      reason = relevance_reason(result)
+
+      refute reason =~
+               ~r/\b(source|claim|proof|proven|confidence|uncertain|uncertainty|verify|verified|reliable|reliability)\b/i
+    end
+  end
+
   defp interpret(query, facts) do
     Interpret.interpret_facts(
       [Message.new("user", query)],
