@@ -68,7 +68,8 @@ defmodule JidoGralkor.Plugin do
         {:ok, %{agent_name: agent_name}}
 
       default_lens ->
-        lens = Client.lens!(default_lens)
+        registered_lens = Client.lens!(default_lens)
+        lens = %{registered_lens | scope: fetch_opt(opts, :scope) || registered_lens.scope}
 
         {:ok,
          %{
