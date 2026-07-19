@@ -1274,7 +1274,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     end
   end
 
-  describe "if Lens registration is invalid (blank, duplicate, reserved, or malformed)" do
+  describe "if Lens registration is invalid (blank, duplicate, reserved `default` or `global`, or malformed)" do
     test "then configuration resolution raises `ArgumentError` naming the invalid Lens before ingestion or search begins" do
       invalid_registries = [
         [
