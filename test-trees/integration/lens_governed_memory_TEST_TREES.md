@@ -38,6 +38,9 @@ when a mounted plugin has a configured default Lens and search targets
   and memory search uses the configured search targets
   and the plugin does not redefine the selected Lenses' ontology, scope, or ingestion process
 
+if a mounted plugin selects an unknown default Lens or invalid search target
+  then mounting fails before the plugin handles an agent signal
+
 where a turn supplies a registered Lens through plugin context
   then that Lens overrides the plugin's default Lens for ingestion during that turn
   and the application-owned definition of the selected Lens remains authoritative
@@ -45,7 +48,7 @@ where a turn supplies a registered Lens through plugin context
 when turns in one session select different Lenses
   then each Lens receives only the turns selected for it
   and no flushed episode combines turns governed by different ontologies or ingestion processes
-  and the session's complete turn order remains available as recall context
+  and before flush the session's complete turn order remains available as recall context
 
 where an application has not registered or selected a named Lens
   then the implicit `default` Lens preserves the operator's existing memory partition
