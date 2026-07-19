@@ -287,9 +287,9 @@ config :jido_gralkor, generalise_min_confidence: 0.5
 
 The older `Gralkor.Client.generalise/2` and `search_generalisations/3` APIs remain available for compatibility. Lens-based consumers should prefer the unified ingest/search boundary above.
 
-## Experiential learning (ERL) recall
+## Experiential learning (legacy default pipeline)
 
-Every captured turn is distilled into a flat `Gralkor.AgentLearning` record (`problem_kind`, `approach`, `success`, `lesson`) and written to the same `group_id` as the conversation — unconditionally at flush, via `add_episode` with the plugin's built-in `Learning` graphiti custom entity type (`Gralkor.LearningEntity`) merged onto the write's `entity_types`. graphiti's extractor then creates a `Learning`-labelled **node** carrying those attributes, and connects it to the domain entities it extracts from the same text. This works even with no consumer ontology configured. (For graphiti to mint the node, the `Learning` entity type declares a class description and optional attributes, per graphiti's custom-entity docs.)
+When the implicit `"default"` Lens uses the legacy capture pipeline, every captured turn is also distilled into a flat `Gralkor.AgentLearning` record (`problem_kind`, `approach`, `success`, `lesson`) and written to the same operator partition. A custom Lens ingestion process owns any equivalent learning behavior it needs.
 
 ### Unconditional learning search on every recall
 
@@ -332,11 +332,14 @@ The Jido glue:
 
 The embedded Gralkor adapter (under `lib/gralkor/`):
 
-- `Gralkor.Client` — behaviour, `sanitize_group_id/1`, `impl/0` app-env resolver.
+- `Gralkor.Client` — legacy adapter behaviour plus the public `ingest/1` and `search/1` Lens boundary.
 - `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, `GraphitiPool`, `Generalise`, and `req_llm`.
 - `Gralkor.Client.InMemory` — test twin.
+- `Gralkor.Lens`, `Gralkor.Ingest`, `Gralkor.Search` — consumer-owned Lens definitions and request values.
+- `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — the ingestion capability and its collision-safe local/shared-global Graphiti placement.
+- `Gralkor.Lens.Ingestion.Store` / `Generalise` — built-in straight-through and generalising ingestion processes.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
-- `Gralkor.Generalise` — hypothesise → evaluate → persist pipeline. On flush, reviews the distilled transcript, hypothesises cross-episode patterns via LLM, searches existing generalisations in a separate `:gen` graphiti partition to rule candidates in or out, and saves the strongest. Generalisations form a hierarchy (broadens / narrows) with deduplication.
+- `Gralkor.Generalise` — hypothesise → evaluate → persist pipeline used by the generalising Lens ingestion process and retained legacy API.
 - `Gralkor.Generalisation` — struct and wire format (`GEN|v1|{json}\ncontent`) for storing generalisations as graphiti episodes with controlled UUIDs (enabling update via re-extraction and delete via `remove_episode`).
 - `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Message`, `Gralkor.InterpretParseFailed`, `Gralkor.GeneralisationParseFailed` — the embedded pipelines (capture buffer, distill, interpret, recall, generalise) that drive Graphiti.
 
