@@ -676,5 +676,27 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  targets: ["global"]
                })
     end
+
+    test "and `global` is the only target that selects globally stored memory" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "published-observations",
+          ontology: ObservationOntology,
+          scope: :global,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      assert_raise ArgumentError, ~r/global/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "public",
+          targets: ["published-observations"]
+        })
+      end
+    end
   end
 end
