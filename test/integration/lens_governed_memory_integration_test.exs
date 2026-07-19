@@ -81,6 +81,8 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
     previous_client = Application.get_env(:jido_gralkor, :client)
     previous_ontology = Application.get_env(:jido_gralkor, :ontology)
+    previous_hypothesise = Application.get_env(:jido_gralkor, :generalise_hypothesise_fn)
+    previous_evaluate = Application.get_env(:jido_gralkor, :generalise_evaluate_fn)
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
@@ -110,6 +112,16 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       case previous_ontology do
         nil -> Application.delete_env(:jido_gralkor, :ontology)
         ontology -> Application.put_env(:jido_gralkor, :ontology, ontology)
+      end
+
+      case previous_hypothesise do
+        nil -> Application.delete_env(:jido_gralkor, :generalise_hypothesise_fn)
+        fun -> Application.put_env(:jido_gralkor, :generalise_hypothesise_fn, fun)
+      end
+
+      case previous_evaluate do
+        nil -> Application.delete_env(:jido_gralkor, :generalise_evaluate_fn)
+        fun -> Application.put_env(:jido_gralkor, :generalise_evaluate_fn, fun)
       end
     end)
 
@@ -1106,6 +1118,79 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
 
         refute_receive {:search, _, _, _}
       end
+    end
+  end
+
+  describe "when a transcript is submitted through Gralkor's generalising ingestion process" do
+    test "then hypotheses are evaluated against generalisations available through the selected Lens" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "generalisations",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: Gralkor.Lens.Ingestion.Generalise
+        ]
+      ])
+
+      lens = Client.lens!("generalisations")
+      store = %Gralkor.Lens.Store{operator_id: "operator-one", lens: lens}
+
+      existing = %Gralkor.Generalisation{
+        id: "existing-one",
+        content: "Eli sometimes chooses Friday.",
+        level: 0,
+        confidence: 0.6,
+        generalises: []
+      }
+
+      assert :ok =
+               Gralkor.Lens.Store.add(
+                 store,
+                 Gralkor.Generalisation.encode(existing),
+                 "generalisation"
+               )
+
+      Application.put_env(:jido_gralkor, :generalise_hypothesise_fn, fn _prompt ->
+        {:ok, [%{content: "Eli prefers Friday launches.", confidence: 0.9}]}
+      end)
+
+      test_pid = self()
+
+      Application.put_env(:jido_gralkor, :generalise_evaluate_fn, fn prompt ->
+        send(test_pid, {:evaluate_prompt, prompt})
+
+        {:ok,
+         [
+           %{
+             action: "contradicts",
+             hypothesis_index: 0,
+             confidence: 0.9,
+             content: "Eli prefers Friday launches.",
+             existing_id: "existing-one"
+           }
+         ]}
+      end)
+
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "generalisations",
+                 content: "Eli: Let's launch on Friday.",
+                 source_description: "captured"
+               })
+
+      assert_receive {:evaluate_prompt, prompt}
+      assert prompt =~ "Eli sometimes chooses Friday."
+
+      assert [%{content: encoded}] =
+               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "generalisations"})
+
+      assert {:ok, resulting, _plain} = Gralkor.Generalisation.decode(encoded)
+      assert resulting.content == "Eli prefers Friday launches."
+      assert resulting.generalises == ["existing-one"]
     end
   end
 end
