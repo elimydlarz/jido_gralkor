@@ -100,8 +100,15 @@ defmodule Gralkor.Client do
   end
 
   defp search_target(operator_id, target, query, max_results) do
+    lens = lens!(target)
+
+    if lens.scope == :global do
+      raise ArgumentError,
+            "global Lens #{inspect(target)} is provenance; search the reserved \"global\" target"
+    end
+
     Store.search(
-      %Store{operator_id: operator_id, lens: lens!(target)},
+      %Store{operator_id: operator_id, lens: lens},
       query,
       max_results
     )
