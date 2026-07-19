@@ -1184,34 +1184,23 @@ JidoGralkor.ContextRotator (src: lib/jido_gralkor/context_rotator.ex; integratio
 
 ```
 JidoGralkor.Canonical.to_messages/3 (src: lib/jido_gralkor/canonical.ex; unit: test/jido_gralkor/canonical_test.exs)
-  when a :llm_completed event has a non-empty tool_calls list
-    then a behaviour message "thought: <text>" is emitted for it, preserving order
-  when a :llm_completed event has an empty tool_calls list
-    then no "thought:" behaviour is emitted for it (the text is the turn's answer, and in
-      a completed outcome will already be carried by the trailing assistant message)
-  when the outcome is {:completed, answer}
-    when user query, answer, and events are all empty
-      then returns []
-    then the user message content is the `user_query` as given (no envelope stripping — the
-      plugin's contract is that `:query` is the user's actual words; harness context lives in
-      the `RequestTransformer`, not the query)
-    when the events contain a :tool_completed event
-      then a behaviour message with "tool <name> → <result>" is emitted, preserving order
-    when the events contain an unknown :kind
-      then that event is ignored (telemetry-only signals don't become memory)
-    when the answer is empty
-      then no trailing assistant message is emitted
-    when the answer is present
-      then the final message is an assistant-role message with the trimmed answer
-    then messages are ordered user → behaviour(s) → assistant
-    when an LLM event carries Anthropic-style list-shaped content blocks
-      then the text blocks are concatenated with spaces into the rendered "thought: …" message
-  when the outcome is {:failed, error}
-    then a terminal behaviour message "request failed: <error>" is emitted in place of the
-      assistant message, so the failure is visible to downstream distillation rather than the
-      turn ending in silence (error rendered via the same formatter used for tool results)
-    then no assistant-role message is emitted
-    then messages are ordered user → behaviour(s from events) → "request failed: …"
+  to_messages/3 — completed turn
+    returns [] when query is empty, answer is empty, and there are no events
+    passes the user_query through to the user message content as given (no envelope stripping — the plugin's contract is that :query is the user's actual words)
+    emits a 'thought: …' behaviour message for :llm_completed events
+    emits a 'tool NAME → RESULT' behaviour message for :tool_completed events
+    preserves event order in the emitted behaviour messages
+    ignores events whose :kind is not memory-worthy
+    omits the assistant message when the completed answer is empty
+    trims a present assistant answer
+    orders messages user → behaviour(s) → assistant
+    handles list-shaped llm content (Anthropic-style blocks) by concatenating text parts
+  to_messages/3 — :llm_completed tool_calls discrimination
+    on a completed turn, a :llm_completed with empty tool_calls emits no 'thought:' behaviour
+  to_messages/3 — failed turn
+    emits a terminal 'request failed: …' behaviour message in place of the assistant answer
+    renders {:error, reason} error terms via the same formatter as tool results
+    keeps the user query and event trace ahead of the failure marker
 ```
 
 ## JidoGralkor ReAct Actions
