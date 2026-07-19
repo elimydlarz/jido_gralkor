@@ -284,9 +284,14 @@ defmodule Gralkor.CaptureBufferTest do
                  turn
                )
 
-      assert {:error, :exhausted} = CaptureBuffer.flush_and_await("session", 1_000)
+      log =
+        capture_log(fn ->
+          assert {:error, :exhausted} = CaptureBuffer.flush_and_await("session", 1_000)
+        end)
+
       assert_receive {:lens_attempted, "observations", [^turn]}
       assert_receive {:lens_attempted, "generalisations", [^turn]}
+      assert log =~ "outcome:error reason::exhausted"
     end
   end
 
@@ -410,10 +415,15 @@ defmodule Gralkor.CaptureBufferTest do
     test "returns {:error, :timeout} and the entry remains available to flush later" do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
-      assert {:error, :timeout} = CaptureBuffer.flush_and_await("s1", 50)
+      log =
+        capture_log(fn ->
+          assert {:error, :timeout} = CaptureBuffer.flush_and_await("s1", 50)
+        end)
+
       assert_receive :callback_started, 1_000
 
       assert [[%Message{content: "x"}]] = CaptureBuffer.turns_for("s1")
+      assert log =~ "flush_and_await timeout — session:s1"
     end
   end
 
