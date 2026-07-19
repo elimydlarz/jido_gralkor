@@ -66,5 +66,29 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert {:ok, mount} = Plugin.mount(%{}, opts)
       assert mount.default_lens == "observations"
     end
+
+    test "and every plugin mount observes the same application-owned Lens definition" do
+      first_opts = %{
+        agent_name: "Susu",
+        default_lens: "observations",
+        search_targets: ["observations"],
+        ontology: nil,
+        scope: :global,
+        ingestion: String
+      }
+
+      second_opts = %{
+        agent_name: "Momo",
+        default_lens: "observations",
+        search_targets: ["observations"]
+      }
+
+      assert {:ok, first_mount} = Plugin.mount(%{}, first_opts)
+      assert {:ok, second_mount} = Plugin.mount(%{}, second_opts)
+      assert first_mount.lens == second_mount.lens
+      assert first_mount.lens.ontology == ObservationOntology
+      assert first_mount.lens.scope == :operator
+      assert first_mount.lens.ingestion == RecordingIngestion
+    end
   end
 end
