@@ -80,6 +80,22 @@ defmodule Gralkor.Client.Native do
   end
 
   @impl Gralkor.Client
+  def capture(session_id, operator_id, agent_name, user_name, msgs, lens) do
+    raise_if_blank!(:session_id, session_id)
+    raise_if_blank!(:agent_name, agent_name)
+    raise_if_blank!(:user_name, user_name)
+
+    CaptureBuffer.append_lens(
+      session_id,
+      operator_id,
+      agent_name,
+      user_name,
+      lens,
+      msgs
+    )
+  end
+
+  @impl Gralkor.Client
   def flush(session_id) do
     raise_if_blank!(:session_id, session_id)
     CaptureBuffer.flush(session_id)
