@@ -75,5 +75,26 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert_receive {:graph_add, _, "The launch window moved to Friday.", "project update",
                       Strict, []}
     end
+
+    test "and the graph add result is returned to the ingestion process" do
+      store = %Store{
+        operator_id: "operator-one",
+        lens: %Lens{
+          name: "observations",
+          ontology: Strict,
+          scope: :operator,
+          ingestion: String
+        }
+      }
+
+      add_episode_fn = fn _destination, _content, _source_description, _ontology, _opts ->
+        {:error, :graph_unavailable}
+      end
+
+      assert {:error, :graph_unavailable} =
+               Graphiti.add_episode(store, "content", "source",
+                 add_episode_fn: add_episode_fn
+               )
+    end
   end
 end
