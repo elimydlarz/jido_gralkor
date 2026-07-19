@@ -27,7 +27,13 @@ when a caller searches a non-empty selection of operator-local Lenses and the re
   then each selected operator-local Lens is searched only for the requesting operator
   and selecting the global pool searches every episode in that pool without filtering by originating Lens
   and results from all selected destinations are combined into one memory response
+  and results are concatenated in requested target order without deduplicating repeated matches
+  and the same maximum result count is applied to every selected destination
   and no unselected operator-local Lens or another operator's local memory can contribute a result
+
+when a selected search destination fails
+  then the first error is returned without a partial result
+  and no later destination is searched
 
 where a global Lens name identifies an episode's origin
   then that name remains attribution rather than a search boundary
