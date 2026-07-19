@@ -80,6 +80,16 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     end
 
     @impl true
+    def add_episode(store, content, source_description, opts) do
+      send(
+        Process.whereis(:lens_governed_memory_integration),
+        {:add_episode, store, content, source_description, opts}
+      )
+
+      :ok
+    end
+
+    @impl true
     def remove_episode(_store, _episode_id), do: :ok
 
     @impl true

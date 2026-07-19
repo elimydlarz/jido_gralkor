@@ -10,5 +10,4 @@ defmodule Gralkor.Lens.Storage do
   @callback search(Store.t(), String.t(), pos_integer()) ::
               {:ok, [String.t()]} | {:error, term()}
 
-  @optional_callbacks add_episode: 4
 end

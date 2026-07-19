@@ -117,7 +117,7 @@ defmodule Gralkor.GeneraliseTest do
         }
       ]
 
-      add_fn = fn _group, body, _source, _ont, _opts ->
+      add_fn = fn _group, body, _source, _ont, opts ->
         assert body =~ "User prefers dark mode"
         assert body =~ "GEN|v1|"
 
@@ -125,6 +125,7 @@ defmodule Gralkor.GeneraliseTest do
         assert gen.level == 0
         assert gen.confidence == 0.85
         assert gen.generalises == []
+        assert opts[:uuid] == gen.id
         :ok
       end
 
@@ -162,10 +163,11 @@ defmodule Gralkor.GeneraliseTest do
         }
       ]
 
-      add_fn = fn _group, body, _source, _ont, _opts ->
+      add_fn = fn _group, body, _source, _ont, opts ->
         {:ok, gen, _plain} = Gralkor.Generalisation.decode(body)
         assert gen.level == 2
         assert gen.generalises == ["gen-existing-1"]
+        assert opts[:uuid] == gen.id
         :ok
       end
 
@@ -204,10 +206,11 @@ defmodule Gralkor.GeneraliseTest do
         }
       ]
 
-      add_fn = fn _group, body, _source, _ont, _opts ->
+      add_fn = fn _group, body, _source, _ont, opts ->
         {:ok, gen, _plain} = Gralkor.Generalisation.decode(body)
         assert gen.level == 1
         assert gen.generalises == ["gen-broad-1"]
+        assert opts[:uuid] == gen.id
         :ok
       end
 
@@ -259,7 +262,11 @@ defmodule Gralkor.GeneraliseTest do
                    hypothesise_fn: ok_hypothesise(candidates),
                    search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
                    evaluate_fn: ok_evaluate(decisions),
-                   add_episode_fn: ok_add(),
+                   add_episode_fn: fn _partition, body, _source, _ontology, opts ->
+                     {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
+                     assert opts[:uuid] == generalisation.id
+                     :ok
+                   end,
                    remove_episode_fn: fn _partition, uuid ->
                      Process.put(:remove_called, true)
                      assert uuid == "gen-outdated"
