@@ -293,6 +293,19 @@ defmodule Gralkor.RecallTest do
     end
   end
 
+  describe "ex-recall > orchestration > if the main graph search fails" do
+    test "then {:error, reason} is returned" do
+      assert {:error, :unavailable} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "q",
+                 default_opts(search_fn: fn _group, _query, _max -> {:error, :unavailable} end)
+               )
+    end
+  end
+
   describe "ex-recall > recall deadline" do
     test "if the budget is exhausted before the call returns, returns {:error, :recall_deadline_expired}" do
       slow_search = fn _g, _q, _max ->

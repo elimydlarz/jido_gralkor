@@ -47,6 +47,8 @@ ex-recall (src: lib/gralkor/recall.ex; unit: test/gralkor/recall_test.exs)
   orchestration
     when called
       then Gralkor.GraphitiPool runs search against the sanitized group_id
+        if the main graph search fails
+          then {:error, reason} is returned
         when search returns no facts
           then memory_block body is "No relevant memories found."
         when search returns facts
