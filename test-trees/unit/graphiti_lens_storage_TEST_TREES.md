@@ -10,6 +10,9 @@ when an operator-local Lens store is searched
   and graph search receives the query and result limit
   and the graph search result is returned to the caller
 
+when the implicit `default` Lens is added to or searched
+  then graph operations use the operator's existing sanitized destination
+
 when a global Lens store adds an episode
   then graph add receives the fixed global destination
   and graph add receives the originating Lens as provenance

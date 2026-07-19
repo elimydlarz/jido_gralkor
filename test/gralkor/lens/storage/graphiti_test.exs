@@ -166,6 +166,37 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
+  describe "when the implicit `default` Lens is added to or searched" do
+    test "then graph operations use the operator's existing sanitized destination" do
+      store = %Store{
+        operator_id: "operator-one",
+        lens: %Lens{
+          name: "default",
+          ontology: Strict,
+          scope: :operator,
+          ingestion: Gralkor.Lens.Ingestion.Store
+        }
+      }
+
+      test_pid = self()
+
+      add_episode_fn = fn destination, _, _, _, _ ->
+        send(test_pid, {:graph_add, destination})
+        :ok
+      end
+
+      search_fn = fn destination, _, _ ->
+        send(test_pid, {:graph_search, destination})
+        {:ok, []}
+      end
+
+      assert :ok = Graphiti.add_episode(store, "content", "source", add_episode_fn: add_episode_fn)
+      assert {:ok, []} = Graphiti.search(store, "content", 5, search_fn: search_fn)
+      assert_receive {:graph_add, "operator_one"}
+      assert_receive {:graph_search, "operator_one"}
+    end
+  end
+
   describe "when a global Lens store adds an episode" do
     test "then graph add receives the fixed global destination" do
       store = %Store{
