@@ -63,7 +63,21 @@ defmodule JidoGralkor.Plugin do
             "JidoGralkor.Plugin requires :agent_name (non-blank string), got #{inspect(agent_name)}"
     end
 
-    {:ok, %{agent_name: agent_name}}
+    case fetch_opt(opts, :default_lens) do
+      nil ->
+        {:ok, %{agent_name: agent_name}}
+
+      default_lens ->
+        lens = Client.lens!(default_lens)
+
+        {:ok,
+         %{
+           agent_name: agent_name,
+           default_lens: default_lens,
+           search_targets: fetch_opt(opts, :search_targets),
+           lens: lens
+         }}
+    end
   end
 
   defp fetch_opt(opts, key) when is_list(opts), do: Keyword.get(opts, key)

@@ -29,6 +29,10 @@ defmodule Gralkor.Client do
   @type user_name :: String.t()
   @type ontology :: module() | nil
 
+  alias Gralkor.Ingest
+  alias Gralkor.Lens
+  alias Gralkor.Lens.Store
+
   @callback recall(group_id(), agent_name(), session_id() | nil, query :: String.t()) ::
               {:ok, String.t()} | {:error, term()}
   @callback capture(
@@ -65,6 +69,29 @@ defmodule Gralkor.Client do
 
   @spec impl() :: module()
   def impl, do: Application.get_env(:jido_gralkor, :client, Gralkor.Client.Native)
+
+  @spec ingest(Ingest.t()) :: :ok | {:error, term()}
+  def ingest(%Ingest{lens: lens_name} = request) do
+    lens = lens!(lens_name)
+    store = %Store{operator_id: request.operator_id, lens: lens}
+    lens.ingestion.ingest(request, store)
+  end
+
+  @spec lens!(String.t()) :: Lens.t()
+  def lens!(name) do
+    lenses = Application.get_env(:jido_gralkor, :lenses, [])
+
+    definition =
+      Enum.find(lenses, fn definition -> Keyword.get(definition, :name) == name end) ||
+        raise ArgumentError, "unknown Lens #{inspect(name)}"
+
+    %Lens{
+      name: Keyword.fetch!(definition, :name),
+      ontology: Keyword.fetch!(definition, :ontology),
+      scope: Keyword.fetch!(definition, :scope),
+      ingestion: Keyword.fetch!(definition, :ingestion)
+    }
+  end
 
   @spec sanitize_group_id(String.t()) :: String.t()
   def sanitize_group_id(id) when is_binary(id), do: String.replace(id, "-", "_")
