@@ -63,6 +63,9 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
 
       :ok
     end
+
+    @impl true
+    def search(_store, _query, _max_results), do: {:ok, []}
   end
 
   setup do
