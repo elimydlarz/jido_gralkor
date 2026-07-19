@@ -630,4 +630,51 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                })
     end
   end
+
+  describe "where a global Lens name identifies an episode's origin" do
+    test "then that name remains attribution rather than a search boundary" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "published-observations",
+          ontology: ObservationOntology,
+          scope: :global,
+          ingestion: StoreAddingIngestion
+        ],
+        [
+          name: "published-decisions",
+          ontology: ObservationOntology,
+          scope: :global,
+          ingestion: StoreAddingIngestion
+        ]
+      ])
+
+      for {lens, content} <- [
+            {"published-observations", "public observation"},
+            {"published-decisions", "public decision"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: content,
+                   source_description: "test source"
+                 })
+      end
+
+      assert Enum.map(Gralkor.Lens.Storage.InMemory.episodes(:global), & &1.lens) == [
+               "published-observations",
+               "published-decisions"
+             ]
+
+      assert {:ok, ["public observation", "public decision"]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "public",
+                 targets: ["global"]
+               })
+    end
+  end
 end
