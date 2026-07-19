@@ -31,6 +31,9 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
   end
 
   defmodule RecordingStorage do
+    @behaviour Gralkor.Lens.Storage
+
+    @impl true
     def add_episode(store, content, source_description) do
       send(
         Process.whereis(:lens_governed_memory_integration),
