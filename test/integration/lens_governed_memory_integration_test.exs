@@ -65,6 +65,9 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     end
 
     @impl true
+    def remove_episode(_store, _episode_id), do: :ok
+
+    @impl true
     def search(store, query, max_results) do
       send(
         Process.whereis(:lens_governed_memory_integration),
