@@ -870,7 +870,7 @@ ex-config-defaults (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.e
 
 ex-config-ontology (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.exs)
   Gralkor.Config.ontology/0 resolves the optional deployment-wide ontology from app env (`:jido_gralkor, :ontology`)
-  the ontology is a single global config value — it is never read from agent state, mount opts, or per-call context (those couplings are the fakery this resolver removes); every write path (capture, memory_add) reads it from here
+  the ontology is the implicit-default compatibility value; registered Lenses own their ontology, while legacy capture and memory_add read it from here
     when `:jido_gralkor, :ontology` is unset
       then returns nil (no ontology — every write behaves identically to the pre-ontology slice)
     when `:jido_gralkor, :ontology` is a module declared via `use Gralkor.Ontology`
@@ -1195,7 +1195,10 @@ JidoGralkor.Canonical.to_messages/3 (src: lib/jido_gralkor/canonical.ex; unit: t
 ```
 JidoGralkor.Actions.MemorySearch (src: lib/jido_gralkor/actions/memory_search.ex; unit: test/jido_gralkor/actions/memory_search_test.exs)
   when invoked with a non-blank query and session_id in context
-    then group_id is derived from context.agent_id via Gralkor.Client.sanitize_group_id/1 and Gralkor.Client.impl().recall/3 is called with that group_id, session_id, and query
+    when context contains non-empty search_targets
+      then Gralkor.Client.search/1 is called for the operator, query, and selected Lens targets and its results are joined
+    when context has no search_targets
+      then group_id is derived from context.agent_id and legacy Gralkor.Client.impl().recall/4 is called with that group_id, agent name, session_id, and query
   when invoked with a blank or missing query
     then the client is not called and the action returns {:ok, %{result: <no-query non-result message>}}
     and a Logger.warning is emitted (defensive against forced-tool-call paths where the LLM had nothing meaningful to search for)
@@ -1217,7 +1220,10 @@ JidoGralkor.Actions.MemoryAdd (src: lib/jido_gralkor/actions/memory_add.ex; unit
   then source_description is a required tool parameter (alongside content) — the LLM must say where each stored insight came from, so no context-less memories land in the graph
   when invoked
     then the action returns {:ok, %{result: "Ingesting."}} without waiting on the client
-    then the client's memory_add is called in a background Task with the sanitized group_id, content, and source_description — and no ontology argument, so the configured global ontology is applied by the client (the tool never reads ontology from context or exposes an override)
+    when context selects a Lens
+      then Gralkor.Client.ingest/1 is called in a background Task with the operator, Lens, content, and source description
+    when context has no Lens
+      then the legacy client's memory_add is called in a background Task with the sanitized group_id, content, and source_description
   if the background Task's client call fails
     then the failure is logged (best-effort storage)
 ```

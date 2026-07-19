@@ -6,8 +6,30 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
   alias Gralkor.Client.InMemory
   alias JidoGralkor.Actions.MemoryAdd
 
+  defmodule LensOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+  end
+
+  defmodule RecordingIngestion do
+    def ingest(request, store) do
+      send(Process.whereis(:memory_add_lens_test), {:lens_ingest, request, store})
+      :ok
+    end
+  end
+
   setup do
     InMemory.reset()
+
+    previous_lenses = Application.get_env(:jido_gralkor, :lenses)
+
+    on_exit(fn ->
+      if previous_lenses do
+        Application.put_env(:jido_gralkor, :lenses, previous_lenses)
+      else
+        Application.delete_env(:jido_gralkor, :lenses)
+      end
+    end)
+
     :ok
   end
 
@@ -32,6 +54,33 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
     assert eventually(fn ->
              InMemory.adds() == [["user_id", "reflection", "agent thought"]]
            end)
+  end
+
+  test "when context selects a Lens then Gralkor.Client.ingest/1 is called in a background Task with the operator, Lens, content, and source description" do
+    Process.register(self(), :memory_add_lens_test)
+
+    Application.put_env(:jido_gralkor, :lenses, [
+      [
+        name: "decisions",
+        ontology: LensOntology,
+        scope: :operator,
+        ingestion: RecordingIngestion
+      ]
+    ])
+
+    assert {:ok, %{result: "Ingesting."}} =
+             MemoryAdd.run(
+               %{content: "We chose Friday.", source_description: "agent decision"},
+               %{agent_id: "operator-one", lens: "decisions"}
+             )
+
+    assert_receive {:lens_ingest,
+                    %Gralkor.Ingest{
+                      operator_id: "operator-one",
+                      lens: "decisions",
+                      content: "We chose Friday.",
+                      source_description: "agent decision"
+                    }, %{lens: %{name: "decisions"}}}
   end
 
   test "if the background Task's client call fails, the failure is logged" do

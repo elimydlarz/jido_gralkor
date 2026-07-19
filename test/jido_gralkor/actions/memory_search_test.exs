@@ -6,8 +6,38 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   alias Gralkor.Client.InMemory
   alias JidoGralkor.Actions.MemorySearch
 
+  defmodule LensOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+  end
+
+  defmodule RecordingStorage do
+    @behaviour Gralkor.Lens.Storage
+
+    def add_episode(_store, _content, _source), do: :ok
+    def remove_episode(_store, _episode_id), do: :ok
+
+    def search(store, query, max_results) do
+      send(Process.whereis(:memory_search_lens_test), {:lens_search, store, query, max_results})
+      {:ok, ["selected local memory"]}
+    end
+  end
+
   setup do
     InMemory.reset()
+
+    previous_lenses = Application.get_env(:jido_gralkor, :lenses)
+    previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
+
+    on_exit(fn ->
+      if previous_lenses,
+        do: Application.put_env(:jido_gralkor, :lenses, previous_lenses),
+        else: Application.delete_env(:jido_gralkor, :lenses)
+
+      if previous_storage,
+        do: Application.put_env(:jido_gralkor, :lens_storage, previous_storage),
+        else: Application.delete_env(:jido_gralkor, :lens_storage)
+    end)
+
     :ok
   end
 
@@ -46,6 +76,32 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     assert group_id == "user_with_hyphens"
     assert agent_name == "Susu"
     assert session_id == "thr-xyz"
+  end
+
+  test "when context contains non-empty search_targets then Gralkor.Client.search/1 is called for the operator, query, and selected Lens targets and its results are joined" do
+    Process.register(self(), :memory_search_lens_test)
+    Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+    Application.put_env(:jido_gralkor, :lenses, [
+      [
+        name: "observations",
+        ontology: LensOntology,
+        scope: :operator,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ]
+    ])
+
+    assert {:ok, %{result: "selected local memory"}} =
+             MemorySearch.run(%{query: "launch"}, %{
+               agent_id: "operator-one",
+               session_id: "thread-one",
+               agent_name: "Susu",
+               search_targets: ["observations"]
+             })
+
+    assert_receive {:lens_search,
+                    %{operator_id: "operator-one", lens: %{name: "observations"}}, "launch", 10}
+    assert [] = InMemory.recalls()
   end
 
   describe "when the query is blank or missing (defensive against forced-tool-call paths)" do
