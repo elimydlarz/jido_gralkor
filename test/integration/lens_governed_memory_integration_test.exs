@@ -1063,4 +1063,24 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       end
     end
   end
+
+  describe "if ingestion names an unknown or blank Lens" do
+    test "then ingestion fails before an ingestion process or graph write is started" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
+      for lens <- ["missing", " "] do
+        assert_raise ArgumentError, ~r/Lens/, fn ->
+          Client.ingest(%Ingest{
+            operator_id: "operator-one",
+            lens: lens,
+            content: "must not write",
+            source_description: "invalid request"
+          })
+        end
+
+        refute_receive {:ingested, _, _}
+        refute_receive {:add_episode, _, _, _}
+      end
+    end
+  end
 end
