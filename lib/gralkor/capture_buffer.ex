@@ -74,13 +74,21 @@ defmodule Gralkor.CaptureBuffer do
 
   def append_lens(session_id, operator_id, agent_name, user_name, lens, msgs)
       when is_binary(session_id) and is_binary(operator_id) and is_list(msgs) do
+    append_lenses(session_id, operator_id, agent_name, user_name, [lens], msgs)
+  end
+
+  def append_lenses(session_id, operator_id, agent_name, user_name, lenses, msgs)
+      when is_binary(session_id) and is_binary(operator_id) and is_list(lenses) and
+             is_list(msgs) do
     raise_if_blank!(:agent_name, agent_name)
     raise_if_blank!(:user_name, user_name)
-    raise_if_blank!(:lens, lens)
+
+    if lenses == [], do: raise(ArgumentError, "lenses must be a non-empty list")
+    Enum.each(lenses, &raise_if_blank!(:lens, &1))
 
     case GenServer.call(
            __MODULE__,
-           {:append_lens, session_id, operator_id, agent_name, user_name, lens, msgs}
+           {:append_lenses, session_id, operator_id, agent_name, user_name, lenses, msgs}
          ) do
       :ok ->
         :ok
@@ -194,7 +202,7 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   def handle_call(
-        {:append_lens, session_id, operator_id, agent_name, user_name, lens, msgs},
+        {:append_lenses, session_id, operator_id, agent_name, user_name, lenses, msgs},
         _from,
         state
       ) do
@@ -205,20 +213,25 @@ defmodule Gralkor.CaptureBuffer do
           agent_name: agent_name,
           user_name: user_name,
           turns: [msgs],
-          lens_order: [lens],
-          batches: %{lens => [msgs]}
+          lens_order: Enum.uniq(lenses),
+          batches: Map.new(Enum.uniq(lenses), &{&1, [msgs]})
         }
 
         {:reply, :ok, %{state | lens_entries: Map.put(state.lens_entries, session_id, entry)}}
 
       %{operator_id: ^operator_id, agent_name: ^agent_name, user_name: ^user_name} = entry ->
-        lens_order = if Map.has_key?(entry.batches, lens), do: entry.lens_order, else: entry.lens_order ++ [lens]
+        new_lenses = Enum.reject(Enum.uniq(lenses), &Map.has_key?(entry.batches, &1))
+
+        batches =
+          Enum.reduce(Enum.uniq(lenses), entry.batches, fn lens, batches ->
+            Map.update(batches, lens, [msgs], &(&1 ++ [msgs]))
+          end)
 
         entry = %{
           entry
           | turns: entry.turns ++ [msgs],
-            lens_order: lens_order,
-            batches: Map.update(entry.batches, lens, [msgs], &(&1 ++ [msgs]))
+            lens_order: entry.lens_order ++ new_lenses,
+            batches: batches
         }
 
         {:reply, :ok, %{state | lens_entries: Map.put(state.lens_entries, session_id, entry)}}
