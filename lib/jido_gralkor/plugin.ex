@@ -215,7 +215,16 @@ defmodule JidoGralkor.Plugin do
 
   defp merge_tool_context(%Signal{data: data} = signal, extras) when is_map(extras) do
     existing_context = Map.get(data, :tool_context, %{})
-    new_context = Map.merge(existing_context, extras)
+    new_context =
+      case Map.fetch(existing_context, :lens) do
+        {:ok, lens} ->
+          Client.lens!(lens)
+          extras |> Map.merge(existing_context) |> Map.merge(extras) |> Map.put(:lens, lens)
+
+        :error ->
+          Map.merge(existing_context, extras)
+      end
+
     %{signal | data: Map.put(data, :tool_context, new_context)}
   end
 end
