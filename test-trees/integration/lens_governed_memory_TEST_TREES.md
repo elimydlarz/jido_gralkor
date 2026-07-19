@@ -1,4 +1,4 @@
-Integration: Lens-governed memory (integration: none)
+Integration: Lens-governed memory (integration: test/integration/lens_governed_memory_integration_test.exs)
 
 when an application registers a Lens with a non-blank name, ontology, local or global scope, and ingestion process
   then direct callers and mounted memory plugins can select that Lens by name
