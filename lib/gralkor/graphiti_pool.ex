@@ -241,7 +241,14 @@ defmodule Gralkor.GraphitiPool do
             kwargs['uuid'] = uid
         import sys
         try:
-            asyncio._gralkor_run(g.add_episode(**kwargs))
+            result = asyncio._gralkor_run(g.add_episode(**kwargs))
+            if lens is not None:
+                lens_name = lens.decode('utf-8') if isinstance(lens, (bytes, bytearray)) else lens
+                asyncio._gralkor_run(g.driver.execute_query(
+                    "MATCH (episode:Episodic {uuid: $uuid}) SET episode.lens = $lens RETURN episode.uuid AS uuid",
+                    uuid=result.episode.uuid,
+                    lens=lens_name,
+                ))
         except BaseException as e:
             print(f"[gralkor] add_episode failed: {type(e).__name__}: {e}", file=sys.stderr)
             raise
@@ -255,7 +262,8 @@ defmodule Gralkor.GraphitiPool do
           "group" => sanitized,
           "_idem" => idempotency_key,
           "ontology_dicts" => ontology_dicts,
-          "uuid" => uuid
+          "uuid" => uuid,
+          "lens" => Keyword.get(opts, :lens)
         }
       )
 
