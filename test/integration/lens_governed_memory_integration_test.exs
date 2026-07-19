@@ -1775,6 +1775,27 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
         ]
       ])
 
+      store = %Gralkor.Lens.Store{
+        operator_id: "operator-one",
+        lens: Client.lens!("generalisations")
+      }
+
+      existing = %Gralkor.Generalisation{
+        id: "existing-global",
+        content: "Launches sometimes move.",
+        level: 0,
+        confidence: 0.6,
+        generalises: []
+      }
+
+      assert :ok =
+               Gralkor.Lens.Store.add(
+                 store,
+                 Gralkor.Generalisation.encode(existing),
+                 "generalisation",
+                 uuid: existing.id
+               )
+
       Application.put_env(:jido_gralkor, :generalise_hypothesise_fn, fn _prompt ->
         {:ok, [%{content: "Eli prefers Friday launches.", confidence: 0.9}]}
       end)
@@ -1783,10 +1804,11 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
         {:ok,
          [
            %{
-             action: "save",
+             action: "contradicts",
              hypothesis_index: 0,
              confidence: 0.9,
-             content: "Eli prefers Friday launches."
+             content: "Eli prefers Friday launches.",
+             existing_id: "existing-global"
            }
          ]}
       end)
@@ -1805,6 +1827,8 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert {:ok, resulting, _plain} = Gralkor.Generalisation.decode(encoded)
       assert episode_id == resulting.id
       assert resulting.content == "Eli prefers Friday launches."
+      assert resulting.generalises == ["existing-global"]
+      refute episode_id == "existing-global"
 
       assert [] =
                Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "generalisations"})
