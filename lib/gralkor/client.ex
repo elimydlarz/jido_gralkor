@@ -79,13 +79,32 @@ defmodule Gralkor.Client do
   end
 
   @spec search(Search.t()) :: {:ok, [String.t()]} | {:error, term()}
-  def search(%Search{operator_id: operator_id, query: query, targets: ["global"], max_results: max_results}) do
+  def search(%Search{
+        operator_id: operator_id,
+        query: query,
+        targets: [_target | _rest] = targets,
+        max_results: max_results
+      }) do
+    Enum.reduce_while(targets, {:ok, []}, fn target, {:ok, results} ->
+      case search_target(operator_id, target, query, max_results) do
+        {:ok, target_results} -> {:cont, {:ok, results ++ target_results}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  @spec search_target(String.t(), String.t(), String.t(), pos_integer()) ::
+          {:ok, [String.t()]} | {:error, term()}
+  defp search_target(operator_id, "global", query, max_results) do
     Store.search(%Store{operator_id: operator_id, lens: :global}, query, max_results)
   end
 
-  def search(%Search{operator_id: operator_id, query: query, targets: [target], max_results: max_results}) do
-    lens = lens!(target)
-    Store.search(%Store{operator_id: operator_id, lens: lens}, query, max_results)
+  defp search_target(operator_id, target, query, max_results) do
+    Store.search(
+      %Store{operator_id: operator_id, lens: lens!(target)},
+      query,
+      max_results
+    )
   end
 
   @spec lens!(String.t()) :: Lens.t()
