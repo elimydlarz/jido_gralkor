@@ -249,7 +249,6 @@ defmodule Gralkor.ClientContract do
             end
           end
         end
-
       end
 
       describe "ex-client > agent_name validation > if capture/6 or capture/7 is called with a missing or blank agent_name" do
@@ -271,7 +270,6 @@ defmodule Gralkor.ClientContract do
             end
           end
         end
-
       end
 
       describe "ex-client > user_name validation > if capture/6 or capture/7 is called with a missing or blank user_name" do
