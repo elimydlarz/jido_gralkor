@@ -49,7 +49,10 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
   defmodule VariableWriteIngestion do
     alias Gralkor.Lens.Store
 
-    def ingest(%{content: "none"}, _store), do: :ok
+    def ingest(%{content: "none"}, store) do
+      send(Process.whereis(:lens_governed_memory_integration), {:no_write_store, store})
+      :ok
+    end
 
     def ingest(%{content: "one", source_description: source_description}, store) do
       Store.add(store, "one", source_description)
@@ -284,6 +287,18 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       end
 
       assert :ok = Client.ingest(request.("none"))
+
+      assert_receive {:no_write_store,
+                      %Gralkor.Lens.Store{
+                        operator_id: "operator-one",
+                        lens: %{
+                          name: "observations",
+                          ontology: ObservationOntology,
+                          scope: :operator,
+                          ingestion: VariableWriteIngestion
+                        }
+                      }}
+
       refute_receive {:add_episode, _, _, _}
 
       assert :ok = Client.ingest(request.("one"))
@@ -294,7 +309,8 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                         lens: %{
                           name: "observations",
                           ontology: ObservationOntology,
-                          scope: :operator
+                          scope: :operator,
+                          ingestion: VariableWriteIngestion
                         }
                       }, "one", "project update"}
 
