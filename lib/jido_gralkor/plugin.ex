@@ -69,12 +69,13 @@ defmodule JidoGralkor.Plugin do
 
       default_lens ->
         lens = Client.lens!(default_lens)
+        search_targets = validate_search_targets!(fetch_opt(opts, :search_targets))
 
         {:ok,
          %{
            agent_name: agent_name,
            default_lens: default_lens,
-           search_targets: fetch_opt(opts, :search_targets),
+           search_targets: search_targets,
            lens: lens
          }}
     end
@@ -83,6 +84,31 @@ defmodule JidoGralkor.Plugin do
   defp fetch_opt(opts, key) when is_list(opts), do: Keyword.get(opts, key)
   defp fetch_opt(opts, key) when is_map(opts), do: Map.get(opts, key)
   defp fetch_opt(_, _), do: nil
+
+  defp validate_search_targets!([_target | _rest] = targets) do
+    Enum.each(targets, fn
+      "global" ->
+        :ok
+
+      target when is_binary(target) ->
+        case Client.lens!(target) do
+          %{scope: :operator} -> :ok
+
+          %{scope: :global} ->
+            raise ArgumentError,
+                  "global Lens #{inspect(target)} is provenance; search the reserved \"global\" target"
+        end
+
+      target ->
+        raise ArgumentError, "invalid search target #{inspect(target)}"
+    end)
+
+    targets
+  end
+
+  defp validate_search_targets!(targets) do
+    raise ArgumentError, "search_targets must be a non-empty list, got #{inspect(targets)}"
+  end
 
   @impl Jido.Plugin
   def handle_signal(%Signal{type: "ai.react.query"} = signal, %{agent: agent}) do
