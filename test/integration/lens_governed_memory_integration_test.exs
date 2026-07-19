@@ -983,6 +983,51 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                         content: "The launch window moved.",
                         source_description: "agent thought"
                       }, %{lens: %{name: "observations"}}}
+
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+
+      start_supervised!(
+        {Gralkor.CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
+         retries: []}
+      )
+
+      request_id = "captured-through-default"
+
+      capture_agent = %{
+        agent
+        | state:
+            Map.merge(agent.state, %{
+              __strategy__: %{
+                request_traces: %{request_id => %{events: [%{kind: :llm_completed, data: %{}}]}}
+              },
+              requests: %{
+                request_id => %{query: "Capture this turn.", status: :pending, result: nil}
+              },
+              user_name: "Eli"
+            })
+      }
+
+      completion = %Jido.Signal{
+        id: "capture-signal",
+        source: "/test",
+        type: "ai.request.completed",
+        data: %{request_id: request_id, result: "Captured."}
+      }
+
+      assert {:ok, :continue} = Plugin.handle_signal(completion, %{agent: capture_agent})
+      assert :ok = Gralkor.Client.Native.flush_and_await("session-one", 1_000)
+
+      assert_receive {:ingested,
+                      %Ingest{
+                        operator_id: "operator-one",
+                        lens: "observations",
+                        content: captured_transcript,
+                        source_description: "captured"
+                      }, %{lens: %{name: "observations"}}}
+
+      assert captured_transcript =~ "Capture this turn."
     end
 
     test "and memory search uses the configured search targets" do
@@ -1434,6 +1479,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     test "and an unset `:jido_gralkor, :ontology` preserves generic extraction" do
       Application.delete_env(:jido_gralkor, :lenses)
       Application.delete_env(:jido_gralkor, :ontology)
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
 
       assert %Gralkor.Lens{
                name: "default",
@@ -1441,6 +1487,25 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                scope: :operator,
                ingestion: Gralkor.Lens.Ingestion.Store
              } = Client.lens!("default")
+
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "default",
+                 content: "A generic memory.",
+                 source_description: "legacy caller"
+               })
+
+      assert_receive {:add_episode,
+                      %Gralkor.Lens.Store{
+                        operator_id: "operator-one",
+                        lens: %Gralkor.Lens{
+                          name: "default",
+                          ontology: nil,
+                          scope: :operator,
+                          ingestion: Gralkor.Lens.Ingestion.Store
+                        }
+                      }, "A generic memory.", "legacy caller"}
     end
 
     test "and the `:jido_gralkor, :ontology` value remains its ontology" do
@@ -1453,12 +1518,39 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
 
     test "and existing capture, memory addition, and recall preserve legacy behavior under that compatibility mapping" do
       Application.delete_env(:jido_gralkor, :lenses)
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
+
+      Gralkor.Client.InMemory.reset()
+      Gralkor.Client.InMemory.set_capture(:ok)
+      Gralkor.Client.InMemory.set_memory_add(:ok)
+      Gralkor.Client.InMemory.set_recall({:ok, "legacy memory"})
 
       assert %Gralkor.Lens{name: "default", scope: :operator} = Client.lens!("default")
-      Code.ensure_loaded!(Gralkor.Client.Native)
-      assert function_exported?(Gralkor.Client.Native, :capture, 5)
-      assert function_exported?(Gralkor.Client.Native, :memory_add, 3)
-      assert function_exported?(Gralkor.Client.Native, :recall, 4)
+
+      messages = [%Gralkor.Message{role: "user", content: "Remember this."}]
+
+      assert :ok =
+               Client.impl().capture(
+                 "session-one",
+                 "operator_one",
+                 "Susu",
+                 "Eli",
+                 messages
+               )
+
+      assert :ok = Client.impl().memory_add("operator_one", "Legacy fact.", "manual")
+
+      assert {:ok, "legacy memory"} =
+               Client.impl().recall("operator_one", "Susu", "session-one", "fact")
+
+      assert [["session-one", "operator_one", "Susu", "Eli", ^messages]] =
+               Gralkor.Client.InMemory.captures()
+
+      assert [["operator_one", "Legacy fact.", "manual"]] =
+               Gralkor.Client.InMemory.adds()
+
+      assert [["operator_one", "Susu", "session-one", "fact"]] =
+               Gralkor.Client.InMemory.recalls()
     end
   end
 
@@ -1530,6 +1622,16 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
         end
 
         refute_receive {:add_episode, _, _, _}
+
+        assert_raise ArgumentError, ~r/Lens/, fn ->
+          Client.search(%Search{
+            operator_id: "operator-one",
+            query: "must not search",
+            targets: ["global"]
+          })
+        end
+
+        refute_receive {:search, _, _, _}
       end
     end
   end
