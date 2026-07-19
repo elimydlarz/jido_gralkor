@@ -177,6 +177,7 @@ ex-interpret (src: lib/gralkor/interpret.ex; unit: test/gralkor/interpret_test.e
     and the interpretation prompt carries a "respond within {output_token_budget} tokens" instruction so the model self-limits the breadth of its answer
     and the interpretation prompt gently frames retrieved facts as understandings extracted from source material rather than proven claims
       and asks the LLM to mention the source context, when available, only where natural, without confidence labels, truth adjudication, or repetitive uncertainty warnings
+      and when retrieved facts conflict, asks the LLM to preserve the relevant accounts rather than choose one as true
     and the structured-output schema instructs the LLM to copy each fact line verbatim
       (preserving every timestamp parenthetical, dropping the leading '- ')
       then ' — ' then a one-sentence relevance reason

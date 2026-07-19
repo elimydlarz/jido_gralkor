@@ -52,6 +52,7 @@ defmodule Gralkor.InterpretTest do
       assert prompt =~ ~r/rather than proven/i
       assert prompt =~ ~r/mention the source context.*when available.*only where natural/is
       assert prompt =~ ~r/without confidence labels, truth adjudication, or repetitive uncertainty warnings/i
+      assert prompt =~ ~r/when retrieved memory facts conflict.*preserve the relevant accounts.*rather than choosing one as true/is
     end
   end
 
