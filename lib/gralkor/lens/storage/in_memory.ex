@@ -20,6 +20,9 @@ defmodule Gralkor.Lens.Storage.InMemory do
   @impl true
   def init(state), do: {:ok, state}
 
+  @spec episodes(key()) :: [episode()]
+  def episodes(key), do: GenServer.call(__MODULE__, {:episodes, key})
+
   @impl Gralkor.Lens.Storage
   def add_episode(
         %Store{operator_id: operator_id, lens: %Lens{name: lens_name, scope: :operator} = lens},
@@ -60,6 +63,9 @@ defmodule Gralkor.Lens.Storage.InMemory do
     {:reply, {:ok, contents}, state}
   end
 
+  def handle_call({:episodes, key}, _from, state) do
+    {:reply, Map.get(state, key, []), state}
+  end
 
   @spec episode(String.t(), Lens.t()) :: episode()
   defp episode(content, lens), do: %{content: content, lens: lens.name}
