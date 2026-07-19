@@ -51,7 +51,7 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
 
       results =
         interpret(
-          "What conflicting accounts exist about when the east gate opened? Include both.",
+          "Which account is definitely true? Give me the verified time when the east gate opened.",
           facts
         )
 
