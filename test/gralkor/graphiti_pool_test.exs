@@ -543,7 +543,7 @@ defmodule Gralkor.GraphitiPoolTest do
       File.rm_rf!(stale_tmp)
     end
 
-    test "then a single AsyncFalkorDB is constructed via redislite and held for the lifetime of the GenServer" do
+    test "then the embedded FalkorDB construction boundary receives the data directory once and the resulting database is held for the lifetime of the GenServer" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 
