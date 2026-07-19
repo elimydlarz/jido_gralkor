@@ -13,6 +13,9 @@ when an operator-local Lens store is searched
 when the implicit `default` Lens is added to or searched
   then graph operations use the operator's existing sanitized destination
 
+when an operator-local Lens store removes an episode
+  then graph removal receives the same operator-and-Lens destination and episode identity
+
 when a global Lens store adds an episode
   then graph add receives the fixed global destination
   and graph add receives the originating Lens as provenance

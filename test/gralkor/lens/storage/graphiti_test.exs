@@ -197,6 +197,36 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
+  describe "when an operator-local Lens store removes an episode" do
+    test "then graph removal receives the same operator-and-Lens destination and episode identity" do
+      store = %Store{
+        operator_id: "operator-one",
+        lens: %Lens{
+          name: "generalisations",
+          ontology: Strict,
+          scope: :operator,
+          ingestion: Gralkor.Lens.Ingestion.Generalise
+        }
+      }
+
+      test_pid = self()
+
+      remove_episode_fn = fn destination, episode_id ->
+        send(test_pid, {:graph_remove, destination, episode_id})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.remove_episode(store, "generalisation-one",
+                 remove_episode_fn: remove_episode_fn
+               )
+
+      assert_receive {:graph_remove,
+                      "lens_6f70657261746f722d6f6e65_67656e6572616c69736174696f6e73",
+                      "generalisation-one"}
+    end
+  end
+
   describe "when a global Lens store adds an episode" do
     test "then graph add receives the fixed global destination" do
       store = %Store{
