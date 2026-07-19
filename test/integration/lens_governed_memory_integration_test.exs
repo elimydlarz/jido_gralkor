@@ -1117,8 +1117,8 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  "operator-one",
                  "Susu",
                  "Eli",
-                 observation,
-                 [%Gralkor.Message{role: "user", content: "Observed rain."}]
+                 [%Gralkor.Message{role: "user", content: "Observed rain."}],
+                 observation
                )
 
       assert :ok =
@@ -1127,8 +1127,8 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  "operator-one",
                  "Susu",
                  "Eli",
-                 generalisation,
-                 [%Gralkor.Message{role: "user", content: "Rain delays launches."}]
+                 [%Gralkor.Message{role: "user", content: "Rain delays launches."}],
+                 generalisation
                )
 
       assert :ok = Gralkor.Client.Native.flush_and_await("session-isolated", 1_000)
@@ -1166,8 +1166,8 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  "operator-one",
                  "Susu",
                  "Eli",
-                 observation,
-                 [%Gralkor.Message{role: "user", content: "first"}]
+                 [%Gralkor.Message{role: "user", content: "first"}],
+                 observation
                )
 
       assert :ok =
@@ -1176,8 +1176,8 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  "operator-one",
                  "Susu",
                  "Eli",
-                 decision,
-                 [%Gralkor.Message{role: "user", content: "second"}]
+                 [%Gralkor.Message{role: "user", content: "second"}],
+                 decision
                )
 
       assert [
@@ -1236,6 +1236,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       Application.delete_env(:jido_gralkor, :lenses)
 
       assert %Gralkor.Lens{name: "default", scope: :operator} = Client.lens!("default")
+      Code.ensure_loaded!(Gralkor.Client.Native)
       assert function_exported?(Gralkor.Client.Native, :capture, 5)
       assert function_exported?(Gralkor.Client.Native, :memory_add, 3)
       assert function_exported?(Gralkor.Client.Native, :recall, 4)
