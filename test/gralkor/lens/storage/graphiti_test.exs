@@ -41,6 +41,43 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                       _, _}
     end
 
+    test "and changing either the operator or Lens produces a distinct destination" do
+      test_pid = self()
+
+      add_episode_fn = fn destination, _content, _source_description, _ontology, _opts ->
+        send(test_pid, {:destination, destination})
+        :ok
+      end
+
+      stores = [
+        %Store{
+          operator_id: "operator-one",
+          lens: %Lens{name: "observations", ontology: Strict, scope: :operator, ingestion: String}
+        },
+        %Store{
+          operator_id: "operator-two",
+          lens: %Lens{name: "observations", ontology: Strict, scope: :operator, ingestion: String}
+        },
+        %Store{
+          operator_id: "operator-one",
+          lens: %Lens{name: "decisions", ontology: Strict, scope: :operator, ingestion: String}
+        }
+      ]
+
+      destinations =
+        Enum.map(stores, fn store ->
+          assert :ok =
+                   Graphiti.add_episode(store, "content", "source",
+                     add_episode_fn: add_episode_fn
+                   )
+
+          assert_receive {:destination, destination}
+          destination
+        end)
+
+      assert length(Enum.uniq(destinations)) == 3
+    end
+
     test "and the graph add receives the episode content, source description, and Lens ontology" do
       store = %Store{
         operator_id: "operator-one",
