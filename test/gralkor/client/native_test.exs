@@ -295,8 +295,7 @@ defmodule Gralkor.Client.NativeTest do
       assert [^msgs] = CaptureBuffer.turns_for("s1")
       assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
 
-      assert_receive {:lens_flushed, "operator-with-hyphens", "Susu", "Eli", "observations",
-                      [^msgs]}
+      assert_receive {:flushed, "operator-with-hyphens", "Susu", "Eli", "observations", [^msgs]}
     end
   end
 
