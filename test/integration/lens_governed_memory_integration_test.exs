@@ -46,6 +46,10 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
     end
   end
 
+  defmodule FailingIngestion do
+    def ingest(_request, _store), do: {:error, :rejected}
+  end
+
   defmodule RecordingStorage do
     @behaviour Gralkor.Lens.Storage
 
@@ -241,6 +245,26 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
 
       assert :ok = Client.ingest(request)
       assert_receive {:ingested, ^request, %{lens: %{name: "observations"}}}
+    end
+
+    test "and the caller observes whether ingestion succeeded or failed" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "rejected",
+          ontology: ObservationOntology,
+          scope: :operator,
+          ingestion: FailingIngestion
+        ]
+      ])
+
+      request = %Ingest{
+        operator_id: "operator-one",
+        lens: "rejected",
+        content: "Do not retain this.",
+        source_description: "consumer policy"
+      }
+
+      assert {:error, :rejected} = Client.ingest(request)
     end
   end
 end
