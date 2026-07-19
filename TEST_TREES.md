@@ -150,6 +150,10 @@ ex-generalise (src: lib/gralkor/generalise.ex; unit: test/gralkor/generalise_tes
   evaluate > skip
     when action is "skip"
       then no episode is added
+  persistence identity
+    whenever any decision persists a new generalisation
+      then add_episode receives `uuid: generalisation.id`
+      and the UUID is the same id encoded in the episode body
   level calculation
     when existing_id is found in all_existing
       then level = existing.level + 1

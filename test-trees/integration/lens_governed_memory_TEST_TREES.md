@@ -59,6 +59,7 @@ where an application has not registered or selected a named Lens
 when a transcript is submitted through Gralkor's generalising ingestion process
   then hypotheses are evaluated against generalisations available through the selected Lens
   and additions, replacements, and removals use the selected Lens's store
+  and every persisted generalisation uses its encoded id as its Lens-store episode identity
   and the selected Lens determines whether the resulting generalisations are operator-local or global
 
 where capture is configured to generalise a flushed transcript through another Lens
