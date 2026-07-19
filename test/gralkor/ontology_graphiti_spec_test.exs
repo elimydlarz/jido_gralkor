@@ -16,7 +16,10 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
         GraphitiPool.graphiti_boundary_spec(
           payload(%{
             entity_types: [
-              %{name: "User", fields: [%{name: :handle, type: :string, required: true, doc: "h"}]},
+              %{
+                name: "User",
+                fields: [%{name: :handle, type: :string, required: true, doc: "h"}]
+              },
               %{name: "Preference", fields: []}
             ]
           })
@@ -87,7 +90,10 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
         GraphitiPool.graphiti_boundary_spec(
           payload(%{
             entity_types: [
-              %{name: "User", fields: [%{name: :nickname, type: :string, required: false, doc: nil}]}
+              %{
+                name: "User",
+                fields: [%{name: :nickname, type: :string, required: false, doc: nil}]
+              }
             ]
           })
         )

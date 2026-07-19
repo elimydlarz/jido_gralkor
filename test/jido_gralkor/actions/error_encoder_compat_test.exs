@@ -25,7 +25,8 @@ defmodule JidoGralkor.Actions.ErrorEncoderCompatTest do
     # Gralkor.Recall.recall/5
     :recall_deadline_expired,
     # Gralkor.GraphitiPool.{search,add_episode,build_indices,build_communities}
-    {:python, "Python exception raised\n\n  Traceback (most recent call last):\n    File \"<string>\", line 2, in <module>\n  RuntimeError: boom\n"},
+    {:python,
+     "Python exception raised\n\n  Traceback (most recent call last):\n    File \"<string>\", line 2, in <module>\n  RuntimeError: boom\n"},
     # Gralkor.CaptureBuffer.flush_and_await/2
     :timeout,
     # InMemory test twin scenarios
@@ -46,6 +47,7 @@ defmodule JidoGralkor.Actions.ErrorEncoderCompatTest do
 
       assert is_binary(Jason.encode!(payload))
       assert is_map(envelope)
+
       refute is_struct(envelope[:details]),
              "envelope :details must not be a struct — Jason.encode! would crash"
     end

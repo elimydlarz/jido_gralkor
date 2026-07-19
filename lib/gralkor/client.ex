@@ -124,7 +124,8 @@ defmodule Gralkor.Client do
 
       target when is_binary(target) ->
         case lens!(target) do
-          %{scope: :operator} -> :ok
+          %{scope: :operator} ->
+            :ok
 
           %{scope: :global} ->
             raise ArgumentError,

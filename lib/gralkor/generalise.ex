@@ -51,16 +51,17 @@ defmodule Gralkor.Generalise do
     gen_partition = Keyword.get(opts, :partition, "#{group_id}_gen")
 
     with {:ok, hypotheses} <- do_hypothesise(transcript, hypothesise_fn, min_confidence),
-         :ok <- do_persist(
-           hypotheses,
-           search_gen_fn,
-           evaluate_fn,
-           add_episode_fn,
-           remove_episode_fn,
-           gen_partition,
-           max_gen_results,
-           ontology
-         ) do
+         :ok <-
+           do_persist(
+             hypotheses,
+             search_gen_fn,
+             evaluate_fn,
+             add_episode_fn,
+             remove_episode_fn,
+             gen_partition,
+             max_gen_results,
+             ontology
+           ) do
       :ok
     else
       {:error, {:upstream_llm, reason}} ->
@@ -109,7 +110,10 @@ defmodule Gralkor.Generalise do
     prompt = hypothesise_prompt(transcript)
 
     if test_mode?(),
-      do: Logger.info("[gralkor] [test] generalise hypothesise prompt chars: #{String.length(prompt)}")
+      do:
+        Logger.info(
+          "[gralkor] [test] generalise hypothesise prompt chars: #{String.length(prompt)}"
+        )
 
     case hypothesise_fn.(prompt) do
       {:ok, candidates} ->
@@ -132,62 +136,79 @@ defmodule Gralkor.Generalise do
     end
   end
 
-  defp do_persist(hypotheses, search_fn, evaluate_fn, add_fn, remove_fn, partition, max_results, ontology) do
+  defp do_persist(
+         hypotheses,
+         search_fn,
+         evaluate_fn,
+         add_fn,
+         remove_fn,
+         partition,
+         max_results,
+         ontology
+       ) do
     if hypotheses == [] do
-      Logger.info("[gralkor] generalise no hypotheses above confidence threshold — nothing to persist")
+      Logger.info(
+        "[gralkor] generalise no hypotheses above confidence threshold — nothing to persist"
+      )
+
       :ok
     else
+      # Search for existing generalisations related to each hypothesis
+      all_existing =
+        hypotheses
+        |> Enum.with_index()
+        |> Enum.flat_map(fn {h, idx} ->
+          query = Map.get(h, :content, "")
 
-    # Search for existing generalisations related to each hypothesis
-    all_existing =
-      hypotheses
-      |> Enum.with_index()
-      |> Enum.flat_map(fn {h, idx} ->
-        query = Map.get(h, :content, "")
-        case search_fn.(partition, query, max_results) do
-          {:ok, raw} ->
-            Enum.reduce(raw, [], fn fact, acc ->
-              case Generalisation.decode(fact) do
-                {:ok, gen, _plain} -> [gen | acc]
-                {:error, :not_a_generalisation} -> acc
-              end
-            end)
-            |> Enum.reverse()
+          case search_fn.(partition, query, max_results) do
+            {:ok, raw} ->
+              Enum.reduce(raw, [], fn fact, acc ->
+                case Generalisation.decode(fact) do
+                  {:ok, gen, _plain} -> [gen | acc]
+                  {:error, :not_a_generalisation} -> acc
+                end
+              end)
+              |> Enum.reverse()
 
-          {:error, reason} ->
-            Logger.warning("[gralkor] generalise search failed for hypothesis ##{idx}: #{inspect(reason)}")
-            []
-        end
-      end)
-      |> Enum.uniq_by(& &1.id)
+            {:error, reason} ->
+              Logger.warning(
+                "[gralkor] generalise search failed for hypothesis ##{idx}: #{inspect(reason)}"
+              )
 
-    Logger.info("[gralkor] generalise found #{length(all_existing)} unique existing generalisations")
+              []
+          end
+        end)
+        |> Enum.uniq_by(& &1.id)
 
-    # Build evaluate prompt: hypothesis + existing generalisations
-    eval_inputs =
-      hypotheses
-      |> Enum.with_index()
-      |> Enum.map(fn {h, idx} ->
-        %{hypothesis: h, index: idx}
-      end)
+      Logger.info(
+        "[gralkor] generalise found #{length(all_existing)} unique existing generalisations"
+      )
 
-    if test_mode?(),
-      do: Logger.info("[gralkor] [test] generalise eval inputs: #{length(eval_inputs)}")
+      # Build evaluate prompt: hypothesis + existing generalisations
+      eval_inputs =
+        hypotheses
+        |> Enum.with_index()
+        |> Enum.map(fn {h, idx} ->
+          %{hypothesis: h, index: idx}
+        end)
 
-    case evaluate_fn.(evaluate_prompt(eval_inputs, all_existing)) do
-      {:ok, decisions} ->
-        Logger.info("[gralkor] generalise evaluated — decisions:#{length(decisions)}")
+      if test_mode?(),
+        do: Logger.info("[gralkor] [test] generalise eval inputs: #{length(eval_inputs)}")
 
-        if test_mode?() and decisions != [],
-          do: Logger.info("[gralkor] [test] generalise decisions: #{inspect(decisions)}")
+      case evaluate_fn.(evaluate_prompt(eval_inputs, all_existing)) do
+        {:ok, decisions} ->
+          Logger.info("[gralkor] generalise evaluated — decisions:#{length(decisions)}")
 
-        persist_decisions(decisions, all_existing, add_fn, remove_fn, partition, ontology)
-        :ok
+          if test_mode?() and decisions != [],
+            do: Logger.info("[gralkor] [test] generalise decisions: #{inspect(decisions)}")
 
-      {:error, reason} ->
-        Logger.warning("[gralkor] generalise evaluate failed: #{inspect(reason)}")
-        :ok
-    end
+          persist_decisions(decisions, all_existing, add_fn, remove_fn, partition, ontology)
+          :ok
+
+        {:error, reason} ->
+          Logger.warning("[gralkor] generalise evaluate failed: #{inspect(reason)}")
+          :ok
+      end
     end
   end
 
@@ -243,7 +264,9 @@ defmodule Gralkor.Generalise do
           end
 
         _ ->
-          Logger.warning("[gralkor] generalise unknown action: #{inspect(Map.get(decision, :action))}")
+          Logger.warning(
+            "[gralkor] generalise unknown action: #{inspect(Map.get(decision, :action))}"
+          )
       end
     end)
   end
@@ -286,9 +309,9 @@ defmodule Gralkor.Generalise do
       else
         "Existing generalisations in memory:\n" <>
           (Enum.map(all_existing, fn g ->
-            "  - [#{g.id}] (level:#{g.level} confidence:#{g.confidence}) #{g.content}"
-          end)
-          |> Enum.join("\n"))
+             "  - [#{g.id}] (level:#{g.level} confidence:#{g.confidence}) #{g.content}"
+           end)
+           |> Enum.join("\n"))
       end
 
     entries =

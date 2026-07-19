@@ -152,7 +152,12 @@ defmodule Gralkor.ApplicationTest do
   describe "ex-application > build_lens_flush_callback/1" do
     test "renders the selected turns and submits the transcript through the selected Lens" do
       test_pid = self()
-      ingest = fn request -> send(test_pid, {:ingested, request}); :ok end
+
+      ingest = fn request ->
+        send(test_pid, {:ingested, request})
+        :ok
+      end
+
       callback = App.build_lens_flush_callback(ingest_fn: ingest)
 
       turns = [
@@ -547,10 +552,12 @@ defmodule Gralkor.ApplicationTest do
       assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn])
 
       assert_received {:add, "g1", _transcript, "captured", :ont, captured_opts}
+
       refute Keyword.get(captured_opts, :merge_learning_entity, false),
              "captured write must not merge Learning"
 
       assert_received {:add, "g1", _learning_body, "learning", :ont, learning_opts}
+
       assert Keyword.get(learning_opts, :merge_learning_entity) == true,
              "learning write signals merge_learning_entity: true"
     end
@@ -651,7 +658,12 @@ defmodule Gralkor.ApplicationTest do
     test "the default add_episode_fn reaches GraphitiPool.add_episode without raising", %{g: g} do
       cb = App.build_flush_callback({:embedded, "/tmp/never_used"})
 
-      turns = [[Gralkor.Message.new("user", "the backup keeps failing"), Gralkor.Message.new("assistant", "I moved the vacuum job to 04:00")]]
+      turns = [
+        [
+          Gralkor.Message.new("user", "the backup keeps failing"),
+          Gralkor.Message.new("assistant", "I moved the vacuum job to 04:00")
+        ]
+      ]
 
       assert :ok = cb.("flush_group", "Susu", "Eli", nil, turns)
 

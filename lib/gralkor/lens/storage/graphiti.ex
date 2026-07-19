@@ -19,9 +19,8 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     add_episode(store, content, source_description, [])
   end
 
-  @spec add_episode(Store.t(), String.t(), String.t(),
-          add_episode_fn: add_episode_fn()
-        ) :: :ok | {:error, term()}
+  @spec add_episode(Store.t(), String.t(), String.t(), add_episode_fn: add_episode_fn()) ::
+          :ok | {:error, term()}
   def add_episode(
         %Store{operator_id: operator_id, lens: %Lens{scope: :operator} = lens},
         content,

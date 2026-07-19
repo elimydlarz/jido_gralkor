@@ -258,7 +258,8 @@ defmodule Gralkor.CaptureBuffer do
 
         {:reply, turns, state}
 
-      {_group, _agent, _user, _ontology, turns} -> {:reply, turns, state}
+      {_group, _agent, _user, _ontology, turns} ->
+        {:reply, turns, state}
     end
   end
 

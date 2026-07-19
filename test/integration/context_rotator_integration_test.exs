@@ -165,5 +165,4 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
       assert committed_entries(pid) == []
     end
   end
-
 end

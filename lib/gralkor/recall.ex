@@ -176,7 +176,13 @@ defmodule Gralkor.Recall do
 
     {relevant, ms} =
       time(fn ->
-        Interpret.interpret_facts(conversation, facts_text, interpret_fn, agent_name, interpret_opts)
+        Interpret.interpret_facts(
+          conversation,
+          facts_text,
+          interpret_fn,
+          agent_name,
+          interpret_opts
+        )
       end)
 
     case relevant do

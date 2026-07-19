@@ -12,7 +12,12 @@ defmodule JidoGralkor.ReActTest do
       out = ReAct.maybe_force_memory_search(overrides, state(1))
 
       assert out.messages == [:msg]
-      assert Keyword.get(out.llm_opts, :tool_choice) == %{type: "function", function: %{name: "memory_search"}}
+
+      assert Keyword.get(out.llm_opts, :tool_choice) == %{
+               type: "function",
+               function: %{name: "memory_search"}
+             }
+
       assert Keyword.get(out.llm_opts, :other) == :preserved
     end
   end
@@ -30,7 +35,9 @@ defmodule JidoGralkor.ReActTest do
     test "then :llm_opts is added with [tool_choice: %{type: \"function\", function: %{name: \"memory_search\"}}]" do
       out = ReAct.maybe_force_memory_search(%{}, state(1))
 
-      assert out.llm_opts == [tool_choice: %{type: "function", function: %{name: "memory_search"}}]
+      assert out.llm_opts == [
+               tool_choice: %{type: "function", function: %{name: "memory_search"}}
+             ]
     end
   end
 end

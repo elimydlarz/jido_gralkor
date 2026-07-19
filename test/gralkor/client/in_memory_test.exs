@@ -24,9 +24,11 @@ defmodule Gralkor.Client.InMemoryTest do
   defp configure_build_indices(response), do: InMemory.set_build_indices(response)
   defp configure_build_communities(response), do: InMemory.set_build_communities(response)
   defp configure_generalise(response), do: InMemory.set_generalise(response)
-  defp configure_search_generalisations(response), do: InMemory.set_search_generalisations(response)
 
-  run_contract do: fn -> :ok end
+  defp configure_search_generalisations(response),
+    do: InMemory.set_search_generalisations(response)
+
+  run_contract(do: fn -> :ok end)
 
   describe "ex-client-in-memory > when an operation is called" do
     test "the call is recorded with its arguments (including agent_name) for later inspection" do

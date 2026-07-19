@@ -87,9 +87,14 @@ defmodule JidoGralkor.Canonical do
 
   defp extract_text(data) when is_map(data) do
     case Map.get(data, :text, "") do
-      value when is_binary(value) -> String.trim(value)
-      value when is_list(value) -> value |> Enum.map_join(" ", &stringify_block/1) |> String.trim()
-      value -> value |> inspect() |> String.trim()
+      value when is_binary(value) ->
+        String.trim(value)
+
+      value when is_list(value) ->
+        value |> Enum.map_join(" ", &stringify_block/1) |> String.trim()
+
+      value ->
+        value |> inspect() |> String.trim()
     end
   end
 

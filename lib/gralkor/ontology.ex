@@ -205,7 +205,12 @@ defmodule Gralkor.Ontology do
 
           {name, existing} ->
             ensure_unique_field!(existing, field, "entity #{inspect(name)}")
-            Module.put_attribute(module, :gralkor_ontology_current_entity, {name, [field | existing]})
+
+            Module.put_attribute(
+              module,
+              :gralkor_ontology_current_entity,
+              {name, [field | existing]}
+            )
         end
 
       existing ->
@@ -346,7 +351,10 @@ defmodule Gralkor.Ontology do
   end
 
   defp update_first_match([{key, _old} | rest], key, new), do: [{key, new} | rest]
-  defp update_first_match([head | rest], key, new), do: [head | update_first_match(rest, key, new)]
+
+  defp update_first_match([head | rest], key, new),
+    do: [head | update_first_match(rest, key, new)]
+
   defp update_first_match([], _key, _new), do: []
 
   defp fields_equivalent?(a, b) do

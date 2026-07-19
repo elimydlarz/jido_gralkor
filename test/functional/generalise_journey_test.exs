@@ -71,7 +71,9 @@ defmodule Gralkor.GeneraliseJourneyTest do
 
   defp search_until(partition, query, min, budget_ms) do
     case GraphitiPool.search(partition, query, 5) do
-      {:ok, raw} when length(raw) >= min -> raw
+      {:ok, raw} when length(raw) >= min ->
+        raw
+
       _ ->
         Process.sleep(3_000)
         search_until(partition, query, min, max(budget_ms - 3_000, 0))
@@ -100,8 +102,15 @@ defmodule Gralkor.GeneraliseJourneyTest do
         end
 
         evaluate_fn = fn _prompt ->
-          {:ok, [%{hypothesis_index: 0, action: "save", confidence: 0.92,
-                   content: "Eli consistently prefers dark mode"}]}
+          {:ok,
+           [
+             %{
+               hypothesis_index: 0,
+               action: "save",
+               confidence: 0.92,
+               content: "Eli consistently prefers dark mode"
+             }
+           ]}
         end
 
         Task.start(fn ->
@@ -110,9 +119,18 @@ defmodule Gralkor.GeneraliseJourneyTest do
             search_gen_fn: search_gen_fn,
             evaluate_fn: evaluate_fn,
             add_episode_fn: fn _gid, content, source, ontology, opts ->
-              GraphitiPool.add_episode(Gralkor.GraphitiPool, gen_partition, content, source, ontology, opts)
+              GraphitiPool.add_episode(
+                Gralkor.GraphitiPool,
+                gen_partition,
+                content,
+                source,
+                ontology,
+                opts
+              )
             end,
-            remove_episode_fn: fn _gid, uuid -> GraphitiPool.remove_episode(gen_partition, uuid) end,
+            remove_episode_fn: fn _gid, uuid ->
+              GraphitiPool.remove_episode(gen_partition, uuid)
+            end,
             min_confidence: 0.3,
             max_gen_results: 5
           )
@@ -140,6 +158,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
              "expected at least one fact in the _gen partition; got #{inspect(raw)}"
 
       facts_text = Enum.map(raw, &Map.get(&1, :fact)) |> Enum.join("\n")
+
       assert facts_text =~ "dark mode",
              "expected search results to mention dark mode; got: #{facts_text}"
     end
@@ -158,12 +177,22 @@ defmodule Gralkor.GeneraliseJourneyTest do
       }
 
       body = Generalisation.encode(gen)
-      :ok = GraphitiPool.add_episode(Gralkor.GraphitiPool, gen_partition, body, "generalisation", nil, [])
+
+      :ok =
+        GraphitiPool.add_episode(
+          Gralkor.GraphitiPool,
+          gen_partition,
+          body,
+          "generalisation",
+          nil,
+          []
+        )
 
       raw = search_until(gen_partition, "standing desk", 1, 60_000)
       assert length(raw) >= 1, "expected at least one search result; got #{inspect(raw)}"
 
       facts_text = Enum.map(raw, &Map.get(&1, :fact)) |> Enum.join("\n")
+
       assert facts_text =~ "standing" or facts_text =~ "desk",
              "expected search results to mention the generalisation; got: #{facts_text}"
     end

@@ -497,6 +497,7 @@ defmodule Gralkor.RecallTest do
       interpret_fn = fn prompt, _budget ->
         if String.contains?(prompt, "<generalisation> pattern"),
           do: send(test_pid, :interpret_saw_gen)
+
         {:ok, ["- some fact (created 2020) — relevant"]}
       end
 

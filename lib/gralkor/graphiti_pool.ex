@@ -66,7 +66,8 @@ defmodule Gralkor.GraphitiPool do
   def search(server \\ __MODULE__, group_id, query, max_results)
 
   def search(server, group_id, query, max_results)
-      when is_binary(group_id) and is_binary(query) and is_integer(max_results) and max_results > 0 do
+      when is_binary(group_id) and is_binary(query) and is_integer(max_results) and
+             max_results > 0 do
     instance = __MODULE__.for(server, group_id)
 
     {raw, _} =
@@ -118,7 +119,8 @@ defmodule Gralkor.GraphitiPool do
   def search_nodes(server \\ __MODULE__, group_id, query, max_results, opts \\ [])
 
   def search_nodes(server, group_id, query, max_results, opts)
-      when is_binary(group_id) and is_binary(query) and is_integer(max_results) and max_results > 0 and
+      when is_binary(group_id) and is_binary(query) and is_integer(max_results) and
+             max_results > 0 and
              is_list(opts) do
     instance = __MODULE__.for(server, group_id)
     node_labels = Keyword.get(opts, :node_labels)
@@ -185,12 +187,27 @@ defmodule Gralkor.GraphitiPool do
       against it (update path). When nil (default), graphiti generates a new
       UUID.
   """
-  @spec add_episode(GenServer.server(), String.t(), String.t(), String.t(), module() | nil, keyword()) ::
+  @spec add_episode(
+          GenServer.server(),
+          String.t(),
+          String.t(),
+          String.t(),
+          module() | nil,
+          keyword()
+        ) ::
           :ok | {:error, term()}
-  def add_episode(server \\ __MODULE__, group_id, content, source_description, ontology, opts \\ [])
+  def add_episode(
+        server \\ __MODULE__,
+        group_id,
+        content,
+        source_description,
+        ontology,
+        opts \\ []
+      )
 
   def add_episode(server, group_id, content, source_description, ontology, opts)
-      when is_binary(group_id) and is_binary(content) and is_binary(source_description) and is_list(opts) do
+      when is_binary(group_id) and is_binary(content) and is_binary(source_description) and
+             is_list(opts) do
     instance = __MODULE__.for(server, group_id)
 
     name = "manual-add-" <> Integer.to_string(System.system_time(:millisecond))
@@ -456,9 +473,13 @@ defmodule Gralkor.GraphitiPool do
             mod when is_atom(mod) -> mod.__ontology__()
           end
 
-        payload = if merge_learning?, do: LearningEntity.merge_ontology_payload(payload), else: payload
+        payload =
+          if merge_learning?, do: LearningEntity.merge_ontology_payload(payload), else: payload
+
         dicts = build_ontology_dicts(payload)
-        {:reply, dicts, %{state | ontology_cache: Map.put(state.ontology_cache, cache_key, dicts)}}
+
+        {:reply, dicts,
+         %{state | ontology_cache: Map.put(state.ontology_cache, cache_key, dicts)}}
     end
   end
 

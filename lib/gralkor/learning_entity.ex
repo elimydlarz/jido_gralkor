@@ -28,7 +28,12 @@ defmodule Gralkor.LearningEntity do
       name: @learning_name,
       description: @description,
       fields: [
-        %{name: :problem_kind, type: :string, required: false, doc: "the kind of problem approached"},
+        %{
+          name: :problem_kind,
+          type: :string,
+          required: false,
+          doc: "the kind of problem approached"
+        },
         %{name: :approach, type: :string, required: false, doc: "the approach taken"},
         %{name: :success, type: :boolean, required: false, doc: "whether it succeeded"},
         %{name: :lesson, type: :string, required: false, doc: "what was learned"}

@@ -37,9 +37,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  add_episode_fn: add_episode_fn
                )
 
-      assert_receive {:graph_add,
-                      "lens_6f70657261746f722d6f6e65_6f62736572766174696f6e73",
-                      _, _, _, _}
+      assert_receive {:graph_add, "lens_6f70657261746f722d6f6e65_6f62736572766174696f6e73", _, _,
+                      _, _}
     end
 
     test "and the graph add receives the episode content, source description, and Lens ontology" do
@@ -92,9 +91,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       end
 
       assert {:error, :graph_unavailable} =
-               Graphiti.add_episode(store, "content", "source",
-                 add_episode_fn: add_episode_fn
-               )
+               Graphiti.add_episode(store, "content", "source", add_episode_fn: add_episode_fn)
     end
   end
 
@@ -120,8 +117,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert {:ok, []} =
                Graphiti.search(store, "launch window", 7, search_fn: search_fn)
 
-      assert_receive {:graph_search,
-                      "lens_6f70657261746f722d6f6e65_6f62736572766174696f6e73", _, _}
+      assert_receive {:graph_search, "lens_6f70657261746f722d6f6e65_6f62736572766174696f6e73", _,
+                      _}
     end
 
     test "and graph search receives the query and result limit" do
@@ -190,7 +187,9 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
         {:ok, []}
       end
 
-      assert :ok = Graphiti.add_episode(store, "content", "source", add_episode_fn: add_episode_fn)
+      assert :ok =
+               Graphiti.add_episode(store, "content", "source", add_episode_fn: add_episode_fn)
+
       assert {:ok, []} = Graphiti.search(store, "content", 5, search_fn: search_fn)
       assert_receive {:graph_add, "operator_one"}
       assert_receive {:graph_search, "operator_one"}

@@ -67,7 +67,9 @@ defmodule Gralkor.LearnTest do
         lesson: "cold caches fail the first health check"
       }
 
-      assert {:ok, %AgentLearning{} = learning} = Learn.learn(turn(), ok_learn(record), "Susu", "Eli")
+      assert {:ok, %AgentLearning{} = learning} =
+               Learn.learn(turn(), ok_learn(record), "Susu", "Eli")
+
       assert learning.problem_kind == "deploy timeout"
       assert learning.approach == "warm cache at boot"
       assert learning.success == true
@@ -82,7 +84,9 @@ defmodule Gralkor.LearnTest do
         "lesson" => "cold caches fail the first health check"
       }
 
-      assert {:ok, %AgentLearning{} = learning} = Learn.learn(turn(), ok_learn(record), "Susu", "Eli")
+      assert {:ok, %AgentLearning{} = learning} =
+               Learn.learn(turn(), ok_learn(record), "Susu", "Eli")
+
       assert learning.problem_kind == "deploy timeout"
       assert learning.success == false
     end

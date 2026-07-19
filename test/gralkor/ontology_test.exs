@@ -41,7 +41,7 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
         entity User do
-          field :handle, :string
+          field(:handle, :string)
         end
       end
 
@@ -53,7 +53,7 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
         entity User do
-          field :handle, :string, required: true
+          field(:handle, :string, required: true)
         end
       end
 
@@ -66,7 +66,7 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
         entity User do
-          field :nickname, :string
+          field(:nickname, :string)
         end
       end
 
@@ -79,7 +79,7 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
         entity User do
-          field :handle, :string, doc: "stable login handle"
+          field(:handle, :string, doc: "stable login handle")
         end
       end
 
@@ -93,7 +93,7 @@ defmodule Gralkor.OntologyTest do
           use Gralkor.Ontology, entities: :open, relationships: :open
 
           entity User do
-            field :handle, :atom
+            field(:handle, :atom)
           end
         end
       end
@@ -105,8 +105,8 @@ defmodule Gralkor.OntologyTest do
           use Gralkor.Ontology, entities: :open, relationships: :open
 
           entity User do
-            field :handle, :string
-            field :handle, :string
+            field(:handle, :string)
+            field(:handle, :string)
           end
         end
       end
@@ -118,11 +118,11 @@ defmodule Gralkor.OntologyTest do
           use Gralkor.Ontology, entities: :open, relationships: :open
 
           entity User do
-            field :handle, :string
+            field(:handle, :string)
           end
 
           entity User do
-            field :handle, :string
+            field(:handle, :string)
           end
         end
       end
@@ -135,15 +135,15 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
 
         entity User do
-          field :handle, :string
+          field(:handle, :string)
         end
 
         entity Preference do
-          field :description, :string
+          field(:description, :string)
         end
 
         from User do
-          prefers Preference
+          prefers(Preference)
         end
       end
 
@@ -157,16 +157,16 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
 
         entity User do
-          field :handle, :string
+          field(:handle, :string)
         end
 
         entity Preference do
-          field :description, :string
+          field(:description, :string)
         end
 
         from User do
           prefers Preference do
-            field :since, :string, doc: "date first observed"
+            field(:since, :string, doc: "date first observed")
           end
         end
       end
@@ -180,11 +180,11 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
 
         entity Node do
-          field :label, :string
+          field(:label, :string)
         end
 
         from Node do
-          relates_to Node
+          relates_to(Node)
         end
       end
 
@@ -197,23 +197,23 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
 
         entity User do
-          field :handle, :string
+          field(:handle, :string)
         end
 
         entity Org do
-          field :name, :string
+          field(:name, :string)
         end
 
         entity Preference do
-          field :description, :string
+          field(:description, :string)
         end
 
         from User do
-          endorses Preference
+          endorses(Preference)
         end
 
         from Org do
-          endorses Preference
+          endorses(Preference)
         end
       end
 
@@ -232,22 +232,22 @@ defmodule Gralkor.OntologyTest do
           use Gralkor.Ontology, entities: :open, relationships: :scoped
 
           entity User do
-            field :handle, :string
+            field(:handle, :string)
           end
 
           entity Preference do
-            field :description, :string
+            field(:description, :string)
           end
 
           from User do
             prefers Preference do
-              field :since, :string
+              field(:since, :string)
             end
           end
 
           from User do
             prefers Preference do
-              field :strength, :string
+              field(:strength, :string)
             end
           end
         end
@@ -260,11 +260,11 @@ defmodule Gralkor.OntologyTest do
           use Gralkor.Ontology, entities: :open, relationships: :scoped
 
           entity Preference do
-            field :description, :string
+            field(:description, :string)
           end
 
           from Ghost do
-            prefers Preference
+            prefers(Preference)
           end
         end
       end
@@ -276,11 +276,11 @@ defmodule Gralkor.OntologyTest do
           use Gralkor.Ontology, entities: :open, relationships: :scoped
 
           entity User do
-            field :handle, :string
+            field(:handle, :string)
           end
 
           from User do
-            knows Ghost
+            knows(Ghost)
           end
         end
       end
@@ -292,11 +292,11 @@ defmodule Gralkor.OntologyTest do
           use Gralkor.Ontology, entities: :open, relationships: :scoped
 
           entity User do
-            field :handle, :string
+            field(:handle, :string)
           end
 
           from User do
-            knows "Ghost"
+            knows("Ghost")
           end
         end
       end
@@ -307,11 +307,11 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
 
         entity User do
-          field :handle, :string
+          field(:handle, :string)
         end
 
         from User do
-          trusts User
+          trusts(User)
         end
       end
 
@@ -326,7 +326,7 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :strict, relationships: :open
 
         entity User do
-          field :handle, :string
+          field(:handle, :string)
         end
       end
 
@@ -338,7 +338,7 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
         entity User do
-          field :handle, :string
+          field(:handle, :string)
         end
       end
 
@@ -352,15 +352,15 @@ defmodule Gralkor.OntologyTest do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
         entity User do
-          field :handle, :string
+          field(:handle, :string)
         end
 
         entity Preference do
-          field :description, :string
+          field(:description, :string)
         end
 
         from User do
-          prefers Preference
+          prefers(Preference)
         end
       end
 
@@ -390,20 +390,20 @@ defmodule Gralkor.OntologyTest do
       use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
       entity User do
-        field :handle, :string, required: true, doc: "stable login handle"
-        field :timezone, :string, doc: "IANA tz"
+        field(:handle, :string, required: true, doc: "stable login handle")
+        field(:timezone, :string, doc: "IANA tz")
       end
 
       entity Preference do
-        field :description, :string, required: true
+        field(:description, :string, required: true)
       end
 
       from User do
         prefers Preference do
-          field :since, :string, doc: "date first observed"
+          field(:since, :string, doc: "date first observed")
         end
 
-        trusts User
+        trusts(User)
       end
     end
 

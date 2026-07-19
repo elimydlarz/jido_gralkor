@@ -51,8 +51,12 @@ defmodule Gralkor.InterpretTest do
       assert prompt =~ ~r/understandings extracted from source material/i
       assert prompt =~ ~r/rather than proven/i
       assert prompt =~ ~r/mention the source context.*when available.*only where natural/is
-      assert prompt =~ ~r/without confidence labels, truth adjudication, or repetitive uncertainty warnings/i
-      assert prompt =~ ~r/when retrieved memory facts conflict.*preserve the relevant accounts.*rather than choosing one as true/is
+
+      assert prompt =~
+               ~r/without confidence labels, truth adjudication, or repetitive uncertainty warnings/i
+
+      assert prompt =~
+               ~r/when retrieved memory facts conflict.*preserve the relevant accounts.*rather than choosing one as true/is
     end
   end
 
@@ -296,7 +300,7 @@ defmodule Gralkor.InterpretTest do
         )
 
       refute ctx =~ "Susu:"
-      assert (ctx |> String.split("User:") |> length()) == 2
+      assert ctx |> String.split("User:") |> length() == 2
     end
 
     test "assembles context as 'Conversation context:\\n{messages}\\n\\nMemory facts to interpret:\\n{facts}'" do

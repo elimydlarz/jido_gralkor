@@ -41,7 +41,17 @@ defmodule Gralkor.LearningEntityTest do
     end
 
     test "no field name is Graphiti-protected" do
-      protected = [:uuid, :name, :group_id, :labels, :created_at, :summary, :attributes, :name_embedding]
+      protected = [
+        :uuid,
+        :name,
+        :group_id,
+        :labels,
+        :created_at,
+        :summary,
+        :attributes,
+        :name_embedding
+      ]
+
       field_names = Enum.map(LearningEntity.spec().fields, & &1.name)
 
       for p <- protected do
@@ -56,7 +66,10 @@ defmodule Gralkor.LearningEntityTest do
     end
 
     test "appends Learning after a consumer's existing entities" do
-      consumer = [%{name: "User", fields: [%{name: :handle, type: :string, required: true, doc: nil}]}]
+      consumer = [
+        %{name: "User", fields: [%{name: :handle, type: :string, required: true, doc: nil}]}
+      ]
+
       result = LearningEntity.merge_entity_types(consumer)
 
       assert length(result) == 2

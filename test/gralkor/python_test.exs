@@ -155,7 +155,9 @@ defmodule Gralkor.PythonTest do
       Process.sleep(200)
 
       remaining = list_redislite_pids()
-      assert remaining == [], "expected reaper to leave no matching processes; got #{inspect(remaining)}"
+
+      assert remaining == [],
+             "expected reaper to leave no matching processes; got #{inspect(remaining)}"
 
       # The Port's child has been SIGKILLed; closing the Port may itself raise
       # if it has already exited — that's fine, we don't care here.

@@ -31,8 +31,13 @@ defmodule Gralkor.GeneraliseTest do
         :ok
       end
 
-      assert :ok = Generalise.generalise("g", "some transcript",
-        default_opts(hypothesise_fn: ok_hypothesise([]), add_episode_fn: add_fn))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "some transcript",
+                 default_opts(hypothesise_fn: ok_hypothesise([]), add_episode_fn: add_fn)
+               )
+
       refute Process.get(:add_episode_called, false)
     end
 
@@ -42,8 +47,12 @@ defmodule Gralkor.GeneraliseTest do
         %{content: "vague preference", confidence: 0.25}
       ]
 
-      assert :ok = Generalise.generalise("g", "some transcript",
-        default_opts(hypothesise_fn: ok_hypothesise(below), min_confidence: 0.3))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "some transcript",
+                 default_opts(hypothesise_fn: ok_hypothesise(below), min_confidence: 0.3)
+               )
 
       refute Process.get(:add_episode_called, false)
     end
@@ -60,12 +69,16 @@ defmodule Gralkor.GeneraliseTest do
         {:ok, []}
       end
 
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(
-          hypothesise_fn: ok_hypothesise(mixed),
-          evaluate_fn: eval_fn,
-          min_confidence: 0.3
-        ))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(mixed),
+                   evaluate_fn: eval_fn,
+                   min_confidence: 0.3
+                 )
+               )
     end
 
     test "candidates are sorted by confidence descending before evaluation" do
@@ -83,14 +96,18 @@ defmodule Gralkor.GeneraliseTest do
       end
 
       assert :ok =
-               Generalise.generalise("g", "transcript",
-                 default_opts(hypothesise_fn: ok_hypothesise(candidates), evaluate_fn: eval_fn))
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(hypothesise_fn: ok_hypothesise(candidates), evaluate_fn: eval_fn)
+               )
     end
   end
 
   describe "ex-generalise > evaluate > save" do
     test "a save decision persists a new generalisation at level 0" do
       candidates = [%{content: "User prefers dark mode", confidence: 0.85}]
+
       decisions = [
         %{
           hypothesis_index: 0,
@@ -111,12 +128,16 @@ defmodule Gralkor.GeneraliseTest do
         :ok
       end
 
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(
-          hypothesise_fn: ok_hypothesise(candidates),
-          evaluate_fn: ok_evaluate(decisions),
-          add_episode_fn: add_fn
-        ))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   evaluate_fn: ok_evaluate(decisions),
+                   add_episode_fn: add_fn
+                 )
+               )
     end
   end
 
@@ -148,13 +169,17 @@ defmodule Gralkor.GeneraliseTest do
         :ok
       end
 
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(
-          hypothesise_fn: ok_hypothesise(candidates),
-          search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
-          evaluate_fn: ok_evaluate(decisions),
-          add_episode_fn: add_fn
-        ))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
+                   evaluate_fn: ok_evaluate(decisions),
+                   add_episode_fn: add_fn
+                 )
+               )
     end
   end
 
@@ -186,13 +211,17 @@ defmodule Gralkor.GeneraliseTest do
         :ok
       end
 
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(
-          hypothesise_fn: ok_hypothesise(candidates),
-          search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
-          evaluate_fn: ok_evaluate(decisions),
-          add_episode_fn: add_fn
-        ))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
+                   evaluate_fn: ok_evaluate(decisions),
+                   add_episode_fn: add_fn
+                 )
+               )
     end
   end
 
@@ -205,7 +234,12 @@ defmodule Gralkor.GeneraliseTest do
         confidence: 0.6
       }
 
-      candidates = [%{content: "User finds notifications helpful for time-sensitive updates", confidence: 0.88}]
+      candidates = [
+        %{
+          content: "User finds notifications helpful for time-sensitive updates",
+          confidence: 0.88
+        }
+      ]
 
       decisions = [
         %{
@@ -217,18 +251,22 @@ defmodule Gralkor.GeneraliseTest do
         }
       ]
 
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(
-          hypothesise_fn: ok_hypothesise(candidates),
-          search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
-          evaluate_fn: ok_evaluate(decisions),
-          add_episode_fn: ok_add(),
-          remove_episode_fn: fn _partition, uuid ->
-            Process.put(:remove_called, true)
-            assert uuid == "gen-outdated"
-            :ok
-          end
-        ))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
+                   evaluate_fn: ok_evaluate(decisions),
+                   add_episode_fn: ok_add(),
+                   remove_episode_fn: fn _partition, uuid ->
+                     Process.put(:remove_called, true)
+                     assert uuid == "gen-outdated"
+                     :ok
+                   end
+                 )
+               )
 
       assert Process.get(:remove_called, false)
     end
@@ -237,17 +275,24 @@ defmodule Gralkor.GeneraliseTest do
   describe "ex-generalise > evaluate > skip" do
     test "a skip decision does not persist anything" do
       candidates = [%{content: "Some weak pattern", confidence: 0.5}]
-      decisions = [%{hypothesis_index: 0, action: "skip", confidence: 0.5, content: "Some weak pattern"}]
 
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(
-          hypothesise_fn: ok_hypothesise(candidates),
-          evaluate_fn: ok_evaluate(decisions),
-          add_episode_fn: fn _g, _b, _s, _ont, _opts ->
-            Process.put(:add_called, true)
-            :ok
-          end
-        ))
+      decisions = [
+        %{hypothesis_index: 0, action: "skip", confidence: 0.5, content: "Some weak pattern"}
+      ]
+
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   evaluate_fn: ok_evaluate(decisions),
+                   add_episode_fn: fn _g, _b, _s, _ont, _opts ->
+                     Process.put(:add_called, true)
+                     :ok
+                   end
+                 )
+               )
 
       refute Process.get(:add_called, false)
     end
@@ -255,42 +300,60 @@ defmodule Gralkor.GeneraliseTest do
 
   describe "ex-generalise > error handling" do
     test "when hypothesise LLM fails, generalise returns :ok (best-effort)" do
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(hypothesise_fn: fn _prompt -> {:error, {:upstream_llm, :timeout}} end))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: fn _prompt -> {:error, {:upstream_llm, :timeout}} end
+                 )
+               )
     end
 
     test "when evaluate LLM fails, generalise returns :ok (best-effort)" do
       candidates = [%{content: "test", confidence: 0.8}]
 
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(
-          hypothesise_fn: ok_hypothesise(candidates),
-          evaluate_fn: fn _prompt -> {:error, {:upstream_llm, :rate_limited}} end
-        ))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   evaluate_fn: fn _prompt -> {:error, {:upstream_llm, :rate_limited}} end
+                 )
+               )
     end
 
     test "when search fails for a hypothesis, it continues with empty existing list" do
       candidates = [%{content: "test", confidence: 0.8}]
       decisions = [%{hypothesis_index: 0, action: "save", confidence: 0.8, content: "test"}]
 
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(
-          hypothesise_fn: ok_hypothesise(candidates),
-          search_gen_fn: fn _p, _q, _m -> {:error, :search_failed} end,
-          evaluate_fn: ok_evaluate(decisions)
-        ))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   search_gen_fn: fn _p, _q, _m -> {:error, :search_failed} end,
+                   evaluate_fn: ok_evaluate(decisions)
+                 )
+               )
     end
 
     test "when add_episode fails, it logs and continues" do
       candidates = [%{content: "test", confidence: 0.8}]
       decisions = [%{hypothesis_index: 0, action: "save", confidence: 0.8, content: "test"}]
 
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(
-          hypothesise_fn: ok_hypothesise(candidates),
-          evaluate_fn: ok_evaluate(decisions),
-          add_episode_fn: fn _g, _b, _s, _ont, _opts -> {:error, :disk_full} end
-        ))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   evaluate_fn: ok_evaluate(decisions),
+                   add_episode_fn: fn _g, _b, _s, _ont, _opts -> {:error, :disk_full} end
+                 )
+               )
     end
   end
 
@@ -304,6 +367,7 @@ defmodule Gralkor.GeneraliseTest do
       }
 
       candidates = [%{content: "broader", confidence: 0.9}]
+
       decisions = [
         %{
           hypothesis_index: 0,
@@ -320,17 +384,22 @@ defmodule Gralkor.GeneraliseTest do
         :ok
       end
 
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(
-          hypothesise_fn: ok_hypothesise(candidates),
-          search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
-          evaluate_fn: ok_evaluate(decisions),
-          add_episode_fn: add_fn
-        ))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
+                   evaluate_fn: ok_evaluate(decisions),
+                   add_episode_fn: add_fn
+                 )
+               )
     end
 
     test "when existing_id is not found, level defaults to 0" do
       candidates = [%{content: "test", confidence: 0.8}]
+
       decisions = [
         %{
           hypothesis_index: 0,
@@ -347,13 +416,17 @@ defmodule Gralkor.GeneraliseTest do
         :ok
       end
 
-      assert :ok = Generalise.generalise("g", "transcript",
-        default_opts(
-          hypothesise_fn: ok_hypothesise(candidates),
-          search_gen_fn: ok_search([]),
-          evaluate_fn: ok_evaluate(decisions),
-          add_episode_fn: add_fn
-        ))
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   search_gen_fn: ok_search([]),
+                   evaluate_fn: ok_evaluate(decisions),
+                   add_episode_fn: add_fn
+                 )
+               )
     end
   end
 end

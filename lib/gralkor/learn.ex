@@ -52,7 +52,8 @@ defmodule Gralkor.Learn do
       problem_kind: [
         type: :string,
         required: true,
-        doc: "The kind of problem that was being approached this turn (a short, reusable category)."
+        doc:
+          "The kind of problem that was being approached this turn (a short, reusable category)."
       ],
       approach: [
         type: :string,

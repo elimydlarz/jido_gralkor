@@ -69,6 +69,7 @@ defmodule Gralkor.Application do
       Keyword.get(deps, :add_episode_fn, fn group_id, content, source, ontology, opts ->
         GraphitiPool.add_episode(GraphitiPool, group_id, content, source, ontology, opts)
       end)
+
     generalise_fn = Keyword.get(deps, :generalise_fn)
     learn_fn = Keyword.get(deps, :learn_fn)
 

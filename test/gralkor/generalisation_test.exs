@@ -78,14 +78,16 @@ defmodule Gralkor.GeneralisationTest do
     end
 
     test "returns plain content trimmed of whitespace" do
-      encoded = "GEN|v1|{\"id\":\"x\",\"level\":0,\"confidence\":0.5,\"generalises\":[]}\n  padded content  \n"
+      encoded =
+        "GEN|v1|{\"id\":\"x\",\"level\":0,\"confidence\":0.5,\"generalises\":[]}\n  padded content  \n"
 
       assert {:ok, _gen, plain} = Generalisation.decode(encoded)
       assert plain == "padded content"
     end
 
     test "handles content with newlines" do
-      encoded = "GEN|v1|{\"id\":\"x\",\"level\":1,\"confidence\":0.7,\"generalises\":[\"y\"]}\nLine 1\nLine 2\nLine 3"
+      encoded =
+        "GEN|v1|{\"id\":\"x\",\"level\":1,\"confidence\":0.7,\"generalises\":[\"y\"]}\nLine 1\nLine 2\nLine 3"
 
       assert {:ok, gen, plain} = Generalisation.decode(encoded)
       assert gen.id == "x"

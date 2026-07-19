@@ -23,15 +23,15 @@ defmodule Gralkor.OntologyExtractionTest do
     use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
     entity User do
-      field :handle, :string, required: true, doc: "stable login handle"
+      field(:handle, :string, required: true, doc: "stable login handle")
     end
 
     entity Preference do
-      field :description, :string, required: true, doc: "what the user prefers"
+      field(:description, :string, required: true, doc: "what the user prefers")
     end
 
     from User do
-      prefers Preference
+      prefers(Preference)
     end
   end
 
@@ -39,15 +39,15 @@ defmodule Gralkor.OntologyExtractionTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
 
     entity User do
-      field :handle, :string, required: true
+      field(:handle, :string, required: true)
     end
 
     entity Preference do
-      field :description, :string, required: true
+      field(:description, :string, required: true)
     end
 
     from User do
-      prefers Preference
+      prefers(Preference)
     end
   end
 

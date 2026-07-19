@@ -339,7 +339,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert div(us_cached, 1000) < 50,
              "100 concurrent cached reads should be near-instant (no GenServer hop), got #{div(us_cached, 1000)}ms (initial creation took #{ms}ms)"
     end
-
   end
 
   describe "for/1 (group_id), when called against a remote spec" do
@@ -359,8 +358,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
       %{pid: pid, table: table} =
         start_pool(
-          falkordb_spec:
-            {:remote, host: "h", port: 1, username: "u", password: "p", ssl: false},
+          falkordb_spec: {:remote, host: "h", port: 1, username: "u", password: "p", ssl: false},
           construct_falkor_db: construct_falkor_db,
           construct_instance: construct_instance,
           warmup: false
@@ -550,16 +548,16 @@ defmodule Gralkor.GraphitiPoolTest do
       use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
       entity User do
-        field :handle, :string, required: true
+        field(:handle, :string, required: true)
       end
 
       entity Preference do
-        field :description, :string, required: true
+        field(:description, :string, required: true)
       end
 
       from User do
         prefers Preference do
-          field :since, :string
+          field(:since, :string)
         end
       end
     end
@@ -568,15 +566,15 @@ defmodule Gralkor.GraphitiPoolTest do
       use Gralkor.Ontology, entities: :open, relationships: :open
 
       entity User do
-        field :handle, :string, required: true
+        field(:handle, :string, required: true)
       end
 
       entity Preference do
-        field :description, :string, required: true
+        field(:description, :string, required: true)
       end
 
       from User do
-        prefers Preference
+        prefers(Preference)
       end
     end
 
@@ -591,7 +589,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
       try do
         strict = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
-        strict_again = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
+
+        strict_again =
+          GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
+
         open = GenServer.call(pid, {:materialise, OpenOntologyForGraphitiTest}, :infinity)
 
         assert Enum.sort(Map.keys(strict)) ==
@@ -660,7 +661,7 @@ defmodule Gralkor.GraphitiPoolTest do
             %{"entity_types" => merged["entity_types"]}
           )
 
-        assert (names |> Pythonx.decode() |> List.to_string()) == "Learning"
+        assert names |> Pythonx.decode() |> List.to_string() == "Learning"
 
         refute Map.has_key?(merged, "edge_types")
         refute Map.has_key?(merged, "edge_type_map")

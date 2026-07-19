@@ -96,7 +96,8 @@ defmodule JidoGralkor.Plugin do
 
       target when is_binary(target) ->
         case Client.lens!(target) do
-          %{scope: :operator} -> :ok
+          %{scope: :operator} ->
+            :ok
 
           %{scope: :global} ->
             raise ArgumentError,
@@ -294,6 +295,7 @@ defmodule JidoGralkor.Plugin do
 
   defp merge_tool_context(%Signal{data: data} = signal, extras) when is_map(extras) do
     existing_context = Map.get(data, :tool_context, %{})
+
     new_context =
       case Map.fetch(existing_context, :lens) do
         {:ok, lens} ->

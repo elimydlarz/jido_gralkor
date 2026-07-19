@@ -263,7 +263,11 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert_receive {:add_episode,
                       %Gralkor.Lens.Store{
                         operator_id: "operator-one",
-                        lens: %{name: "observations", ontology: ObservationOntology, scope: :operator}
+                        lens: %{
+                          name: "observations",
+                          ontology: ObservationOntology,
+                          scope: :operator
+                        }
                       }, "one", "project update"}
 
       assert :ok = Client.ingest(request.("many"))
@@ -458,7 +462,12 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                  source_description: "public project update"
                })
 
-      assert [%{content: "The public launch window moved to Friday.", lens: "published-observations"}] =
+      assert [
+               %{
+                 content: "The public launch window moved to Friday.",
+                 lens: "published-observations"
+               }
+             ] =
                Gralkor.Lens.Storage.InMemory.episodes(:global)
     end
 
@@ -770,8 +779,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
                         lens: "observations",
                         content: "The launch window moved.",
                         source_description: "agent thought"
-                      },
-                      %{lens: %{name: "observations"}}}
+                      }, %{lens: %{name: "observations"}}}
     end
 
     test "and memory search uses the configured search targets" do
@@ -948,9 +956,7 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
 
       start_supervised!(
         {Gralkor.CaptureBuffer,
-         flush_callback: fn _, _, _, _, _ -> :ok end,
-         lens_flush_callback: lens_flush,
-         retries: []}
+         flush_callback: fn _, _, _, _, _ -> :ok end, lens_flush_callback: lens_flush, retries: []}
       )
 
       assert {:ok, plugin_state} =
@@ -1001,15 +1007,13 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
 
       assert :ok = Gralkor.Client.Native.flush_and_await("session-one", 1_000)
 
-      assert_receive {:ingested,
-                      %Ingest{lens: "observations", content: observation_transcript},
+      assert_receive {:ingested, %Ingest{lens: "observations", content: observation_transcript},
                       %{lens: %{name: "observations"}}}
 
       assert observation_transcript =~ "The launch moved."
       refute observation_transcript =~ "We chose Friday."
 
-      assert_receive {:ingested,
-                      %Ingest{lens: "decisions", content: decision_transcript},
+      assert_receive {:ingested, %Ingest{lens: "decisions", content: decision_transcript},
                       %{lens: %{name: "decisions"}}}
 
       assert decision_transcript =~ "We chose Friday."
@@ -1046,7 +1050,14 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
   describe "if Lens registration is invalid (blank, duplicate, reserved, or malformed)" do
     test "then configuration resolution raises `ArgumentError` naming the invalid Lens before ingestion or search begins" do
       invalid_registries = [
-        [[name: " ", ontology: ObservationOntology, scope: :operator, ingestion: RecordingIngestion]],
+        [
+          [
+            name: " ",
+            ontology: ObservationOntology,
+            scope: :operator,
+            ingestion: RecordingIngestion
+          ]
+        ],
         [
           [
             name: "observations",
@@ -1061,9 +1072,23 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
             ingestion: RecordingIngestion
           ]
         ],
-        [[name: "global", ontology: ObservationOntology, scope: :global, ingestion: RecordingIngestion]],
+        [
+          [
+            name: "global",
+            ontology: ObservationOntology,
+            scope: :global,
+            ingestion: RecordingIngestion
+          ]
+        ],
         [[name: "broken", ontology: String, scope: :operator, ingestion: RecordingIngestion]],
-        [[name: "broken", ontology: ObservationOntology, scope: :tenant, ingestion: RecordingIngestion]],
+        [
+          [
+            name: "broken",
+            ontology: ObservationOntology,
+            scope: :tenant,
+            ingestion: RecordingIngestion
+          ]
+        ],
         [[name: "broken", ontology: ObservationOntology, scope: :operator, ingestion: String]]
       ]
 
@@ -1259,7 +1284,8 @@ defmodule Gralkor.LensGovernedMemoryIntegrationTest do
       assert length(Gralkor.CaptureBuffer.turns_for("session-generalise")) == 1
       assert :ok = Gralkor.Client.Native.flush_and_await("session-generalise", 1_000)
 
-      assert_receive {:ingested, %Ingest{lens: "observations", content: transcript}, observation_store}
+      assert_receive {:ingested, %Ingest{lens: "observations", content: transcript},
+                      observation_store}
 
       assert_receive {:ingested, %Ingest{lens: "generalisations", content: ^transcript},
                       generalisation_store}

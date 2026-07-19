@@ -22,9 +22,7 @@ defmodule Gralkor.CaptureBufferTest do
     {:ok, pid} =
       start_supervised(
         {CaptureBuffer,
-         flush_callback: flush_callback,
-         lens_flush_callback: lens_flush_callback,
-         retries: []}
+         flush_callback: flush_callback, lens_flush_callback: lens_flush_callback, retries: []}
       )
 
     %{pid: pid}
@@ -189,8 +187,7 @@ defmodule Gralkor.CaptureBufferTest do
 
       assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "observations", [^turn]}
 
-      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "generalisations",
-                      [^turn]}
+      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "generalisations", [^turn]}
     end
   end
 
