@@ -1117,9 +1117,9 @@ JidoGralkor.Plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plu
 ```
 JidoGralkor.ReAct.maybe_force_memory_search/2 (src: lib/jido_gralkor/re_act.ex; unit: test/jido_gralkor/re_act_test.exs)
   when state.iteration == 1 (first ReAct turn)
-    then the returned overrides carry llm_opts: [tool_choice: %{type: "function", function: %{name: "memory_search"}}], folded into any existing :llm_opts the consumer was already returning (other entries preserved)
+    the returned overrides carry llm_opts: [tool_choice: %{type: "function", function: %{name: "memory_search"}}], folded into existing :llm_opts
   when state.iteration > 1
-    then the overrides are returned unchanged (no tool_choice override — the model is free to answer or call further tools)
+    the overrides are returned unchanged
   when overrides has no :llm_opts key on iteration 1
     then :llm_opts is added with [tool_choice: %{type: "function", function: %{name: "memory_search"}}]
 ```
@@ -1132,8 +1132,8 @@ JidoGralkor.Lifecycle (src: lib/jido_gralkor/lifecycle.ex; unit: test/jido_gralk
   when the AgentServer terminates with a committed thread
     then `Gralkor.Client.flush(thread_id)` is invoked without blocking termination
     and the flush is logged at :info naming the session id and the terminate reason
-    if the background flush call fails
-      then the failure is logged and termination is unaffected
+  when the AgentServer terminates with a committed thread, if the background flush call fails
+    then the failure is logged and termination is unaffected
   when the AgentServer terminates without a committed thread
     then Gralkor is not called
 ```
