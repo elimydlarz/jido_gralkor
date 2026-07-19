@@ -1,6 +1,6 @@
 ## Core Domain Identity
 
-`:jido_gralkor` is the adapter library between a Jido agent loop and Gralkor's memory port. It owns the wiring (plugin + lifecycle + ReAct tools + canonical message translation); it owns no memory behaviour of its own.
+The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` layer owns memory-domain behavior, and applications extend it with Lens ingestion modules.
 
 ## World-to-Code Mapping
 
@@ -33,7 +33,7 @@ One context only — the Jido↔Gralkor adaptation. The memory pipelines (`Gralk
 - `session_id` is the Jido thread id from `agent.state[:__thread__].id` — never minted by the plugin.
 - `agent_name` is required at mount; missing/blank raises `ArgumentError`.
 - `user_name` is read per-turn from `agent.state[:user_name]`; capture raises on missing/blank.
-- First-turn-on-fresh-agent: no thread yet → `MemorySearch` short-circuits, capture is skipped, only `agent_name` is planted.
+- First-turn-on-fresh-agent: no thread yet → `MemorySearch` short-circuits, capture is skipped, and Lens mounts still plant `agent_name`, `lens`, and `search_targets` without a session id.
 - A local Lens partitions by operator and Lens name; every global Lens writes to the shared global partition.
 - Only the reserved `"global"` target searches the global pool. A global Lens name records ingestion provenance and is not a sound search filter.
 - A Lens ingestion callback controls whether one request causes zero, one, or many store writes; storage failures are returned without falling back to another path.
@@ -43,7 +43,7 @@ One context only — the Jido↔Gralkor adaptation. The memory pipelines (`Gralk
 - The iter-1 `tool_choice` forcing is a workaround: `Jido.AI.Reasoning.ReAct.Config` lacks a `:preamble_tool` knob, and `tool_choice` is applied uniformly across the ReAct loop today. The helper exists to pin it for one iteration without forking the strategy.
 - The plugin captures on every turn, regardless of whether tools were called, because the embedded `Gralkor.Distill` decides what's memory-worthy — we don't gate at this layer.
 - Recalled graph content is memory context, not adjudicated truth. Gralkor preserves and retrieves understandings extracted from source material without imposing confidence or verification semantics on the ontology; truth-sensitive verification belongs to the consuming application.
-- All operator-facing knobs (`:falkordb`, `:client`, `:lenses`, `:ontology`, `:interpret_max_output_tokens`, `:recall_deadline_ms`, `:test`) live under the `:jido_gralkor` app env — single namespace matching the OTP application. `Gralkor.Client.Native` reads them per call so operators can change them without restarting.
+- Consumer-facing configuration lives under the `:jido_gralkor` app env. Request settings are resolved per call; startup backend settings such as `:falkordb` require an application restart.
 - Ontology selection belongs to the Lens. The implicit `"default"` Lens retains the deployment-wide `:ontology` only as the compatibility path for consumers that have not adopted a Lens registry.
 - Generalisation is an ingestion process, not a partition type. `Gralkor.Lens.Ingestion.Generalise` reads, updates, and removes through its bound store, so the selected Lens determines ontology and local/global placement.
 - The embedded Python stack is a consumer-invisible internal concern: `Gralkor.Python.init/1` materialises the venv via `Pythonx.uv_init/2` from jido_gralkor's own `priv/python/pyproject.toml`, so consumers configure *nothing* about Python. The Python deps must live in jido_gralkor's packaged manifest rather than `config/config.exs` because a dep's config does not propagate to a consumer's runtime app env and Pythonx reads its pin via `Application.compile_env` — leaving it in config forced every consumer to restate (and silently drift on) the graphiti-core version.
@@ -51,4 +51,4 @@ One context only — the Jido↔Gralkor adaptation. The memory pipelines (`Gralk
 
 ## Temporal View
 
-`ai.react.query` → plant `:session_id` (if committed), `:agent_name`, selected `:lens`, and `:search_targets` → ReAct tools ingest through the default/per-turn Lens and search the selected local Lenses plus optional global pool → `ai.request.completed`/`failed` → `Canonical.to_messages/3` normalises one turn → capture submits it through the selected Lens and, when configured, independently through `generalise_lens`. On AgentServer termination, `Lifecycle.terminate/2` fires a fire-and-forget flush. On manual rotate (`/new`), `ContextRotator.rotate_now/2` flushes synchronously, installs a fresh thread, and emits a compaction signal.
+`ai.react.query` → plant `:session_id` (if committed), `:agent_name`, selected `:lens`, and `:search_targets` → ReAct tools ingest through the default/per-turn Lens and search the selected local Lenses plus optional global pool → `ai.request.completed`/`failed` → `Canonical.to_messages/3` normalises one turn → capture buffers the turn under the selected and optional generalising Lenses → flush submits each Lens batch independently. On AgentServer termination, `Lifecycle.terminate/2` fires a fire-and-forget flush. On manual rotate (`/new`), `ContextRotator.rotate_now/2` flushes synchronously, installs a fresh thread, and emits a compaction signal.

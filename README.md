@@ -54,17 +54,28 @@ Remote wins when both are set. `:ssl` defaults to `false`; set `true` for Falkor
 
 ```elixir
 # config/test.exs
-config :jido_gralkor, client: Gralkor.Client.InMemory
+config :jido_gralkor,
+  client: Gralkor.Client.InMemory,
+  lens_storage: Gralkor.Lens.Storage.InMemory
 ```
 
-And start the twin once in `test/test_helper.exs`:
+Start the legacy client twin once in `test/test_helper.exs`:
 
 ```elixir
 {:ok, _} = Gralkor.Client.InMemory.start_link()
 ExUnit.start()
 ```
 
-When `:jido_gralkor, :client` is pinned to `Gralkor.Client.InMemory`, the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer) does not start. No FalkorDB backend required in tests.
+Lens tests should also start a fresh storage process in setup so state is isolated:
+
+```elixir
+setup do
+  start_supervised!(Gralkor.Lens.Storage.InMemory)
+  :ok
+end
+```
+
+When the client and Lens storage use these in-memory adapters, the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer) does not start and Lens calls do not reach Graphiti. No FalkorDB backend is required.
 
 **3. `Jido.Thread.Plugin` on your `use Jido` supervisor.** The plugin reads `session_id` from `agent.state[:__thread__].id`, so the thread plugin must be active:
 
@@ -133,7 +144,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your co
 
 **Lens partitioning.** An operator-scoped Lens writes to a partition derived from the operator id and Lens name, so different operators and different local Lenses remain isolated. Every global Lens writes to the one shared `global` partition. Global writes retain their originating Lens name as provenance, but global search deliberately queries the whole pool: use the reserved `"global"` search target, not the name of a global Lens.
 
-**First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants only `:agent_name` (no `:session_id`) and lets capture establish the session when the turn completes. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
+**First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus configured `:lens` and `:search_targets`, but no `:session_id`, and lets capture establish the session when the turn completes. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
 
 **Death-triggered flush.** `JidoGralkor.Lifecycle` is an optional `Jido.AgentServer.Lifecycle` implementation. When wired as `lifecycle_mod:` on the agent, graceful termination of the AgentServer fires `Gralkor.Client.flush/1` for the active thread so an orphaned agent doesn't strand its capture buffer. No idle-timer machinery — Jido's `AgentServer` owns `:idle_timeout` directly.
 
@@ -320,12 +331,12 @@ Maintainers can exercise the interpretation prompt against a real low-cost model
 
 The Jido glue:
 
-- `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (planting session+agent on tool_context) and `ai.request.completed` / `ai.request.failed` (capture).
+- `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (planting session, agent, selected Lens, and search targets) and `ai.request.completed` / `ai.request.failed` (capture).
 - `JidoGralkor.ReAct` — `maybe_force_memory_search/2` helper. Folds `tool_choice: %{type: "function", function: %{name: "memory_search"}}` into ReAct overrides on iteration 1; passes through unchanged on iterations 2+.
 - `JidoGralkor.Canonical` — normalises a Jido/ReAct turn into the canonical `[%Gralkor.Message{role, content}]` shape.
 - `JidoGralkor.Lifecycle` — `Jido.AgentServer.Lifecycle` impl whose sole job is the death-triggered flush.
 - `JidoGralkor.ContextRotator` — synchronous `rotate_now/2` for in-life context consolidation.
-- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls `Gralkor.Client.recall/4`. Short-circuits when no thread is committed or the query is blank.
+- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls `Gralkor.Client.search/1` for configured Lens targets and falls back to legacy `recall/4` when no Lens search is configured. It short-circuits when no thread is committed or the query is blank.
 - `JidoGralkor.Actions.MemoryAdd` — fire-and-forget ReAct tool.
 - `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
 - `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's partition.
@@ -335,7 +346,7 @@ The embedded Gralkor adapter (under `lib/gralkor/`):
 - `Gralkor.Client` — legacy adapter behaviour plus the public `ingest/1` and `search/1` Lens boundary.
 - `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, `GraphitiPool`, `Generalise`, and `req_llm`.
 - `Gralkor.Client.InMemory` — test twin.
-- `Gralkor.Lens`, `Gralkor.Ingest`, `Gralkor.Search` — consumer-owned Lens definitions and request values.
+- `Gralkor.Lens`, `Gralkor.Ingest`, `Gralkor.Search` — the resolved Lens model and consumer request values.
 - `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — the ingestion capability and its collision-safe local/shared-global Graphiti placement.
 - `Gralkor.Lens.Ingestion.Store` / `Generalise` — built-in straight-through and generalising ingestion processes.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
