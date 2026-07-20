@@ -1,4 +1,4 @@
-Functional: lens-search (functional: none)
+Functional: lens-search (functional: test/functional/lens_search_functional_test.exs)
 
 when a caller searches memory
   then the requesting operator's reserved `default` destination is always searched first
