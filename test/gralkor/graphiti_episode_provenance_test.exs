@@ -8,7 +8,100 @@ defmodule Gralkor.GraphitiEpisodeProvenanceTest do
     :ok
   end
 
-  defp start_pool(graphiti) do
+  describe "when add_episode receives an originating Lens" do
+    test "then the source description submitted to Graphiti identifies that Lens" do
+      {pid, graphiti} = start_recording_pool()
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 pid,
+                 "global",
+                 "public fact",
+                 "publication",
+                 nil,
+                 lens: "published-observations"
+               )
+
+      added = decode(graphiti, "g.added")
+
+      assert added["source_description"] ==
+               "publication [lens: published-observations]"
+
+      GenServer.stop(pid)
+    end
+
+    test "and no second graph mutation is attempted after Graphiti ingests the episode" do
+      {pid, graphiti} = start_recording_pool()
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 pid,
+                 "global",
+                 "public fact",
+                 "publication",
+                 nil,
+                 lens: "published-observations"
+               )
+
+      assert decode(graphiti, "g.driver.queries") == []
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "where add_episode has no originating Lens" do
+    test "then the original source description is submitted unchanged" do
+      {pid, graphiti} = start_recording_pool()
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 pid,
+                 "operator",
+                 "private fact",
+                 "conversation",
+                 nil
+               )
+
+      added = decode(graphiti, "g.added")
+      assert added["source_description"] == "conversation"
+      assert decode(graphiti, "g.driver.queries") == []
+
+      GenServer.stop(pid)
+    end
+  end
+
+  defp start_recording_pool do
+    {graphiti, _} =
+      Pythonx.eval(
+        """
+        class _Episode:
+            uuid = "episode-123"
+
+        class _Result:
+            episode = _Episode()
+
+        class _Driver:
+            def __init__(self):
+                self.queries = []
+
+            async def execute_query(self, query, **kwargs):
+                self.queries.append({"query": query, "kwargs": kwargs})
+                return [], None, None
+
+        class _Graphiti:
+            def __init__(self):
+                self.driver = _Driver()
+                self.added = None
+
+            async def add_episode(self, **kwargs):
+                self.added = kwargs
+                return _Result()
+
+        _Graphiti()
+        """,
+        %{}
+      )
+
     table = :"provenance_pool_#{System.unique_integer([:positive])}"
 
     opts = [
@@ -25,106 +118,11 @@ defmodule Gralkor.GraphitiEpisodeProvenanceTest do
     ]
 
     {:ok, pid} = GraphitiPool.start_link(opts)
-    pid
+    {pid, graphiti}
   end
 
-  describe "when add_episode receives an originating Lens" do
-    test "then the source description submitted to Graphiti identifies that Lens" do
-      {graphiti, _} =
-        Pythonx.eval(
-          """
-          class _Episode:
-              uuid = "episode-123"
-
-          class _Result:
-              episode = _Episode()
-
-          class _Driver:
-              async def execute_query(self, query, **kwargs):
-                  raise AssertionError("provenance must be part of add_episode")
-
-          class _Graphiti:
-              def __init__(self):
-                  self.driver = _Driver()
-                  self.added = None
-
-              async def add_episode(self, **kwargs):
-                  self.added = kwargs
-                  return _Result()
-
-          _Graphiti()
-          """,
-          %{}
-        )
-
-      pid = start_pool(graphiti)
-
-      assert :ok =
-               GraphitiPool.add_episode(
-                 pid,
-                 "global",
-                 "public fact",
-                 "publication",
-                 nil,
-                 lens: "published-observations"
-               )
-
-      {recorded, _} = Pythonx.eval("g.added", %{"g" => graphiti})
-      recorded = Pythonx.decode(recorded)
-
-      assert recorded["source_description"] ==
-               "publication [lens: published-observations]"
-
-      GenServer.stop(pid)
-    end
-  end
-
-  describe "where add_episode has no originating Lens" do
-    test "then no provenance update is attempted" do
-      {graphiti, _} =
-        Pythonx.eval(
-          """
-          class _Episode:
-              uuid = "episode-123"
-
-          class _Result:
-              episode = _Episode()
-
-          class _Driver:
-              def __init__(self):
-                  self.provenance = None
-
-              async def execute_query(self, query, **kwargs):
-                  self.provenance = {"query": query, "kwargs": kwargs}
-                  return [], None, None
-
-          class _Graphiti:
-              def __init__(self):
-                  self.driver = _Driver()
-
-              async def add_episode(self, **kwargs):
-                  return _Result()
-
-          _Graphiti()
-          """,
-          %{}
-        )
-
-      pid = start_pool(graphiti)
-
-      assert :ok =
-               GraphitiPool.add_episode(
-                 pid,
-                 "operator",
-                 "private fact",
-                 "conversation",
-                 nil
-               )
-
-      {recorded, _} = Pythonx.eval("g.driver.provenance", %{"g" => graphiti})
-      assert Pythonx.decode(recorded) == nil
-
-      GenServer.stop(pid)
-    end
+  defp decode(graphiti, expression) do
+    {value, _} = Pythonx.eval(expression, %{"g" => graphiti})
+    Pythonx.decode(value)
   end
 end
