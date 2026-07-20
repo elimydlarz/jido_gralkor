@@ -8,8 +8,8 @@ defmodule Gralkor.Search do
   be used as search targets. Results are combined in target order.
   """
 
-  @enforce_keys [:operator_id, :query, :targets]
-  defstruct [:operator_id, :query, :targets, max_results: 10]
+  @enforce_keys [:operator_id, :query]
+  defstruct [:operator_id, :query, targets: [], max_results: 10]
 
   @type t :: %__MODULE__{
           operator_id: String.t(),
