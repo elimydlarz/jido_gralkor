@@ -148,7 +148,7 @@ defmodule JidoGralkor.Plugin do
   def handle_signal(
         %Signal{
           type: "ai.request.completed",
-          data: %{request_id: request_id, result: result} = data
+          data: %{request_id: request_id, result: result}
         },
         %{agent: agent}
       )
