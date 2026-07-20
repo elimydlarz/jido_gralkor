@@ -453,7 +453,9 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert [%{content: episode}] =
                Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "observations"})
 
-      assert :binary.match(episode, "first-request") < :binary.match(episode, "second-request")
+      {first_position, _length} = :binary.match(episode, "first-request")
+      {second_position, _length} = :binary.match(episode, "second-request")
+      assert first_position < second_position
     end
   end
 
