@@ -19,7 +19,6 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     add_episode(store, content, source_description, [])
   end
 
-  @impl Gralkor.Lens.Storage
   @spec add_episode(Store.t(), String.t(), String.t(), keyword()) ::
           :ok | {:error, term()}
   def add_episode(
@@ -54,33 +53,6 @@ defmodule Gralkor.Lens.Storage.Graphiti do
       lens.ontology,
       Keyword.delete(episode_opts, :lens) ++ [lens: lens.name]
     )
-  end
-
-  @impl Gralkor.Lens.Storage
-  def remove_episode(%Store{operator_id: operator_id, lens: %Lens{scope: :operator} = lens}, id) do
-    remove_episode(
-      %Store{operator_id: operator_id, lens: lens},
-      id,
-      []
-    )
-  end
-
-  def remove_episode(%Store{lens: %Lens{scope: :global}}, id) do
-    remove_episode(%Store{operator_id: "global", lens: :global}, id, [])
-  end
-
-  def remove_episode(
-        %Store{operator_id: operator_id, lens: %Lens{scope: :operator} = lens},
-        id,
-        opts
-      ) do
-    remove_episode_fn = Keyword.get(opts, :remove_episode_fn, &GraphitiPool.remove_episode/2)
-    remove_episode_fn.(local_destination(operator_id, lens.name), id)
-  end
-
-  def remove_episode(%Store{lens: lens}, id, opts) when lens in [:global] do
-    remove_episode_fn = Keyword.get(opts, :remove_episode_fn, &GraphitiPool.remove_episode/2)
-    remove_episode_fn.("global", id)
   end
 
   @impl Gralkor.Lens.Storage

@@ -7,9 +7,8 @@ defmodule Gralkor.Lens.Store do
   the same destination. Ingestion processes should use this capability rather
   than choose Graphiti partitions themselves.
 
-  `add/4` accepts episode options such as `:uuid` when a process needs stable
-  identity for later replacement or removal. Global provenance is attached by
-  the storage adapter and does not need to be supplied by the process.
+  Global provenance is attached by the storage adapter and does not need to be
+  supplied by the process.
   """
 
   alias Gralkor.Lens
@@ -26,18 +25,6 @@ defmodule Gralkor.Lens.Store do
   @doc "Adds an episode through the bound Lens."
   def add(%__MODULE__{} = store, content, source_description) do
     storage().add_episode(store, content, source_description)
-  end
-
-  @spec add(t(), String.t(), String.t(), keyword()) :: :ok | {:error, term()}
-  @doc "Adds an episode through the bound Lens with storage options."
-  def add(%__MODULE__{} = store, content, source_description, opts) do
-    storage().add_episode(store, content, source_description, opts)
-  end
-
-  @spec remove(t(), String.t()) :: :ok | {:error, term()}
-  @doc "Removes an episode by identity from the bound Lens destination."
-  def remove(%__MODULE__{} = store, episode_id) do
-    storage().remove_episode(store, episode_id)
   end
 
   @spec search(t(), String.t(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}
