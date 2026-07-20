@@ -125,7 +125,9 @@ defmodule Gralkor.Interpret do
   end
 
   defp epistemic_instruction do
-    "Treat retrieved memory facts as understandings extracted from source material rather " <>
+    "Return only facts that directly help answer the user's request. Omit every unrelated fact, " <>
+      "even when it appears alongside relevant material. Treat retrieved memory facts as " <>
+      "understandings extracted from source material rather " <>
       "than proven claims. Mention the source context, when available, only where natural, " <>
       "without confidence labels, truth adjudication, or repetitive uncertainty warnings. " <>
       "When retrieved memory facts conflict, preserve the relevant accounts rather than " <>
