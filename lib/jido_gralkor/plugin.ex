@@ -285,6 +285,7 @@ defmodule JidoGralkor.Plugin do
 
   defp selected_lens(agent, data) do
     get_in(data, [:tool_context, :lens]) ||
+      get_in(agent.state, [:__strategy__, :run_tool_context, :lens]) ||
       case plugin_state(agent) do
         %{default_lens: lens} -> lens
         _ -> nil
