@@ -1,4 +1,4 @@
-Functional: default-lens-compatibility (functional: none)
+Functional: default-lens-compatibility (functional: test/functional/default_lens_compatibility_functional_test.exs)
 
 where an application has not registered or selected a named Lens
   then the implicit `default` Lens preserves access to the operator's existing memory partition
