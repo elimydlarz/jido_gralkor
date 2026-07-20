@@ -15,6 +15,41 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
+  defmodule FailingSearchStorage do
+    @behaviour Gralkor.Lens.Storage
+
+    @impl true
+    def add_episode(_store, _content, _source_description), do: :ok
+
+    @impl true
+    def add_episode(_store, _content, _source_description, _opts), do: :ok
+
+    @impl true
+    def remove_episode(_store, _episode_id), do: :ok
+
+    @impl true
+    def search(%Gralkor.Lens.Store{lens: %{name: "observations"}}, _query, _max_results),
+      do: {:error, :unavailable}
+
+    def search(_store, _query, _max_results), do: {:ok, ["default memory"]}
+  end
+
+  defmodule UnexpectedSearchStorage do
+    @behaviour Gralkor.Lens.Storage
+
+    @impl true
+    def add_episode(_store, _content, _source_description), do: :ok
+
+    @impl true
+    def add_episode(_store, _content, _source_description, _opts), do: :ok
+
+    @impl true
+    def remove_episode(_store, _episode_id), do: :ok
+
+    @impl true
+    def search(_store, _query, _max_results), do: raise("memory query started")
+  end
+
   setup do
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
     previous_ontology = Application.get_env(:jido_gralkor, :ontology)
@@ -30,6 +65,24 @@ defmodule Gralkor.LensSearchFunctionalTest do
         name: "observations",
         ontology: MemoryOntology,
         scope: :operator,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ],
+      [
+        name: "decisions",
+        ontology: MemoryOntology,
+        scope: :operator,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ],
+      [
+        name: "published-observations",
+        ontology: MemoryOntology,
+        scope: :global,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ],
+      [
+        name: "published-decisions",
+        ontology: MemoryOntology,
+        scope: :global,
         ingestion: Gralkor.Lens.Ingestion.Store
       ]
     ])
@@ -66,6 +119,27 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  operator_id: "operator-one",
                  query: "memory",
                  targets: ["observations"]
+               })
+    end
+
+    test "and another operator's default memory cannot contribute a result" do
+      for {operator, content} <- [
+            {"operator-one", "first operator memory"},
+            {"operator-two", "second operator memory"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: operator,
+                   lens: "default",
+                   content: content,
+                   source_description: "legacy"
+                 })
+      end
+
+      assert {:ok, ["first operator memory"]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory"
                })
     end
   end
@@ -108,6 +182,70 @@ defmodule Gralkor.LensSearchFunctionalTest do
   end
 
   describe "where a caller supplies additional operator-local Lens or reserved `global` targets" do
+    test "then every additional target is searched after the requesting operator's reserved `default` destination" do
+      for {lens, content} <- [
+            {"default", "default memory"},
+            {"observations", "observation memory"},
+            {"decisions", "decision memory"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: content,
+                   source_description: "functional"
+                 })
+      end
+
+      assert {:ok, ["default memory", "decision memory", "observation memory"]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["decisions", "observations"]
+               })
+    end
+
+    test "and additional results retain their configured target order" do
+      for {lens, content} <- [
+            {"observations", "observation memory"},
+            {"decisions", "decision memory"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: content,
+                   source_description: "functional"
+                 })
+      end
+
+      assert {:ok, ["observation memory", "decision memory"]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["observations", "decisions"]
+               })
+    end
+
+    test "and repeated matches from different destinations remain in the response" do
+      for lens <- ["observations", "decisions"] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: "shared memory",
+                   source_description: "functional"
+                 })
+      end
+
+      assert {:ok, ["shared memory", "shared memory"]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["observations", "decisions"]
+               })
+    end
+
     test "and the same maximum result count applies independently to the default and every additional destination" do
       for {lens, content} <- [
             {"default", "default one"},
@@ -131,6 +269,148 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  targets: ["observations"],
                  max_results: 1
                })
+    end
+
+    test "and no unselected local Lens or another operator's local memory can contribute a result" do
+      for {operator, lens, content} <- [
+            {"operator-one", "observations", "selected memory"},
+            {"operator-one", "decisions", "unselected memory"},
+            {"operator-two", "observations", "other operator memory"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: operator,
+                   lens: lens,
+                   content: content,
+                   source_description: "functional"
+                 })
+      end
+
+      assert {:ok, ["selected memory"]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["observations"]
+               })
+    end
+  end
+
+  describe "where the selection contains the reserved `global` target" do
+    test "then every relevant globally stored episode may contribute" do
+      for {lens, content} <- [
+            {"published-observations", "published observation"},
+            {"published-decisions", "published decision"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: content,
+                   source_description: "functional"
+                 })
+      end
+
+      assert {:ok, ["published observation", "published decision"]} =
+               Client.search(%Search{
+                 operator_id: "operator-two",
+                 query: "published",
+                 targets: ["global"]
+               })
+    end
+
+    test "and originating Lens does not filter the global results" do
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "published-decisions",
+                 content: "published decision",
+                 source_description: "functional"
+               })
+
+      assert {:ok, ["published decision"]} =
+               Client.search(%Search{
+                 operator_id: "operator-two",
+                 query: "published",
+                 targets: ["global"]
+               })
+    end
+  end
+
+  describe "where a global Lens name identifies an episode's origin" do
+    test "then that name remains attribution rather than a search boundary" do
+      assert_raise ArgumentError, ~r/provenance/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "published",
+          targets: ["published-observations"]
+        })
+      end
+    end
+
+    test "and `global` is the only target that selects globally stored memory" do
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "published-observations",
+                 content: "published observation",
+                 source_description: "functional"
+               })
+
+      assert {:ok, ["published observation"]} =
+               Client.search(%Search{
+                 operator_id: "operator-two",
+                 query: "published",
+                 targets: ["global"]
+               })
+    end
+  end
+
+  describe "if the selected memory search fails" do
+    test "then the error is returned without manufacturing a partial memory response" do
+      Application.put_env(:jido_gralkor, :lens_storage, FailingSearchStorage)
+
+      assert {:error, :unavailable} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["observations"]
+               })
+    end
+  end
+
+  describe "if search supplies an additional target that is neither a registered operator-local Lens nor reserved `default` or `global`" do
+    test "then search fails before any memory query is started" do
+      Application.put_env(:jido_gralkor, :lens_storage, UnexpectedSearchStorage)
+
+      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "memory",
+          targets: ["missing"]
+        })
+      end
+    end
+
+    test "and no valid subset is searched" do
+      Application.put_env(:jido_gralkor, :lens_storage, UnexpectedSearchStorage)
+
+      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "memory",
+          targets: ["observations", "missing"]
+        })
+      end
+    end
+
+    test "and the error identifies the invalid target" do
+      assert_raise ArgumentError, ~r/missing/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "memory",
+          targets: ["missing"]
+        })
+      end
     end
   end
 
