@@ -20,7 +20,8 @@ defmodule Gralkor.LensMemoryScopeFunctionalTest do
 
     @impl true
     def ingest(request, store) do
-      with :ok <- Gralkor.Lens.Store.add(store, "first #{request.content}", request.source_description) do
+      with :ok <-
+             Gralkor.Lens.Store.add(store, "first #{request.content}", request.source_description) do
         Gralkor.Lens.Store.add(store, "second #{request.content}", request.source_description)
       end
     end

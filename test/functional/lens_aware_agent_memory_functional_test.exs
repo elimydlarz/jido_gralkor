@@ -224,7 +224,9 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       agent = agent(plugin_state)
-      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(agent, "decisions")
+
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
+               query(agent, "decisions")
 
       assert {:ok, %{result: "Ingesting."}} =
                MemoryAdd.run(
@@ -308,7 +310,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                InMemory.captures()
     end
 
-
     test "when the matching request fails without repeating its Lens, then automatic capture uses the retained request Lens rather than the plugin default" do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
@@ -349,6 +350,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
             {"decision-request", "decisions", "Decided."}
           ] do
         base_agent = agent(plugin_state)
+
         assert {:ok, {:continue, %{data: %{tool_context: retained_context}}}} =
                  query(base_agent, lens, request_id)
 
@@ -382,6 +384,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
             {"decision-request", "decisions"}
           ] do
         base_agent = agent(plugin_state)
+
         assert {:ok, {:continue, %{data: %{tool_context: retained_context}}}} =
                  query(base_agent, lens, request_id)
 
@@ -404,6 +407,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       for request_id <- ["first-request", "second-request"] do
         base_agent = agent(plugin_state)
+
         assert {:ok, {:continue, %{data: %{tool_context: retained_context}}}} =
                  query(base_agent, "observations", request_id)
 

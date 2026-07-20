@@ -311,7 +311,6 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert_receive {:graph_add, "global", "public fact", "publication", Strict,
                       [lens: "published-observations"]}
     end
-
   end
 
   describe "when the global pool is searched" do
