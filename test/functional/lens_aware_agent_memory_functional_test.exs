@@ -246,7 +246,14 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  default_lens: "observations"
                )
 
-      assert {:ok, {:continue, %{data: %{tool_context: %{lens: "decisions"}}}}} =
+      assert {:ok,
+              {:continue,
+               %{
+                 data: %{
+                   tool_context: %{lens: "decisions"},
+                   extra_refs: %{jido_gralkor_lens: "decisions"}
+                 }
+               }}} =
                query(agent(plugin_state), "decisions")
     end
 
@@ -276,7 +283,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         state: %{__memory__: plugin_state, __thread__: %{id: "session-one"}}
       }
 
-      assert {:ok, {:continue, %{data: %{tool_context: retained_context}}}} =
+      assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
                Plugin.handle_signal(query_signal, %{agent: query_agent})
 
       completion_agent = %{
@@ -284,11 +291,11 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         | state:
             Map.merge(query_agent.state, %{
               __strategy__: %{
-                run_tool_context: retained_context,
                 request_traces: %{
                   request_id => %{events: [%{kind: :llm_completed, data: %{}}]}
                 }
               },
+              __thread__: thread_with_request_lens(request_id, retained_refs),
               requests: %{
                 request_id => %{query: "Record a decision", status: :pending, result: nil}
               },
@@ -320,10 +327,10 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       request_id = "failed-decision-request"
       query_agent = agent(plugin_state)
 
-      assert {:ok, {:continue, %{data: %{tool_context: retained_context}}}} =
+      assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
                query(query_agent, "decisions", request_id)
 
-      failed_agent = completion_agent(query_agent, request_id, retained_context)
+      failed_agent = completion_agent(query_agent, request_id, retained_refs)
 
       failure_signal = %Jido.Signal{
         id: "failure-signal",
@@ -351,10 +358,10 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
           ] do
         base_agent = agent(plugin_state)
 
-        assert {:ok, {:continue, %{data: %{tool_context: retained_context}}}} =
+        assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
                  query(base_agent, lens, request_id)
 
-        completed_agent = completion_agent(base_agent, request_id, retained_context)
+        completed_agent = completion_agent(base_agent, request_id, retained_refs)
 
         assert {:ok, :continue} =
                  Plugin.handle_signal(
@@ -385,13 +392,13 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
           ] do
         base_agent = agent(plugin_state)
 
-        assert {:ok, {:continue, %{data: %{tool_context: retained_context}}}} =
+        assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
                  query(base_agent, lens, request_id)
 
         assert {:ok, :continue} =
                  Plugin.handle_signal(
                    completion_signal(request_id, "#{lens} result"),
-                   %{agent: completion_agent(base_agent, request_id, retained_context)}
+                   %{agent: completion_agent(base_agent, request_id, retained_refs)}
                  )
       end
 
@@ -408,13 +415,13 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       for request_id <- ["first-request", "second-request"] do
         base_agent = agent(plugin_state)
 
-        assert {:ok, {:continue, %{data: %{tool_context: retained_context}}}} =
+        assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
                  query(base_agent, "observations", request_id)
 
         assert {:ok, :continue} =
                  Plugin.handle_signal(
                    completion_signal(request_id, request_id),
-                   %{agent: completion_agent(base_agent, request_id, retained_context)}
+                   %{agent: completion_agent(base_agent, request_id, retained_refs)}
                  )
       end
 
@@ -502,7 +509,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     Plugin.handle_signal(signal, %{agent: agent})
   end
 
-  defp completion_agent(agent, request_id, _retained_context) do
+  defp completion_agent(agent, request_id, retained_refs) do
     %{
       agent
       | state:
@@ -512,10 +519,24 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                 request_id => %{events: [%{kind: :llm_completed, data: %{}}]}
               }
             },
+            __thread__: thread_with_request_lens(request_id, retained_refs),
             requests: %{
               request_id => %{query: request_id, status: :pending, result: nil}
             }
           })
+    }
+  end
+
+  defp thread_with_request_lens(request_id, retained_refs) do
+    %{
+      id: "session-one",
+      entries: [
+        %{
+          kind: :ai_message,
+          payload: %{role: :user},
+          refs: Map.put(retained_refs, :request_id, request_id)
+        }
+      ]
     }
   end
 
