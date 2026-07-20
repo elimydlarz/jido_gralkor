@@ -3,7 +3,10 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
   @moduletag :functional
 
+  alias Gralkor.Client
   alias Gralkor.Client.InMemory
+  alias Gralkor.Ingest
+  alias JidoGralkor.Actions.MemorySearch
   alias JidoGralkor.Plugin
 
   defmodule MemoryOntology do
@@ -26,8 +29,14 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   setup do
     previous_client = Application.get_env(:jido_gralkor, :client)
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
+    previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
+    previous_ontology = Application.get_env(:jido_gralkor, :ontology)
+
+    start_supervised!(Gralkor.Lens.Storage.InMemory)
 
     Application.put_env(:jido_gralkor, :client, InMemory)
+    Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+    Application.put_env(:jido_gralkor, :ontology, MemoryOntology)
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
@@ -50,9 +59,50 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     on_exit(fn ->
       restore_env(:client, previous_client)
       restore_env(:lenses, previous_lenses)
+      restore_env(:lens_storage, previous_storage)
+      restore_env(:ontology, previous_ontology)
     end)
 
     :ok
+  end
+
+  describe "where a mounted memory plugin has no additional search targets" do
+    test "then memory search uses only the requesting operator's reserved `default` target" do
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "default",
+                 content: "baseline memory",
+                 source_description: "legacy"
+               })
+
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{},
+                 agent_name: "Susu",
+                 default_lens: "observations"
+               )
+
+      query_signal = %Jido.Signal{
+        id: "query-signal",
+        source: "/functional",
+        type: "ai.react.query",
+        data: %{query: "baseline"}
+      }
+
+      agent = %{
+        id: "operator-one",
+        state: %{__memory__: plugin_state, __thread__: %{id: "session-one"}}
+      }
+
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
+               Plugin.handle_signal(query_signal, %{agent: agent})
+
+      assert {:ok, %{result: "baseline memory"}} =
+               MemorySearch.run(
+                 %{query: "baseline"},
+                 Map.put(tool_context, :agent_id, agent.id)
+               )
+    end
   end
 
   describe "where an agent turn selects another registered Lens" do
