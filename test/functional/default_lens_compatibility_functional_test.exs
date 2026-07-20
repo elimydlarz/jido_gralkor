@@ -14,33 +14,14 @@ defmodule Gralkor.DefaultLensCompatibilityFunctionalTest do
     end
   end
 
-  defmodule RecordingStorage do
-    @behaviour Gralkor.Lens.Storage
-
-    @impl true
-    def add_episode(store, content, source_description) do
-      send(
-        Process.whereis(:default_lens_compatibility_functional),
-        {:episode_added, store, content, source_description}
-      )
-
-      :ok
-    end
-
-    @impl true
-    def search(_store, _query, _max_results), do: {:ok, []}
-  end
-
   setup do
-    Process.register(self(), :default_lens_compatibility_functional)
-
     keys = [:client, :lenses, :lens_storage, :ontology]
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
 
     start_supervised!(Gralkor.Lens.Storage.InMemory)
 
     Application.delete_env(:jido_gralkor, :lenses)
-    Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+    Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
 
     on_exit(fn -> Enum.each(previous, fn {key, value} -> restore_env(key, value) end) end)
 
@@ -50,8 +31,6 @@ defmodule Gralkor.DefaultLensCompatibilityFunctionalTest do
   describe "where an application has not registered or selected a named Lens" do
     test "then the implicit `default` Lens preserves access to the operator's existing memory partition" do
       Application.put_env(:jido_gralkor, :ontology, MemoryOntology)
-      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
