@@ -1,4 +1,4 @@
-Functional: lens-aware-agent-memory (functional: none)
+Functional: lens-aware-agent-memory (functional: test/functional/lens_aware_agent_memory_functional_test.exs)
 
 when a mounted memory plugin has a configured default Lens and search targets
   then automatic capture and memory addition use the registered default Lens
