@@ -70,6 +70,25 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
+  describe "where a caller includes the reserved `default` target explicitly" do
+    test "then the requesting operator's default destination is searched only once" do
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "default",
+                 content: "default memory",
+                 source_description: "legacy"
+               })
+
+      assert {:ok, ["default memory"]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["default"]
+               })
+    end
+  end
+
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
 end
