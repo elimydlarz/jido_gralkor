@@ -27,7 +27,7 @@ defmodule Gralkor.Lens.Storage.InMemory do
   def episodes(key), do: GenServer.call(__MODULE__, {:episodes, key})
 
   @impl Gralkor.Lens.Storage
-  def add_episode(%Store{} = store, content, source_description) do
+  def add_episode(%Store{} = store, content, _source_description) do
     GenServer.call(__MODULE__, {:add, key(store), episode(content, store.lens)})
   end
 
