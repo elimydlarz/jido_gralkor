@@ -32,7 +32,6 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
       :lenses,
       :lens_storage,
       :generalise_hypothesise_fn,
-      :generalise_evaluate_fn,
       :generalise_min_confidence
     ]
 

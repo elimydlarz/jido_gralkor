@@ -146,10 +146,6 @@ defmodule Gralkor.Client do
     end)
   end
 
-  defp validate_search_targets!(targets) do
-    raise ArgumentError, "search targets must be a non-empty list, got #{inspect(targets)}"
-  end
-
   @spec search_target(String.t(), String.t(), String.t(), pos_integer()) ::
           {:ok, [String.t()]} | {:error, term()}
   defp search_target(operator_id, "global", query, max_results) do

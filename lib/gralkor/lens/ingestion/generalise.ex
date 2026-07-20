@@ -21,7 +21,6 @@ defmodule Gralkor.Lens.Ingestion.Generalise do
     with {:ok, candidates} <- hypothesise_fn.(prompt(request.content)) do
       candidates
       |> Enum.filter(&(Map.get(&1, :confidence, 0) >= min_confidence))
-      |> Enum.sort_by(&Map.get(&1, :confidence, 0), :desc)
       |> Enum.reduce_while(:ok, fn candidate, :ok ->
         case Store.add(store, Map.fetch!(candidate, :content), request.source_description) do
           :ok -> {:cont, :ok}

@@ -363,7 +363,7 @@ The embedded Gralkor adapter (under `lib/gralkor/`):
 - `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — the ingestion capability and its collision-safe local/shared-global Graphiti placement.
 - `Gralkor.Lens.Ingestion.Store` / `Generalise` — built-in straight-through and generalising ingestion processes.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
-- `Gralkor.Generalise` — hypothesise → evaluate → persist pipeline used by the generalising Lens ingestion process and retained legacy API.
+- `Gralkor.Generalise` — the retained legacy `_gen` hypothesise → evaluate → persist pipeline.
 - `Gralkor.Generalisation` — struct and wire format (`GEN|v1|{json}\ncontent`) for storing generalisations as graphiti episodes with controlled UUIDs (enabling update via re-extraction and delete via `remove_episode`).
 - `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Message`, `Gralkor.InterpretParseFailed`, `Gralkor.GeneralisationParseFailed` — the embedded pipelines (capture buffer, distill, interpret, recall, generalise) that drive Graphiti.
 
