@@ -502,7 +502,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     Plugin.handle_signal(signal, %{agent: agent})
   end
 
-  defp completion_agent(agent, request_id, retained_context) do
+  defp completion_agent(agent, request_id, _retained_context) do
     %{
       agent
       | state:
