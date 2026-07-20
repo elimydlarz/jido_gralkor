@@ -29,7 +29,7 @@ defmodule Gralkor.GraphitiEpisodeProvenanceTest do
   end
 
   describe "when add_episode receives an originating Lens" do
-    test "then the created Episodic node records that Lens by its returned episode identity" do
+    test "then the source description submitted to Graphiti identifies that Lens" do
       {graphiti, _} =
         Pythonx.eval(
           """
@@ -40,18 +40,16 @@ defmodule Gralkor.GraphitiEpisodeProvenanceTest do
               episode = _Episode()
 
           class _Driver:
-              def __init__(self):
-                  self.provenance = None
-
               async def execute_query(self, query, **kwargs):
-                  self.provenance = {"query": query, "kwargs": kwargs}
-                  return [], None, None
+                  raise AssertionError("provenance must be part of add_episode")
 
           class _Graphiti:
               def __init__(self):
                   self.driver = _Driver()
+                  self.added = None
 
               async def add_episode(self, **kwargs):
+                  self.added = kwargs
                   return _Result()
 
           _Graphiti()
@@ -71,13 +69,11 @@ defmodule Gralkor.GraphitiEpisodeProvenanceTest do
                  lens: "published-observations"
                )
 
-      {recorded, _} = Pythonx.eval("g.driver.provenance", %{"g" => graphiti})
+      {recorded, _} = Pythonx.eval("g.added", %{"g" => graphiti})
       recorded = Pythonx.decode(recorded)
 
-      assert recorded["kwargs"]["uuid"] == "episode-123"
-      assert recorded["kwargs"]["lens"] == "published-observations"
-      assert recorded["query"] =~ "MATCH (episode:Episodic {uuid: $uuid})"
-      assert recorded["query"] =~ "SET episode.lens = $lens"
+      assert recorded["source_description"] ==
+               "publication [lens: published-observations]"
 
       GenServer.stop(pid)
     end
