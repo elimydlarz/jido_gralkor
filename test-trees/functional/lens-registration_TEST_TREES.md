@@ -1,4 +1,4 @@
-Functional: lens-registration (functional: none)
+Functional: lens-registration (functional: test/functional/lens_registration_functional_test.exs)
 
 when an application registers a valid Lens
   then direct callers and mounted memory plugins can select that Lens by name
