@@ -60,17 +60,17 @@ defmodule Gralkor.Lens.Storage.InMemory do
   def search(
         %Store{operator_id: operator_id, lens: %Lens{name: lens_name, scope: :operator}},
         _query,
-        _max_results
+        max_results
       ) do
-    GenServer.call(__MODULE__, {:search, {operator_id, lens_name}})
+    GenServer.call(__MODULE__, {:search, {operator_id, lens_name}, max_results})
   end
 
-  def search(%Store{lens: %Lens{scope: :global}}, _query, _max_results) do
-    GenServer.call(__MODULE__, {:search, :global})
+  def search(%Store{lens: %Lens{scope: :global}}, _query, max_results) do
+    GenServer.call(__MODULE__, {:search, :global, max_results})
   end
 
-  def search(%Store{lens: :global}, _query, _max_results) do
-    GenServer.call(__MODULE__, {:search, :global})
+  def search(%Store{lens: :global}, _query, max_results) do
+    GenServer.call(__MODULE__, {:search, :global, max_results})
   end
 
   @impl true
@@ -78,8 +78,8 @@ defmodule Gralkor.Lens.Storage.InMemory do
     {:reply, :ok, Map.update(state, key, [episode], &(&1 ++ [episode]))}
   end
 
-  def handle_call({:search, key}, _from, state) do
-    contents = state |> Map.get(key, []) |> Enum.map(& &1.content)
+  def handle_call({:search, key, max_results}, _from, state) do
+    contents = state |> Map.get(key, []) |> Enum.take(max_results) |> Enum.map(& &1.content)
     {:reply, {:ok, contents}, state}
   end
 
