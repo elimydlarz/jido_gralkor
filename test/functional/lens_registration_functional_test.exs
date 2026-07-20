@@ -4,6 +4,8 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
   @moduletag :functional
 
   alias Gralkor.Client
+  alias Gralkor.Ingest
+  alias Gralkor.Search
   alias JidoGralkor.Plugin
 
   defmodule MemoryOntology do
@@ -23,12 +25,27 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     end
   end
 
+  defmodule UnexpectedStorage do
+    @behaviour Gralkor.Lens.Storage
+
+    @impl true
+    def add_episode(_store, _content, _source_description), do: raise("ingestion started")
+
+    @impl true
+    def search(_store, _query, _max_results), do: raise("search started")
+  end
+
   setup do
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
+    previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
 
     Application.put_env(:jido_gralkor, :lenses, [valid_lens("observations")])
+    Application.put_env(:jido_gralkor, :lens_storage, UnexpectedStorage)
 
-    on_exit(fn -> restore_env(:lenses, previous_lenses) end)
+    on_exit(fn ->
+      restore_env(:lenses, previous_lenses)
+      restore_env(:lens_storage, previous_storage)
+    end)
 
     :ok
   end
@@ -66,7 +83,22 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     test "then configuration resolution raises `ArgumentError` before ingestion or search begins" do
       Application.put_env(:jido_gralkor, :lenses, [valid_lens("observations"), :invalid])
 
-      assert_raise ArgumentError, fn -> Client.lens!("observations") end
+      assert_raise ArgumentError, fn ->
+        Client.ingest(%Ingest{
+          operator_id: "operator-one",
+          lens: "observations",
+          content: "must not land",
+          source_description: "functional"
+        })
+      end
+
+      assert_raise ArgumentError, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "must not run",
+          targets: ["observations"]
+        })
+      end
     end
 
     test "where the Lens name is blank, then the error identifies the invalid name" do
