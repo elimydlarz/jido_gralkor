@@ -51,24 +51,30 @@ if a mounted plugin selects an unknown default Lens, invalid search target, unkn
   then mounting fails before the plugin handles an agent signal
 
 where a turn supplies a registered Lens through plugin context
-  then that Lens overrides the plugin's default Lens for ingestion during that turn
+  then that Lens is retained as the ingestion Lens for that request
   and the application-owned definition of the selected Lens remains authoritative
+    when the matching request completes or fails without repeating the Lens in its completion signal
+      then automatic capture uses the retained request Lens rather than the plugin default
 
 when turns in one session select different Lenses
   then each Lens receives only the turns selected for it
   and no flushed episode combines turns governed by different ontologies or ingestion processes
-  and before flush the session's complete turn order remains available as recall context
+  and before flush the capture buffer exposes the session's complete turn order
 
 where an application has not registered or selected a named Lens
-  then the implicit `default` Lens preserves the operator's existing memory partition
+  then the implicit `default` Lens preserves access to the operator's existing memory partition
   and the `:jido_gralkor, :ontology` value remains its ontology
   and an unset `:jido_gralkor, :ontology` preserves generic extraction
   and existing capture, memory addition, and recall preserve legacy behavior under that compatibility mapping
 
+where search selects the reserved `default` target
+  then Graphiti searches the requesting operator's compatibility group
+  and another operator's compatibility memory cannot contribute a result
+
 when a transcript is submitted through Gralkor's generalising ingestion process
-  then hypotheses are evaluated against generalisations available through the selected Lens
-  and additions, replacements, and removals use the selected Lens's store
-  and every persisted generalisation uses its encoded id as its Lens-store episode identity
+  then the process distils the transcript into zero or more generalisation episodes
+  and each distilled episode is added through the selected Lens with its ontology and Graphiti group
+  and existing episodes remain as provenance-bearing source history while Graphiti resolves duplicate and contradicted facts
   and the selected Lens determines whether the resulting generalisations are operator-local or global
 
 where capture is configured to generalise a flushed transcript through another Lens
@@ -81,7 +87,7 @@ if Lens registration is invalid (blank, duplicate, reserved `default` or `global
 if ingestion names an unknown or blank Lens
   then ingestion fails before an ingestion process or graph write is started
 
-if search supplies an empty selection or a target that is neither a registered operator-local Lens nor `global`
+if search supplies an empty selection or a target that is neither a registered operator-local Lens nor reserved `default` or `global`
   then search fails before any memory query is started
   and no valid subset is searched
 
