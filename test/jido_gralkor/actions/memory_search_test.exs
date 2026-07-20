@@ -14,8 +14,6 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     @behaviour Gralkor.Lens.Storage
 
     def add_episode(_store, _content, _source), do: :ok
-    def add_episode(_store, _content, _source, _opts), do: :ok
-    def remove_episode(_store, _episode_id), do: :ok
 
     def search(store, query, max_results) do
       send(Process.whereis(:memory_search_lens_test), {:lens_search, store, query, max_results})
