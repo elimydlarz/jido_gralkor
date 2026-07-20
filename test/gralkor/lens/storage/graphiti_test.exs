@@ -150,7 +150,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
   end
 
   describe "when an operator-local Lens store is searched" do
-    test "then graph search receives the same deterministic operator-and-Lens destination" do
+    test "then graph search receives the same deterministic operator-and-Lens group" do
       store = %Store{
         operator_id: "operator-one",
         lens: %Lens{
@@ -251,7 +251,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
   end
 
   describe "when a global Lens store adds an episode" do
-    test "then graph add receives the fixed global destination" do
+    test "then graph add receives the fixed global group" do
       store = %Store{
         operator_id: "operator-one",
         lens: %Lens{
