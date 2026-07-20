@@ -2,8 +2,9 @@ defmodule Gralkor.Lens.Ingestion.Generalise do
   @behaviour Gralkor.Lens.Ingestion
 
   alias Gralkor.Client.Native
-  alias Gralkor.Generalise
   alias Gralkor.Lens.Store
+
+  @default_min_confidence 0.3
 
   @impl true
   def ingest(request, store) do
@@ -14,27 +15,30 @@ defmodule Gralkor.Lens.Ingestion.Generalise do
         Native.generalise_hypothesise_callback()
       )
 
-    evaluate_fn =
-      Application.get_env(
-        :jido_gralkor,
-        :generalise_evaluate_fn,
-        Native.generalise_evaluate_callback()
-      )
+    min_confidence =
+      Application.get_env(:jido_gralkor, :generalise_min_confidence, @default_min_confidence)
 
-    Generalise.generalise(request.operator_id, request.content,
-      partition: store,
-      ontology: store.lens.ontology,
-      hypothesise_fn: hypothesise_fn,
-      evaluate_fn: evaluate_fn,
-      search_gen_fn: fn ^store, query, max_results ->
-        Store.search(store, query, max_results)
-      end,
-      add_episode_fn: fn ^store, content, source, _ontology, opts ->
-        Store.add(store, content, source, opts)
-      end,
-      remove_episode_fn: fn ^store, episode_id ->
-        Store.remove(store, episode_id)
-      end
-    )
+    with {:ok, candidates} <- hypothesise_fn.(prompt(request.content)) do
+      candidates
+      |> Enum.filter(&(Map.get(&1, :confidence, 0) >= min_confidence))
+      |> Enum.sort_by(&Map.get(&1, :confidence, 0), :desc)
+      |> Enum.reduce_while(:ok, fn candidate, :ok ->
+        case Store.add(store, Map.fetch!(candidate, :content), request.source_description) do
+          :ok -> {:cont, :ok}
+          {:error, _reason} = error -> {:halt, error}
+        end
+      end)
+    end
+  end
+
+  defp prompt(transcript) do
+    """
+    Review the following conversation transcript and distil durable, evidence-backed generalisations that capture meaningful patterns, preferences, decisions, or recurring behaviours.
+
+    Each generalisation must be supported by the transcript, useful beyond this conversation, and accompanied by a confidence score from 0.0 to 1.0.
+
+    Transcript:
+    #{transcript}
+    """
   end
 end
