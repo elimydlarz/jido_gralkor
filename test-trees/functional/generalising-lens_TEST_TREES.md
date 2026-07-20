@@ -3,7 +3,7 @@ Functional: generalising-lens (functional: test/functional/generalising_lens_fun
 when a transcript is submitted through Gralkor's generalising ingestion process
   then the process distils zero or more durable generalisation episodes
   and each resulting episode is added through the selected Lens with its ontology and memory destination
-  and repeated or contradicted facts are reconciled while their source episodes remain as provenance
+  and repeated or contradicted generalisations are added as ordinary episodes without deleting earlier episodes
   and the caller observes whether ingestion succeeded or failed
 
 where the generalising Lens is operator-local
