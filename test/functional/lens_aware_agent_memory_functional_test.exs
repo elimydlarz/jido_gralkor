@@ -503,8 +503,13 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
 
     test "where Lens options are supplied without a default Lens, then the error identifies that a default Lens is required" do
-      assert_raise ArgumentError, ~r/default_lens is required/, fn ->
-        Plugin.mount(%{}, agent_name: "Susu", search_targets: ["observations"])
+      for lens_options <- [
+            [search_targets: ["observations"]],
+            [generalise_lens: "generalisations"]
+          ] do
+        assert_raise ArgumentError, ~r/default_lens is required/, fn ->
+          Plugin.mount(%{}, Keyword.merge([agent_name: "Susu"], lens_options))
+        end
       end
     end
   end
