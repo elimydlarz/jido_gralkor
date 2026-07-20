@@ -508,7 +508,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       | state:
           Map.merge(agent.state, %{
             __strategy__: %{
-              run_tool_context: retained_context,
               request_traces: %{
                 request_id => %{events: [%{kind: :llm_completed, data: %{}}]}
               }
