@@ -1,10 +1,21 @@
 Functional: lens-search (functional: none)
 
-when a caller searches a non-empty selection of operator-local Lenses and reserved `default` or `global` targets
-  then results are returned from every selected destination belonging to the requesting operator
-  and results retain the requested target order without deduplicating repeated matches
-  and the same maximum result count applies independently to every selected destination
+when a caller searches memory
+  then the requesting operator's reserved `default` destination is always searched first
+  and another operator's default memory cannot contribute a result
+
+where a caller supplies additional operator-local Lens or reserved `global` targets
+  then every additional target is searched after the requesting operator's reserved `default` destination
+  and additional results retain their configured target order
+  and repeated matches from different destinations remain in the response
+  and the same maximum result count applies independently to the default and every additional destination
   and no unselected local Lens or another operator's local memory can contribute a result
+
+where a caller supplies no additional search targets
+  then only the requesting operator's reserved `default` destination is searched
+
+where a caller includes the reserved `default` target explicitly
+  then the requesting operator's default destination is searched only once
 
 where the selection contains the reserved `global` target
   then every relevant globally stored episode may contribute
@@ -17,10 +28,7 @@ where a global Lens name identifies an episode's origin
 if the selected memory search fails
   then the error is returned without manufacturing a partial memory response
 
-if search supplies an invalid target selection
+if search supplies an additional target that is neither a registered operator-local Lens nor reserved `default` or `global`
   then search fails before any memory query is started
   and no valid subset is searched
-    where the selection is empty
-      then the error identifies that at least one target is required
-    where a target is neither a registered operator-local Lens nor reserved `default` or `global`
-      then the error identifies the invalid target
+  and the error identifies the invalid target

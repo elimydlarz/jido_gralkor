@@ -9,7 +9,7 @@ when an application registers operator-local observation and decision Lenses and
     when the agent's completed turn is also submitted through the generalisation Lens
       then durable generalisations enter shared global memory with their originating Lens recorded
     when the agent searches its selected local Lenses and global memory
-      then one memory response contains relevant results from exactly those selected destinations
+      then one memory response contains relevant results from the operator's default memory and the additional selected destinations
       and another operator's local memory is absent
 
 if the application selects an unknown Lens or invalid search target

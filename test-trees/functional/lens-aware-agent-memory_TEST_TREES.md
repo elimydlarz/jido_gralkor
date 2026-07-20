@@ -1,9 +1,13 @@
 Functional: lens-aware-agent-memory (functional: test/functional/lens_aware_agent_memory_functional_test.exs)
 
-when a mounted memory plugin has a configured default Lens and search targets
-  then automatic capture and memory addition use the registered default Lens
-  and memory search uses the configured search targets
+when a mounted memory plugin has a configured default ingestion Lens and optional additional search targets
+  then automatic capture and memory addition use the registered default ingestion Lens
+  and memory search always includes the requesting operator's reserved `default` target
+  and memory search also includes the configured additional search targets
   and the plugin does not redefine a selected Lens's ontology, scope, or ingestion process
+
+where a mounted memory plugin has no additional search targets
+  then memory search uses only the requesting operator's reserved `default` target
 
 where an agent turn selects another registered Lens
   then memory addition uses the turn-selected Lens
