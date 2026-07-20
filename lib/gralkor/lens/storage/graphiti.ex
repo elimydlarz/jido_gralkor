@@ -101,8 +101,11 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   @spec add_options(keyword()) :: {add_episode_fn(), keyword()}
   defp add_options(opts) do
     case Keyword.pop(opts, :add_episode_fn, &graph_add/5) do
-      {add_episode_fn, []} -> {add_episode_fn, []}
-      {_add_episode_fn, unsupported} -> raise ArgumentError, "unsupported add options #{inspect(unsupported)}"
+      {add_episode_fn, []} ->
+        {add_episode_fn, []}
+
+      {_add_episode_fn, unsupported} ->
+        raise ArgumentError, "unsupported add options #{inspect(unsupported)}"
     end
   end
 
