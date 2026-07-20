@@ -22,12 +22,6 @@ defmodule Gralkor.LensSearchFunctionalTest do
     def add_episode(_store, _content, _source_description), do: :ok
 
     @impl true
-    def add_episode(_store, _content, _source_description, _opts), do: :ok
-
-    @impl true
-    def remove_episode(_store, _episode_id), do: :ok
-
-    @impl true
     def search(%Gralkor.Lens.Store{lens: %{name: "observations"}}, _query, _max_results),
       do: {:error, :unavailable}
 
@@ -39,12 +33,6 @@ defmodule Gralkor.LensSearchFunctionalTest do
 
     @impl true
     def add_episode(_store, _content, _source_description), do: :ok
-
-    @impl true
-    def add_episode(_store, _content, _source_description, _opts), do: :ok
-
-    @impl true
-    def remove_episode(_store, _episode_id), do: :ok
 
     @impl true
     def search(_store, _query, _max_results), do: raise("memory query started")

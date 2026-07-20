@@ -4,9 +4,7 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
   @moduletag :functional
 
   alias Gralkor.Client
-  alias Gralkor.Generalisation
   alias Gralkor.Ingest
-  alias Gralkor.Lens.Store
   alias Gralkor.Search
   alias JidoGralkor.Plugin
 
@@ -23,12 +21,6 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
 
     @impl true
     def add_episode(_store, _content, _source_description), do: {:error, :unavailable}
-
-    @impl true
-    def add_episode(_store, _content, _source_description, _opts), do: {:error, :unavailable}
-
-    @impl true
-    def remove_episode(_store, _episode_id), do: raise("alternative persistence attempted")
 
     @impl true
     def search(_store, _query, _max_results), do: raise("alternative persistence attempted")
@@ -92,58 +84,21 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
              } = Client.lens!("generalisations")
     end
 
-    test "and repeated or contradicted facts are reconciled while their source episodes remain as provenance" do
-      store = %Store{
-        operator_id: "operator-one",
-        lens: Client.lens!("generalisations")
-      }
-
-      existing = %Generalisation{
-        id: "existing-one",
-        content: "Eli avoids Friday launches.",
-        level: 0,
-        confidence: 0.7
-      }
-
-      assert :ok =
-               Store.add(
-                 store,
-                 Generalisation.encode(existing),
-                 "earlier transcript",
-                 uuid: existing.id
-               )
-
+    test "and repeated or contradicted generalisations are added as ordinary episodes without deleting earlier episodes" do
       Application.put_env(:jido_gralkor, :generalise_hypothesise_fn, fn _prompt ->
-        {:ok, [%{content: "Eli prefers Friday launches.", confidence: 0.9}]}
-      end)
-
-      Application.put_env(:jido_gralkor, :generalise_evaluate_fn, fn _prompt ->
         {:ok,
          [
-           %{
-             action: "contradicts",
-             hypothesis_index: 0,
-             confidence: 0.9,
-             content: "Eli prefers Friday launches.",
-             existing_id: "existing-one"
-           }
+           %{content: "Eli prefers Friday launches.", confidence: 0.9},
+           %{content: "Eli avoids Friday launches.", confidence: 0.8}
          ]}
       end)
 
-      assert :ok =
-               Client.ingest(%Ingest{
-                 operator_id: "operator-one",
-                 lens: "generalisations",
-                 content: "Eli now schedules launches on Friday.",
-                 source_description: "new transcript"
-               })
+      assert :ok = ingest("operator-one", "Eli's Friday launch preference is disputed.")
 
       assert [
-               %{id: "existing-one"},
-               %{content: new_episode, lens: "generalisations"}
-             ] = Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "generalisations"})
-
-      assert new_episode =~ "Eli prefers Friday launches."
+               %{content: "Eli prefers Friday launches.", lens: "generalisations"},
+               %{content: "Eli avoids Friday launches.", lens: "generalisations"}
+             ] = episodes({"operator-one", "generalisations"})
     end
 
     test "and the caller observes whether ingestion succeeded or failed" do

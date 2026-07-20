@@ -28,14 +28,6 @@ defmodule Gralkor.DefaultLensCompatibilityFunctionalTest do
     end
 
     @impl true
-    def add_episode(store, content, source_description, _opts) do
-      add_episode(store, content, source_description)
-    end
-
-    @impl true
-    def remove_episode(_store, _episode_id), do: :ok
-
-    @impl true
     def search(_store, _query, _max_results), do: {:ok, []}
   end
 
