@@ -1,4 +1,4 @@
-Unit: In-memory Lens storage (src: lib/gralkor/lens/storage/in_memory.ex; unit: test/gralkor/lens/storage/in_memory_test.exs)
+Unit: in-memory-lens-storage (src: lib/gralkor/lens/storage/in_memory.ex; unit: test/gralkor/lens/storage/in_memory_test.exs)
 
 when an operator-local or global Lens store adds episodes
   then each episode remains in insertion order within only its selected Lens destination

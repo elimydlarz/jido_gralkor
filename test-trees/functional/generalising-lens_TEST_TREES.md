@@ -1,9 +1,9 @@
-Integration: Generalising Lens (integration: none)
+Functional: generalising-lens (functional: none)
 
 when a transcript is submitted through Gralkor's generalising ingestion process
   then the process distils zero or more durable generalisation episodes
   and each resulting episode is added through the selected Lens with its ontology and memory destination
-  and existing episodes remain as provenance-bearing source history while Graphiti resolves duplicate and contradicted facts
+  and repeated or contradicted facts are reconciled while their source episodes remain as provenance
   and the caller observes whether ingestion succeeded or failed
 
 where the generalising Lens is operator-local
@@ -21,5 +21,5 @@ if distillation produces no durable generalisation
   then no episode is submitted to Graphiti
   and ingestion completes successfully
 
-if distillation or Graphiti ingestion fails
+if distillation or memory ingestion fails
   then ingestion returns the failure without performing an alternative persistence write

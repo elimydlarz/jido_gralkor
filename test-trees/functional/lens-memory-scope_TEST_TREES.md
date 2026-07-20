@@ -1,4 +1,4 @@
-Integration: Lens memory scope (integration: none)
+Functional: lens-memory-scope (functional: none)
 
 when an operator-local Lens adds an episode
   then its memory destination is determined by the operator and Lens together

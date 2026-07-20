@@ -1,4 +1,4 @@
-Integration: Lens-aware agent memory (integration: none)
+Functional: lens-aware-agent-memory (functional: none)
 
 when a mounted memory plugin has a configured default Lens and search targets
   then automatic capture and memory addition use the registered default Lens
@@ -12,9 +12,19 @@ where an agent turn selects another registered Lens
       then automatic capture uses the retained request Lens rather than the plugin default
 
 when turns in one session select different Lenses
-  then each Lens receives only the turns selected for it
+  then each Lens retains only the turns selected for it
   and no flushed episode combines turns governed by different ontologies or ingestion processes
-  and before flush the capture buffer exposes the session's complete turn order
+  and captured turns retain their original order
 
-if a mounted plugin selects an unknown default Lens, invalid search target, unknown or duplicate generalising Lens, or Lens options without a default Lens
+if a mounted plugin receives invalid Lens configuration
   then mounting fails before the plugin handles an agent signal
+    where the default Lens is unknown
+      then the error identifies the unknown default Lens
+    where a search target is invalid
+      then the error identifies the invalid target
+    where the generalising Lens is unknown
+      then the error identifies the unknown generalising Lens
+    where the generalising Lens duplicates the default Lens
+      then the error identifies that the two selections must differ
+    where Lens options are supplied without a default Lens
+      then the error identifies that a default Lens is required

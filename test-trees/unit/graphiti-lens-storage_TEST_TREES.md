@@ -1,4 +1,4 @@
-Unit: Graphiti Lens storage (src: lib/gralkor/lens/storage/graphiti.ex; unit: test/gralkor/lens/storage/graphiti_test.exs)
+Unit: graphiti-lens-storage (src: lib/gralkor/lens/storage/graphiti.ex; unit: test/gralkor/lens/storage/graphiti_test.exs)
 
 when an operator-local Lens store adds an episode
   then Graphiti receives a deterministic group unique to the operator and Lens

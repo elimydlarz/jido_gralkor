@@ -1,4 +1,4 @@
-Journey: Application Lens workflow (journey: none)
+Journey: application-lens-workflow (journey: none)
 
 when an application registers operator-local observation and decision Lenses and a global generalisation Lens
   then direct consumers and the mounted memory plugin use the same application-owned Lens definitions

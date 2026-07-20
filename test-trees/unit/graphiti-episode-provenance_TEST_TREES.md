@@ -1,4 +1,4 @@
-Unit: Graphiti episode provenance (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti_episode_provenance_test.exs)
+Unit: graphiti-episode-provenance (src: lib/gralkor/graphiti_pool.ex; unit: test/gralkor/graphiti_episode_provenance_test.exs)
 
 when add_episode receives an originating Lens
   then the source description submitted to Graphiti identifies that Lens
