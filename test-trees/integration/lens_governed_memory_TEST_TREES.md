@@ -23,7 +23,7 @@ when an operator-local Lens adds an episode
 
 when a global Lens adds an episode
   then Graphiti ingests the episode into the one global group shared by every global Lens and every operator
-  and the same episode submission records the name of the Lens that ingested it in its source
+  and the same episode submission records the name of the Lens that ingested it in its source description
   and the ingestion process does not have to add Lens provenance itself
 
 when a caller searches a non-empty selection of operator-local Lenses and reserved `default` or `global` targets
@@ -52,9 +52,9 @@ if a mounted plugin selects an unknown default Lens, invalid search target, unkn
 
 where a turn supplies a registered Lens through plugin context
   then that Lens is retained as the ingestion Lens for that request
-  and the application-owned definition of the selected Lens remains authoritative
     when the matching request completes or fails without repeating the Lens in its completion signal
       then automatic capture uses the retained request Lens rather than the plugin default
+  and the application-owned definition of the selected Lens remains authoritative
 
 when turns in one session select different Lenses
   then each Lens receives only the turns selected for it

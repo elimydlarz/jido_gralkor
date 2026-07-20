@@ -17,7 +17,7 @@ when the implicit `default` Lens is added to or searched
 
 when a global Lens store adds an episode
   then graph add receives the fixed global group
-  and the episode source identifies the originating Lens in the same graph add
+  and the episode source description identifies the originating Lens in the same graph add
 
 when the global pool is searched
   then graph search receives the fixed global group
