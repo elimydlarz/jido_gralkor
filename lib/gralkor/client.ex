@@ -112,6 +112,7 @@ defmodule Gralkor.Client do
         targets: targets,
         max_results: max_results
       }) do
+    targets = ["default" | targets]
     validate_search_targets!(targets)
 
     Enum.reduce_while(targets, {:ok, []}, fn target, {:ok, results} ->
