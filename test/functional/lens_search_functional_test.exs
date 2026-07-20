@@ -307,15 +307,20 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
 
     test "and originating Lens does not filter the global results" do
-      assert :ok =
-               Client.ingest(%Ingest{
-                 operator_id: "operator-one",
-                 lens: "published-decisions",
-                 content: "published decision",
-                 source_description: "functional"
-               })
+      for {lens, content} <- [
+            {"published-observations", "published observation"},
+            {"published-decisions", "published decision"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: content,
+                   source_description: "functional"
+                 })
+      end
 
-      assert {:ok, ["published decision"]} =
+      assert {:ok, ["published observation", "published decision"]} =
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "published",

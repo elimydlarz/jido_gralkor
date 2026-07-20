@@ -178,13 +178,19 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
   describe "where a mounted memory plugin has no additional search targets" do
     test "then memory search uses only the requesting operator's reserved `default` target" do
-      assert :ok =
-               Client.ingest(%Ingest{
-                 operator_id: "operator-one",
-                 lens: "default",
-                 content: "baseline memory",
-                 source_description: "legacy"
-               })
+      for {lens, content} <- [
+            {"default", "baseline memory"},
+            {"observations", "unselected local memory"},
+            {"generalisations", "unselected global memory"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: content,
+                   source_description: "functional"
+                 })
+      end
 
       assert {:ok, plugin_state} =
                Plugin.mount(%{},

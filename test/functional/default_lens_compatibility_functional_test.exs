@@ -37,6 +37,8 @@ defmodule Gralkor.DefaultLensCompatibilityFunctionalTest do
     keys = [:client, :lenses, :lens_storage, :ontology]
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
 
+    start_supervised!(Gralkor.Lens.Storage.InMemory)
+
     Application.delete_env(:jido_gralkor, :lenses)
     Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
 
@@ -48,6 +50,7 @@ defmodule Gralkor.DefaultLensCompatibilityFunctionalTest do
   describe "where an application has not registered or selected a named Lens" do
     test "then the implicit `default` Lens preserves access to the operator's existing memory partition" do
       Application.put_env(:jido_gralkor, :ontology, MemoryOntology)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
 
       assert :ok =
                Client.ingest(%Ingest{
@@ -57,11 +60,11 @@ defmodule Gralkor.DefaultLensCompatibilityFunctionalTest do
                  source_description: "legacy"
                })
 
-      assert_receive {:episode_added,
-                      %Gralkor.Lens.Store{
-                        operator_id: "operator-one",
-                        lens: %Gralkor.Lens{name: "default", scope: :operator}
-                      }, "compatible memory", "legacy"}
+      assert {:ok, ["compatible memory"]} =
+               Client.search(%Gralkor.Search{
+                 operator_id: "operator-one",
+                 query: "compatible"
+               })
     end
 
     test "and the `:jido_gralkor, :ontology` value remains its ontology" do
