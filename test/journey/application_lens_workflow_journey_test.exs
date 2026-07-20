@@ -129,14 +129,22 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
         }
       }
 
+      request_id = "request-one"
+
       decision_signal = %Jido.Signal{
         id: "decision-signal",
         source: "/journey",
         type: "ai.react.query",
-        data: %{query: "Record a decision", tool_context: %{lens: "decisions"}}
+        data: %{
+          request_id: request_id,
+          query: "Record a decision",
+          tool_context: %{lens: "decisions"}
+        }
       }
 
-      assert {:ok, {:continue, %{data: %{tool_context: decision_context}}}} =
+      assert {:ok,
+              {:continue,
+               %{data: %{tool_context: decision_context, extra_refs: decision_refs}}}} =
                Plugin.handle_signal(decision_signal, %{agent: base_agent})
 
       assert {:ok, %{result: "Ingesting."}} =
@@ -153,13 +161,10 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
       assert {:ok, observation_results} = search("operator-one", ["observations"])
       refute "We chose Friday." in observation_results
 
-      request_id = "request-one"
-
       capture_agent = %{
         base_agent
         | state:
             Map.put(base_agent.state, :__strategy__, %{
-              run_tool_context: %{lens: "decisions"},
               request_traces: %{request_id => %{events: [%{kind: :llm_completed, data: %{}}]}},
               requests: %{
                 request_id => %{
@@ -168,6 +173,16 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
                   result: nil
                 }
               }
+            })
+            |> Map.put(:__thread__, %{
+              id: "session-one",
+              entries: [
+                %{
+                  kind: :ai_message,
+                  payload: %{role: :user},
+                  refs: Map.put(decision_refs, :request_id, request_id)
+                }
+              ]
             })
       }
 
@@ -188,6 +203,14 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
                &(&1.lens == "generalisations" and
                    String.contains?(&1.content, "Friday launches"))
              )
+
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-two",
+                 lens: "observations",
+                 content: "Another operator's local launch memory.",
+                 source_description: "journey"
+               })
 
       assert {:ok, {:continue, %{data: %{tool_context: search_context}}}} =
                Plugin.handle_signal(
@@ -210,14 +233,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
       assert result =~ "The launch window moved to Friday."
       assert result =~ "We chose Friday."
       assert result =~ "Eli consistently prefers Friday launches."
-
-      assert :ok =
-               Client.ingest(%Ingest{
-                 operator_id: "operator-two",
-                 lens: "observations",
-                 content: "Another operator's local launch memory.",
-                 source_description: "journey"
-               })
+      refute result =~ "Another operator's local launch memory."
 
       assert {:ok, operator_one_results} =
                search("operator-one", ["observations", "decisions", "global"])
