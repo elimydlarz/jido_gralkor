@@ -1,5 +1,9 @@
 Unit: In-memory Lens storage (src: lib/gralkor/lens/storage/in_memory.ex; unit: test/gralkor/lens/storage/in_memory_test.exs)
 
-when a Lens store adds an episode with an explicit identity
-  then the stored episode records that identity
-  and removing that identity removes the same stored episode
+when an operator-local or global Lens store adds episodes
+  then each episode remains in insertion order within only its selected Lens destination
+  and every stored episode retains its originating Lens
+
+when an operator-local or global Lens store is searched with a maximum result count
+  then no more than that count is returned from the selected destination
+  and the retained insertion order is preserved
