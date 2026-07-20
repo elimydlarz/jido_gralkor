@@ -143,8 +143,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
       }
 
       assert {:ok,
-              {:continue,
-               %{data: %{tool_context: decision_context, extra_refs: decision_refs}}}} =
+              {:continue, %{data: %{tool_context: decision_context, extra_refs: decision_refs}}}} =
                Plugin.handle_signal(decision_signal, %{agent: base_agent})
 
       assert {:ok, %{result: "Ingesting."}} =

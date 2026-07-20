@@ -69,5 +69,4 @@ defmodule Gralkor.Lens.Storage.InMemory do
     do: {operator_id, lens_name}
 
   defp key(%Store{lens: %Lens{scope: :global}}), do: :global
-
 end

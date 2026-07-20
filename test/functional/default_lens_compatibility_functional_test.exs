@@ -31,6 +31,7 @@ defmodule Gralkor.DefaultLensCompatibilityFunctionalTest do
   describe "where an application has not registered or selected a named Lens" do
     test "then the implicit `default` Lens preserves access to the operator's existing memory partition" do
       Application.put_env(:jido_gralkor, :ontology, MemoryOntology)
+
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
