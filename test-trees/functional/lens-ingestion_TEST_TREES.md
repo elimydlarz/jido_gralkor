@@ -1,4 +1,4 @@
-Functional: lens-ingestion (functional: none)
+Functional: lens-ingestion (functional: test/functional/lens_ingestion_functional_test.exs)
 
 when information is submitted through a registered Lens
   then the Lens's ingestion process receives the original information and a store bound to that Lens
