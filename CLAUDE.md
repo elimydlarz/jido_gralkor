@@ -2,7 +2,7 @@
 
 Jido-side adapter that embeds the Gralkor memory server. Ships the JidoGralkor.* plugin/lifecycle modules plus the Gralkor.* adapter (Pythonx-driven graphiti, capture buffer, distill, interpret, recall) that used to live in the now-deprecated `:gralkor_ex` package.
 
-**Test trees live in [TEST_TREES.md](TEST_TREES.md)** — the canonical contract between intent and tests. The inline tree blocks below are kept here for narrative flow and will be removed in a follow-up sync; treat TEST_TREES.md as authoritative when they disagree.
+**Test trees live under [`test-trees/`](test-trees/)** — the canonical contract between intent and tests. Functional and Journey trees describe application-visible behaviour; Integration and Unit trees describe the inner subjects revealed through TDD.
 
 ## Mental Model
 
@@ -117,7 +117,7 @@ A mutation that no test fails on is a **survivor** — a gap in the suite. Each 
 
 ## Test Trees
 
-See [TEST_TREES.md](TEST_TREES.md) — the canonical contract between intent and tests for this project.
+See [`test-trees/`](test-trees/) — the canonical contract between intent and tests for this project.
 
 ## Pending cleanups
 
