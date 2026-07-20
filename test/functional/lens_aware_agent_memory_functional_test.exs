@@ -386,6 +386,9 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
 
     test "and no flushed episode combines turns governed by different ontologies or ingestion processes" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+      start_lens_capture_buffer()
+
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
@@ -408,10 +411,24 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  )
       end
 
-      assert Enum.map(InMemory.captures(), &List.last/1) == ["observations", "decisions"]
+      assert :ok = Gralkor.Client.Native.flush_and_await("session-one", 1_000)
+
+      assert [%{content: observation_episode}] =
+               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "observations"})
+
+      assert [%{content: decision_episode}] =
+               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "decisions"})
+
+      assert observation_episode =~ "observations result"
+      refute observation_episode =~ "decisions result"
+      assert decision_episode =~ "decisions result"
+      refute decision_episode =~ "observations result"
     end
 
     test "and captured turns retain their original order" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+      start_lens_capture_buffer()
+
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
@@ -431,9 +448,12 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  )
       end
 
-      assert [first_capture, second_capture] = InMemory.captures()
-      assert Enum.any?(Enum.at(first_capture, 4), &(&1.content == "first-request"))
-      assert Enum.any?(Enum.at(second_capture, 4), &(&1.content == "second-request"))
+      assert :ok = Gralkor.Client.Native.flush_and_await("session-one", 1_000)
+
+      assert [%{content: episode}] =
+               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "observations"})
+
+      assert :binary.match(episode, "first-request") < :binary.match(episode, "second-request")
     end
   end
 
@@ -553,6 +573,15 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       type: "ai.request.completed",
       data: %{request_id: request_id, result: result}
     }
+  end
+
+  defp start_lens_capture_buffer do
+    start_supervised!(
+      {Gralkor.CaptureBuffer,
+       flush_callback: fn _, _, _, _, _ -> :ok end,
+       lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
+       retries: []}
+    )
   end
 
   defp eventually(fun, attempts \\ 50)
