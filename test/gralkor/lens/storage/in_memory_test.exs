@@ -6,7 +6,18 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
   alias Gralkor.Lens.Store
 
   setup do
+    previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
+    Application.put_env(:jido_gralkor, :lens_storage, InMemory)
     start_supervised!(InMemory)
+
+    on_exit(fn ->
+      if previous_storage do
+        Application.put_env(:jido_gralkor, :lens_storage, previous_storage)
+      else
+        Application.delete_env(:jido_gralkor, :lens_storage)
+      end
+    end)
+
     :ok
   end
 
