@@ -36,6 +36,7 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
 
   setup do
     keys = [
+      :client,
       :lenses,
       :lens_storage,
       :generalise_hypothesise_fn,
