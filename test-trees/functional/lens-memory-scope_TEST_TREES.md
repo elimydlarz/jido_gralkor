@@ -1,4 +1,4 @@
-Functional: lens-memory-scope (functional: none)
+Functional: lens-memory-scope (functional: test/functional/lens_memory_scope_functional_test.exs)
 
 when an operator-local Lens adds an episode
   then its memory destination is determined by the operator and Lens together
