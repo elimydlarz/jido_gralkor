@@ -64,7 +64,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
 
       true ->
         case Map.get(context, :search_targets) do
-          [_target | _rest] = targets ->
+          targets when is_list(targets) ->
             request = %Search{
               operator_id: Map.fetch!(context, :agent_id),
               query: query,

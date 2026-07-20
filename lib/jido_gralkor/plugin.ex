@@ -103,7 +103,9 @@ defmodule JidoGralkor.Plugin do
   defp fetch_opt(opts, key) when is_map(opts), do: Map.get(opts, key)
   defp fetch_opt(_, _), do: nil
 
-  defp validate_search_targets!([_target | _rest] = targets) do
+  defp validate_search_targets!(nil), do: []
+
+  defp validate_search_targets!(targets) when is_list(targets) do
     Enum.each(targets, fn
       "global" ->
         :ok
@@ -126,7 +128,7 @@ defmodule JidoGralkor.Plugin do
   end
 
   defp validate_search_targets!(targets) do
-    raise ArgumentError, "search_targets must be a non-empty list, got #{inspect(targets)}"
+    raise ArgumentError, "search_targets must be a list, got #{inspect(targets)}"
   end
 
   @impl Jido.Plugin
