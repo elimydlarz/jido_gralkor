@@ -143,7 +143,7 @@ end
 
 The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed), `:agent_name`, the selected `:lens`, and `:search_targets` on the signal's `tool_context`. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
 
-Set `tool_context[:lens]` on an individual query to override `default_lens` for that turn. The override becomes authoritative for both `memory_add` and automatic capture. If `generalise_lens` is configured, the same completed turn is also submitted to that Lens without duplicating it in session context.
+Set `tool_context[:lens]` on an individual query to override `default_lens` for that turn. The plugin retains the selection on the request's Jido thread entry, making it authoritative for both `memory_add` and later completion or failure capture after ReAct has released its transient tool context. If `generalise_lens` is configured, the same completed turn is also submitted to that Lens without duplicating it in session context.
 
 The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your consumer's responsibility to populate (e.g. via `on_before_cmd` from the signal's `tool_context`) so distill renders user lines under the human's actual name rather than a generic "User".
 
@@ -330,8 +330,8 @@ setup do
 end
 
 test "agent recalls stored context" do
-  Gralkor.Client.InMemory.configure_recall({:ok, "<gralkor-memory>known fact</gralkor-memory>"})
-  Gralkor.Client.InMemory.configure_capture(:ok)
+  Gralkor.Client.InMemory.set_recall({:ok, "<gralkor-memory>known fact</gralkor-memory>"})
+  Gralkor.Client.InMemory.set_capture(:ok)
   # ... exercise your agent, assert on responses, inspect recorded calls
 end
 ```
