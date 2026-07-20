@@ -1,4 +1,4 @@
-Functional: generalising-lens (functional: none)
+Functional: generalising-lens (functional: test/functional/generalising_lens_functional_test.exs)
 
 when a transcript is submitted through Gralkor's generalising ingestion process
   then the process distils zero or more durable generalisation episodes
