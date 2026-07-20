@@ -89,14 +89,14 @@ Optional model overrides (`GRALKOR_LLM_MODEL`, `GRALKOR_EMBEDDER_MODEL`) are rea
 Legacy tests use `Gralkor.Client.InMemory` and reset it per scenario. Lens tests additionally configure `lens_storage: Gralkor.Lens.Storage.InMemory` and start a fresh storage process per test; pinning only the client does not intercept `Client.ingest/1` or `search/1`.
 
 ```bash
-mix test          # default run: unit + integration, excluding :functional and :journey — no real LLM/graphiti calls
+mix test            # default run: unit + integration, excluding :functional and :journey — no real LLM/graphiti calls
 mix test.unit       # only :unit (excludes integration, functional, journey)
 mix test.integration
-mix test.functional # opt-in: real Pythonx + graphiti-core + real LLM (slow, costly)
-mix test.journey    # opt-in: full end-to-end journey suites (real LLM, slow, costly)
+mix test.functional # application-visible feature behaviour; some suites use real LLM/graphiti boundaries
+mix test.journey    # broad whole-application Functional workflows; some require external services
 ```
 
-Real LLM (and graphiti-core extraction) calls live only in the opt-in `:functional` and `:journey` tiers; a default `mix test` is deterministic. The boundary contract those tiers used to be the sole proof of — which graphiti `add_episode` kwargs an ontology populates — is now pinned deterministically by `ex-ontology-graphiti-spec` (`Gralkor.GraphitiPool.graphiti_boundary_spec/1`, pure, no Pythonx). The functional `ontology-extraction` suite remains the proof that a real LLM honours the declared schema.
+Functional tests describe application-visible behaviour and may use deterministic substitutes or focused live boundaries. Journey tests are the broad workflow form of Functional coverage. Real LLM and graphiti-core extraction calls remain confined to these opt-in suites; a default `mix test` is deterministic. The boundary contract those tiers used to be the sole proof of — which graphiti `add_episode` kwargs an ontology populates — is now pinned deterministically by `ex-ontology-graphiti-spec` (`Gralkor.GraphitiPool.graphiti_boundary_spec/1`, pure, no Pythonx). The functional `ontology-extraction` suite remains the proof that a real LLM honours the declared schema.
 
 `test/functional/interpret_epistemic_humility_test.exs` is the focused real-model proof for interpretation behavior. It loads `OPENAI_API_KEY` from `.env`, calls OpenAI `gpt-4.1-mini` through ReqLLM at temperature `0.0`, and covers varied source types, adversarial conflicting accounts, ordinary memories without provenance, and relevance filtering. It starts no Graphiti or FalkorDB runtime. Missing credentials fail fast rather than skip.
 
