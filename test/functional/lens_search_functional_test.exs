@@ -107,6 +107,33 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
+  describe "where a caller supplies additional operator-local Lens or reserved `global` targets" do
+    test "and the same maximum result count applies independently to the default and every additional destination" do
+      for {lens, content} <- [
+            {"default", "default one"},
+            {"default", "default two"},
+            {"observations", "observation one"},
+            {"observations", "observation two"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: content,
+                   source_description: "functional"
+                 })
+      end
+
+      assert {:ok, ["default one", "observation one"]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 targets: ["observations"],
+                 max_results: 1
+               })
+    end
+  end
+
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
 end
