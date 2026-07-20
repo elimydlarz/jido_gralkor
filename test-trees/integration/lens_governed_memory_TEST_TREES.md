@@ -6,34 +6,37 @@ when an application registers a Lens with a non-blank name, ontology, local or g
 
 when information is submitted through a registered Lens
   then the Lens's ingestion process receives the information and a store bound to that Lens
-  and every episode the process asks the store to add uses the Lens's ontology and storage scope
+  and every episode the process asks the store to add is submitted once to Graphiti with the Lens's ontology and Graphiti group
   and the process may add no episodes, one episode, or multiple episodes without changing those bindings
+  and Graphiti owns extraction, duplicate resolution, temporal invalidation, persistence, and fact-to-episode provenance
 
 where information is submitted directly without a mounted plugin or conversational turn
   then the selected Lens's ingestion process runs without requiring an agent response or capture flush
   and the caller observes whether ingestion succeeded or failed
 
 when an operator-local Lens adds an episode
-  then the episode is available only through that Lens for that operator
+  then its Graphiti group is determined by the operator and Lens together
+  and that group is distinct from every other operator-local Lens group and the shared global group
+  and the episode is available only through that Lens for that operator
   and a Lens with the same name belonging to another operator cannot observe it
   and another operator-local Lens belonging to the same operator cannot observe it
 
 when a global Lens adds an episode
-  then the episode enters the one global pool shared by every global Lens and every operator
-  and the episode records the name of the Lens that ingested it
+  then Graphiti ingests the episode into the one global group shared by every global Lens and every operator
+  and the same episode submission records the name of the Lens that ingested it in its source
   and the ingestion process does not have to add Lens provenance itself
 
-when a caller searches a non-empty selection of operator-local Lenses and the reserved `global` target
-  then each selected operator-local Lens is searched only for the requesting operator
+when a caller searches a non-empty selection of operator-local Lenses and reserved `default` or `global` targets
+  then the selection resolves to Graphiti groups for the requesting operator
+  and those groups are searched through one Graphiti multi-group search
   and selecting the global pool searches every episode in that pool without filtering by originating Lens
   and results from all selected destinations are combined into one memory response
   and results are concatenated in requested target order without deduplicating repeated matches
   and the same maximum result count is applied to every selected destination
   and no unselected operator-local Lens or another operator's local memory can contribute a result
 
-when a selected search destination fails
-  then the first error is returned without a partial result
-  and no later destination is searched
+if Graphiti's multi-group search fails
+  then the error is returned without manufacturing a partial memory response
 
 where a global Lens name identifies an episode's origin
   then that name remains attribution rather than a search boundary
