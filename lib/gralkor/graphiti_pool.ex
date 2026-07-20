@@ -186,6 +186,8 @@ defmodule Gralkor.GraphitiPool do
       When given, graphiti fetches the existing episode and re-runs extraction
       against it (update path). When nil (default), graphiti generates a new
       UUID.
+    * `:lens` — optional originating Lens name. It is appended to the episode's
+      source description before the single graphiti `add_episode` call.
   """
   @spec add_episode(
           GenServer.server(),
