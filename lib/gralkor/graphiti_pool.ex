@@ -209,6 +209,7 @@ defmodule Gralkor.GraphitiPool do
       when is_binary(group_id) and is_binary(content) and is_binary(source_description) and
              is_list(opts) do
     instance = __MODULE__.for(server, group_id)
+    source_description = lens_source_description(source_description, Keyword.get(opts, :lens))
 
     name = "manual-add-" <> Integer.to_string(System.system_time(:millisecond))
     idempotency_key = "key-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
@@ -258,14 +259,7 @@ defmodule Gralkor.GraphitiPool do
             kwargs['uuid'] = uid
         import sys
         try:
-            result = asyncio._gralkor_run(g.add_episode(**kwargs))
-            if lens is not None:
-                lens_name = lens.decode('utf-8') if isinstance(lens, (bytes, bytearray)) else lens
-                asyncio._gralkor_run(g.driver.execute_query(
-                    "MATCH (episode:Episodic {uuid: $uuid}) SET episode.lens = $lens RETURN episode.uuid AS uuid",
-                    uuid=result.episode.uuid,
-                    lens=lens_name,
-                ))
+            asyncio._gralkor_run(g.add_episode(**kwargs))
         except BaseException as e:
             print(f"[gralkor] add_episode failed: {type(e).__name__}: {e}", file=sys.stderr)
             raise
@@ -279,14 +273,19 @@ defmodule Gralkor.GraphitiPool do
           "group" => sanitized,
           "_idem" => idempotency_key,
           "ontology_dicts" => ontology_dicts,
-          "uuid" => uuid,
-          "lens" => Keyword.get(opts, :lens)
+          "uuid" => uuid
         }
       )
 
     :ok
   rescue
     e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
+  end
+
+  defp lens_source_description(source_description, nil), do: source_description
+
+  defp lens_source_description(source_description, lens) do
+    "#{source_description} [lens: #{lens}]"
   end
 
   @doc """
