@@ -151,7 +151,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your co
 
 **Session identity.** `session_id` is the current Jido thread id (read from `agent.state[:__thread__].id`, populated by `Jido.Thread.Plugin`). The plugin does not mint its own identifier — Jido's thread lifecycle is the single source of truth.
 
-**Lens partitioning.** An operator-scoped Lens writes to a partition derived from the operator id and Lens name, so different operators and different local Lenses remain isolated. Every global Lens writes to the one shared `global` partition. Global writes retain their originating Lens name as provenance, but global search deliberately queries the whole pool: use the reserved `"global"` search target, not the name of a global Lens.
+**Lens partitioning.** An operator-scoped Lens writes to a partition derived from the operator id and Lens name, so different operators and different local Lenses remain isolated. Every global Lens writes to the one shared `global` partition. The Lens store records a global episode's originating Lens in the source description supplied with the same Graphiti `add_episode` call; it does not mutate the graph afterward. Global search deliberately queries the whole pool: use the reserved `"global"` search target, not the name of a global Lens.
 
 **First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus configured `:lens` and `:search_targets`, but no `:session_id`; completed and failed turn capture are both skipped with a warning until a committed thread supplies that identity. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
 
@@ -252,7 +252,7 @@ The plugin mount chooses how an agent uses the registered Lenses:
 ```
 
 - `default_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
-- `search_targets` is a non-empty list of local Lens names and/or the reserved `"global"` target. A named global Lens is ingestion provenance, not a search filter, so it cannot be used as a target.
+- `search_targets` is an optional list of additional local Lens names and/or the reserved `"global"` target. Every Lens-aware search always includes the requesting operator's reserved `"default"` destination first; configured targets are additive. Omitting the option or using `[]` therefore searches only `"default"`. Naming `"default"` explicitly does not search it twice. A named global Lens is ingestion provenance, not a search filter, so it cannot be used as a target.
 - `generalise_lens` is optional. It submits each flushed transcript to a second Lens independently of the primary capture Lens.
 
 Consumers that ingest or search outside an agent call the same public boundary directly:
@@ -275,6 +275,8 @@ Consumers that ingest or search outside an agent call the same public boundary d
   })
 ```
 
+`Gralkor.Search.targets` has the same additive meaning as the plugin option: the operator's reserved `"default"` destination is always searched first. The result limit applies independently to default and every additional destination, and results retain destination order.
+
 Registry and plugin configuration fail fast for blank, duplicate, reserved, or malformed Lens definitions and for unknown or unsound search targets. If no Lens configuration is used, the implicit `"default"` Lens preserves the existing operator partition and deployment-wide `:ontology` behavior.
 
 ### Ontology DSL
@@ -292,7 +294,7 @@ On each store write, graphiti receives the selected Lens ontology's `entity_type
 
 ## Generalisation
 
-`Gralkor.Lens.Ingestion.Generalise` is a built-in ingestion process for an ordinary Lens. It hypothesises patterns from the submitted transcript, reconciles them against existing episodes in that Lens, and persists the survivors through the Lens-bound store. The Lens definition determines both ontology and scope; generalisation has no special partitioning rule.
+`Gralkor.Lens.Ingestion.Generalise` is a built-in ingestion process for an ordinary Lens. It distils zero or more durable, confidence-scored generalisations from the submitted transcript and submits each survivor through the Lens-bound store. Graphiti's normal `add_episode` pipeline owns entity/edge extraction and reconciliation of repeated or contradicted facts while retaining source episodes as provenance; the Lens process does not duplicate that graph logic or replace/remove source episodes itself. The Lens definition determines both ontology and scope; generalisation has no special partitioning rule.
 
 To run it automatically after capture, register a Lens with `ingestion: Gralkor.Lens.Ingestion.Generalise` and select its name as the plugin's `generalise_lens`. To invoke it without the plugin, submit a normal `%Gralkor.Ingest{lens: "generalisations", ...}` request. This is independent of the agent replying: any consumer surface can ingest through the same request.
 

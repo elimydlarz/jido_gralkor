@@ -20,7 +20,7 @@ The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` l
 - *user_name* — the human's name per turn; stashed on `agent.state[:user_name]` by the consumer.
 - *forced recall* — the iter-1 `tool_choice` override that pins `memory_search` on the first ReAct iteration.
 - *operator* — the application identity whose local memory is isolated; it is not a Lens and does not determine global visibility.
-- *Lens* — a named ingestion channel with an ontology, an ingestion process, and `:operator` or `:global` scope.
+- *Lens* — a named ingestion channel with an ontology, an ingestion process, and `:operator` or `:global` scope; reserved `default` is the operator's baseline memory destination.
 - *global pool* — the one shared destination used by every global Lens. Global episodes retain their originating Lens, while global search is deliberately unfiltered.
 
 ## Bounded Contexts
@@ -35,7 +35,7 @@ Two cooperating contexts live in this package: `Gralkor.*` owns the memory domai
 - When a committed turn produces a non-empty capture, `user_name` is read from `agent.state[:user_name]`; missing/blank raises `ArgumentError`.
 - First-turn-on-fresh-agent: no thread yet → `MemorySearch` short-circuits, capture is skipped, and Lens mounts still plant `agent_name`, `lens`, and `search_targets` without a session id.
 - A local Lens store partitions by operator and Lens name; every store write through a global Lens uses the shared global partition.
-- Public search requires a non-empty, fully valid selection before any query begins. Only reserved `"global"` selects the global pool; a global Lens name is provenance, while its ingestion process may query that pool through its bound store.
+- Public search always includes the requesting operator's reserved `"default"` destination first; a fully valid explicit selection adds local Lens destinations or reserved `"global"` before any query begins. Only `"global"` selects the global pool; a global Lens name is provenance.
 - Lens definitions are application-owned and selected by name. The selected callback controls zero, one, or many bound-store writes; `Client.ingest/1` returns its result without an implicit fallback write.
 
 ## Decision Rationale
@@ -45,10 +45,10 @@ Two cooperating contexts live in this package: `Gralkor.*` owns the memory domai
 - Recalled graph content is memory context, not adjudicated truth. Gralkor preserves and retrieves understandings extracted from source material without imposing confidence or verification semantics on the ontology; truth-sensitive verification belongs to the consuming application.
 - Consumer configuration is read from the `:jido_gralkor` app env and documented system environment variables. Request-time settings resolve per call; startup backend selection through `:falkordb` or `GRALKOR_DATA_DIR` requires restarting the application.
 - Ontology selection belongs to the selected Lens. The implicit `"default"` Lens retains deployment-wide `:ontology` as the compatibility path for calls or mounts that do not select a registered Lens.
-- Generalisation is an ingestion process, not a partition type. `Gralkor.Lens.Ingestion.Generalise` reads, updates, and removes through its bound store, so the selected Lens determines ontology and local/global placement.
+- Generalisation is an ingestion process, not a partition type. `Gralkor.Lens.Ingestion.Generalise` distils durable episodes and adds them through its bound store; Graphiti's normal episode ingestion owns fact reconciliation, while the selected Lens determines ontology and local/global placement.
 - The embedded Python stack is a consumer-invisible internal concern: `Gralkor.Python.init/1` reads jido_gralkor's packaged `priv/python/pyproject.toml` and supplies it directly to `Pythonx.uv_init/2`. Dependency application config does not propagate into a consumer, so owning the manifest prevents consumers from restating and drifting the Python dependency set.
 - `Gralkor.Ontology` declares each relationship once (`from Source do verb Target end`) and derives graphiti's `edge_types` + `edge_type_map` automatically. Graphiti's split between those two dicts is the modelled-once-mentioned-twice trap the DSL exists to remove. `relationships: :scoped` does not forbid generic edges — graphiti always extracts edge candidates and only constrains *which named class* they conform to between declared `(src, dst)` pairs; closing the world on edges would require post-filtering not yet implemented.
 
 ## Temporal View
 
-`ai.react.query` → plant `:session_id` when committed plus `:agent_name`, selected `:lens`, and `:search_targets` → ReAct tools ingest through the default or per-turn Lens and search the selected local Lenses plus optional global pool → a completed or failed request with a committed thread and non-empty canonical trace is buffered under the selected and optional generalising Lenses → flush submits each Lens batch independently. With a committed thread, AgentServer termination starts a fire-and-forget flush. Manual rotation without a thread is a no-op; otherwise `ContextRotator.rotate_now/2` installs a fresh thread seeded with retained and in-flight entries only after a successful synchronous flush, and preserves the current thread when flushing fails.
+`ai.react.query` → plant `:session_id` when committed plus `:agent_name`, selected `:lens`, and additional `:search_targets` → ReAct tools ingest through the default or per-turn Lens and search the operator's reserved `default` memory followed by selected local Lenses and optional global pool → a completed or failed request with a committed thread and non-empty canonical trace is buffered under the selected and optional generalising Lenses → flush submits each Lens batch independently. With a committed thread, AgentServer termination starts a fire-and-forget flush. Manual rotation without a thread is a no-op; otherwise `ContextRotator.rotate_now/2` installs a fresh thread seeded with retained and in-flight entries only after a successful synchronous flush, and preserves the current thread when flushing fails.

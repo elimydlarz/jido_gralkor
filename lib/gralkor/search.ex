@@ -1,11 +1,13 @@
 defmodule Gralkor.Search do
   @moduledoc """
-  A search across explicitly selected Lens destinations.
+  A search across the operator's baseline memory and additional Lens destinations.
 
-  Each target is either a registered operator-local Lens name or the reserved
-  `"global"` target. `"global"` searches the whole shared global pool without
-  filtering by originating Lens; global Lens names are provenance and cannot
-  be used as search targets. Results are combined in target order.
+  The requesting operator's reserved `"default"` destination is always searched
+  first. Each entry in `targets` is an additional registered operator-local Lens
+  name or the reserved `"global"` target. `"global"` searches the whole shared
+  global pool without filtering by originating Lens; global Lens names are
+  provenance and cannot be used as search targets. Results are combined in
+  destination order.
   """
 
   @enforce_keys [:operator_id, :query]
