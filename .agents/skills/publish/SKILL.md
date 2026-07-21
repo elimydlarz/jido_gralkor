@@ -15,9 +15,10 @@ Require exactly `<major|minor|patch|current>` from the operator's request.
 4. Stop if the worktree contains changes outside the current trunk-sync session.
 5. Inspect `.trunk-sync/timeclock/`. Require no other active trunk-sync session on the current branch so the release commit cannot move during publication.
 6. Require non-empty `HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>/.env`. Require both credentials before running tests or editing files. Shell-source `<repo-root>/.env` so its values are interpreted before passing credentials to Hex or GitHub. Load them without printing their values.
-7. Read the current branch and local commit with `git branch --show-current` and `git rev-parse HEAD`.
-8. Read `@version` from `mix.exs` and calculate the requested semantic-version change. For `current`, use the existing version.
-9. Query the remote without updating local refs:
+7. Create a temporary Hex home, shell-source `<repo-root>/.env`, and run `HEX_HOME="<temporary-hex-home>" HEX_API_KEY="$HEX_TOKEN" mix hex.user whoami` without printing the token. Require the authenticated Hex user to equal `elimydlarz`.
+8. Read the current branch and local commit with `git branch --show-current` and `git rev-parse HEAD`.
+9. Read `@version` from `mix.exs` and calculate the requested semantic-version change. For `current`, use the existing version.
+10. Query the remote without updating local refs:
 
 ```sh
 git ls-remote --symref origin HEAD refs/heads/<current-branch>
