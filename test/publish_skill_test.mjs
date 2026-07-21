@@ -88,4 +88,18 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       assert.match(skill, /Require `HEAD` and the remote branch tip still to equal the synchronized release commit/);
     },
   );
+
+  await context.test(
+    "and GitHub receives a new lightweight release tag for the synchronized release commit",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(skill, /jido-gralkor-v<version>/);
+      assert.match(skill, /gh api --method POST 'repos\/\{owner\}\/\{repo\}\/git\/refs'/);
+      assert.match(skill, /-f 'ref=refs\/tags\/jido-gralkor-v<version>'/);
+      assert.match(skill, /-f 'sha=<release-commit>'/);
+      assert.match(skill, /Create only a lightweight reference/);
+      assert.match(skill, /Never update or replace an existing release tag\./);
+    },
+  );
 });
