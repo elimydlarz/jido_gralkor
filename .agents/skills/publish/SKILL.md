@@ -79,4 +79,6 @@ Report the version, release commit, release tag, test commands, Hex package, and
 
 Fail visibly on every command error. Do not retry Hex publication automatically because a failed response may follow a completed publish. Never replace a local or remote release tag.
 
+Stop before editing `mix.exs` or publishing to Hex if Hex identity, ownership transfer, or ownership verification fails.
+
 If ownership transfer, synchronization, Hex publication, tag creation, or verification fails, stop and inspect the state with read-only commands. Report the prepared version, synchronized release commit, Hex result, and exact remote branch and tag state. Do not report the release as complete until every remote check succeeds.
