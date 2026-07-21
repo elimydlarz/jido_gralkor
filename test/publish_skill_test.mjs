@@ -168,7 +168,7 @@ test("when the operator selects the current version", async (context) => {
 });
 
 test(
-  "if the version selection is invalid, a required credential is missing, another trunk-sync session can move the branch, the worktree contains unrelated changes, the branch is not the up-to-date remote default branch, tests fail, or the release tag already exists",
+  "if the version selection is invalid, a required credential is missing, the Hex token does not identify `elimydlarz`, another trunk-sync session can move the branch, the worktree contains unrelated changes, the branch is not the up-to-date remote default branch, tests fail, ownership transfer or verification fails, or the release tag already exists",
   async (context) => {
     await context.test("then publishing stops before changing release state", async () => {
       const skill = await readFile(skillUrl, "utf8");
@@ -178,6 +178,7 @@ test(
       assert.match(skill, /Require both credentials before running tests or editing files/);
       assert.match(skill, /Require `refs\/tags\/jido-gralkor-v<version>` to be absent from the remote/);
       assert.match(skill, /Do not change release state before every preflight check and test command passes\./);
+      assert.match(skill, /Stop before editing `mix\.exs` or publishing to Hex if Hex identity, ownership transfer, or ownership verification fails\./);
     });
   },
 );
