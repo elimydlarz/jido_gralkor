@@ -38,11 +38,12 @@ Do not change release state before every preflight check and test command passes
 
 ## Prepare
 
-1. For `current`, do not edit `mix.exs`. Use its existing `@version` as the prepared version.
-2. For `major`, `minor`, or `patch`, edit only `@version` in `mix.exs` with `apply_patch`.
-3. When the version changes, require the command's trunk-sync hook result to succeed and require trunk-sync to commit and push the version change, leaving a clean worktree.
-4. Record the synchronized release commit with `git rev-parse HEAD`.
-5. Inspect the release commit and query `refs/heads/<current-branch>` with `git ls-remote`.
+1. Shell-source `<repo-root>/.env` and use an isolated temporary Hex home with `HEX_API_KEY="$HEX_TOKEN"`. Run `mix hex.owner packages`. If `jido_gralkor` is absent, run `mix hex.owner transfer jido_gralkor elimydlarz`, then run `mix hex.owner packages` again. Require `jido_gralkor` to appear in `elimydlarz`'s owned-package list before editing `mix.exs`. Do not pass `--organization`; this is a personally owned public package in the global Hex repository.
+2. For `current`, do not edit `mix.exs`. Use its existing `@version` as the prepared version.
+3. For `major`, `minor`, or `patch`, edit only `@version` in `mix.exs` with `apply_patch`.
+4. When the version changes, require the command's trunk-sync hook result to succeed and require trunk-sync to commit and push the version change, leaving a clean worktree.
+5. Record the synchronized release commit with `git rev-parse HEAD`.
+6. Inspect the release commit and query `refs/heads/<current-branch>` with `git ls-remote`.
 
 Require the remote branch tip to equal the synchronized release commit before publishing to Hex.
 
@@ -78,4 +79,4 @@ Report the version, release commit, release tag, test commands, Hex package, and
 
 Fail visibly on every command error. Do not retry Hex publication automatically because a failed response may follow a completed publish. Never replace a local or remote release tag.
 
-If synchronization, Hex publication, tag creation, or verification fails, stop and inspect the state with read-only commands. Report the prepared version, synchronized release commit, Hex result, and exact remote branch and tag state. Do not report the release as complete until every remote check succeeds.
+If ownership transfer, synchronization, Hex publication, tag creation, or verification fails, stop and inspect the state with read-only commands. Report the prepared version, synchronized release commit, Hex result, and exact remote branch and tag state. Do not report the release as complete until every remote check succeeds.
