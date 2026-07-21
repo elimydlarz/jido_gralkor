@@ -24,3 +24,14 @@ Require the current branch to be the remote default branch. Require the local co
 Require non-empty `GRALKOR_HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>/.env`. Load them without printing their values.
 
 Run `mix test`, `mix test.functional`, and `mix test.journey` before editing the version.
+
+## Prepare
+
+1. Read `@version` from `mix.exs` and calculate the requested semantic-version change.
+2. Edit only `@version` in `mix.exs` with `apply_patch`.
+3. Require the command's trunk-sync hook result to succeed.
+4. Require trunk-sync to commit and push the version change, leaving a clean worktree.
+5. Record the synchronized release commit with `git rev-parse HEAD`.
+6. Inspect the release commit and query `refs/heads/<current-branch>` with `git ls-remote`.
+
+Require the remote branch tip to equal the synchronized release commit before publishing to Hex.
