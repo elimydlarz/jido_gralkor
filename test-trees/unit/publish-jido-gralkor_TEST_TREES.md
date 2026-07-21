@@ -7,7 +7,9 @@ when an operator asks to publish jido_gralkor with a semantic-version change kin
   and the required Hex and GitHub credentials are shell-loaded from the repository environment using their current names
   and the version change is synchronized to the remote default branch by trunk-sync before Hex publication
   and no direct write-side Git command is attempted
-  and Hex receives the synchronized version through a write-capable user token whose account can manage both the gralkor organization package and the personally owned legacy packages
+  and the Hex token identifies the personal user `elimydlarz`
+  and after the test suite passes, `jido_gralkor` ownership is transferred from the gralkor organization to `elimydlarz` and verified through that user's owned packages before the version changes
+  and Hex receives the synchronized version as a personally owned public package
   and GitHub receives a new lightweight release tag for the synchronized release commit
   and remote inspection proves the branch and release tag resolve to the release commit
   and completion reports the version, commit, tag, tests, Hex package, and remote branch
@@ -15,7 +17,7 @@ when an operator asks to publish jido_gralkor with a semantic-version change kin
 when the operator selects the current version
   then mix.exs remains unchanged and its version is synchronized before Hex publication
 
-if the version selection is invalid, a required credential is missing, another trunk-sync session can move the branch, the worktree contains unrelated changes, the branch is not the up-to-date remote default branch, tests fail, or the release tag already exists
+if the version selection is invalid, a required credential is missing, the Hex token does not identify `elimydlarz`, another trunk-sync session can move the branch, the worktree contains unrelated changes, the branch is not the up-to-date remote default branch, tests fail, ownership transfer or verification fails, or the release tag already exists
   then publishing stops before changing release state
 
 if trunk-sync synchronization, Hex publication, GitHub tag creation, or remote verification fails
