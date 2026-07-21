@@ -1,6 +1,6 @@
 ## Core Domain Identity
 
-The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` layer owns memory-domain behavior, and applications extend it with Lens ingestion modules.
+This repository is the canonical development and distribution home for Jido-first Gralkor. The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` layer owns memory-domain behavior, and applications extend it with Lens ingestion modules.
 
 ## World-to-Code Mapping
 

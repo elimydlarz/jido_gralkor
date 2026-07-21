@@ -1,6 +1,6 @@
 # jido_gralkor
 
-Jido-side adapter that embeds the Gralkor memory server. Ships the JidoGralkor.* plugin/lifecycle modules plus the Gralkor.* adapter (Pythonx-driven graphiti, capture buffer, distill, interpret, recall) that used to live in the now-deprecated `:gralkor_ex` package.
+Canonical development and distribution home for Jido-first Gralkor. Ships the JidoGralkor.* plugin/lifecycle modules plus the embedded Gralkor.* adapter (Pythonx-driven graphiti, capture buffer, distill, interpret, recall); the legacy `:gralkor` and `:gralkor_ex` packages redirect consumers here.
 
 **Test trees live under [`test-trees/`](test-trees/)** — the canonical contract between intent and tests. Functional and Journey trees describe application-visible behaviour; Integration and Unit trees describe the inner subjects revealed through TDD.
 
