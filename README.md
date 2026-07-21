@@ -371,13 +371,13 @@ The behavioural contract lives in [`test-trees/`](https://github.com/elimydlarz/
 
 ## Publishing (maintainers)
 
-`:jido_gralkor` is published to the public Hex registry, owned by the `gralkor` Hex organization. Future releases use a `gralkor`-scoped org key (`GRALKOR_HEX_TOKEN`) loaded from the workspace `.env`; see the workspace `publish` skill for the full release flow.
+`:jido_gralkor` is published to the public Hex registry, owned by the `gralkor` Hex organization. Releases use a `gralkor`-scoped org key (`HEX_TOKEN`) loaded from the workspace `.env`; see the workspace `publish` skill for the full release flow.
 
 ```bash
-$publish patch   # or minor | major
+$publish patch   # or minor | major | current
 ```
 
-The skill runs the full suite before changing release state, lets trunk-sync synchronize the version commit and default branch, publishes through the `gralkor` Hex token, creates the lightweight `jido-gralkor-v<version>` tag through GitHub's API, and verifies both remote refs. Copy `.env.example` to `.env` and provide `GRALKOR_HEX_TOKEN` plus a repository-scoped `GH_TOKEN` with Contents write permission.
+The skill runs the full suite before changing release state, lets trunk-sync synchronize the version commit and default branch, publishes through the `gralkor` Hex token, creates the lightweight `jido-gralkor-v<version>` tag through GitHub's API, and verifies both remote refs. Copy `.env.example` to `.env` and provide `HEX_TOKEN` plus a repository-scoped `GH_TOKEN` with Contents write permission.
 
 ## License
 

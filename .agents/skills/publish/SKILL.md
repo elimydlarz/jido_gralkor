@@ -1,22 +1,22 @@
 ---
 name: publish
-description: Publish jido_gralkor to Hex with a major, minor, or patch semantic-version change while trunk-sync exclusively owns commits and branch synchronization and GitHub's API creates the release tag. Use when an operator asks to publish or release jido_gralkor from this repository.
+description: Publish the current jido_gralkor version or a major, minor, or patch semantic-version change to Hex while trunk-sync exclusively owns commits and branch synchronization and GitHub's API creates the release tag. Use when an operator asks to publish or release jido_gralkor from this repository.
 ---
 
 # Publish jido_gralkor
 
-Require exactly `<major|minor|patch>` from the operator's request.
+Require exactly `<major|minor|patch|current>` from the operator's request.
 
 ## Preflight
 
 1. Resolve the repository root with `git rev-parse --show-toplevel`.
-2. Reject a change kind other than `major`, `minor`, or `patch`.
+2. Reject a version selection other than `major`, `minor`, `patch`, or `current`.
 3. Inspect `git status --short` and the complete `git diff`.
 4. Stop if the worktree contains changes outside the current trunk-sync session.
 5. Inspect `.trunk-sync/timeclock/`. Require no other active trunk-sync session on the current branch so the release commit cannot move during publication.
-6. Require non-empty `GRALKOR_HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>/.env`. Require both credentials before running tests or editing files. Load them without printing their values.
+6. Require non-empty `HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>/.env`. Require both credentials before running tests or editing files. Load them without printing their values.
 7. Read the current branch and local commit with `git branch --show-current` and `git rev-parse HEAD`.
-8. Read `@version` from `mix.exs` and calculate the requested semantic-version change.
+8. Read `@version` from `mix.exs` and calculate the requested semantic-version change. For `current`, use the existing version.
 9. Query the remote without updating local refs:
 
 ```sh
@@ -37,9 +37,9 @@ Do not change release state before every preflight check and test command passes
 
 ## Prepare
 
-1. Edit only `@version` in `mix.exs` with `apply_patch`.
-2. Require the command's trunk-sync hook result to succeed.
-3. Require trunk-sync to commit and push the version change, leaving a clean worktree.
+1. For `current`, do not edit `mix.exs`. Use its existing `@version` as the prepared version.
+2. For `major`, `minor`, or `patch`, edit only `@version` in `mix.exs` with `apply_patch`.
+3. When the version changes, require the command's trunk-sync hook result to succeed and require trunk-sync to commit and push the version change, leaving a clean worktree.
 4. Record the synchronized release commit with `git rev-parse HEAD`.
 5. Inspect the release commit and query `refs/heads/<current-branch>` with `git ls-remote`.
 
@@ -52,7 +52,7 @@ Re-read `mix.exs`, `HEAD`, and the remote branch tip. Require `mix.exs` still to
 Load `<repo-root>/.env` without printing it. Create a temporary directory, substitute its absolute path for `<temporary-hex-home>`, and isolate Hex from cached user authentication when publishing:
 
 ```sh
-HEX_HOME="<temporary-hex-home>" HEX_API_KEY="$GRALKOR_HEX_TOKEN" mix hex.publish --yes
+HEX_HOME="<temporary-hex-home>" HEX_API_KEY="$HEX_TOKEN" mix hex.publish --yes
 ```
 
 After Hex succeeds, create `jido-gralkor-v<version>` at the synchronized release commit through GitHub's create-reference API:
