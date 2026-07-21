@@ -374,15 +374,10 @@ The behavioural contract lives in [`test-trees/`](https://github.com/elimydlarz/
 `:jido_gralkor` is published to the public Hex registry, owned by the `gralkor` Hex organization. Future releases use a `gralkor`-scoped org key (`GRALKOR_HEX_TOKEN`) loaded from the workspace `.env`; see the workspace `publish` skill for the full release flow.
 
 ```bash
-./scripts/publish.sh patch   # or minor | major | current
+$publish patch   # or minor | major
 ```
 
-Bumps `@version` in `mix.exs`, runs `mix hex.publish --yes`, commits the bump, and tags `jido-gralkor-v<version>` locally. The tag is **lightweight**, so `git push --follow-tags` will *not* push it (that only pushes annotated tags) — push the release tag explicitly:
-
-```bash
-git push                                 # the version-bump commit
-git push origin jido-gralkor-v<version>  # the release tag
-```
+The skill runs the full suite before changing release state, lets trunk-sync synchronize the version commit and default branch, publishes through the `gralkor` Hex token, creates the lightweight `jido-gralkor-v<version>` tag through GitHub's API, and verifies both remote refs. Copy `.env.example` to `.env` and provide `GRALKOR_HEX_TOKEN` plus a repository-scoped `GH_TOKEN` with Contents write permission.
 
 ## License
 
