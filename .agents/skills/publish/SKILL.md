@@ -6,3 +6,17 @@ description: Publish jido_gralkor to Hex with a major, minor, or patch semantic-
 # Publish jido_gralkor
 
 Require exactly `<major|minor|patch>` from the operator's request.
+
+## Preflight
+
+1. Resolve the repository root with `git rev-parse --show-toplevel`.
+2. Reject a change kind other than `major`, `minor`, or `patch`.
+3. Inspect `git status --short` and the complete `git diff`.
+4. Read the current branch and local commit with `git branch --show-current` and `git rev-parse HEAD`.
+5. Query the remote without updating local refs:
+
+```sh
+git ls-remote --symref origin HEAD refs/heads/<current-branch>
+```
+
+Require the current branch to be the remote default branch. Require the local commit to equal the remote branch tip.
