@@ -77,4 +77,15 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
     assert.match(skill, /Do not run `scripts\/publish\.sh` because it performs direct write-side Git commands\./);
     assert.doesNotMatch(skill, /^git (?:fetch|add|commit|tag [^-]|push)/m);
   });
+
+  await context.test(
+    "and Hex receives the synchronized version through the gralkor organization token",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(skill, /HEX_API_KEY="\$GRALKOR_HEX_TOKEN" mix hex\.publish --yes/);
+      assert.match(skill, /Require `mix\.exs` still to contain the prepared version/);
+      assert.match(skill, /Require `HEAD` and the remote branch tip still to equal the synchronized release commit/);
+    },
+  );
 });
