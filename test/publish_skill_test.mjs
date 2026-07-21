@@ -4,7 +4,6 @@ import test from "node:test";
 
 const skillUrl = new URL("../.agents/skills/publish/SKILL.md", import.meta.url);
 const openaiYamlUrl = new URL("../.agents/skills/publish/agents/openai.yaml", import.meta.url);
-const envExampleUrl = new URL("../.env.example", import.meta.url);
 
 test("when an operator asks to publish jido_gralkor with a semantic-version change kind", async (context) => {
   await context.test("then the semantic-version change kind is the only required operator input", async () => {
@@ -18,5 +17,3 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
     );
   });
 });
-
-void envExampleUrl;
