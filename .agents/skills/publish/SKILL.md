@@ -49,3 +49,11 @@ Load `<repo-root>/.env` without printing it, isolate Hex from cached user authen
 ```sh
 HEX_API_KEY="$GRALKOR_HEX_TOKEN" mix hex.publish --yes
 ```
+
+After Hex succeeds, create `jido-gralkor-v<version>` at the synchronized release commit through GitHub's create-reference API:
+
+```sh
+gh api --method POST 'repos/{owner}/{repo}/git/refs' -f 'ref=refs/tags/jido-gralkor-v<version>' -f 'sha=<release-commit>'
+```
+
+Create only a lightweight reference. Never update or replace an existing release tag.
