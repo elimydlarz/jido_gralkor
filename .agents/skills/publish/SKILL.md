@@ -72,3 +72,9 @@ git ls-remote origin refs/heads/<current-branch> refs/tags/jido-gralkor-v<versio
 Require both remote refs to resolve to the synchronized release commit.
 
 Report the version, release commit, release tag, test commands, Hex package, and remote branch only after remote verification succeeds.
+
+## Failure handling
+
+Fail visibly on every command error. Do not retry Hex publication automatically because a failed response may follow a completed publish. Never replace a local or remote release tag.
+
+If synchronization, Hex publication, tag creation, or verification fails, stop and inspect the state with read-only commands. Report the prepared version, synchronized release commit, Hex result, and exact remote branch and tag state. Do not report the release as complete until every remote check succeeds.
