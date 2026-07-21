@@ -140,3 +140,23 @@ test(
     });
   },
 );
+
+test(
+  "if trunk-sync synchronization, Hex publication, GitHub tag creation, or remote verification fails",
+  async (context) => {
+    await context.test(
+      "then publishing stops without replacing an existing release tag and reports the exact incomplete release state",
+      async () => {
+        const skill = await readFile(skillUrl, "utf8");
+
+        assert.match(skill, /Fail visibly on every command error\./);
+        assert.match(skill, /Do not retry Hex publication automatically/);
+        assert.match(skill, /Never replace a local or remote release tag/);
+        assert.match(
+          skill,
+          /Report the prepared version, synchronized release commit, Hex result, and exact remote branch and tag state/,
+        );
+      },
+    );
+  },
+);
