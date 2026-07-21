@@ -56,6 +56,13 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
     },
   );
 
+  await context.test("and the Hex token identifies the personal user `elimydlarz`", async () => {
+    const skill = await readFile(skillUrl, "utf8");
+
+    assert.match(skill, /mix hex\.user whoami/);
+    assert.match(skill, /Require the authenticated Hex user to equal `elimydlarz`\./);
+  });
+
   await context.test(
     "and the version change is synchronized to the remote default branch by trunk-sync before Hex publication",
     async () => {
