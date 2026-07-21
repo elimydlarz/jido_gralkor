@@ -31,4 +31,10 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       assert.match(skill, /Require the local commit to equal the remote branch tip/);
     },
   );
+
+  await context.test("and the complete test suite passes before release state changes", async () => {
+    const skill = await readFile(skillUrl, "utf8");
+
+    assert.match(skill, /Run `mix test`, `mix test\.functional`, and `mix test\.journey` before editing the version\./);
+  });
 });
