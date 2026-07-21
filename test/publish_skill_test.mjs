@@ -6,12 +6,12 @@ const skillUrl = new URL("../.agents/skills/publish/SKILL.md", import.meta.url);
 const openaiYamlUrl = new URL("../.agents/skills/publish/agents/openai.yaml", import.meta.url);
 const envExampleUrl = new URL("../.env.example", import.meta.url);
 
-test("when an operator asks to publish jido_gralkor with a semantic-version change kind", async (context) => {
-  await context.test("then the semantic-version change kind is the only required operator input", async () => {
+test("when an operator asks to publish jido_gralkor with a semantic-version change kind or the current version", async (context) => {
+  await context.test("then the version selection is the only required operator input", async () => {
     const skill = await readFile(skillUrl, "utf8");
     const openaiYaml = await readFile(openaiYamlUrl, "utf8");
 
-    assert.match(skill, /Require exactly `<major\|minor\|patch>` from the operator's request\./);
+    assert.match(skill, /Require exactly `<major\|minor\|patch\|current>` from the operator's request\./);
     assert.match(
       openaiYaml,
       /default_prompt: "Use \$publish patch to publish the next jido_gralkor release\."/,
@@ -40,13 +40,14 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
   });
 
   await context.test(
-    "and the required Hex and GitHub credentials are loaded from the repository environment",
+    "and the required Hex and GitHub credentials are loaded from the repository environment using their current names",
     async () => {
       const skill = await readFile(skillUrl, "utf8");
       const envExample = await readFile(envExampleUrl, "utf8");
 
-      assert.match(skill, /Require non-empty `GRALKOR_HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>\/\.env`\./);
-      assert.match(envExample, /^GRALKOR_HEX_TOKEN=$/m);
+      assert.match(skill, /Require non-empty `HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>\/\.env`\./);
+      assert.match(envExample, /^HEX_TOKEN=$/m);
+      assert.doesNotMatch(envExample, /^GRALKOR_HEX_TOKEN=/m);
       assert.match(envExample, /^GH_TOKEN=$/m);
       assert.match(envExample, /Contents write permission/);
     },
@@ -83,7 +84,7 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
     async () => {
       const skill = await readFile(skillUrl, "utf8");
 
-      assert.match(skill, /HEX_API_KEY="\$GRALKOR_HEX_TOKEN" mix hex\.publish --yes/);
+      assert.match(skill, /HEX_API_KEY="\$HEX_TOKEN" mix hex\.publish --yes/);
       assert.match(skill, /Require `mix\.exs` still to contain the prepared version/);
       assert.match(skill, /Require `HEAD` and the remote branch tip still to equal the synchronized release commit/);
     },
@@ -126,8 +127,20 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
   );
 });
 
+test("when the operator selects the current version", async (context) => {
+  await context.test(
+    "then mix.exs remains unchanged and its version is synchronized before Hex publication",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(skill, /For `current`, do not edit `mix\.exs`\./);
+      assert.match(skill, /Use its existing `@version` as the prepared version/);
+    },
+  );
+});
+
 test(
-  "if the semantic-version change kind is invalid, a required credential is missing, another trunk-sync session can move the branch, the worktree contains unrelated changes, the branch is not the up-to-date remote default branch, tests fail, or the release tag already exists",
+  "if the version selection is invalid, a required credential is missing, another trunk-sync session can move the branch, the worktree contains unrelated changes, the branch is not the up-to-date remote default branch, tests fail, or the release tag already exists",
   async (context) => {
     await context.test("then publishing stops before changing release state", async () => {
       const skill = await readFile(skillUrl, "utf8");
