@@ -82,7 +82,7 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
   });
 
   await context.test(
-    "and Hex receives the synchronized version through the gralkor organization token",
+    "and Hex receives the synchronized version through the write-capable Hex token",
     async () => {
       const skill = await readFile(skillUrl, "utf8");
 
