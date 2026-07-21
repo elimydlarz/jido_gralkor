@@ -1,4 +1,4 @@
-Unit: publish-jido-gralkor (src: .agents/skills/publish/SKILL.md, .agents/skills/publish/agents/openai.yaml, .env.example; unit: test/jido_gralkor/publish_skill_test.exs)
+Unit: publish-jido-gralkor (src: .agents/skills/publish/SKILL.md, .agents/skills/publish/agents/openai.yaml, .env.example; unit: test/publish_skill_test.mjs)
 
 when an operator asks to publish jido_gralkor with a semantic-version change kind
   then the semantic-version change kind is the only required operator input
