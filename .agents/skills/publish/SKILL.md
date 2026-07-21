@@ -21,6 +21,10 @@ git ls-remote --symref origin HEAD refs/heads/<current-branch>
 
 Require the current branch to be the remote default branch. Require the local commit to equal the remote branch tip.
 
+Run every read-only Git inspection as its own standalone command. Do not compose a Git command with `cd`, pipes, command substitution, environment assignments, shell wrappers, or another command.
+
+Do not run direct write-side Git commands, including `git fetch`, `git add`, `git commit`, `git tag`, or `git push`. Trunk-sync exclusively owns commits and branch synchronization. Do not run `scripts/publish.sh` because it performs direct write-side Git commands.
+
 Require non-empty `GRALKOR_HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>/.env`. Load them without printing their values.
 
 Run `mix test`, `mix test.functional`, and `mix test.journey` before editing the version.
