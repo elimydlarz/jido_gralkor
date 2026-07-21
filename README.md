@@ -4,14 +4,14 @@ Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One H
 
 You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, and **Lenses**: named, independently configurable ingestion and search channels, each with its own ontology, scope, and consumer-defined ingestion process.
 
-This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 4.1"}` for the whole memory stack.
+This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 5.0"}` for the whole memory stack.
 
 ## Install
 
 ```elixir
 def deps do
   [
-    {:jido_gralkor, "~> 4.1"}
+    {:jido_gralkor, "~> 5.0"}
   ]
 end
 ```
@@ -371,13 +371,13 @@ The behavioural contract lives in [`test-trees/`](https://github.com/elimydlarz/
 
 ## Publishing (maintainers)
 
-`:jido_gralkor` is published to the public Hex registry, owned by the `gralkor` Hex organization. Releases use a `gralkor`-scoped org key (`HEX_TOKEN`) loaded from the workspace `.env`; see the workspace `publish` skill for the full release flow.
+`:jido_gralkor` is published to the public Hex registry as a package owned by the `elimydlarz` Hex user. Releases use that user's API key (`HEX_TOKEN`) loaded from the workspace `.env`; see the workspace `publish` skill for the full release flow.
 
 ```bash
 $publish patch   # or minor | major | current
 ```
 
-The skill runs the full suite before changing release state, lets trunk-sync synchronize the version commit and default branch, publishes through the `gralkor` Hex token, creates the lightweight `jido-gralkor-v<version>` tag through GitHub's API, and verifies both remote refs. Copy `.env.example` to `.env` and provide `HEX_TOKEN` plus a repository-scoped `GH_TOKEN` with Contents write permission.
+The skill runs the full suite before changing release state, verifies or transfers the package to personal ownership, lets trunk-sync synchronize the version commit and default branch, publishes through the personal Hex token, creates the lightweight `jido-gralkor-v<version>` tag through GitHub's API, and verifies both remote refs. Copy `.env.example` to `.env` and provide `HEX_TOKEN` plus a repository-scoped `GH_TOKEN` with Contents write permission.
 
 ## License
 
