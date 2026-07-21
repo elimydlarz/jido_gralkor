@@ -48,6 +48,8 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       assert.match(skill, /Require non-empty `HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>\/\.env`\./);
       assert.match(envExample, /^HEX_TOKEN=$/m);
       assert.doesNotMatch(envExample, /^GRALKOR_HEX_TOKEN=/m);
+      assert.match(envExample, /Hex user API key with `api:write` permission/);
+      assert.match(envExample, /manage `jido_gralkor`, `gralkor`, and `gralkor_ex`/);
       assert.match(envExample, /^GH_TOKEN=$/m);
       assert.match(envExample, /Contents write permission/);
     },
