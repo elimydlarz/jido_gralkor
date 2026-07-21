@@ -125,3 +125,18 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
     },
   );
 });
+
+test(
+  "if the semantic-version change kind is invalid, a required credential is missing, another trunk-sync session can move the branch, the worktree contains unrelated changes, the branch is not the up-to-date remote default branch, tests fail, or the release tag already exists",
+  async (context) => {
+    await context.test("then publishing stops before changing release state", async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(skill, /Stop if the worktree contains changes outside the current trunk-sync session/);
+      assert.match(skill, /Require no other active trunk-sync session on the current branch/);
+      assert.match(skill, /Require both credentials before running tests or editing files/);
+      assert.match(skill, /Require `refs\/tags\/jido-gralkor-v<version>` to be absent from the remote/);
+      assert.match(skill, /Do not change release state before every preflight check and test command passes\./);
+    });
+  },
+);
