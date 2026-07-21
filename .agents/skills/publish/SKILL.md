@@ -14,7 +14,7 @@ Require exactly `<major|minor|patch|current>` from the operator's request.
 3. Inspect `git status --short` and the complete `git diff`.
 4. Stop if the worktree contains changes outside the current trunk-sync session.
 5. Inspect `.trunk-sync/timeclock/`. Require no other active trunk-sync session on the current branch so the release commit cannot move during publication.
-6. Require non-empty `HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>/.env`. Require both credentials before running tests or editing files. Load them without printing their values.
+6. Require non-empty `HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>/.env`. Require both credentials before running tests or editing files. Shell-source `<repo-root>/.env` so its values are interpreted before passing credentials to Hex or GitHub. Load them without printing their values.
 7. Read the current branch and local commit with `git branch --show-current` and `git rev-parse HEAD`.
 8. Read `@version` from `mix.exs` and calculate the requested semantic-version change. For `current`, use the existing version.
 9. Query the remote without updating local refs:
@@ -49,7 +49,7 @@ Require the remote branch tip to equal the synchronized release commit before pu
 
 Re-read `mix.exs`, `HEAD`, and the remote branch tip. Require `mix.exs` still to contain the prepared version. Require `HEAD` and the remote branch tip still to equal the synchronized release commit.
 
-Load `<repo-root>/.env` without printing it. Create a temporary directory, substitute its absolute path for `<temporary-hex-home>`, and isolate Hex from cached user authentication when publishing:
+Shell-source `<repo-root>/.env` without printing it. Create a temporary directory, substitute its absolute path for `<temporary-hex-home>`, and isolate Hex from cached user authentication when publishing:
 
 ```sh
 HEX_HOME="<temporary-hex-home>" HEX_API_KEY="$HEX_TOKEN" mix hex.publish --yes
