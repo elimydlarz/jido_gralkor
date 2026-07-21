@@ -51,4 +51,18 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       assert.match(envExample, /Contents write permission/);
     },
   );
+
+  await context.test(
+    "and the version change is synchronized to the remote default branch by trunk-sync before Hex publication",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(skill, /Read `@version` from `mix\.exs` and calculate the requested semantic-version change\./);
+      assert.match(skill, /Edit only `@version` in `mix\.exs`/);
+      assert.match(skill, /Require the command's trunk-sync hook result to succeed/);
+      assert.match(skill, /Require trunk-sync to commit and push the version change/);
+      assert.match(skill, /Record the synchronized release commit with `git rev-parse HEAD`/);
+      assert.match(skill, /Require the remote branch tip to equal the synchronized release commit before publishing to Hex\./);
+    },
+  );
 });
