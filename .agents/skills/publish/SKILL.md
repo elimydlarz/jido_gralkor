@@ -21,4 +21,6 @@ git ls-remote --symref origin HEAD refs/heads/<current-branch>
 
 Require the current branch to be the remote default branch. Require the local commit to equal the remote branch tip.
 
+Require non-empty `GRALKOR_HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>/.env`. Load them without printing their values.
+
 Run `mix test`, `mix test.functional`, and `mix test.journey` before editing the version.
