@@ -4,6 +4,7 @@ import test from "node:test";
 
 const skillUrl = new URL("../.agents/skills/publish/SKILL.md", import.meta.url);
 const openaiYamlUrl = new URL("../.agents/skills/publish/agents/openai.yaml", import.meta.url);
+const envExampleUrl = new URL("../.env.example", import.meta.url);
 
 test("when an operator asks to publish jido_gralkor with a semantic-version change kind", async (context) => {
   await context.test("then the semantic-version change kind is the only required operator input", async () => {
@@ -37,4 +38,17 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
 
     assert.match(skill, /Run `mix test`, `mix test\.functional`, and `mix test\.journey` before editing the version\./);
   });
+
+  await context.test(
+    "and the required Hex and GitHub credentials are loaded from the repository environment",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+      const envExample = await readFile(envExampleUrl, "utf8");
+
+      assert.match(skill, /Require non-empty `GRALKOR_HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>\/\.env`\./);
+      assert.match(envExample, /^GRALKOR_HEX_TOKEN=$/m);
+      assert.match(envExample, /^GH_TOKEN=$/m);
+      assert.match(envExample, /Contents write permission/);
+    },
+  );
 });
