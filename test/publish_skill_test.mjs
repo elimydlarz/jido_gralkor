@@ -49,7 +49,7 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       assert.match(envExample, /^HEX_TOKEN=$/m);
       assert.doesNotMatch(envExample, /^GRALKOR_HEX_TOKEN=/m);
       assert.match(envExample, /user API key with `api:write` permission/);
-      assert.match(envExample, /manage `jido_gralkor`, `gralkor`, and `gralkor_ex`/);
+      assert.match(envExample, /`jido_gralkor`, `gralkor`, and `gralkor_ex`/);
       assert.match(envExample, /^GH_TOKEN=$/m);
       assert.match(envExample, /Contents write permission/);
     },
