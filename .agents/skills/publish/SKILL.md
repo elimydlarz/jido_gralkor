@@ -57,3 +57,11 @@ gh api --method POST 'repos/{owner}/{repo}/git/refs' -f 'ref=refs/tags/jido-gral
 ```
 
 Create only a lightweight reference. Never update or replace an existing release tag.
+
+Verify the remote state with this standalone inspection:
+
+```sh
+git ls-remote origin refs/heads/<current-branch> refs/tags/jido-gralkor-v<version>
+```
+
+Require both remote refs to resolve to the synchronized release commit.
