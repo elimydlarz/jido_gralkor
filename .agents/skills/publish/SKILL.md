@@ -39,3 +39,13 @@ Run `mix test`, `mix test.functional`, and `mix test.journey` before editing the
 6. Inspect the release commit and query `refs/heads/<current-branch>` with `git ls-remote`.
 
 Require the remote branch tip to equal the synchronized release commit before publishing to Hex.
+
+## Publish
+
+Re-read `mix.exs`, `HEAD`, and the remote branch tip. Require `mix.exs` still to contain the prepared version. Require `HEAD` and the remote branch tip still to equal the synchronized release commit.
+
+Load `<repo-root>/.env` without printing it, isolate Hex from cached user authentication with a temporary `HEX_HOME`, and publish with:
+
+```sh
+HEX_API_KEY="$GRALKOR_HEX_TOKEN" mix hex.publish --yes
+```
