@@ -4,7 +4,7 @@ when an operator asks to publish jido_gralkor with a semantic-version change kin
   then the version selection is the only required operator input
   and read-only Git preflight proves the local default branch matches its remote tip
   and the complete test suite passes before release state changes
-  and the required Hex and GitHub credentials are loaded from the repository environment using their current names
+  and the required Hex and GitHub credentials are shell-loaded from the repository environment using their current names
   and the version change is synchronized to the remote default branch by trunk-sync before Hex publication
   and no direct write-side Git command is attempted
   and Hex receives the synchronized version through a write-capable user token whose account can manage both the gralkor organization package and the personally owned legacy packages

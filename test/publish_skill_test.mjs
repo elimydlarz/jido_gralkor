@@ -40,12 +40,13 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
   });
 
   await context.test(
-    "and the required Hex and GitHub credentials are loaded from the repository environment using their current names",
+    "and the required Hex and GitHub credentials are shell-loaded from the repository environment using their current names",
     async () => {
       const skill = await readFile(skillUrl, "utf8");
       const envExample = await readFile(envExampleUrl, "utf8");
 
       assert.match(skill, /Require non-empty `HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>\/\.env`\./);
+      assert.match(skill, /Shell-source `<repo-root>\/\.env` so its values are interpreted before passing credentials to Hex or GitHub\./);
       assert.match(envExample, /^HEX_TOKEN=$/m);
       assert.doesNotMatch(envExample, /^GRALKOR_HEX_TOKEN=/m);
       assert.match(envExample, /user API key with `api:write` permission/);
