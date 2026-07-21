@@ -1,0 +1,4 @@
+interface:
+  display_name: "Publish jido_gralkor"
+  short_description: "Publish a trunk-sync-safe Hex release"
+  default_prompt: "Use $publish patch to publish the next jido_gralkor release."
