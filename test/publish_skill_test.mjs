@@ -65,4 +65,16 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       assert.match(skill, /Require the remote branch tip to equal the synchronized release commit before publishing to Hex\./);
     },
   );
+
+  await context.test("and no direct write-side Git command is attempted", async () => {
+    const skill = await readFile(skillUrl, "utf8");
+
+    assert.match(
+      skill,
+      /Do not run direct write-side Git commands, including `git fetch`, `git add`, `git commit`, `git tag`, or `git push`\./,
+    );
+    assert.match(skill, /Run every read-only Git inspection as its own standalone command/);
+    assert.match(skill, /Do not run `scripts\/publish\.sh` because it performs direct write-side Git commands\./);
+    assert.doesNotMatch(skill, /^git (?:fetch|add|commit|tag [^-]|push)/m);
+  });
 });
