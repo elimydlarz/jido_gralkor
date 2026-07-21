@@ -20,3 +20,5 @@ git ls-remote --symref origin HEAD refs/heads/<current-branch>
 ```
 
 Require the current branch to be the remote default branch. Require the local commit to equal the remote branch tip.
+
+Run `mix test`, `mix test.functional`, and `mix test.journey` before editing the version.
