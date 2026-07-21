@@ -49,10 +49,10 @@ Require the remote branch tip to equal the synchronized release commit before pu
 
 Re-read `mix.exs`, `HEAD`, and the remote branch tip. Require `mix.exs` still to contain the prepared version. Require `HEAD` and the remote branch tip still to equal the synchronized release commit.
 
-Load `<repo-root>/.env` without printing it, isolate Hex from cached user authentication with a temporary `HEX_HOME`, and publish with:
+Load `<repo-root>/.env` without printing it. Create a temporary directory, substitute its absolute path for `<temporary-hex-home>`, and isolate Hex from cached user authentication when publishing:
 
 ```sh
-HEX_API_KEY="$GRALKOR_HEX_TOKEN" mix hex.publish --yes
+HEX_HOME="<temporary-hex-home>" HEX_API_KEY="$GRALKOR_HEX_TOKEN" mix hex.publish --yes
 ```
 
 After Hex succeeds, create `jido-gralkor-v<version>` at the synchronized release commit through GitHub's create-reference API:
