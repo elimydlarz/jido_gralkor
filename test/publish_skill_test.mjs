@@ -16,4 +16,19 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       /default_prompt: "Use \$publish patch to publish the next jido_gralkor release\."/,
     );
   });
+
+  await context.test(
+    "and read-only Git preflight proves the local default branch matches its remote tip",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(skill, /git status --short/);
+      assert.match(skill, /git diff/);
+      assert.match(skill, /git branch --show-current/);
+      assert.match(skill, /git rev-parse HEAD/);
+      assert.match(skill, /git ls-remote --symref origin HEAD refs\/heads\/<current-branch>/);
+      assert.match(skill, /Require the current branch to be the remote default branch/);
+      assert.match(skill, /Require the local commit to equal the remote branch tip/);
+    },
+  );
 });
