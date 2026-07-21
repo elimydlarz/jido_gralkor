@@ -112,4 +112,16 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       assert.match(skill, /Require both remote refs to resolve to the synchronized release commit\./);
     },
   );
+
+  await context.test(
+    "and completion reports the version, commit, tag, tests, Hex package, and remote branch",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(
+        skill,
+        /Report the version, release commit, release tag, test commands, Hex package, and remote branch only after remote verification succeeds\./,
+      );
+    },
+  );
 });
