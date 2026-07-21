@@ -103,13 +103,18 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
   });
 
   await context.test(
-    "and Hex receives the synchronized version through the write-capable Hex token",
+    "and Hex receives the synchronized version as a personally owned public package",
     async () => {
       const skill = await readFile(skillUrl, "utf8");
+      const envExample = await readFile(envExampleUrl, "utf8");
 
       assert.match(skill, /HEX_API_KEY="\$HEX_TOKEN" mix hex\.publish --yes/);
       assert.match(skill, /Require `mix\.exs` still to contain the prepared version/);
       assert.match(skill, /Require `HEAD` and the remote branch tip still to equal the synchronized release commit/);
+      assert.match(skill, /personally owned public package in the global Hex repository/);
+      assert.doesNotMatch(skill, /mix hex\.publish --organization/);
+      assert.match(envExample, /personal Hex user `elimydlarz`/);
+      assert.doesNotMatch(envExample, /manage both the gralkor organization package/);
     },
   );
 
