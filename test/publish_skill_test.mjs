@@ -102,4 +102,14 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       assert.match(skill, /Never update or replace an existing release tag\./);
     },
   );
+
+  await context.test(
+    "and remote inspection proves the branch and release tag resolve to the release commit",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(skill, /git ls-remote origin refs\/heads\/<current-branch> refs\/tags\/jido-gralkor-v<version>/);
+      assert.match(skill, /Require both remote refs to resolve to the synchronized release commit\./);
+    },
+  );
 });
