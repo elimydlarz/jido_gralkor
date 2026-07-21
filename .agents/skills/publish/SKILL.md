@@ -65,3 +65,5 @@ git ls-remote origin refs/heads/<current-branch> refs/tags/jido-gralkor-v<versio
 ```
 
 Require both remote refs to resolve to the synchronized release commit.
+
+Report the version, release commit, release tag, test commands, Hex package, and remote branch only after remote verification succeeds.
