@@ -83,7 +83,7 @@ while a deadline budget governs the call
 when no deadline is supplied
   then a default budget of 12 seconds governs the call
 
-when a recall is requested
+when a recall begins
   then the session is logged
   and the group is logged
   and the query length is logged
