@@ -6,16 +6,21 @@ when inference is needed to extract entities and edges from an episode, to embed
 when the pool starts
   then the shared asyncio runtime is installed, so the pool can be started on its own
   and the LLM client, the embedder, and the cross-encoder are each constructed once and shared by every graph instance for the pool's lifetime
-
-when the pool starts while both configured model specs name a supported inference provider
-  then client construction proceeds using the configured model ids
-  and the LLM client is built for the provider the LLM spec names
-  and the embedder is built for the provider the embedder spec names
-  and the cross-encoder is built for the provider the LLM spec names
-  while the embedder spec names Google
-    then the embedder is constructed to send one input per request, so a batched call cannot receive fewer embeddings than it sent inputs
-  while the two specs name different providers
-    then each client is still built for its own role's provider and startup completes
+  while both configured model specs name a supported inference provider
+    then client construction proceeds using the configured model ids
+    and the LLM client is built for the provider the LLM spec names
+    and the embedder is built for the provider the embedder spec names
+    and the cross-encoder is built for the provider the LLM spec names
+    while the embedder spec names Google
+      then the embedder is constructed to send one input per request, so a batched call cannot receive fewer embeddings than it sent inputs
+    while the two specs name different providers
+      then each client is still built for its own role's provider
+      and startup completes
+  while an embedded connection is configured
+    then any resume-cache file left beside the database is removed before the embedded database is constructed, so a stale socket from a previous boot cannot be reconnected to
+    and the embedded database is constructed once and held for the pool's lifetime
+  while a remote connection is configured
+    then the remote database is constructed once and held for the pool's lifetime
 
 if either configured model spec names a provider that is neither OpenAI nor Google
   then startup raises before any inference client is constructed
@@ -30,13 +35,6 @@ if the credential for a provider named by a configured model spec is absent
 where a provider is named by neither configured model spec
   then its absent credential does not prevent startup
 
-when the pool starts while an embedded connection is configured
-  then any resume-cache file left beside the database is removed before the embedded database is constructed, so a stale socket from a previous boot cannot be reconnected to
-  and the embedded database is constructed once and held for the pool's lifetime
-
-when the pool starts while a remote connection is configured
-  then the remote database is constructed once and held for the pool's lifetime
-
 when the pool has constructed its database
   then a warmup search runs once against a throwaway query and group, paying the cold-start cost before any consumer can recall
   and a warmup interpretation runs once against an empty conversation and throwaway facts
@@ -50,23 +48,24 @@ when a graph instance is requested for a group
   and concurrent callers for different groups proceed in parallel
   while no instance is cached for that group
     then the instance is constructed, cached, and held for the pool's lifetime
-    and construction runs to completion even when it takes longer than the default call timeout
     and index and constraint building is invoked before the instance is cached and returned
+    while construction takes longer than the default call timeout
+      then construction still runs to completion
     if index and constraint building fails
-      then the failure is non-fatal and the instance is still cached and returned
+      then the failure is non-fatal
+      and the instance is still cached and returned
 
-when an episode is added while no ontology is supplied
-  then the graph library receives no entity types, edge types, edge type map, or excluded entity types
-
-when an episode is added while an ontology module is supplied
-  then that ontology is translated into the graph library's schema representation on first encounter
-  and a later add with the same ontology reuses the translated representation rather than rebuilding it
-  and the translated entity types, edge types, edge type map, and excluded entity types are forwarded to the graph library
-  and the forwarded dictionary carries exactly the keys the ontology selects, omitting the rest
-  and the forwarded dictionary uses the graph library's key names outside and the ontology's declared type names inside
-
-when an episode is added while an episode identifier is supplied
-  then that identifier is forwarded to the graph library, so re-adding under it updates the episode by re-extraction
+when an episode is added
+  while no ontology is supplied
+    then the graph library receives no entity types, edge types, edge type map, or excluded entity types
+  while an ontology module is supplied
+    then that ontology is translated into the graph library's schema representation on first encounter
+    and a later add with the same ontology reuses the translated representation rather than rebuilding it
+    and the translated entity types, edge types, edge type map, and excluded entity types are forwarded to the graph library
+    and the forwarded dictionary carries exactly the keys the ontology selects, omitting the rest
+    and the forwarded dictionary uses the graph library's key names outside and the ontology's declared type names inside
+  while an episode identifier is supplied
+    then that identifier is forwarded to the graph library, so re-adding under it updates the episode by re-extraction
 
 if adding an episode raises inside the graph library
   then an error carrying only the raised exception's class and message is returned
@@ -86,9 +85,9 @@ when a fact search is run for a group
   and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps
   and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints
 
-when a node search is run for a group while node labels are supplied
-  then the graph library's node search is invoked with the requested result count and a filter carrying those labels
-  and each returned node is rendered with its name, summary, and attributes, ordered by relevance
-
-when a node search is run for a group while no node labels are supplied
-  then the graph library's node search is invoked with every node eligible
+when a node search is run for a group
+  while node labels are supplied
+    then the graph library's node search is invoked with the requested result count and a filter carrying those labels
+    and each returned node is rendered with its name, summary, and attributes, ordered by relevance
+  while no node labels are supplied
+    then the graph library's node search is invoked with every node eligible
