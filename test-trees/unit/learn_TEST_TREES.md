@@ -1,7 +1,7 @@
 Unit: learn (src: lib/gralkor/learn.ex; unit: test/gralkor/learn_test.exs)
 
 when one reasoning turn is learned from
-  then the injected learning caller is asked once, and that single call produces the whole record
+  then the injected learning caller is asked exactly once, that single call producing the whole record
   and the prompt renders each user message as "{user_name}: {content}"
   and the prompt renders each assistant message as "{agent_name}: {content}"
   and the prompt renders each behaviour message as "{agent_name}: (behaviour: {content})"
