@@ -61,13 +61,13 @@ where a learning search is supplied
   and it is seeded with the raw user query rather than a classified or LLM-rewritten query
   and it asks for one third of the main result limit, never fewer than one
   and its results are combined with the regular facts before interpretation
-  and it is abandoned after the same five-second yield the generalisation search uses, independent of the overall recall deadline
+  and it is abandoned after a five-second yield that is independent of the overall recall deadline
   if it fails or times out
     then recall proceeds with only the regular facts
 
 where no learning search is supplied
-  then no learning search is performed
-  and the main search is still the only search issued
+  then no learning search is issued
+  and the main search remains the only query sent to the graph
 
 when recall runs through the production client wiring
   then the learning search reaches the graph as a node search restricted to the node label "Learning"
