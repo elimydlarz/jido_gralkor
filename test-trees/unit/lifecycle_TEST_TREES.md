@@ -8,6 +8,7 @@ when the agent server terminates
     then that thread's buffered memory is flushed without blocking termination
     and the flush is logged at info naming the session id and the terminate reason
     if the flush call fails
-      then the failure is logged and termination completes normally regardless
+      then the failure is logged
+      and termination completes normally regardless
   while no thread is committed to agent state
     then no flush is requested at all
