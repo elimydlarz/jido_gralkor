@@ -94,7 +94,7 @@ when the recall call completes
   and the resulting block size is logged
   and how long the search took is logged
   and how long interpretation took is logged
-  where interpretation was never called because the search was empty
+  where interpretation never ran
     then the logged interpretation duration is zero
 
 where test mode is enabled
