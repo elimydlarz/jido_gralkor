@@ -96,7 +96,8 @@ when memory is added with a group and content
   while no ontology override is supplied
     then the deployment-configured ontology is the one applied, so a caller is never required to supply one
   where an ontology override is supplied
-    then the override is the ontology applied and the deployment-configured ontology is not consulted
+    then the override is the ontology applied
+    and the deployment-configured ontology is not consulted
   where a source description is supplied
     then it is the source recorded on the episode
   where no source description is supplied
