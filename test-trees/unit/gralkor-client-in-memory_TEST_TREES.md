@@ -10,8 +10,9 @@ when the double is reset
   then every configured response is cleared
   and every recorded call is cleared
 
-when the client implementation is resolved while a client module is configured
-  then that configured module is returned
+when the client implementation is resolved
+  while a client module is configured
+    then that configured module is returned
 
 when a recall is requested with a group, an agent name, a session id and a query
   while the backend returns a memory block
