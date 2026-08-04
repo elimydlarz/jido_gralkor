@@ -4,11 +4,10 @@ when the built-in learning entity type is requested
   then it is named "Learning"
   and it carries a non-empty description, without which the extraction model never mints a learning node
   and it declares the problem kind, the approach, the success flag, and the lesson, in that order
-  and the problem kind is an optional string
+  and the problem kind is an optional string, so extraction never drops the entity over a missing attribute
   and the approach is an optional string
   and the success flag is an optional boolean
   and the lesson is an optional string
-  and every field being optional means extraction never drops the entity over a missing attribute
   and no field takes a name the graph store reserves for itself
 
 when a consumer's entity-type list is merged with the built-in learning entity type
