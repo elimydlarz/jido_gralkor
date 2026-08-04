@@ -137,8 +137,9 @@ when a group id holding hyphens is sanitized
 when a group id holding no hyphens is sanitized
   then it is returned unchanged
 
-when the client implementation is resolved while no client module is configured
-  then the native adapter is returned
+when the client implementation is resolved
+  while no client module is configured
+    then the native adapter is returned
 
 when a recall runs
   then it carries a deadline of twelve seconds
