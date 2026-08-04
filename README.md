@@ -96,6 +96,67 @@ end
 
 `:jido_gralkor` auto-supervises its native runtime (Python → GraphitiPool → CaptureBuffer) when a FalkorDB backend is configured — no separate `Gralkor.Server` to wire into your supervision tree, and no readiness gate to add. By the time `Application.start/2` returns, `Gralkor.Client` is ready.
 
+## Configuration reference
+
+Everything `:jido_gralkor` reads, in one place. Nothing else is configurable — Python, the venv, and the Graphiti client are internal concerns with no consumer-facing knobs.
+
+### Application environment (`config :jido_gralkor, …`)
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
+| `:lenses` | list of keyword definitions (`:name`, `:ontology`, `:scope`, `:ingestion`) | `[]` | The Lens registry — named ingestion/search channels. Blank, duplicate, reserved (`"default"`, `"global"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
+| `:ontology` | module using `Gralkor.Ontology` | unset | Deployment-wide ontology for the implicit `"default"` Lens (legacy capture and `memory_add`). Registered Lenses use their own `:ontology` instead. A non-ontology module raises at the write boundary. |
+| `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
+| `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1` or `search/1`. |
+| `:generalise_on_flush` | boolean | `false` | Fires the legacy `Gralkor.Generalise` pipeline after each successful implicit-default capture flush. Lens mounts use `generalise_lens` instead. |
+| `:generalise_min_confidence` | float | `0.3` | Minimum confidence a generalisation hypothesis must reach to be persisted. Applies to both the legacy pipeline and `Gralkor.Lens.Ingestion.Generalise`. |
+| `:interpret_max_output_tokens` | positive integer | `2000` | Output ceiling for the per-recall interpret LLM call. Raise it if recall surfaces many candidate facts and you see `Gralkor.InterpretParseFailed` (the parser refuses truncated responses). Lower it to cap latency and cost. A non-positive value raises. |
+| `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall (search + interpret). On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. The auxiliary generalisation and learning searches have their own fixed 5 s yield inside this budget and degrade to no extra facts on timeout. |
+| `:test` | boolean | `false` | Verbose diagnostic logging: recall queries and returned facts, flushed capture bodies, and generalisation prompts/candidates/decisions are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
+| `:generalise_hypothesise_fn` | 1-arity fun | live ReqLLM call | Test seam: replaces the LLM call `Gralkor.Lens.Ingestion.Generalise` makes, so Lens generalisation can be exercised deterministically. |
+
+```elixir
+# config/runtime.exs — everything optional, shown with its default
+config :jido_gralkor,
+  ontology: MyApp.Ontology,
+  generalise_on_flush: false,
+  generalise_min_confidence: 0.3,
+  interpret_max_output_tokens: 2000,
+  recall_deadline_ms: 12_000
+```
+
+### Environment variables
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `GRALKOR_DATA_DIR` | unset | Writable directory for the embedded `falkordblite` backend (it spawns a `redis-server` grandchild there). Ignored when `:falkordb` is configured. With neither set, no native runtime starts. |
+| `GOOGLE_API_KEY` | — | Credential for Graphiti's Python-side Gemini LLM and embedder clients and for the BEAM-side ReqLLM calls. Required whenever the native runtime runs. |
+| `GRALKOR_LLM_MODEL` | `google:gemini-3.1-flash-lite` | `"provider:model"` override for the Graphiti LLM. Parsing is provider-agnostic, but native Graphiti startup accepts `google:` only and fails before constructing Python clients otherwise. |
+| `GRALKOR_EMBEDDER_MODEL` | `google:gemini-embedding-2-preview` | Same form and same Google-only constraint, for the embedder. |
+
+### Plugin mount options
+
+```elixir
+{JidoGralkor.Plugin, %{agent_name: "Susu", default_lens: "observations", …}}
+```
+
+| Option | Required | Default | What it does |
+| --- | --- | --- | --- |
+| `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
+| `:default_lens` | no | unset (implicit-default mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. |
+| `:search_targets` | no | `[]` | Additional local Lens names and/or the reserved `"global"` target. The operator's reserved `"default"` destination is always searched first; naming it explicitly doesn't search it twice. A global Lens's own name is provenance, not a target, and raises. |
+| `:generalise_lens` | no | unset | Second registered Lens that independently receives each flushed transcript. Must differ from `:default_lens`. |
+
+Per-turn, `tool_context[:lens]` overrides `:default_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
+
+### `JidoGralkor.ContextRotator.rotate_now/2`
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `:flush_timeout_ms` | `30_000` | How long the synchronous pre-rotation flush may take. |
+| `:keep_last_n` | `4` | Most-recent pre-flush thread entries seeded into the rotated thread. `0` drops everything that existed before the flush; turns that land during the flush are always carried over. |
+
 ## Wire it on your agent
 
 ```elixir
