@@ -29,7 +29,8 @@ if a recall is requested with a missing or blank agent name
 
 when a turn is captured for a session under a group, with an agent name, a user name and messages
   then the group is sanitized before it is buffered
-  and the deployment-configured ontology is resolved and buffered alongside the turn, the caller being given no ontology argument of its own
+  and the deployment-configured ontology is resolved, the caller being given no ontology argument of its own
+  and that resolved ontology is buffered alongside the turn
   and the sanitized group, the agent name, the user name, the resolved ontology and the messages are appended to the capture buffer under that session
   and success is returned immediately, no distillation running before the call returns
   and nothing is logged for the turn itself, captured content becoming observable only at flush
