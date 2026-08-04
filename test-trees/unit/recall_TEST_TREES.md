@@ -75,7 +75,8 @@ when recall runs through the production client wiring
   and no learning-search failure is logged
 
 while a deadline budget governs the call
-  then a call whose upstream answers inside the budget returns its memory block normally
+  if the upstream answers inside the budget
+    then the memory block is returned normally
   if the budget is exhausted before the call returns
     then in-flight upstream work is cancelled
     and {:error, :recall_deadline_expired} is returned
