@@ -105,8 +105,8 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
-| `:lenses` | list of keyword definitions (`:name`, `:ontology`, `:scope`, `:ingestion`) | `[]` | The Lens registry — named ingestion/search channels. Blank, duplicate, reserved (`"default"`, `"global"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
-| `:ontology` | module using `Gralkor.Ontology` | unset | Deployment-wide ontology for the implicit `"default"` Lens (legacy capture and `memory_add`). Registered Lenses use their own `:ontology` instead. A non-ontology module raises at the write boundary. |
+| `:lenses` | list of keyword definitions (`:name`, `:ontology`, `:scope`, `:ingestion`) | `[]` | The Lens registry — named ingestion/search channels. Each definition's `:ontology` is a module atom pointing at an ontology module you define in your own application's `lib/` (see [Ontology DSL](#ontology-dsl)) — resolved directly, with no intermediate registry or config-side declaration. Blank, duplicate, reserved (`"default"`, `"global"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
+| `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"default"` Lens only — the channel used by mounts with no `:default_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises at the write boundary. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1` or `search/1`. |
 | `:generalise_on_flush` | boolean | `false` | Fires the legacy `Gralkor.Generalise` pipeline after each successful implicit-default capture flush. Lens mounts use `generalise_lens` instead. |
@@ -119,12 +119,12 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 ```elixir
 # config/runtime.exs — everything optional, shown with its default
 config :jido_gralkor,
-  ontology: MyApp.Ontology,
-  generalise_on_flush: false,
   generalise_min_confidence: 0.3,
   interpret_max_output_tokens: 2000,
   recall_deadline_ms: 12_000
 ```
+
+`:ontology` and `:generalise_on_flush` are omitted above on purpose: both belong to the implicit-default compatibility path, not to a Lens deployment. See [A complete configuration](#a-complete-configuration) for all of it wired together.
 
 ### Environment variables
 
@@ -156,6 +156,108 @@ Per-turn, `tool_context[:lens]` overrides `:default_lens` for that query; the pl
 | --- | --- | --- |
 | `:flush_timeout_ms` | `30_000` | How long the synchronous pre-rotation flush may take. |
 | `:keep_last_n` | `4` | Most-recent pre-flush thread entries seeded into the rotated thread. `0` drops everything that existed before the flush; turns that land during the flush are always carried over. |
+
+## A complete configuration
+
+Everything above, in one deployment. Three files.
+
+**Ontologies are modules, not config.** Each one is defined once as ordinary compiled Elixir in your own `lib/`, and a Lens definition points at it by module atom — the same way that definition's `ingestion:` key points at an ingestion module you wrote. So an ontology exists in two places, playing two different roles: *defined* in `lib/` as code, *referenced* in `config/runtime.exs` from the Lens that should extract with it. There is no third thing — no ontology list in the application env to register it with first. Two Lenses may point at the same module, as `"observations"` and `"decisions"` do below; a Lens needing a different extraction schema points at a different module, as `"generalisations"` does.
+
+```elixir
+# lib/my_app/ontologies.ex — compiled code. Named by Lens definitions below.
+defmodule MyApp.Ontology do
+  use Gralkor.Ontology, entities: :strict, relationships: :scoped
+
+  entity Teammate do
+    field :handle,   :string, required: true, doc: "stable login handle"
+    field :timezone, :string,                 doc: "IANA tz"
+  end
+
+  entity WorkingPreference do
+    field :description, :string, required: true
+  end
+
+  from Teammate do
+    prefers WorkingPreference do
+      field :since, :string, doc: "date first observed"
+    end
+  end
+end
+
+defmodule MyApp.PatternOntology do
+  use Gralkor.Ontology, entities: :strict, relationships: :open
+
+  entity Pattern do
+    field :statement,  :string, required: true, doc: "the durable generalisation"
+    field :confidence, :float,                  doc: "0.0–1.0 as scored at distillation"
+  end
+end
+```
+
+```elixir
+# config/runtime.exs
+import Config
+
+config :jido_gralkor,
+  # Backend — pick one. Remote wins if both are present.
+  falkordb: [
+    host: System.fetch_env!("FALKORDB_HOST"),
+    port: String.to_integer(System.fetch_env!("FALKORDB_PORT")),
+    username: System.get_env("FALKORDB_USERNAME"),
+    password: System.get_env("FALKORDB_PASSWORD"),
+    ssl: System.get_env("FALKORDB_SSL") == "true"
+  ],
+
+  # The Lens registry. Each entry binds a name to an ontology module,
+  # a scope, and an ingestion process. This is the only place an
+  # ontology needs to be mentioned in config.
+  lenses: [
+    [
+      name: "observations",
+      ontology: MyApp.Ontology,
+      scope: :operator,
+      ingestion: Gralkor.Lens.Ingestion.Store
+    ],
+    [
+      name: "decisions",
+      ontology: MyApp.Ontology,
+      scope: :operator,
+      ingestion: MyApp.DecisionIngestion
+    ],
+    [
+      name: "generalisations",
+      ontology: MyApp.PatternOntology,
+      scope: :global,
+      ingestion: Gralkor.Lens.Ingestion.Generalise
+    ]
+  ],
+
+  # Tuning — all optional, shown at their defaults.
+  generalise_min_confidence: 0.3,
+  interpret_max_output_tokens: 2000,
+  recall_deadline_ms: 12_000
+
+# NOT set here: `:ontology`. That key binds an ontology to the implicit
+# "default" Lens used by mounts that configure no Lenses at all. A
+# deployment that registers Lenses leaves it unset — see below.
+```
+
+```elixir
+# lib/my_app/chat_agent.ex — the mount selects among the registered names.
+plugins: [
+  {JidoGralkor.Plugin,
+   %{
+     agent_name: "Susu",
+     default_lens: "observations",
+     search_targets: ["decisions", "global"],
+     generalise_lens: "generalisations"
+   }}
+]
+```
+
+That mount writes captured turns and `memory_add` calls to `"observations"`, submits each flushed transcript independently to `"generalisations"`, and searches the operator's reserved `"default"` destination (always first, implicitly), then `"decisions"`, then the shared `"global"` pool.
+
+**On `:ontology` vs. Lens `ontology:`.** They are not a declaration and a reference to it; they are two different channels, each with its own binding. `:ontology` configures exactly one channel — the implicit `"default"` Lens, which cannot be registered in `:lenses` because the name is reserved. Set `:ontology` only if you run mounts without `:default_lens` (implicit-default mode), or call the legacy `memory_add/3` and `capture/5` surface directly. It has no effect on writes through a registered Lens. Reads are unaffected either way: search never consults an ontology, only writes do.
 
 ## Wire it on your agent
 
@@ -226,30 +328,35 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your co
 
 ## Configure Lenses
 
-A Lens is an application-owned memory channel. Its definition supplies a name, a graphiti ontology, a scope, and the ingestion process Gralkor invokes when content is sent through it. Register as many Lenses as your application needs:
+A Lens is an application-owned memory channel. Its definition supplies a name, a graphiti ontology, a scope, and the ingestion process Gralkor invokes when content is sent through it.
+
+The ontology is a module you compile into your own application — declared once in `lib/`, then named by module in each Lens that should extract with it:
 
 ```elixir
+# lib/my_app/ontology.ex
 defmodule MyApp.Ontology do
   use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
-  entity User do
+  entity Teammate do
     field :handle,   :string, required: true, doc: "stable login handle"
     field :timezone, :string,                  doc: "IANA tz"
   end
 
-  entity Preference do
+  entity WorkingPreference do
     field :description, :string, required: true
   end
 
-  from User do
-    prefers Preference do
+  from Teammate do
+    prefers WorkingPreference do
       field :since, :string, doc: "date first observed"
     end
 
-    trusts User
+    trusts Teammate
   end
 end
 ```
+
+Register as many Lenses as your application needs. Several Lenses may name the same ontology module — the name, scope, and ingestion process are what distinguish them:
 
 ```elixir
 # config/runtime.exs
@@ -350,6 +457,8 @@ Each Lens ontology is a module declared with `Gralkor.Ontology`:
 - `entities: :strict` excludes graphiti's generic `Entity` extraction — only your declared types survive. `entities: :open` lets graphiti extract generic Entity nodes alongside yours.
 - `relationships: :scoped` populates graphiti's `edge_type_map` from your declared `(src, dst)` pairs, so named edges only fire between declared endpoints. `relationships: :open` drops the map; graphiti's default applies. Either way, graphiti always extracts edge candidates — generic fall-through edges between unconstrained pairs are not closed off.
 - Both opts are required at `use` — no defaults; pick deliberately.
+
+**Protected field names.** Entity and edge *type* names are unrestricted — pick whatever suits your domain. Field names are not: graphiti rejects any custom entity attribute whose name collides with a field on its own `EntityNode`, namely `uuid`, `name`, `group_id`, `labels`, `created_at`, `summary`, `attributes`, and `name_embedding`. The DSL does not currently catch this at compile time, so `field :name, :string` compiles and then raises `EntityTypeValidationError` from Python on the first write through the Lens that selected the ontology. Name fields for what they hold — `handle`, `title`, `statement` — rather than reaching for `name` or `summary`.
 
 On each store write, graphiti receives the selected Lens ontology's `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types`, translated from the module's compile-time payload.
 

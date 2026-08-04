@@ -8,20 +8,20 @@ defmodule Gralkor.Ontology do
       defmodule MyOntology do
         use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
-        entity User do
+        entity Teammate do
           field :handle,   :string, required: true, doc: "stable login handle"
           field :timezone, :string,                  doc: "IANA tz"
         end
 
-        entity Preference do
+        entity WorkingPreference do
           field :description, :string, required: true
         end
 
-        from User do
-          prefers Preference do
+        from Teammate do
+          prefers WorkingPreference do
             field :since, :string, doc: "date first observed"
           end
-          trusts User
+          trusts Teammate
         end
       end
 
@@ -29,6 +29,13 @@ defmodule Gralkor.Ontology do
   layer translates into graphiti's `entity_types`, `edge_types`,
   `edge_type_map`, and `excluded_entity_types`. The Elixir side never
   constructs Pydantic classes.
+
+  Entity and edge *type* names are unrestricted, but field names are not:
+  graphiti rejects any custom entity attribute colliding with its own
+  `EntityNode` fields — `uuid`, `name`, `group_id`, `labels`, `created_at`,
+  `summary`, `attributes`, `name_embedding`. This DSL does not check that at
+  compile time, so such a field raises `EntityTypeValidationError` from
+  Python on the first write through the owning Lens.
 
   See `ex-ontology` and `ex-ontology-payload` in `TEST_TREES.md`.
   """
