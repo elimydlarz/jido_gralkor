@@ -1,20 +1,19 @@
-Unit: gralkor-application (src: lib/gralkor/application.ex; unit: test/gralkor/application_test.exs; integration: test/gralkor/application_test.exs)
+Unit: gralkor-application (src: lib/gralkor/application.ex; integration: test/gralkor/application_test.exs; unit: test/gralkor/application_test.exs)
 
-when the application starts while a remote FalkorDB connection is configured
-  then the Python runtime, the graph pool, and the capture buffer are supervised in that order
-  and the graph pool is constructed with the remote connection, so no embedded server is spawned
-  and a configured data directory is ignored
-
-when the application starts while a data directory is configured and no remote connection is configured
-  then the Python runtime, the graph pool, and the capture buffer are supervised in that order
-  and the graph pool is constructed with the embedded connection
-  and startup returns only once all three have initialised, so a consumer needs no separate readiness gate
-
-when the application starts while neither a remote connection nor a data directory is configured
-  then no children are supervised, because the consumer has not opted into the native runtime
-
-when the application starts while the in-memory client is configured
-  then no children are supervised regardless of any data directory or remote connection, so a consumer that pinned the in-memory client is never forced into the native boot path
+when the application starts
+  while a remote FalkorDB connection is configured
+    then the Python runtime, the graph pool, and the capture buffer are supervised in that order
+    and the graph pool is constructed with the remote connection, so no embedded server is spawned
+    and a configured data directory is ignored
+  while a data directory is configured
+  and no remote connection is configured
+    then the Python runtime, the graph pool, and the capture buffer are supervised in that order
+    and the graph pool is constructed with the embedded connection
+    and startup returns only once all three have initialised, so a consumer needs no separate readiness gate
+  while neither a remote connection nor a data directory is configured
+    then no children are supervised, because the consumer has not opted into the native runtime
+  while the in-memory client is configured
+    then no children are supervised regardless of any data directory or remote connection, so a consumer that pinned the in-memory client is never forced into the native boot path
 
 if the remote FalkorDB configuration is not a keyword list carrying a host and a port
   then startup raises before any child starts
@@ -22,15 +21,25 @@ if the remote FalkorDB configuration is not a keyword list carrying a host and a
 when a capture flush runs
   then the transcript episode is rendered from the user and assistant text of every captured turn only, with no agent reasoning and no inference call
   and the rendered transcript is written as a captured episode
+  while no learning step is wired
+    then no learning episode is written
+  while no episode-writing dependency is supplied
+    then the captured and learning writes reach the graph pool with its server named explicitly, so the transcript is written rather than raising on an argument shifted into the wrong position
+  while generalisation on flush is disabled
+    then no generalisation step runs
 
 when a capture flush writes its captured episode successfully
   then a single line reporting the group, the transcript size, and the duration is logged
   and the flush reports success
   and every captured turn is learned from in the order it was appended
   and each learning result is written as its own separate episode carrying the same group and ontology as the captured episode
+  while generalisation on flush is enabled
+    then generalisation is started against the group and the rendered transcript without blocking the flush
+    and a generalisation failure does not change the flush result
 
 when a capture flush renders an empty transcript
-  then no captured episode is written and the flush reports success
+  then no captured episode is written
+  and the flush reports success
   and every captured turn is still learned from in the order it was appended
 
 if writing the captured episode fails
@@ -43,26 +52,14 @@ if writing a learning episode fails
   then the failure is returned unchanged rather than swallowed, so the capture buffer owns whether to retry or drop it
 
 if producing a learning result fails
-  then the failure is returned unchanged and is not retried at the flush, because retry belongs to the inference call itself
+  then the failure is returned unchanged
+  and the failure is not retried at the flush, because retry belongs to the inference call itself
 
 if producing a learning result raises or returns an unexpected shape
   then the exception propagates, because an unexpected inference response is a fault rather than a best-effort drop
 
 when a capture flush is retried after its captured episode has already been written
   then that captured episode is written a second time, because episode writes are not idempotent
-
-when a capture flush runs while no learning step is wired
-  then no learning episode is written
-
-when a capture flush runs while no episode-writing dependency is supplied
-  then the captured and learning writes reach the graph pool with its server named explicitly, so the transcript is written rather than raising on an argument shifted into the wrong position
-
-when a capture flush writes its captured episode successfully while generalisation on flush is enabled
-  then generalisation is started against the group and the rendered transcript without blocking the flush
-  and a generalisation failure does not change the flush result
-
-when a capture flush runs while generalisation on flush is disabled
-  then no generalisation step runs
 
 when a Lens capture flush runs
   then the selected turns are rendered in the order they were appended
