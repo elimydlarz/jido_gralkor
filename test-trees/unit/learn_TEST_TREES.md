@@ -9,7 +9,7 @@ when one reasoning turn is learned from
   while the learning caller returns an atom-keyed record
     then a learning record carrying the problem kind, the approach, the success flag, and the lesson is returned
   while the learning caller returns a string-keyed record
-    then the same learning record is returned with its keys normalised
+    then its string keys are normalised into a learning record carrying those same four values
     and its success flag is a boolean
   if the learning caller returns an error
     then that error is returned to the caller unchanged, never swallowed
