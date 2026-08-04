@@ -25,7 +25,8 @@ when a caller projects an ontology payload into the graphiti boundary spec
     then the spec carries `:excluded_entity_types` as `["Entity"]`
   while the payload's `:excluded_entity_types` is nil
     then the spec omits `:excluded_entity_types` entirely
-  while the payload declares no entities, no verbs, and a nil `:excluded_entity_types`
-    then the spec is empty, so the episode write is made with none of the four ontology kwargs
-  while the payload declares no entities and no verbs but excludes "Entity"
-    then the spec carries only `:excluded_entity_types`
+  while the payload declares no entities and no verbs
+    where its `:excluded_entity_types` is nil
+      then the spec is empty, so the episode write is made with none of the four ontology kwargs
+    where its `:excluded_entity_types` is `["Entity"]`
+      then the spec carries only `:excluded_entity_types`
