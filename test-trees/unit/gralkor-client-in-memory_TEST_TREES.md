@@ -3,8 +3,9 @@ Unit: gralkor-client-in-memory (src: lib/gralkor/client.ex, lib/gralkor/client/i
 when any client operation is called
   then the call is recorded with every argument it was given, so a consumer's exact request can be inspected afterwards
 
-if an operation is called while no response is configured for it
-  then a not-configured error is returned rather than a fabricated success
+if an operation is called
+  while no response is configured for it
+    then a not-configured error is returned rather than a fabricated success
 
 when the double is reset
   then every configured response is cleared
