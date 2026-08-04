@@ -38,7 +38,8 @@ when an agent turn completes
   while a thread has committed to agent state
     then the turn is sent for capture as canonical messages under that thread's session id and the operator's sanitised group id
     and the user name held in agent state is forwarded with the capture
-    and the user's query opens the captured messages and the completed answer closes them
+    and the user's query opens the captured messages
+    and the completed answer closes them
     while the completed turn's request trace holds no events
       then no capture is sent at all
     where the plugin was mounted with Lens selections
