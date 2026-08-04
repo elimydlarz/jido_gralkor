@@ -1,17 +1,17 @@
 Unit: gralkor-config (src: lib/gralkor/config.ex; unit: test/gralkor/config_test.exs)
 
-when the FalkorDB connection is resolved while neither a remote configuration nor a data directory is set
-  then nothing is returned, so the supervisor can start with no children
-
-when the FalkorDB connection is resolved while a data directory is set and no remote configuration is set
-  then an embedded connection carrying that data directory is returned
-  and a leading tilde in the data directory is expanded to an absolute path
-
-when the FalkorDB connection is resolved while a remote configuration carrying a host and a port is set
-  then a remote connection carrying that configuration unchanged is returned
-  and a supplied username and password are carried through unchanged
-  while a data directory is also set
-    then the remote connection is the one returned
+when the FalkorDB connection is resolved
+  while neither a remote configuration nor a data directory is set
+    then nothing is returned, so the supervisor can start with no children
+  while a data directory is set
+  and no remote configuration is set
+    then an embedded connection carrying that data directory is returned
+    and a leading tilde in the data directory is expanded to an absolute path
+  while a remote configuration carrying a host and a port is set
+    then a remote connection carrying that configuration unchanged is returned
+    and a supplied username and password are carried through unchanged
+    while a data directory is also set
+      then the remote connection is the one returned
 
 if the remote FalkorDB configuration is not a keyword list
   then resolving the connection raises, naming the offending value
@@ -46,11 +46,11 @@ if a role's model override omits the colon separator
 if a role's model override leaves the provider or the model id blank
   then resolving that role's model raises, naming the environment variable and the offending value
 
-when the deployment-wide ontology is resolved while no ontology is configured
-  then nothing is returned, so every write behaves as it does with no ontology declared
-
-when the deployment-wide ontology is resolved while a module declared as an ontology is configured
-  then that module is returned
+when the deployment-wide ontology is resolved
+  while no ontology is configured
+    then nothing is returned, so every write behaves as it does with no ontology declared
+  while a module declared as an ontology is configured
+    then that module is returned
 
 if the configured deployment-wide ontology is a module that is not declared as an ontology
   then resolving it raises at the write boundary, naming the offending value
