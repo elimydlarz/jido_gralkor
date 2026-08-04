@@ -64,4 +64,6 @@ when an agent turn fails
     and a warning naming the operator is logged
 
 when a signal of any other type arrives
-  then the plugin lets the signal continue untouched, capturing nothing and recalling nothing
+  then the plugin lets the signal continue untouched
+  and nothing is captured
+  and nothing is recalled
