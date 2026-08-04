@@ -13,7 +13,8 @@ when a recall is requested with a group, an agent name and a query
   while a session id is given
     then it is handed to the recall pipeline, so the turns buffered for that session become the conversation context
   where no session id is given
-    then the recall pipeline is invoked without one and the conversation context is empty
+    then the recall pipeline is invoked without one
+    and the conversation context is empty
   where a recall deadline is configured
     then it is forwarded to the recall pipeline in place of the default deadline
   where an interpretation output budget is configured
