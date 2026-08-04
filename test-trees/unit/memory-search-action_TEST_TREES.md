@@ -13,12 +13,16 @@ when the memory search tool runs with a query and a committed session
 
 if the memory search tool runs without a usable query
   then no search is issued against any backend
-  and the result explicitly states that no query was provided and that it is a non-result
-  and a query of only whitespace counts as no query
+  and the result explicitly states that no query was provided
+  and the result explicitly states that it is a non-result
   and a warning naming the short-circuit is logged
+  while the query is only whitespace
+    then it counts as no query
 
 if the memory search tool runs with no usable session id in its tool context
   then no search is issued against any backend
-  and the result explicitly states that long-term memory was not queried and that it is a non-result
-  and a blank session id counts as no session id
+  and the result explicitly states that long-term memory was not queried
+  and the result explicitly states that it is a non-result
   and a warning naming the operator is logged
+  while the session id is blank
+    then it counts as no session id
