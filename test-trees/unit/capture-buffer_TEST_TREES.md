@@ -89,7 +89,8 @@ when a session holding turns is flushed and awaited
     then that error is returned without any retry
   while the flush callback fails for any other reason
     then the same configured backoff schedule applies, bounded by the caller's timeout
-    and a timeout error is returned when the retries together outlast that timeout
+    when the retries together outlast that timeout
+      then a timeout error is returned
   if the flush callback does not finish within the caller's timeout
     then a timeout error is returned
     and the buffered turns remain available to flush again
