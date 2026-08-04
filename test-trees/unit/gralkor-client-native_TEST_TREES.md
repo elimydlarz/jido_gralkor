@@ -123,7 +123,8 @@ when community building is requested for a group
   then the group is sanitized before use
   and community building is scoped to the sanitized group
   and the number of communities and the number of edges built are returned
-  and a graph failure is returned unchanged
+  if the graph fails
+    then that failure is returned unchanged
 
 when generalisations are searched for a group
   then the group is sanitized before use
