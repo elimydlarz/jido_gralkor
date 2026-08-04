@@ -52,8 +52,8 @@ where a generalisation search is supplied
     then recall proceeds with only the regular facts
 
 where no generalisation search is supplied
-  then no generalisation search is performed
-  and the main search is still the only search issued
+  then no generalisation search is issued
+  and recall still returns its memory block from the main search alone
 
 where a learning search is supplied
   then it runs on every recall without any opt-in flag
