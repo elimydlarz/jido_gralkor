@@ -3,14 +3,15 @@ Unit: gralkor-client-native (src: lib/gralkor/client.ex, lib/gralkor/client/nati
 when any adapter operation is called
   then the work runs in the calling node's own processes, no HTTP request or other network transport being involved
 
-when a recall is requested with a group, an agent name, a session id and a query
-  then the session id is handed to the recall pipeline, so the turns buffered for that session become the conversation context
-  and a fact search scoped to the group is supplied to the pipeline
-  and a generalisation search scoped to the group's `_gen` partition is supplied to the pipeline
+when a recall is requested with a group, an agent name and a query
+  then a fact search scoped to the group is supplied to the recall pipeline
+  and a generalisation search scoped to the group's `_gen` partition is supplied to the recall pipeline
   and a learning search is supplied on every recall, with no enabling flag and no inference-based classification of the query
   and that learning search is seeded with the caller's raw query rather than a derived one
   and that learning search asks the graph for nodes labelled `Learning` rather than for edges, so standalone learning nodes are returned instead of nothing
   and each learning node found is rendered from its name, its summary, and its lesson, approach and problem-kind attributes
+  while a session id is given
+    then it is handed to the recall pipeline, so the turns buffered for that session become the conversation context
   where no session id is given
     then the recall pipeline is invoked without one and the conversation context is empty
   where a recall deadline is configured
@@ -20,37 +21,39 @@ when a recall is requested with a group, an agent name, a session id and a query
     and it is forwarded to the recall pipeline as the interpretation output-token budget
   if the configured interpretation output budget is not a positive integer
     then an argument error naming that setting is raised at the adapter boundary before any recall work starts
-  if the agent name is missing or blank
-    then an argument error naming the agent name is raised
 
-when a turn is captured with a session id, a group, an agent name, a user name and messages
+if a recall is requested with a missing or blank agent name
+  then an argument error naming the agent name is raised
+  and no search is issued
+
+when a turn is captured for a session under a group, with an agent name, a user name and messages
   then the group is sanitized before it is buffered
   and the deployment-configured ontology is resolved and buffered alongside the turn, the caller being given no ontology argument of its own
   and the sanitized group, the agent name, the user name, the resolved ontology and the messages are appended to the capture buffer under that session
   and success is returned immediately, no distillation running before the call returns
   and nothing is logged for the turn itself, captured content becoming observable only at flush
-  if the session id is missing or blank
-    then an argument error naming the session id is raised
-  if the agent name is missing or blank
-    then an argument error naming the agent name is raised
-  if the user name is missing or blank
-    then an argument error naming the user name is raised
 
 where a turn is captured through a named Lens
   then the operator id is buffered unsanitized, so the Lens keeps the operator's original identity
   and the agent name, the user name, the Lens name and the messages are appended to the capture buffer under that session
-  and the deployment-configured ontology is not consulted, the Lens owning its own ontology
+  and the deployment-configured ontology is not consulted, a Lens owning its own ontology
   and success is returned immediately
-  if the session id is missing or blank
-    then an argument error naming the session id is raised
-  if the agent name is missing or blank
-    then an argument error naming the agent name is raised
-  if the user name is missing or blank
-    then an argument error naming the user name is raised
 
 where a turn is captured through a primary Lens together with additional Lenses
-  then every named Lens receives that turn in its own batch when the session is flushed
+  then each named Lens receives that turn in its own flush batch
   but the session buffers the turn only once
+
+if a capture is requested with a missing or blank session id
+  then an argument error naming the session id is raised
+  and no turn is buffered
+
+if a capture is requested with a missing or blank agent name
+  then an argument error naming the agent name is raised
+  and no turn is buffered
+
+if a capture is requested with a missing or blank user name
+  then an argument error naming the user name is raised
+  and no turn is buffered
 
 when a session holding buffered turns is flushed
   then those turns are scheduled for flush
@@ -82,7 +85,7 @@ if a flush-and-await is requested with a missing or blank session id
 if a flush-and-await is requested with a missing or non-positive timeout
   then an argument error naming the timeout is raised
 
-when memory is added with a group, content and a source description
+when memory is added with a group and content
   then the group is sanitized before the write
   and the content is written to the graph as a plain-text episode scoped to the sanitized group
   and the episode carries a generated name of "manual-add-" followed by the current millisecond timestamp
@@ -93,8 +96,10 @@ when memory is added with a group, content and a source description
     then the deployment-configured ontology is the one applied, so a caller is never required to supply one
   where an ontology override is supplied
     then the override is the ontology applied and the deployment-configured ontology is not consulted
+  where a source description is supplied
+    then it is the source recorded on the episode
   where no source description is supplied
-    then the source description recorded is "manual"
+    then the source recorded on the episode is "manual"
   while the ontology that applies resolves to nothing
     then the write declares no entity types, edge types, edge-type map or excluded entity types, so extraction stays generic
   while the ontology that applies is a module declaring an ontology
