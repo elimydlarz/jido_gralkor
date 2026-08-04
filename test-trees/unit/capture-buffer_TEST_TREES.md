@@ -104,7 +104,7 @@ when every buffered session is flushed at once
   if one session's flush fails
     then the other sessions' flushes still complete
 
-when every buffered session is flushed at once and none are buffered
+when a flush of every buffered session finds none buffered
   then the call returns immediately without invoking the flush callback
 
 when a linked flush worker exits normally
