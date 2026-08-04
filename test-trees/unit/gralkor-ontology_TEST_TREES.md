@@ -32,7 +32,7 @@ when an ontology declares `entity Foo do … end` with an alias
   if two fields in the same entity share a name
     then compilation fails with an error naming the duplicated field
   if a non-field expression appears inside the block
-    then compilation fails, because only `field` declarations are available inside an `entity` block and relationships belong in `from` blocks
+    then compilation fails, only `field` declarations being available inside an `entity` block and relationships living in `from` blocks
   if the same entity name is declared more than once in one ontology
     then compilation fails with an error naming the duplicated entity
 
