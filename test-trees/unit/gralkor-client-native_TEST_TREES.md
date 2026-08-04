@@ -93,7 +93,8 @@ when memory is added with a group and content
   and the episode carries a generated name of "manual-add-" followed by the current millisecond timestamp
   and the episode carries a generated idempotency key rendered from a positive monotonic unique integer
   and success is returned once the graph accepts the write
-  and a graph failure is returned unchanged
+  if the graph fails
+    then that failure is returned unchanged
   while no ontology override is supplied
     then the deployment-configured ontology is the one applied, so a caller is never required to supply one
   where an ontology override is supplied
