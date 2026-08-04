@@ -6,4 +6,5 @@ when the memory add tool runs with content and a source description
   where the tool context selects a Lens
     then the background write is routed to that Lens's ingestion for the operator, carrying the content and source description
   if the background write fails
-    then the failure is logged and the caller's acknowledgement is unaffected
+    then the failure is logged
+    and the caller's acknowledgement is unaffected
