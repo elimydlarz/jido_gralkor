@@ -1,0 +1,24 @@
+Unit: memory-search-action (src: lib/jido_gralkor/actions/memory_search.ex; unit: test/jido_gralkor/actions/memory_search_test.exs)
+
+when the memory search tool runs with a query and a committed session
+  then the operator's sanitised group id, the agent name, and the session id from the tool context are passed to the memory backend with the query
+  while the backend returns a memory block
+    then the action result carries that block
+  if the backend fails
+    then the failure reason is returned to the caller unchanged
+  where the tool context selects Lens search targets
+    then the Lens search is used in place of the legacy recall
+    and the operator's reserved `default` destination is searched alongside every selected target
+    and the results of all searched targets are joined into one result
+
+if the memory search tool runs without a usable query
+  then no search is issued against any backend
+  and the result explicitly states that no query was provided and that it is a non-result
+  and a query of only whitespace counts as no query
+  and a warning naming the short-circuit is logged
+
+if the memory search tool runs with no usable session id in its tool context
+  then no search is issued against any backend
+  and the result explicitly states that long-term memory was not queried and that it is a non-result
+  and a blank session id counts as no session id
+  and a warning naming the operator is logged
