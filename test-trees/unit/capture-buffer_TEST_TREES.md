@@ -73,8 +73,9 @@ if the flush callback reports an upstream-LLM error
 
 if the flush callback raises or fails for any other reason
   then the flush is retried on the configured backoff schedule, which defaults to 1s, then 2s, then 4s
-  and the turns are dropped once that schedule is exhausted
-  and an exhausted line is logged at error when the schedule runs out
+  when that schedule is exhausted
+    then the turns are dropped
+    and an exhausted line is logged at error
 
 when a session holding turns is flushed and awaited
   while the flush callback succeeds within the caller's timeout
