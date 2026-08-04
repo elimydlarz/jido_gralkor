@@ -70,8 +70,9 @@ when a consumer calls `__ontology__/0` on a declared ontology module
   and each field entry is `%{name: atom(), type: atom(), required: boolean(), doc: String.t() | nil}`
 
 while an ontology is declared with `relationships: :open`
-  then `__ontology__/0` returns an empty `:edge_type_map` even when relationships were declared, so every named edge stays allowed everywhere
-  but the declared verbs still appear in `:edge_types`
+  where relationships were declared
+    then `__ontology__/0` returns an empty `:edge_type_map`, so every named edge stays allowed everywhere
+    but the declared verbs still appear in `:edge_types`
 
 while an ontology is declared with `relationships: :scoped`
   then `__ontology__/0` returns exactly the declared (source, target) → [edge_name] entries in `:edge_type_map`
