@@ -6,9 +6,11 @@ when a running agent is asked to rotate its context now
       then exactly one flush is requested, naming the pre-rotation session id and the caller's flush timeout
       and the agent's active session id becomes a new one
       and the agent process is still running afterwards
-      while the caller retains recent entries and the thread holds more than that
+      while the caller retains recent entries
+      and the thread holds more than that
         then the rotated thread is seeded with only that many most recent entries, dropping everything before them
-      while the caller retains nothing and every pre-rotation entry was already flushed
+      while the caller retains nothing
+      and every pre-rotation entry was already flushed
         then the rotated thread starts empty
     if the flush of the committed session fails
       then the failure reason is returned to the caller
