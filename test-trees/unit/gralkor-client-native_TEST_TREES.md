@@ -154,4 +154,5 @@ when a memory add runs
     and an error identifying the expired deadline is returned
 
 where any adapter operation other than recall and memory add runs
-  then it carries no deadline and either runs to completion or crashes
+  then it carries no deadline of its own
+  and it either runs to completion or crashes its worker
