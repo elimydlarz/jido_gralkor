@@ -116,7 +116,8 @@ when memory is added with a group and content
 when an index and constraint rebuild is requested
   then the rebuild is applied to the whole graph rather than to a single group
   and a status is returned once the rebuild completes
-  and a graph failure is returned unchanged
+  if the graph fails
+    then that failure is returned unchanged
 
 when community building is requested for a group
   then the group is sanitized before use
