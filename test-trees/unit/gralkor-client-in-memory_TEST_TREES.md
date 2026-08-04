@@ -75,7 +75,8 @@ when memory is added with a group, content and a source description
   if the backend fails
     then that failure is returned unchanged
   where an ontology override is supplied
-    then the override is applied to the write and the deployment-configured ontology is not consulted
+    then the override is applied to the write
+    and the deployment-configured ontology is not consulted
     and this override is the only per-call ontology surface the client exposes
     while the backend acknowledges the add
       then success is returned
