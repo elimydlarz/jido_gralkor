@@ -8,12 +8,12 @@ defmodule Gralkor.Ontology do
       defmodule MyOntology do
         use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
-        entity Teammate do
+        entity Teammate, "A person the agent works with." do
           field :handle,   :string, required: true, doc: "stable login handle"
           field :timezone, :string,                  doc: "IANA tz"
         end
 
-        entity WorkingPreference do
+        entity WorkingPreference, "A way a teammate prefers to work." do
           field :description, :string, required: true
         end
 
