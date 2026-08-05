@@ -41,7 +41,6 @@ defmodule Gralkor.Generalise do
     search_gen_fn = Keyword.fetch!(opts, :search_gen_fn)
     evaluate_fn = Keyword.fetch!(opts, :evaluate_fn)
     add_episode_fn = Keyword.fetch!(opts, :add_episode_fn)
-    remove_episode_fn = Keyword.get(opts, :remove_episode_fn)
     ontology = Keyword.get(opts, :ontology)
 
     min_confidence = Keyword.get(opts, :min_confidence, @default_min_confidence)
