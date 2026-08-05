@@ -63,12 +63,12 @@ defmodule JidoGralkor.Actions.MemorySearch do
         {:ok, %{result: @no_session_result}}
 
       true ->
-        case Map.get(context, :search_targets) do
-          targets when is_list(targets) ->
+        case Map.get(context, :search_lenses) do
+          lenses when is_list(lenses) ->
             request = %Search{
               operator_id: Map.fetch!(context, :agent_id),
               query: query,
-              targets: targets
+              lenses: lenses
             }
 
             case Client.search(request) do
