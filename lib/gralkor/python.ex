@@ -4,10 +4,14 @@ defmodule Gralkor.Python do
 
   Responsibilities, all in `init/1`:
 
-    1. **Reap redislite orphans.** `falkordblite` (loaded into PythonX in this
-       BEAM) spawns a `redis-server` grandchild. A hard BEAM SIGKILL leaves
-       it orphaned. SIGKILL anything matching `redislite/bin/redis-server`
-       before we boot; the path is unique to falkordblite.
+    1. **Reap redislite orphans, once per VM.** `falkordblite` (loaded into
+       PythonX in this BEAM) spawns a `redis-server` grandchild, which
+       daemonises and is reparented to init — so nothing about a running
+       server says which VM started it. A hard BEAM SIGKILL leaves it
+       orphaned. SIGKILL anything matching `redislite/bin/redis-server`,
+       but only on the first `Gralkor.Python` to boot in this VM: that is
+       the one moment when every matching server predates us. A later sweep
+       could only kill a live server this VM owns.
 
     2. **Materialise the venv + initialise the interpreter** via
        `Pythonx.uv_init/2` from the jido_gralkor-owned `@pyproject_toml`. This
