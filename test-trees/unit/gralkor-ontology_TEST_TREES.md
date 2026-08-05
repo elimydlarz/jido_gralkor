@@ -13,6 +13,11 @@ when a module declares an ontology with `use Gralkor.Ontology`
 when an ontology declares `entity Foo do … end` with an alias
   then the entity is named with the alias' last segment as a string ("Foo")
   and no module named Foo is defined by the declaration
+  and the entity carries no description, so the extractor decides from the entity's name and fields alone
+  where the declaration passes a description before the block
+    then that description is recorded on the entity, so the extractor is told when to mint it
+    if the description is neither a string nor absent
+      then compilation fails with an error naming the entity and the rejected description
   where the block calls `field :name, :type`
     then the entity carries a field with that name and type
     where the call passes `required: true`
