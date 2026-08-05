@@ -7,7 +7,7 @@ defmodule JidoGralkor.Plugin do
   On `ai.react.query` the plugin plants the current thread's `:session_id`
   and the configured `:agent_name` on the signal's `tool_context` so the
   `MemorySearch` ReAct tool can find them. A Lens-aware mount also plants its
-  selected `:lens` and `:search_targets`:
+  selected `:lens` and `:search_lenses`:
 
     * `:session_id` — the current Jido thread id (read from
       `agent.state[:__thread__].id`). Absent when no thread is
