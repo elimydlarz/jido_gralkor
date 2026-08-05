@@ -215,14 +215,11 @@ defmodule Gralkor.PythonTest do
     end
 
     defp list_redislite_pids do
-      case System.cmd("pgrep", ["-af", "redislite/bin/redis-server"], stderr_to_stdout: true) do
+      case System.cmd("pgrep", ["-f", "redislite/bin/redis-server"], stderr_to_stdout: true) do
         {output, 0} ->
           output
           |> String.split("\n", trim: true)
-          |> Enum.map(fn line ->
-            [pid_str | _] = String.split(line, " ", parts: 2)
-            String.to_integer(pid_str)
-          end)
+          |> Enum.map(&String.to_integer(String.trim(&1)))
 
         {_, _} ->
           []
