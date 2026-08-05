@@ -1,4 +1,4 @@
-Functional: inference-provider-selection (functional: none)
+Functional: inference-provider-selection (functional: test/functional/inference_provider_selection_functional_test.exs)
 
 when the deployment configures an inference LLM and an embedder
   then the provider for each role is selected from that role's own configuration
