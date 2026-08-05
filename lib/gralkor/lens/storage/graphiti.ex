@@ -30,7 +30,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     {add_episode_fn, episode_opts} = add_options(opts)
 
     add_episode_fn.(
-      local_destination(operator_id, lens.name),
+      group_id(operator_id, lens.name),
       content,
       source_description,
       lens.ontology,
@@ -69,7 +69,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
         opts
       ) do
     search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
-    search_fn.(local_destination(operator_id, lens.name), query, max_results)
+    search_fn.(group_id(operator_id, lens.name), query, max_results)
   end
 
   def search(%Store{lens: %Lens{scope: :global}}, query, max_results, opts) do
@@ -82,10 +82,10 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     search_fn.("global", query, max_results)
   end
 
-  @spec local_destination(String.t(), String.t()) :: String.t()
-  defp local_destination(operator_id, "default"), do: String.replace(operator_id, "-", "_")
+  @spec group_id(String.t(), String.t()) :: String.t()
+  defp group_id(operator_id, "default"), do: String.replace(operator_id, "-", "_")
 
-  defp local_destination(operator_id, lens_name) do
+  defp group_id(operator_id, lens_name) do
     "lens_" <> encode(operator_id) <> "_" <> encode(lens_name)
   end
 
