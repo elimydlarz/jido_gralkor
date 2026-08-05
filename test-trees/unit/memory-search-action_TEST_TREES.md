@@ -6,10 +6,10 @@ when the memory search tool runs with a query and a committed session
     then the action result carries that block
   if the backend fails
     then the failure reason is returned to the caller unchanged
-  where the tool context selects Lens search targets
+  where the tool context selects Lenses to search
     then the Lens search is used in place of the legacy recall
-    and the operator's reserved `default` destination is searched alongside every selected target
-    and the results of all searched targets are joined into one result
+    and the operator's reserved `default` Lens is searched alongside every selected Lens
+    and the results of all searched Lenses are joined into one result
 
 if the memory search tool runs without a usable query
   then no search is issued against any backend
