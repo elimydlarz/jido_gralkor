@@ -48,6 +48,43 @@ defmodule Gralkor.OntologyTest do
       assert [%{name: "User"}] = EntityNameOntology.__ontology__().entity_types
     end
 
+    test "an entity declared without a description carries none" do
+      defmodule NoDescriptionOntology do
+        use Gralkor.Ontology, entities: :open, relationships: :open
+
+        entity User do
+          field(:handle, :string)
+        end
+      end
+
+      assert [%{description: nil}] = NoDescriptionOntology.__ontology__().entity_types
+    end
+
+    test "a description given before the block is recorded on the entity" do
+      defmodule DescribedEntityOntology do
+        use Gralkor.Ontology, entities: :open, relationships: :open
+
+        entity User, "A person who talks to the agent." do
+          field(:handle, :string)
+        end
+      end
+
+      assert [%{name: "User", description: "A person who talks to the agent."}] =
+               DescribedEntityOntology.__ontology__().entity_types
+    end
+
+    test "a description that is not a string raises" do
+      assert_raise CompileError, ~r/description/, fn ->
+        defmodule BadDescriptionOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :open
+
+          entity User, 42 do
+            field(:handle, :string)
+          end
+        end
+      end
+    end
+
     test "field with required: true records required" do
       defmodule RequiredFieldOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
