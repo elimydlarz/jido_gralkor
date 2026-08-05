@@ -186,15 +186,37 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
   end
 
   describe "while the deployment has not opted into the native memory runtime" do
+    setup do
+      previous_client = Application.get_env(:jido_gralkor, :client)
+      previous_dir = System.get_env("GRALKOR_DATA_DIR")
+      previous_falkordb = Application.get_env(:jido_gralkor, :falkordb)
+
+      Application.delete_env(:jido_gralkor, :falkordb)
+      System.delete_env("GRALKOR_DATA_DIR")
+      Application.delete_env(:jido_gralkor, :client)
+
+      on_exit(fn ->
+        if previous_client,
+          do: Application.put_env(:jido_gralkor, :client, previous_client),
+          else: Application.delete_env(:jido_gralkor, :client)
+
+        if previous_falkordb,
+          do: Application.put_env(:jido_gralkor, :falkordb, previous_falkordb),
+          else: Application.delete_env(:jido_gralkor, :falkordb)
+
+        if previous_dir, do: System.put_env("GRALKOR_DATA_DIR", previous_dir)
+      end)
+
+      :ok
+    end
+
     test "where a configured provider is unsupported or its credential is absent then startup is unaffected, because no inference client is constructed at all" do
       configure("anthropic:claude-opus-5", "cohere:embed-english-v3.0")
       credentials(nil, nil)
 
-      # Neither :falkordb nor GRALKOR_DATA_DIR selects a backend, so the
-      # supervisor has no pool to start and nothing validates a provider.
-      assert Config.falkordb_spec() == nil or is_tuple(Config.falkordb_spec())
-
-      assert {:ok, _} = Application.ensure_all_started(:jido_gralkor)
+      # No backend is selected, so the supervisor has no pool to start and
+      # nothing ever reaches provider validation.
+      assert Gralkor.Application.children() == []
     end
   end
 end
