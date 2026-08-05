@@ -80,8 +80,8 @@ defmodule Gralkor.OntologyExtractionTest do
         {GraphitiPool,
          [
            falkordb_spec: {:embedded, data_dir},
-           llm_model: %{provider: :google, id: "gemini-3.1-flash-lite"},
-           embedder_model: %{provider: :google, id: "gemini-embedding-2-preview"},
+           llm_model: Gralkor.Config.llm_model(),
+           embedder_model: Gralkor.Config.embedder_model(),
            interpret_fn: Native.interpret_callback(),
            warmup: false
          ]}
