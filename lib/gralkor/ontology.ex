@@ -298,7 +298,12 @@ defmodule Gralkor.Ontology do
 
   defp build_payload(module, entities, edges, use_opts) do
     ensure_unique_entities!(module, entities)
-    entity_payloads = Enum.map(entities, fn {name, fields} -> %{name: name, fields: fields} end)
+
+    entity_payloads =
+      Enum.map(entities, fn {name, description, fields} ->
+        %{name: name, description: description, fields: fields}
+      end)
+
     entity_names = MapSet.new(entity_payloads, & &1.name)
 
     ensure_known_endpoints!(module, edges, entity_names)
