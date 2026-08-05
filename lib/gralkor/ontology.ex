@@ -30,6 +30,11 @@ defmodule Gralkor.Ontology do
   `edge_type_map`, and `excluded_entity_types`. The Elixir side never
   constructs Pydantic classes.
 
+  An entity's optional description becomes the extracted type's own
+  description. graphiti's extractor reads it to decide when to mint the
+  entity, so a type whose name alone is ambiguous is extracted far more
+  reliably with one.
+
   Entity and edge *type* names are unrestricted, but field names are not:
   graphiti rejects any custom entity attribute colliding with its own
   `EntityNode` fields — `uuid`, `name`, `group_id`, `labels`, `created_at`,
