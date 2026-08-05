@@ -9,7 +9,6 @@ defmodule Gralkor.GeneraliseTest do
   defp ok_evaluate(decisions), do: fn _prompt -> {:ok, decisions} end
   defp ok_search(facts), do: fn _partition, _query, _max -> {:ok, facts} end
   defp ok_add, do: fn _group, _body, _source, _ont, _opts -> :ok end
-  defp ok_remove, do: fn _group, _uuid -> :ok end
 
   defp default_opts(extras) do
     Keyword.merge(
@@ -17,8 +16,7 @@ defmodule Gralkor.GeneraliseTest do
         hypothesise_fn: ok_hypothesise([]),
         search_gen_fn: ok_search([]),
         evaluate_fn: ok_evaluate([]),
-        add_episode_fn: ok_add(),
-        remove_episode_fn: ok_remove()
+        add_episode_fn: ok_add()
       ],
       extras
     )
@@ -125,7 +123,7 @@ defmodule Gralkor.GeneraliseTest do
         assert gen.level == 0
         assert gen.confidence == 0.85
         assert gen.generalises == []
-        assert opts[:uuid] == gen.id
+        assert opts == []
         :ok
       end
 
@@ -167,7 +165,7 @@ defmodule Gralkor.GeneraliseTest do
         {:ok, gen, _plain} = Gralkor.Generalisation.decode(body)
         assert gen.level == 2
         assert gen.generalises == ["gen-existing-1"]
-        assert opts[:uuid] == gen.id
+        assert opts == []
         :ok
       end
 
@@ -210,7 +208,7 @@ defmodule Gralkor.GeneraliseTest do
         {:ok, gen, _plain} = Gralkor.Generalisation.decode(body)
         assert gen.level == 1
         assert gen.generalises == ["gen-broad-1"]
-        assert opts[:uuid] == gen.id
+        assert opts == []
         :ok
       end
 
