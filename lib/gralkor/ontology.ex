@@ -63,14 +63,28 @@ defmodule Gralkor.Ontology do
     end
   end
 
-  defmacro entity({:__aliases__, _, segments}, do: block) do
+  defmacro entity(alias_ast, do: block) do
+    quote do
+      Gralkor.Ontology.entity(unquote(alias_ast), nil, do: unquote(block))
+    end
+  end
+
+  defmacro entity(other, _opts) do
+    raise CompileError,
+      description:
+        "Gralkor.Ontology: `entity` requires an alias (e.g. `entity User do … end`); got #{Macro.to_string(other)}"
+  end
+
+  defmacro entity({:__aliases__, _, segments}, description, do: block) do
     name = segments |> List.last() |> Atom.to_string()
 
     quote do
+      Gralkor.Ontology.__validate_entity_description__(unquote(name), unquote(description))
+
       Module.put_attribute(
         __MODULE__,
         :gralkor_ontology_current_entity,
-        {unquote(name), []}
+        {unquote(name), unquote(description), []}
       )
 
       try do
@@ -80,15 +94,32 @@ defmodule Gralkor.Ontology do
         :ok
       end
 
-      {name, fields} = Module.delete_attribute(__MODULE__, :gralkor_ontology_current_entity)
-      Module.put_attribute(__MODULE__, :gralkor_ontology_entities, {name, Enum.reverse(fields)})
+      {name, description, fields} =
+        Module.delete_attribute(__MODULE__, :gralkor_ontology_current_entity)
+
+      Module.put_attribute(
+        __MODULE__,
+        :gralkor_ontology_entities,
+        {name, description, Enum.reverse(fields)}
+      )
     end
   end
 
-  defmacro entity(other, _opts) do
+  defmacro entity(other, _description, _opts) do
     raise CompileError,
       description:
-        "Gralkor.Ontology: `entity` requires an alias (e.g. `entity User do … end`); got #{Macro.to_string(other)}"
+        "Gralkor.Ontology: `entity` requires an alias (e.g. `entity User, \"…\" do … end`); got #{Macro.to_string(other)}"
+  end
+
+  @doc false
+  def __validate_entity_description__(name, description) do
+    unless is_nil(description) or is_binary(description) do
+      raise CompileError,
+        description:
+          "Gralkor.Ontology: entity #{name} description must be a string, got #{inspect(description)}"
+    end
+
+    :ok
   end
 
   defmacro field(name, type, opts \\ []) when is_atom(name) and is_atom(type) do
