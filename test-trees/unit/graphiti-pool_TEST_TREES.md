@@ -89,6 +89,7 @@ when a fact search is run for a group
   and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints
 
 when a node search is run for a group
+  then it is restricted to the sanitised group id the episodes were written under, so a group id carrying hyphens still matches
   while node labels are supplied
     then the graph library's node search is invoked with the requested result count and a filter carrying those labels
     and each returned node is rendered with its name, summary, and attributes, ordered by relevance

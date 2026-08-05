@@ -187,6 +187,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
               async def search_(self, query, config=None, group_ids=None, search_filter=None):
                   self.recorded['query'] = query
+                  self.recorded['group_ids'] = list(group_ids) if group_ids else []
                   self.recorded['limit'] = config.limit if config is not None else None
                   self.recorded['node_labels'] = (
                       list(search_filter.node_labels)
@@ -213,7 +214,11 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       assert {:ok, [node]} =
-               GraphitiPool.search_nodes(pid, "g1", "how do I resolve a scheduling conflict", 5,
+               GraphitiPool.search_nodes(
+                 pid,
+                 "group-with-hyphens",
+                 "how do I resolve a scheduling conflict",
+                 5,
                  node_labels: ["Learning"]
                )
 
@@ -226,6 +231,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert rec["query"] == "how do I resolve a scheduling conflict"
       assert rec["limit"] == 5
       assert rec["node_labels"] == ["Learning"]
+      assert rec["group_ids"] == ["group_with_hyphens"]
 
       GenServer.stop(pid)
     end
