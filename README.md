@@ -459,14 +459,14 @@ Consumers that ingest or search outside an agent call the same public boundary d
   Gralkor.Client.search(%Gralkor.Search{
     operator_id: "operator-42",
     query: "When should we release?",
-    targets: ["decisions", "global"],
+    lenses: ["decisions", "global"],
     max_results: 10
   })
 ```
 
-`Gralkor.Search.targets` has the same additive meaning as the plugin option: the operator's reserved `"default"` destination is always searched first. The result limit applies independently to default and every additional destination, and results retain destination order.
+`Gralkor.Search.lenses` has the same additive meaning as the plugin option: the operator's reserved `"default"` Lens is always searched first. The result limit applies independently to default and every additional Lens, and results retain Lens order.
 
-Registry and plugin configuration fail fast for blank, duplicate, reserved, or malformed Lens definitions and for unknown or unsound search targets. If no Lens configuration is used, the implicit `"default"` Lens preserves the existing operator partition and deployment-wide `:ontology` behavior.
+Registry and plugin configuration fail fast for blank, duplicate, reserved, or malformed Lens definitions and for unknown Lens names. If no Lens configuration is used, the implicit `"default"` Lens preserves the existing operator group and deployment-wide `:ontology` behavior.
 
 ### Ontology DSL
 
