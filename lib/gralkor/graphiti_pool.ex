@@ -892,7 +892,10 @@ defmodule Gralkor.GraphitiPool do
   # batched create_batch then fails with "zip() argument 2 is shorter than
   # argument 1". Filed upstream as getzep/graphiti#1467 — drop it once the fix
   # lands and we've bumped past the affected version.
-  defp construct_embedder(%{provider: :google, id: embedder_name, batch_size: batch_size}, genai_client) do
+  defp construct_embedder(
+         %{provider: :google, id: embedder_name, batch_size: batch_size},
+         genai_client
+       ) do
     {embedder, _} =
       Pythonx.eval(
         """

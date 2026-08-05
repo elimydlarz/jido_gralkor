@@ -34,7 +34,9 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
   end
 
   defp configure(llm, embedder) do
-    if llm, do: System.put_env("GRALKOR_LLM_MODEL", llm), else: System.delete_env("GRALKOR_LLM_MODEL")
+    if llm,
+      do: System.put_env("GRALKOR_LLM_MODEL", llm),
+      else: System.delete_env("GRALKOR_LLM_MODEL")
 
     if embedder,
       do: System.put_env("GRALKOR_EMBEDDER_MODEL", embedder),
@@ -42,8 +44,13 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
   end
 
   defp credentials(google, openai) do
-    if google, do: System.put_env("GOOGLE_API_KEY", google), else: System.delete_env("GOOGLE_API_KEY")
-    if openai, do: System.put_env("OPENAI_API_KEY", openai), else: System.delete_env("OPENAI_API_KEY")
+    if google,
+      do: System.put_env("GOOGLE_API_KEY", google),
+      else: System.delete_env("GOOGLE_API_KEY")
+
+    if openai,
+      do: System.put_env("OPENAI_API_KEY", openai),
+      else: System.delete_env("OPENAI_API_KEY")
   end
 
   # The deployment has opted into the native runtime; inference client

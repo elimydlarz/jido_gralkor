@@ -776,7 +776,9 @@ defmodule Gralkor.GraphitiPoolTest do
       previous = System.get_env("OPENAI_API_KEY")
 
       on_exit(fn ->
-        if previous, do: System.put_env("OPENAI_API_KEY", previous), else: System.delete_env("OPENAI_API_KEY")
+        if previous,
+          do: System.put_env("OPENAI_API_KEY", previous),
+          else: System.delete_env("OPENAI_API_KEY")
       end)
 
       :ok
