@@ -33,6 +33,21 @@ defmodule Gralkor.TestEnv do
     end
 
     bridge_gemini_to_google_api_key()
+    ensure_placeholder_provider_credentials()
+  end
+
+  # `Gralkor.GraphitiPool` refuses to start when the credential for a provider a
+  # configured model spec selects is absent, so every test that starts a pool
+  # needs one present — including the deterministic ones, which stub client
+  # construction and never reach a provider. Placeholders are set only when the
+  # variable is genuinely absent, so a real key loaded from `.env` above always
+  # wins and the functional suites keep calling real providers.
+  @placeholder "test-placeholder-not-a-real-credential"
+
+  defp ensure_placeholder_provider_credentials do
+    Enum.each(["GOOGLE_API_KEY", "OPENAI_API_KEY"], fn var ->
+      if System.get_env(var) in [nil, ""], do: System.put_env(var, @placeholder)
+    end)
   end
 
   # The user keeps the Gemini credential in `GEMINI_API_KEY`; req_llm and
