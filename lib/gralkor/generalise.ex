@@ -138,7 +138,6 @@ defmodule Gralkor.Generalise do
          search_fn,
          evaluate_fn,
          add_fn,
-         remove_fn,
          gen_group_id,
          max_results,
          ontology
