@@ -187,7 +187,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
       found = memories_until(gen_group_id, "dark mode", 40_000)
 
       assert found != [],
-             "expected the _gen group to surface the written generalisation; got nothing"
+             "expected the _gen group to surface the written generalisation; the group holds: #{inspect(graph_contents(gen_group_id))}"
 
       text = Enum.join(found, "\n")
 
@@ -221,7 +221,9 @@ defmodule Gralkor.GeneraliseJourneyTest do
         )
 
       found = memories_until(gen_group_id, "standing desk", 60_000)
-      assert found != [], "expected the _gen group to surface the stored generalisation"
+
+      assert found != [],
+             "expected the _gen group to surface the stored generalisation; the group holds: #{inspect(graph_contents(gen_group_id))}"
 
       text = Enum.join(found, "\n")
 
