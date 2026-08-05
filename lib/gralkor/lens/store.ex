@@ -3,9 +3,9 @@ defmodule Gralkor.Lens.Store do
   Storage capability passed to a `Gralkor.Lens.Ingestion` process.
 
   The Store is already bound to an operator and resolved Lens. Additions use
-  that Lens's ontology and scope; searches use its destination; removals use
-  the same destination. Ingestion processes should use this capability rather
-  than choose Graphiti partitions themselves.
+  that Lens's ontology and scope; searches and removals use its group.
+  Ingestion processes should use this capability rather than choose Graphiti
+  group IDs themselves.
 
   Global provenance is attached by the storage adapter and does not need to be
   supplied by the process.
