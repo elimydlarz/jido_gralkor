@@ -26,7 +26,7 @@ Five direct Hex deps (six with `:ex_doc` for dev docs):
 - `{:req_llm, "~> 1.0"}` — LLM client used by the embedded Distill + Interpret pipelines (provider-portable via `response_model`-bearing Pydantic schemas).
 - `{:jason, "~> 1.4"}` — JSON parsing for the embedded pipelines.
 
-**Embedded Gralkor adapter.** `Gralkor.*` contains both legacy pipelines and the Lens boundary. Lens capture uses `capture/6` or `/7`, batches by Lens, and flushes through `Client.ingest/1`; Lens ingestion owns any learning or distillation beyond its configured process. The implicit-default compatibility path uses `capture/5`, `memory_add/3`, `recall/4`, unconditional AgentLearning during legacy flush, optional `:generalise_on_flush`, the separate `_gen` partition, and deployment-wide `:ontology`. Both paths share Pythonx, GraphitiPool, CaptureBuffer, ontology materialisation, and lifecycle flushing.
+**Embedded Gralkor adapter.** `Gralkor.*` contains both legacy pipelines and the Lens boundary. Lens capture uses `capture/6` or `/7`, batches by Lens, and flushes through `Client.ingest/1`; Lens ingestion owns any learning or distillation beyond its configured process. The implicit-default compatibility path uses `capture/5`, `memory_add/3`, `recall/4`, unconditional AgentLearning during legacy flush, optional `:generalise_on_flush`, the separate `_gen` group, and deployment-wide `:ontology`. Both paths share Pythonx, GraphitiPool, CaptureBuffer, ontology materialisation, and lifecycle flushing.
 
 ## Configuring Gralkor
 
