@@ -32,7 +32,7 @@ when an agent turn begins
     while a thread has committed to agent state
       then the selected Lens and the configured Lenses to search are planted on the tool context beside the agent name and the committed thread's id
     while no thread has committed to agent state
-      then the selected Lens and the configured search targets are planted on the tool context beside the agent name and without a session id
+      then the selected Lens and the configured Lenses to search are planted on the tool context beside the agent name and without a session id
 
 when an agent turn completes
   while a thread has committed to agent state
