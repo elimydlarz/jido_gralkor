@@ -937,9 +937,10 @@ defmodule Gralkor.GraphitiPool do
         """
         from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
         en = embedder_name.decode('utf-8') if isinstance(embedder_name, (bytes, bytearray)) else embedder_name
-        OpenAIEmbedder(OpenAIEmbedderConfig(embedding_model=en))
+        k = api_key.decode('utf-8') if isinstance(api_key, (bytes, bytearray)) else api_key
+        OpenAIEmbedder(OpenAIEmbedderConfig(embedding_model=en, api_key=k))
         """,
-        %{"embedder_name" => embedder_name}
+        %{"embedder_name" => embedder_name, "api_key" => api_key!(:openai)}
       )
 
     embedder
