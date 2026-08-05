@@ -22,6 +22,7 @@ This repository is the canonical development and distribution home for Jido-firs
 - *operator* — the application identity whose local memory is isolated; it is not a Lens and does not determine global visibility.
 - *Lens* — a named ingestion channel with an ontology, an ingestion process, and `:operator` or `:global` scope; reserved `default` is the operator's baseline memory destination.
 - *global pool* — the one shared destination used by every global Lens. Global episodes retain their originating Lens, while global search is deliberately unfiltered.
+- *role* — one of the two inference slots, `llm` or `embedder`, each selecting its provider from its own model spec. The cross-encoder has no spec and follows the llm role; a credential is required only for a provider some role selects.
 
 ## Bounded Contexts
 
