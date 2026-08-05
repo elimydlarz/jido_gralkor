@@ -10,7 +10,7 @@ where the generalising Lens is operator-local
   then its resulting memory is available only to that operator through that Lens
 
 where the generalising Lens is global
-  then its resulting memory enters shared global memory
+  then its resulting memory enters the shared global group
   and every resulting episode records the generalising Lens as its origin
 
 where capture is configured to generalise a flushed transcript through another Lens
