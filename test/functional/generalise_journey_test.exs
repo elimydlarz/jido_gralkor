@@ -120,17 +120,18 @@ defmodule Gralkor.GeneraliseJourneyTest do
             search_gen_fn: search_gen_fn,
             evaluate_fn: evaluate_fn,
             add_episode_fn: fn _gid, content, source, ontology, opts ->
-              GraphitiPool.add_episode(
-                Gralkor.GraphitiPool,
-                gen_group_id,
-                content,
-                source,
-                ontology,
-                opts
-              )
-            end,
-            remove_episode_fn: fn _gid, uuid ->
-              GraphitiPool.remove_episode(gen_group_id, uuid)
+              result =
+                GraphitiPool.add_episode(
+                  Gralkor.GraphitiPool,
+                  gen_group_id,
+                  content,
+                  source,
+                  ontology,
+                  opts
+                )
+
+              send(test_pid, {:generalisation_written, result})
+              result
             end,
             min_confidence: 0.3,
             max_gen_results: 5
