@@ -88,6 +88,26 @@ defmodule Gralkor.GeneraliseJourneyTest do
       Enum.map(nodes, fn node -> "#{node.name} — #{node.summary}" end)
   end
 
+  # Says whether a group that surfaced nothing is empty (the write never landed)
+  # or holds an episode nothing was extracted from.
+  defp graph_contents(group_id) do
+    instance = GraphitiPool.for(group_id)
+
+    {raw, _} =
+      Pythonx.eval(
+        """
+        import asyncio
+        records, _, _ = asyncio._gralkor_run(
+            g.driver.execute_query("MATCH (n) RETURN labels(n) AS labels, n.name AS name, n.group_id AS group_id")
+        )
+        [f"{r['labels']} name={r['name']} group_id={r['group_id']}" for r in records]
+        """,
+        %{"g" => instance}
+      )
+
+    raw |> Pythonx.decode() |> Enum.map(&to_string/1)
+  end
+
   describe "ex-generalise-journey > after flush with generalise_fn" do
     test "the generalise pipeline saves generalisations to the _gen group" do
       group_id = "gen_after_flush_#{System.unique_integer([:positive])}"
