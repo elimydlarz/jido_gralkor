@@ -103,32 +103,20 @@ defmodule JidoGralkor.Plugin do
   defp fetch_opt(opts, key) when is_map(opts), do: Map.get(opts, key)
   defp fetch_opt(_, _), do: nil
 
-  defp validate_search_targets!(nil), do: []
+  defp validate_search_lenses!(nil), do: []
 
-  defp validate_search_targets!(targets) when is_list(targets) do
-    Enum.each(targets, fn
-      "global" ->
-        :ok
-
-      target when is_binary(target) ->
-        case Client.lens!(target) do
-          %{scope: :operator} ->
-            :ok
-
-          %{scope: :global} ->
-            raise ArgumentError,
-                  "global Lens #{inspect(target)} is provenance; search the reserved \"global\" target"
-        end
-
-      target ->
-        raise ArgumentError, "invalid search target #{inspect(target)}"
+  defp validate_search_lenses!(lenses) when is_list(lenses) do
+    Enum.each(lenses, fn
+      "global" -> :ok
+      name when is_binary(name) -> Client.lens!(name)
+      name -> raise ArgumentError, "invalid Lens #{inspect(name)}"
     end)
 
-    targets
+    lenses
   end
 
-  defp validate_search_targets!(targets) do
-    raise ArgumentError, "search_targets must be a list, got #{inspect(targets)}"
+  defp validate_search_lenses!(lenses) do
+    raise ArgumentError, "search_lenses must be a list, got #{inspect(lenses)}"
   end
 
   @impl Jido.Plugin
