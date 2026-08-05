@@ -1,13 +1,13 @@
 Functional: lens-aware-agent-memory (functional: test/functional/lens_aware_agent_memory_functional_test.exs)
 
-when a mounted memory plugin has a configured default ingestion Lens and optional additional search targets
+when a mounted memory plugin has a configured default ingestion Lens and optional additional Lenses to search
   then automatic capture and memory addition use the registered default ingestion Lens
-  and memory search always includes the requesting operator's reserved `default` target
-  and memory search also includes the configured additional search targets
+  and memory search always includes the requesting operator's reserved `default` Lens
+  and memory search also includes the configured additional Lenses
   and the plugin does not redefine a selected Lens's ontology, scope, or ingestion process
 
-where a mounted memory plugin has no additional search targets
-  then memory search uses only the requesting operator's reserved `default` target
+where a mounted memory plugin has no additional Lenses to search
+  then memory search uses only the requesting operator's reserved `default` Lens
 
 where an agent turn selects another registered Lens
   then memory addition uses the turn-selected Lens
@@ -24,8 +24,8 @@ if a mounted plugin receives invalid Lens configuration
   then mounting fails before the plugin handles an agent signal
     where the default Lens is unknown
       then the error identifies the unknown default Lens
-    where a search target is invalid
-      then the error identifies the invalid target
+    where a Lens to search is unknown
+      then the error identifies the unknown Lens
     where the generalising Lens is unknown
       then the error identifies the unknown generalising Lens
     where the generalising Lens duplicates the default Lens
