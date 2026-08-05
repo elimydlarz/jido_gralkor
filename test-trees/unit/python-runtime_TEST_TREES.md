@@ -16,7 +16,6 @@ when the Python runtime is initialised
     then it is materialised
   while an embedded connection is configured
     then any process whose arguments identify the embedded backend's bundled server is killed first, so a server orphaned by a hard virtual-machine exit cannot survive
-    but the sweep matches on arguments alone, so a live server belonging to an earlier runtime in this same virtual machine is killed too, leaving that older graph's next query with a refused connection
   while a remote connection is configured
     then no orphaned-server sweep runs
     and the embedded backend is never imported
