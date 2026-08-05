@@ -55,7 +55,6 @@ defmodule Gralkor.Generalise do
              search_gen_fn,
              evaluate_fn,
              add_episode_fn,
-             remove_episode_fn,
              gen_group_id,
              max_gen_results,
              ontology
