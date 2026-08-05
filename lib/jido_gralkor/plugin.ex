@@ -71,7 +71,7 @@ defmodule JidoGralkor.Plugin do
 
     case fetch_opt(opts, :default_lens) do
       nil ->
-        if fetch_opt(opts, :search_targets) != nil or fetch_opt(opts, :generalise_lens) != nil do
+        if fetch_opt(opts, :search_lenses) != nil or fetch_opt(opts, :generalise_lens) != nil do
           raise ArgumentError, ":default_lens is required when Lens options are configured"
         end
 
@@ -79,7 +79,7 @@ defmodule JidoGralkor.Plugin do
 
       default_lens ->
         lens = Client.lens!(default_lens)
-        search_targets = validate_search_targets!(fetch_opt(opts, :search_targets))
+        search_lenses = validate_search_lenses!(fetch_opt(opts, :search_lenses))
         generalise_lens = fetch_opt(opts, :generalise_lens)
 
         if generalise_lens, do: Client.lens!(generalise_lens)
