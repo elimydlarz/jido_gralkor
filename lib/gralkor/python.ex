@@ -151,6 +151,42 @@ defmodule Gralkor.Python do
     e -> {:error, {:graphiti_import, Exception.message(e)}}
   end
 
+  # One import block per provider the pool will accept, so a provider that
+  # configuration admits can never fail later on a missing package. `openai`
+  # arrives as an unconditional graphiti-core dependency; `google-genai` via the
+  # extra named in priv/python/pyproject.toml.
+  @provider_client_imports %{
+    google: """
+    from graphiti_core.llm_client.gemini_client import GeminiClient
+    from graphiti_core.embedder.gemini import GeminiEmbedder
+    from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
+    """,
+    openai: """
+    from graphiti_core.llm_client.openai_client import OpenAIClient
+    from graphiti_core.embedder.openai import OpenAIEmbedder
+    from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
+    """
+  }
+
+  @doc """
+  Import the graphiti LLM, embedder, and reranker clients for `provider`.
+  Returns `{:error, {:unsupported_provider, provider}}` for a provider the pool
+  would refuse anyway.
+  """
+  @spec smoke_import_provider_clients(atom()) :: :ok | {:error, term()}
+  def smoke_import_provider_clients(provider) do
+    case Map.fetch(@provider_client_imports, provider) do
+      {:ok, source} ->
+        Pythonx.eval(source, %{})
+        :ok
+
+      :error ->
+        {:error, {:unsupported_provider, provider}}
+    end
+  rescue
+    e -> {:error, {:provider_client_import, provider, Exception.message(e)}}
+  end
+
   # ── default OS plumbing ────────────────────────────────────
 
   defp list_redislite_orphans do
