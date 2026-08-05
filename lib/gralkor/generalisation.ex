@@ -3,9 +3,11 @@ defmodule Gralkor.Generalisation do
   Struct and wire format for generalisations stored as graphiti episodes in a
   dedicated group (`"\#{group_id}_gen"`).
 
-  The struct `:id` doubles as the graphiti episode UUID — `add_episode` accepts
-  an optional `uuid` parameter, so we control identity. This gives us update
-  (re-add with same uuid) and delete (`remove_episode(uuid)`) on generalisations.
+  The struct `:id` identifies the generalisation inside the episode body, which
+  is what `:generalises` points at when one generalisation supersedes another.
+  It is not the graphiti episode UUID: graphiti mints those, and its
+  `add_episode(uuid: …)` parameter *loads an existing* episode to re-extract
+  rather than creating one under an id we chose.
 
   ## Wire format
 
