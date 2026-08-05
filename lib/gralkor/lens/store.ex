@@ -28,7 +28,7 @@ defmodule Gralkor.Lens.Store do
   end
 
   @spec search(t(), String.t(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}
-  @doc "Searches the bound Lens destination."
+  @doc "Searches the bound Lens's group."
   def search(%__MODULE__{} = store, query, max_results) do
     storage().search(store, query, max_results)
   end
