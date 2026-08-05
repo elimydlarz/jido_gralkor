@@ -18,14 +18,11 @@ defmodule Gralkor.OntologyExtractionTest do
   @moduletag :functional
   @moduletag timeout: 600_000
 
-  @user_description "A person the agent talks to. Extract a User for anyone the text names as talking to, instructing, or being helped by the agent."
-  @preference_description "A way a person prefers things to be done. Extract a Preference for each distinct preference, style, or standing instruction the text records about how someone wants to be treated or answered."
-
   defmodule StrictOntology do
     use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
     entity User,
-          "A person the agent talks to. Extract a User for anyone the text names as talking to, instructing, or being helped by the agent." do
+           "A person the agent talks to. Extract a User for anyone the text names as talking to, instructing, or being helped by the agent." do
       field(:handle, :string, required: true, doc: "stable login handle")
     end
 
@@ -43,7 +40,7 @@ defmodule Gralkor.OntologyExtractionTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
 
     entity User,
-          "A person the agent talks to. Extract a User for anyone the text names as talking to, instructing, or being helped by the agent." do
+           "A person the agent talks to. Extract a User for anyone the text names as talking to, instructing, or being helped by the agent." do
       field(:handle, :string, required: true)
     end
 
@@ -60,7 +57,9 @@ defmodule Gralkor.OntologyExtractionTest do
   @fixture """
   Important context. Eli (handle: eli) has a strong preference for concise,
   structured responses with minimal preamble. Eli prefers this format
-  especially for technical questions. Always respond to Eli in this style.
+  especially for technical questions. Eli also prefers dark mode in every
+  editor, and prefers to be addressed by first name. Always respond to Eli
+  in this style.
   """
 
   setup_all do
