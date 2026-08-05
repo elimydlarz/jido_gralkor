@@ -316,7 +316,8 @@ defmodule Gralkor.GeneraliseTest do
 
       add_fn = fn _group, body, _source, _ontology, opts ->
         {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
-        assert opts[:uuid] == generalisation.id
+        assert opts == []
+        assert generalisation.id =~ ~r/^gen-/
         :ok
       end
 
