@@ -1,7 +1,7 @@
 defmodule Gralkor.Generalisation do
   @moduledoc """
   Struct and wire format for generalisations stored as graphiti episodes in a
-  dedicated partition (`"\#{group_id}_gen"`).
+  dedicated group (`"\#{group_id}_gen"`).
 
   The struct `:id` doubles as the graphiti episode UUID — `add_episode` accepts
   an optional `uuid` parameter, so we control identity. This gives us update
