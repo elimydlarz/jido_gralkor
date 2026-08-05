@@ -418,6 +418,43 @@ defmodule Gralkor.GraphitiPool do
   @spec credential_env(atom()) :: String.t() | nil
   def credential_env(provider), do: Map.get(@credential_env, provider)
 
+  @doc """
+  Decide which provider builds each shared client, from the two configured model
+  specs. Pure — no Pythonx, no credentials read — so the per-role dispatch is
+  pinned deterministically and `default_construct_shared_clients/2` is left with
+  nothing to decide.
+
+  Each role takes its own spec's provider. The cross-encoder has no spec of its
+  own and follows the llm role. A Google embedder carries `:batch_size` of 1;
+  the OpenAI embedder takes no batch size at all, its client having no such
+  parameter and no equivalent of the Gemini batching defect.
+  """
+  @spec shared_client_spec(map(), map()) :: %{
+          llm: map(),
+          embedder: map(),
+          cross_encoder: map()
+        }
+  def shared_client_spec(llm_model, embedder_model) do
+    %{
+      llm: %{provider: llm_model[:provider], id: llm_model[:id]},
+      embedder: embedder_spec(embedder_model),
+      cross_encoder: %{provider: llm_model[:provider]}
+    }
+  end
+
+  # gemini-embedding-2-preview returns ONE embedding for N inputs in a single
+  # call — graphiti's batched create_batch then fails with "zip() argument 2 is
+  # shorter than argument 1". Force batch_size=1 so each input becomes its own
+  # request. Filed upstream as getzep/graphiti#1467. OpenAI's embedder unpacks
+  # result.data 1:1 and exposes no batch_size, so the workaround is Google-only.
+  defp embedder_spec(%{provider: :google} = embedder_model) do
+    %{provider: :google, id: embedder_model[:id], batch_size: 1}
+  end
+
+  defp embedder_spec(embedder_model) do
+    %{provider: embedder_model[:provider], id: embedder_model[:id]}
+  end
+
   @doc false
   @spec validate_native_models!(map(), map()) :: :ok
   def validate_native_models!(llm_model, embedder_model) do
