@@ -895,9 +895,10 @@ defmodule Gralkor.GraphitiPool do
         from graphiti_core.llm_client.config import LLMConfig
         from graphiti_core.llm_client.openai_client import OpenAIClient
         ln = llm_name.decode('utf-8') if isinstance(llm_name, (bytes, bytearray)) else llm_name
-        OpenAIClient(config=LLMConfig(model=ln))
+        k = api_key.decode('utf-8') if isinstance(api_key, (bytes, bytearray)) else api_key
+        OpenAIClient(config=LLMConfig(model=ln, api_key=k))
         """,
-        %{"llm_name" => llm_name}
+        %{"llm_name" => llm_name, "api_key" => api_key!(:openai)}
       )
 
     llm
