@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Recall returned facts unrelated to the query.** `Gralkor.Interpret` was never told what was asked — it judged relevance against the buffered conversation alone. A recall from a session that never carried the query (a fresh session, or a `memory_search` whose query is not the last user turn) therefore filtered against nothing: for "Where does Eli work?" the graph search ranked "Eli works at Anthropic" first and interpretation dropped it in favour of an unrelated fact from the same group. `Recall` now passes the query to `Interpret.interpret_facts/6`, which renders it as a `Request to answer:` section; the conversation is still trimmed oldest-first to the char budget, the request and the facts never are.
+- **Every legacy generalisation write failed.** `Gralkor.Generalise` passed the new generalisation's id as graphiti's `add_episode(uuid: …)`, which *loads an existing* episode to re-extract against — so each write raised `NodeNotFoundError` inside the flush task and nothing reached the `_gen` group. Generalisations are now written as new episodes with graphiti minting the episode uuid.
+- **Recall never surfaced a generalisation.** The generalisation search read graphiti *edges* and tried to decode each fact as the `GEN|v1|` wire format, which extracted facts never carry; and a generalisation naming one subject yields a node with no edge at all. It now reads nodes (`GraphitiPool.search_nodes`), the same primitive ERL uses.
+- **The redislite orphan sweep killed live servers owned by the same VM.** `Gralkor.Python.init/1` SIGKILLed every `redislite/bin/redis-server` on each boot, so the second journey module in a run killed the first module's database mid-test. The sweep now runs once per VM — the one moment when every matching server predates it. `pgrep -af` also dropped to `pgrep -f`: on macOS `-a` includes the caller's *ancestors* in the match list.
+- **`ontology-extraction` was flaky by construction.** Its entity types carried no description, and graphiti's extractor reads a custom type's description to decide when to mint it (the lesson `Gralkor.LearningEntity` already encodes). 1–2 of its 3 assertions failed per run; with descriptions declared it passes run after run.
+- `Gralkor.DistillTest`'s arity assertions now `Code.ensure_loaded!/1` first — `function_exported?/3` answers `false` for a module the VM has not loaded, so random ordering could fail them.
+
+### Added
+- `entity Foo, "when to extract one" do … end` — `Gralkor.Ontology` entities can now declare a description, rendered as the extracted type's own description for graphiti's extractor. Optional; the description must be a literal string.
+
+### Removed
+- `Gralkor.Generalise`'s `:remove_episode_fn` option and its contradicts-removal path. It addressed graphiti by a generalisation id that is not an episode uuid, so it could never have deleted anything. A contradicting generalisation is persisted as an ordinary new episode recording its lineage, matching `Gralkor.Lens.Ingestion.Generalise`.
+
 ## [4.1.0] - 2026-07-01
 
 ### Changed
