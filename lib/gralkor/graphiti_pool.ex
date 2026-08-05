@@ -404,15 +404,58 @@ defmodule Gralkor.GraphitiPool do
     :ok
   end
 
+  # Each role — llm and embedder — picks its provider from its own spec, so an
+  # OpenAI LLM alongside a Google embedder is a supported pair. The cross-encoder
+  # has no spec of its own and follows the llm role.
+  @supported_providers [:openai, :google]
+  @credential_env %{openai: "OPENAI_API_KEY", google: "GOOGLE_API_KEY"}
+
+  @doc false
+  @spec supported_providers() :: [atom()]
+  def supported_providers, do: @supported_providers
+
+  @doc false
+  @spec credential_env(atom()) :: String.t() | nil
+  def credential_env(provider), do: Map.get(@credential_env, provider)
+
   @doc false
   @spec validate_native_models!(map(), map()) :: :ok
   def validate_native_models!(llm_model, embedder_model) do
-    if llm_model[:provider] != :google or embedder_model[:provider] != :google do
+    roles = [{"llm", llm_model}, {"embedder", embedder_model}]
+
+    validate_supported_providers!(roles, llm_model, embedder_model)
+    # Only a provider some role actually selected needs a credential — an unused
+    # provider's absent key is not a misconfiguration.
+    Enum.each(roles, &validate_credential!/1)
+
+    :ok
+  end
+
+  defp validate_supported_providers!(roles, llm_model, embedder_model) do
+    unless Enum.all?(roles, fn {_role, model} -> model[:provider] in @supported_providers end) do
+      supported = Enum.map_join(@supported_providers, ", ", &inspect/1)
+
       raise ArgumentError,
-            "Gralkor.GraphitiPool native Graphiti supports Google models only; got llm=#{inspect(llm_model)}, embedder=#{inspect(embedder_model)}"
+            "Gralkor.GraphitiPool native Graphiti supports #{supported} models; " <>
+              "got llm=#{inspect(llm_model)}, embedder=#{inspect(embedder_model)}"
     end
 
     :ok
+  end
+
+  defp validate_credential!({role, model}) do
+    var = Map.fetch!(@credential_env, model[:provider])
+
+    case System.get_env(var) do
+      value when is_binary(value) and value != "" ->
+        :ok
+
+      _ ->
+        raise ArgumentError,
+              "Gralkor.GraphitiPool requires #{var} because the #{role} model spec " <>
+                "#{inspect(model)} selects the #{inspect(model[:provider])} provider; " <>
+                "set it, or configure a different provider for the #{role} role"
+    end
   end
 
   @fact_keys ~w(fact created_at valid_at invalid_at expired_at)a
