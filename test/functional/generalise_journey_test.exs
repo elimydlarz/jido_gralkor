@@ -65,7 +65,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
     :ok
   end
 
-  defp search_until(_partition, _query, _min, 0) do
+  defp search_until(_group_id, _query, _min, 0) do
     []
   end
 
