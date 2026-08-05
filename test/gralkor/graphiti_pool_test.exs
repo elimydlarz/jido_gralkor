@@ -798,6 +798,61 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "while both configured model specs name a supported inference provider, when each provider's credential is handed to its client" do
+    setup do
+      previous = %{
+        "GOOGLE_API_KEY" => System.get_env("GOOGLE_API_KEY"),
+        "OPENAI_API_KEY" => System.get_env("OPENAI_API_KEY")
+      }
+
+      on_exit(fn ->
+        Enum.each(previous, fn
+          {var, nil} -> System.delete_env(var)
+          {var, value} -> System.put_env(var, value)
+        end)
+      end)
+
+      :ok
+    end
+
+    test "then the credential is read on the BEAM side from the variable that provider's spec names" do
+      System.put_env("OPENAI_API_KEY", "openai-secret")
+      System.put_env("GOOGLE_API_KEY", "google-secret")
+
+      assert GraphitiPool.api_key!(:openai) == "openai-secret"
+      assert GraphitiPool.api_key!(:google) == "google-secret"
+    end
+
+    test "and a credential set from Elixir still reaches the client, the embedded interpreter's own environment never carrying it" do
+      var = "GRALKOR_CREDENTIAL_DELIVERY_PROBE_#{System.unique_integer([:positive])}"
+      on_exit(fn -> System.delete_env(var) end)
+
+      System.put_env(var, "set-from-elixir")
+      assert System.get_env(var) == "set-from-elixir"
+
+      {seen_by_python, _} =
+        Pythonx.eval(
+          """
+          import os
+          os.environ.get(name.decode('utf-8'), '<<ABSENT>>')
+          """,
+          %{"name" => var}
+        )
+
+      assert Pythonx.decode(seen_by_python) == "<<ABSENT>>",
+             "os:putenv reached the interpreter's environment; api_key!/1 could then be replaced by letting the Python client read the variable itself"
+
+      System.put_env("OPENAI_API_KEY", "openai-secret")
+      assert GraphitiPool.api_key!(:openai) == "openai-secret"
+    end
+
+    test "if the variable that provider's spec names is absent then reading it raises rather than handing the client a blank key" do
+      System.delete_env("OPENAI_API_KEY")
+
+      assert_raise System.EnvError, fn -> GraphitiPool.api_key!(:openai) end
+    end
+  end
+
   describe "init/1 runs synchronously, if any warmup call raises or returns {:error, _}" do
     test "then it is caught and logged at :warning as \"[gralkor] warmup failed (non-fatal) — <stage>: <reason>\" and boot proceeds" do
       log =
