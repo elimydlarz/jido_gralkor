@@ -78,9 +78,13 @@ defmodule Gralkor.Ontology do
   defmacro entity({:__aliases__, _, segments}, description, do: block) do
     name = segments |> List.last() |> Atom.to_string()
 
-    quote do
-      Gralkor.Ontology.__validate_entity_description__(unquote(name), unquote(description))
+    unless is_nil(description) or is_binary(description) do
+      raise CompileError,
+        description:
+          "Gralkor.Ontology: entity #{name} description must be a literal string, got #{Macro.to_string(description)}"
+    end
 
+    quote do
       Module.put_attribute(
         __MODULE__,
         :gralkor_ontology_current_entity,
