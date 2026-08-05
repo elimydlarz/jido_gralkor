@@ -94,8 +94,8 @@ defmodule Gralkor.Lens.Storage.Graphiti do
 
   @spec graph_add(String.t(), String.t(), String.t(), module() | nil, keyword()) ::
           :ok | {:error, term()}
-  defp graph_add(destination, content, source_description, ontology, graph_opts) do
-    GraphitiPool.add_episode(destination, content, source_description, ontology, graph_opts)
+  defp graph_add(group_id, content, source_description, ontology, graph_opts) do
+    GraphitiPool.add_episode(group_id, content, source_description, ontology, graph_opts)
   end
 
   @spec add_options(keyword()) :: {add_episode_fn(), keyword()}
@@ -111,8 +111,8 @@ defmodule Gralkor.Lens.Storage.Graphiti do
 
   @spec graph_search(String.t(), String.t(), pos_integer()) ::
           {:ok, [String.t()]} | {:error, term()}
-  defp graph_search(destination, query, max_results) do
-    case GraphitiPool.search(destination, query, max_results) do
+  defp graph_search(group_id, query, max_results) do
+    case GraphitiPool.search(group_id, query, max_results) do
       {:ok, facts} -> {:ok, Enum.map(facts, &Gralkor.Format.format_fact/1)}
       {:error, _reason} = error -> error
     end
