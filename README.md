@@ -426,7 +426,7 @@ defmodule MyApp.DecisionIngestion do
 end
 ```
 
-The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The store, rather than consumer code, owns the physical partition, selected ontology, and global provenance.
+The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The store, rather than consumer code, owns the group id, selected ontology, and global provenance.
 
 The plugin mount chooses how an agent uses the registered Lenses:
 
