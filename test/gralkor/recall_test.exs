@@ -144,7 +144,7 @@ defmodule Gralkor.RecallTest do
 
       assert :counters.get(called, 1) == 0
       assert_receive {^ref, prompt}
-      assert prompt =~ "Conversation context:\n\n\nMemory facts to interpret:"
+      assert prompt =~ "Conversation context:\n\n\nRequest to answer:\nq\n\nMemory facts to interpret:"
     end
   end
 
