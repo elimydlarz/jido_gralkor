@@ -20,10 +20,10 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
       test_pid = self()
 
-      add_episode_fn = fn destination, content, source_description, ontology, opts ->
+      add_episode_fn = fn group_id, content, source_description, ontology, opts ->
         send(
           test_pid,
-          {:graph_add, destination, content, source_description, ontology, opts}
+          {:graph_add, group_id, content, source_description, ontology, opts}
         )
 
         :ok
@@ -44,8 +44,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "and changing either the operator or Lens produces a distinct group" do
       test_pid = self()
 
-      add_episode_fn = fn destination, _content, _source_description, _ontology, _opts ->
-        send(test_pid, {:destination, destination})
+      add_episode_fn = fn group_id, _content, _source_description, _ontology, _opts ->
+        send(test_pid, {:group_id, group_id})
         :ok
       end
 
@@ -64,25 +64,25 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
         }
       ]
 
-      destinations =
+      group_ids =
         Enum.map(stores, fn store ->
           assert :ok =
                    Graphiti.add_episode(store, "content", "source",
                      add_episode_fn: add_episode_fn
                    )
 
-          assert_receive {:destination, destination}
-          destination
+          assert_receive {:group_id, group_id}
+          group_id
         end)
 
-      assert length(Enum.uniq(destinations)) == 3
+      assert length(Enum.uniq(group_ids)) == 3
     end
 
     test "and the local group is distinct from the shared global group" do
       test_pid = self()
 
-      add_episode_fn = fn destination, _content, _source_description, _ontology, _opts ->
-        send(test_pid, {:destination, destination})
+      add_episode_fn = fn group_id, _content, _source_description, _ontology, _opts ->
+        send(test_pid, {:group_id, group_id})
         :ok
       end
 
@@ -91,8 +91,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  add_episode_fn: add_episode_fn
                )
 
-      assert_receive {:destination, local_destination}
-      refute local_destination == "global"
+      assert_receive {:group_id, group_id}
+      refute group_id == "global"
     end
 
     test "and the graph add receives the episode content, source description, and Lens ontology" do
@@ -108,10 +108,10 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
       test_pid = self()
 
-      add_episode_fn = fn destination, content, source_description, ontology, opts ->
+      add_episode_fn = fn group_id, content, source_description, ontology, opts ->
         send(
           test_pid,
-          {:graph_add, destination, content, source_description, ontology, opts}
+          {:graph_add, group_id, content, source_description, ontology, opts}
         )
 
         :ok
@@ -163,8 +163,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
       test_pid = self()
 
-      search_fn = fn destination, query, max_results ->
-        send(test_pid, {:graph_search, destination, query, max_results})
+      search_fn = fn group_id, query, max_results ->
+        send(test_pid, {:graph_search, group_id, query, max_results})
         {:ok, []}
       end
 
@@ -188,8 +188,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
       test_pid = self()
 
-      search_fn = fn destination, query, max_results ->
-        send(test_pid, {:graph_search, destination, query, max_results})
+      search_fn = fn group_id, query, max_results ->
+        send(test_pid, {:graph_search, group_id, query, max_results})
         {:ok, []}
       end
 
@@ -218,7 +218,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
   end
 
   describe "when the implicit `default` Lens is added to or searched" do
-    test "then graph operations use the operator's existing sanitized destination" do
+    test "then graph operations use the operator's existing sanitized group_id" do
       store = %Store{
         operator_id: "operator-one",
         lens: %Lens{
@@ -231,13 +231,13 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
       test_pid = self()
 
-      add_episode_fn = fn destination, _, _, _, _ ->
-        send(test_pid, {:graph_add, destination})
+      add_episode_fn = fn group_id, _, _, _, _ ->
+        send(test_pid, {:graph_add, group_id})
         :ok
       end
 
-      search_fn = fn destination, _, _ ->
-        send(test_pid, {:graph_search, destination})
+      search_fn = fn group_id, _, _ ->
+        send(test_pid, {:graph_search, group_id})
         {:ok, []}
       end
 
@@ -264,10 +264,10 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
       test_pid = self()
 
-      add_episode_fn = fn destination, content, source_description, ontology, opts ->
+      add_episode_fn = fn group_id, content, source_description, ontology, opts ->
         send(
           test_pid,
-          {:graph_add, destination, content, source_description, ontology, opts}
+          {:graph_add, group_id, content, source_description, ontology, opts}
         )
 
         :ok
@@ -294,10 +294,10 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
       test_pid = self()
 
-      add_episode_fn = fn destination, content, source_description, ontology, opts ->
+      add_episode_fn = fn group_id, content, source_description, ontology, opts ->
         send(
           test_pid,
-          {:graph_add, destination, content, source_description, ontology, opts}
+          {:graph_add, group_id, content, source_description, ontology, opts}
         )
 
         :ok
@@ -318,8 +318,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       store = %Store{operator_id: "operator-one", lens: :global}
       test_pid = self()
 
-      search_fn = fn destination, query, max_results ->
-        send(test_pid, {:graph_search, destination, query, max_results})
+      search_fn = fn group_id, query, max_results ->
+        send(test_pid, {:graph_search, group_id, query, max_results})
         {:ok, []}
       end
 
@@ -331,8 +331,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       store = %Store{operator_id: "operator-one", lens: :global}
       test_pid = self()
 
-      search_fn = fn destination, query, max_results ->
-        send(test_pid, {:graph_search, destination, query, max_results})
+      search_fn = fn group_id, query, max_results ->
+        send(test_pid, {:graph_search, group_id, query, max_results})
         {:ok, []}
       end
 
@@ -355,8 +355,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
       test_pid = self()
 
-      search_fn = fn destination, query, max_results ->
-        send(test_pid, {:graph_search, destination, query, max_results})
+      search_fn = fn group_id, query, max_results ->
+        send(test_pid, {:graph_search, group_id, query, max_results})
         {:ok, []}
       end
 

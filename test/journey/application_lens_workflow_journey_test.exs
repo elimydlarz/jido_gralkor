@@ -92,7 +92,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  default_lens: "observations",
-                 search_targets: ["observations", "decisions", "global"],
+                 search_lenses: ["observations", "decisions", "global"],
                  generalise_lens: "generalisations"
                )
 
@@ -258,7 +258,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
         Plugin.mount(%{},
           agent_name: "Susu",
           default_lens: "observations",
-          search_targets: ["missing"]
+          search_lenses: ["missing"]
         )
       end
 

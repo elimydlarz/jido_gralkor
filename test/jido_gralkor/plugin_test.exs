@@ -95,7 +95,7 @@ defmodule JidoGralkor.PluginTest do
               %{
                 agent_name: "Susu",
                 default_lens: "observations",
-                search_targets: ["observations", "global"],
+                search_lenses: ["observations", "global"],
                 generalise_lens: "generalisations",
                 lens: %Gralkor.Lens{
                   name: "observations",
@@ -107,7 +107,7 @@ defmodule JidoGralkor.PluginTest do
                Plugin.mount(%{id: "operator-one", state: %{}},
                  agent_name: "Susu",
                  default_lens: "observations",
-                 search_targets: ["observations", "global"],
+                 search_lenses: ["observations", "global"],
                  generalise_lens: "generalisations"
                )
     end
@@ -157,7 +157,7 @@ defmodule JidoGralkor.PluginTest do
       assert tool_context == %{
                agent_name: "Susu",
                lens: "observations",
-               search_targets: ["observations", "global"],
+               search_lenses: ["observations", "global"],
                session_id: "thread-one"
              }
     end
@@ -176,7 +176,7 @@ defmodule JidoGralkor.PluginTest do
       assert tool_context == %{
                agent_name: "Susu",
                lens: "observations",
-               search_targets: ["observations", "global"]
+               search_lenses: ["observations", "global"]
              }
     end
   end
@@ -528,7 +528,7 @@ defmodule JidoGralkor.PluginTest do
       Plugin.mount(%{id: "operator-one", state: %{}},
         agent_name: "Susu",
         default_lens: "observations",
-        search_targets: ["observations", "global"],
+        search_lenses: ["observations", "global"],
         generalise_lens: "generalisations"
       )
 

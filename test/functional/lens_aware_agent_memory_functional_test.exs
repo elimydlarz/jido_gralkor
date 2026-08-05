@@ -79,7 +79,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  default_lens: "observations",
-                 search_targets: []
+                 search_lenses: []
                )
 
       agent = agent(plugin_state)
@@ -119,7 +119,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  default_lens: "observations",
-                 search_targets: ["observations"]
+                 search_lenses: ["observations"]
                )
 
       agent = agent(plugin_state)
@@ -147,7 +147,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  default_lens: "observations",
-                 search_targets: ["observations"]
+                 search_lenses: ["observations"]
                )
 
       agent = agent(plugin_state)
@@ -268,7 +268,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  default_lens: "observations",
-                 search_targets: ["observations"]
+                 search_lenses: ["observations"]
                )
 
       request_id = "decision-request"
@@ -477,7 +477,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         Plugin.mount(%{},
           agent_name: "Susu",
           default_lens: "observations",
-          search_targets: ["missing"]
+          search_lenses: ["missing"]
         )
       end
     end
@@ -504,7 +504,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
     test "where Lens options are supplied without a default Lens, then the error identifies that a default Lens is required" do
       for lens_options <- [
-            [search_targets: ["observations"]],
+            [search_lenses: ["observations"]],
             [generalise_lens: "generalisations"]
           ] do
         assert_raise ArgumentError, ~r/default_lens is required/, fn ->

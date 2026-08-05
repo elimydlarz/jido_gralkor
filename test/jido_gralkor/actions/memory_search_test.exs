@@ -77,7 +77,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     assert session_id == "thr-xyz"
   end
 
-  test "when context contains search_targets then default and selected Lens results are joined" do
+  test "when context contains search_lenses then default and selected Lens results are joined" do
     Process.register(self(), :memory_search_lens_test)
     Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
 
@@ -95,7 +95,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                agent_id: "operator-one",
                session_id: "thread-one",
                agent_name: "Susu",
-               search_targets: ["observations"]
+               search_lenses: ["observations"]
              })
 
     assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "default"}},
