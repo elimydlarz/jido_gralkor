@@ -2,7 +2,6 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Interpret
-  alias Gralkor.Message
 
   @moduletag :functional
   @moduletag timeout: 120_000
