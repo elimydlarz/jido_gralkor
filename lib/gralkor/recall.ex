@@ -176,6 +176,7 @@ defmodule Gralkor.Recall do
       time(fn ->
         Interpret.interpret_facts(
           conversation,
+          query,
           facts_text,
           interpret_fn,
           agent_name,
