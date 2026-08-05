@@ -5,12 +5,17 @@ defmodule Gralkor.Interpret do
 
   Two responsibilities, each its own tree:
 
-    * `build_interpretation_context/3` — pure: assemble the LLM prompt from
-      conversation messages and a formatted facts string, dropping oldest
-      messages until the prompt fits the configured char budget. Renders
-      role labels using `agent_name`.
-    * `interpret_facts/5` — call the LLM with that prompt and a structured-
+    * `build_interpretation_context/5` — pure: assemble the LLM prompt from
+      conversation messages, the request being answered, and a formatted facts
+      string, dropping oldest messages until the prompt fits the configured
+      char budget. Renders role labels using `agent_name`.
+    * `interpret_facts/6` — call the LLM with that prompt and a structured-
       output schema; return the list of relevant facts the LLM selected.
+
+  The request travels separately from the conversation because a recall may be
+  made from a session that never carried it — a fresh session, or a memory
+  search whose query is not the last thing the user said. Without it the model
+  has nothing to judge relevance against.
 
   See `test-trees/unit/interpret_TEST_TREES.md`.
   """
