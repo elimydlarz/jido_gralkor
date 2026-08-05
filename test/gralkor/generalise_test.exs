@@ -260,20 +260,18 @@ defmodule Gralkor.GeneraliseTest do
                    hypothesise_fn: ok_hypothesise(candidates),
                    search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
                    evaluate_fn: ok_evaluate(decisions),
-                   add_episode_fn: fn _partition, body, _source, _ontology, opts ->
+                   add_episode_fn: fn _partition, body, _source, _ontology, _opts ->
                      {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
-                     assert opts[:uuid] == generalisation.id
-                     :ok
-                   end,
-                   remove_episode_fn: fn _partition, uuid ->
-                     Process.put(:remove_called, true)
-                     assert uuid == "gen-outdated"
+                     Process.put(:persisted, generalisation)
                      :ok
                    end
                  )
                )
 
-      assert Process.get(:remove_called, false)
+      persisted = Process.get(:persisted)
+
+      assert persisted.level == 1
+      assert persisted.generalises == ["gen-outdated"]
     end
   end
 
