@@ -6,6 +6,8 @@ when any adapter operation is called
 when a recall is requested with a group, an agent name and a query
   then a fact search scoped to the group is supplied to the recall pipeline
   and a generalisation search scoped to the `_gen` group derived from it is supplied to the recall pipeline
+  and that generalisation search asks the graph for nodes rather than for edges, so a generalisation naming a single subject is returned instead of nothing
+  and each generalisation node found is rendered from its summary, or from its name when it has no summary
   and a learning search is supplied on every recall, with no enabling flag and no inference-based classification of the query
   and that learning search is seeded with the caller's raw query rather than a derived one
   and that learning search asks the graph for nodes labelled `Learning` rather than for edges, so standalone learning nodes are returned instead of nothing
