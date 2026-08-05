@@ -95,6 +95,8 @@ BEAM-side ReqLLM calls in `Gralkor.Client.Native` use `Config.llm_model()`, so t
 
 Legacy tests use `Gralkor.Client.InMemory` and reset it per scenario. Lens tests additionally configure `lens_storage: Gralkor.Lens.Storage.InMemory` and start a fresh storage process per test; pinning only the client does not intercept `Client.ingest/1` or `search/1`.
 
+Any test that starts a `Gralkor.GraphitiPool` needs a credential present for each provider its model specs select, because `validate_native_models!/2` refuses to start without one — even when client construction is stubbed and no provider is ever called. `Gralkor.TestEnv.load/1` therefore sets an obvious placeholder for `GOOGLE_API_KEY` and `OPENAI_API_KEY` when the variable is genuinely absent, after loading `.env`, so a real key always wins and the functional suites keep calling real providers.
+
 ```bash
 mix test            # default run: unit + integration, excluding :functional and :journey — no real LLM/graphiti calls
 mix test.unit       # only :unit (excludes integration, functional, journey)
