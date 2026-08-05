@@ -836,11 +836,28 @@ defmodule Gralkor.GraphitiPool do
   end
 
   defp default_construct_shared_clients(llm_model, embedder_model) do
-    %{provider: :google, id: llm_name} = llm_model
-    %{provider: :google, id: embedder_name} = embedder_model
+    spec = shared_client_spec(llm_model, embedder_model)
 
+    # A Google role needs one shared genai.Client threaded through its
+    # constructors; the OpenAI clients build their own AsyncOpenAI internally and
+    # read OPENAI_API_KEY from the process env, so they take no client kwarg.
+    genai_client = if :google in providers(spec), do: construct_genai_client()
+
+    llm = construct_llm_client(spec.llm, genai_client)
+    embedder = construct_embedder(spec.embedder, genai_client)
+    cross_encoder = construct_cross_encoder(spec.cross_encoder, genai_client, llm)
+
+    %{llm_client: llm, embedder: embedder, cross_encoder: cross_encoder}
+  end
+
+  defp providers(spec), do: [spec.llm.provider, spec.embedder.provider]
+
+  defp construct_genai_client do
     {client, _} = Pythonx.eval("from google import genai\ngenai.Client()\n", %{})
+    client
+  end
 
+  defp construct_llm_client(%{provider: :google, id: llm_name}, genai_client) do
     {llm, _} =
       Pythonx.eval(
         """
@@ -849,38 +866,93 @@ defmodule Gralkor.GraphitiPool do
         ln = llm_name.decode('utf-8') if isinstance(llm_name, (bytes, bytearray)) else llm_name
         GeminiClient(config=LLMConfig(model=ln), client=client)
         """,
-        %{"llm_name" => llm_name, "client" => client}
+        %{"llm_name" => llm_name, "client" => genai_client}
       )
 
-    # gemini-embedding-2-preview returns ONE embedding for N inputs in a single
-    # call — graphiti's batched create_batch then fails with
-    # "zip() argument 2 is shorter than argument 1". Force batch_size=1 so each
-    # input becomes its own request. gemini-embedding-001 batches fine but
-    # we set batch_size=1 uniformly so the call shape is identical regardless
-    # of model choice.
-    #
-    # Filed upstream as getzep/graphiti#1467 — remove this workaround once the
-    # fix lands and we've bumped past the affected version.
+    llm
+  end
+
+  defp construct_llm_client(%{provider: :openai, id: llm_name}, _genai_client) do
+    {llm, _} =
+      Pythonx.eval(
+        """
+        from graphiti_core.llm_client.config import LLMConfig
+        from graphiti_core.llm_client.openai_client import OpenAIClient
+        ln = llm_name.decode('utf-8') if isinstance(llm_name, (bytes, bytearray)) else llm_name
+        OpenAIClient(config=LLMConfig(model=ln))
+        """,
+        %{"llm_name" => llm_name}
+      )
+
+    llm
+  end
+
+  # batch_size=1 is the Google-only workaround decided in shared_client_spec/2:
+  # gemini-embedding-2-preview returns ONE embedding for N inputs, and graphiti's
+  # batched create_batch then fails with "zip() argument 2 is shorter than
+  # argument 1". Filed upstream as getzep/graphiti#1467 — drop it once the fix
+  # lands and we've bumped past the affected version.
+  defp construct_embedder(%{provider: :google, id: embedder_name, batch_size: batch_size}, genai_client) do
     {embedder, _} =
       Pythonx.eval(
         """
         from graphiti_core.embedder.gemini import GeminiEmbedder, GeminiEmbedderConfig
         en = embedder_name.decode('utf-8') if isinstance(embedder_name, (bytes, bytearray)) else embedder_name
-        GeminiEmbedder(GeminiEmbedderConfig(embedding_model=en), client=client, batch_size=1)
+        GeminiEmbedder(GeminiEmbedderConfig(embedding_model=en), client=client, batch_size=batch_size)
         """,
-        %{"embedder_name" => embedder_name, "client" => client}
+        %{"embedder_name" => embedder_name, "client" => genai_client, "batch_size" => batch_size}
       )
 
+    embedder
+  end
+
+  # OpenAIEmbedder unpacks result.data 1:1 from a single batched call and takes
+  # no batch_size parameter. It slices each vector to EmbedderConfig's
+  # embedding_dim (1024 by default), which text-embedding-3's Matryoshka
+  # training makes safe, but the truncation is silent — unlike Gemini, which
+  # asks for the dimension explicitly via output_dimensionality.
+  defp construct_embedder(%{provider: :openai, id: embedder_name}, _genai_client) do
+    {embedder, _} =
+      Pythonx.eval(
+        """
+        from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
+        en = embedder_name.decode('utf-8') if isinstance(embedder_name, (bytes, bytearray)) else embedder_name
+        OpenAIEmbedder(OpenAIEmbedderConfig(embedding_model=en))
+        """,
+        %{"embedder_name" => embedder_name}
+      )
+
+    embedder
+  end
+
+  defp construct_cross_encoder(%{provider: :google}, genai_client, _llm) do
     {cross_encoder, _} =
       Pythonx.eval(
         """
         from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
         GeminiRerankerClient(client=client)
         """,
-        %{"client" => client}
+        %{"client" => genai_client}
       )
 
-    %{llm_client: llm, embedder: embedder, cross_encoder: cross_encoder}
+    cross_encoder
+  end
+
+  # Reusing the already-constructed OpenAIClient avoids re-authenticating: the
+  # reranker unwraps it to the underlying AsyncOpenAI. Left without a model of
+  # its own, it falls back to its own small classifier default rather than
+  # forcing the main LLM model onto every rerank.
+  defp construct_cross_encoder(%{provider: :openai}, _genai_client, llm) do
+    {cross_encoder, _} =
+      Pythonx.eval(
+        """
+        from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
+        OpenAIRerankerClient(client=llm_client)
+        """,
+        %{"llm_client" => llm}
+      )
+
+    cross_encoder
   end
 
   defp do_warmup(state) do
