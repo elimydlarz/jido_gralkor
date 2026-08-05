@@ -64,7 +64,7 @@ defmodule Gralkor.Generalisation do
   end
 
   @doc """
-  Decodes a raw fact string (from a graphiti search result) into a
+  Decodes a stored episode body (from a graphiti episode search) into a
   `%Generalisation{}` struct and the plain content.
 
   Returns `{:ok, %Generalisation{}, plain_content}` on success,
