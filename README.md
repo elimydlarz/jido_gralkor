@@ -535,7 +535,7 @@ Maintainers can exercise the interpretation prompt against a real low-cost model
 
 The Jido glue:
 
-- `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (planting session, agent, selected Lens, and search targets) and `ai.request.completed` / `ai.request.failed` (capture).
+- `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (planting session, agent, selected Lens, and Lenses to search) and `ai.request.completed` / `ai.request.failed` (capture).
 - `JidoGralkor.ReAct` — `maybe_force_memory_search/2` helper. Folds `tool_choice: %{type: "function", function: %{name: "memory_search"}}` into ReAct overrides on iteration 1; passes through unchanged on iterations 2+.
 - `JidoGralkor.Canonical` — normalises a Jido/ReAct turn into the canonical `[%Gralkor.Message{role, content}]` shape.
 - `JidoGralkor.Lifecycle` — `Jido.AgentServer.Lifecycle` impl whose sole job is the death-triggered flush.
