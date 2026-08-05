@@ -111,58 +111,41 @@ defmodule Gralkor.Client do
   def search(%Search{
         operator_id: operator_id,
         query: query,
-        targets: targets,
+        lenses: lenses,
         max_results: max_results
       }) do
-    targets = Enum.uniq(["default" | targets])
-    validate_search_targets!(targets)
+    lenses = Enum.uniq(["default" | lenses])
+    Enum.each(lenses, &validate_search_lens!/1)
 
-    Enum.reduce_while(targets, {:ok, []}, fn target, {:ok, results} ->
-      case search_target(operator_id, target, query, max_results) do
-        {:ok, target_results} -> {:cont, {:ok, results ++ target_results}}
+    Enum.reduce_while(lenses, {:ok, []}, fn lens_name, {:ok, results} ->
+      case search_lens(operator_id, lens_name, query, max_results) do
+        {:ok, lens_results} -> {:cont, {:ok, results ++ lens_results}}
         {:error, _reason} = error -> {:halt, error}
       end
     end)
   end
 
-  defp validate_search_targets!([_target | _rest] = targets) do
-    registered_lenses!()
+  @spec validate_search_lens!(term()) :: :ok
+  defp validate_search_lens!("global"), do: :ok
 
-    Enum.each(targets, fn
-      "global" ->
-        :ok
-
-      target when is_binary(target) ->
-        case lens!(target) do
-          %{scope: :operator} ->
-            :ok
-
-          %{scope: :global} ->
-            raise ArgumentError,
-                  "global Lens #{inspect(target)} is provenance; search the reserved \"global\" target"
-        end
-
-      target ->
-        raise ArgumentError, "invalid search target #{inspect(target)}"
-    end)
+  defp validate_search_lens!(name) when is_binary(name) do
+    lens!(name)
+    :ok
   end
 
-  @spec search_target(String.t(), String.t(), String.t(), pos_integer()) ::
+  defp validate_search_lens!(name) do
+    raise ArgumentError, "invalid Lens #{inspect(name)}"
+  end
+
+  @spec search_lens(String.t(), String.t(), String.t(), pos_integer()) ::
           {:ok, [String.t()]} | {:error, term()}
-  defp search_target(operator_id, "global", query, max_results) do
+  defp search_lens(operator_id, "global", query, max_results) do
     Store.search(%Store{operator_id: operator_id, lens: :global}, query, max_results)
   end
 
-  defp search_target(operator_id, target, query, max_results) do
-    lens = lens!(target)
-
-    if lens.scope == :global do
-      raise ArgumentError,
-            "global Lens #{inspect(target)} is provenance; search the reserved \"global\" target"
-    end
-
+  defp search_lens(operator_id, name, query, max_results) do
     Store.search(
-      %Store{operator_id: operator_id, lens: lens},
+      %Store{operator_id: operator_id, lens: lens!(name)},
       query,
       max_results
     )
