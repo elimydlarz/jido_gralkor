@@ -851,13 +851,20 @@ defmodule Gralkor.GraphitiPool do
 
   defp providers(spec), do: [spec.llm.provider, spec.embedder.provider]
 
-  # Erlang's os:putenv keeps its own table and never reaches the C environment,
-  # so a credential set from Elixir — a consumer's runtime.exs, or the test
-  # helper loading .env — is invisible to the embedded interpreter's os.environ.
-  # Every constructor therefore takes its key as an explicit argument. Elixir has
-  # already proven it present in validate_credential!/1.
+  @doc """
+  The credential for `provider`, read on the Elixir side.
+
+  Erlang's `os:putenv` keeps its own table and never reaches the C environment,
+  so a credential set from Elixir — a consumer's `runtime.exs`, or the test
+  helper loading `.env` — is invisible to the embedded interpreter's
+  `os.environ`. Every client constructor therefore takes its key as an explicit
+  argument rather than letting the Python client read the variable itself.
+
+  Raises when the variable is absent; `validate_native_models!/2` has already
+  proven it present for every provider a role selects.
+  """
   @spec api_key!(atom()) :: String.t()
-  defp api_key!(provider), do: System.fetch_env!(Map.fetch!(@credential_env, provider))
+  def api_key!(provider), do: System.fetch_env!(Map.fetch!(@credential_env, provider))
 
   defp construct_genai_client do
     {client, _} =
