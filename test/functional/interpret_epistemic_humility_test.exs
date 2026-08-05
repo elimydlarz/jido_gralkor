@@ -100,7 +100,8 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
 
   defp interpret(query, facts) do
     Interpret.interpret_facts(
-      [Message.new("user", query)],
+      [],
+      query,
       facts,
       &openai_interpret/2,
       "Susu",
