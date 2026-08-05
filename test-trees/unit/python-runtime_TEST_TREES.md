@@ -16,6 +16,7 @@ when the Python runtime is initialised
     then it is materialised
   while an embedded connection is configured
     then any process whose arguments identify the embedded backend's bundled server is killed first, so a server orphaned by a hard virtual-machine exit cannot survive
+    and only the first initialisation in a virtual machine sweeps, so a later one cannot kill a server this virtual machine has already started
   while a remote connection is configured
     then no orphaned-server sweep runs
     and the embedded backend is never imported
