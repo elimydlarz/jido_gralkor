@@ -3,6 +3,10 @@ name = "jido_gralkor"
 version = "0.0.0"
 requires-python = "==3.12.*"
 dependencies = [
-  "graphiti-core[falkordb,google-genai,openai]>=0.29.2",
+  # No `openai` extra is named: graphiti-core requires `openai` unconditionally
+  # (Requires-Dist: openai>=1.91.0), so the OpenAI LLM, embedder, and reranker
+  # clients are importable from this manifest alone. Naming a non-existent extra
+  # makes uv warn on every resolve.
+  "graphiti-core[falkordb,google-genai]>=0.29.2",
   "falkordblite"
 ]
