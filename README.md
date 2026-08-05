@@ -404,7 +404,7 @@ config :jido_gralkor,
   ]
 ```
 
-`:operator` Lenses are local to the operator and isolated from every other local Lens. `:global` Lenses all write into the same shared global pool. Each global episode records the Lens it arrived through, but searches of `"global"` are intentionally unfiltered and return relevant memory from the whole pool.
+`:operator` Lenses are local to the operator and isolated from every other local Lens. `:global` Lenses all write into the same shared global group. Each global episode records the Lens it arrived through, but searches of that group are intentionally unfiltered and return relevant memory from the whole group.
 
 `Gralkor.Lens.Ingestion.Store` is the built-in straight-through process. A consumer can define any other ingestion process by implementing one callback:
 
