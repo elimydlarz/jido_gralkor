@@ -23,6 +23,34 @@ defmodule Gralkor.RecallTest do
     )
   end
 
+  describe "ex-recall > when a recall is requested" do
+    test "the query reaches interpretation, so relevance is judged against what was asked" do
+      ref = make_ref()
+      test_pid = self()
+
+      interpret_fn = fn prompt, _budget ->
+        send(test_pid, {ref, prompt})
+        {:ok, []}
+      end
+
+      _ =
+        Recall.recall(
+          "g",
+          "TestAgent",
+          "session-1",
+          "Where does Eli work?",
+          default_opts(
+            search_fn: ok_search(["- Eli works at Anthropic"]),
+            interpret_fn: interpret_fn,
+            turns_fn: turns_for([[Message.new("user", "unrelated earlier turn")]])
+          )
+        )
+
+      assert_receive {^ref, prompt}
+      assert prompt =~ "Where does Eli work?"
+    end
+  end
+
   describe "ex-recall > when no relevant facts are found" do
     test "memory_block body is 'No relevant memories found.' (search returned empty)" do
       assert {:ok, block} =
