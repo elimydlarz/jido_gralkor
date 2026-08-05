@@ -34,9 +34,9 @@ Two cooperating contexts live in this package: `Gralkor.*` owns the memory domai
 - `session_id` is the Jido thread id from `agent.state[:__thread__].id` — never minted by the plugin.
 - `agent_name` is required at mount; missing/blank raises `ArgumentError`.
 - When a committed turn produces a non-empty capture, `user_name` is read from `agent.state[:user_name]`; missing/blank raises `ArgumentError`.
-- First-turn-on-fresh-agent: no thread yet → `MemorySearch` short-circuits, capture is skipped, and Lens mounts still plant `agent_name`, `lens`, and `search_targets` without a session id.
-- A local Lens store partitions by operator and Lens name; every store write through a global Lens uses the shared global partition.
-- Public search always includes the requesting operator's reserved `"default"` destination first; a fully valid explicit selection adds local Lens destinations or reserved `"global"` before any query begins. Only `"global"` selects the global pool; a global Lens name is provenance.
+- First-turn-on-fresh-agent: no thread yet → `MemorySearch` short-circuits, capture is skipped, and Lens mounts still plant `agent_name`, `lens`, and `search_lenses` without a session id.
+- A local Lens store resolves its group from the operator id and Lens name; every store write through a global Lens uses the shared global group.
+- Public search always includes the requesting operator's reserved `"default"` Lens first and validates every selected Lens before any query begins. Naming a global Lens searches the whole shared global group, because that is the group its episodes live in; originating Lens is attribution, not a filter.
 - Lens definitions are application-owned and selected by name. The selected callback controls zero, one, or many bound-store writes; `Client.ingest/1` returns its result without an implicit fallback write.
 
 ## Decision Rationale
