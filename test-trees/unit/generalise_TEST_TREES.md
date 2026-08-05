@@ -25,8 +25,9 @@ when evaluation decides a candidate narrows an existing generalisation
   and the existing generalisation is left active
 
 when evaluation decides a candidate contradicts an existing generalisation
-  where a removal function is supplied
-    then the existing generalisation is removed by its id before the replacement is written
+  then the contradicting generalisation is persisted one level above the existing one
+  and it records the existing generalisation's id as generalised
+  and the existing generalisation is left in place, because the graph library owns episode identity and a generalisation's id cannot address its episode
 
 when evaluation decides to skip a candidate
   then no episode is added
