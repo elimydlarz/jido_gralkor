@@ -5,9 +5,10 @@ defmodule Gralkor.Client do
   Named Lens operations use `ingest/1` and `search/1`. Ingestion resolves the
   application-owned Lens definition and invokes its ingestion process with a
   Lens-bound store. Search always begins with the requesting operator's
-  reserved `"default"` destination, then combines explicitly selected
-  operator-local Lens destinations and the reserved `"global"` pool; a global
-  Lens name is provenance, not a search boundary.
+  reserved `"default"` Lens, then searches each additionally selected Lens.
+  Every Lens resolves to the group its episodes live in, so naming a global
+  Lens searches the whole shared `"global"` group; the originating Lens is
+  attribution, not a search boundary.
 
   The compatibility surface remains `recall/4`, `capture/5`, `flush/1`,
   `flush_and_await/2`, and `memory_add/3` or `/4`. Lens-aware capture uses
