@@ -515,25 +515,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Enum.uniq(shareds) == [shared]
     end
 
-    test "native Graphiti model support when both configured model specs use the Google provider then shared Python-client construction may proceed using their model ids" do
-      test_pid = self()
-      llm_model = %{provider: :google, id: "gemini-custom"}
-      embedder_model = %{provider: :google, id: "gemini-embedding-custom"}
-
-      %{pid: pid} =
-        start_pool(
-          llm_model: llm_model,
-          embedder_model: embedder_model,
-          construct_shared_clients: fn received_llm, received_embedder ->
-            send(test_pid, {:construct_shared, received_llm, received_embedder})
-            %{llm_client: nil, embedder: nil, cross_encoder: nil}
-          end
-        )
-
-      assert_receive {:construct_shared, ^llm_model, ^embedder_model}
-      assert Process.alive?(pid)
-    end
-
     test "while both configured model specs name a supported inference provider then client construction proceeds using the configured model ids" do
       test_pid = self()
 
