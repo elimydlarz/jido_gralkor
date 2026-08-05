@@ -3,7 +3,45 @@ defmodule Gralkor.PythonTest do
 
   alias Gralkor.Python
 
+  setup do
+    :persistent_term.erase({Python, :swept})
+    :ok
+  end
+
   describe "ex-python-runtime > orphan reap" do
+    test "a second initialisation in the same VM sweeps nothing, so a server this VM started survives" do
+      sweeps = :counters.new(1, [])
+
+      list_orphans = fn ->
+        :counters.add(sweeps, 1, 1)
+        [4321]
+      end
+
+      killed = :ets.new(:killed, [:public, :set])
+      kill_pid = fn pid -> :ets.insert(killed, {pid, true}) end
+
+      boot = fn ->
+        Python.init(
+          reap_orphans: true,
+          list_orphans: list_orphans,
+          kill_pid: kill_pid,
+          uv_init: fn -> :ok end,
+          smoke_import: fn -> :ok end,
+          install_loop: false
+        )
+      end
+
+      assert {:ok, _} = boot.()
+      assert :ets.lookup(killed, 4321) == [{4321, true}]
+
+      :ets.delete_all_objects(killed)
+
+      assert {:ok, _} = boot.()
+
+      assert :counters.get(sweeps, 1) == 1
+      assert :ets.lookup(killed, 4321) == []
+    end
+
     test "every redislite pid returned by the listing function is killed" do
       list_orphans = fn -> [1234, 5678] end
       killed = :ets.new(:killed, [:public, :set])
