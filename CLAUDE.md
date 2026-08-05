@@ -116,7 +116,6 @@ Functional tests describe application-visible behaviour and may use deterministi
 
 - `jido_memory_journey` round-trip and flush — recall surfaces the wrong fact, both tests returning the vacuum-job fact that belongs to the module's third test. Not stale storage: `setup_all` builds a fresh `System.tmp_dir!()` path per module and removes it on exit. It is semantic search quality under `text-embedding-3-small`, whose 1024 dims graphiti slices silently, where the suite was written against `gemini-embedding-2-preview`.
 - `generalise_journey` after-flush — distillation kept no generalisation, so the `_gen` group is empty.
-- `remote_falkordb_journey` — 3 invalid until `FALKORDB_TEST_HOST` is set; unrelated to the provider, it needs a running FalkorDB (`docker run -p 6380:6379 falkordb/falkordb`).
 
 Whether a stronger embedder, relaxed assertions, or keeping Google as the tested baseline is the right answer is an open decision about what these suites are meant to prove.
 
