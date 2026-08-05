@@ -11,7 +11,7 @@ defmodule Gralkor.LearningEntity do
   it, so `SearchFilters(node_labels: ["Learning"])` (ex-recall) reliably returns
   only learning nodes.
 
-  See `ex-learning-entity` in `TEST_TREES.md`.
+  See `test-trees/unit/learning-entity_TEST_TREES.md`.
   """
 
   @learning_name "Learning"

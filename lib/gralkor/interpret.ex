@@ -12,7 +12,7 @@ defmodule Gralkor.Interpret do
     * `interpret_facts/5` — call the LLM with that prompt and a structured-
       output schema; return the list of relevant facts the LLM selected.
 
-  See `ex-interpret` and `ex-interpret-context` in `gralkor/TEST_TREES.md`.
+  See `test-trees/unit/interpret_TEST_TREES.md`.
   """
 
   alias Gralkor.InterpretParseFailed

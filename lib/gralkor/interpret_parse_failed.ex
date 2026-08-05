@@ -9,7 +9,7 @@ defmodule Gralkor.InterpretParseFailed do
   a larger budget, or surface a typed error to the user) without catching
   every internal failure.
 
-  See `ex-interpret` in `gralkor/TEST_TREES.md`.
+  See `test-trees/unit/interpret_TEST_TREES.md`.
   """
 
   defexception [:message, :raw_response]

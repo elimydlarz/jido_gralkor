@@ -22,7 +22,7 @@ defmodule Gralkor.Python do
     3. **Smoke-import `graphiti_core`** through PythonX so any venv / import
        failure surfaces at boot rather than on the first real call.
 
-  See `ex-python-runtime` in `gralkor/TEST_TREES.md`.
+  See `test-trees/unit/python-runtime_TEST_TREES.md`.
   """
 
   use GenServer

@@ -6,7 +6,7 @@ defmodule Gralkor.RemoteFalkorDbJourneyTest do
   `jido_memory_journey_test.exs` but proves the `{:remote, kw}` branch
   of `Gralkor.GraphitiPool.default_construct_falkor_db/1`.
 
-  Reifies `ex-remote-falkordb-journey` in `gralkor/TEST_TREES.md`.
+  Reifies `test-trees/journey/remote-falkordb-journey_TEST_TREES.md`.
 
   Requires `DEEPSEEK_API_KEY` (for Elixir-side req_llm calls) and
   `GOOGLE_API_KEY` (for graphiti's Python-side Gemini clients), plus

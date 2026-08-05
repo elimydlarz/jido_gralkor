@@ -14,7 +14,7 @@ defmodule Gralkor.GraphitiPool do
   Elixir callers parallelise naturally. Serialising calls through a single
   GenServer would throw that away.
 
-  See `ex-graphiti-pool` in `gralkor/TEST_TREES.md`.
+  See `test-trees/unit/graphiti-pool_TEST_TREES.md`.
   """
 
   use GenServer

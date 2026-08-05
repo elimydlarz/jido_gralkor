@@ -9,7 +9,7 @@ defmodule Gralkor.Distill do
   `Gralkor.AgentLearning` episode (see `Gralkor.Learn`), and non-ERL turns drop
   it. Rendering is pure — there is no LLM call.
 
-  See `ex-format-transcript` in `TEST_TREES.md`.
+  See `test-trees/unit/format-transcript_TEST_TREES.md`.
   """
 
   alias Gralkor.Message

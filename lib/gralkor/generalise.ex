@@ -8,7 +8,7 @@ defmodule Gralkor.Generalise do
   call, search, add_episode, remove_episode) are passed as functions in
   `opts`. Production wiring lives in `Gralkor.Client.Native`.
 
-  See `ex-generalise` in `TEST_TREES.md`.
+  See `test-trees/unit/generalise_TEST_TREES.md`.
   """
 
   require Logger

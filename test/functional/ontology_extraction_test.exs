@@ -6,7 +6,7 @@ defmodule Gralkor.OntologyExtractionTest do
   time, asserting against the actual node/edge labels in the graph via
   raw Cypher.
 
-  Reifies the `ontology-extraction` tree in `TEST_TREES.md`.
+  Reifies `test-trees/functional/ontology-extraction_TEST_TREES.md`.
   """
 
   use ExUnit.Case, async: false

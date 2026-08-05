@@ -9,7 +9,7 @@ defmodule Gralkor.CaptureBuffer do
   configured backoff (default 1s/2s/4s); contract errors (4xx) and
   upstream-LLM errors drop without retry.
 
-  See `ex-capture-buffer` in `gralkor/TEST_TREES.md`.
+  See `test-trees/unit/capture-buffer_TEST_TREES.md`.
   """
 
   use GenServer

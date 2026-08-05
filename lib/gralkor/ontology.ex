@@ -37,7 +37,7 @@ defmodule Gralkor.Ontology do
   compile time, so such a field raises `EntityTypeValidationError` from
   Python on the first write through the owning Lens.
 
-  See `ex-ontology` and `ex-ontology-payload` in `TEST_TREES.md`.
+  See `test-trees/unit/gralkor-ontology_TEST_TREES.md`.
   """
 
   @allowed_entities [:strict, :open]

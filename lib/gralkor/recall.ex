@@ -7,7 +7,7 @@ defmodule Gralkor.Recall do
   source) are passed as functions in `opts`. Production wiring lives in
   `Gralkor.Client.Native`.
 
-  See `ex-recall` in `gralkor/TEST_TREES.md`.
+  See `test-trees/unit/recall_TEST_TREES.md`.
   """
 
   require Logger

@@ -18,7 +18,7 @@ defmodule Gralkor.Generalisation do
   The prefix is part of the text that graphiti embeds, so generalisations are
   searchable by their content while remaining parseable on read.
 
-  See `ex-generalisation` in `TEST_TREES.md`.
+  See `test-trees/unit/generalisation_TEST_TREES.md`.
   """
 
   alias Gralkor.GeneralisationParseFailed

@@ -10,7 +10,7 @@ defmodule Gralkor.Learn do
   is a single node carrying the problem kind, the approach, whether it
   succeeded, and the lesson.
 
-  See `ex-learn` in `TEST_TREES.md`.
+  See `test-trees/unit/learn_TEST_TREES.md`.
   """
 
   alias Gralkor.AgentLearning

@@ -13,7 +13,7 @@ defmodule Gralkor.Format do
   Timestamp normalisation matches the server's `pipelines/formatting.py` so
   consumers see identical fact text from either stack.
 
-  See `ex-format-fact` in `gralkor/TEST_TREES.md`.
+  See `test-trees/unit/format-fact_TEST_TREES.md`.
   """
 
   @fractional_seconds ~r/\.\d+/

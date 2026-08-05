@@ -4,7 +4,7 @@ defmodule Gralkor.Client.Native do
   to graphiti via `Gralkor.GraphitiPool` (Pythonx-backed) and to the LLM via
   `req_llm` (Elixir-side, used by `Gralkor.Distill` and `Gralkor.Interpret`).
 
-  See `ex-client-native` in `gralkor/TEST_TREES.md`.
+  See `test-trees/unit/gralkor-client-native_TEST_TREES.md`.
   """
 
   @behaviour Gralkor.Client

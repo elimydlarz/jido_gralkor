@@ -10,7 +10,7 @@ defmodule Gralkor.AgentLearning do
   surfaces it, with the success bias living in the text. Any domain entities the
   `lesson` mentions are linked to the consumer's `Learning` node by graphiti.
 
-  See `ex-agent-learning` in `TEST_TREES.md`.
+  See `test-trees/unit/agent-learning_TEST_TREES.md`.
   """
 
   @enforce_keys [:problem_kind, :approach, :success, :lesson]

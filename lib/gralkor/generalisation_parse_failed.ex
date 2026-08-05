@@ -6,7 +6,7 @@ defmodule Gralkor.GeneralisationParseFailed do
   Distinct from `RuntimeError` so callers can distinguish "this graphiti fact
   is not a generalisation" (skip) from "the data is corrupted" (log and raise).
 
-  See `ex-generalisation` in `TEST_TREES.md`.
+  See `test-trees/unit/generalisation_TEST_TREES.md`.
   """
 
   defexception [:message, :raw]
