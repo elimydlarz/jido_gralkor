@@ -1,7 +1,7 @@
 defmodule JidoGralkor.Actions.MemoryBuildCommunities do
   @moduledoc """
   Admin tool that runs Graphiti's community detection over this agent's
-  memory partition.
+  memory group.
 
   The `:description` is deliberately worded as a hard "DO NOT CALL" to
   the LLM. This is expensive operator-maintenance — calling it unprompted
@@ -18,7 +18,7 @@ defmodule JidoGralkor.Actions.MemoryBuildCommunities do
     description:
       "ADMIN — DO NOT CALL unless the user has explicitly asked you to build Gralkor communities. " <>
         "This is an expensive operator-maintenance action; calling it unprompted wastes time. " <>
-        "Runs Graphiti community detection over this agent's memory partition.",
+        "Runs Graphiti community detection over this agent's memory group.",
     schema: []
 
   alias Gralkor.Client
