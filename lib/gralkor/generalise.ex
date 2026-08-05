@@ -208,7 +208,7 @@ defmodule Gralkor.Generalise do
     end
   end
 
-  defp persist_decisions(decisions, all_existing, add_fn, remove_fn, gen_group_id, ontology) do
+  defp persist_decisions(decisions, all_existing, add_fn, gen_group_id, ontology) do
     # Index existing by id for fast lookup
     existing_by_id = Map.new(all_existing, fn g -> {g.id, g} end)
 
