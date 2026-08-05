@@ -5,8 +5,8 @@ defmodule Gralkor.Generalise do
   evaluate relationships, and persist the strongest.
 
   Pure orchestration — all dependencies (hypothesise LLM call, evaluate LLM
-  call, search, add_episode, remove_episode) are passed as functions in
-  `opts`. Production wiring lives in `Gralkor.Client.Native`.
+  call, search, add_episode) are passed as functions in `opts`. Production
+  wiring lives in `Gralkor.Client.Native`.
 
   See `test-trees/unit/generalise_TEST_TREES.md`.
   """
