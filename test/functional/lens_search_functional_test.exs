@@ -85,7 +85,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
   end
 
   describe "when a caller searches memory" do
-    test "then the requesting operator's reserved `default` destination is always searched first" do
+    test "then the requesting operator's reserved `default` Lens is always searched first" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
@@ -132,8 +132,8 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
-  describe "where a caller includes the reserved `default` target explicitly" do
-    test "then the requesting operator's default destination is searched only once" do
+  describe "where a caller includes the reserved `default` Lens explicitly" do
+    test "then the requesting operator's default group is searched only once" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
@@ -151,8 +151,8 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
-  describe "where a caller supplies no additional search targets" do
-    test "then only the requesting operator's reserved `default` destination is searched" do
+  describe "where a caller supplies no additional Lenses to search" do
+    test "then only the requesting operator's reserved `default` Lens is searched" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
@@ -169,8 +169,8 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
-  describe "where a caller supplies additional operator-local Lens or reserved `global` targets" do
-    test "then every additional target is searched after the requesting operator's reserved `default` destination" do
+  describe "where a caller supplies additional Lenses to search" do
+    test "then every additional Lens is searched after the requesting operator's reserved `default` Lens" do
       for {lens, content} <- [
             {"default", "default memory"},
             {"observations", "observation memory"},
@@ -193,7 +193,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                })
     end
 
-    test "and additional results retain their configured target order" do
+    test "and additional results retain their configured Lens order" do
       for {lens, content} <- [
             {"observations", "observation memory"},
             {"decisions", "decision memory"}
@@ -215,7 +215,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                })
     end
 
-    test "and repeated matches from different destinations remain in the response" do
+    test "and repeated matches from different groups remain in the response" do
       for lens <- ["observations", "decisions"] do
         assert :ok =
                  Client.ingest(%Ingest{
@@ -234,7 +234,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                })
     end
 
-    test "and the same maximum result count applies independently to the default and every additional destination" do
+    test "and the same maximum result count applies independently to the default and every additional Lens" do
       for {lens, content} <- [
             {"default", "default one"},
             {"default", "default two"},
@@ -283,7 +283,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
-  describe "where the selection contains the reserved `global` target" do
+  describe "where the selection contains the reserved `global` Lens" do
     test "then every relevant globally stored episode may contribute" do
       for {lens, content} <- [
             {"published-observations", "published observation"},
@@ -371,7 +371,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
-  describe "if search supplies an additional target that is neither a registered operator-local Lens nor reserved `default` or `global`" do
+  describe "if search supplies an additional Lens that is neither registered nor reserved" do
     test "then search fails before any memory query is started" do
       Application.put_env(:jido_gralkor, :lens_storage, UnexpectedSearchStorage)
 
@@ -396,7 +396,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
       end
     end
 
-    test "and the error identifies the invalid target" do
+    test "and the error identifies the unknown Lens" do
       assert_raise ArgumentError, ~r/missing/, fn ->
         Client.search(%Search{
           operator_id: "operator-one",
