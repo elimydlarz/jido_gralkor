@@ -441,7 +441,7 @@ The plugin mount chooses how an agent uses the registered Lenses:
 ```
 
 - `default_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
-- `search_targets` is an optional list of additional local Lens names and/or the reserved `"global"` target. Every Lens-aware search always includes the requesting operator's reserved `"default"` destination first; configured targets are additive. Omitting the option or using `[]` therefore searches only `"default"`. Naming `"default"` explicitly does not search it twice. A named global Lens is ingestion provenance, not a search filter, so it cannot be used as a target.
+- `search_lenses` is an optional list of additional registered Lens names and/or the reserved `"global"` Lens. Every Lens-aware search always includes the requesting operator's reserved `"default"` Lens first; configured Lenses are additive. Omitting the option or using `[]` therefore searches only `"default"`. Naming `"default"` explicitly does not search it twice. Naming a global Lens searches the whole shared `"global"` group, because that is the group its episodes live in.
 - `generalise_lens` is optional. It submits each flushed transcript to a second Lens independently of the primary capture Lens.
 
 Consumers that ingest or search outside an agent call the same public boundary directly:
