@@ -1,7 +1,8 @@
 Unit: interpret (src: lib/gralkor/interpret.ex; unit: test/gralkor/interpret_test.exs)
 
-when facts are interpreted against a conversation
+when facts are interpreted for a request against a conversation
   then the prompt sent to the model carries the labelled conversation messages
+  and the prompt carries the request the facts were recalled for, so relevance is judged against what was asked even when the conversation never carried it
   and the prompt carries the formatted facts
   and the prompt frames retrieved facts as understandings extracted from source material rather than proven claims
   and the prompt asks for the source context, when available, to be mentioned only where natural
@@ -37,12 +38,12 @@ when no output token budget is supplied
 if the output token budget is zero, negative, or not an integer
   then an ArgumentError is raised
 
-when the interpretation context is built from messages, facts, and an agent name
+when the interpretation context is built from messages, a request, facts, and an agent name
   then user messages render as "User: {content}"
   and assistant messages render as "{agent_name}: {content}"
   and behaviour messages render as "{agent_name}: (behaviour: {content})"
   and messages whose content is empty once trimmed are dropped
-  and the context reads "Conversation context:\n{messages}\n\nMemory facts to interpret:\n{facts}"
+  and the context reads "Conversation context:\n{messages}\n\nRequest to answer:\n{query}\n\nMemory facts to interpret:\n{facts}"
   and message content is neither inspected nor mutated beyond whitespace trimming
   if the agent name is missing or blank
     then an ArgumentError is raised
@@ -51,4 +52,4 @@ when the interpretation context is built from messages, facts, and an agent name
     but the newest messages that fit are retained
   if even a single message on its own exceeds the character budget
     then the conversation context is left empty
-    but the memory facts are still included
+    but the request and the memory facts are still included
