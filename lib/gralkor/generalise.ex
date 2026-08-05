@@ -198,7 +198,7 @@ defmodule Gralkor.Generalise do
           if test_mode?() and decisions != [],
             do: Logger.info("[gralkor] [test] generalise decisions: #{inspect(decisions)}")
 
-          persist_decisions(decisions, all_existing, add_fn, remove_fn, gen_group_id, ontology)
+          persist_decisions(decisions, all_existing, add_fn, gen_group_id, ontology)
           :ok
 
         {:error, reason} ->
