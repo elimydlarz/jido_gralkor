@@ -3,6 +3,6 @@ name = "jido_gralkor"
 version = "0.0.0"
 requires-python = "==3.12.*"
 dependencies = [
-  "graphiti-core[falkordb,google-genai]>=0.29.2",
+  "graphiti-core[falkordb,google-genai,openai]>=0.29.2",
   "falkordblite"
 ]
