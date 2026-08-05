@@ -153,7 +153,9 @@ defmodule Gralkor.GeneraliseJourneyTest do
 
       :ok = Client.impl().flush(session_id)
 
-      # Wait for generalise to complete and graphiti to re-index
+      assert_receive {:generalisation_written, :ok}, 120_000
+
+      # Wait for graphiti to re-index the written generalisation
       raw = search_until(gen_group_id, "dark mode", 1, 40_000)
 
       assert length(raw) >= 1,
