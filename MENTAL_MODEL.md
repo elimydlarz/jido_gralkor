@@ -20,8 +20,8 @@ This repository is the canonical development and distribution home for Jido-firs
 - *user_name* — the human's name per turn; stashed on `agent.state[:user_name]` by the consumer.
 - *forced recall* — the iter-1 `tool_choice` override that pins `memory_search` on the first ReAct iteration.
 - *operator* — the application identity whose local memory is isolated; it is not a Lens and does not determine global visibility.
-- *Lens* — a named ingestion channel with an ontology, an ingestion process, and `:operator` or `:global` scope; reserved `default` is the operator's baseline memory destination.
-- *global pool* — the one shared destination used by every global Lens. Global episodes retain their originating Lens, while global search is deliberately unfiltered.
+- *Lens* — a named ingestion and search channel with an ontology, an ingestion process, and `:operator` or `:global` scope; reserved `default` is the operator's baseline Lens and reserved `global` names the shared group.
+- *group* — where episodes are stored; graphiti's `group_id`. Every Lens resolves to one: an operator Lens to a group derived from the operator id and Lens name, every global Lens to the one shared `global` group, which is searched unfiltered by originating Lens.
 - *role* — one of the two inference slots, `llm` or `embedder`, each selecting its provider from its own model spec. The cross-encoder has no spec and follows the llm role; a credential is required only for a provider some role selects.
 
 ## Bounded Contexts
