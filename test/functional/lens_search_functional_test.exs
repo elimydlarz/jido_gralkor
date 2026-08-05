@@ -106,7 +106,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
-                 targets: ["observations"]
+                 lenses: ["observations"]
                })
     end
 
@@ -146,7 +146,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
-                 targets: ["default"]
+                 lenses: ["default"]
                })
     end
   end
@@ -189,7 +189,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
-                 targets: ["decisions", "observations"]
+                 lenses: ["decisions", "observations"]
                })
     end
 
@@ -211,7 +211,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
-                 targets: ["observations", "decisions"]
+                 lenses: ["observations", "decisions"]
                })
     end
 
@@ -230,7 +230,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
-                 targets: ["observations", "decisions"]
+                 lenses: ["observations", "decisions"]
                })
     end
 
@@ -254,7 +254,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
-                 targets: ["observations"],
+                 lenses: ["observations"],
                  max_results: 1
                })
     end
@@ -278,7 +278,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
-                 targets: ["observations"]
+                 lenses: ["observations"]
                })
     end
   end
@@ -302,7 +302,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "published",
-                 targets: ["global"]
+                 lenses: ["global"]
                })
     end
 
@@ -324,7 +324,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "published",
-                 targets: ["global"]
+                 lenses: ["global"]
                })
     end
   end
@@ -335,7 +335,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
         Client.search(%Search{
           operator_id: "operator-one",
           query: "published",
-          targets: ["published-observations"]
+          lenses: ["published-observations"]
         })
       end
     end
@@ -353,7 +353,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "published",
-                 targets: ["global"]
+                 lenses: ["global"]
                })
     end
   end
@@ -366,7 +366,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
-                 targets: ["observations"]
+                 lenses: ["observations"]
                })
     end
   end
@@ -379,7 +379,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
         Client.search(%Search{
           operator_id: "operator-one",
           query: "memory",
-          targets: ["missing"]
+          lenses: ["missing"]
         })
       end
     end
@@ -391,7 +391,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
         Client.search(%Search{
           operator_id: "operator-one",
           query: "memory",
-          targets: ["observations", "missing"]
+          lenses: ["observations", "missing"]
         })
       end
     end
@@ -401,7 +401,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
         Client.search(%Search{
           operator_id: "operator-one",
           query: "memory",
-          targets: ["missing"]
+          lenses: ["missing"]
         })
       end
     end

@@ -270,7 +270,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
     Client.search(%Search{
       operator_id: operator_id,
       query: "launch",
-      targets: targets
+      lenses: targets
     })
   end
 
