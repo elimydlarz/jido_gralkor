@@ -166,7 +166,7 @@ config :jido_gralkor,
 | --- | --- | --- | --- |
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
 | `:default_lens` | no | unset (implicit-default mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. |
-| `:search_targets` | no | `[]` | Additional local Lens names and/or the reserved `"global"` target. The operator's reserved `"default"` destination is always searched first; naming it explicitly doesn't search it twice. A global Lens's own name is provenance, not a target, and raises. |
+| `:search_lenses` | no | `[]` | Additional registered Lens names and/or the reserved `"global"` Lens. The operator's reserved `"default"` Lens is always searched first; naming it explicitly doesn't search it twice. |
 | `:generalise_lens` | no | unset | Second registered Lens that independently receives each flushed transcript. Must differ from `:default_lens`. |
 
 Per-turn, `tool_context[:lens]` overrides `:default_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
