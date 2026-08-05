@@ -268,7 +268,7 @@ defmodule JidoGralkor.Plugin do
 
   defp lens_context(agent) do
     case plugin_state(agent) do
-      %{default_lens: lens, search_targets: targets} -> %{lens: lens, search_targets: targets}
+      %{default_lens: lens, search_lenses: lenses} -> %{lens: lens, search_lenses: lenses}
       _ -> %{}
     end
   end
