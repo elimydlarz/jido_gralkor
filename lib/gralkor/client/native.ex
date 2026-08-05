@@ -322,8 +322,8 @@ defmodule Gralkor.Client.Native do
   def generalise_evaluate_callback, do: evaluate_gen_fn()
 
   defp search_gen_fn do
-    fn partition, query, max_results ->
-      case GraphitiPool.search(partition, query, max_results) do
+    fn gen_group_id, query, max_results ->
+      case GraphitiPool.search(gen_group_id, query, max_results) do
         {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Map.get(&1, :fact))}
         {:error, _} = err -> err
       end

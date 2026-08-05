@@ -142,7 +142,7 @@ defmodule Gralkor.Generalise do
          evaluate_fn,
          add_fn,
          remove_fn,
-         partition,
+         gen_group_id,
          max_results,
          ontology
        ) do
@@ -160,7 +160,7 @@ defmodule Gralkor.Generalise do
         |> Enum.flat_map(fn {h, idx} ->
           query = Map.get(h, :content, "")
 
-          case search_fn.(partition, query, max_results) do
+          case search_fn.(gen_group_id, query, max_results) do
             {:ok, raw} ->
               Enum.reduce(raw, [], fn fact, acc ->
                 case Generalisation.decode(fact) do
@@ -202,7 +202,7 @@ defmodule Gralkor.Generalise do
           if test_mode?() and decisions != [],
             do: Logger.info("[gralkor] [test] generalise decisions: #{inspect(decisions)}")
 
-          persist_decisions(decisions, all_existing, add_fn, remove_fn, partition, ontology)
+          persist_decisions(decisions, all_existing, add_fn, remove_fn, gen_group_id, ontology)
           :ok
 
         {:error, reason} ->
@@ -212,7 +212,7 @@ defmodule Gralkor.Generalise do
     end
   end
 
-  defp persist_decisions(decisions, all_existing, add_fn, remove_fn, partition, ontology) do
+  defp persist_decisions(decisions, all_existing, add_fn, remove_fn, gen_group_id, ontology) do
     # Index existing by id for fast lookup
     existing_by_id = Map.new(all_existing, fn g -> {g.id, g} end)
 
@@ -250,10 +250,10 @@ defmodule Gralkor.Generalise do
 
           if action == :contradicts && existing_id && remove_fn do
             Logger.info("[gralkor] generalise contradict — removing #{existing_id}")
-            remove_fn.(partition, existing_id)
+            remove_fn.(gen_group_id, existing_id)
           end
 
-          case add_fn.(partition, body, "generalisation", ontology, uuid: gen.id) do
+          case add_fn.(gen_group_id, body, "generalisation", ontology, uuid: gen.id) do
             :ok ->
               Logger.info(
                 "[gralkor] generalise #{action} — saved (id:#{gen.id} level:#{level} confidence:#{confidence})"
