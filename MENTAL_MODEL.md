@@ -10,7 +10,7 @@ This repository is the canonical development and distribution home for Jido-firs
 - **`JidoGralkor.Canonical.to_messages/3`** — normalises a Jido/ReAct turn into Gralkor's `[%Message{role, content}]` shape.
 - **`JidoGralkor.Lifecycle`** — graceful-shutdown flush via `Gralkor.Client.flush/1`.
 - **`JidoGralkor.ContextRotator`** — synchronous rotate-on-demand: flush, retain recent and in-flight entries, then install a fresh thread.
-- **`Gralkor.Client` / `Gralkor.Ingest` / `Gralkor.Search`** — the callable Lens boundary and its request values. A registered `Gralkor.Lens` owns its name, ontology, operator-or-global scope, and ingestion module; `Gralkor.Lens.Store` owns physical partitioning and provenance.
+- **`Gralkor.Client` / `Gralkor.Ingest` / `Gralkor.Search`** — the callable Lens boundary and its request values. A registered `Gralkor.Lens` owns its name, ontology, operator-or-global scope, and ingestion module; `Gralkor.Lens.Store` owns group resolution and provenance.
 
 ## Ubiquitous Language
 
