@@ -765,16 +765,17 @@ defmodule Gralkor.RecallTest do
               def __init__(self):
                   self.recorded = {}
 
-              # main + gen recall use edge search
+              # the main recall search uses edge search
               async def search(self, query, num_results=10, search_filter=None):
                   return []
 
-              # the learning search uses NODE search (search_nodes -> g.search_)
+              # the generalisation and learning searches use NODE search
+              # (search_nodes -> g.search_), so every call is recorded
               async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                  self.recorded['node_labels'] = (
+                  self.recorded.setdefault('node_label_calls', []).append(
                       list(search_filter.node_labels)
                       if search_filter is not None and search_filter.node_labels
-                      else None
+                      else []
                   )
                   return _Results()
 
@@ -819,9 +820,9 @@ defmodule Gralkor.RecallTest do
       refute String.contains?(logs, "learning search failed")
 
       # And it ran as a NODE search filtered to node_labels: ["Learning"] — the
-      # fake graphiti recorded the labels its search_ received.
+      # fake graphiti recorded the labels of every search_ it received.
       {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      assert (rec |> Pythonx.decode())["node_labels"] == ["Learning"]
+      assert ["Learning"] in (rec |> Pythonx.decode())["node_label_calls"]
     end
   end
 end
