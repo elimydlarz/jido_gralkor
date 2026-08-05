@@ -10,7 +10,7 @@ defmodule JidoGralkor.Actions.MemoryBuildCommunities do
 
   `group_id` is derived from `context[:agent_id]` via
   `Gralkor.Client.sanitize_group_id/1` — the community build is scoped to
-  this agent's graph partition.
+  this agent's group.
   """
 
   use Jido.Action,
