@@ -36,14 +36,35 @@ export GRALKOR_DATA_DIR=/var/lib/<your-app>/gralkor   # writable
 export GOOGLE_API_KEY=...
 ```
 
-Native Graphiti currently supports Google for both its LLM and embedder. The
-defaults are `google:gemini-3.1-flash-lite` and
-`google:gemini-embedding-2-preview`; optional `GRALKOR_LLM_MODEL` and
-`GRALKOR_EMBEDDER_MODEL` overrides must therefore also use the `google:`
-provider prefix. Startup fails before constructing Python clients when either
-override names another provider. Direct ReqLLM calls may still use an explicit
-non-Google model—for example, the focused interpretation functional suite uses
-OpenAI without starting Graphiti.
+Native Graphiti supports `google:` and `openai:` models, and each of its two
+roles picks its provider independently. `GRALKOR_LLM_MODEL` selects the LLM
+(default `google:gemini-3.1-flash-lite`) and `GRALKOR_EMBEDDER_MODEL` selects
+the embedder (default `google:gemini-embedding-2-preview`). The
+cross-encoder/reranker has no spec of its own and follows the LLM role's
+provider.
+
+Mixing the two roles is supported. An OpenAI LLM with a Google embedder builds
+an OpenAI LLM client, an OpenAI reranker, and a Google embedder:
+
+```bash
+export GRALKOR_LLM_MODEL=openai:gpt-4.1-mini
+export GRALKOR_EMBEDDER_MODEL=google:gemini-embedding-2-preview
+export OPENAI_API_KEY=...   # the llm role selected openai
+export GOOGLE_API_KEY=...   # the embedder role selected google
+```
+
+Set only the credential(s) for the providers your two specs actually select: an
+all-Google pair needs `GOOGLE_API_KEY` alone, an all-OpenAI pair needs
+`OPENAI_API_KEY` alone. Startup raises `ArgumentError` before any inference
+client is constructed when a spec names a provider outside `:openai` / `:google`
+(naming both specs and the supported providers), or when the credential for a
+provider a spec selects is missing or blank (naming the variable and the role,
+`"llm"` or `"embedder"`). Nothing checks that an LLM and an embedder from
+different providers are otherwise compatible — embedding dimensions and the like
+are yours to keep consistent.
+
+Direct ReqLLM calls are provider-portable regardless — for example, the focused
+interpretation functional suite uses OpenAI without starting Graphiti.
 
 ```elixir
 # Remote — point at a managed FalkorDB. config/runtime.exs
