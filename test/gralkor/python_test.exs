@@ -177,7 +177,7 @@ defmodule Gralkor.PythonTest do
 
     test "spawns a fake-argv process, reaps via the default OS plumbing, confirms it's gone" do
       # `exec -a NAME ...` lets us set argv[0] without owning that path on disk
-      # (no need for a real `redislite/bin/redis-server` binary). `pgrep -af`
+      # (no need for a real `redislite/bin/redis-server` binary). `pgrep -f`
       # matches against the full command line, including argv[0].
       port =
         Port.open(
@@ -191,7 +191,7 @@ defmodule Gralkor.PythonTest do
       # Give bash a moment to exec into sleep with the spoofed argv.
       Process.sleep(200)
 
-      # Default plumbing: list via `pgrep -af`, kill via `kill -KILL`.
+      # Default plumbing: list via `pgrep -f`, kill via `kill -KILL`.
       pids = list_redislite_pids()
       assert pids != [], "expected pgrep to find at least one fake redislite process"
 
