@@ -798,7 +798,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "while both configured model specs name a supported inference provider, when each provider's credential is handed to its client" do
+  describe "when a provider's credential is handed to its client" do
     setup do
       previous = %{
         "GOOGLE_API_KEY" => System.get_env("GOOGLE_API_KEY"),
