@@ -555,7 +555,7 @@ The embedded Gralkor adapter (under `lib/gralkor/`):
 - `Gralkor.Lens.Ingestion.Store` / `Generalise` — built-in straight-through and generalising ingestion processes.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
 - `Gralkor.Generalise` — the retained legacy `_gen` hypothesise → evaluate → persist pipeline.
-- `Gralkor.Generalisation` — struct and wire format (`GEN|v1|{json}\ncontent`) for storing generalisations as graphiti episodes with controlled UUIDs (enabling update via re-extraction and delete via `remove_episode`).
+- `Gralkor.Generalisation` — struct and wire format (`GEN|v1|{json}\ncontent`) for storing generalisations as graphiti episodes, carrying each generalisation's own id and the ids it generalises inside the episode body.
 - `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Message`, `Gralkor.InterpretParseFailed`, `Gralkor.GeneralisationParseFailed` — the embedded pipelines (capture buffer, distill, interpret, recall, generalise) that drive Graphiti.
 
 The behavioural contract lives in [`test-trees/`](https://github.com/elimydlarz/jido_gralkor/tree/main/test-trees). Functional trees describe each application-visible feature, and the Journey tree describes the broad whole-application workflow. [`CLAUDE.md`](https://github.com/elimydlarz/jido_gralkor/blob/main/CLAUDE.md) carries the maintainer-facing mental model and project guidance.
