@@ -22,7 +22,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
   end
 
   describe "when an operator-local or global Lens store adds episodes" do
-    test "then each episode remains in insertion order within only its selected Lens destination" do
+    test "then each episode remains in insertion order within only its selected Lens group" do
       observations = local_store("operator-one", "observations")
       decisions = local_store("operator-one", "decisions")
       global = global_store("published-observations")
@@ -60,7 +60,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
   end
 
   describe "when an operator-local or global Lens store is searched with a maximum result count" do
-    test "then no more than that count is returned from the selected destination" do
+    test "then no more than that count is returned from the selected group" do
       observations = local_store("operator-one", "observations")
 
       Enum.each(["first", "second", "third"], fn content ->

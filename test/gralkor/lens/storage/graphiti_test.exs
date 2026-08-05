@@ -140,7 +140,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
         }
       }
 
-      add_episode_fn = fn _destination, _content, _source_description, _ontology, _opts ->
+      add_episode_fn = fn _group_id, _content, _source_description, _ontology, _opts ->
         {:error, :graph_unavailable}
       end
 
@@ -208,7 +208,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
         }
       }
 
-      search_fn = fn _destination, _query, _max_results ->
+      search_fn = fn _group_id, _query, _max_results ->
         {:error, :graph_unavailable}
       end
 
