@@ -115,17 +115,6 @@ defmodule Gralkor.Ontology do
         "Gralkor.Ontology: `entity` requires an alias (e.g. `entity User, \"…\" do … end`); got #{Macro.to_string(other)}"
   end
 
-  @doc false
-  def __validate_entity_description__(name, description) do
-    unless is_nil(description) or is_binary(description) do
-      raise CompileError,
-        description:
-          "Gralkor.Ontology: entity #{name} description must be a string, got #{inspect(description)}"
-    end
-
-    :ok
-  end
-
   defmacro field(name, type, opts \\ []) when is_atom(name) and is_atom(type) do
     unless type in @allowed_field_types do
       raise CompileError,
