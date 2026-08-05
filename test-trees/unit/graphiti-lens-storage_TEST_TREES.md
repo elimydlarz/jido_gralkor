@@ -19,7 +19,7 @@ when a global Lens store adds an episode
   then graph add receives the fixed global group
   and the episode source description identifies the originating Lens in the same graph add
 
-when the global pool is searched
+when the reserved `global` Lens is searched
   then graph search receives the fixed global group
   and no originating-Lens filter is supplied
 
