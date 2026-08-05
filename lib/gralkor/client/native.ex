@@ -163,8 +163,7 @@ defmodule Gralkor.Client.Native do
       ontology: Config.ontology(),
       add_episode_fn: fn group_id, content, source, ontology, opts ->
         GraphitiPool.add_episode(Gralkor.GraphitiPool, group_id, content, source, ontology, opts)
-      end,
-      remove_episode_fn: &GraphitiPool.remove_episode/2
+      end
     ]
 
     Generalise.generalise(group_id, transcript, opts)
