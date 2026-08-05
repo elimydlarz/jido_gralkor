@@ -329,27 +329,29 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
-  describe "where a global Lens name identifies an episode's origin" do
-    test "then that name remains attribution rather than a search boundary" do
-      assert_raise ArgumentError, ~r/provenance/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "published",
-          lenses: ["published-observations"]
-        })
-      end
+  describe "where the selection names a registered global Lens" do
+    test "then its group is the shared global group, so the whole global group is searched" do
+      publish_global_episodes()
+
+      assert {:ok, ["published observation", "published decision"]} =
+               Client.search(%Search{
+                 operator_id: "operator-two",
+                 query: "published",
+                 lenses: ["published-observations"]
+               })
     end
 
-    test "and `global` is the only target that selects globally stored memory" do
-      assert :ok =
-               Client.ingest(%Ingest{
-                 operator_id: "operator-one",
-                 lens: "published-observations",
-                 content: "published observation",
-                 source_description: "functional"
+    test "and originating Lens remains attribution rather than a search boundary" do
+      publish_global_episodes()
+
+      assert {:ok, results} =
+               Client.search(%Search{
+                 operator_id: "operator-two",
+                 query: "published",
+                 lenses: ["published-decisions"]
                })
 
-      assert {:ok, ["published observation"]} =
+      assert {:ok, ^results} =
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "published",
