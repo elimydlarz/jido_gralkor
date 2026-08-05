@@ -3,11 +3,10 @@ defmodule JidoGralkor.Actions.MemorySearch do
   ReAct tool the LLM can call to search long-term memory.
 
   In Lens-aware mode, calls `Gralkor.Client.search/1` with the operator id and
-  `context[:search_targets]`, combining the operator's reserved `"default"`
-  destination with the selected additional local Lens destinations and/or the
-  reserved `"global"` pool. Otherwise it calls the configured client's legacy
-  `recall/4`, using a group id sanitised from `context[:agent_id]` and the
-  configured agent name.
+  `context[:search_lenses]`, combining the operator's reserved `"default"` Lens
+  with the selected additional Lenses. Otherwise it calls the configured
+  client's legacy `recall/4`, using a group id sanitised from
+  `context[:agent_id]` and the configured agent name.
 
   `session_id` is read from `context[:session_id]` (planted by
   `JidoGralkor.Plugin` on `ai.react.query`) and is required before either mode
