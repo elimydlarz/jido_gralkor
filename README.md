@@ -502,7 +502,7 @@ The older `Gralkor.Client.generalise/2` and `search_generalisations/3` APIs rema
 
 ## Experiential learning (legacy default pipeline)
 
-When the implicit `"default"` Lens uses the legacy capture pipeline, every captured turn is also distilled into a flat `Gralkor.AgentLearning` record (`problem_kind`, `approach`, `success`, `lesson`) and written to the same operator partition. A custom Lens ingestion process owns any equivalent learning behavior it needs.
+When the implicit `"default"` Lens uses the legacy capture pipeline, every captured turn is also distilled into a flat `Gralkor.AgentLearning` record (`problem_kind`, `approach`, `success`, `lesson`) and written to the same operator group. A custom Lens ingestion process owns any equivalent learning behavior it needs.
 
 ### Unconditional learning search on every recall
 
