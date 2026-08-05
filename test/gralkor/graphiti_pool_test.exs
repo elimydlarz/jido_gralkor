@@ -846,7 +846,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert GraphitiPool.api_key!(:openai) == "openai-secret"
     end
 
-    test "if the variable that provider's spec names is absent then reading it raises rather than handing the client a blank key" do
+    test "if that variable is absent then reading it raises rather than handing over a blank key" do
       System.delete_env("OPENAI_API_KEY")
 
       assert_raise System.EnvError, fn -> GraphitiPool.api_key!(:openai) end
