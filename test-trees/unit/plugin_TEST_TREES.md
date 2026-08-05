@@ -30,7 +30,7 @@ when an agent turn begins
     and no recall is issued on the plugin's own initiative
   where the plugin was mounted with Lens selections
     while a thread has committed to agent state
-      then the selected Lens and the configured search targets are planted on the tool context beside the agent name and the committed thread's id
+      then the selected Lens and the configured Lenses to search are planted on the tool context beside the agent name and the committed thread's id
     while no thread has committed to agent state
       then the selected Lens and the configured search targets are planted on the tool context beside the agent name and without a session id
 
