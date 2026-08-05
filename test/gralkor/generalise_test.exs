@@ -302,7 +302,7 @@ defmodule Gralkor.GeneraliseTest do
   end
 
   describe "ex-generalise > persistence identity" do
-    test "whenever any decision persists a new generalisation, add_episode receives its encoded id as uuid" do
+    test "whenever any decision persists a new generalisation, add_episode is given no episode identifier and the generalisation's id travels in the body" do
       candidates = [%{content: "User prefers dark mode", confidence: 0.85}]
 
       decisions = [
