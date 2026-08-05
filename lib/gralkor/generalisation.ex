@@ -17,8 +17,10 @@ defmodule Gralkor.Generalisation do
       GEN|v1|{"id":"abc123","level":2,"confidence":0.85,"generalises":["def456"]}
       Eli prefers concise, structured responses by default.
 
-  The prefix is part of the text that graphiti embeds, so generalisations are
-  searchable by their content while remaining parseable on read.
+  The prefix is part of the episode body, so a generalisation stays parseable on
+  read — but only through an episode search, which returns that body. Edge and
+  node search return what an extractor derived from it, and no derived text
+  carries the prefix.
 
   See `test-trees/unit/generalisation_TEST_TREES.md`.
   """
