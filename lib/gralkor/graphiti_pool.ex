@@ -839,8 +839,7 @@ defmodule Gralkor.GraphitiPool do
     spec = shared_client_spec(llm_model, embedder_model)
 
     # A Google role needs one shared genai.Client threaded through its
-    # constructors; the OpenAI clients build their own AsyncOpenAI internally and
-    # read OPENAI_API_KEY from the process env, so they take no client kwarg.
+    # constructors; the OpenAI clients build their own AsyncOpenAI internally.
     genai_client = if :google in providers(spec), do: construct_genai_client()
 
     llm = construct_llm_client(spec.llm, genai_client)
@@ -852,8 +851,25 @@ defmodule Gralkor.GraphitiPool do
 
   defp providers(spec), do: [spec.llm.provider, spec.embedder.provider]
 
+  # Erlang's os:putenv keeps its own table and never reaches the C environment,
+  # so a credential set from Elixir — a consumer's runtime.exs, or the test
+  # helper loading .env — is invisible to the embedded interpreter's os.environ.
+  # Every constructor therefore takes its key as an explicit argument. Elixir has
+  # already proven it present in validate_credential!/1.
+  @spec api_key!(atom()) :: String.t()
+  defp api_key!(provider), do: System.fetch_env!(Map.fetch!(@credential_env, provider))
+
   defp construct_genai_client do
-    {client, _} = Pythonx.eval("from google import genai\ngenai.Client()\n", %{})
+    {client, _} =
+      Pythonx.eval(
+        """
+        from google import genai
+        k = api_key.decode('utf-8') if isinstance(api_key, (bytes, bytearray)) else api_key
+        genai.Client(api_key=k)
+        """,
+        %{"api_key" => api_key!(:google)}
+      )
+
     client
   end
 
