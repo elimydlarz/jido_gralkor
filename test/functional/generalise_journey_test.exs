@@ -78,13 +78,17 @@ defmodule Gralkor.GeneraliseJourneyTest do
     end
   end
 
-  # A generalisation naming one subject is extracted as a node with no edge, so
-  # what the group can surface for a query is its facts and its nodes together.
+  # Everything the group can surface for a query: the episodes as written, the
+  # facts an extractor derived from them, and the nodes it minted. A
+  # generalisation naming one subject yields a node and no edge — and on a given
+  # run may yield neither — so the episode is what makes it findable at all.
   defp memories(group_id, query) do
+    {:ok, episodes} = GraphitiPool.search_episodes(GraphitiPool, group_id, query, 5)
     {:ok, edges} = GraphitiPool.search(group_id, query, 5)
     {:ok, nodes} = GraphitiPool.search_nodes(GraphitiPool, group_id, query, 5)
 
-    Enum.map(edges, & &1.fact) ++
+    Enum.map(episodes, & &1.content) ++
+      Enum.map(edges, & &1.fact) ++
       Enum.map(nodes, fn node -> "#{node.name} — #{node.summary}" end)
   end
 
