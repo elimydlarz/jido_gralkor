@@ -109,13 +109,12 @@ defmodule Gralkor.PythonTest do
       assert :ok = Python.smoke_import_graphiti()
     end
 
-    test "the provider client for each supported inference provider imports successfully, so an unsupported provider selection fails on its configuration rather than on a missing package" do
+    test "each supported provider's clients import" do
       assert :ok = Python.smoke_import_graphiti()
 
-      Enum.each(Gralkor.GraphitiPool.supported_providers(), fn provider ->
-        assert :ok = Python.smoke_import_provider_clients(provider),
-               "provider #{inspect(provider)} is accepted by configuration but its graphiti clients do not import"
-      end)
+      for provider <- Gralkor.GraphitiPool.supported_providers() do
+        assert :ok == Python.smoke_import_provider_clients(provider)
+      end
     end
   end
 
