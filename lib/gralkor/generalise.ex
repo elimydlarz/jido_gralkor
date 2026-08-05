@@ -48,7 +48,7 @@ defmodule Gralkor.Generalise do
     min_confidence = Keyword.get(opts, :min_confidence, @default_min_confidence)
     max_gen_results = Keyword.get(opts, :max_gen_results, @default_max_gen_results)
 
-    gen_partition = Keyword.get(opts, :partition, "#{group_id}_gen")
+    gen_group_id = Keyword.get(opts, :gen_group_id, "#{group_id}_gen")
 
     with {:ok, hypotheses} <- do_hypothesise(transcript, hypothesise_fn, min_confidence),
          :ok <-
@@ -58,7 +58,7 @@ defmodule Gralkor.Generalise do
              evaluate_fn,
              add_episode_fn,
              remove_episode_fn,
-             gen_partition,
+             gen_group_id,
              max_gen_results,
              ontology
            ) do
