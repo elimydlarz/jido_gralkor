@@ -128,7 +128,7 @@ when community building is requested for a group
 
 when generalisations are searched for a group
   then the group is sanitised before use
-  and the search is scoped to that group's `_gen` partition
+  and the search is scoped to the `_gen` group derived from it
   and every result that decodes as a generalisation is returned carrying its decoded content, level and confidence
   but a result that does not decode as a generalisation is left out rather than surfaced raw
   if the search fails
