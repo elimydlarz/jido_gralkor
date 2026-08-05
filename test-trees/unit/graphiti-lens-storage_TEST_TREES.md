@@ -13,7 +13,7 @@ when an operator-local Lens store is searched
   and the graph search result is returned to the caller
 
 when the implicit `default` Lens is added to or searched
-  then graph operations use the operator's existing sanitized destination
+  then graph operations use the operator's existing sanitised group id
 
 when a global Lens store adds an episode
   then graph add receives the fixed global group
