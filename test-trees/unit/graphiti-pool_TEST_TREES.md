@@ -11,6 +11,9 @@ when the pool starts
     and the LLM client is built for the provider the LLM spec names
     and the embedder is built for the provider the embedder spec names
     and the cross-encoder is built for the provider the LLM spec names
+    and each provider's credential is read on the BEAM side and handed to its client as an explicit argument, the embedded interpreter's own environment never carrying it
+      where the credential was set from Elixir rather than exported into the OS process
+        then it still reaches the client, so a consumer's runtime configuration and a test helper's loaded `.env` both work
     while the embedder spec names Google
       then the embedder is constructed to send one input per request, so a batched call cannot receive fewer embeddings than it sent inputs
     while the two specs name different providers
