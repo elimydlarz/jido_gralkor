@@ -164,6 +164,102 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "search_episodes/4" do
+    test "then graphiti's g.search_ is invoked with an episode-only config, returning the bodies that were written" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+
+          class _Episode:
+              def __init__(self, content, source_description):
+                  self.content = content
+                  self.source_description = source_description
+
+          class _Results:
+              def __init__(self, episodes):
+                  self.episodes = episodes
+                  self.nodes = []
+                  self.edges = []
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded = {}
+
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  self.recorded['query'] = query
+                  self.recorded['group_ids'] = list(group_ids) if group_ids else []
+                  self.recorded['limit'] = config.limit if config is not None else None
+                  self.recorded['episode_methods'] = (
+                      [m.value for m in config.episode_config.search_methods]
+                      if config is not None and config.episode_config is not None
+                      else None
+                  )
+                  self.recorded['edge_config'] = config.edge_config is not None
+                  self.recorded['node_config'] = config.node_config is not None
+                  return _Results([
+                      _Episode("GEN|v1|{}\\nEli consistently prefers dark mode", "generalisation"),
+                  ])
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      construct_instance = fn _db, _shared, _group_id -> g end
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: construct_instance,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:ok, [episode]} =
+               GraphitiPool.search_episodes(pid, "group-with-hyphens", "dark mode", 5)
+
+      assert episode.content == "GEN|v1|{}\nEli consistently prefers dark mode"
+      assert episode.source_description == "generalisation"
+
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      rec = Pythonx.decode(rec)
+      assert rec["query"] == "dark mode"
+      assert rec["group_ids"] == ["group_with_hyphens"]
+      assert rec["limit"] == 5
+      assert rec["episode_methods"] == ["bm25"]
+      refute rec["edge_config"]
+      refute rec["node_config"]
+
+      GenServer.stop(pid)
+    end
+
+    test "then when graphiti raises, an error carrying the exception is returned" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  raise RuntimeError("boom")
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:error, {:python, message}} = GraphitiPool.search_episodes(pid, "g1", "q", 5)
+      assert message =~ "boom"
+
+      GenServer.stop(pid)
+    end
+  end
+
   describe "search_nodes/5, when called with node_labels" do
     test "then graphiti's g.search_ is invoked (NODE search) with the node_labels SearchFilter, returning node name/summary/attributes" do
       {g, _} =
