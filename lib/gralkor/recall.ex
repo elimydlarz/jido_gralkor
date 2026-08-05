@@ -126,7 +126,7 @@ defmodule Gralkor.Recall do
             await_aux(learning_task, "learning search")
 
         {body, n_facts, interpret_ms} =
-          interpret_combined(combined, conversation, interpret_fn, agent_name, opts)
+          interpret_combined(combined, conversation, query, interpret_fn, agent_name, opts)
 
         %{
           block: wrap(body),
