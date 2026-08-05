@@ -344,6 +344,11 @@ defmodule Gralkor.Client.Native do
     end
   end
 
+  defp format_generalisation_node(%{name: name, summary: summary}) do
+    body = if summary in [nil, ""], do: name, else: summary
+    "<generalisation> #{body}"
+  end
+
   defp raise_if_blank!(field, value) when is_binary(value) do
     if String.trim(value) == "" do
       raise ArgumentError,
