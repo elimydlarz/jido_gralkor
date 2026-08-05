@@ -419,7 +419,8 @@ defmodule Gralkor.InterpretTest do
     test "if even one message exceeds the budget, the request and the facts are still included" do
       msgs = [Message.new("user", String.duplicate("x", 1000))]
 
-      ctx = Interpret.build_interpretation_context(msgs, "still asked", "- f", "Susu", budget: 100)
+      ctx =
+        Interpret.build_interpretation_context(msgs, "still asked", "- f", "Susu", budget: 100)
 
       refute ctx =~ "User:"
       assert ctx =~ "still asked"
