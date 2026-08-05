@@ -15,7 +15,7 @@ if mount is given no agent name
 if mount is given a blank agent name
   then it raises ArgumentError
 
-when mount selects a default Lens, search targets, and an optional generalising Lens
+when mount selects a default Lens, Lenses to search, and an optional generalising Lens
   then those selections are resolved against the application Lens registry and stored on the plugin state
   and the resolved Lens keeps the ontology, scope, and ingestion the registry declared for it, redefining none of them
 
