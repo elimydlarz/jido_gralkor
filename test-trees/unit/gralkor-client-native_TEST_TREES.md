@@ -5,7 +5,7 @@ when any adapter operation is called
 
 when a recall is requested with a group, an agent name and a query
   then a fact search scoped to the group is supplied to the recall pipeline
-  and a generalisation search scoped to the group's `_gen` partition is supplied to the recall pipeline
+  and a generalisation search scoped to the `_gen` group derived from it is supplied to the recall pipeline
   and a learning search is supplied on every recall, with no enabling flag and no inference-based classification of the query
   and that learning search is seeded with the caller's raw query rather than a derived one
   and that learning search asks the graph for nodes labelled `Learning` rather than for edges, so standalone learning nodes are returned instead of nothing
