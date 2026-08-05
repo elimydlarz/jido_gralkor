@@ -99,6 +99,73 @@ defmodule Gralkor.GraphitiPool do
   end
 
   @doc """
+  Episode search against `group_id` via graphiti's `search_` with an
+  episode-only config. Returns `{:ok, [%{content:, source_description:}]}` —
+  the episode bodies as they were written.
+
+  This is the primitive for content Gralkor wrote in a format it must read back
+  verbatim (a generalisation's `GEN|v1|` envelope). Edge and node search both
+  return what an extractor *derived* from an episode, which is a different text
+  and may be nothing at all: an episode naming one subject yields a node and no
+  edge, and neither carries the wire envelope. graphiti searches episodes by
+  BM25 over their content, so retrieval here depends on the stored words rather
+  than on an extraction.
+  """
+  @spec search_episodes(GenServer.server(), String.t(), String.t(), pos_integer()) ::
+          {:ok, [map()]} | {:error, term()}
+  def search_episodes(server \\ __MODULE__, group_id, query, max_results)
+
+  def search_episodes(server, group_id, query, max_results)
+      when is_binary(group_id) and is_binary(query) and is_integer(max_results) and
+             max_results > 0 do
+    instance = __MODULE__.for(server, group_id)
+
+    {raw, _} =
+      Pythonx.eval(
+        """
+        import asyncio
+        from graphiti_core.search.search_config import (
+          EpisodeSearchConfig,
+          EpisodeSearchMethod,
+          SearchConfig,
+        )
+        from graphiti_core.search.search_filters import SearchFilters
+
+        q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
+        gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+        config = SearchConfig(
+          episode_config=EpisodeSearchConfig(search_methods=[EpisodeSearchMethod.bm25]),
+          limit=max_results,
+        )
+        res = asyncio._gralkor_run(
+          g.search_(q, config=config, group_ids=[gid], search_filter=SearchFilters())
+        )
+        [
+          {"content": e.content, "source_description": e.source_description}
+          for e in res.episodes
+        ]
+        """,
+        %{
+          "g" => instance,
+          "query" => query,
+          "group_id" => Client.sanitize_group_id(group_id),
+          "max_results" => max_results
+        }
+      )
+
+    {:ok, raw |> Pythonx.decode() |> Enum.map(&episode_map/1)}
+  rescue
+    e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
+  end
+
+  defp episode_map(%{} = m) do
+    %{
+      content: Map.get(m, "content"),
+      source_description: Map.get(m, "source_description")
+    }
+  end
+
+  @doc """
   Node search against `group_id` via graphiti's `search_` with the
   `NODE_HYBRID_SEARCH_RRF` recipe. Unlike `search/4` (which returns *edges* and
   whose `node_labels` filter matches edges by endpoint), this returns *nodes* —
