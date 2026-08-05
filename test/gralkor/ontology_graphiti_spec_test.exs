@@ -37,6 +37,29 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
     end
   end
 
+  describe "ex-ontology-graphiti-spec > entity_types / edge_types > when a projected type carries a description" do
+    test "then that type's entry carries it, and a type without one omits the key" do
+      spec =
+        GraphitiPool.graphiti_boundary_spec(
+          payload(%{
+            entity_types: [
+              %{name: "User", description: "A person who talks to the agent.", fields: []},
+              %{name: "Preference", description: nil, fields: []}
+            ]
+          })
+        )
+
+      assert spec[:entity_types] == [
+               %{
+                 "name" => "User",
+                 "description" => "A person who talks to the agent.",
+                 "fields" => []
+               },
+               %{"name" => "Preference", "fields" => []}
+             ]
+    end
+  end
+
   describe "ex-ontology-graphiti-spec > entity_types / edge_types > when the payload declares no entities" do
     test "then the spec omits :entity_types entirely" do
       refute Map.has_key?(GraphitiPool.graphiti_boundary_spec(payload()), :entity_types)

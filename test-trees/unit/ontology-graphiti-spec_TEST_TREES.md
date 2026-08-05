@@ -17,6 +17,10 @@ when a caller projects an ontology payload into the graphiti boundary spec
     then that field's entry carries `"doc" =>` that string
   while a projected type carries a field with no doc string
     then that field's entry carries `"doc" => nil`
+  while a projected type carries a description
+    then that type's entry carries `"description" =>` that string, so the extractor is told when to mint the type
+  while a projected type carries no description
+    then that type's entry omits `"description"` entirely
   while the payload's `:edge_type_map` is non-empty
     then the spec carries `:edge_type_map` as src/dst/names maps in the payload's order
   while the payload's `:edge_type_map` is empty
