@@ -65,19 +65,27 @@ defmodule Gralkor.GeneraliseJourneyTest do
     :ok
   end
 
-  defp search_until(_group_id, _query, _min, 0) do
-    []
+  defp memories_until(_group_id, _query, 0), do: []
+
+  defp memories_until(group_id, query, budget_ms) do
+    case memories(group_id, query) do
+      [] ->
+        Process.sleep(3_000)
+        memories_until(group_id, query, max(budget_ms - 3_000, 0))
+
+      found ->
+        found
+    end
   end
 
-  defp search_until(group_id, query, min, budget_ms) do
-    case GraphitiPool.search(group_id, query, 5) do
-      {:ok, raw} when length(raw) >= min ->
-        raw
+  # A generalisation naming one subject is extracted as a node with no edge, so
+  # what the group can surface for a query is its facts and its nodes together.
+  defp memories(group_id, query) do
+    {:ok, edges} = GraphitiPool.search(group_id, query, 5)
+    {:ok, nodes} = GraphitiPool.search_nodes(GraphitiPool, group_id, query, 5)
 
-      _ ->
-        Process.sleep(3_000)
-        search_until(group_id, query, min, max(budget_ms - 3_000, 0))
-    end
+    Enum.map(edges, & &1.fact) ++
+      Enum.map(nodes, fn node -> "#{node.name} — #{node.summary}" end)
   end
 
   describe "ex-generalise-journey > after flush with generalise_fn" do
