@@ -108,6 +108,15 @@ defmodule Gralkor.PythonTest do
     test "importing graphiti_core succeeds" do
       assert :ok = Python.smoke_import_graphiti()
     end
+
+    test "the provider client for each supported inference provider imports successfully, so an unsupported provider selection fails on its configuration rather than on a missing package" do
+      assert :ok = Python.smoke_import_graphiti()
+
+      Enum.each(Gralkor.GraphitiPool.supported_providers(), fn provider ->
+        assert :ok = Python.smoke_import_provider_clients(provider),
+               "provider #{inspect(provider)} is accepted by configuration but its graphiti clients do not import"
+      end)
+    end
   end
 
   describe "ex-python-runtime > integration > GenServer boots through init/1" do
