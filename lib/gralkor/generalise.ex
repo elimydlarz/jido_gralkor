@@ -25,7 +25,6 @@ defmodule Gralkor.Generalise do
           search_gen_fn: function(),
           evaluate_fn: function(),
           add_episode_fn: function(),
-          remove_episode_fn: function(),
           min_confidence: float(),
           max_gen_results: pos_integer()
         ]
