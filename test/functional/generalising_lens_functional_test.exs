@@ -66,7 +66,7 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
              ] = episodes({"operator-one", "generalisations"})
     end
 
-    test "and each resulting episode is added through the selected Lens with its ontology and memory destination" do
+    test "and each resulting episode is added through the selected Lens with its ontology and group" do
       Application.put_env(:jido_gralkor, :generalise_hypothesise_fn, fn _prompt ->
         {:ok, [%{content: "Eli prefers Friday launches.", confidence: 0.9}]}
       end)

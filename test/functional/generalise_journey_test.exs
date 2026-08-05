@@ -6,10 +6,10 @@ defmodule Gralkor.GeneraliseJourneyTest do
 
   Proves:
     1. The generalise pipeline runs after flush and saves episodes to a
-       `_gen` graphiti partition
+       `_gen` graphiti group
     2. The generalisation content is searchable via GraphitiPool.search
-       against the `_gen` partition
-    3. A generalisation added directly to the `_gen` partition via
+       against the `_gen` group
+    3. A generalisation added directly to the `_gen` group via
        add_episode is findable via search
 
   Reifies the `ex-generalise-journey` tree.
@@ -69,19 +69,19 @@ defmodule Gralkor.GeneraliseJourneyTest do
     []
   end
 
-  defp search_until(partition, query, min, budget_ms) do
-    case GraphitiPool.search(partition, query, 5) do
+  defp search_until(group, query, min, budget_ms) do
+    case GraphitiPool.search(group, query, 5) do
       {:ok, raw} when length(raw) >= min ->
         raw
 
       _ ->
         Process.sleep(3_000)
-        search_until(partition, query, min, max(budget_ms - 3_000, 0))
+        search_until(group, query, min, max(budget_ms - 3_000, 0))
     end
   end
 
   describe "ex-generalise-journey > after flush with generalise_fn" do
-    test "the generalise pipeline saves generalisations to the _gen partition" do
+    test "the generalise pipeline saves generalisations to the _gen group" do
       group_id = "gen_after_flush_#{System.unique_integer([:positive])}"
       gen_partition = "#{group_id}_gen"
 
@@ -155,7 +155,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
       raw = search_until(gen_partition, "dark mode", 1, 40_000)
 
       assert length(raw) >= 1,
-             "expected at least one fact in the _gen partition; got #{inspect(raw)}"
+             "expected at least one fact in the _gen group; got #{inspect(raw)}"
 
       facts_text = Enum.map(raw, &Map.get(&1, :fact)) |> Enum.join("\n")
 
@@ -164,7 +164,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
     end
   end
 
-  describe "ex-generalise-journey > direct add_episode to _gen partition" do
+  describe "ex-generalise-journey > direct add_episode to _gen group" do
     test "a generalisation stored via add_episode is findable via search" do
       group_id = "gen_direct_#{System.unique_integer([:positive])}"
       gen_partition = "#{group_id}_gen"

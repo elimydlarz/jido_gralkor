@@ -73,7 +73,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     :ok
   end
 
-  describe "when a mounted memory plugin has a configured default ingestion Lens and optional additional search targets" do
+  describe "when a mounted memory plugin has a configured default ingestion Lens and optional additional Lenses to search" do
     test "then automatic capture and memory addition use the registered default ingestion Lens" do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
@@ -106,7 +106,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert [[_, _, _, _, _, "observations"]] = InMemory.captures()
     end
 
-    test "and memory search always includes the requesting operator's reserved `default` target" do
+    test "and memory search always includes the requesting operator's reserved `default` Lens" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
@@ -134,7 +134,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert result == "baseline memory"
     end
 
-    test "and memory search also includes the configured additional search targets" do
+    test "and memory search also includes the configured additional Lenses" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
@@ -176,8 +176,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
   end
 
-  describe "where a mounted memory plugin has no additional search targets" do
-    test "then memory search uses only the requesting operator's reserved `default` target" do
+  describe "where a mounted memory plugin has no additional Lenses to search" do
+    test "then memory search uses only the requesting operator's reserved `default` Lens" do
       for {lens, content} <- [
             {"default", "baseline memory"},
             {"observations", "unselected local memory"},
@@ -472,7 +472,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "where a search target is invalid, then the error identifies the invalid target" do
+    test "where a Lens to search is unknown, then the error identifies the unknown Lens" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",

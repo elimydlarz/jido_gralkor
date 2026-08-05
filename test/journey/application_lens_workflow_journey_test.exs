@@ -241,7 +241,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
     end
   end
 
-  describe "if the application selects an unknown Lens or invalid search target" do
+  describe "if the application selects an unknown Lens" do
     test "then the operation fails before memory is ingested or searched" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Client.ingest(%Ingest{

@@ -87,7 +87,7 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  describe "when mount/2 selects a default Lens, search targets, and an optional generalising Lens" do
+  describe "when mount/2 selects a default Lens, Lenses to search, and an optional generalising Lens" do
     test "then it resolves the application registry and stores those selections without redefining their ontology, scope, or ingestion" do
       configure_lenses()
 
@@ -143,7 +143,7 @@ defmodule JidoGralkor.PluginTest do
   end
 
   describe "when an agent turn begins, when the plugin is Lens-aware" do
-    test "then the selected Lens and search targets are planted with the agent name and optional session id" do
+    test "then the selected Lens and Lenses to search are planted with the agent name and optional session id" do
       plugin_state = lens_plugin_state()
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
@@ -162,7 +162,7 @@ defmodule JidoGralkor.PluginTest do
              }
     end
 
-    test "then the selected Lens and search targets are planted without a session id when no thread has committed" do
+    test "then the selected Lens and Lenses to search are planted without a session id when no thread has committed" do
       plugin_state = lens_plugin_state()
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 

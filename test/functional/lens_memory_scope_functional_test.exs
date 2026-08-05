@@ -54,7 +54,7 @@ defmodule Gralkor.LensMemoryScopeFunctionalTest do
   end
 
   describe "when an operator-local Lens adds an episode" do
-    test "then its memory destination is determined by the operator and Lens together" do
+    test "then its group is determined by the operator and Lens together" do
       assert :ok = ingest("operator-one", "observations", "private observation")
 
       assert [%{content: "private observation", lens: "observations"}] =
