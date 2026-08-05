@@ -592,6 +592,54 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "while both configured model specs name a supported inference provider" do
+    test "then the LLM client is built for the provider the LLM spec names, the embedder for the provider the embedder spec names, and the cross-encoder for the provider the LLM spec names" do
+      spec =
+        GraphitiPool.shared_client_spec(
+          %{provider: :openai, id: "gpt-4.1-mini"},
+          %{provider: :google, id: "gemini-embedding-2-preview"}
+        )
+
+      assert spec.llm.provider == :openai
+      assert spec.llm.id == "gpt-4.1-mini"
+      assert spec.embedder.provider == :google
+      assert spec.embedder.id == "gemini-embedding-2-preview"
+      assert spec.cross_encoder.provider == :openai
+    end
+
+    test "while the embedder spec names Google then the embedder is constructed to send one input per request" do
+      spec =
+        GraphitiPool.shared_client_spec(
+          %{provider: :google, id: "gemini-3.1-flash-lite"},
+          %{provider: :google, id: "gemini-embedding-2-preview"}
+        )
+
+      assert spec.embedder.batch_size == 1
+    end
+
+    test "while the embedder spec names OpenAI then no per-request batch size is imposed on it" do
+      spec =
+        GraphitiPool.shared_client_spec(
+          %{provider: :openai, id: "gpt-4.1-mini"},
+          %{provider: :openai, id: "text-embedding-3-small"}
+        )
+
+      refute Map.has_key?(spec.embedder, :batch_size)
+    end
+
+    test "while the two specs name different providers then each client is still built for its own role's provider" do
+      spec =
+        GraphitiPool.shared_client_spec(
+          %{provider: :google, id: "gemini-3.1-flash-lite"},
+          %{provider: :openai, id: "text-embedding-3-small"}
+        )
+
+      assert spec.llm.provider == :google
+      assert spec.embedder.provider == :openai
+      assert spec.cross_encoder.provider == :google
+    end
+  end
+
   describe "if either configured model spec names a provider that is neither OpenAI nor Google" do
     setup do
       previous_trap_exit = Process.flag(:trap_exit, true)
