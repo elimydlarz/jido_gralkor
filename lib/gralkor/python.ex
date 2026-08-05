@@ -60,7 +60,26 @@ defmodule Gralkor.Python do
   end
 
   defp maybe_reap(false, _list, _kill), do: :ok
-  defp maybe_reap(true, list, kill), do: reap_redislite_orphans(list, kill)
+  defp maybe_reap(true, list, kill), do: sweep_orphans_once(list, kill)
+
+  @doc """
+  Reap on the first sweep this VM performs, and nothing on any later one.
+
+  Only the first `Gralkor.Python` to boot runs before this VM has started a
+  server of its own, so every later sweep would be aiming at a live server we
+  own — a daemonised, init-reparented `redis-server` carries no evidence of
+  which VM spawned it.
+  """
+  @spec sweep_orphans_once((-> [integer()]), (integer() -> any())) :: :ok
+  def sweep_orphans_once(list_orphans, kill_pid)
+      when is_function(list_orphans, 0) and is_function(kill_pid, 1) do
+    if :persistent_term.get({__MODULE__, :swept}, false) do
+      :ok
+    else
+      :persistent_term.put({__MODULE__, :swept}, true)
+      reap_redislite_orphans(list_orphans, kill_pid)
+    end
+  end
 
   @doc """
   Materialise the uv-managed venv and initialise the PythonX interpreter from
