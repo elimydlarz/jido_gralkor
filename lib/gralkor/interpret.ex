@@ -101,22 +101,29 @@ defmodule Gralkor.Interpret do
   end
 
   @doc """
-  Assemble the LLM prompt from conversation messages and the formatted facts.
+  Assemble the LLM prompt from conversation messages, the request being
+  answered, and the formatted facts.
 
   Drops oldest messages until the assembled prompt fits the char budget
-  (`opts[:budget]`, default #{@default_budget}). Raises on blank agent_name.
+  (`opts[:budget]`, default #{@default_budget}). The request and the facts are
+  never dropped. Raises on blank agent_name.
   """
-  @spec build_interpretation_context([Message.t()], String.t(), String.t(), keyword()) ::
-          String.t()
-  def build_interpretation_context(messages, facts_text, agent_name, opts \\ [])
-      when is_list(messages) and is_binary(facts_text) do
+  @spec build_interpretation_context(
+          [Message.t()],
+          String.t(),
+          String.t(),
+          String.t(),
+          keyword()
+        ) :: String.t()
+  def build_interpretation_context(messages, query, facts_text, agent_name, opts \\ [])
+      when is_list(messages) and is_binary(query) and is_binary(facts_text) do
     raise_if_blank!(agent_name)
     budget = Keyword.get(opts, :budget, @default_budget)
 
     messages
     |> labelled_lines(agent_name)
-    |> fit_to_budget(facts_text, budget)
-    |> assemble(facts_text)
+    |> fit_to_budget(query, facts_text, budget)
+    |> assemble(query, facts_text)
   end
 
   # ── internal ────────────────────────────────────────────────
