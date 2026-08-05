@@ -45,13 +45,20 @@ defmodule Gralkor.Interpret do
   Raises `ArgumentError` if `agent_name` is blank or the output token budget
   is non-positive/non-integer.
   """
-  @spec interpret_facts([Message.t()], String.t(), interpret_fn(), String.t(), keyword()) ::
-          [String.t()]
-  def interpret_facts(messages, facts_text, interpret_fn, agent_name, opts \\ [])
-      when is_list(messages) and is_binary(facts_text) and is_function(interpret_fn, 2) do
+  @spec interpret_facts(
+          [Message.t()],
+          String.t(),
+          String.t(),
+          interpret_fn(),
+          String.t(),
+          keyword()
+        ) :: [String.t()]
+  def interpret_facts(messages, query, facts_text, interpret_fn, agent_name, opts \\ [])
+      when is_list(messages) and is_binary(query) and is_binary(facts_text) and
+             is_function(interpret_fn, 2) do
     raise_if_blank!(agent_name)
     output_token_budget = output_token_budget!(opts)
-    prompt = build_interpretation_context(messages, facts_text, agent_name, opts)
+    prompt = build_interpretation_context(messages, query, facts_text, agent_name, opts)
 
     prompt_with_budget =
       Enum.join(
