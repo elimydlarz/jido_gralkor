@@ -92,7 +92,7 @@ defmodule JidoGralkor.Plugin do
          %{
            agent_name: agent_name,
            default_lens: default_lens,
-           search_targets: search_targets,
+           search_lenses: search_lenses,
            lens: lens,
            generalise_lens: generalise_lens
          }}
