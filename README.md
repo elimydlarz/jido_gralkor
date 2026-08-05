@@ -473,6 +473,7 @@ Registry and plugin configuration fail fast for blank, duplicate, reserved, or m
 Each Lens ontology is a module declared with `Gralkor.Ontology`:
 
 - `entity Foo do field … end` declares an entity. `field :name, :type, opts` supports `:string | :integer | :float | :boolean`, plus `required: true` and `doc:` (rendered as the Pydantic field description).
+- `entity Foo, "when to extract one" do … end` adds a description, rendered as the extracted type's own description. Graphiti's extractor reads it to decide when to mint the entity, so a type whose name alone is ambiguous — `Preference`, `Pattern`, `Learning` — is extracted far more reliably with one. The description must be a literal string.
 - `from Source do verb Target [do field … end] end` declares outgoing relationships from `Source`. The verb's name becomes the edge type in graphiti (`prefers` → `"PREFERS"`, `relates_to` → `"RELATES_TO"`). The optional `do` block carries edge properties.
 - Same verb in multiple `from` blocks becomes one edge type with multiple endpoint pairs.
 - `entities: :strict` excludes graphiti's generic `Entity` extraction — only your declared types survive. `entities: :open` lets graphiti extract generic Entity nodes alongside yours.
