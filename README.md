@@ -189,12 +189,12 @@ Everything above, in one deployment. Three files.
 defmodule MyApp.Ontology do
   use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
-  entity Teammate do
+  entity Teammate, "A person the agent works with." do
     field :handle,   :string, required: true, doc: "stable login handle"
     field :timezone, :string,                 doc: "IANA tz"
   end
 
-  entity WorkingPreference do
+  entity WorkingPreference, "A way a teammate prefers to work." do
     field :description, :string, required: true
   end
 
@@ -208,7 +208,7 @@ end
 defmodule MyApp.PatternOntology do
   use Gralkor.Ontology, entities: :strict, relationships: :open
 
-  entity Pattern do
+  entity Pattern, "A durable pattern distilled from many conversations." do
     field :statement,  :string, required: true, doc: "the durable generalisation"
     field :confidence, :float,                  doc: "0.0–1.0 as scored at distillation"
   end
