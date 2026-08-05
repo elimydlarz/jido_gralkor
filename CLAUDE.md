@@ -32,7 +32,7 @@ Five direct Hex deps (six with `:ex_doc` for dev docs):
 
 `:jido_gralkor` is the integration point for operators who run a Jido agent on top of Gralkor. All operator-facing knobs live under the `:jido_gralkor` application env.
 
-**Lenses.** `:lenses` is a list of application-owned keyword definitions with `:name`, `:ontology`, `:scope`, and `:ingestion`. `JidoGralkor.Plugin` selects registered names through `:default_lens`, `:search_targets`, and optional `:generalise_lens`; see README `Configure Lenses` for the consumer API. Registry and mount validation fail fast. The deployment-wide `:ontology` and `:generalise_on_flush` settings below describe the implicit-default compatibility pipeline.
+**Lenses.** `:lenses` is a list of application-owned keyword definitions with `:name`, `:ontology`, `:scope`, and `:ingestion`. `JidoGralkor.Plugin` selects registered names through `:default_lens`, `:search_lenses`, and optional `:generalise_lens`; see README `Configure Lenses` for the consumer API. Registry and mount validation fail fast. The deployment-wide `:ontology` and `:generalise_on_flush` settings below describe the implicit-default compatibility pipeline.
 
 Pick **one** of the two backends:
 
