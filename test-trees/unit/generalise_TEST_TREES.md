@@ -33,8 +33,8 @@ when evaluation decides to skip a candidate
   then no episode is added
 
 when any decision persists a new generalisation
-  then the episode write receives the generalisation's id as the episode uuid
-  and that uuid is the same id encoded in the episode body, so later updates and deletes address it
+  then the episode write supplies no episode identifier, so the graph library mints a new episode instead of failing to find one to update
+  and the generalisation's own id travels in the episode body, where it records lineage between generalisations
 
 when the existing generalisation named by a decision is found among the searched generalisations
   then the new generalisation's level is one above that existing level
