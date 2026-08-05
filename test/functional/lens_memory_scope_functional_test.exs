@@ -143,7 +143,7 @@ defmodule Gralkor.LensMemoryScopeFunctionalTest do
     Client.search(%Search{
       operator_id: operator,
       query: "memory",
-      targets: targets
+      lenses: targets
     })
   end
 

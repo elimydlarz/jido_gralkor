@@ -124,14 +124,14 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "Friday",
-                 targets: ["generalisations"]
+                 lenses: ["generalisations"]
                })
 
       assert {:ok, []} =
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "Friday",
-                 targets: ["generalisations"]
+                 lenses: ["generalisations"]
                })
     end
   end
@@ -147,7 +147,7 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "Friday",
-                 targets: ["global"]
+                 lenses: ["global"]
                })
     end
 
