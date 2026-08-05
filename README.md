@@ -270,7 +270,7 @@ plugins: [
    %{
      agent_name: "Susu",
      default_lens: "observations",
-     search_targets: ["decisions", "global"],
+     search_lenses: ["decisions", "global"],
      generalise_lens: "generalisations"
    }}
 ]
@@ -307,7 +307,7 @@ defmodule MyApp.ChatAgent do
        %{
          agent_name: "Susu",
          default_lens: "observations",
-         search_targets: ["observations", "global"],
+         search_lenses: ["observations", "global"],
          generalise_lens: "generalisations"
        }}
     ]
@@ -325,7 +325,7 @@ defmodule MyApp.ChatAgent do
 end
 ```
 
-The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed), `:agent_name`, the selected `:lens`, and `:search_targets` on the signal's `tool_context`. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
+The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed), `:agent_name`, the selected `:lens`, and `:search_lenses` on the signal's `tool_context`. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
 
 Set `tool_context[:lens]` on an individual query to override `default_lens` for that turn. The plugin retains the selection on the request's Jido thread entry, making it authoritative for both `memory_add` and later completion or failure capture after ReAct has released its transient tool context. If `generalise_lens` is configured, the same completed turn is also submitted to that Lens without duplicating it in session context.
 
@@ -337,7 +337,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your co
 
 **Lens groups.** Every Lens resolves to the graphiti group its episodes live in. An operator-scoped Lens writes to a group derived from the operator id and Lens name, so different operators and different local Lenses remain isolated. Every global Lens writes to the one shared `global` group. The Lens store records a global episode's originating Lens in the source description supplied with the same Graphiti `add_episode` call; it does not mutate the graph afterward. Global search is deliberately unfiltered by originating Lens — naming a global Lens and naming `"global"` search the same group.
 
-**First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus configured `:lens` and `:search_targets`, but no `:session_id`; completed and failed turn capture are both skipped with a warning until a committed thread supplies that identity. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
+**First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus configured `:lens` and `:search_lenses`, but no `:session_id`; completed and failed turn capture are both skipped with a warning until a committed thread supplies that identity. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
 
 **Death-triggered flush.** `JidoGralkor.Lifecycle` is an optional `Jido.AgentServer.Lifecycle` implementation. When wired as `lifecycle_mod:` on the agent, graceful termination of the AgentServer fires `Gralkor.Client.flush/1` for the active thread so an orphaned agent doesn't strand its capture buffer. No idle-timer machinery — Jido's `AgentServer` owns `:idle_timeout` directly.
 
@@ -435,7 +435,7 @@ The plugin mount chooses how an agent uses the registered Lenses:
  %{
    agent_name: "Susu",
    default_lens: "observations",
-   search_targets: ["observations", "global"],
+   search_lenses: ["observations", "global"],
    generalise_lens: "generalisations"
  }}
 ```
