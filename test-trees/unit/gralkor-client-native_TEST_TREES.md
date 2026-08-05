@@ -131,6 +131,7 @@ when community building is requested for a group
 when generalisations are searched for a group
   then the group is sanitised before use
   and the search is scoped to the `_gen` group derived from it
+  and it asks the graph for episodes rather than for facts, because a generalisation is read back from the body that was written rather than from what an extractor derived
   and every result that decodes as a generalisation is returned carrying its decoded content, level and confidence
   but a result that does not decode as a generalisation is left out rather than surfaced raw
   if the search fails

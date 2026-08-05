@@ -88,6 +88,15 @@ when a fact search is run for a group
   and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps
   and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints
 
+when an episode search is run for a group
+  then the graph library is asked for episodes only, with the requested result count
+  and it is restricted to the sanitised group id the episodes were written under
+  and each returned episode is rendered with the body that was written and its source description
+  and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned
+
+if running an episode search raises inside the graph library
+  then an error carrying the raised exception is returned
+
 when a node search is run for a group
   then it is restricted to the sanitised group id the episodes were written under, so a group id carrying hyphens still matches
   while node labels are supplied
