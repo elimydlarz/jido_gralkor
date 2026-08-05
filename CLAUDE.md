@@ -112,7 +112,7 @@ Functional tests describe application-visible behaviour and may use deterministi
 
 `gpt-4.1-mini` is too weak for the ontology-extraction assertions — it produced `User` but no `Preference` node from the fixture, failing the strict and open cases every time. **On `gpt-4.1` the whole `ontology-extraction` suite is flaky**, because each assertion demands a specific label out of one real extraction: the no-ontology case (`at least one generic Entity`) was observed fail/fail/pass across three identical runs, and the open case (`at least one Preference`) has both passed and failed on identical input. Expect 1–2 of its 3 tests to fail on any given run; that is LLM variance, not a regression. Whether these assertions were stabler on the Google defaults is unmeasured — it needs a `GOOGLE_API_KEY` to establish.
 
-**Known-failing on the OpenAI pin** (`mix test.journey` → 4/7, 3 invalid), all output quality rather than wiring:
+**Known-failing on the OpenAI pin** (`mix test.journey` → 4/7), all output quality rather than wiring:
 
 - `jido_memory_journey` round-trip and flush — recall surfaces the wrong fact, both tests returning the vacuum-job fact that belongs to the module's third test. Not stale storage: `setup_all` builds a fresh `System.tmp_dir!()` path per module and removes it on exit. It is semantic search quality under `text-embedding-3-small`, whose 1024 dims graphiti slices silently, where the suite was written against `gemini-embedding-2-preview`.
 - `generalise_journey` after-flush — distillation kept no generalisation, so the `_gen` group is empty.
