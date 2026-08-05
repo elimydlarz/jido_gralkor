@@ -84,6 +84,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
     test "the generalise pipeline saves generalisations to the _gen group" do
       group_id = "gen_after_flush_#{System.unique_integer([:positive])}"
       gen_group_id = "#{group_id}_gen"
+      test_pid = self()
 
       # Inline flush callback: distill and generalise in one step
       gen_flush_callback = fn gid, _agent_name, _user_name, _ontology, _turns ->
