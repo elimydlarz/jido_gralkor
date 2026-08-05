@@ -176,20 +176,22 @@ defmodule Gralkor.Interpret do
   defp render_line("assistant", content, agent), do: "#{agent}: #{content}"
   defp render_line("behaviour", content, agent), do: "#{agent}: (behaviour: #{content})"
 
-  defp fit_to_budget([], _facts, _budget), do: []
+  defp fit_to_budget([], _query, _facts, _budget), do: []
 
-  defp fit_to_budget(lines, facts, budget) do
-    if String.length(assemble(lines, facts)) <= budget do
+  defp fit_to_budget(lines, query, facts, budget) do
+    if String.length(assemble(lines, query, facts)) <= budget do
       lines
     else
       [_oldest | rest] = lines
-      fit_to_budget(rest, facts, budget)
+      fit_to_budget(rest, query, facts, budget)
     end
   end
 
-  defp assemble(lines, facts_text) do
+  defp assemble(lines, query, facts_text) do
     "Conversation context:\n" <>
       Enum.join(lines, "\n") <>
+      "\n\nRequest to answer:\n" <>
+      query <>
       "\n\nMemory facts to interpret:\n" <>
       facts_text
   end
