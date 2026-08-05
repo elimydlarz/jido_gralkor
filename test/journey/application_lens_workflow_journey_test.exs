@@ -266,11 +266,11 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
     end
   end
 
-  defp search(operator_id, targets) do
+  defp search(operator_id, lenses) do
     Client.search(%Search{
       operator_id: operator_id,
       query: "launch",
-      lenses: targets
+      lenses: lenses
     })
   end
 
