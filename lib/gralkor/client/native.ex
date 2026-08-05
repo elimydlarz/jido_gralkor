@@ -174,11 +174,11 @@ defmodule Gralkor.Client.Native do
     sanitized = Client.sanitize_group_id(group_id)
     gen_group_id = "#{sanitized}_gen"
 
-    case GraphitiPool.search(gen_group_id, query, max_results) do
-      {:ok, raw_facts} ->
+    case GraphitiPool.search_episodes(GraphitiPool, gen_group_id, query, max_results) do
+      {:ok, episodes} ->
         gens =
-          Enum.flat_map(raw_facts, fn fact ->
-            case Generalisation.decode(fact.fact) do
+          Enum.flat_map(episodes, fn episode ->
+            case Generalisation.decode(episode.content) do
               {:ok, gen, _plain} -> [gen]
               {:error, :not_a_generalisation} -> []
             end
