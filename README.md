@@ -276,7 +276,7 @@ plugins: [
 ]
 ```
 
-That mount writes captured turns and `memory_add` calls to `"observations"`, submits each flushed transcript independently to `"generalisations"`, and searches the operator's reserved `"default"` destination (always first, implicitly), then `"decisions"`, then the shared `"global"` pool.
+That mount writes captured turns and `memory_add` calls to `"observations"`, submits each flushed transcript independently to `"generalisations"`, and searches the operator's reserved `"default"` Lens (always first, implicitly), then `"decisions"`, then the shared `"global"` group.
 
 **On `:ontology` vs. Lens `ontology:`.** They are not a declaration and a reference to it; they are two different channels, each with its own binding. `:ontology` configures exactly one channel — the implicit `"default"` Lens, which cannot be registered in `:lenses` because the name is reserved. Set `:ontology` only if you run mounts without `:default_lens` (implicit-default mode), or call the legacy `memory_add/3` and `capture/5` surface directly. It has no effect on writes through a registered Lens. Reads are unaffected either way: search never consults an ontology, only writes do.
 
