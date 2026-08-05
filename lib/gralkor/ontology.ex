@@ -49,7 +49,7 @@ defmodule Gralkor.Ontology do
     relationships = fetch_use_opt!(opts, :relationships, @allowed_relationships)
 
     quote do
-      import Gralkor.Ontology, only: [entity: 2, from: 2]
+      import Gralkor.Ontology, only: [entity: 2, entity: 3, from: 2]
 
       Module.register_attribute(__MODULE__, :gralkor_ontology_entities, accumulate: true)
       Module.register_attribute(__MODULE__, :gralkor_ontology_edges, accumulate: true)
