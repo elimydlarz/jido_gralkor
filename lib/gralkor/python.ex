@@ -7,9 +7,16 @@ defmodule Gralkor.Python do
     1. **Reap redislite orphans.** `falkordblite` (loaded into PythonX in this
        BEAM) spawns a `redis-server` grandchild. A hard BEAM SIGKILL leaves
        it orphaned. SIGKILL anything matching `redislite/bin/redis-server`
-       before we boot — safe because this runs *before* our own Python init,
-       so anything matching is by definition not ours-yet, and the path is
-       unique to falkordblite.
+       before we boot; the path is unique to falkordblite.
+
+       This is safe only for the **first** `Gralkor.Python` in a VM. The reap
+       matches on argv alone, so a second one started while the first still
+       holds a live server kills that server too, and the older graph's next
+       query fails with `ConnectionRefusedError` on its unix socket. Test
+       modules that each `start_supervised(Gralkor.Python)` hit this — see
+       `FAILURES.md` — which is why journey modules must be run one at a time.
+       Scoping the reap to pids this VM did not spawn would remove the
+       restriction.
 
     2. **Materialise the venv + initialise the interpreter** via
        `Pythonx.uv_init/2` from the jido_gralkor-owned `@pyproject_toml`. This
