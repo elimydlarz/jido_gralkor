@@ -592,6 +592,162 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "if either configured model spec names a provider that is neither OpenAI nor Google" do
+    setup do
+      previous_trap_exit = Process.flag(:trap_exit, true)
+      on_exit(fn -> Process.flag(:trap_exit, previous_trap_exit) end)
+      :ok
+    end
+
+    test "then startup raises before any inference client is constructed, and the failure names both configured model specs and the supported providers" do
+      test_pid = self()
+
+      unsupported_pairs = [
+        {%{provider: :anthropic, id: "claude-opus-5"},
+         %{provider: :google, id: "gemini-embedding-2-preview"}},
+        {%{provider: :google, id: "gemini-3.1-flash-lite"},
+         %{provider: :cohere, id: "embed-english-v3.0"}}
+      ]
+
+      Enum.each(unsupported_pairs, fn {llm_model, embedder_model} ->
+        assert {:error, {%ArgumentError{} = error, _stacktrace}} =
+                 GraphitiPool.start_link(
+                   name: nil,
+                   table: :"pool_table_#{System.unique_integer([:positive])}",
+                   falkordb_spec: {:embedded, "/tmp/never_used"},
+                   llm_model: llm_model,
+                   embedder_model: embedder_model,
+                   construct_shared_clients: fn _, _ ->
+                     send(test_pid, :inference_client_construction_started)
+                     %{llm_client: nil, embedder: nil, cross_encoder: nil}
+                   end,
+                   construct_falkor_db: fn _ -> :stub_falkor_db end,
+                   construct_instance: fn _, _, group -> {:stub_graphiti, group} end,
+                   initialise_instance: fn _ -> :ok end,
+                   install_loop_fn: fn -> :ok end,
+                   warmup: false
+                 )
+
+        message = Exception.message(error)
+        assert message =~ inspect(llm_model)
+        assert message =~ inspect(embedder_model)
+        assert message =~ "openai"
+        assert message =~ "google"
+        refute_received :inference_client_construction_started
+      end)
+    end
+  end
+
+  describe "if the credential for a provider named by a configured model spec is absent" do
+    setup do
+      previous_trap_exit = Process.flag(:trap_exit, true)
+      on_exit(fn -> Process.flag(:trap_exit, previous_trap_exit) end)
+
+      previous = %{
+        "GOOGLE_API_KEY" => System.get_env("GOOGLE_API_KEY"),
+        "OPENAI_API_KEY" => System.get_env("OPENAI_API_KEY")
+      }
+
+      on_exit(fn ->
+        Enum.each(previous, fn
+          {var, nil} -> System.delete_env(var)
+          {var, value} -> System.put_env(var, value)
+        end)
+      end)
+
+      :ok
+    end
+
+    defp start_pool_for_credentials(llm_model, embedder_model, test_pid) do
+      GraphitiPool.start_link(
+        name: nil,
+        table: :"pool_table_#{System.unique_integer([:positive])}",
+        falkordb_spec: {:embedded, "/tmp/never_used"},
+        llm_model: llm_model,
+        embedder_model: embedder_model,
+        construct_shared_clients: fn _, _ ->
+          send(test_pid, :inference_client_construction_started)
+          %{llm_client: nil, embedder: nil, cross_encoder: nil}
+        end,
+        construct_falkor_db: fn _ -> :stub_falkor_db end,
+        construct_instance: fn _, _, group -> {:stub_graphiti, group} end,
+        initialise_instance: fn _ -> :ok end,
+        install_loop_fn: fn -> :ok end,
+        warmup: false
+      )
+    end
+
+    test "then startup raises before any inference client is constructed, and the failure names the absent credential and the role whose spec required it" do
+      test_pid = self()
+      System.put_env("GOOGLE_API_KEY", "present")
+      System.delete_env("OPENAI_API_KEY")
+
+      assert {:error, {%ArgumentError{} = llm_error, _}} =
+               start_pool_for_credentials(
+                 %{provider: :openai, id: "gpt-4.1-mini"},
+                 %{provider: :google, id: "gemini-embedding-2-preview"},
+                 test_pid
+               )
+
+      llm_message = Exception.message(llm_error)
+      assert llm_message =~ "OPENAI_API_KEY"
+      assert llm_message =~ "llm"
+      refute_received :inference_client_construction_started
+
+      assert {:error, {%ArgumentError{} = embedder_error, _}} =
+               start_pool_for_credentials(
+                 %{provider: :google, id: "gemini-3.1-flash-lite"},
+                 %{provider: :openai, id: "text-embedding-3-small"},
+                 test_pid
+               )
+
+      embedder_message = Exception.message(embedder_error)
+      assert embedder_message =~ "OPENAI_API_KEY"
+      assert embedder_message =~ "embedder"
+      refute_received :inference_client_construction_started
+    end
+
+    test "while the credential is present but blank then startup still raises" do
+      test_pid = self()
+      System.put_env("GOOGLE_API_KEY", "")
+
+      assert {:error, {%ArgumentError{} = error, _}} =
+               start_pool_for_credentials(
+                 %{provider: :google, id: "gemini-3.1-flash-lite"},
+                 %{provider: :google, id: "gemini-embedding-2-preview"},
+                 test_pid
+               )
+
+      assert Exception.message(error) =~ "GOOGLE_API_KEY"
+      refute_received :inference_client_construction_started
+    end
+  end
+
+  describe "where a provider is named by neither configured model spec" do
+    setup do
+      previous = System.get_env("OPENAI_API_KEY")
+
+      on_exit(fn ->
+        if previous, do: System.put_env("OPENAI_API_KEY", previous), else: System.delete_env("OPENAI_API_KEY")
+      end)
+
+      :ok
+    end
+
+    test "then its absent credential does not prevent startup" do
+      System.put_env("GOOGLE_API_KEY", "present")
+      System.delete_env("OPENAI_API_KEY")
+
+      %{pid: pid} =
+        start_pool(
+          llm_model: %{provider: :google, id: "gemini-3.1-flash-lite"},
+          embedder_model: %{provider: :google, id: "gemini-embedding-2-preview"}
+        )
+
+      assert Process.alive?(pid)
+    end
+  end
+
   describe "init/1 runs synchronously, if any warmup call raises or returns {:error, _}" do
     test "then it is caught and logged at :warning as \"[gralkor] warmup failed (non-fatal) — <stage>: <reason>\" and boot proceeds" do
       log =
