@@ -81,7 +81,7 @@ defmodule Gralkor.LensMemoryScopeFunctionalTest do
   end
 
   describe "when a global Lens adds an episode" do
-    test "then the episode enters the one global memory pool shared by every global Lens and every operator" do
+    test "then the episode enters the one global group shared by every global Lens and every operator" do
       assert :ok = ingest("operator-one", "published-observations", "public observation")
       assert :ok = ingest("operator-two", "published-decisions", "public decision")
 

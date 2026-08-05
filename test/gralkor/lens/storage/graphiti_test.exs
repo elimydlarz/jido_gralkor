@@ -313,7 +313,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  describe "when the global pool is searched" do
+  describe "when the reserved `global` Lens is searched" do
     test "then graph search receives the fixed global group" do
       store = %Store{operator_id: "operator-one", lens: :global}
       test_pid = self()
