@@ -2,6 +2,7 @@ Unit: recall (src: lib/gralkor/recall.ex; integration: test/gralkor/recall_test.
 
 when a recall is requested
   then the group id is sanitised by replacing hyphens with underscores before any search runs
+  and the query is passed to interpretation, so relevance is judged against what was asked even when no session supplies a conversation
   and the returned memory block wraps its body in `<gralkor-memory trust="untrusted">…</gralkor-memory>`
   and the memory block carries an instruction to search memory again when more detail is needed
   if the agent name is missing or blank
