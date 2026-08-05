@@ -33,7 +33,7 @@ Three things the consumer must set up.
 ```bash
 # Embedded — falkordblite spawns a redis-server grandchild under this dir
 export GRALKOR_DATA_DIR=/var/lib/<your-app>/gralkor   # writable
-export GOOGLE_API_KEY=...
+export GOOGLE_API_KEY=...                             # the default LLM and embedder are Google
 ```
 
 Native Graphiti supports `google:` and `openai:` models, and each of its two
