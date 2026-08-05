@@ -7,7 +7,7 @@ defmodule Gralkor.InterpretTest do
 
   # ── ex-interpret ─────────────────────────────────────────────
 
-  describe "ex-interpret > interpret_facts/5 calls the configured LLM with the prompt" do
+  describe "ex-interpret > interpret_facts/6 calls the configured LLM with the prompt" do
     test "the prompt includes the labelled conversation messages and the formatted facts" do
       ref = make_ref()
       test_pid = self()
@@ -20,6 +20,7 @@ defmodule Gralkor.InterpretTest do
       _ =
         Interpret.interpret_facts(
           [Message.new("user", "what about X?")],
+          "tell me about X",
           "- X is a thing (created 2020)",
           interpret_fn,
           "Susu"
@@ -28,6 +29,28 @@ defmodule Gralkor.InterpretTest do
       assert_receive {^ref, prompt}
       assert prompt =~ "User: what about X?"
       assert prompt =~ "- X is a thing (created 2020)"
+    end
+
+    test "the prompt carries the request, so relevance is judged against it even when no conversation carried it" do
+      ref = make_ref()
+      test_pid = self()
+
+      interpret_fn = fn prompt, _budget ->
+        send(test_pid, {ref, prompt})
+        {:ok, []}
+      end
+
+      _ =
+        Interpret.interpret_facts(
+          [],
+          "Where does Eli work?",
+          "- Eli works at Anthropic",
+          interpret_fn,
+          "Susu"
+        )
+
+      assert_receive {^ref, prompt}
+      assert prompt =~ "Request to answer:\nWhere does Eli work?"
     end
 
     test "the prompt gently frames memory as source-derived understanding rather than proven truth" do
@@ -42,6 +65,7 @@ defmodule Gralkor.InterpretTest do
       _ =
         Interpret.interpret_facts(
           [Message.new("user", "what do we know about X?")],
+          "what do we know about X?",
           "- X is a thing",
           interpret_fn,
           "Susu"
@@ -60,7 +84,7 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/5 when the LLM returns relevant facts" do
+  describe "ex-interpret > interpret_facts/6 when the LLM returns relevant facts" do
     test "returns the list unchanged" do
       facts = [
         "X is a thing (created 2020) — relevant because the user asked about X",
@@ -72,6 +96,7 @@ defmodule Gralkor.InterpretTest do
       assert ^facts =
                Interpret.interpret_facts(
                  [Message.new("user", "tell me about X")],
+                 "tell me about X",
                  "- X is a thing\n- Y was deprecated",
                  interpret_fn,
                  "Susu"
@@ -79,13 +104,14 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/5 when the LLM returns an empty list" do
+  describe "ex-interpret > interpret_facts/6 when the LLM returns an empty list" do
     test "returns []" do
       interpret_fn = fn _, _ -> {:ok, []} end
 
       assert [] =
                Interpret.interpret_facts(
                  [Message.new("user", "q")],
+                 "q",
                  "- nothing relevant",
                  interpret_fn,
                  "Susu"
@@ -93,13 +119,14 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/5 if the LLM response cannot be parsed against the schema" do
+  describe "ex-interpret > interpret_facts/6 if the LLM response cannot be parsed against the schema" do
     test "raises Gralkor.InterpretParseFailed (a distinct exception; no partial list is returned)" do
       interpret_fn = fn _, _ -> {:ok, %{not: "a list"}} end
 
       assert_raise InterpretParseFailed, fn ->
         Interpret.interpret_facts(
           [Message.new("user", "q")],
+          "q",
           "- f",
           interpret_fn,
           "Susu"
@@ -113,6 +140,7 @@ defmodule Gralkor.InterpretTest do
       assert_raise InterpretParseFailed, fn ->
         Interpret.interpret_facts(
           [Message.new("user", "q")],
+          "q",
           "- f",
           interpret_fn,
           "Susu"
@@ -126,6 +154,7 @@ defmodule Gralkor.InterpretTest do
       assert_raise RuntimeError, ~r/interpret failed/, fn ->
         Interpret.interpret_facts(
           [Message.new("user", "q")],
+          "q",
           "- f",
           interpret_fn,
           "Susu"
@@ -134,10 +163,16 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/5 if agent_name is missing or blank" do
+  describe "ex-interpret > interpret_facts/6 if agent_name is missing or blank" do
     test "raises ArgumentError on blank" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Interpret.interpret_facts([Message.new("user", "q")], "- f", fn _, _ -> {:ok, []} end, "")
+        Interpret.interpret_facts(
+          [Message.new("user", "q")],
+          "q",
+          "- f",
+          fn _, _ -> {:ok, []} end,
+          ""
+        )
       end
     end
 
@@ -145,6 +180,7 @@ defmodule Gralkor.InterpretTest do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
         Interpret.interpret_facts(
           [Message.new("user", "q")],
+          "q",
           "- f",
           fn _, _ -> {:ok, []} end,
           nil
@@ -153,7 +189,7 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/5 when opts[:output_token_budget] is omitted" do
+  describe "ex-interpret > interpret_facts/6 when opts[:output_token_budget] is omitted" do
     test "a default of 2000 is applied (passed to interpret_fn and rendered into the prompt)" do
       ref = make_ref()
       test_pid = self()
@@ -166,6 +202,7 @@ defmodule Gralkor.InterpretTest do
       _ =
         Interpret.interpret_facts(
           [Message.new("user", "q")],
+          "q",
           "- f",
           interpret_fn,
           "Susu"
@@ -176,11 +213,12 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/5 if opts[:output_token_budget] is non-positive or non-integer" do
+  describe "ex-interpret > interpret_facts/6 if opts[:output_token_budget] is non-positive or non-integer" do
     test "raises ArgumentError on zero" do
       assert_raise ArgumentError, ~r/output_token_budget/, fn ->
         Interpret.interpret_facts(
           [Message.new("user", "q")],
+          "q",
           "- f",
           fn _, _ -> {:ok, []} end,
           "Susu",
@@ -193,6 +231,7 @@ defmodule Gralkor.InterpretTest do
       assert_raise ArgumentError, ~r/output_token_budget/, fn ->
         Interpret.interpret_facts(
           [Message.new("user", "q")],
+          "q",
           "- f",
           fn _, _ -> {:ok, []} end,
           "Susu",
@@ -205,6 +244,7 @@ defmodule Gralkor.InterpretTest do
       assert_raise ArgumentError, ~r/output_token_budget/, fn ->
         Interpret.interpret_facts(
           [Message.new("user", "q")],
+          "q",
           "- f",
           fn _, _ -> {:ok, []} end,
           "Susu",
@@ -214,7 +254,7 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/5 calls interpret_fn with the prompt AND the output_token_budget" do
+  describe "ex-interpret > interpret_facts/6 calls interpret_fn with the prompt AND the output_token_budget" do
     test "interpret_fn receives both the prompt and the configured budget so it can pass max_tokens to the provider" do
       ref = make_ref()
       test_pid = self()
@@ -227,6 +267,7 @@ defmodule Gralkor.InterpretTest do
       _ =
         Interpret.interpret_facts(
           [Message.new("user", "q")],
+          "q",
           "- f",
           interpret_fn,
           "Susu",
@@ -237,7 +278,7 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/5 the interpretation prompt carries a budget instruction" do
+  describe "ex-interpret > interpret_facts/6 the interpretation prompt carries a budget instruction" do
     test "the prompt includes a 'respond within N tokens' instruction matching the configured budget" do
       ref = make_ref()
       test_pid = self()
@@ -250,6 +291,7 @@ defmodule Gralkor.InterpretTest do
       _ =
         Interpret.interpret_facts(
           [Message.new("user", "q")],
+          "q",
           "- f",
           interpret_fn,
           "Susu",
@@ -280,7 +322,7 @@ defmodule Gralkor.InterpretTest do
 
   # ── ex-interpret-context ─────────────────────────────────────
 
-  describe "ex-interpret-context > build_interpretation_context/3" do
+  describe "ex-interpret-context > build_interpretation_context/5" do
     test "labels each message by role: 'User', '{agent_name}' (assistant), '{agent_name}: (behaviour: ...)' (behaviour)" do
       ctx =
         Interpret.build_interpretation_context(
@@ -289,6 +331,7 @@ defmodule Gralkor.InterpretTest do
             Message.new("behaviour", "thought about it"),
             Message.new("assistant", "hello")
           ],
+          "q",
           "- some fact",
           "Susu"
         )
@@ -308,6 +351,7 @@ defmodule Gralkor.InterpretTest do
             Message.new("assistant", "   "),
             Message.new("user", "")
           ],
+          "q",
           "- f",
           "Susu"
         )
@@ -316,15 +360,17 @@ defmodule Gralkor.InterpretTest do
       assert ctx |> String.split("User:") |> length() == 2
     end
 
-    test "assembles context as 'Conversation context:\\n{messages}\\n\\nMemory facts to interpret:\\n{facts}'" do
+    test "assembles context as 'Conversation context:\\n{messages}\\n\\nRequest to answer:\\n{query}\\n\\nMemory facts to interpret:\\n{facts}'" do
       ctx =
         Interpret.build_interpretation_context(
           [Message.new("user", "q")],
+          "where does Eli work?",
           "- f",
           "Susu"
         )
 
-      assert ctx == "Conversation context:\nUser: q\n\nMemory facts to interpret:\n- f"
+      assert ctx ==
+               "Conversation context:\nUser: q\n\nRequest to answer:\nwhere does Eli work?\n\nMemory facts to interpret:\n- f"
     end
 
     test "does NOT inspect or mutate content beyond whitespace trimming" do
@@ -334,6 +380,7 @@ defmodule Gralkor.InterpretTest do
       ctx =
         Interpret.build_interpretation_context(
           [Message.new("user", preserved)],
+          "q",
           "- f",
           "Susu"
         )
@@ -343,13 +390,13 @@ defmodule Gralkor.InterpretTest do
 
     test "raises ArgumentError on blank agent_name" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Interpret.build_interpretation_context([Message.new("user", "hi")], "- f", "")
+        Interpret.build_interpretation_context([Message.new("user", "hi")], "q", "- f", "")
       end
     end
 
     test "raises ArgumentError on nil agent_name" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Interpret.build_interpretation_context([Message.new("user", "hi")], "- f", nil)
+        Interpret.build_interpretation_context([Message.new("user", "hi")], "q", "- f", nil)
       end
     end
   end
@@ -362,19 +409,20 @@ defmodule Gralkor.InterpretTest do
         Message.new("user", "newest")
       ]
 
-      ctx = Interpret.build_interpretation_context(msgs, "- f", "Susu", budget: 200)
+      ctx = Interpret.build_interpretation_context(msgs, "q", "- f", "Susu", budget: 200)
 
       assert String.length(ctx) <= 200
       assert ctx =~ "User: newest"
       refute ctx =~ "oldest"
     end
 
-    test "if even one message exceeds the budget, returns empty conversation context" do
+    test "if even one message exceeds the budget, the request and the facts are still included" do
       msgs = [Message.new("user", String.duplicate("x", 1000))]
 
-      ctx = Interpret.build_interpretation_context(msgs, "- f", "Susu", budget: 100)
+      ctx = Interpret.build_interpretation_context(msgs, "still asked", "- f", "Susu", budget: 100)
 
       refute ctx =~ "User:"
+      assert ctx =~ "still asked"
       assert ctx =~ "- f"
     end
   end
