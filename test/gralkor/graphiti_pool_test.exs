@@ -823,7 +823,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert GraphitiPool.api_key!(:google) == "google-secret"
     end
 
-    test "and a credential set from Elixir still reaches the client, the embedded interpreter's own environment never carrying it" do
+    test "and a credential set from Elixir reaches it, the interpreter's own environment never carrying it" do
       var = "GRALKOR_CREDENTIAL_DELIVERY_PROBE_#{System.unique_integer([:positive])}"
       on_exit(fn -> System.delete_env(var) end)
 
