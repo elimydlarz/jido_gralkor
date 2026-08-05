@@ -164,15 +164,15 @@ defmodule Gralkor.GeneraliseJourneyTest do
       assert_receive {:generalisation_written, :ok}, 120_000
 
       # Wait for graphiti to re-index the written generalisation
-      raw = search_until(gen_group_id, "dark mode", 1, 40_000)
+      found = memories_until(gen_group_id, "dark mode", 40_000)
 
-      assert length(raw) >= 1,
-             "expected at least one fact in the _gen group; got #{inspect(raw)}"
+      assert found != [],
+             "expected the _gen group to surface the written generalisation; got nothing"
 
-      facts_text = Enum.map(raw, &Map.get(&1, :fact)) |> Enum.join("\n")
+      text = Enum.join(found, "\n")
 
-      assert facts_text =~ "dark mode",
-             "expected search results to mention dark mode; got: #{facts_text}"
+      assert text =~ "dark mode",
+             "expected search results to mention dark mode; got: #{text}"
     end
   end
 
