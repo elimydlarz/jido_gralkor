@@ -227,7 +227,7 @@ defmodule Gralkor.GeneraliseTest do
   end
 
   describe "ex-generalise > evaluate > contradicts" do
-    test "a contradicts decision removes the old generalisation and saves the new one" do
+    test "a contradicts decision saves the new generalisation one level above and leaves the existing one in place" do
       existing_gen = %Gralkor.Generalisation{
         id: "gen-outdated",
         content: "User dislikes notifications",
