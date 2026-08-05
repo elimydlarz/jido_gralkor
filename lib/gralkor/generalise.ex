@@ -244,12 +244,7 @@ defmodule Gralkor.Generalise do
 
           body = Generalisation.encode(gen)
 
-          if action == :contradicts && existing_id && remove_fn do
-            Logger.info("[gralkor] generalise contradict — removing #{existing_id}")
-            remove_fn.(gen_group_id, existing_id)
-          end
-
-          case add_fn.(gen_group_id, body, "generalisation", ontology, uuid: gen.id) do
+          case add_fn.(gen_group_id, body, "generalisation", ontology, []) do
             :ok ->
               Logger.info(
                 "[gralkor] generalise #{action} — saved (id:#{gen.id} level:#{level} confidence:#{confidence})"
