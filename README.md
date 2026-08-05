@@ -543,7 +543,7 @@ The Jido glue:
 - `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls `Gralkor.Client.search/1` for the configured Lenses and falls back to legacy `recall/4` when no Lens search is configured. It short-circuits when no thread is committed or the query is blank.
 - `JidoGralkor.Actions.MemoryAdd` — fire-and-forget ReAct tool.
 - `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
-- `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's partition.
+- `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's group.
 
 The embedded Gralkor adapter (under `lib/gralkor/`):
 
