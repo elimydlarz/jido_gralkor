@@ -69,21 +69,21 @@ defmodule Gralkor.GeneraliseJourneyTest do
     []
   end
 
-  defp search_until(group, query, min, budget_ms) do
-    case GraphitiPool.search(group, query, 5) do
+  defp search_until(group_id, query, min, budget_ms) do
+    case GraphitiPool.search(group_id, query, 5) do
       {:ok, raw} when length(raw) >= min ->
         raw
 
       _ ->
         Process.sleep(3_000)
-        search_until(group, query, min, max(budget_ms - 3_000, 0))
+        search_until(group_id, query, min, max(budget_ms - 3_000, 0))
     end
   end
 
   describe "ex-generalise-journey > after flush with generalise_fn" do
     test "the generalise pipeline saves generalisations to the _gen group" do
       group_id = "gen_after_flush_#{System.unique_integer([:positive])}"
-      gen_partition = "#{group_id}_gen"
+      gen_group_id = "#{group_id}_gen"
 
       # Inline flush callback: distill and generalise in one step
       gen_flush_callback = fn gid, _agent_name, _user_name, _ontology, _turns ->
@@ -121,7 +121,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
             add_episode_fn: fn _gid, content, source, ontology, opts ->
               GraphitiPool.add_episode(
                 Gralkor.GraphitiPool,
-                gen_partition,
+                gen_group_id,
                 content,
                 source,
                 ontology,
@@ -129,7 +129,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
               )
             end,
             remove_episode_fn: fn _gid, uuid ->
-              GraphitiPool.remove_episode(gen_partition, uuid)
+              GraphitiPool.remove_episode(gen_group_id, uuid)
             end,
             min_confidence: 0.3,
             max_gen_results: 5
@@ -152,7 +152,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
       :ok = Client.impl().flush(session_id)
 
       # Wait for generalise to complete and graphiti to re-index
-      raw = search_until(gen_partition, "dark mode", 1, 40_000)
+      raw = search_until(gen_group_id, "dark mode", 1, 40_000)
 
       assert length(raw) >= 1,
              "expected at least one fact in the _gen group; got #{inspect(raw)}"
@@ -167,7 +167,7 @@ defmodule Gralkor.GeneraliseJourneyTest do
   describe "ex-generalise-journey > direct add_episode to _gen group" do
     test "a generalisation stored via add_episode is findable via search" do
       group_id = "gen_direct_#{System.unique_integer([:positive])}"
-      gen_partition = "#{group_id}_gen"
+      gen_group_id = "#{group_id}_gen"
 
       gen = %Generalisation{
         id: "gen-direct-add",
@@ -181,14 +181,14 @@ defmodule Gralkor.GeneraliseJourneyTest do
       :ok =
         GraphitiPool.add_episode(
           Gralkor.GraphitiPool,
-          gen_partition,
+          gen_group_id,
           body,
           "generalisation",
           nil,
           []
         )
 
-      raw = search_until(gen_partition, "standing desk", 1, 60_000)
+      raw = search_until(gen_group_id, "standing desk", 1, 60_000)
       assert length(raw) >= 1, "expected at least one search result; got #{inspect(raw)}"
 
       facts_text = Enum.map(raw, &Map.get(&1, :fact)) |> Enum.join("\n")
