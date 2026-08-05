@@ -160,10 +160,10 @@ defmodule Gralkor.Recall do
     end
   end
 
-  defp interpret_combined([], _conversation, _interpret_fn, _agent_name, _opts),
+  defp interpret_combined([], _conversation, _query, _interpret_fn, _agent_name, _opts),
     do: {@no_facts_body, 0, 0}
 
-  defp interpret_combined(facts, conversation, interpret_fn, agent_name, opts) do
+  defp interpret_combined(facts, conversation, query, interpret_fn, agent_name, opts) do
     facts_text = format_facts(facts)
 
     interpret_opts =
