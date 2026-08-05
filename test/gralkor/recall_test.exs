@@ -759,9 +759,15 @@ defmodule Gralkor.RecallTest do
           """
           import asyncio
 
+          class _Episode:
+              def __init__(self, content):
+                  self.content = content
+                  self.source_description = "generalisation"
+
           class _Results:
-              def __init__(self):
+              def __init__(self, episodes=None):
                   self.nodes = []
+                  self.episodes = episodes or []
 
           class _FakeGraphiti:
               def __init__(self):
@@ -771,9 +777,18 @@ defmodule Gralkor.RecallTest do
               async def search(self, query, num_results=10, search_filter=None):
                   return []
 
-              # the generalisation and learning searches use NODE search
-              # (search_nodes -> g.search_), so every call is recorded
+              # the generalisation and learning searches use NODE search, and
+              # reading generalisations back uses EPISODE search — both arrive
+              # here as g.search_, so every call is recorded by what it asked for
               async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  if config is not None and config.episode_config is not None:
+                      self.recorded.setdefault('episode_calls', []).append(
+                          [m.value for m in config.episode_config.search_methods]
+                      )
+                      return _Results(episodes=[
+                          _Episode('GEN|v1|{"id":"gen-1","level":0,"confidence":0.8,"generalises":[]}\\nEli prefers dark mode'),
+                      ])
+
                   self.recorded.setdefault('node_label_calls', []).append(
                       list(search_filter.node_labels)
                       if search_filter is not None and search_filter.node_labels
@@ -825,6 +840,34 @@ defmodule Gralkor.RecallTest do
       # fake graphiti recorded the labels of every search_ it received.
       {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
       assert ["Learning"] in (rec |> Pythonx.decode())["node_label_calls"]
+    end
+
+    test "Native.recall/4 runs the real generalisation search as an unfiltered node search",
+         %{g: g} do
+      import ExUnit.CaptureLog
+
+      logs =
+        capture_log(fn ->
+          assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "what does Eli prefer")
+        end)
+
+      refute String.contains?(logs, "gen search failed")
+
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert [] in (rec |> Pythonx.decode())["node_label_calls"]
+    end
+
+    test "Native.search_generalisations/3 asks the graph for episodes and decodes the stored bodies",
+         %{g: g} do
+      assert {:ok, [generalisation]} = Native.search_generalisations("g", "dark mode", 5)
+
+      assert generalisation.id == "gen-1"
+      assert generalisation.content == "Eli prefers dark mode"
+      assert generalisation.level == 0
+      assert generalisation.confidence == 0.8
+
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert (rec |> Pythonx.decode())["episode_calls"] == [["bm25"]]
     end
   end
 end
