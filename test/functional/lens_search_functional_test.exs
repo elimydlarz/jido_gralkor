@@ -409,6 +409,21 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
+  defp publish_global_episodes do
+    for {lens, content} <- [
+          {"published-observations", "published observation"},
+          {"published-decisions", "published decision"}
+        ] do
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: lens,
+                 content: content,
+                 source_description: "functional"
+               })
+    end
+  end
+
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
 end
