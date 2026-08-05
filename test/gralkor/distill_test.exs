@@ -73,6 +73,8 @@ defmodule Gralkor.DistillTest do
 
   describe "ex-format-transcript > no LLM is involved" do
     test "rendering is pure — format_transcript/3 takes no distill_fn" do
+      Code.ensure_loaded!(Distill)
+
       refute function_exported?(Distill, :format_transcript, 4)
       assert function_exported?(Distill, :format_transcript, 3)
     end
