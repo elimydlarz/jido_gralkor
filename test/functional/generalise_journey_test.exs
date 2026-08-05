@@ -200,13 +200,13 @@ defmodule Gralkor.GeneraliseJourneyTest do
           []
         )
 
-      raw = search_until(gen_group_id, "standing desk", 1, 60_000)
-      assert length(raw) >= 1, "expected at least one search result; got #{inspect(raw)}"
+      found = memories_until(gen_group_id, "standing desk", 60_000)
+      assert found != [], "expected the _gen group to surface the stored generalisation"
 
-      facts_text = Enum.map(raw, &Map.get(&1, :fact)) |> Enum.join("\n")
+      text = Enum.join(found, "\n")
 
-      assert facts_text =~ "standing" or facts_text =~ "desk",
-             "expected search results to mention the generalisation; got: #{facts_text}"
+      assert text =~ "standing" or text =~ "desk",
+             "expected search results to mention the generalisation; got: #{text}"
     end
   end
 end
