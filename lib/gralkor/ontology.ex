@@ -326,7 +326,7 @@ defmodule Gralkor.Ontology do
 
   defp ensure_unique_entities!(module, entities) do
     entities
-    |> Enum.map(fn {name, _} -> name end)
+    |> Enum.map(fn {name, _description, _fields} -> name end)
     |> Enum.frequencies()
     |> Enum.find(fn {_, count} -> count > 1 end)
     |> case do
