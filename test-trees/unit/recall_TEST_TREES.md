@@ -1,7 +1,7 @@
 Unit: recall (src: lib/gralkor/recall.ex; integration: test/gralkor/recall_test.exs; unit: test/gralkor/recall_test.exs)
 
 when a recall is requested
-  then the group id is sanitized by replacing hyphens with underscores before any search runs
+  then the group id is sanitised by replacing hyphens with underscores before any search runs
   and the returned memory block wraps its body in `<gralkor-memory trust="untrusted">…</gralkor-memory>`
   and the memory block carries an instruction to search memory again when more detail is needed
   if the agent name is missing or blank
@@ -44,7 +44,7 @@ when no output token budget is supplied
   then interpretation applies its own default budget of 2000
 
 where a generalisation search is supplied
-  then it runs in parallel with the main search over the same sanitized group
+  then it runs in parallel with the main search over the same sanitised group
   and it asks for one third of the main result limit, never fewer than one
   and its results are combined with the regular facts before interpretation
   and it is abandoned after a five-second yield that is independent of the overall recall deadline
@@ -57,7 +57,7 @@ where no generalisation search is supplied
 
 where a learning search is supplied
   then it runs on every recall without any opt-in flag
-  and it runs in parallel over the same sanitized group
+  and it runs in parallel over the same sanitised group
   and it is seeded with the raw user query rather than a classified or LLM-rewritten query
   and it asks for one third of the main result limit, never fewer than one
   and its results are combined with the regular facts before interpretation

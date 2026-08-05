@@ -28,15 +28,15 @@ if a recall is requested with a missing or blank agent name
   and no search is issued
 
 when a turn is captured for a session under a group, with an agent name, a user name and messages
-  then the group is sanitized before it is buffered
+  then the group is sanitised before it is buffered
   and the deployment-configured ontology is resolved, the caller being given no ontology argument of its own
   and that resolved ontology is buffered alongside the turn
-  and the sanitized group, the agent name, the user name, the resolved ontology and the messages are appended to the capture buffer under that session
+  and the sanitised group, the agent name, the user name, the resolved ontology and the messages are appended to the capture buffer under that session
   and success is returned immediately, no distillation running before the call returns
   and nothing is logged for the turn itself, captured content becoming observable only at flush
 
 where a turn is captured through a named Lens
-  then the operator id is buffered unsanitized, so the Lens keeps the operator's original identity
+  then the operator id is buffered unsanitised, so the Lens keeps the operator's original identity
   and the agent name, the user name, the Lens name and the messages are appended to the capture buffer under that session
   and the deployment-configured ontology is not consulted, a Lens owning its own ontology
   and success is returned immediately
@@ -88,8 +88,8 @@ if a flush-and-await is requested with a missing or non-positive timeout
   then an argument error naming the timeout is raised
 
 when memory is added with a group and content
-  then the group is sanitized before the write
-  and the content is written to the graph as a plain-text episode scoped to the sanitized group
+  then the group is sanitised before the write
+  and the content is written to the graph as a plain-text episode scoped to the sanitised group
   and the episode carries a generated name of "manual-add-" followed by the current millisecond timestamp
   and the episode carries a generated idempotency key rendered from a positive monotonic unique integer
   and success is returned once the graph accepts the write
@@ -120,25 +120,25 @@ when an index and constraint rebuild is requested
     then that failure is returned unchanged
 
 when community building is requested for a group
-  then the group is sanitized before use
-  and community building is scoped to the sanitized group
+  then the group is sanitised before use
+  and community building is scoped to the sanitised group
   and the number of communities and the number of edges built are returned
   if the graph fails
     then that failure is returned unchanged
 
 when generalisations are searched for a group
-  then the group is sanitized before use
+  then the group is sanitised before use
   and the search is scoped to that group's `_gen` partition
   and every result that decodes as a generalisation is returned carrying its decoded content, level and confidence
   but a result that does not decode as a generalisation is left out rather than surfaced raw
   if the search fails
     then that failure is returned unchanged
 
-when a group id holding hyphens is sanitized
+when a group id holding hyphens is sanitised
   then every hyphen is replaced with an underscore
   and consecutive hyphens are each replaced independently, so none is collapsed into another
 
-when a group id holding no hyphens is sanitized
+when a group id holding no hyphens is sanitised
   then it is returned unchanged
 
 when the client implementation is resolved
