@@ -153,7 +153,7 @@ defmodule Gralkor.GraphitiPool do
         %{
           "g" => instance,
           "query" => query,
-          "group_id" => group_id,
+          "group_id" => Client.sanitize_group_id(group_id),
           "max_results" => max_results,
           "node_labels" => node_labels
         }
