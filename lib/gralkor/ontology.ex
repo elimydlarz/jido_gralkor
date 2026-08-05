@@ -251,13 +251,13 @@ defmodule Gralkor.Ontology do
               description:
                 "Gralkor.Ontology: `field` may only be used inside `entity` or relationship blocks"
 
-          {name, existing} ->
+          {name, description, existing} ->
             ensure_unique_field!(existing, field, "entity #{inspect(name)}")
 
             Module.put_attribute(
               module,
               :gralkor_ontology_current_entity,
-              {name, [field | existing]}
+              {name, description, [field | existing]}
             )
         end
 
