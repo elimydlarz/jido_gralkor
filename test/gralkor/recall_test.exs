@@ -525,8 +525,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > when gen_search_fn is provided" do
-    test "gen search runs in parallel alongside the main search" do
+  describe "where a generalisation search is supplied" do
+    test "then it runs alongside the main search and receives at least one third of the main limit" do
       test_pid = self()
 
       gen_fn = fn _g, _q, max_r ->
@@ -552,7 +552,7 @@ defmodule Gralkor.RecallTest do
       assert block =~ "<gralkor-memory"
     end
 
-    test "gen results are combined with regular facts before interpretation" do
+    test "and successful generalisation facts reach interpretation with regular facts" do
       test_pid = self()
 
       gen_fn = fn _g, _q, _max ->
@@ -583,7 +583,10 @@ defmodule Gralkor.RecallTest do
       assert block =~ "<gralkor-memory"
     end
 
-    test "when gen search fails, recall proceeds with only regular facts" do
+  end
+
+  describe "where a generalisation search is supplied > if it fails" do
+    test "then it contributes no facts while regular facts remain eligible" do
       gen_fn = fn _g, _q, _max -> {:error, :gen_down} end
 
       assert {:ok, block} =
@@ -603,7 +606,10 @@ defmodule Gralkor.RecallTest do
       assert block =~ "some fact"
     end
 
-    test "when gen search returns empty, recall proceeds normally" do
+  end
+
+  describe "where a generalisation search is supplied > while it returns no facts" do
+    test "then recall proceeds normally" do
       assert {:ok, block} =
                Recall.recall(
                  "g",
@@ -621,8 +627,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > when gen_search_fn is absent" do
-    test "no gen search is performed (backward compatible)" do
+  describe "where no generalisation search is supplied" do
+    test "then no generalisation search is issued" do
       assert {:ok, block} =
                Recall.recall(
                  "g",
@@ -636,9 +642,9 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > when an auxiliary search outlasts its yield" do
+  describe "where both auxiliary searches outlast their yield" do
     @tag :capture_log
-    test "both auxiliary searches are abandoned after five seconds and recall returns the main facts" do
+    test "then both are abandoned within one shared five-second window" do
       slow = fn _g, _q, _max ->
         Process.sleep(30_000)
         {:ok, ["- never seen"]}
@@ -676,8 +682,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > when the main result limit is small" do
-    test "an auxiliary search still asks for at least one result" do
+  describe "when the main result limit is smaller than three" do
+    test "then each supplied auxiliary search still receives a limit of one" do
       test_pid = self()
 
       aux = fn _g, _q, max_r ->
@@ -705,8 +711,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > when a learning_search_fn is provided in opts" do
-    test "the learning search runs unconditionally over the same group_id, seeded with the raw user query" do
+  describe "where a learning search is supplied" do
+    test "then it runs on every recall over the same group with the raw query and at least one third of the main limit" do
       test_pid = self()
 
       search_fn = fn _g, q, max_r ->
@@ -739,7 +745,7 @@ defmodule Gralkor.RecallTest do
       assert_receive {:learning_searched, "how do I schedule X", 3}, 500
     end
 
-    test "learning results are combined with regular facts before interpretation" do
+    test "and successful learning facts reach interpretation with regular facts" do
       test_pid = self()
 
       learning_fn = fn _g, _q, _max ->
@@ -769,7 +775,10 @@ defmodule Gralkor.RecallTest do
       assert_receive :interpret_saw_learning, 500
     end
 
-    test "when the learning search fails, recall proceeds with only regular facts" do
+  end
+
+  describe "where a learning search is supplied > if it fails" do
+    test "then it contributes no facts while regular facts remain eligible" do
       learning_fn = fn _g, _q, _max -> {:error, :search_down} end
 
       assert {:ok, block} =
@@ -788,7 +797,10 @@ defmodule Gralkor.RecallTest do
       assert block =~ "some fact"
     end
 
-    test "when the learning search returns empty, recall proceeds normally" do
+  end
+
+  describe "where a learning search is supplied > while it returns no facts" do
+    test "then recall proceeds normally" do
       assert {:ok, block} =
                Recall.recall(
                  "g",
@@ -806,8 +818,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > when learning_search_fn is absent" do
-    test "no learning search is performed (backward compatible)" do
+  describe "where no learning search is supplied" do
+    test "then no learning search is issued" do
       test_pid = self()
 
       search_fn = fn _g, q, _max ->
