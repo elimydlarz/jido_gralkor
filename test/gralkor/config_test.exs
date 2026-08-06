@@ -40,38 +40,32 @@ defmodule Gralkor.ConfigTest do
   defp restore_env(key, ""), do: System.put_env(key, "")
   defp restore_env(key, v), do: System.put_env(key, v)
 
-  describe "falkordb-connection > when neither :falkordb nor GRALKOR_DATA_DIR is set" do
-    test "returns nil" do
+  describe "when the FalkorDB connection is resolved > while neither a remote configuration nor a data directory is set" do
+    test "then nothing is returned, so the supervisor can start with no children" do
       assert Config.falkordb_spec() == nil
     end
   end
 
-  describe "falkordb-connection > when GRALKOR_DATA_DIR is set and :falkordb is unset" do
-    test "returns {:embedded, expanded_path}" do
+  describe "when the FalkorDB connection is resolved > while a data directory is set > and no remote configuration is set" do
+    test "then an embedded connection carrying that data directory is returned" do
       System.put_env("GRALKOR_DATA_DIR", "/tmp/gralkor")
       assert Config.falkordb_spec() == {:embedded, "/tmp/gralkor"}
     end
 
-    test "expands ~ in the data dir" do
+    test "and a leading tilde in the data directory is expanded to an absolute path" do
       System.put_env("GRALKOR_DATA_DIR", "~/gralkor")
       assert {:embedded, expanded} = Config.falkordb_spec()
       refute String.starts_with?(expanded, "~")
     end
   end
 
-  describe "falkordb-connection > when :falkordb is set with :host and :port" do
-    test "returns {:remote, kw} with the keyword list unchanged" do
+  describe "when the FalkorDB connection is resolved > while a remote configuration carrying a host and a port is set" do
+    test "then a remote connection carrying that configuration unchanged is returned" do
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
       assert Config.falkordb_spec() == {:remote, [host: "falkor.example", port: 6379]}
     end
 
-    test "remote wins when GRALKOR_DATA_DIR is also set" do
-      System.put_env("GRALKOR_DATA_DIR", "/tmp/should_be_ignored")
-      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
-      assert {:remote, _} = Config.falkordb_spec()
-    end
-
-    test "carries username and password through" do
+    test "and a supplied username and password are carried through unchanged" do
       Application.put_env(:jido_gralkor, :falkordb,
         host: "falkor.example",
         port: 6379,
@@ -85,84 +79,72 @@ defmodule Gralkor.ConfigTest do
     end
   end
 
-  describe "falkordb-connection > when :falkordb is misconfigured" do
-    test "raises when :host is missing" do
-      Application.put_env(:jido_gralkor, :falkordb, port: 6379)
-      assert_raise ArgumentError, ~r/:host/, fn -> Config.falkordb_spec() end
-    end
-
-    test "raises when :port is missing" do
-      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example")
-      assert_raise ArgumentError, ~r/:port/, fn -> Config.falkordb_spec() end
-    end
-
-    test "raises when :host is blank" do
-      Application.put_env(:jido_gralkor, :falkordb, host: "", port: 6379)
-      assert_raise ArgumentError, ~r/:host/, fn -> Config.falkordb_spec() end
-    end
-
-    test "raises when :host contains only whitespace" do
-      Application.put_env(:jido_gralkor, :falkordb, host: "   ", port: 6379)
-      assert_raise ArgumentError, ~r/:host/, fn -> Config.falkordb_spec() end
-    end
-
-    test "raises when :port is not a positive integer" do
-      Application.put_env(:jido_gralkor, :falkordb, host: "h", port: 0)
-      assert_raise ArgumentError, ~r/:port/, fn -> Config.falkordb_spec() end
-    end
-
-    test "raises when :falkordb is not a keyword list" do
-      Application.put_env(:jido_gralkor, :falkordb, "falkor://host:6379")
-      assert_raise ArgumentError, ~r/keyword list/, fn -> Config.falkordb_spec() end
+  describe "when the FalkorDB connection is resolved > while a remote configuration carrying a host and a port is set > while a data directory is also set" do
+    test "then the remote connection is the one returned" do
+      System.put_env("GRALKOR_DATA_DIR", "/tmp/should_be_ignored")
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
+      assert {:remote, _} = Config.falkordb_spec()
     end
   end
 
-  describe "ex-config-defaults > model-spec shape > llm_model and embedder_model" do
-    test "default to the canonical google models as %{provider:, id:} maps when env is unset" do
-      assert Config.llm_model() == %{provider: :google, id: "gemini-3.1-flash-lite"}
-      assert Config.embedder_model() == %{provider: :google, id: "gemini-embedding-2-preview"}
+  describe "if the remote FalkorDB configuration is not a keyword list" do
+    test "then resolving the connection raises, naming the offending value" do
+      Application.put_env(:jido_gralkor, :falkordb, "falkor://host:6379")
+      assert_raise ArgumentError, ~r/falkor:\/\/host:6379/, fn -> Config.falkordb_spec() end
     end
+  end
 
-    test "GRALKOR_LLM_MODEL is parsed to a map" do
+  describe "if the remote FalkorDB configuration omits its host" do
+    test "then resolving the connection raises, naming the offending value" do
+      Application.put_env(:jido_gralkor, :falkordb, port: 6379)
+      assert_raise ArgumentError, ~r/\[port: 6379\]/, fn -> Config.falkordb_spec() end
+    end
+  end
+
+  describe "if the remote FalkorDB configuration omits its port" do
+    test "then resolving the connection raises, naming the offending value" do
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example")
+      assert_raise ArgumentError, ~r/falkor\.example/, fn -> Config.falkordb_spec() end
+    end
+  end
+
+  describe "if the remote FalkorDB host is blank" do
+    test "then resolving the connection raises, naming the offending value" do
+      for host <- ["", "   "] do
+        Application.put_env(:jido_gralkor, :falkordb, host: host, port: 6379)
+        assert_raise ArgumentError, ~r/host/, fn -> Config.falkordb_spec() end
+      end
+    end
+  end
+
+  describe "if the remote FalkorDB port is not a positive integer" do
+    test "then resolving the connection raises, naming the offending value" do
+      Application.put_env(:jido_gralkor, :falkordb, host: "h", port: 0)
+      assert_raise ArgumentError, ~r/0/, fn -> Config.falkordb_spec() end
+    end
+  end
+
+  describe "when a role's model override is configured as a provider and a model id joined by a colon" do
+    test "then a spec carrying that provider as an atom and that model id as a string is returned" do
       System.put_env("GRALKOR_LLM_MODEL", "openai:gpt-4")
       assert Config.llm_model() == %{provider: :openai, id: "gpt-4"}
-    end
-
-    test "GRALKOR_EMBEDDER_MODEL is parsed to a map" do
       System.put_env("GRALKOR_EMBEDDER_MODEL", "openai:text-embedding-3-small")
       assert Config.embedder_model() == %{provider: :openai, id: "text-embedding-3-small"}
     end
 
-    test "blank env values fall back to defaults" do
-      System.put_env("GRALKOR_LLM_MODEL", "")
-      assert Config.llm_model() == %{provider: :google, id: "gemini-3.1-flash-lite"}
+    test "and the returned spec is not narrowed to any particular provider, so provider support is decided where the inference clients are built" do
+      System.put_env("GRALKOR_LLM_MODEL", "anthropic:claude-3")
+      assert Config.llm_model() == %{provider: :anthropic, id: "claude-3"}
     end
 
-    test "GRALKOR_LLM_MODEL without a colon raises ArgumentError naming the env var and value" do
-      System.put_env("GRALKOR_LLM_MODEL", "gemini-3.1-flash-lite")
-
-      assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL.*gemini-3\.1-flash-lite/, fn ->
-        Config.llm_model()
-      end
+    test "and only the first colon separates the provider from the model id, so a model id may itself contain colons" do
+      System.put_env("GRALKOR_LLM_MODEL", "anthropic:claude-3:opus")
+      assert Config.llm_model() == %{provider: :anthropic, id: "claude-3:opus"}
     end
 
-    test "GRALKOR_EMBEDDER_MODEL with a blank provider half raises ArgumentError naming the env var and value" do
-      System.put_env("GRALKOR_EMBEDDER_MODEL", ":gemini-embedding-2-preview")
+    test "and the returned spec is the inline map shape the BEAM-side LLM client accepts without a catalog lookup, so a model id newer than the bundled catalog raises no unverified-model warning" do
+      System.put_env("GRALKOR_LLM_MODEL", "google:not-yet-catalogued")
 
-      assert_raise ArgumentError,
-                   ~r/GRALKOR_EMBEDDER_MODEL.*:gemini-embedding-2-preview/,
-                   fn -> Config.embedder_model() end
-    end
-
-    test "GRALKOR_LLM_MODEL with a blank model half raises ArgumentError naming the env var and value" do
-      System.put_env("GRALKOR_LLM_MODEL", "google:")
-
-      assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL.*google:/, fn ->
-        Config.llm_model()
-      end
-    end
-
-    test "the default llm_model shape is accepted by ReqLLM.model/1 without emitting an 'unverified model' IO.warn" do
       stderr =
         capture_io(:stderr, fn ->
           assert {:ok, %LLMDB.Model{}} = ReqLLM.model(Config.llm_model())
@@ -170,45 +152,73 @@ defmodule Gralkor.ConfigTest do
 
       refute stderr =~ "Using unverified model"
     end
+  end
 
-    test "the default embedder_model shape is accepted by ReqLLM.model/1 without emitting an 'unverified model' IO.warn" do
-      stderr =
-        capture_io(:stderr, fn ->
-          assert {:ok, %LLMDB.Model{}} = ReqLLM.model(Config.embedder_model())
-        end)
-
-      refute stderr =~ "Using unverified model"
+  describe "when no model override is configured for a role" do
+    test "then the Google default model spec for that role is returned" do
+      assert Config.llm_model() == %{provider: :google, id: "gemini-3.1-flash-lite"}
+      assert Config.embedder_model() == %{provider: :google, id: "gemini-embedding-2-preview"}
     end
   end
 
-  describe "ex-config-defaults > model-spec shape > when a model id contains colons" do
-    test "then only the first colon separates provider from id" do
-      System.put_env("GRALKOR_LLM_MODEL", "anthropic:claude-3:opus")
-      assert Config.llm_model() == %{provider: :anthropic, id: "claude-3:opus"}
+  describe "when a role's model override is configured as a blank value" do
+    test "then the Google default model spec for that role is returned" do
+      System.put_env("GRALKOR_LLM_MODEL", "")
+      System.put_env("GRALKOR_EMBEDDER_MODEL", "")
+      assert Config.llm_model() == %{provider: :google, id: "gemini-3.1-flash-lite"}
+      assert Config.embedder_model() == %{provider: :google, id: "gemini-embedding-2-preview"}
     end
   end
 
-  describe "ex-config-ontology > when :jido_gralkor, :ontology is unset" do
-    test "returns nil" do
+  describe "if a role's model override omits the colon separator" do
+    test "then resolving that role's model raises, naming the environment variable and the offending value" do
+      System.put_env("GRALKOR_LLM_MODEL", "gemini-3.1-flash-lite")
+
+      assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL.*gemini-3\.1-flash-lite/, fn ->
+        Config.llm_model()
+      end
+    end
+  end
+
+  describe "if a role's model override leaves the provider or the model id blank" do
+    test "then resolving that role's model raises, naming the environment variable and the offending value" do
+      System.put_env("GRALKOR_EMBEDDER_MODEL", ":gemini-embedding-2-preview")
+
+      assert_raise ArgumentError,
+                   ~r/GRALKOR_EMBEDDER_MODEL.*:gemini-embedding-2-preview/,
+                   fn -> Config.embedder_model() end
+
+      System.put_env("GRALKOR_LLM_MODEL", "google:")
+
+      assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL.*google:/, fn ->
+        Config.llm_model()
+      end
+    end
+  end
+
+  describe "when the deployment-wide ontology is resolved > while no ontology is configured" do
+    test "then nothing is returned, so every write behaves as it does with no ontology declared" do
       assert Config.ontology() == nil
     end
   end
 
-  describe "ex-config-ontology > when :jido_gralkor, :ontology is a module declared via use Gralkor.Ontology" do
-    test "returns that module" do
+  describe "when the deployment-wide ontology is resolved > while a module declared as an ontology is configured" do
+    test "then that module is returned" do
       Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
       assert Config.ontology() == Gralkor.TestOntologies.Strict
     end
   end
 
-  describe "ex-config-ontology > if :jido_gralkor, :ontology is a module that does not export __ontology__/0, or any non-module value" do
-    test "raises ArgumentError naming a module that is not an ontology" do
+  describe "if the configured deployment-wide ontology is a module that is not declared as an ontology" do
+    test "then resolving it raises at the write boundary, naming the offending value" do
       Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
 
       assert_raise ArgumentError, ~r/NotAnOntology/, fn -> Config.ontology() end
     end
+  end
 
-    test "raises ArgumentError naming a non-module value" do
+  describe "if the configured deployment-wide ontology is not a module" do
+    test "then resolving it raises at the write boundary, naming the offending value" do
       Application.put_env(:jido_gralkor, :ontology, "MyApp.Ontology")
 
       assert_raise ArgumentError, ~r/MyApp\.Ontology/, fn -> Config.ontology() end
