@@ -334,12 +334,15 @@ defmodule Gralkor.Client.Native do
 
   defp search_gen_fn do
     fn gen_group_id, query, max_results ->
-      case GraphitiPool.search(gen_group_id, query, max_results) do
-        {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Map.get(&1, :fact))}
+      case GraphitiPool.search_episodes(GraphitiPool, gen_group_id, query, max_results) do
+        {:ok, episodes} -> {:ok, Enum.map(episodes, &Map.fetch!(&1, :content))}
         {:error, _} = err -> err
       end
     end
   end
+
+  @doc false
+  def generalisation_search_callback, do: search_gen_fn()
 
   defp gen_recall_search_fn do
     fn group_id, query, max_results ->
