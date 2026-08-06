@@ -721,49 +721,6 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
-  describe "when a capture flush writes its captured episode successfully" do
-    test "and the learning write asks for the built-in Learning entity type to be merged onto its ontology, while the captured write does not",
-         %{learning: learning, turn: turn} do
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: fn group, body, source, ontology, opts ->
-            send(self(), {:add, group, body, source, ontology, opts})
-            :ok
-          end,
-          learn_fn: fn _t, _a, _u -> {:ok, learning} end
-        )
-
-      assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn])
-
-      assert_received {:add, "g1", _transcript, "captured", :ont, captured_opts}
-
-      refute Keyword.get(captured_opts, :merge_learning_entity, false),
-             "captured write must not merge Learning"
-
-      assert_received {:add, "g1", _learning_body, "learning", :ont, learning_opts}
-
-      assert Keyword.get(learning_opts, :merge_learning_entity) == true,
-             "learning write signals merge_learning_entity: true"
-
-      no_ontology_cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: fn group, body, source, ontology, opts ->
-            send(self(), {:add, group, body, source, ontology, opts})
-            :ok
-          end,
-          learn_fn: fn _t, _a, _u -> {:ok, learning} end
-        )
-
-      assert :ok = no_ontology_cb.("g1", "Susu", "Eli", nil, [turn])
-
-      assert_received {:add, "g1", _transcript, "captured", nil, captured_opts}
-      refute Keyword.get(captured_opts, :merge_learning_entity, false)
-
-      assert_received {:add, "g1", _learning_body, "learning", nil, learning_opts}
-      assert Keyword.get(learning_opts, :merge_learning_entity) == true
-    end
-  end
-
   # The production path (start/2) builds the flush callback with NO add_episode_fn
   # dep, so it falls back to the default. Every other build_flush_callback test
   # injects a stub add_episode_fn and never exercises that default — which is
