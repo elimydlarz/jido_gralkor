@@ -137,7 +137,7 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
   end
 
   describe "where the generalising Lens is global" do
-    test "then its resulting memory enters shared global memory" do
+    test "then its resulting memory enters the shared global group" do
       Application.put_env(:jido_gralkor, :lenses, [lens(:global)])
       set_hypothesis("Eli prefers Friday launches.")
 

@@ -73,7 +73,7 @@ defmodule Gralkor.LensMemoryScopeFunctionalTest do
       assert {:ok, []} = search("operator-two", ["observations"])
     end
 
-    test "and the episode is unavailable from shared global memory" do
+    test "and the episode is unavailable from the shared global group" do
       assert :ok = ingest("operator-one", "observations", "private observation")
 
       assert {:ok, []} = search("operator-one", ["global"])
