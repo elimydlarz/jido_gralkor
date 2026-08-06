@@ -230,14 +230,14 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
       seed_thread_with_entries(pid, "pre-rotation", [%{role: :user, content: "flushed"}])
-      pause_second_state_read(pid, self())
+      pause_before_installation(pid, self())
 
       rotation =
         Task.async(fn ->
           ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000, keep_last_n: 0)
         end)
 
-      assert_receive :second_state_read
+      assert_receive :before_installation
 
       append =
         Task.async(fn ->
@@ -270,28 +270,36 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     assert :ok = :sys.install(pid, {block_second_get_state_reply, 0})
   end
 
-  defp pause_second_state_read(pid, test_pid) do
-    pause = fn count, event, _proc_state ->
+  defp pause_before_installation(pid, test_pid) do
+    pause = fn state, event, _proc_state ->
       case event do
         {:in, {:"$gen_call", _from, :get_state}} ->
-          count = count + 1
+          state = %{state | reads: state.reads + 1}
 
-          if count == 2 do
-            send(test_pid, :second_state_read)
-
-            receive do
-              :continue_rotation -> :ok
-            end
+          if state.reads == 2 do
+            pause_rotation(test_pid)
           end
 
-          count
+          state
+
+        {:in, {:system, _from, {:replace_state, _fun}}} when state.reads == 1 ->
+          pause_rotation(test_pid)
+          state
 
         _ ->
-          count
+          state
       end
     end
 
-    assert :ok = :sys.install(pid, {pause, 0})
+    assert :ok = :sys.install(pid, {pause, %{reads: 0}})
+  end
+
+  defp pause_rotation(test_pid) do
+    send(test_pid, :before_installation)
+
+    receive do
+      :continue_rotation -> :ok
+    end
   end
 
   defp append_thread_entry(pid, payload) do
