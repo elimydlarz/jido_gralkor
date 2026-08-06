@@ -10,12 +10,18 @@
 - **The redislite orphan sweep killed live servers owned by the same VM.** `Gralkor.Python.init/1` SIGKILLed every `redislite/bin/redis-server` on each boot, so the second journey module in a run killed the first module's database mid-test. The sweep now runs once per VM — the one moment when every matching server predates it. `pgrep -af` also dropped to `pgrep -f`: on macOS `-a` includes the caller's *ancestors* in the match list.
 - **`ontology-extraction` was flaky by construction.** Its entity types carried no description, and graphiti's extractor reads a custom type's description to decide when to mint it (the lesson `Gralkor.LearningEntity` already encodes). 1–2 of its 3 assertions failed per run; with descriptions declared it passes run after run.
 - `Gralkor.DistillTest`'s arity assertions now `Code.ensure_loaded!/1` first — `function_exported?/3` answers `false` for a module the VM has not loaded, so random ordering could fail them.
+- **Rebuilding the graph's indices rebuilt a database no episode is written to.** `GraphitiPool.build_indices/1` resolved the instance for a hardcoded `"default_db"` group; since every group is its own FalkorDB database, the `memory_build_indices` action never touched a group holding real data. It now rebuilds every group the pool holds an instance for — a group whose instance has not been created yet has its indices built the moment it is.
+- **A recall whose deadline expired said nothing.** The expiry now logs a warning naming the session and the budget, as the retry-ownership contract already required.
 
 ### Added
 - `entity Foo, "when to extract one" do … end` — `Gralkor.Ontology` entities can now declare a description, rendered as the extracted type's own description for graphiti's extractor. Optional; the description must be a literal string.
 - `Gralkor.GraphitiPool.search_episodes/4` — graphiti's BM25-over-content episode search, returning `{:ok, [%{content:, source_description:}]}`. The primitive for content Gralkor wrote in a format it must read back verbatim; unlike edge and node search, it does not depend on what an extractor derived.
 
+### Changed
+- `Gralkor.Interpret.interpret_facts/6` and `build_interpretation_context/5` take the recall query as their second argument. Consumers calling them directly must pass it; `Gralkor.Recall` already does.
+
 ### Removed
+- `Gralkor.GraphitiPool.credential_env/1` and `Gralkor.Client.Native.generalise_evaluate_callback/0` — neither had a caller, a test, or a documented consumer.
 - `Gralkor.Generalise`'s `:remove_episode_fn` option and its contradicts-removal path. It addressed graphiti by a generalisation id that is not an episode uuid, so it could never have deleted anything. A contradicting generalisation is persisted as an ordinary new episode recording its lineage, matching `Gralkor.Lens.Ingestion.Generalise`.
 
 ## [4.1.0] - 2026-07-01
@@ -30,6 +36,9 @@
 - **ERL did not work end to end against real graphiti.** Two bugs, both surfaced only by live functional testing (the fake-infra suite was green): (1) the `Learning` custom entity type had no class docstring and used required fields, so graphiti's extractor never created a `Learning` node; (2) recall queried *edges* (`g.search` + `node_labels`), which filters edges by endpoint and so never returns a standalone `Learning` node. Fixed by giving the entity a docstring + optional fields and switching recall to NODE search (`search_nodes/5`). Verified live: `add_episode` now creates a fully-populated `Learning` node and `search_nodes(node_labels: ["Learning"])` retrieves it.
 - **ERL learning search silently degraded on every recall (call-signature bug).** The client-wired `learning_search_fn` passed `search_filter:` as a positional arg to `GraphitiPool.search/5`; because that function carries defaults on both `server` (1st) and `opts` (5th), the 4-arg call bound the keyword list to `max_results` and failed the guard. The task raised `FunctionClauseError`, `Recall.await_aux` swallowed it, and the learning search returned `[]` — ERL quietly did nothing. Superseded by the move to `search_nodes/5` (the learning search now passes `node_labels` in opts with the server explicit).
 - **All capture flush was broken in production.** `Gralkor.Application.build_flush_callback/2`'s default `add_episode_fn` was `&GraphitiPool.add_episode/5`; since `add_episode` carries defaults on `server` (1st) and `opts` (6th), the 5-arity capture bound `group_id`→`server` and raised `FunctionClauseError` on every flush, exhausting `CaptureBuffer` and writing nothing (not just learnings — all captured memory). Fixed to call `add_episode` with the server supplied explicitly; pinned by an integration test wiring the default callback against a real `GraphitiPool`.
+
+### Changed
+- `Gralkor.Interpret.interpret_facts/6` and `build_interpretation_context/5` take the recall query as their second argument. Consumers calling them directly must pass it; `Gralkor.Recall` already does.
 
 ### Removed
 - `Gralkor.TaskKind` and the `:jido_gralkor, :erl_recall` opt-in flag — a dormant code path no consumer had ever set. The unconditional learning search replaces it.
