@@ -304,8 +304,8 @@ defmodule Gralkor.Generalise do
     entries =
       Enum.map(inputs, fn %{hypothesis: h, index: idx} ->
         """
-        Hypothesis ##{idx} (confidence: #{Map.get(h, :confidence, 0)}):
-        #{Map.get(h, :content, "")}
+        Hypothesis ##{idx} (confidence: #{field(h, :confidence, 0)}):
+        #{field(h, :content, "")}
         """
       end)
       |> Enum.join("\n---\n")
