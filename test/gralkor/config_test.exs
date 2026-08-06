@@ -142,7 +142,7 @@ defmodule Gralkor.ConfigTest do
       assert Config.llm_model() == %{provider: :anthropic, id: "claude-3:opus"}
     end
 
-    test "and the returned spec is the inline map shape the BEAM-side LLM client accepts without a catalog lookup, so a model id newer than the bundled catalog raises no unverified-model warning" do
+    test "and the inline spec avoids a catalog lookup and unverified-model warning" do
       System.put_env("GRALKOR_LLM_MODEL", "google:not-yet-catalogued")
 
       stderr =

@@ -32,7 +32,7 @@ when a role's model override is configured as a provider and a model id joined b
   then a spec carrying that provider as an atom and that model id as a string is returned
   and the returned spec is not narrowed to any particular provider, so provider support is decided where the inference clients are built
   and only the first colon separates the provider from the model id, so a model id may itself contain colons
-  and the returned spec is the inline map shape the BEAM-side LLM client accepts without a catalog lookup, so a model id newer than the bundled catalog raises no unverified-model warning
+  and the inline spec avoids a catalog lookup and unverified-model warning
 
 when no model override is configured for a role
   then the Google default model spec for that role is returned
