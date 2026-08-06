@@ -149,6 +149,28 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "if a turn without a Lens is appended for a session that already holds Lens-selected turns" do
+    test "then an argument error is raised before the new turn is buffered, preserving the Lens-selected turns unchanged" do
+      lens_turn = [Message.new("user", "lens turn")]
+
+      :ok =
+        CaptureBuffer.append_lens(
+          "s",
+          "operator",
+          "Susu",
+          "Eli",
+          "observations",
+          lens_turn
+        )
+
+      assert_raise ArgumentError, ~r/Lens-selected/, fn ->
+        CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "legacy")])
+      end
+
+      assert [^lens_turn] = CaptureBuffer.turns_for("s")
+    end
+  end
+
   describe "if the agent name is missing or blank" do
     test "then an argument error is raised" do
       for agent_name <- [nil, ""] do
@@ -272,6 +294,26 @@ defmodule Gralkor.CaptureBufferTest do
           [Message.new("user", "y")]
         )
       end
+    end
+  end
+
+  describe "where captured turns select a Lens > if a Lens-selected turn is appended for a session that already holds turns without a Lens" do
+    test "then an argument error is raised before the new turn is buffered, preserving the turns without a Lens unchanged" do
+      legacy_turn = [Message.new("user", "legacy turn")]
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, legacy_turn)
+
+      assert_raise ArgumentError, ~r/without a Lens/, fn ->
+        CaptureBuffer.append_lens(
+          "s",
+          "operator",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "lens")]
+        )
+      end
+
+      assert [^legacy_turn] = CaptureBuffer.turns_for("s")
     end
   end
 
