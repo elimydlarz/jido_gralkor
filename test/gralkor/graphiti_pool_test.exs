@@ -437,6 +437,76 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
+
+    test "then each returned edge is rendered as a fact carrying its created, valid, invalid, and expired timestamps" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          from datetime import datetime, timezone
+
+          class _Edge:
+              def __init__(self, fact):
+                  self.fact = fact
+                  self.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
+                  self.valid_at = datetime(2024, 1, 2, tzinfo=timezone.utc)
+                  self.invalid_at = datetime(2024, 1, 3, tzinfo=timezone.utc)
+                  self.expired_at = datetime(2024, 1, 4, tzinfo=timezone.utc)
+
+          class _FakeGraphiti:
+              async def search(self, query, num_results=10):
+                  return [_Edge("timestamps flow through")]
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:ok, [fact]} = GraphitiPool.search(pid, "g1", "q", 5)
+
+      assert fact.fact == "timestamps flow through"
+      assert fact.created_at == "2024-01-01 00:00:00+00:00"
+      assert fact.valid_at == "2024-01-02 00:00:00+00:00"
+      assert fact.invalid_at == "2024-01-03 00:00:00+00:00"
+      assert fact.expired_at == "2024-01-04 00:00:00+00:00"
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "search/4 (edge search), if running a fact search raises inside the graph library" do
+    test "then an error carrying the raised exception is returned" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              async def search(self, query, num_results=10):
+                  raise RuntimeError("boom")
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:error, {:python, message}} = GraphitiPool.search(pid, "g1", "q", 5)
+      assert message =~ "boom"
+
+      GenServer.stop(pid)
+    end
   end
 
   describe "build_indices/1" do
