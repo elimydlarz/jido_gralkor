@@ -110,18 +110,16 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when an interpretation output-token option is built for a supported provider" do
-    describe "while the provider is OpenAI" do
-      test "then the option uses `max_completion_tokens`, which OpenAI structured-output requests accept" do
-        assert Native.interpret_output_token_options(:openai, 321) ==
-                 [max_completion_tokens: 321]
-      end
+  describe "when an interpretation output-token option is built for a supported provider > while the provider is OpenAI" do
+    test "then the option uses `max_completion_tokens`, which OpenAI structured-output requests accept" do
+      assert Native.interpret_output_token_options(:openai, 321) ==
+               [max_completion_tokens: 321]
     end
+  end
 
-    describe "while the provider is Google" do
-      test "then the option uses `max_tokens`, which ReqLLM translates for that provider" do
-        assert Native.interpret_output_token_options(:google, 654) == [max_tokens: 654]
-      end
+  describe "when an interpretation output-token option is built for a supported provider > while the provider is Google" do
+    test "then the option uses `max_tokens`, which ReqLLM translates for that provider" do
+      assert Native.interpret_output_token_options(:google, 654) == [max_tokens: 654]
     end
   end
 
