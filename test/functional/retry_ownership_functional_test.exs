@@ -120,7 +120,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
       result_fn.(:counters.get(counter, 1))
     end
 
-    start_supervised!({CaptureBuffer, flush_callback: callback, retries: [1_000, 2_000, 4_000]})
+    start_supervised!({CaptureBuffer, flush_callback: callback})
 
     counter
   end

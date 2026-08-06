@@ -10,7 +10,7 @@ when recall interpretation receives an invalid structured response
   then interpretation raises after one model call
 
 when a graph write raises inside a capture chain
-  then the capture buffer retries with one-second and two-second backoffs
+  then the capture buffer retries with its default one-second and two-second backoffs
   and a returned write failure is not retried by a second layer
 
 when a graph write fails outside a capture chain
