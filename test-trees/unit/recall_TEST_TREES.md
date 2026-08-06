@@ -57,12 +57,9 @@ when recall begins and completes
 
 where test mode is enabled
   then the raw query is logged
-  when facts are returned
-    then the resulting memory block is logged
-  when no facts are returned
-    then no memory block is logged
-  when auxiliary searches run
-    then each auxiliary result count and result body is logged
+  and a returned-facts memory block is logged
+  and an empty-result memory block is not logged
+  and each auxiliary result count and result body is logged
 
 where test mode is disabled
   then neither the raw query nor memory block is logged
@@ -78,7 +75,8 @@ where a generalisation search is supplied
 
 where no generalisation search is supplied
   then no generalisation search is issued
-  and a supplied learning search still contributes its successful facts
+  where a learning search is supplied
+    then its successful facts still reach interpretation
 
 where a learning search is supplied
   then it runs on every recall over the same group with the raw query and at least one third of the main limit
@@ -91,7 +89,8 @@ where a learning search is supplied
 
 where no learning search is supplied
   then no learning search is issued
-  and a supplied generalisation search still contributes its successful facts
+  where a generalisation search is supplied
+    then its successful facts still reach interpretation
 
 where neither auxiliary search is supplied
   then the main search is the only search issued
