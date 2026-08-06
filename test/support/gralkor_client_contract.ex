@@ -391,6 +391,23 @@ defmodule Gralkor.ClientContract do
 
           assert {:error, :timeout} = client().flush_and_await("session-1", 50)
         end
+
+        test "and the buffered turns remain available to flush on a later call" do
+          unquote(setup_block).()
+          configure_flush_and_await({:error, :timeout})
+
+          assert {:error, :timeout} = client().flush_and_await("session-1", 50)
+
+          # the timeout does not discard the buffered turns for the session —
+          # a later flush call for the same session still reaches the backend
+          # and can still succeed.
+          configure_flush_and_await(:ok)
+
+          assert :ok = client().flush_and_await("session-1", 5_000)
+
+          assert [["session-1", 50], ["session-1", 5_000]] =
+                   Gralkor.Client.InMemory.flush_and_awaits()
+        end
       end
 
       describe "ex-client > flush_and_await/2 if the backend fails before the timeout" do
