@@ -207,11 +207,7 @@ defmodule Gralkor.Client.Native do
     schema = Interpret.interpret_schema()
 
     fn prompt, output_token_budget ->
-      options =
-        case model.provider do
-          :openai -> [max_completion_tokens: output_token_budget]
-          _provider -> [max_tokens: output_token_budget]
-        end
+      options = interpret_output_token_options(model.provider, output_token_budget)
 
       case ReqLLM.generate_object(model, prompt, schema, options) do
         {:ok, response} ->
@@ -280,6 +276,14 @@ defmodule Gralkor.Client.Native do
 
   @doc false
   def interpret_callback, do: interpret_fn()
+
+  @doc false
+  @spec interpret_output_token_options(:openai | :google, pos_integer()) :: keyword()
+  def interpret_output_token_options(:openai, output_token_budget),
+    do: [max_completion_tokens: output_token_budget]
+
+  def interpret_output_token_options(:google, output_token_budget),
+    do: [max_tokens: output_token_budget]
 
   defp turns_fn, do: &CaptureBuffer.turns_for/1
 
