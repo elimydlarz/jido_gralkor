@@ -450,9 +450,26 @@ defmodule Gralkor.Client.NativeTest do
     {g, _} =
       Pythonx.eval(
         """
+        import asyncio
+
+        class _Results:
+            def __init__(self):
+                self.nodes = []
+                self.episodes = []
+
         class _FakeGraphiti:
             def __init__(self):
                 self.recorded = {"episodes": [], "communities": 0}
+
+            async def search(self, query, num_results=10, search_filter=None):
+                if query.startswith("slow:"):
+                    await asyncio.sleep(0.3)
+                return []
+
+            async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                if query.startswith("slow:"):
+                    await asyncio.sleep(0.3)
+                return _Results()
 
             async def add_episode(self, **kwargs):
                 if kwargs.get("episode_body") == "boom":
@@ -607,16 +624,16 @@ defmodule Gralkor.Client.NativeTest do
 
     @tag :capture_log
     test "then it carries the deadline the deployment configures in place of the pipeline's own" do
-      Application.put_env(:jido_gralkor, :recall_deadline_ms, 1)
+      Application.put_env(:jido_gralkor, :recall_deadline_ms, 50)
 
       assert {:error, :recall_deadline_expired} =
-               Native.recall("g", "TestAgent", nil, "what do we know")
+               Native.recall("g", "TestAgent", nil, "slow: what do we know")
     end
 
-    test "where the deployment configures none, the pipeline's twelve-second default governs it" do
+    test "where the deployment configures none, the pipeline's own twelve-second default governs it" do
       Application.delete_env(:jido_gralkor, :recall_deadline_ms)
 
-      assert {:ok, block} = Native.recall("g", "TestAgent", nil, "what do we know")
+      assert {:ok, block} = Native.recall("g", "TestAgent", nil, "slow: what do we know")
       assert block =~ "<gralkor-memory"
     end
   end
