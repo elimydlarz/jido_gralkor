@@ -2025,7 +2025,8 @@ defmodule Gralkor.GraphitiPoolTest do
         merged =
           GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest, true}, :infinity)
 
-        plain_again = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
+        plain_again =
+          GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
 
         merged_again =
           GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest, true}, :infinity)
