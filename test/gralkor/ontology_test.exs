@@ -121,7 +121,7 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "where the call passes `required: true` > then the field is recorded as required" do
-      [%{fields: [field]}] = RequiredFieldOntology.__ontology__().entity_types
+      [%{fields: [field]}] = Gralkor.OntologyTest.RequiredFieldOntology.__ontology__().entity_types
       assert field == %{name: :handle, type: :string, required: true, doc: nil}
     end
 
@@ -152,7 +152,7 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "where the call omits `:doc` > then the field's description is recorded as nil" do
-      [%{fields: [field]}] = OptionalFieldOntology.__ontology__().entity_types
+      [%{fields: [field]}] = Gralkor.OntologyTest.OptionalFieldOntology.__ontology__().entity_types
       assert field.doc == nil
     end
 
@@ -385,7 +385,7 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "and the endpoint map preserves each distinct declared source-target pair in order" do
-      ontology = MultiEndpointOntology.__ontology__()
+      ontology = Gralkor.OntologyTest.MultiEndpointOntology.__ontology__()
       assert ontology.edge_type_map == [
                {{"User", "Preference"}, ["ENDORSES"]},
                {{"Org", "Preference"}, ["ENDORSES"]}
@@ -532,7 +532,7 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "but the declared verbs still appear in `:edge_types`" do
-      ontology = OpenRelsOntology.__ontology__()
+      ontology = Gralkor.OntologyTest.OpenRelsOntology.__ontology__()
       assert [%{name: "PREFERS"}] = ontology.edge_types
     end
   end
