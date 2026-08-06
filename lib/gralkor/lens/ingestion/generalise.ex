@@ -20,13 +20,27 @@ defmodule Gralkor.Lens.Ingestion.Generalise do
 
     with {:ok, candidates} <- hypothesise_fn.(prompt(request.content)) do
       candidates
-      |> Enum.filter(&(Map.get(&1, :confidence, 0) >= min_confidence))
+      |> Enum.filter(&(field(&1, :confidence, 0) >= min_confidence))
       |> Enum.reduce_while(:ok, fn candidate, :ok ->
-        case Store.add(store, Map.fetch!(candidate, :content), request.source_description) do
+        case Store.add(store, fetch_field!(candidate, :content), request.source_description) do
           :ok -> {:cont, :ok}
           {:error, _reason} = error -> {:halt, error}
         end
       end)
+    end
+  end
+
+  defp field(map, key, default) do
+    case Map.fetch(map, key) do
+      {:ok, value} -> value
+      :error -> Map.get(map, Atom.to_string(key), default)
+    end
+  end
+
+  defp fetch_field!(map, key) do
+    case Map.fetch(map, key) do
+      {:ok, value} -> value
+      :error -> Map.fetch!(map, Atom.to_string(key))
     end
   end
 

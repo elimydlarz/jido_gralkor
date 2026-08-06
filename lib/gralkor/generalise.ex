@@ -110,8 +110,8 @@ defmodule Gralkor.Generalise do
       {:ok, candidates} ->
         filtered =
           candidates
-          |> Enum.filter(fn c -> Map.get(c, :confidence, 0) >= min_confidence end)
-          |> Enum.sort_by(fn c -> Map.get(c, :confidence, 0) end, :desc)
+          |> Enum.filter(fn c -> field(c, :confidence, 0) >= min_confidence end)
+          |> Enum.sort_by(fn c -> field(c, :confidence, 0) end, :desc)
 
         Logger.info(
           "[gralkor] generalise hypothesised — candidates:#{length(candidates)} above_threshold:#{length(filtered)}"
@@ -145,7 +145,7 @@ defmodule Gralkor.Generalise do
         hypotheses
         |> Enum.with_index()
         |> Enum.flat_map(fn {h, idx} ->
-          query = Map.get(h, :content, "")
+          query = field(h, :content, "")
 
           case search_fn.(gen_group_id, query, max_results) do
             {:ok, raw} ->
@@ -198,11 +198,11 @@ defmodule Gralkor.Generalise do
     existing_by_id = Map.new(all_existing, fn g -> {g.id, g} end)
 
     Enum.each(decisions, fn decision ->
-      action = normalize_action(Map.get(decision, :action))
-      idx = Map.get(decision, :hypothesis_index)
-      content = Map.get(decision, :content, "")
-      confidence = Map.get(decision, :confidence, 0.0)
-      existing_id = Map.get(decision, :existing_id)
+      action = normalize_action(field(decision, :action))
+      idx = field(decision, :hypothesis_index)
+      content = field(decision, :content, "")
+      confidence = field(decision, :confidence, 0.0)
+      existing_id = field(decision, :existing_id)
 
       case action do
         :skip ->
@@ -233,7 +233,7 @@ defmodule Gralkor.Generalise do
 
         _ ->
           Logger.warning(
-            "[gralkor] generalise unknown action: #{inspect(Map.get(decision, :action))}"
+            "[gralkor] generalise unknown action: #{inspect(field(decision, :action))}"
           )
       end
     end)
@@ -246,6 +246,13 @@ defmodule Gralkor.Generalise do
   defp normalize_action("skip"), do: :skip
   defp normalize_action(other) when is_atom(other), do: other
   defp normalize_action(_), do: :unknown
+
+  defp field(map, key, default \\ nil) do
+    case Map.fetch(map, key) do
+      {:ok, value} -> value
+      :error -> Map.get(map, Atom.to_string(key), default)
+    end
+  end
 
   defp ancestry(:save, _existing_id, _existing_by_id), do: {[], 0}
 

@@ -548,15 +548,23 @@ defmodule Gralkor.GraphitiPool do
     var = Map.fetch!(@credential_env, model[:provider])
 
     case System.get_env(var) do
-      value when is_binary(value) and value != "" ->
+      value when is_binary(value) ->
+        if String.trim(value) == "" do
+          raise_missing_credential!(var, role, model)
+        end
+
         :ok
 
       _ ->
-        raise ArgumentError,
-              "Gralkor.GraphitiPool requires #{var} because the #{role} model spec " <>
-                "#{inspect(model)} selects the #{inspect(model[:provider])} provider; " <>
-                "set it, or configure a different provider for the #{role} role"
+        raise_missing_credential!(var, role, model)
     end
+  end
+
+  defp raise_missing_credential!(var, role, model) do
+    raise ArgumentError,
+          "Gralkor.GraphitiPool requires #{var} because the #{role} model spec " <>
+            "#{inspect(model)} selects the #{inspect(model[:provider])} provider; " <>
+            "set it, or configure a different provider for the #{role} role"
   end
 
   @fact_keys ~w(fact created_at valid_at invalid_at expired_at)a

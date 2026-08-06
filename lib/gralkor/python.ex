@@ -46,12 +46,17 @@ defmodule Gralkor.Python do
     kill_pid = Keyword.get(opts, :kill_pid, &sigkill/1)
     uv_init = Keyword.get(opts, :uv_init, &ensure_initialised/0)
     smoke_import = Keyword.get(opts, :smoke_import, &smoke_import_graphiti/0)
+
+    smoke_import_provider =
+      Keyword.get(opts, :smoke_import_provider, &smoke_import_provider_clients/1)
+
     install_loop? = Keyword.get(opts, :install_loop, true)
     reap_orphans? = Keyword.get(opts, :reap_orphans, true)
 
     with :ok <- maybe_reap(reap_orphans?, list_orphans, kill_pid),
          :ok <- uv_init.(),
          :ok <- smoke_import.(),
+         :ok <- smoke_import_supported_providers(smoke_import_provider),
          :ok <- maybe_install_loop(install_loop?) do
       {:ok, %{}}
     else
@@ -102,6 +107,15 @@ defmodule Gralkor.Python do
 
   defp maybe_install_loop(false), do: :ok
   defp maybe_install_loop(true), do: install_async_runtime()
+
+  defp smoke_import_supported_providers(smoke_import_provider) do
+    Enum.reduce_while(Gralkor.GraphitiPool.supported_providers(), :ok, fn provider, :ok ->
+      case smoke_import_provider.(provider) do
+        :ok -> {:cont, :ok}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
 
   @doc """
   Spin up a daemon-thread asyncio event loop and stash it on `asyncio` as

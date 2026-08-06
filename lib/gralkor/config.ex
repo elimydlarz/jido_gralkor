@@ -130,19 +130,29 @@ defmodule Gralkor.Config do
   defp resolve_model_env(var, default) do
     case System.get_env(var) do
       nil -> default
-      "" -> default
-      m -> parse_model_env!(var, m)
+      value -> if String.trim(value) == "", do: default, else: parse_model_env!(var, value)
     end
   end
 
   defp parse_model_env!(var, value) do
     case String.split(value, ":", parts: 2) do
-      [provider, id] when provider != "" and id != "" ->
-        %{provider: String.to_atom(provider), id: id}
+      [provider, id] ->
+        provider = String.trim(provider)
+        id = String.trim(id)
+
+        if provider != "" and id != "" do
+          %{provider: String.to_atom(provider), id: id}
+        else
+          invalid_model_env!(var, value)
+        end
 
       _ ->
-        raise ArgumentError,
-              "expected #{var} in the form \"provider:model\"; got #{inspect(value)}"
+        invalid_model_env!(var, value)
     end
+  end
+
+  defp invalid_model_env!(var, value) do
+    raise ArgumentError,
+          "expected #{var} in the form \"provider:model\"; got #{inspect(value)}"
   end
 end
