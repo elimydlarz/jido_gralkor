@@ -106,12 +106,6 @@ defmodule Gralkor.Generalise do
   defp do_hypothesise(transcript, hypothesise_fn, min_confidence) do
     prompt = hypothesise_prompt(transcript)
 
-    if test_mode?(),
-      do:
-        Logger.info(
-          "[gralkor] [test] generalise hypothesise prompt chars: #{String.length(prompt)}"
-        )
-
     case hypothesise_fn.(prompt) do
       {:ok, candidates} ->
         filtered =
@@ -122,9 +116,6 @@ defmodule Gralkor.Generalise do
         Logger.info(
           "[gralkor] generalise hypothesised — candidates:#{length(candidates)} above_threshold:#{length(filtered)}"
         )
-
-        if test_mode?() and filtered != [],
-          do: Logger.info("[gralkor] [test] generalise hypotheses: #{inspect(filtered)}")
 
         {:ok, filtered}
 
@@ -188,15 +179,9 @@ defmodule Gralkor.Generalise do
           %{hypothesis: h, index: idx}
         end)
 
-      if test_mode?(),
-        do: Logger.info("[gralkor] [test] generalise eval inputs: #{length(eval_inputs)}")
-
       case evaluate_fn.(evaluate_prompt(eval_inputs, all_existing)) do
         {:ok, decisions} ->
           Logger.info("[gralkor] generalise evaluated — decisions:#{length(decisions)}")
-
-          if test_mode?() and decisions != [],
-            do: Logger.info("[gralkor] [test] generalise decisions: #{inspect(decisions)}")
 
           persist_decisions(decisions, all_existing, add_fn, gen_group_id, ontology)
           :ok
@@ -339,6 +324,4 @@ defmodule Gralkor.Generalise do
     #{entries}
     """
   end
-
-  defp test_mode?, do: Application.get_env(:jido_gralkor, :test, false)
 end
