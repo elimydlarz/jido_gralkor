@@ -3,6 +3,7 @@ defmodule Gralkor.RecallTest do
 
   alias Gralkor.Message
   alias Gralkor.Recall
+  alias Gralkor.InterpretParseFailed
 
   defp ok_search(facts), do: fn _g, _q, _max -> {:ok, facts} end
   defp ok_interpret(list), do: fn _prompt, _budget -> {:ok, list} end
@@ -331,6 +332,28 @@ defmodule Gralkor.RecallTest do
                  "q",
                  default_opts(search_fn: fn _group, _query, _max -> {:error, :unavailable} end)
                )
+    end
+  end
+
+  describe "if interpretation cannot parse its structured response" do
+    test "then Gralkor.InterpretParseFailed carrying the invalid response reaches the recall caller" do
+      invalid_response = %{not: "a list of strings"}
+
+      error =
+        assert_raise InterpretParseFailed, fn ->
+          Recall.recall(
+            "g",
+            "TestAgent",
+            nil,
+            "q",
+            default_opts(
+              search_fn: ok_search(["- remembered fact"]),
+              interpret_fn: fn _prompt, _budget -> {:ok, invalid_response} end
+            )
+          )
+        end
+
+      assert error.raw_response == invalid_response
     end
   end
 
