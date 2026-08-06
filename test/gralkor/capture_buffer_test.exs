@@ -743,6 +743,35 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "when a session holding turns is flushed and awaited > while the flush callback fails for any other reason > when the callback throws, exits, or returns a value outside its contract" do
+    test "then the outcome is retried as a failure without stopping the buffer" do
+      for outcome <- [:throw, :exit, :unexpected] do
+        test_pid = self()
+        attempts = :counters.new(1, [])
+
+        flush_callback = fn _g, _a, _u, _o, _t ->
+          :counters.add(attempts, 1, 1)
+          send(test_pid, {:attempt, outcome, :counters.get(attempts, 1)})
+          callback_outcome(outcome)
+        end
+
+        :ok = stop_supervised(CaptureBuffer)
+
+        {:ok, pid} =
+          start_supervised({CaptureBuffer, flush_callback: flush_callback, retries: [0]})
+
+        :ok = CaptureBuffer.append("s-#{outcome}", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+        assert {:error, :exhausted} =
+                 CaptureBuffer.flush_and_await("s-#{outcome}", 1_000)
+
+        assert_receive {:attempt, ^outcome, 1}
+        assert_receive {:attempt, ^outcome, 2}
+        assert Process.alive?(pid)
+      end
+    end
+  end
+
   describe "when a session holding turns is flushed and awaited > while the flush callback fails for any other reason > when the retries together outlast that timeout" do
     setup do
       flush_callback = fn _g, _a, _u, _o, _t -> raise "internal: still broken" end
@@ -867,6 +896,33 @@ defmodule Gralkor.CaptureBufferTest do
         assert_receive {:attempt, 3}, 200
         refute_receive {:attempt, 4}, 100
       end)
+    end
+  end
+
+  describe "if the flush callback raises or fails for any other reason > when the callback throws, exits, or returns a value outside its contract" do
+    test "then the outcome is retried as a failure without stopping the buffer" do
+      for outcome <- [:throw, :exit, :unexpected] do
+        test_pid = self()
+        attempts = :counters.new(1, [])
+
+        flush_callback = fn _g, _a, _u, _o, _t ->
+          :counters.add(attempts, 1, 1)
+          send(test_pid, {:attempt, outcome, :counters.get(attempts, 1)})
+          callback_outcome(outcome)
+        end
+
+        :ok = stop_supervised(CaptureBuffer)
+
+        {:ok, pid} =
+          start_supervised({CaptureBuffer, flush_callback: flush_callback, retries: [0]})
+
+        :ok = CaptureBuffer.append("s-#{outcome}", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+        :ok = CaptureBuffer.flush("s-#{outcome}")
+
+        assert_receive {:attempt, ^outcome, 1}, 200
+        assert_receive {:attempt, ^outcome, 2}, 200
+        assert Process.alive?(pid)
+      end
     end
   end
 
@@ -1036,6 +1092,10 @@ defmodule Gralkor.CaptureBufferTest do
       assert Process.alive?(pid)
     end
   end
+
+  defp callback_outcome(:throw), do: throw(:boom)
+  defp callback_outcome(:exit), do: exit(:boom)
+  defp callback_outcome(:unexpected), do: :unexpected
 
   describe "if any other unexpected message arrives, a linked process exiting abnormally included" do
     test "then it is logged at error, so a genuine crash stays observable", %{pid: pid} do
