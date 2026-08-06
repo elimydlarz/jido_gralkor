@@ -212,7 +212,7 @@ defmodule Gralkor.Client.Native do
       case ReqLLM.generate_object(model, prompt, schema, options) do
         {:ok, response} ->
           object = ReqLLM.Response.object(response)
-          {:ok, Map.get(object, :relevantFacts) || Map.get(object, "relevantFacts") || []}
+          interpret_relevant_facts(object)
 
         {:error, _} = err ->
           err
@@ -276,6 +276,11 @@ defmodule Gralkor.Client.Native do
 
   @doc false
   def interpret_callback, do: interpret_fn()
+
+  @doc false
+  def interpret_relevant_facts(object) when is_map(object) do
+    {:ok, Map.get(object, :relevantFacts) || Map.get(object, "relevantFacts")}
+  end
 
   @doc false
   @spec interpret_output_token_options(:openai | :google, pos_integer()) :: keyword()
