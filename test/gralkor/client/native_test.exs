@@ -194,7 +194,6 @@ defmodule Gralkor.Client.NativeTest do
     test "then every hyphen is replaced with an underscore" do
       assert Client.sanitize_group_id("a-b-c") == "a_b_c"
     end
-  end
 
     test "and consecutive hyphens are each replaced independently, so none is collapsed into another" do
       assert Client.sanitize_group_id("a--b") == "a__b"
