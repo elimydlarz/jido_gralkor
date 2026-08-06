@@ -1187,6 +1187,54 @@ defmodule Gralkor.GraphitiPoolTest do
         assert Process.alive?(pid)
       end)
     end
+
+    test "and the LLM client is built for the provider the LLM spec names" do
+      spec =
+        GraphitiPool.shared_client_spec(
+          %{provider: :openai, id: "gpt-4.1-mini"},
+          %{provider: :google, id: "gemini-embedding-2-preview"}
+        )
+
+      assert spec.llm.provider == :openai
+      assert spec.llm.id == "gpt-4.1-mini"
+    end
+
+    test "and the embedder is built for the provider the embedder spec names" do
+      spec =
+        GraphitiPool.shared_client_spec(
+          %{provider: :openai, id: "gpt-4.1-mini"},
+          %{provider: :google, id: "gemini-embedding-2-preview"}
+        )
+
+      assert spec.embedder.provider == :google
+      assert spec.embedder.id == "gemini-embedding-2-preview"
+    end
+
+    test "and the cross-encoder is built for the provider the LLM spec names" do
+      spec =
+        GraphitiPool.shared_client_spec(
+          %{provider: :openai, id: "gpt-4.1-mini"},
+          %{provider: :google, id: "gemini-embedding-2-preview"}
+        )
+
+      assert spec.cross_encoder.provider == :openai
+    end
+
+    test "and each provider's credential is read on the BEAM side and handed to its client as an explicit argument, the embedded interpreter's own environment never carrying it" do
+      previous_openai = System.get_env("OPENAI_API_KEY")
+      previous_google = System.get_env("GOOGLE_API_KEY")
+
+      on_exit(fn ->
+        restore_env("OPENAI_API_KEY", previous_openai)
+        restore_env("GOOGLE_API_KEY", previous_google)
+      end)
+
+      System.put_env("OPENAI_API_KEY", "openai-secret")
+      System.put_env("GOOGLE_API_KEY", "google-secret")
+
+      assert GraphitiPool.api_key!(:openai) == "openai-secret"
+      assert GraphitiPool.api_key!(:google) == "google-secret"
+    end
   end
 
   describe "when the pool starts > while both configured model specs name a supported inference provider > while the two specs name different providers" do
