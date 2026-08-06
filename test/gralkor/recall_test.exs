@@ -618,6 +618,75 @@ defmodule Gralkor.RecallTest do
     end
   end
 
+  describe "ex-recall > when an auxiliary search outlasts its yield" do
+    @tag :capture_log
+    test "both auxiliary searches are abandoned after five seconds and recall returns the main facts" do
+      slow = fn _g, _q, _max ->
+        Process.sleep(30_000)
+        {:ok, ["- never seen"]}
+      end
+
+      {elapsed_us, result} =
+        :timer.tc(fn ->
+          Recall.recall(
+            "g",
+            "TestAgent",
+            nil,
+            "q",
+            default_opts(
+              search_fn: ok_search(["- main fact"]),
+              gen_search_fn: slow,
+              learning_search_fn: slow,
+              interpret_fn: fn prompt, _budget ->
+                send(self(), {:prompt, prompt})
+                {:ok, ["- main fact — r"]}
+              end,
+              deadline_ms: 30_000
+            )
+          )
+        end)
+
+      assert {:ok, block} = result
+      assert block =~ "main fact"
+      refute block =~ "never seen"
+
+      elapsed_ms = div(elapsed_us, 1000)
+      assert elapsed_ms >= 5_000, "expected the aux yield to be waited out; took #{elapsed_ms}ms"
+
+      assert elapsed_ms < 15_000,
+             "expected both aux searches to share one five-second yield; took #{elapsed_ms}ms"
+    end
+  end
+
+  describe "ex-recall > when the main result limit is small" do
+    test "an auxiliary search still asks for at least one result" do
+      test_pid = self()
+
+      aux = fn _g, _q, max_r ->
+        send(test_pid, {:aux_max, max_r})
+        {:ok, []}
+      end
+
+      assert {:ok, _} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "q",
+                 default_opts(
+                   search_fn: ok_search(["- f"]),
+                   gen_search_fn: aux,
+                   learning_search_fn: aux,
+                   interpret_fn: ok_interpret(["f — r"]),
+                   max_results: 1
+                 )
+               )
+
+      assert_receive {:aux_max, 1}
+      assert_receive {:aux_max, 1}
+    end
+  end
+
   describe "ex-recall > when a learning_search_fn is provided in opts" do
     test "the learning search runs unconditionally over the same group_id, seeded with the raw user query" do
       test_pid = self()
