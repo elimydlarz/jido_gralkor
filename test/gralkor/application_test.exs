@@ -514,6 +514,35 @@ defmodule Gralkor.ApplicationTest do
       assert {:error, {:python, "ConnectionError: reset by peer"}} =
                cb.("g1", "TestAgent", "Eli", nil, turns)
     end
+
+    test "and no learning episode is written on that attempt, so a retried flush cannot write learning twice",
+         %{learning: learning, turn: turn} do
+      test_pid = self()
+
+      add = fn group, body, source, ontology, _opts ->
+        send(test_pid, {:add, group, body, source, ontology})
+        if source == "captured", do: {:error, :disk_full}, else: :ok
+      end
+
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add,
+          learn_fn: fn _t, _a, _u -> {:ok, learning} end
+        )
+
+      assert {:error, :disk_full} = cb.("g1", "Susu", "Eli", nil, [turn])
+      assert_receive {:add, "g1", _b, "captured", nil}
+      refute_receive {:add, _, _, "learning", _}, 100
+
+      generalise_cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: fn _g, _b, _s, _o, _opts -> {:error, :disk_full} end,
+          generalise_fn: fn _group_id, _body -> send(self(), :generalise_called) end
+        )
+
+      assert {:error, :disk_full} = generalise_cb.("g1", "Susu", "Eli", nil, [turn])
+      refute_received :generalise_called
+    end
   end
 
   describe "when a capture flush writes its captured episode successfully > while generalisation on flush is enabled" do
