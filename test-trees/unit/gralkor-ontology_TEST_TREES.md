@@ -47,7 +47,7 @@ when an ontology declares an aliased relationship source
     and that relationship carries no edge properties
   where the block calls `verb Target do … end`
     then a relationship is declared from the source entity to the target entity under the verb's edge name
-    and the do-block's `field` declarations become that relationship's edge properties, with the same name, type, required and doc semantics as entity fields
+    and the do-block fields become edge properties with entity-field semantics
   where the verb is a single lowercase word ("prefers")
     then the edge name is that word uppercased ("PREFERS")
   where the verb contains underscores ("relates_to")

@@ -90,8 +90,10 @@ defmodule Gralkor.OntologyTest do
       assert [%{name: "User", description: "A person who talks to the agent."}] =
                DescribedEntityOntology.__ontology__().entity_types
     end
+  end
 
-    test "if the description is invalid > then compilation fails naming the entity and rejected description" do
+  describe "when an ontology declares an aliased entity > where the entity has a description > if the description is invalid" do
+    test "then compilation fails naming the entity and rejected description" do
       assert_raise CompileError, ~r/User.*description.*42/s, fn ->
         defmodule BadDescriptionOntology do
           use Gralkor.Ontology, entities: :open, relationships: :open
@@ -119,14 +121,18 @@ defmodule Gralkor.OntologyTest do
       assert field.name == :handle
       assert field.type == :string
     end
+  end
 
-    test "where the call passes `required: true` > then the field is recorded as required" do
+  describe "when an ontology declares an aliased entity > where the entity declares a field > where the call passes `required: true`" do
+    test "then the field is recorded as required" do
       ontology_module = Gralkor.OntologyTest.RequiredFieldOntology
       [%{fields: [field]}] = apply(ontology_module, :__ontology__, []).entity_types
       assert field == %{name: :handle, type: :string, required: true, doc: nil}
     end
+  end
 
-    test "where the call omits `:required` or passes `required: false` > then the field is recorded as optional" do
+  describe "when an ontology declares an aliased entity > where the entity declares a field > where the call omits `:required` or passes `required: false`" do
+    test "then the field is recorded as optional" do
       defmodule OptionalFieldOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -138,8 +144,10 @@ defmodule Gralkor.OntologyTest do
       [%{fields: [field]}] = Gralkor.OntologyTest.OptionalFieldOntology.__ontology__().entity_types
       refute field.required
     end
+  end
 
-    test "where the call passes `doc: \"…\"` > then the doc string is recorded as the field's description" do
+  describe "when an ontology declares an aliased entity > where the entity declares a field > where the call passes `doc: \"…\"`" do
+    test "then the doc string is recorded as the field's description" do
       defmodule DocFieldOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -151,14 +159,18 @@ defmodule Gralkor.OntologyTest do
       [%{fields: [field]}] = DocFieldOntology.__ontology__().entity_types
       assert field.doc == "stable login handle"
     end
+  end
 
-    test "where the call omits `:doc` > then the field's description is recorded as nil" do
+  describe "when an ontology declares an aliased entity > where the entity declares a field > where the call omits `:doc`" do
+    test "then the field's description is recorded as nil" do
       ontology_module = Gralkor.OntologyTest.OptionalFieldOntology
       [%{fields: [field]}] = apply(ontology_module, :__ontology__, []).entity_types
       assert field.doc == nil
     end
+  end
 
-    test "if the field type is unsupported > then compilation fails naming the rejected type" do
+  describe "when an ontology declares an aliased entity > where the entity declares a field > if the field type is unsupported" do
+    test "then compilation fails naming the rejected type" do
       assert_raise CompileError, ~r/atom/, fn ->
         defmodule BadTypeOntology do
           use Gralkor.Ontology, entities: :open, relationships: :open
@@ -169,8 +181,10 @@ defmodule Gralkor.OntologyTest do
         end
       end
     end
+  end
 
-    test "if `:required` is given a non-boolean value > then compilation fails with an error naming `:required`" do
+  describe "when an ontology declares an aliased entity > where the entity declares a field > if `:required` is given a non-boolean value" do
+    test "then compilation fails with an error naming `:required`" do
       assert_raise CompileError, ~r/required/, fn ->
         defmodule InvalidRequiredOntology do
           use Gralkor.Ontology, entities: :open, relationships: :open
@@ -181,8 +195,10 @@ defmodule Gralkor.OntologyTest do
         end
       end
     end
+  end
 
-    test "if `:doc` is given a value that is neither a string nor nil > then compilation fails with an error naming `:doc`" do
+  describe "when an ontology declares an aliased entity > where the entity declares a field > if `:doc` is given a value that is neither a string nor nil" do
+    test "then compilation fails with an error naming `:doc`" do
       assert_raise CompileError, ~r/doc/, fn ->
         defmodule InvalidDocOntology do
           use Gralkor.Ontology, entities: :open, relationships: :open
@@ -304,7 +320,7 @@ defmodule Gralkor.OntologyTest do
                EdgePropertyOntology.__ontology__().edge_type_map
     end
 
-    test "and the do-block's `field` declarations become that relationship's edge properties, with the same name, type, required and doc semantics as entity fields" do
+    test "and the do-block fields become edge properties with entity-field semantics" do
       ontology_module = Gralkor.OntologyTest.EdgePropertyOntology
       [%{fields: [field]}] = apply(ontology_module, :__ontology__, []).edge_types
       assert field == %{name: :since, type: :string, required: false, doc: "date first observed"}
