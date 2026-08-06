@@ -142,7 +142,7 @@ defmodule Gralkor.InterpretTest do
           Interpret.interpret_facts([Message.new("user", "q")], "q", "- f", interpret_fn, "Susu")
         end
 
-      assert error.raw_response == %{not: "a list"}
+      assert error.raw_response == {:ok, %{not: "a list"}}
       assert Exception.message(error) =~ ~s(%{not: "a list"})
     end
 
