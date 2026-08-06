@@ -1256,6 +1256,18 @@ defmodule Gralkor.GraphitiPoolTest do
       assert_receive {:construct_shared, ^llm_model, ^embedder_model}
       assert Process.alive?(pid)
     end
+
+    test "then each client is still built for its own role's provider" do
+      spec =
+        GraphitiPool.shared_client_spec(
+          %{provider: :google, id: "gemini-3.1-flash-lite"},
+          %{provider: :openai, id: "text-embedding-3-small"}
+        )
+
+      assert spec.llm.provider == :google
+      assert spec.embedder.provider == :openai
+      assert spec.cross_encoder.provider == :google
+    end
   end
 
   describe "when the pool has constructed its database" do
