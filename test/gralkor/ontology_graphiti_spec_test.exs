@@ -11,7 +11,7 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while the payload declares entities" do
-    test "then the spec carries :entity_types as a list of name/fields maps in declaration order" do
+    test "then the spec carries `:entity_types` as a list of string-keyed name/fields maps in declaration order" do
       spec =
         GraphitiPool.graphiti_boundary_spec(
           payload(%{
@@ -70,13 +70,13 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while the payload declares no entities" do
-    test "then the spec omits :entity_types entirely" do
+    test "then the spec omits `:entity_types` entirely" do
       refute Map.has_key?(GraphitiPool.graphiti_boundary_spec(payload()), :entity_types)
     end
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while the payload declares relationship verbs" do
-    test "then the spec carries :edge_types as a list of name/fields maps in first-declaration order" do
+    test "then the spec carries `:edge_types` as a list of string-keyed name/fields maps in first-declaration order" do
       spec =
         GraphitiPool.graphiti_boundary_spec(
           payload(%{
@@ -95,13 +95,13 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while the payload declares no relationship verbs" do
-    test "then the spec omits :edge_types entirely" do
+    test "then the spec omits `:edge_types` entirely" do
       refute Map.has_key?(GraphitiPool.graphiti_boundary_spec(payload()), :edge_types)
     end
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected type carries a required field" do
-    test "then its entry carries \"required\" => true" do
+    test "then that field's entry carries `\"required\" => true`" do
       spec =
         GraphitiPool.graphiti_boundary_spec(
           payload(%{
@@ -117,7 +117,7 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected type carries an optional field" do
-    test "then its entry carries \"required\" => false" do
+    test "then that field's entry carries `\"required\" => false`" do
       spec =
         GraphitiPool.graphiti_boundary_spec(
           payload(%{
@@ -136,7 +136,7 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected type carries a field with a doc string" do
-    test "then its entry carries \"doc\" => that string" do
+    test "then that field's entry carries `\"doc\" =>` that string" do
       spec =
         GraphitiPool.graphiti_boundary_spec(
           payload(%{
@@ -155,7 +155,7 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected type carries a field with no doc string" do
-    test "then its entry carries \"doc\" => nil" do
+    test "then that field's entry carries `\"doc\" => nil`" do
       spec =
         GraphitiPool.graphiti_boundary_spec(
           payload(%{
@@ -171,7 +171,7 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while the payload's `:edge_type_map` is non-empty" do
-    test "then the spec carries :edge_type_map as a list of src/dst/names maps in order" do
+    test "then the spec carries `:edge_type_map` as src/dst/names maps in the payload's order" do
       spec =
         GraphitiPool.graphiti_boundary_spec(
           payload(%{
@@ -190,20 +190,20 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while the payload's `:edge_type_map` is empty" do
-    test "then the spec omits :edge_type_map entirely" do
+    test "then the spec omits `:edge_type_map` entirely" do
       refute Map.has_key?(GraphitiPool.graphiti_boundary_spec(payload()), :edge_type_map)
     end
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while the payload's `:excluded_entity_types` is `[\"Entity\"]`" do
-    test "then the spec carries :excluded_entity_types as [\"Entity\"]" do
+    test "then the spec carries `:excluded_entity_types` as `[\"Entity\"]`" do
       spec = GraphitiPool.graphiti_boundary_spec(payload(%{excluded_entity_types: ["Entity"]}))
       assert spec[:excluded_entity_types] == ["Entity"]
     end
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while the payload's `:excluded_entity_types` is nil" do
-    test "then the spec omits :excluded_entity_types entirely" do
+    test "then the spec omits `:excluded_entity_types` entirely" do
       refute Map.has_key?(
                GraphitiPool.graphiti_boundary_spec(payload(%{excluded_entity_types: nil})),
                :excluded_entity_types
@@ -218,7 +218,7 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
   end
 
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while the payload declares no entities and no verbs > where its `:excluded_entity_types` is `[\"Entity\"]`" do
-    test "then the spec carries only :excluded_entity_types" do
+    test "then the spec carries only `:excluded_entity_types`" do
       spec = GraphitiPool.graphiti_boundary_spec(payload(%{excluded_entity_types: ["Entity"]}))
       assert spec == %{excluded_entity_types: ["Entity"]}
     end
