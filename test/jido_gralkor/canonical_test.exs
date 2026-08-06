@@ -119,23 +119,21 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
-  describe "while the trace holds a completed tool event" do
-    describe "while that event carries no result" do
-      test "then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing, when the result is nil" do
-        events = [%{kind: :tool_completed, data: %{tool_name: "memory_search", result: nil}}]
+  describe "while the trace holds a completed tool event > while that event carries no result" do
+    test "then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing, when the result is nil" do
+      events = [%{kind: :tool_completed, data: %{tool_name: "memory_search", result: nil}}]
 
-        [_user, behaviour] = Canonical.to_messages("q", events, {:completed, ""})
+      [_user, behaviour] = Canonical.to_messages("q", events, {:completed, ""})
 
-        assert behaviour == Message.new("behaviour", "tool memory_search")
-      end
+      assert behaviour == Message.new("behaviour", "tool memory_search")
+    end
 
-      test "then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing, when the result is an empty string" do
-        events = [%{kind: :tool_completed, data: %{tool_name: "memory_search", result: ""}}]
+    test "then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing, when the result is an empty string" do
+      events = [%{kind: :tool_completed, data: %{tool_name: "memory_search", result: ""}}]
 
-        [_user, behaviour] = Canonical.to_messages("q", events, {:completed, ""})
+      [_user, behaviour] = Canonical.to_messages("q", events, {:completed, ""})
 
-        assert behaviour == Message.new("behaviour", "tool memory_search")
-      end
+      assert behaviour == Message.new("behaviour", "tool memory_search")
     end
   end
 
