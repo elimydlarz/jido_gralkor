@@ -1,21 +1,21 @@
 Unit: canonical-messages (src: lib/jido_gralkor/canonical.ex; unit: test/jido_gralkor/canonical_test.exs)
 
-when a turn is rendered into canonical messages
-  then the user's query becomes the opening user message exactly as given, with no envelope stripping
+when a turn becomes canonical messages
+  then the user's query opens them unchanged
   and the messages run user first, then the behaviour trace in order, then the turn's outcome last
-  while the query, the outcome, and the event trace are all empty
+  while query, outcome, and trace are empty
     then nothing is rendered at all, so the caller can skip the write
-  while the trace holds a completed llm event that requested tools
+  while a tool-requesting llm event completes
     then it renders as a behaviour message reading `thought: …`
-    while that event's content is a list of blocks rather than a string
-      then the text parts are concatenated into a single thought
-  while the trace holds a completed llm event that requested no tools
+    while its content is blocks
+      then the text parts form one thought
+  while an llm event completes without requesting tools
     then no thought behaviour message is rendered for it
-  while the trace holds a completed tool event
+  while a tool event completes
     then it renders as a behaviour message reading `tool NAME → RESULT`
-    while that event carries no result
+    while it carries no result
       then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing
-  while the trace holds events that are not memory-worthy
+  while events are not memory-worthy
     then those events contribute no messages
   while the turn completed
     then the completed answer terminates the messages as the assistant message

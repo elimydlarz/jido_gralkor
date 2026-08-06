@@ -4,8 +4,8 @@ defmodule JidoGralkor.CanonicalTest do
   alias Gralkor.Message
   alias JidoGralkor.Canonical
 
-  describe "when a turn is rendered into canonical messages" do
-    test "then the user's query becomes the opening user message exactly as given, with no envelope stripping" do
+  describe "when a turn becomes canonical messages" do
+    test "then the user's query opens them unchanged" do
       query = "  <example>kept</example>\n\nactual question  "
 
       [user | _] = Canonical.to_messages(query, [], {:completed, "a"})
@@ -40,13 +40,13 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
-  describe "when a turn is rendered into canonical messages > while the query, the outcome, and the event trace are all empty" do
+  describe "when a turn becomes canonical messages > while query, outcome, and trace are empty" do
     test "then nothing is rendered at all, so the caller can skip the write" do
       assert Canonical.to_messages("", [], {:completed, ""}) == []
     end
   end
 
-  describe "when a turn is rendered into canonical messages > while the trace holds a completed llm event that requested tools" do
+  describe "when a turn becomes canonical messages > while a tool-requesting llm event completes" do
     test "then it renders as a behaviour message reading `thought: …`" do
       events = [
         %{kind: :llm_completed, data: %{text: "considering options", tool_calls: [%{name: "t"}]}}
@@ -61,8 +61,8 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
-  describe "when a turn is rendered into canonical messages > while the trace holds a completed llm event that requested tools > while that event's content is a list of blocks rather than a string" do
-    test "then the text parts are concatenated into a single thought" do
+  describe "when a turn becomes canonical messages > while a tool-requesting llm event completes > while its content is blocks" do
+    test "then the text parts form one thought" do
       events = [
         %{
           kind: :llm_completed,
@@ -81,7 +81,7 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
-  describe "when a turn is rendered into canonical messages > while the trace holds a completed llm event that requested no tools" do
+  describe "when a turn becomes canonical messages > while an llm event completes without requesting tools" do
     test "then no thought behaviour message is rendered for it" do
       events = [%{kind: :llm_completed, data: %{text: "direct answer", tool_calls: []}}]
 
@@ -91,7 +91,7 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
-  describe "when a turn is rendered into canonical messages > while the trace holds a completed tool event" do
+  describe "when a turn becomes canonical messages > while a tool event completes" do
     test "then it renders as a behaviour message reading `tool NAME → RESULT`" do
       events = [
         %{
@@ -111,7 +111,7 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
-  describe "when a turn is rendered into canonical messages > while the trace holds events that are not memory-worthy" do
+  describe "when a turn becomes canonical messages > while events are not memory-worthy" do
     test "then those events contribute no messages" do
       events = [
         %{kind: :telemetry_ping, data: %{anything: "x"}},
@@ -128,7 +128,7 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
-  describe "when a turn is rendered into canonical messages > while the turn completed" do
+  describe "when a turn becomes canonical messages > while the turn completed" do
     test "then the completed answer terminates the messages as the assistant message" do
       events = [
         %{kind: :llm_completed, data: %{text: "t", tool_calls: [%{name: "x"}]}},
@@ -140,7 +140,7 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
-  describe "when a turn is rendered into canonical messages > while the trace holds a completed tool event > while that event carries no result" do
+  describe "when a turn becomes canonical messages > while a tool event completes > while it carries no result" do
     test "then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing" do
       for result <- [nil, ""] do
         events = [%{kind: :tool_completed, data: %{tool_name: "memory_search", result: result}}]
@@ -152,14 +152,14 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
-  describe "when a turn is rendered into canonical messages > while the turn completed > while the completed answer is empty" do
+  describe "when a turn becomes canonical messages > while the turn completed > while the completed answer is empty" do
     test "then no assistant message is emitted" do
       messages = Canonical.to_messages("q", [], {:completed, ""})
       refute Enum.any?(messages, &(&1.role == "assistant"))
     end
   end
 
-  describe "when a turn is rendered into canonical messages > while the turn failed" do
+  describe "when a turn becomes canonical messages > while the turn failed" do
     test "then a terminal behaviour message reading `request failed: …` takes the place of the assistant answer" do
       events = [%{kind: :llm_completed, data: %{text: "trying"}}]
 
@@ -187,7 +187,7 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
-  describe "when a turn is rendered into canonical messages > while the turn failed > while the failure reason is an error tuple" do
+  describe "when a turn becomes canonical messages > while the turn failed > while the failure reason is an error tuple" do
     test "then it is rendered by the same formatter that renders tool results" do
       messages = Canonical.to_messages("q", [], {:failed, {:error, :timeout}})
 
