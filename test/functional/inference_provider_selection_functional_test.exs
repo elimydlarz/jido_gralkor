@@ -165,7 +165,6 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       assert message =~ "google"
       refute_received {:constructed, _}
     end
-
   end
 
   describe "if the native memory runtime receives an absent or blank credential" do
@@ -191,7 +190,6 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       assert Exception.message(blank) =~ "llm"
       refute_received {:constructed, _}
     end
-
   end
 
   describe "where the native memory runtime does not configure a provider for either role" do
