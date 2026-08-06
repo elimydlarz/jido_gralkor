@@ -1174,4 +1174,41 @@ defmodule Gralkor.Client.NativeTest do
       assert reason =~ "generalisation search refused"
     end
   end
+
+  describe "when the legacy generalisation pipeline searches for existing generalisations" do
+    @describetag :integration
+    setup :start_recall_recording_pool
+
+    test "then episode search reads written bodies from the supplied generalisation group" do
+      callback = Native.generalisation_search_callback()
+
+      assert {:ok, _bodies} = callback.("legacy_gen", "dark mode", 5)
+
+      assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _instance} ->
+               group == "legacy_gen"
+             end)
+    end
+
+    test "and every written body is returned unchanged to the generalisation pipeline" do
+      callback = Native.generalisation_search_callback()
+
+      assert {:ok,
+              [
+                "GEN|v1|{\"id\":\"gen-1\",\"level\":0,\"confidence\":0.8,\"generalises\":[]}\nEli prefers dark mode",
+                "not a generalisation"
+              ]} = callback.("legacy_gen", "dark mode", 5)
+    end
+  end
+
+  describe "when the legacy generalisation pipeline searches for existing generalisations > if the episode search fails" do
+    @describetag :integration
+    setup :start_recall_recording_pool
+
+    test "then that failure is returned unchanged" do
+      callback = Native.generalisation_search_callback()
+
+      assert {:error, {:python, reason}} = callback.("legacy_gen", "fail: now", 5)
+      assert reason =~ "generalisation search refused"
+    end
+  end
 end
