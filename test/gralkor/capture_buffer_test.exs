@@ -604,14 +604,20 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "when the flush callback raises an internal error then retries with the configured backoff" do
+    test "when the flush callback raises an internal error then retries with the configured backoff, and logs the flush-completed line once it succeeds" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
-      :ok = CaptureBuffer.flush("s")
 
-      assert_receive {:attempt, 1}, 200
-      assert_receive {:attempt, 2}, 200
-      assert_receive {:attempt, 3}, 200
-      refute_receive {:attempt, 4}, 100
+      log =
+        capture_log(fn ->
+          :ok = CaptureBuffer.flush("s")
+
+          assert_receive {:attempt, 1}, 200
+          assert_receive {:attempt, 2}, 200
+          assert_receive {:attempt, 3}, 200
+          refute_receive {:attempt, 4}, 100
+        end)
+
+      assert log =~ ~r/\[gralkor\] capture flushed — turns:1 elapsed:\d+ms/
     end
   end
 
