@@ -285,14 +285,12 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > request shape > if agent_name is missing or blank" do
-    test "raises ArgumentError on blank agent_name" do
+  describe "if the agent name is missing or blank" do
+    test "then an argument error is raised" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
         Recall.recall("g", "", nil, "q", default_opts())
       end
-    end
 
-    test "raises ArgumentError on nil agent_name" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
         Recall.recall("g", nil, nil, "q", default_opts())
       end
