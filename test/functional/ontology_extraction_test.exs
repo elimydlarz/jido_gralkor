@@ -54,6 +54,14 @@ defmodule Gralkor.OntologyExtractionTest do
     end
   end
 
+  defmodule UnrelatedOntology do
+    use Gralkor.Ontology, entities: :strict, relationships: :scoped
+
+    entity Project do
+      field(:name, :string, required: true)
+    end
+  end
+
   @fixture """
   Important context. Eli (handle: eli) has a strong preference for concise,
   structured responses with minimal preamble. Eli prefers this format
@@ -97,8 +105,20 @@ defmodule Gralkor.OntologyExtractionTest do
     :ok
   end
 
-  describe "ontology-extraction > strict ontology" do
-    test "every node has a custom label and PREFERS edges exist" do
+  setup do
+    previous_ontology = Application.get_env(:jido_gralkor, :ontology)
+
+    on_exit(fn ->
+      if previous_ontology,
+        do: Application.put_env(:jido_gralkor, :ontology, previous_ontology),
+        else: Application.delete_env(:jido_gralkor, :ontology)
+    end)
+
+    :ok
+  end
+
+  describe "when an episode is ingested under a strict ontology" do
+    test "then extraction conforms every node and relationship to the declared ontology" do
       group_id = "ontology_strict_#{System.unique_integer([:positive])}"
 
       :ok = Client.impl().memory_add(group_id, @fixture, "fixture", StrictOntology)
@@ -120,8 +140,8 @@ defmodule Gralkor.OntologyExtractionTest do
     end
   end
 
-  describe "ontology-extraction > open ontology" do
-    test "User and Preference nodes still appear; generic-only nodes are not asserted against" do
+  describe "when an episode is ingested under an open ontology" do
+    test "then extraction includes the declared entity types without excluding generic entities" do
       group_id = "ontology_open_#{System.unique_integer([:positive])}"
 
       :ok = Client.impl().memory_add(group_id, @fixture, "fixture", OpenOntology)
@@ -136,8 +156,9 @@ defmodule Gralkor.OntologyExtractionTest do
     end
   end
 
-  describe "ontology-extraction > no ontology" do
-    test "nodes are generic Entity, no User or Preference labels" do
+  describe "when an episode is ingested while no ontology is configured" do
+    test "then extraction preserves generic entities without undeclared custom labels" do
+      Application.delete_env(:jido_gralkor, :ontology)
       group_id = "ontology_none_#{System.unique_integer([:positive])}"
 
       :ok = Client.impl().memory_add(group_id, @fixture, "fixture")
@@ -152,6 +173,20 @@ defmodule Gralkor.OntologyExtractionTest do
 
       assert Enum.any?(node_labels, fn labels -> "Entity" in labels end),
              "expected at least one generic Entity node; got: #{inspect(node_labels)}"
+    end
+  end
+
+  describe "where a memory write supplies an ontology that differs from application configuration" do
+    test "then that write's extraction is governed by the supplied ontology alone" do
+      Application.put_env(:jido_gralkor, :ontology, UnrelatedOntology)
+      group_id = "ontology_override_#{System.unique_integer([:positive])}"
+
+      :ok = Client.impl().memory_add(group_id, @fixture, "fixture", StrictOntology)
+
+      node_labels = node_labels(group_id)
+      assert Enum.any?(node_labels, fn labels -> "User" in labels end)
+      assert Enum.any?(node_labels, fn labels -> "Preference" in labels end)
+      refute Enum.any?(node_labels, fn labels -> "Project" in labels end)
     end
   end
 
