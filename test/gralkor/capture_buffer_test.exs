@@ -550,6 +550,54 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "ex-capture-buffer > flush_and_await/2 when called for a session_id with buffered turns and the callback reports an upstream-LLM error" do
+    setup do
+      test_pid = self()
+      attempts = :counters.new(1, [])
+
+      err_callback = fn _g, _a, _u, _o, _t ->
+        :counters.add(attempts, 1, 1)
+        send(test_pid, {:attempt, :counters.get(attempts, 1)})
+        {:error, {:upstream_llm, :rate_limited}}
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      {:ok, _} =
+        start_supervised({CaptureBuffer, flush_callback: err_callback, retries: [10, 20, 30]})
+
+      :ok
+    end
+
+    test "returns the error without retry" do
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      assert {:error, {:upstream_llm, :rate_limited}} =
+               CaptureBuffer.flush_and_await("s1", 1_000)
+
+      assert_receive {:attempt, 1}, 200
+      refute_receive {:attempt, 2}, 100
+    end
+  end
+
+  describe "ex-capture-buffer > flush_and_await/2 when called for a session_id with buffered turns and the callback fails for any other reason across the caller's timeout" do
+    setup do
+      flush_callback = fn _g, _a, _u, _o, _t -> raise "internal: still broken" end
+      :ok = stop_supervised(CaptureBuffer)
+
+      {:ok, _} =
+        start_supervised({CaptureBuffer, flush_callback: flush_callback, retries: [50, 50, 50]})
+
+      :ok
+    end
+
+    test "returns {:error, :timeout} once the configured backoff schedule outlasts the timeout" do
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      assert {:error, :timeout} = CaptureBuffer.flush_and_await("s1", 30)
+    end
+  end
+
   describe "ex-capture-buffer > flush_and_await/2 when called for a session_id with no entry" do
     test "returns :ok without scheduling a flush and logs an empty-flush event" do
       logs =
