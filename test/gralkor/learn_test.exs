@@ -102,9 +102,11 @@ defmodule Gralkor.LearnTest do
       schema = Learn.learn_schema()
       assert schema[:problem_kind][:type] == :string
       assert schema[:problem_kind][:required] == true
+      assert schema[:approach][:type] == :string
       assert schema[:approach][:required] == true
       assert schema[:success][:type] == :boolean
       assert schema[:success][:required] == true
+      assert schema[:lesson][:type] == :string
       assert schema[:lesson][:required] == true
       assert schema[:lesson][:doc] =~ "learn"
     end
