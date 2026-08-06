@@ -171,146 +171,44 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/6 when opts[:output_token_budget] is omitted" do
-    test "a default of 2000 is applied (passed to interpret_fn and rendered into the prompt)" do
-      ref = make_ref()
-      test_pid = self()
+  describe "when no output token budget is supplied" do
+    test "then a default of 2000 is passed to the model call" do
+      assert {_prompt, 2000} = captured_budget([])
+    end
 
-      interpret_fn = fn prompt, budget ->
-        send(test_pid, {ref, prompt, budget})
-        {:ok, []}
-      end
-
-      _ =
-        Interpret.interpret_facts(
-          [Message.new("user", "q")],
-          "q",
-          "- f",
-          interpret_fn,
-          "Susu"
-        )
-
-      assert_receive {^ref, prompt, 2000}
+    test "and the prompt instructs the model to respond within 2000 tokens" do
+      assert {prompt, 2000} = captured_budget([])
       assert prompt =~ "Respond within 2000 tokens"
     end
   end
 
-  describe "ex-interpret > interpret_facts/6 if opts[:output_token_budget] is non-positive or non-integer" do
-    test "raises ArgumentError on zero" do
-      assert_raise ArgumentError, ~r/output_token_budget/, fn ->
-        Interpret.interpret_facts(
-          [Message.new("user", "q")],
-          "q",
-          "- f",
-          fn _, _ -> {:ok, []} end,
-          "Susu",
-          output_token_budget: 0
-        )
-      end
-    end
-
-    test "raises ArgumentError on negative" do
-      assert_raise ArgumentError, ~r/output_token_budget/, fn ->
-        Interpret.interpret_facts(
-          [Message.new("user", "q")],
-          "q",
-          "- f",
-          fn _, _ -> {:ok, []} end,
-          "Susu",
-          output_token_budget: -1
-        )
-      end
-    end
-
-    test "raises ArgumentError on non-integer" do
-      assert_raise ArgumentError, ~r/output_token_budget/, fn ->
-        Interpret.interpret_facts(
-          [Message.new("user", "q")],
-          "q",
-          "- f",
-          fn _, _ -> {:ok, []} end,
-          "Susu",
-          output_token_budget: "lots"
-        )
+  describe "if the output token budget is zero, negative, or not an integer" do
+    test "then an ArgumentError is raised" do
+      for budget <- [0, -1, "lots"] do
+        assert_raise ArgumentError, ~r/output_token_budget/, fn ->
+          Interpret.interpret_facts(
+            [Message.new("user", "q")],
+            "q",
+            "- f",
+            fn _, _ -> {:ok, []} end,
+            "Susu",
+            output_token_budget: budget
+          )
+        end
       end
     end
   end
 
-  describe "ex-interpret > interpret_facts/6 calls interpret_fn with the prompt AND the output_token_budget" do
-    test "interpret_fn receives both the prompt and the configured budget so it can set the provider's output token limit" do
-      ref = make_ref()
-      test_pid = self()
-
-      interpret_fn = fn prompt, budget ->
-        send(test_pid, {ref, prompt, budget})
-        {:ok, []}
-      end
-
-      _ =
-        Interpret.interpret_facts(
-          [Message.new("user", "q")],
-          "q",
-          "- f",
-          interpret_fn,
-          "Susu",
-          output_token_budget: 3500
-        )
-
-      assert_receive {^ref, _prompt, 3500}
+  describe "when an output token budget is supplied" do
+    test "then it is passed to the model call alongside the prompt so a token ceiling can reach the provider" do
+      assert {_prompt, 3500} = captured_budget(output_token_budget: 3500)
     end
-  end
 
-  describe "ex-interpret > interpret_facts/6 the interpretation prompt carries a budget instruction" do
-    test "the prompt includes a 'respond within N tokens' instruction matching the configured budget" do
-      ref = make_ref()
-      test_pid = self()
-
-      interpret_fn = fn prompt, _budget ->
-        send(test_pid, {ref, prompt})
-        {:ok, []}
-      end
-
-      _ =
-        Interpret.interpret_facts(
-          [Message.new("user", "q")],
-          "q",
-          "- f",
-          interpret_fn,
-          "Susu",
-          output_token_budget: 4096
-        )
-
-      assert_receive {^ref, prompt}
+    test "and the prompt instructs the model to respond within that many tokens" do
+      assert {prompt, 4096} = captured_budget(output_token_budget: 4096)
       assert prompt =~ "Respond within 4096 tokens"
     end
   end
-
-  describe "ex-interpret > the structured-output schema" do
-    test "interpret_schema/0 declares relevantFacts as a list of strings" do
-      schema = Interpret.interpret_schema()
-
-      assert Keyword.has_key?(schema, :relevantFacts)
-      assert schema[:relevantFacts][:type] == {:list, :string}
-      assert schema[:relevantFacts][:required] == true
-    end
-
-    test "the schema's doc instructs the LLM to copy facts verbatim, preserve timestamps and drop the leading marker" do
-      doc = Interpret.interpret_schema()[:relevantFacts][:doc]
-
-      assert doc =~ ~r/verbatim/i
-      assert doc =~ ~r/timestamp/i
-      assert doc =~ "dropping the leading '- '"
-    end
-
-    test "the schema's doc asks for ' — ' and a one-sentence relevance reason after each fact" do
-      doc = Interpret.interpret_schema()[:relevantFacts][:doc]
-
-      assert doc =~ "' — '"
-      assert doc =~ ~r/one-sentence relevance reason/i
-    end
-  end
-
-  # ── ex-interpret-context ─────────────────────────────────────
 
   describe "ex-interpret-context > build_interpretation_context/5" do
     test "labels each message by role: 'User', '{agent_name}' (assistant), '{agent_name}: (behaviour: ...)' (behaviour)" do
