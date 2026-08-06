@@ -272,6 +272,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
 
   defp pause_before_installation(pid, test_pid) do
     pause = fn state, event, _proc_state ->
+      if match?({:in, _}, event), do: IO.inspect(event, label: "SYS_IN")
+
       case event do
         {:in, {:"$gen_call", _from, :get_state}} ->
           state = %{state | reads: state.reads + 1}
