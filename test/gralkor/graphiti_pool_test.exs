@@ -5,7 +5,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
   alias Gralkor.GraphitiPool
 
-  defp start_pool(opts) do
+  def start_pool(opts) do
     table = :"pool_table_#{System.unique_integer([:positive])}"
 
     defaults = [
@@ -239,8 +239,13 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when an episode is added > while an ontology module is supplied" do
-    @describetag :integration
+  defmodule OntologyForwardingTest do
+    use ExUnit.Case, async: false
+
+    alias Gralkor.GraphitiPool
+
+    describe "when an episode is added > while an ontology module is supplied" do
+      @describetag :integration
 
     defmodule OntologyForwardingOntology do
       use Gralkor.Ontology, entities: :strict, relationships: :scoped
@@ -277,7 +282,7 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       %{pid: pid} =
-        start_pool(
+        Gralkor.GraphitiPoolTest.start_pool(
           construct_instance: fn _db, _shared, _group_id -> g end,
           warmup: false,
           install_loop_fn: &Gralkor.Python.install_async_runtime/0
@@ -336,6 +341,7 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
   end
+
 
   describe "when an episode is removed" do
     test "then the graph library deletes that episode along with the nodes and edges it orphans" do
