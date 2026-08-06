@@ -6,6 +6,10 @@ defmodule JidoGralkor.LifecycleTest do
   alias Gralkor.Client.InMemory
   alias JidoGralkor.Lifecycle
 
+  defmodule FailingClient do
+    def flush(_session_id), do: {:error, :boom}
+  end
+
   setup do
     InMemory.reset()
     :ok
@@ -13,6 +17,19 @@ defmodule JidoGralkor.LifecycleTest do
 
   defp state(agent_state) do
     %{agent: %{state: agent_state}}
+  end
+
+  defp use_failing_client do
+    previous = Application.get_env(:jido_gralkor, :client)
+    Application.put_env(:jido_gralkor, :client, FailingClient)
+
+    on_exit(fn ->
+      if previous do
+        Application.put_env(:jido_gralkor, :client, previous)
+      else
+        Application.delete_env(:jido_gralkor, :client)
+      end
+    end)
   end
 
   defp eventually(fun, timeout_ms \\ 500, interval_ms \\ 10) do
@@ -87,7 +104,7 @@ defmodule JidoGralkor.LifecycleTest do
 
   describe "when the agent server terminates > while a thread is committed to agent state > if the flush call fails" do
     test "then the failure is logged" do
-      InMemory.set_flush({:error, :boom})
+      use_failing_client()
       thread_id = "thread-fail"
 
       s = state(%{__thread__: %{id: thread_id}})
@@ -104,7 +121,7 @@ defmodule JidoGralkor.LifecycleTest do
     end
 
     test "and termination completes normally regardless" do
-      InMemory.set_flush({:error, :boom})
+      use_failing_client()
       s = state(%{__thread__: %{id: "thread-fail"}})
 
       assert :ok = Lifecycle.terminate(:normal, s)
