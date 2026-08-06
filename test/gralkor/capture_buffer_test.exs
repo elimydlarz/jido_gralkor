@@ -157,6 +157,81 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "ex-capture-buffer > append_lens/6 when called for an existing session_id with a different operator" do
+    test "raises (sessions are not re-bindable across operators)" do
+      :ok =
+        CaptureBuffer.append_lens(
+          "session",
+          "operator-one",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "x")]
+        )
+
+      assert_raise ArgumentError, ~r/operator/i, fn ->
+        CaptureBuffer.append_lens(
+          "session",
+          "operator-two",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "y")]
+        )
+      end
+    end
+  end
+
+  describe "ex-capture-buffer > append_lens/6 when called for an existing session_id with a different agent_name" do
+    test "raises (sessions are not re-bindable across agents)" do
+      :ok =
+        CaptureBuffer.append_lens(
+          "session",
+          "operator-one",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "x")]
+        )
+
+      assert_raise ArgumentError, ~r/agent/i, fn ->
+        CaptureBuffer.append_lens(
+          "session",
+          "operator-one",
+          "Other",
+          "Eli",
+          "observations",
+          [Message.new("user", "y")]
+        )
+      end
+    end
+  end
+
+  describe "ex-capture-buffer > append_lens/6 when called for an existing session_id with a different user_name" do
+    test "raises (sessions are not re-bindable across users)" do
+      :ok =
+        CaptureBuffer.append_lens(
+          "session",
+          "operator-one",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "x")]
+        )
+
+      assert_raise ArgumentError, ~r/user/i, fn ->
+        CaptureBuffer.append_lens(
+          "session",
+          "operator-one",
+          "Susu",
+          "Alice",
+          "observations",
+          [Message.new("user", "y")]
+        )
+      end
+    end
+  end
+
   describe "ex-capture-buffer > append_lens/6 when turns in one session select different Lenses" do
     test "then each turn remains associated with its selected Lens" do
       observation = [Message.new("user", "an observation")]
