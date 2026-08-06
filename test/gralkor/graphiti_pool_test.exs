@@ -221,7 +221,7 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
 
-    test "then the translated entity types, edge types, edge type map, and excluded entity types are forwarded to the graph library, using its kwarg names outside and the ontology's declared type names inside" do
+    test "then entity types, edge types, edge type map, and excluded entity types are forwarded, using graph library kwarg names outside and ontology type names inside" do
       {g, _} =
         Pythonx.eval(
           """
