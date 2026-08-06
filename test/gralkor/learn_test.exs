@@ -88,12 +88,20 @@ defmodule Gralkor.LearnTest do
                Learn.learn(turn(), ok_learn(record), "Susu", "Eli")
 
       assert learning.problem_kind == "deploy timeout"
+      assert learning.approach == "warm cache at boot"
       assert learning.success == false
+      assert learning.lesson == "cold caches fail the first health check"
     end
 
     test "propagates {:error, reason} from learn_fn" do
       assert {:error, :upstream} =
                Learn.learn(turn(), fn _ -> {:error, :upstream} end, "Susu", "Eli")
+    end
+
+    test "raises when learn_fn returns a shape that is neither a record nor an error" do
+      assert_raise CaseClauseError, fn ->
+        Learn.learn(turn(), fn _ -> :oops end, "Susu", "Eli")
+      end
     end
   end
 
