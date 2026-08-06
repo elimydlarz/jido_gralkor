@@ -163,7 +163,7 @@ defmodule JidoGralkor.PluginTest do
   end
 
   describe "when an agent turn begins > where the plugin was mounted with Lens selections > while a thread has committed to agent state" do
-    test "then the selected Lens and the configured Lenses to search are planted on the tool context beside the agent name and the committed thread's id" do
+    test "then the Lens selections and committed session id are planted on the tool context beside the agent name" do
       plugin_state = lens_plugin_state()
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
@@ -185,7 +185,7 @@ defmodule JidoGralkor.PluginTest do
   end
 
   describe "when an agent turn begins > where the plugin was mounted with Lens selections > while no thread has committed to agent state" do
-    test "then the selected Lens and the configured Lenses to search are planted on the tool context beside the agent name and without a session id" do
+    test "then the Lens selections are planted on the tool context beside the agent name without a session id" do
       plugin_state = lens_plugin_state()
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
@@ -247,7 +247,10 @@ defmodule JidoGralkor.PluginTest do
       assert List.last(messages) == %Message{role: "assistant", content: "you said hi"}
     end
 
-    test "if agent state holds no user name > then the callback raises ArgumentError naming the missing user name" do
+  end
+
+  describe "when an agent turn completes > while a thread has committed to agent state > if agent state holds no user name" do
+    test "then the callback raises ArgumentError naming the missing user name" do
       InMemory.set_capture(:ok)
       request_id = "req-no-user"
 
@@ -280,7 +283,10 @@ defmodule JidoGralkor.PluginTest do
       end
     end
 
-    test "if agent state holds a blank user name > then the callback raises ArgumentError naming the missing user name" do
+  end
+
+  describe "when an agent turn completes > while a thread has committed to agent state > if agent state holds a blank user name" do
+    test "then the callback raises ArgumentError naming the missing user name" do
       InMemory.set_capture(:ok)
       request_id = "req-blank-user"
 
@@ -308,8 +314,6 @@ defmodule JidoGralkor.PluginTest do
         Plugin.handle_signal(signal, context(ag))
       end
     end
-
-  end
 
   describe "when an agent turn completes > while no thread has committed to agent state" do
     test "then capture is skipped" do
