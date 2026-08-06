@@ -95,16 +95,16 @@ defmodule Gralkor.ConfigTest do
   end
 
   describe "if the remote FalkorDB configuration omits its host" do
-    test "then resolving the connection raises, naming the offending value" do
+    test "then resolving the connection raises, naming the missing host" do
       Application.put_env(:jido_gralkor, :falkordb, port: 6379)
-      assert_raise ArgumentError, ~r/\[port: 6379\]/, fn -> Config.falkordb_spec() end
+      assert_raise ArgumentError, ~r/:host/, fn -> Config.falkordb_spec() end
     end
   end
 
   describe "if the remote FalkorDB configuration omits its port" do
-    test "then resolving the connection raises, naming the offending value" do
+    test "then resolving the connection raises, naming the missing port" do
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example")
-      assert_raise ArgumentError, ~r/falkor\.example/, fn -> Config.falkordb_spec() end
+      assert_raise ArgumentError, ~r/:port/, fn -> Config.falkordb_spec() end
     end
   end
 

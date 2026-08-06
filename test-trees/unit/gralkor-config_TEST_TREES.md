@@ -17,10 +17,10 @@ if the remote FalkorDB configuration is not a keyword list
   then resolving the connection raises, naming the offending value
 
 if the remote FalkorDB configuration omits its host
-  then resolving the connection raises, naming the offending value
+  then resolving the connection raises, naming the missing host
 
 if the remote FalkorDB configuration omits its port
-  then resolving the connection raises, naming the offending value
+  then resolving the connection raises, naming the missing port
 
 if the remote FalkorDB host is blank
   then resolving the connection raises, naming the offending value
