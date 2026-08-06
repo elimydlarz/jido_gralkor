@@ -184,8 +184,8 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "where a turn is captured through a named Lens, alone or together with additional Lenses" do
-        test "while the backend acknowledges the capture > then success is returned" do
+      describe "where a turn is captured through a named Lens, alone or together with additional Lenses > while the backend acknowledges the capture" do
+        test "then success is returned" do
           unquote(setup_block).()
           configure_capture(:ok)
 
@@ -201,8 +201,10 @@ defmodule Gralkor.ClientContract do
                      ])
           end
         end
+      end
 
-        test "if the backend fails > then that failure is returned unchanged" do
+      describe "where a turn is captured through a named Lens, alone or together with additional Lenses > if the backend fails" do
+        test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_capture({:error, :write_failed})
 
