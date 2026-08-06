@@ -41,8 +41,8 @@ defmodule Gralkor.GraphitiPoolTest do
     GraphitiPool.start_link(Keyword.merge(defaults, opts))
   end
 
-  describe "add_episode/5, when graphiti's add_episode raises" do
-    test "then {:error, {:python, reason}} is returned with reason summarised to the Python error's class and message — not the full multi-line traceback" do
+  describe "if adding an episode raises inside the graph library" do
+    test "then an error carrying only the raised exception's class and message is returned" do
       err = %Pythonx.Error{
         type: nil,
         value: nil,
@@ -65,7 +65,7 @@ defmodule Gralkor.GraphitiPoolTest do
       refute reason =~ "\n"
     end
 
-    test "then {:error, {:python, reason}} is the shape returned by the rescue clause" do
+    test "and the logged diagnostic is a single concise line, so neither the full traceback nor an embedding vector is written to the log" do
       err = %Pythonx.Error{
         type: nil,
         value: nil,
@@ -82,7 +82,10 @@ defmodule Gralkor.GraphitiPoolTest do
       assert reason == "ValueError: bad thing happened"
     end
 
-    test "when Pythonx supplies no error lines then the reason falls back to \"Python exception raised (no detail available)\" without crashing" do
+  end
+
+  describe "if adding an episode raises inside the graph library > if the raised exception carries no detail" do
+    test "then the returned reason falls back to a message stating that a Python exception was raised with no detail available" do
       err = %Pythonx.Error{type: nil, value: nil, traceback: nil, lines: []}
 
       reason = GraphitiPool.summarise_python_error(err)
@@ -90,8 +93,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "add_episode/6, if adding an episode raises inside the graph library" do
-    test "then {:error, {:python, reason}} is returned, reason carrying only the raised exception's class and message" do
+  describe "when inference is needed to extract entities and edges from an episode, to embed a search query, or to rerank search candidates" do
+    test "then the call is issued by the graph library's own provider client rather than by the BEAM-side LLM client" do
       {g, _} =
         Pythonx.eval(
           """
@@ -123,8 +126,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "add_episode/6, when an episode is added, while an episode identifier is supplied" do
-    test "then that identifier is forwarded to graphiti's add_episode as uuid, so re-adding under it updates the episode by re-extraction" do
+  describe "when an episode is added > while an episode identifier is supplied" do
+    test "then that identifier is forwarded to the graph library, so re-adding under it updates the episode by re-extraction" do
       {g, _} =
         Pythonx.eval(
           """
@@ -196,8 +199,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "add_episode/6, when an episode is added, while no ontology is supplied" do
-    test "then the graph library receives no entity_types, edge_types, edge_type_map, or excluded_entity_types kwargs" do
+  describe "when an episode is added > while no ontology is supplied" do
+    test "then the graph library receives no entity types, edge types, edge type map, or excluded entity types" do
       {g, _} =
         Pythonx.eval(
           """
@@ -237,7 +240,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "add_episode/6, when an episode is added, while an ontology module is supplied" do
+  describe "when an episode is added > while an ontology module is supplied" do
     @describetag :integration
 
     defmodule OntologyForwardingOntology do
@@ -258,7 +261,7 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
 
-    test "then entity types, edge types, edge type map, and excluded entity types are forwarded, using graph library kwarg names outside and ontology type names inside" do
+    test "and the translated entity types, edge types, edge type map, and excluded entity types are forwarded to the graph library" do
       {g, _} =
         Pythonx.eval(
           """
@@ -335,8 +338,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "remove_episode/3, when graphiti's remove_episode raises" do
-    test "then {:error, {:python, reason}} is returned with reason summarised to the Python error's class and message — not the full multi-line traceback" do
+  describe "if removing an episode raises inside the graph library" do
+    test "and the logged diagnostic is a single concise line rather than a full traceback" do
       err = %Pythonx.Error{
         type: nil,
         value: nil,
@@ -356,8 +359,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "remove_episode/3, when an episode is removed" do
-    test "then graphiti's remove_episode is invoked with the episode uuid, deleting that episode along with the nodes and edges it orphans" do
+  describe "when an episode is removed" do
+    test "then the graph library deletes that episode along with the nodes and edges it orphans" do
       {g, _} =
         Pythonx.eval(
           """
@@ -390,8 +393,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "remove_episode/3, if removing an episode raises inside the graph library" do
-    test "then {:error, {:python, reason}} is returned, reason carrying only the raised exception's class and message" do
+  describe "if removing an episode raises inside the graph library" do
+    test "then an error carrying only the raised exception's class and message is returned" do
       {g, _} =
         Pythonx.eval(
           """
@@ -423,8 +426,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "search/4 (edge search)" do
-    test "then graphiti's g.search is invoked with num_results and the edges are returned as fact maps" do
+  describe "when a fact search is run for a group" do
+    test "then the graph library's edge search is invoked with the requested result count" do
       # A Pythonx-built fake graphiti whose search coroutine records its kwargs on the
       # instance, so they survive across Pythonx.eval scopes. The pool's construct_instance
       # returns it so GraphitiPool.search drives it.
@@ -475,7 +478,7 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "then each returned edge is rendered as a fact carrying its created, valid, invalid, and expired timestamps" do
+    test "and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps" do
       {g, _} =
         Pythonx.eval(
           """
@@ -518,7 +521,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "search/4 (edge search), if running a fact search raises inside the graph library" do
+  describe "if running a fact search raises inside the graph library" do
     test "then an error carrying the raised exception is returned" do
       {g, _} =
         Pythonx.eval(
@@ -546,8 +549,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "build_indices/1" do
-    test "then every group this pool holds an instance for is rebuilt, not one database standing for the whole graph" do
+  describe "when an index and constraint rebuild is requested for the whole graph" do
+    test "then every group the pool holds an instance for is rebuilt, each group being its own database" do
       {instance, _} =
         Pythonx.eval(
           """
