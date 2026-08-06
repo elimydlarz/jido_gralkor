@@ -575,6 +575,13 @@ defmodule Gralkor.Client.NativeTest do
       assert [%{"source_description" => "captured"}] = episodes(g)
     end
 
+    test "where no source description is supplied then the source recorded on the episode is \"manual\"",
+         %{g: g} do
+      assert :ok = Native.memory_add("g1", "content", nil)
+
+      assert [%{"source_description" => "manual"}] = episodes(g)
+    end
+
     test "if the graph fails the write, that failure is returned unchanged", %{g: g} do
       assert {:error, {:python, reason}} = Native.memory_add("g1", "boom", "manual")
       assert reason =~ "graph refused the write"

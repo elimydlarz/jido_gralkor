@@ -66,6 +66,7 @@ when a graph instance is requested for a group
       and the instance is still cached and returned
 
 when an episode is added
+  then its name combines the current millisecond timestamp with a positive monotonic unique integer, so concurrent writes remain distinguishable without claiming an episode UUID
   while no ontology is supplied
     then the graph library receives no entity types, edge types, edge type map, or excluded entity types
   while an ontology module is supplied

@@ -159,6 +159,43 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when an episode is added" do
+    test "then its name combines the current millisecond timestamp with a positive monotonic unique integer, so concurrent writes remain distinguishable without claiming an episode UUID" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.names = []
+
+              async def add_episode(self, **kwargs):
+                  self.names.append(kwargs['name'])
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok = GraphitiPool.add_episode(pid, "g1", "first", "manual", nil)
+      assert :ok = GraphitiPool.add_episode(pid, "g1", "second", "manual", nil)
+
+      {names, _} = Pythonx.eval("g.names", %{"g" => g})
+      assert [first, second] = Pythonx.decode(names)
+      assert first =~ ~r/^manual-add-\d+-\d+$/
+      assert second =~ ~r/^manual-add-\d+-\d+$/
+      refute first == second
+
+      GenServer.stop(pid)
+    end
+  end
+
   describe "add_episode/6, when an episode is added, while no ontology is supplied" do
     test "then the graph library receives no entity_types, edge_types, edge_type_map, or excluded_entity_types kwargs" do
       {g, _} =
