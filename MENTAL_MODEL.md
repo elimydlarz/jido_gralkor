@@ -8,7 +8,7 @@ This repository is the canonical development and distribution home for Jido-firs
 - **`JidoGralkor.Actions.MemorySearch` / `MemoryAdd` / `MemoryBuildIndices` / `MemoryBuildCommunities`** — the plugin's four ReAct tools; `MemorySearch` is the only recall path (no auto-recall in the plugin), and the two build actions are description-gated operator maintenance.
 - **`JidoGralkor.ReAct.maybe_force_memory_search/2`** — folds `tool_choice` into the consumer's transformer overrides on iter-1, making recall agentic.
 - **`JidoGralkor.Canonical.to_messages/3`** — normalises a Jido/ReAct turn into Gralkor's `[%Message{role, content}]` shape.
-- **`JidoGralkor.Lifecycle`** — graceful-shutdown flush via `Gralkor.Client.flush/1`.
+- **`JidoGralkor.Lifecycle`** — graceful-shutdown flush via the configured Gralkor client adapter's `flush/1`.
 - **`JidoGralkor.ContextRotator`** — synchronous rotate-on-demand: flush, retain recent and in-flight entries, then install a fresh thread.
 - **`Gralkor.Client` / `Gralkor.Ingest` / `Gralkor.Search`** — the callable Lens boundary and its request values. A registered `Gralkor.Lens` owns its name, ontology, operator-or-global scope, and ingestion module; `Gralkor.Lens.Store` owns group resolution and provenance; `Gralkor.Lens.Ingestion.ingest/2` is the callback an application implements, and `Gralkor.Lens.Ingestion.Generalise` is the built-in generalising one.
 
