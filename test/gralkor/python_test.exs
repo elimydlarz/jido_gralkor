@@ -156,6 +156,54 @@ defmodule Gralkor.PythonTest do
     end
   end
 
+  describe "ex-python-runtime > integration > venv init already-initialised guard" do
+    @describetag :integration
+
+    test "a second initialisation in the same VM short-circuits, so it cannot trip the interpreter's already-initialised guard" do
+      # test_helper.exs already called ensure_initialised/0 once at boot, so the
+      # :persistent_term flag is already set. Without the guard, this call would
+      # re-invoke Pythonx.uv_init/2, which raises "already been initialized" —
+      # caught and turned into {:error, _} — instead of returning :ok.
+      assert :persistent_term.get({Python, :uv_inited}, false) == true
+      assert :ok = Python.ensure_initialised()
+    end
+  end
+
+  describe "ex-python-runtime > integration > async runtime installation" do
+    @describetag :integration
+
+    test "installs a shared event loop and a helper that submits a coroutine's return value" do
+      assert :ok = Python.install_async_runtime()
+
+      {result, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+
+          async def _add():
+              return 40 + 2
+
+          [hasattr(asyncio, '_gralkor_loop'), callable(asyncio._gralkor_run), asyncio._gralkor_run(_add())]
+          """,
+          %{}
+        )
+
+      assert Pythonx.decode(result) == [true, true, 42]
+    end
+
+    test "re-invoking the loop installation leaves the already-installed loop in place" do
+      assert :ok = Python.install_async_runtime()
+
+      {before_id, _} = Pythonx.eval("import asyncio; id(asyncio._gralkor_loop)", %{})
+
+      assert :ok = Python.install_async_runtime()
+
+      {after_id, _} = Pythonx.eval("import asyncio; id(asyncio._gralkor_loop)", %{})
+
+      assert Pythonx.decode(before_id) == Pythonx.decode(after_id)
+    end
+  end
+
   describe "ex-python-runtime > integration > GenServer boots through init/1" do
     @describetag :integration
 
