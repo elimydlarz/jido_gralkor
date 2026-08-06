@@ -1,25 +1,25 @@
 Integration: context-rotator (src: lib/jido_gralkor/context_rotator.ex; integration: test/integration/context_rotator_integration_test.exs)
 
-when a running agent is asked to rotate its context now
-  while a thread is committed to the agent
-    while the flush of the committed session succeeds
+when context rotation is requested
+  while the agent has a committed thread
+    while its session flush succeeds
       then exactly one flush is requested, naming the pre-rotation session id and the caller's flush timeout
       and the agent's active session id becomes a new one
       and the agent process is still running afterwards
-      while the caller retains recent entries
-      and the thread holds more than that
-        then the rotated thread is seeded with only that many most recent entries, dropping everything before them
-      while the caller retains nothing
-      and every pre-rotation entry was already flushed
-        then the rotated thread starts empty
-    if installing the fresh thread fails after the flush succeeded
+      while recent entries are retained
+      and the thread holds more
+        then only that many newest entries seed the rotated thread
+      while no entries are retained
+      and every prior entry was flushed
+        then the rotated thread is empty
+    if installing the fresh thread fails after flushing
       then the failure reason is returned to the caller
       and the agent process is still running afterwards
-    if the flush of the committed session fails
+    if its session flush fails
       then the failure reason is returned to the caller
       and the active session id is left unchanged
       and the agent process is still running afterwards
-  while no thread is committed to the agent
+  while the agent has no committed thread
     then rotation succeeds without requesting any flush
     and no session is committed as a side effect
     and the agent process is still running afterwards

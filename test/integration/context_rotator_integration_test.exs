@@ -76,7 +76,7 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "when a running agent is asked to rotate its context now > while a thread is committed to the agent > while the flush of the committed session succeeds" do
+  describe "when context rotation is requested > while the agent has a committed thread > while its session flush succeeds" do
     test "then exactly one flush is requested, naming the pre-rotation session id and the caller's flush timeout" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
@@ -110,7 +110,7 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "when a running agent is asked to rotate its context now > while no thread is committed to the agent" do
+  describe "when context rotation is requested > while the agent has no committed thread" do
     test "then rotation succeeds without requesting any flush" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
@@ -136,7 +136,7 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "when a running agent is asked to rotate its context now > while a thread is committed to the agent > if the flush of the committed session fails" do
+  describe "when context rotation is requested > while the agent has a committed thread > if its session flush fails" do
     test "then the failure reason is returned to the caller" do
       InMemory.set_flush_and_await({:error, :backend_down})
       pid = start_agent()
@@ -165,7 +165,7 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "when a running agent is asked to rotate its context now > while a thread is committed to the agent > if installing the fresh thread fails after the flush succeeded" do
+  describe "when context rotation is requested > while the agent has a committed thread > if installing the fresh thread fails after flushing" do
     test "then the failure reason is returned to the caller" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
@@ -186,8 +186,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "when a running agent is asked to rotate its context now > while a thread is committed to the agent > while the flush of the committed session succeeds > while the caller retains recent entries > and the thread holds more than that" do
-    test "then the rotated thread is seeded with only that many most recent entries, dropping everything before them" do
+  describe "when context rotation is requested > while the agent has a committed thread > while its session flush succeeds > while recent entries are retained > and the thread holds more" do
+    test "then only that many newest entries seed the rotated thread" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
 
@@ -209,8 +209,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "when a running agent is asked to rotate its context now > while a thread is committed to the agent > while the flush of the committed session succeeds > while the caller retains nothing > and every pre-rotation entry was already flushed" do
-    test "then the rotated thread starts empty" do
+  describe "when context rotation is requested > while the agent has a committed thread > while its session flush succeeds > while no entries are retained > and every prior entry was flushed" do
+    test "then the rotated thread is empty" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
 
