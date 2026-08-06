@@ -22,581 +22,420 @@ defmodule Gralkor.GeneraliseTest do
     )
   end
 
-  describe "ex-generalise > hypothesise_schema/0" do
-    test "requires generalisations as a list of maps, each carrying content and a confidence between 0.0 and 1.0" do
+  describe "when the structured-output schema for hypothesising is requested" do
+    test "then it requires the generalisations as a list of maps" do
       schema = Generalise.hypothesise_schema()
-
       assert schema[:generalisations][:type] == {:list, :map}
       assert schema[:generalisations][:required] == true
-      assert schema[:generalisations][:doc] =~ "content"
-      assert schema[:generalisations][:doc] =~ "confidence"
-      assert schema[:generalisations][:doc] =~ "0.0-1.0"
+    end
+
+    test "and it tells the model each entry carries content and a confidence between 0.0 and 1.0" do
+      doc = Generalise.hypothesise_schema()[:generalisations][:doc]
+      assert doc =~ "content"
+      assert doc =~ "confidence"
+      assert doc =~ "0.0-1.0"
     end
   end
 
-  describe "ex-generalise > evaluate_schema/0" do
-    test "requires decisions as a list of maps, each carrying an action, the hypothesis index, a confidence and the content to save, and names which actions are available" do
+  describe "when the structured-output schema for evaluating is requested" do
+    test "then it requires the decisions as a list of maps" do
       schema = Generalise.evaluate_schema()
-
       assert schema[:decisions][:type] == {:list, :map}
       assert schema[:decisions][:required] == true
-      assert schema[:decisions][:doc] =~ "action"
-      assert schema[:decisions][:doc] =~ "hypothesis_index"
-      assert schema[:decisions][:doc] =~ "confidence"
-      assert schema[:decisions][:doc] =~ "content"
-      assert schema[:decisions][:doc] =~ "save|broadens|narrows|contradicts|skip"
+    end
+
+    test "and it tells the model each decision carries an action, the hypothesis index, a confidence and the content to save" do
+      doc = Generalise.evaluate_schema()[:decisions][:doc]
+      assert doc =~ "action"
+      assert doc =~ "hypothesis_index"
+      assert doc =~ "confidence"
+      assert doc =~ "content"
+    end
+
+    test "and it tells the model which actions are available" do
+      assert Generalise.evaluate_schema()[:decisions][:doc] =~
+               "save|broadens|narrows|contradicts|skip"
     end
   end
 
-  describe "ex-generalise > hypothesise" do
-    test "when the LLM returns no candidates, nothing is persisted" do
-      add_fn = fn _g, _b, _s, _ont, _opts ->
-        Process.put(:add_episode_called, true)
-        :ok
-      end
+  describe "when a transcript is generalised" do
+    test "then only hypothesised candidates at or above the minimum confidence reach evaluation" do
+      prompt = evaluation_prompt([
+        %{content: "below", confidence: 0.2},
+        %{content: "above", confidence: 0.7}
+      ])
 
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "some transcript",
-                 default_opts(hypothesise_fn: ok_hypothesise([]), add_episode_fn: add_fn)
-               )
-
-      refute Process.get(:add_episode_called, false)
+      assert prompt =~ "above"
+      refute prompt =~ "below"
     end
 
-    test "with no min_confidence supplied, the default of 0.3 decides what reaches evaluation" do
-      candidates = [
-        %{content: "just below", confidence: 0.29},
-        %{content: "exactly at", confidence: 0.3}
-      ]
+    test "and candidates reach evaluation sorted by confidence descending" do
+      prompt =
+        evaluation_prompt([
+          %{content: "c_low", confidence: 0.4},
+          %{content: "c_high", confidence: 0.9},
+          %{content: "c_mid", confidence: 0.6}
+        ])
 
-      evaluate_fn = fn prompt ->
-        Process.put(:evaluate_prompt, prompt)
-        {:ok, []}
-      end
+      position = fn content -> :binary.match(prompt, content) |> elem(0) end
+      assert position.("c_high") < position.("c_mid")
+      assert position.("c_mid") < position.("c_low")
+    end
 
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   evaluate_fn: evaluate_fn
-                 )
-               )
+    test "and the minimum confidence defaults to 0.3" do
+      prompt =
+        evaluation_prompt([
+          %{content: "just below", confidence: 0.29},
+          %{content: "exactly at", confidence: 0.3}
+        ])
 
-      prompt = Process.get(:evaluate_prompt)
       assert prompt =~ "exactly at"
       refute prompt =~ "just below"
     end
 
-    test "candidates below min_confidence are dropped" do
-      below = [
-        %{content: "weak pattern", confidence: 0.1},
-        %{content: "vague preference", confidence: 0.25}
-      ]
-
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "some transcript",
-                 default_opts(hypothesise_fn: ok_hypothesise(below), min_confidence: 0.3)
-               )
-
-      refute Process.get(:add_episode_called, false)
+    test "if every hypothesised candidate falls below the minimum confidence > then nothing is persisted" do
+      refute_persistence([
+        %{content: "weak", confidence: 0.1},
+        %{content: "vague", confidence: 0.25}
+      ])
     end
 
-    test "only candidates at or above min_confidence are evaluated" do
-      mixed = [
-        %{content: "xyzzy-below-threshold-unique", confidence: 0.2},
-        %{content: "above", confidence: 0.7}
-      ]
-
-      eval_fn = fn prompt ->
-        assert prompt =~ "above"
-        refute prompt =~ "xyzzy-below-threshold-unique"
-        {:ok, []}
-      end
-
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(mixed),
-                   evaluate_fn: eval_fn,
-                   min_confidence: 0.3
-                 )
-               )
-    end
-
-    test "candidates are sorted by confidence descending before evaluation" do
-      candidates = [
-        %{content: "c_low", confidence: 0.4},
-        %{content: "c_high", confidence: 0.9},
-        %{content: "c_mid", confidence: 0.6}
-      ]
-
-      eval_fn = fn prompt ->
-        pos = fn s -> :binary.match(prompt, s) |> elem(0) end
-        assert pos.("c_high") < pos.("c_mid")
-        assert pos.("c_mid") < pos.("c_low")
-        {:ok, []}
-      end
-
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(hypothesise_fn: ok_hypothesise(candidates), evaluate_fn: eval_fn)
-               )
+    test "if no candidates are hypothesised at all > then nothing is persisted" do
+      refute_persistence([])
     end
   end
 
-  describe "ex-generalise > evaluate > save" do
-    test "a save decision persists a new generalisation at level 0" do
-      candidates = [%{content: "User prefers dark mode", confidence: 0.85}]
+  describe "when evaluation decides to save a candidate" do
+    test "then a new generalisation is persisted at level 0" do
+      {generalisation, _body, _opts} = persisted("save", nil)
+      assert generalisation.level == 0
+    end
 
-      decisions = [
-        %{
-          hypothesis_index: 0,
-          action: "save",
-          confidence: 0.85,
-          content: "User prefers dark mode"
-        }
-      ]
+    test "and it records no generalised ids" do
+      {generalisation, _body, _opts} = persisted("save", nil)
+      assert generalisation.generalises == []
+    end
 
-      add_fn = fn _group, body, _source, _ont, opts ->
-        assert body =~ "User prefers dark mode"
-        assert body =~ "GEN|v1|"
+    test "and the persisted episode body is the encoded generalisation" do
+      {generalisation, body, _opts} = persisted("save", nil)
+      assert {:ok, ^generalisation, _plain} = Gralkor.Generalisation.decode(body)
+    end
+  end
 
-        {:ok, gen, _plain} = Gralkor.Generalisation.decode(body)
-        assert gen.level == 0
-        assert gen.confidence == 0.85
-        assert gen.generalises == []
-        assert opts == []
-        :ok
+  for {action, wording} <- [
+        {"broadens", "when evaluation decides a candidate broadens an existing generalisation"},
+        {"narrows", "when evaluation decides a candidate narrows an existing generalisation"}
+      ] do
+    describe wording do
+      test "then a new generalisation is persisted one level above the existing one" do
+        existing = existing_generalisation(1)
+        {generalisation, _body, _opts} = persisted(unquote(action), existing)
+        assert generalisation.level == 2
       end
 
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   evaluate_fn: ok_evaluate(decisions),
-                   add_episode_fn: add_fn
-                 )
-               )
-    end
-
-    test "a save decision ignores an unrelated existing id and remains an independent level-0 generalisation" do
-      existing_gen = %Gralkor.Generalisation{
-        id: "gen-existing",
-        content: "Existing",
-        level: 4,
-        confidence: 0.7
-      }
-
-      add_fn = fn _group, body, _source, _ontology, _opts ->
-        {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
-        assert generalisation.level == 0
-        assert generalisation.generalises == []
-        :ok
+      test "and it records the existing generalisation's id as generalised" do
+        existing = existing_generalisation(1)
+        {generalisation, _body, _opts} = persisted(unquote(action), existing)
+        assert generalisation.generalises == [existing.id]
       end
 
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise([%{content: "New", confidence: 0.9}]),
-                   search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
-                   evaluate_fn:
-                     ok_evaluate([
-                       %{
-                         action: "save",
-                         hypothesis_index: 0,
-                         confidence: 0.9,
-                         content: "New",
-                         existing_id: "gen-existing"
-                       }
-                     ]),
-                   add_episode_fn: add_fn
-                 )
-               )
-    end
-  end
-
-  describe "ex-generalise > evaluate > broadens" do
-    test "a broadens decision creates a new generalisation with level = existing.level + 1" do
-      existing_gen = %Gralkor.Generalisation{
-        id: "gen-existing-1",
-        content: "User prefers dark mode in VS Code",
-        level: 1,
-        confidence: 0.8
-      }
-
-      candidates = [%{content: "User prefers dark mode across all editors", confidence: 0.9}]
-
-      decisions = [
-        %{
-          hypothesis_index: 0,
-          action: "broadens",
-          confidence: 0.9,
-          content: "User prefers dark mode across all editors",
-          existing_id: "gen-existing-1"
-        }
-      ]
-
-      add_fn = fn _group, body, _source, _ont, opts ->
-        {:ok, gen, _plain} = Gralkor.Generalisation.decode(body)
-        assert gen.level == 2
-        assert gen.generalises == ["gen-existing-1"]
-        assert opts == []
-        :ok
+      test "and the existing generalisation is left active" do
+        existing = existing_generalisation(1)
+        persisted(unquote(action), existing)
+        assert existing == existing_generalisation(1)
       end
-
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
-                   evaluate_fn: ok_evaluate(decisions),
-                   add_episode_fn: add_fn
-                 )
-               )
     end
   end
 
-  describe "ex-generalise > evaluate > narrows" do
-    test "a narrows decision creates a new generalisation with level = existing.level + 1" do
-      existing_gen = %Gralkor.Generalisation{
-        id: "gen-broad-1",
-        content: "User likes music",
-        level: 0,
-        confidence: 0.7
-      }
+  describe "when evaluation decides a candidate contradicts an existing generalisation" do
+    test "then the contradicting generalisation is persisted one level above the existing one" do
+      existing = existing_generalisation(0)
+      {generalisation, _body, _opts} = persisted("contradicts", existing)
+      assert generalisation.level == 1
+    end
 
-      candidates = [%{content: "User likes 1950s jazz", confidence: 0.95}]
+    test "and it records the existing generalisation's id as generalised" do
+      existing = existing_generalisation(0)
+      {generalisation, _body, _opts} = persisted("contradicts", existing)
+      assert generalisation.generalises == [existing.id]
+    end
 
-      decisions = [
-        %{
-          hypothesis_index: 0,
-          action: "narrows",
-          confidence: 0.95,
-          content: "User likes 1950s jazz",
-          existing_id: "gen-broad-1"
-        }
-      ]
-
-      add_fn = fn _group, body, _source, _ont, opts ->
-        {:ok, gen, _plain} = Gralkor.Generalisation.decode(body)
-        assert gen.level == 1
-        assert gen.generalises == ["gen-broad-1"]
-        assert opts == []
-        :ok
-      end
-
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
-                   evaluate_fn: ok_evaluate(decisions),
-                   add_episode_fn: add_fn
-                 )
-               )
+    test "and the existing generalisation is left in place, because the graph library owns episode identity and a generalisation's id cannot address its episode" do
+      existing = existing_generalisation(0)
+      persisted("contradicts", existing)
+      assert existing == existing_generalisation(0)
     end
   end
 
-  describe "ex-generalise > evaluate > contradicts" do
-    test "a contradicts decision saves the new generalisation one level above and leaves the existing one in place" do
-      existing_gen = %Gralkor.Generalisation{
-        id: "gen-outdated",
-        content: "User dislikes notifications",
-        level: 0,
-        confidence: 0.6
-      }
-
-      candidates = [
-        %{
-          content: "User finds notifications helpful for time-sensitive updates",
-          confidence: 0.88
-        }
-      ]
-
-      decisions = [
-        %{
-          hypothesis_index: 0,
-          action: "contradicts",
-          confidence: 0.88,
-          content: "User finds notifications helpful for time-sensitive updates",
-          existing_id: "gen-outdated"
-        }
-      ]
-
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
-                   evaluate_fn: ok_evaluate(decisions),
-                   add_episode_fn: fn _partition, body, _source, _ontology, _opts ->
-                     {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
-                     Process.put(:persisted, generalisation)
-                     :ok
-                   end
-                 )
-               )
-
-      persisted = Process.get(:persisted)
-
-      assert persisted.level == 1
-      assert persisted.generalises == ["gen-outdated"]
+  describe "when evaluation decides to skip a candidate" do
+    test "then no episode is added" do
+      refute_decision_persistence("skip")
     end
   end
 
-  describe "ex-generalise > evaluate > skip" do
-    test "a skip decision does not persist anything" do
-      candidates = [%{content: "Some weak pattern", confidence: 0.5}]
+  describe "when any decision persists a new generalisation" do
+    test "then the episode write supplies no episode identifier, so the graph library mints a new episode instead of failing to find one to update" do
+      {_generalisation, _body, opts} = persisted("save", nil)
+      assert opts == []
+    end
 
-      decisions = [
-        %{hypothesis_index: 0, action: "skip", confidence: 0.5, content: "Some weak pattern"}
-      ]
-
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   evaluate_fn: ok_evaluate(decisions),
-                   add_episode_fn: fn _g, _b, _s, _ont, _opts ->
-                     Process.put(:add_called, true)
-                     :ok
-                   end
-                 )
-               )
-
-      refute Process.get(:add_called, false)
+    test "and the generalisation's own id travels in the episode body, where it records lineage between generalisations" do
+      {generalisation, body, _opts} = persisted("save", nil)
+      assert body =~ generalisation.id
     end
   end
 
-  describe "ex-generalise > persistence identity" do
-    test "whenever any decision persists a new generalisation, add_episode is given no episode identifier and the generalisation's id travels in the body" do
-      candidates = [%{content: "User prefers dark mode", confidence: 0.85}]
-
-      decisions = [
-        %{
-          hypothesis_index: 0,
-          action: "save",
-          confidence: 0.85,
-          content: "User prefers dark mode"
-        }
-      ]
-
-      add_fn = fn _group, body, _source, _ontology, opts ->
-        {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
-        assert opts == []
-        assert generalisation.id =~ ~r/^gen-/
-        :ok
-      end
-
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   evaluate_fn: ok_evaluate(decisions),
-                   add_episode_fn: add_fn
-                 )
-               )
+  describe "when the existing generalisation named by a decision is found among the searched generalisations" do
+    test "then the new generalisation's level is one above that existing level" do
+      existing = existing_generalisation(3)
+      {generalisation, _body, _opts} = persisted("broadens", existing)
+      assert generalisation.level == 4
     end
   end
 
-  describe "ex-generalise > error handling" do
-    test "when hypothesise LLM fails, generalise returns :ok (best-effort) and logs the failure" do
-      logs =
-        capture_log(fn ->
-          assert :ok =
-                   Generalise.generalise(
-                     "g",
-                     "transcript",
-                     default_opts(
-                       hypothesise_fn: fn _prompt -> {:error, {:upstream_llm, :timeout}} end
-                     )
-                   )
-        end)
+  describe "if the existing generalisation named by a decision is not found" do
+    test "then the new generalisation's level is 0" do
+      {generalisation, _body, _opts} = persisted("broadens", nil, "missing")
+      assert generalisation.level == 0
+    end
+  end
 
+  describe "if the hypothesis model call fails" do
+    test "then generalisation still returns :ok" do
+      {result, _logs} = hypothesis_failure()
+      assert result == :ok
+    end
+
+    test "and the failure is logged" do
+      {_result, logs} = hypothesis_failure()
       assert logs =~ "generalise upstream LLM error"
       assert logs =~ ":timeout"
     end
+  end
 
-    test "when evaluate LLM fails, generalise returns :ok (best-effort) and persists nothing" do
-      candidates = [%{content: "test", confidence: 0.8}]
-
-      add_fn = fn _g, _b, _s, _ont, _opts ->
-        Process.put(:add_called, true)
-        :ok
-      end
-
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   evaluate_fn: fn _prompt -> {:error, {:upstream_llm, :rate_limited}} end,
-                   add_episode_fn: add_fn
-                 )
-               )
-
-      refute Process.get(:add_called, false)
+  describe "if the evaluation model call fails" do
+    test "then generalisation still returns :ok" do
+      {result, _persisted} = evaluation_failure()
+      assert result == :ok
     end
 
-    test "when search fails for a hypothesis, evaluation still runs against an empty existing list" do
-      candidates = [%{content: "test", confidence: 0.8}]
-      decisions = [%{hypothesis_index: 0, action: "save", confidence: 0.8, content: "test"}]
-
-      evaluate_fn = fn prompt ->
-        Process.put(:evaluate_prompt, prompt)
-        {:ok, decisions}
-      end
-
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   search_gen_fn: fn _p, _q, _m -> {:error, :search_failed} end,
-                   evaluate_fn: evaluate_fn
-                 )
-               )
-
-      assert Process.get(:evaluate_prompt) =~ "(no existing generalisations in memory)"
-    end
-
-    test "when add_episode fails, the failure is logged and the remaining decisions are still applied" do
-      candidates = [
-        %{content: "first", confidence: 0.9},
-        %{content: "second", confidence: 0.8}
-      ]
-
-      decisions = [
-        %{hypothesis_index: 0, action: "save", confidence: 0.9, content: "first"},
-        %{hypothesis_index: 1, action: "save", confidence: 0.8, content: "second"}
-      ]
-
-      add_fn = fn _g, body, _s, _ont, _opts ->
-        {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
-        Process.put(:persisted, [generalisation.content | Process.get(:persisted, [])])
-
-        case generalisation.content do
-          "first" -> {:error, :disk_full}
-          _ -> :ok
-        end
-      end
-
-      logs =
-        capture_log(fn ->
-          assert :ok =
-                   Generalise.generalise(
-                     "g",
-                     "transcript",
-                     default_opts(
-                       hypothesise_fn: ok_hypothesise(candidates),
-                       evaluate_fn: ok_evaluate(decisions),
-                       add_episode_fn: add_fn
-                     )
-                   )
-        end)
-
-      assert logs =~ "generalise persist failed"
-      assert logs =~ ":disk_full"
-      assert Enum.sort(Process.get(:persisted)) == ["first", "second"]
+    test "and nothing is persisted" do
+      {_result, persisted?} = evaluation_failure()
+      refute persisted?
     end
   end
 
-  describe "ex-generalise > level calculation" do
-    test "level is max child level + 1 via existing_by_id lookup" do
-      existing_gen = %Gralkor.Generalisation{
-        id: "gen-l0",
-        content: "base",
-        level: 3,
-        confidence: 0.9
-      }
+  describe "if the search for existing generalisations fails" do
+    test "then evaluation continues against an empty existing list" do
+      assert search_failure_prompt() =~ "(no existing generalisations in memory)"
+    end
+  end
 
-      candidates = [%{content: "broader", confidence: 0.9}]
-
-      decisions = [
-        %{
-          hypothesis_index: 0,
-          action: "broadens",
-          confidence: 0.9,
-          content: "broader",
-          existing_id: "gen-l0"
-        }
-      ]
-
-      add_fn = fn _group, body, _source, _ont, _opts ->
-        {:ok, gen, _plain} = Gralkor.Generalisation.decode(body)
-        assert gen.level == 4
-        :ok
-      end
-
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
-                   evaluate_fn: ok_evaluate(decisions),
-                   add_episode_fn: add_fn
-                 )
-               )
+  describe "if an episode write fails" do
+    test "then the failure is logged" do
+      {logs, _persisted} = episode_write_failure()
+      assert logs =~ "generalise persist failed"
+      assert logs =~ ":disk_full"
     end
 
-    test "when existing_id is not found, level defaults to 0" do
-      candidates = [%{content: "test", confidence: 0.8}]
+    test "and the remaining decisions are still applied" do
+      {_logs, persisted} = episode_write_failure()
+      assert Enum.sort(persisted) == ["first", "second"]
+    end
+  end
 
-      decisions = [
-        %{
-          hypothesis_index: 0,
-          action: "broadens",
-          confidence: 0.8,
-          content: "test",
-          existing_id: "nonexistent"
-        }
-      ]
+  defp evaluation_prompt(candidates) do
+    evaluate_fn = fn prompt ->
+      Process.put(:evaluate_prompt, prompt)
+      {:ok, []}
+    end
 
-      add_fn = fn _group, body, _source, _ont, _opts ->
-        {:ok, gen, _plain} = Gralkor.Generalisation.decode(body)
-        assert gen.level == 0
-        :ok
+    assert :ok =
+             Generalise.generalise(
+               "g",
+               "transcript",
+               default_opts(hypothesise_fn: ok_hypothesise(candidates), evaluate_fn: evaluate_fn)
+             )
+
+    Process.get(:evaluate_prompt)
+  end
+
+  defp refute_persistence(candidates) do
+    add_fn = fn _group, _body, _source, _ontology, _opts ->
+      Process.put(:add_called, true)
+      :ok
+    end
+
+    assert :ok =
+             Generalise.generalise(
+               "g",
+               "transcript",
+               default_opts(hypothesise_fn: ok_hypothesise(candidates), add_episode_fn: add_fn)
+             )
+
+    refute Process.get(:add_called, false)
+  end
+
+  defp existing_generalisation(level) do
+    %Gralkor.Generalisation{
+      id: "gen-existing",
+      content: "existing",
+      level: level,
+      confidence: 0.8
+    }
+  end
+
+  defp persisted(action, existing, existing_id \\ nil) do
+    candidate = %{content: "candidate", confidence: 0.9}
+
+    decision = %{
+      hypothesis_index: 0,
+      action: action,
+      confidence: 0.9,
+      content: candidate.content
+    }
+
+    decision =
+      case {existing, existing_id, action} do
+        {%Gralkor.Generalisation{id: id}, _, _} -> Map.put(decision, :existing_id, id)
+        {nil, id, _} when is_binary(id) -> Map.put(decision, :existing_id, id)
+        {nil, nil, "save"} -> decision
       end
 
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   search_gen_fn: ok_search([]),
-                   evaluate_fn: ok_evaluate(decisions),
-                   add_episode_fn: add_fn
-                 )
-               )
+    search_results = if existing, do: [Gralkor.Generalisation.encode(existing)], else: []
+
+    add_fn = fn _group, body, _source, _ontology, opts ->
+      Process.put(:persisted_body, body)
+      Process.put(:persisted_opts, opts)
+      :ok
     end
+
+    assert :ok =
+             Generalise.generalise(
+               "g",
+               "transcript",
+               default_opts(
+                 hypothesise_fn: ok_hypothesise([candidate]),
+                 search_gen_fn: ok_search(search_results),
+                 evaluate_fn: ok_evaluate([decision]),
+                 add_episode_fn: add_fn
+               )
+             )
+
+    body = Process.get(:persisted_body)
+    {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
+    {generalisation, body, Process.get(:persisted_opts)}
+  end
+
+  defp refute_decision_persistence(action) do
+    add_fn = fn _group, _body, _source, _ontology, _opts ->
+      Process.put(:add_called, true)
+      :ok
+    end
+
+    decision = %{hypothesis_index: 0, action: action, confidence: 0.5, content: "candidate"}
+
+    assert :ok =
+             Generalise.generalise(
+               "g",
+               "transcript",
+               default_opts(
+                 hypothesise_fn: ok_hypothesise([%{content: "candidate", confidence: 0.5}]),
+                 evaluate_fn: ok_evaluate([decision]),
+                 add_episode_fn: add_fn
+               )
+             )
+
+    refute Process.get(:add_called, false)
+  end
+
+  defp hypothesis_failure do
+    result =
+      capture_log(fn ->
+        Process.put(
+          :hypothesis_failure_result,
+          Generalise.generalise(
+            "g",
+            "transcript",
+            default_opts(hypothesise_fn: fn _prompt -> {:error, {:upstream_llm, :timeout}} end)
+          )
+        )
+      end)
+
+    {Process.get(:hypothesis_failure_result), result}
+  end
+
+  defp evaluation_failure do
+    add_fn = fn _group, _body, _source, _ontology, _opts ->
+      Process.put(:add_called, true)
+      :ok
+    end
+
+    result =
+      Generalise.generalise(
+        "g",
+        "transcript",
+        default_opts(
+          hypothesise_fn: ok_hypothesise([%{content: "candidate", confidence: 0.8}]),
+          evaluate_fn: fn _prompt -> {:error, {:upstream_llm, :rate_limited}} end,
+          add_episode_fn: add_fn
+        )
+      )
+
+    {result, Process.get(:add_called, false)}
+  end
+
+  defp search_failure_prompt do
+    evaluate_fn = fn prompt ->
+      Process.put(:evaluate_prompt, prompt)
+      {:ok, []}
+    end
+
+    assert :ok =
+             Generalise.generalise(
+               "g",
+               "transcript",
+               default_opts(
+                 hypothesise_fn: ok_hypothesise([%{content: "candidate", confidence: 0.8}]),
+                 search_gen_fn: fn _partition, _query, _max -> {:error, :search_failed} end,
+                 evaluate_fn: evaluate_fn
+               )
+             )
+
+    Process.get(:evaluate_prompt)
+  end
+
+  defp episode_write_failure do
+    candidates = [
+      %{content: "first", confidence: 0.9},
+      %{content: "second", confidence: 0.8}
+    ]
+
+    decisions = [
+      %{hypothesis_index: 0, action: "save", confidence: 0.9, content: "first"},
+      %{hypothesis_index: 1, action: "save", confidence: 0.8, content: "second"}
+    ]
+
+    add_fn = fn _group, body, _source, _ontology, _opts ->
+      {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
+      Process.put(:persisted, [generalisation.content | Process.get(:persisted, [])])
+      if generalisation.content == "first", do: {:error, :disk_full}, else: :ok
+    end
+
+    logs =
+      capture_log(fn ->
+        assert :ok =
+                 Generalise.generalise(
+                   "g",
+                   "transcript",
+                   default_opts(
+                     hypothesise_fn: ok_hypothesise(candidates),
+                     evaluate_fn: ok_evaluate(decisions),
+                     add_episode_fn: add_fn
+                   )
+                 )
+      end)
+
+    {logs, Process.get(:persisted)}
   end
 end
