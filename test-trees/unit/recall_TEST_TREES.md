@@ -1,72 +1,93 @@
 Unit: recall (src: lib/gralkor/recall.ex; unit: test/gralkor/recall_test.exs)
 
 when a recall is requested
-  then the group id is sanitised by replacing hyphens with underscores before any search runs
-  and the query is passed to interpretation, so relevance is judged against what was asked even when no session supplies a conversation
-  and the returned memory block wraps its body in `<gralkor-memory trust="untrusted">…</gralkor-memory>`
-  and the memory block carries an instruction to search memory again when more detail is needed
-  if the agent name is missing or blank
-    then an ArgumentError is raised
+  then the query reaches interpretation even when the session conversation does not contain it
+
+when no relevant facts are found
+  then an empty graph result produces the no-memories body
+  and interpretation selecting no facts produces the no-memories body
 
 when interpretation selects relevant facts
-  then the memory block body lists them one per line
-  and each entry is the interpreted line verbatim, preserving every timestamp parenthetical
-  and each entry ends with ' — ' followed by a one-sentence relevance reason
-
-when the graph search returns no facts
-  then the memory block body is "No relevant memories found."
-
-when interpretation selects none of the searched facts
-  then the memory block body is "No relevant memories found."
-
-if the main graph search fails
-  then the failure reason is returned to the caller
-  and no memory block is manufactured
+  then the memory block lists every interpreted line verbatim and in order
 
 when a non-blank session id is supplied
-  then the conversation context is the buffered turns for that session, flat-walked in order
-  and user turns are labelled "User"
-  and assistant turns are labelled with the agent name rather than "Assistant"
+  then buffered turns are flat-walked in order with user and named-agent labels
 
 when a nil session id is supplied
-  then the conversation context is empty
-  and the turn buffer is never consulted
+  then conversation context is empty and the turn buffer is not consulted
 
 when a maximum result count is supplied
-  then at most that many facts are searched for
+  then that count is forwarded to the main search
 
 when no maximum result count is supplied
-  then a default of 10 facts is searched for
+  then the main search receives the default count of ten
 
 when an output token budget is supplied
   then that budget is forwarded to interpretation
 
 when no output token budget is supplied
-  then interpretation applies its own default budget of 2000
+  then interpretation receives its default budget of two thousand
+
+when a group id contains hyphens
+  then every hyphen is replaced with an underscore before search
+
+if the agent name is missing or blank
+  then an argument error is raised
+
+when recall returns a memory block
+  then the block is marked as untrusted and instructs the caller to search again for more detail
+
+if the main graph search fails
+  then its failure is returned without manufacturing a memory block
+
+while a deadline budget governs recall
+  if the budget expires before recall returns
+    then a deadline-expired error is returned and a warning names the session and budget
+    and ordinary BEAM work owned by the recall task is stopped
+  if recall finishes within the budget
+    then the memory block is returned normally
+
+when no deadline is supplied
+  then twelve seconds governs recall
+
+when recall begins and completes
+  then call metadata and result timing metrics are logged
+  where interpretation does not run
+    then the interpretation duration is logged as zero
+
+where test mode is enabled
+  then the raw query is logged
+  when facts are returned
+    then the resulting memory block is logged
+  when no facts are returned
+    then no memory block is logged
+  when auxiliary searches run
+    then each auxiliary result count and result body is logged
+
+where test mode is disabled
+  then neither the raw query nor memory block is logged
 
 where a generalisation search is supplied
-  then it runs in parallel with the main search over the same sanitised group
-  and it asks for one third of the main result limit, never fewer than one
-  and its results are combined with the regular facts before interpretation
-  and it may use up to the shared five-second auxiliary yield while the outer recall deadline remains available
-  if it fails or times out
-    then it contributes no facts to interpretation
-    and successful learning-search facts remain eligible for interpretation
+  then it runs alongside the main search and receives at least one third of the main limit
+  and successful generalisation facts reach interpretation with regular facts
+  if it fails
+    then it contributes no facts while regular facts remain eligible
+    and successful learning-search facts remain eligible
+  while it returns no facts
+    then recall proceeds normally
 
 where no generalisation search is supplied
   then no generalisation search is issued
   and a supplied learning search still contributes its successful facts
 
 where a learning search is supplied
-  then it runs on every recall without any opt-in flag
-  and it runs in parallel over the same sanitised group
-  and it is seeded with the raw user query rather than a classified or LLM-rewritten query
-  and it asks for one third of the main result limit, never fewer than one
-  and its results are combined with the regular facts before interpretation
-  and it may use up to the shared five-second auxiliary yield while the outer recall deadline remains available
-  if it fails or times out
-    then it contributes no facts to interpretation
-    and successful generalisation-search facts remain eligible for interpretation
+  then it runs on every recall over the same group with the raw query and at least one third of the main limit
+  and successful learning facts reach interpretation with regular facts
+  if it fails
+    then it contributes no facts while regular facts remain eligible
+    and successful generalisation-search facts remain eligible
+  while it returns no facts
+    then recall proceeds normally
 
 where no learning search is supplied
   then no learning search is issued
@@ -75,46 +96,11 @@ where no learning search is supplied
 where neither auxiliary search is supplied
   then the main search is the only search issued
 
-where generalisation and learning searches are both supplied
-  if both searches outlast their auxiliary yield
-    then both searches are abandoned within one shared five-second window
-  if the outer recall deadline expires before their auxiliary yield
-    then the recall deadline ends the call before the five-second auxiliary window elapses
+where both auxiliary searches outlast their yield
+  then both are abandoned within one shared five-second window
 
-while a deadline budget governs the call
-  if the upstream answers inside the budget
-    then the memory block is returned normally
-  if the budget is exhausted before the call returns
-    then {:error, :recall_deadline_expired} is returned
-    and the expiry is logged as a warning naming the session and the budget
-    and ordinary BEAM work owned by the recall task is stopped
+where both auxiliary searches outlast the outer deadline
+  then the outer deadline ends recall before the five-second auxiliary window elapses
 
-when no deadline is supplied
-  then a default budget of 12 seconds governs the call
-
-when a recall begins
-  then the session is logged
-  and the group is logged
-  and the query length is logged
-  and the search result limit is logged
-
-when the recall call completes
-  then how many facts were found is logged
-  and the resulting block size is logged
-  and how long the search took is logged
-  and how long interpretation took is logged
-  where interpretation never ran
-    then the logged interpretation duration is zero
-
-where test mode is enabled
-  then the raw query is also logged
-  and every auxiliary search that runs logs how many results it returned
-  and every auxiliary search that runs logs the results themselves
-  when facts are returned
-    then the resulting memory block is also logged
-  when no facts are returned
-    then no memory block is logged
-
-where test mode is disabled
-  then the raw query is not logged
-  and the memory block is not logged
+when the main result limit is smaller than three
+  then each supplied auxiliary search still receives a limit of one
