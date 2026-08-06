@@ -17,6 +17,11 @@ defmodule Gralkor.AgentLearningTest do
       assert learning.success == true
       assert learning.lesson == "global GenServer state must be reset in setup"
     end
+
+    test "carries exactly the four fields, so no id/parent/link field makes recall a graph traversal" do
+      assert AgentLearning.__struct__() |> Map.from_struct() |> Map.keys() |> Enum.sort() ==
+               [:approach, :lesson, :problem_kind, :success]
+    end
   end
 
   describe "ex-agent-learning > to_episode/1" do
