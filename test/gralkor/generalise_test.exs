@@ -145,8 +145,7 @@ defmodule Gralkor.GeneraliseTest do
                      "g",
                      "transcript",
                      default_opts(
-                       hypothesise_fn:
-                         ok_hypothesise([%{content: "candidate", confidence: 0.9}]),
+                       hypothesise_fn: ok_hypothesise([%{content: "candidate", confidence: 0.9}]),
                        search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing)]),
                        evaluate_fn: ok_evaluate(decisions),
                        add_episode_fn: add_fn
