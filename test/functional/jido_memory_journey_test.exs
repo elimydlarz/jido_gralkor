@@ -1,10 +1,12 @@
 defmodule Gralkor.JidoMemoryJourneyTest do
   @moduledoc """
-  End-to-end functional test: real PythonX runtime, real graphiti-core, real
-  embedded falkordblite. Elixir-side (distill, interpret) uses DeepSeek via
-  req_llm (reads DEEPSEEK_API_KEY from `.env`). Python-side graphiti clients
-  (entity/edge extraction, embeddings, reranker) are still hard-wired to
-  Google Gemini and need GOOGLE_API_KEY.
+  End-to-end journey test: real PythonX runtime, real graphiti-core, real
+  embedded falkordblite. Both sides follow the configured inference roles —
+  the Elixir side (distill, interpret, learn) through `Gralkor.Config.llm_model/0`
+  and the Python-side graphiti clients (entity/edge extraction, embeddings,
+  reranker) through the same `GRALKOR_LLM_MODEL` / `GRALKOR_EMBEDDER_MODEL`
+  specs — so the credential this suite needs is whichever provider those
+  select.
 
   Reifies the `jido-memory-journey` tree.
   """
