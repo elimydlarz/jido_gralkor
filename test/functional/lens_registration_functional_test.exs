@@ -79,6 +79,16 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     end
   end
 
+  describe "if an application's Lens registry is not a list" do
+    test "then configuration resolution raises `ArgumentError` naming what it found instead" do
+      Application.put_env(:jido_gralkor, :lenses, %{not: "a list"})
+
+      assert_raise ArgumentError, ~r/Lens registry must be a list, got %{not: "a list"}/, fn ->
+        Client.lens!("observations")
+      end
+    end
+  end
+
   describe "if an application registers an invalid Lens" do
     test "then configuration resolution raises `ArgumentError` before ingestion or search begins" do
       Application.put_env(:jido_gralkor, :lenses, [valid_lens("observations"), :invalid])
