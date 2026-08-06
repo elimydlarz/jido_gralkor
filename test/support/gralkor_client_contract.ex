@@ -114,6 +114,41 @@ defmodule Gralkor.ClientContract do
                      [Gralkor.Message.new("user", "hi")]
                    )
         end
+
+        test "then the write applies the deployment-configured ontology, the caller being given no ontology argument on this arity" do
+          unquote(setup_block).()
+
+          original_ontology = Application.get_env(:jido_gralkor, :ontology)
+
+          on_exit(fn ->
+            case original_ontology do
+              nil -> Application.delete_env(:jido_gralkor, :ontology)
+              value -> Application.put_env(:jido_gralkor, :ontology, value)
+            end
+          end)
+
+          Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+          configure_capture(:ok)
+
+          assert :ok =
+                   client().capture(
+                     "session-1",
+                     "group-1",
+                     "TestAgent",
+                     "Eli",
+                     [Gralkor.Message.new("user", "hi")]
+                   )
+
+          # capture/5 gives the caller no way to pass an ontology — the
+          # recorded call carries only the five arguments the caller supplied.
+          assert [["session-1", "group-1", "TestAgent", "Eli", _turn]] =
+                   Gralkor.Client.InMemory.captures()
+
+          # which is exactly why the write must be the one reaching for the
+          # deployment-configured ontology — the single source of truth every
+          # write path resolves it from.
+          assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
+        end
       end
 
       describe "ex-client > capture/6" do
