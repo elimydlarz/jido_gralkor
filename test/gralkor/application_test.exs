@@ -34,7 +34,28 @@ defmodule Gralkor.ApplicationTest do
     Application.delete_env(:jido_gralkor, :client)
     Application.delete_env(:jido_gralkor, :falkordb)
     Application.delete_env(:jido_gralkor, :generalise_on_flush)
-    :ok
+
+    test_pid = self()
+
+    recording_add = fn group, body, source, ontology, _opts ->
+      send(test_pid, {:add, group, body, source, ontology})
+      :ok
+    end
+
+    learning = %Gralkor.AgentLearning{
+      problem_kind: "deploy timeout",
+      approach: "warm cache at boot",
+      success: true,
+      lesson: "cold caches fail the first health check"
+    }
+
+    turn = [
+      Gralkor.Message.new("user", "Q"),
+      Gralkor.Message.new("behaviour", "thinking"),
+      Gralkor.Message.new("assistant", "A")
+    ]
+
+    %{recording_add: recording_add, learning: learning, turn: turn}
   end
 
   describe "when the application starts > while neither a remote connection nor a data directory is configured" do
@@ -490,31 +511,7 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
-  describe "ex-application > build_flush_callback learning routing" do
-    setup do
-      test_pid = self()
-
-      recording_add = fn group, body, source, ontology, _opts ->
-        send(test_pid, {:add, group, body, source, ontology})
-        :ok
-      end
-
-      learning = %Gralkor.AgentLearning{
-        problem_kind: "deploy timeout",
-        approach: "warm cache at boot",
-        success: true,
-        lesson: "cold caches fail the first health check"
-      }
-
-      turn = [
-        Gralkor.Message.new("user", "Q"),
-        Gralkor.Message.new("behaviour", "thinking"),
-        Gralkor.Message.new("assistant", "A")
-      ]
-
-      %{recording_add: recording_add, learning: learning, turn: turn}
-    end
-
+  describe "when a capture flush writes its captured episode successfully" do
     test "every turn is learned from, in the order it was appended — each becomes a separate 'learning' episode in the same group/ontology",
          %{recording_add: add, learning: learning, turn: turn} do
       turn2 = [Gralkor.Message.new("user", "Q2"), Gralkor.Message.new("assistant", "A2")]
