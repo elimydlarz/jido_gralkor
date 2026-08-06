@@ -932,6 +932,20 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when a graph instance is requested for a group > while no instance is cached for that group > while construction takes longer than the default call timeout" do
+    @tag timeout: 30_000
+    test "then construction still runs to completion" do
+      slow_construct = fn _db, _shared, group ->
+        Process.sleep(5_500)
+        {:stub_graphiti, group}
+      end
+
+      %{pid: pid} = start_pool(construct_instance: slow_construct)
+
+      assert {:stub_graphiti, "slowgroup"} = GraphitiPool.for(pid, "slowgroup")
+    end
+  end
+
   describe "when a graph instance is requested for a group > while no instance is cached for that group" do
     test "then the instance is constructed, cached, and held for the pool's lifetime" do
       construction_count = :counters.new(1, [])
@@ -949,23 +963,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert {:instance, "operator_one"} = GraphitiPool.for(pid, "operator-one")
       assert :counters.get(construction_count, 1) == 1
     end
-  end
 
-  describe "when a graph instance is requested for a group > while no instance is cached for that group > while construction takes longer than the default call timeout" do
-    @tag timeout: 30_000
-    test "then construction still runs to completion" do
-      slow_construct = fn _db, _shared, group ->
-        Process.sleep(5_500)
-        {:stub_graphiti, group}
-      end
-
-      %{pid: pid} = start_pool(construct_instance: slow_construct)
-
-      assert {:stub_graphiti, "slowgroup"} = GraphitiPool.for(pid, "slowgroup")
-    end
-  end
-
-  describe "when a graph instance is requested for a group > while no instance is cached for that group" do
     test "and index and constraint building is invoked before the instance is cached and returned" do
       {instance, _} =
         Pythonx.eval(
