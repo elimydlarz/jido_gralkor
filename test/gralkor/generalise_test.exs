@@ -22,6 +22,32 @@ defmodule Gralkor.GeneraliseTest do
     )
   end
 
+  describe "ex-generalise > hypothesise_schema/0" do
+    test "requires generalisations as a list of maps, each carrying content and a confidence between 0.0 and 1.0" do
+      schema = Generalise.hypothesise_schema()
+
+      assert schema[:generalisations][:type] == {:list, :map}
+      assert schema[:generalisations][:required] == true
+      assert schema[:generalisations][:doc] =~ "content"
+      assert schema[:generalisations][:doc] =~ "confidence"
+      assert schema[:generalisations][:doc] =~ "0.0-1.0"
+    end
+  end
+
+  describe "ex-generalise > evaluate_schema/0" do
+    test "requires decisions as a list of maps, each carrying an action, the hypothesis index, a confidence and the content to save, and names which actions are available" do
+      schema = Generalise.evaluate_schema()
+
+      assert schema[:decisions][:type] == {:list, :map}
+      assert schema[:decisions][:required] == true
+      assert schema[:decisions][:doc] =~ "action"
+      assert schema[:decisions][:doc] =~ "hypothesis_index"
+      assert schema[:decisions][:doc] =~ "confidence"
+      assert schema[:decisions][:doc] =~ "content"
+      assert schema[:decisions][:doc] =~ "save|broadens|narrows|contradicts|skip"
+    end
+  end
+
   describe "ex-generalise > hypothesise" do
     test "when the LLM returns no candidates, nothing is persisted" do
       add_fn = fn _g, _b, _s, _ont, _opts ->
