@@ -587,6 +587,23 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
+
+    test "and a group whose instance has never been created is left alone, its indices being built the moment it is" do
+      construction_count = :counters.new(1, [])
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, group ->
+            :counters.add(construction_count, 1, 1)
+            {:instance, group}
+          end,
+          initialise_instance: fn _instance -> :ok end
+        )
+
+      assert {:instance, "created"} = GraphitiPool.for(pid, "created")
+      assert {:ok, %{status: "built"}} = GraphitiPool.build_indices(pid)
+      assert :counters.get(construction_count, 1) == 1
+    end
   end
 
   describe "when an episode search is run for a group" do
@@ -700,6 +717,13 @@ defmodule Gralkor.GraphitiPoolTest do
       assert message =~ "boom"
 
       GenServer.stop(pid)
+    end
+  end
+
+  describe "when a node search is run for a group" do
+    test "then it is restricted to the sanitised group id the episodes were written under, so a group id carrying hyphens still matches" do
+      {_node, recorded} = node_search_result()
+      assert recorded["group_ids"] == ["group_with_hyphens"]
     end
   end
 
