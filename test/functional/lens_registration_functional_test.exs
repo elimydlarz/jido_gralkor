@@ -111,13 +111,13 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-    test "where the Lens name is blank, then the error identifies the invalid name" do
+    test "and a blank Lens name is identified" do
       Application.put_env(:jido_gralkor, :lenses, [valid_lens(" ")])
 
       assert_raise ArgumentError, ~r/invalid Lens name " "/, fn -> Client.lens!(" ") end
     end
 
-    test "where the Lens name duplicates another registered Lens, then the error identifies the duplicate name" do
+    test "and a duplicate Lens name is identified" do
       Application.put_env(:jido_gralkor, :lenses, [
         valid_lens("observations"),
         valid_lens("observations")
@@ -128,7 +128,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-    test "where the Lens name is reserved as `default` or `global`, then the error identifies the reserved name" do
+    test "and a reserved `default` or `global` Lens name is identified" do
       for name <- ["default", "global"] do
         Application.put_env(:jido_gralkor, :lenses, [valid_lens(name)])
 
@@ -136,7 +136,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-    test "where the Lens definition has an invalid shape, then the error identifies the invalid definition" do
+    test "and an invalid Lens definition shape is identified" do
       Application.put_env(:jido_gralkor, :lenses, [%{name: "observations"}])
 
       assert_raise ArgumentError, ~r/invalid Lens definition/, fn ->
@@ -144,7 +144,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-    test "where the Lens ontology is invalid, then the error identifies the Lens and invalid ontology" do
+    test "and an invalid Lens ontology is identified with its Lens" do
       Application.put_env(:jido_gralkor, :lenses, [
         valid_lens("observations") |> Keyword.put(:ontology, String)
       ])
@@ -154,7 +154,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-    test "where the Lens scope is invalid, then the error identifies the Lens and invalid scope" do
+    test "and an invalid Lens scope is identified with its Lens" do
       Application.put_env(:jido_gralkor, :lenses, [
         valid_lens("observations") |> Keyword.put(:scope, :tenant)
       ])
@@ -164,7 +164,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-    test "where the Lens ingestion process is invalid, then the error identifies the Lens and invalid ingestion process" do
+    test "and an invalid Lens ingestion process is identified with its Lens" do
       Application.put_env(:jido_gralkor, :lenses, [
         valid_lens("observations") |> Keyword.put(:ingestion, String)
       ])
