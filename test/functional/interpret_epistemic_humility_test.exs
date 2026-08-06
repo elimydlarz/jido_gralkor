@@ -17,8 +17,8 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
     end
   end
 
-  describe "interpret-epistemic-humility > when relevant memory contains accounts from sources with different apparent veracity" do
-    test "every needed account retains its source wording without reliability ranking or truth adjudication" do
+  describe "when relevant memory contains accounts from sources with different apparent veracity" do
+    test "then every needed account retains its source wording without reliability ranking or truth adjudication" do
       facts = """
       - A signed harbour log records strong northerly wind during the inspection.
       - In an interview, Noor remembered unusually high waves during the inspection.
@@ -37,14 +37,18 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
       assert Enum.any?(results, &String.contains?(&1, "anonymous message-board post"))
 
       reasons = results |> Enum.map(&relevance_reason/1) |> Enum.join(" ")
+      returned_accounts = Enum.join(results, " ")
 
       refute reasons =~
                ~r/\b(more reliable|less reliable|reliable|unreliable|verified|unverified|proven|true|false)\b/i
+
+      refute returned_accounts =~
+               ~r/\b(more reliable|less reliable|unreliable|verified|unverified|proven|definitely true|definitely false)\b/i
     end
   end
 
-  describe "interpret-epistemic-humility > when relevant memory contains conflicting accounts" do
-    test "the conflicting accounts are surfaced together rather than resolved into one asserted fact" do
+  describe "when relevant memory contains conflicting accounts" do
+    test "then both accounts are surfaced without resolving them into one asserted fact" do
       facts = """
       - The official incident report states that the east gate opened at 08:00.
       - During the debrief, Kai recalled that the east gate opened at 09:00.
@@ -61,11 +65,14 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
       assert Enum.any?(results, &String.contains?(&1, "During the debrief, Kai"))
       assert Enum.any?(results, &String.contains?(&1, "08:00"))
       assert Enum.any?(results, &String.contains?(&1, "09:00"))
+
+      refute Enum.join(results, " ") =~
+               ~r/\b(definitely true|verified time|correct time|actual time)\b/i
     end
   end
 
-  describe "interpret-epistemic-humility > when a relevant memory fact carries no available source context" do
-    test "it has a concise relevance reason without a generic epistemic warning" do
+  describe "when a relevant memory fact carries no available source context" do
+    test "then it receives a concise relevance reason without a generic epistemic warning" do
       results =
         interpret(
           "Which seat should I book for Eli on an overnight flight?",
@@ -82,8 +89,8 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
     end
   end
 
-  describe "interpret-epistemic-humility > when sourced memory contains both relevant and irrelevant facts" do
-    test "irrelevant facts are omitted while the relevant fact retains its natural source context" do
+  describe "when sourced memory contains both relevant and irrelevant facts" do
+    test "then irrelevant facts are omitted while the relevant fact retains its natural source context" do
       facts = """
       - The Atlas project brief says the launch is scheduled for Tuesday.
       - A restaurant receipt shows that lunch was ramen.
