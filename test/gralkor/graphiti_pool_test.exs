@@ -1148,7 +1148,11 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert_receive {:construct_instance, "warmup"}
       assert_receive {:interpret_fn, prompt, 2_000}
-      assert prompt == "Conversation context:\n\n\nMemory facts to interpret:\n- warmup"
+
+      assert prompt ==
+               Gralkor.Interpret.build_interpretation_context([], "warmup", "- warmup", "warmup")
+
+      assert prompt =~ "Memory facts to interpret:\n- warmup"
 
       {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
       rec = Pythonx.decode(rec)

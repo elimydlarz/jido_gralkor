@@ -23,6 +23,7 @@ defmodule Gralkor.GraphitiPool do
 
   alias Gralkor.Client
   alias Gralkor.Config
+  alias Gralkor.Interpret
   alias Gralkor.LearningEntity
 
   @default_table :gralkor_graphiti_instances
@@ -1123,7 +1124,8 @@ defmodule Gralkor.GraphitiPool do
   defp time_warmup_interpret(%{interpret_fn: interpret_fn}) when is_function(interpret_fn, 2) do
     time(fn ->
       try do
-        interpret_fn.("Conversation context:\n\n\nMemory facts to interpret:\n- warmup", 2_000)
+        prompt = Interpret.build_interpretation_context([], "warmup", "- warmup", "warmup")
+        interpret_fn.(prompt, 2_000)
         :ok
       rescue
         e -> {:error, Exception.message(e)}
