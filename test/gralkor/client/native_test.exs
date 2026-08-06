@@ -127,6 +127,12 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
+  describe "when the native adapter reads a structured interpretation response > if the required relevant facts field is absent" do
+    test "then the absent value remains malformed rather than becoming a valid empty selection" do
+      assert {:ok, nil} = Native.interpret_relevant_facts(%{})
+    end
+  end
+
   describe "if a recall is requested with a missing or blank agent name" do
     test "then an argument error naming the agent name is raised" do
       for agent_name <- [nil, ""] do
