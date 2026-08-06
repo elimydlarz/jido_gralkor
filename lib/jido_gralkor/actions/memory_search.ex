@@ -55,7 +55,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
 
         {:ok, %{result: @no_query_result}}
 
-      session_id in [nil, ""] ->
+      blank_session_id?(session_id) ->
         Logger.warning(
           "[jido_gralkor] memory_search short-circuited — no session_id in ReAct tool context for agent #{inspect(Map.get(context, :agent_id))} (#{@no_session_warning_hint})"
         )
@@ -87,4 +87,8 @@ defmodule JidoGralkor.Actions.MemorySearch do
         end
     end
   end
+
+  defp blank_session_id?(nil), do: true
+  defp blank_session_id?(session_id) when is_binary(session_id), do: String.trim(session_id) == ""
+  defp blank_session_id?(_session_id), do: false
 end
