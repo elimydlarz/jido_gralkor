@@ -70,7 +70,7 @@ defmodule JidoGralkor.MixProject do
     statuses =
       Enum.map(
         ["mix test --include functional --include journey", "node --test"],
-        &Mix.shell().cmd/1
+        fn command -> Mix.shell().cmd(command) end
       )
 
     if Enum.any?(statuses, &(&1 != 0)), do: Mix.raise("Tests failed")
