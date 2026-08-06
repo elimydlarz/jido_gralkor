@@ -75,7 +75,7 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
   end
 
   describe "when the deployment configures an inference LLM and an embedder" do
-    test "then each role takes its own provider, OpenAI and Google both accepted" do
+    test "then each role takes its own configured provider, accepting OpenAI and Google" do
       credentials("google-key", "openai-key")
 
       for {llm, embedder} <- [
@@ -93,7 +93,7 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       end
     end
 
-    test "while the configured LLM provider is OpenAI then reranking of search candidates is sent to OpenAI" do
+    test "and an OpenAI LLM configures OpenAI reranking" do
       credentials("google-key", "openai-key")
       configure("openai:gpt-4.1-mini", "openai:text-embedding-3-small")
 
@@ -104,7 +104,7 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       GenServer.stop(pid)
     end
 
-    test "while the configured LLM provider is Google then reranking of search candidates is sent to Google" do
+    test "and a Google LLM configures Google reranking" do
       credentials("google-key", "openai-key")
       configure("google:gemini-3.1-flash-lite", "google:gemini-embedding-2-preview")
 
@@ -115,7 +115,7 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       GenServer.stop(pid)
     end
 
-    test "while the two role providers differ then each client is built for its own role's provider and it starts" do
+    test "and differing role providers construct independent clients and start the memory runtime" do
       credentials("google-key", "openai-key")
       configure("openai:gpt-4.1-mini", "google:gemini-embedding-2-preview")
 
@@ -131,7 +131,7 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
   end
 
   describe "where the deployment configures no LLM or embedder override" do
-    test "then Google is used for both roles and only its credential is required" do
+    test "then Google configures both roles and its credential alone starts the memory runtime" do
       configure(nil, nil)
       credentials("google-key", nil)
 
@@ -145,14 +145,14 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
     end
   end
 
-  describe "while the deployment has opted into the native memory runtime" do
+  describe "if the native memory runtime receives an unsupported provider" do
     setup do
       previous_trap_exit = Process.flag(:trap_exit, true)
       on_exit(fn -> Process.flag(:trap_exit, previous_trap_exit) end)
       :ok
     end
 
-    test "if a configured provider is unsupported then it refuses to start, naming both specs and the supported providers" do
+    test "then startup fails before client construction and names both model specs and the supported providers" do
       credentials("google-key", "openai-key")
       configure("anthropic:claude-opus-5", "google:gemini-embedding-2-preview")
 
@@ -166,7 +166,16 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       refute_received {:constructed, _}
     end
 
-    test "if a configured provider's credential is absent or blank then it refuses to start, naming the credential and the role" do
+  end
+
+  describe "if the native memory runtime receives an absent or blank credential" do
+    setup do
+      previous_trap_exit = Process.flag(:trap_exit, true)
+      on_exit(fn -> Process.flag(:trap_exit, previous_trap_exit) end)
+      :ok
+    end
+
+    test "then startup fails before client construction and names the credential and its role" do
       configure("openai:gpt-4.1-mini", "google:gemini-embedding-2-preview")
       credentials("google-key", nil)
 
@@ -182,7 +191,10 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       refute_received {:constructed, _}
     end
 
-    test "where a provider is named by neither role then its absent credential does not prevent startup" do
+  end
+
+  describe "where the native memory runtime does not configure a provider for either role" do
+    test "then that provider's absent credential does not prevent startup" do
       configure("google:gemini-3.1-flash-lite", "google:gemini-embedding-2-preview")
       credentials("google-key", nil)
 
@@ -192,7 +204,7 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
     end
   end
 
-  describe "while the deployment has not opted into the native memory runtime" do
+  describe "where the deployment has not opted into the native memory runtime" do
     setup do
       previous_client = Application.get_env(:jido_gralkor, :client)
       previous_dir = System.get_env("GRALKOR_DATA_DIR")
@@ -217,7 +229,7 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       :ok
     end
 
-    test "where a provider is unsupported or uncredentialed then startup is unaffected" do
+    test "then unsupported or uncredentialed provider settings do not affect startup" do
       configure("anthropic:claude-opus-5", "cohere:embed-english-v3.0")
       credentials(nil, nil)
 
