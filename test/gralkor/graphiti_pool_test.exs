@@ -1382,6 +1382,26 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when the pool has constructed its database > where no warmup interpretation callback is configured" do
+    test "then warmup interpretation is skipped with a numeric zero duration" do
+      log =
+        capture_log(fn ->
+          %{pid: pid} = start_pool(successful_warmup_opts())
+          GenServer.stop(pid)
+        end)
+
+      assert log =~ ~r/\[gralkor\] warmup — search:\d+ interpret:0 \d+ms/
+    end
+
+    test "and startup completes" do
+      capture_log(fn ->
+        %{pid: pid} = start_pool(successful_warmup_opts())
+        assert Process.alive?(pid)
+        GenServer.stop(pid)
+      end)
+    end
+  end
+
   describe "when the pool starts > while both configured model specs name a supported inference provider > while the embedder spec names Google" do
     test "then the embedder sends one input per request" do
       spec =
@@ -1758,6 +1778,20 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when the pool has constructed its database > if a warmup call raises or returns an error > while warmup interpretation returns an error" do
+    test "then the interpretation failure is logged with its returned reason" do
+      log =
+        capture_log(fn ->
+          opts = successful_warmup_opts(interpret_fn: fn _, _ -> {:error, :warmup_boom} end)
+          %{pid: pid} = start_pool(opts)
+          assert Process.alive?(pid)
+          GenServer.stop(pid)
+        end)
+
+      assert log =~ "[gralkor] warmup failed (non-fatal) — interpret: :warmup_boom"
+    end
+  end
+
   describe "when the pool starts > while an embedded connection is configured" do
     @describetag :integration
 
@@ -2072,6 +2106,29 @@ defmodule Gralkor.GraphitiPoolTest do
     after
       Process.flag(:trap_exit, previous_trap_exit)
     end
+  end
+
+  defp successful_warmup_opts(extra_opts \\ []) do
+    {graph, _} =
+      Pythonx.eval(
+        """
+        class _SuccessfulWarmupGraphiti:
+            async def search(self, query, num_results=10):
+                return []
+
+        _SuccessfulWarmupGraphiti()
+        """,
+        %{}
+      )
+
+    Keyword.merge(
+      [
+        construct_instance: fn _db, _shared, _group -> graph end,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0,
+        warmup: true
+      ],
+      extra_opts
+    )
   end
 
   defp restore_env(name, nil), do: System.delete_env(name)
