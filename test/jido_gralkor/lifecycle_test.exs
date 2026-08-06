@@ -7,7 +7,10 @@ defmodule JidoGralkor.LifecycleTest do
   alias JidoGralkor.Lifecycle
 
   defmodule FailingClient do
-    def flush(_session_id), do: {:error, :boom}
+    def flush(session_id) do
+      send(Application.fetch_env!(:jido_gralkor, :lifecycle_test_pid), {:failing_flush, session_id})
+      {:error, :boom}
+    end
   end
 
   setup do
@@ -21,13 +24,21 @@ defmodule JidoGralkor.LifecycleTest do
 
   defp use_failing_client do
     previous = Application.get_env(:jido_gralkor, :client)
+    previous_test_pid = Application.get_env(:jido_gralkor, :lifecycle_test_pid)
     Application.put_env(:jido_gralkor, :client, FailingClient)
+    Application.put_env(:jido_gralkor, :lifecycle_test_pid, self())
 
     on_exit(fn ->
       if previous do
         Application.put_env(:jido_gralkor, :client, previous)
       else
         Application.delete_env(:jido_gralkor, :client)
+      end
+
+      if previous_test_pid do
+        Application.put_env(:jido_gralkor, :lifecycle_test_pid, previous_test_pid)
+      else
+        Application.delete_env(:jido_gralkor, :lifecycle_test_pid)
       end
     end)
   end
@@ -112,8 +123,7 @@ defmodule JidoGralkor.LifecycleTest do
       log =
         capture_log(fn ->
           assert :ok = Lifecycle.terminate(:normal, s)
-          assert eventually(fn -> InMemory.flushes() == [[thread_id]] end)
-          Process.sleep(50)
+          assert_receive {:failing_flush, ^thread_id}
         end)
 
       assert log =~ "[gralkor] flush failed"
