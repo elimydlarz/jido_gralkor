@@ -262,10 +262,14 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
 
   describe "if distillation or memory ingestion fails" do
     test "then ingestion returns the failure without performing an alternative persistence write" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
+      Gralkor.Client.InMemory.reset()
+      Gralkor.Client.InMemory.set_memory_add(:ok)
       Application.put_env(:jido_gralkor, :lens_storage, FailingStorage)
       set_hypothesis("Eli prefers Friday launches.")
 
       assert {:error, :unavailable} = ingest("operator-one", "A Friday launch was chosen.")
+      assert Gralkor.Client.InMemory.adds() == []
     end
   end
 
