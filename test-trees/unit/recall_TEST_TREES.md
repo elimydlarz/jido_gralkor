@@ -70,6 +70,10 @@ where no learning search is supplied
   then no learning search is issued
   and the main search remains the only query sent to the graph
 
+where generalisation and learning searches are both supplied
+  if both searches outlast their auxiliary yield
+    then both searches are abandoned within one shared five-second window
+
 while a deadline budget governs the call
   if the upstream answers inside the budget
     then the memory block is returned normally

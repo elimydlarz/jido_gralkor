@@ -46,6 +46,9 @@ when the pool has constructed its database
     then the failure is logged as non-fatal, naming the stage and the reason
     and startup completes anyway
 
+when the pool terminates
+  then the database it held for its lifetime is closed through the shared asyncio runtime
+
 when a graph instance is requested for a group
   then the instance is looked up from a cache shared across callers
   and concurrent callers for different groups proceed in parallel
