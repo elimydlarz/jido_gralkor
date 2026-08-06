@@ -21,8 +21,8 @@ defmodule Gralkor.ClientContract do
 
   defmacro run_contract(do: setup_block) do
     quote do
-      describe "ex-client > recall/4 with a non-blank string session_id" do
-        test "when the backend returns a memory block then {:ok, block} is returned" do
+      describe "when a recall is requested with a group, an agent name, a session id and a query" do
+        test "while the backend returns a memory block > then that block is returned to the caller as a success" do
           unquote(setup_block).()
 
           configure_recall({:ok, "<gralkor-memory>some block</gralkor-memory>"})
@@ -31,7 +31,7 @@ defmodule Gralkor.ClientContract do
                    client().recall("group-1", "TestAgent", "session-1", "what is X?")
         end
 
-        test "if the backend fails then {:error, reason} is returned" do
+        test "if the backend fails > then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_recall({:error, :backend_down})
 
@@ -40,8 +40,8 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > recall/4 with a nil session_id" do
-        test "when the backend returns a memory block then {:ok, block} is returned" do
+      describe "where a recall is requested with no session id" do
+        test "while the backend returns a memory block > then that block is returned to the caller as a success" do
           unquote(setup_block).()
           configure_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
 
@@ -49,7 +49,7 @@ defmodule Gralkor.ClientContract do
                    client().recall("group-1", "TestAgent", nil, "anything?")
         end
 
-        test "if the backend fails then {:error, reason} is returned" do
+        test "if the backend fails > then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_recall({:error, :nope})
 
@@ -86,8 +86,8 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > capture/5" do
-        test "when the backend acknowledges the capture then :ok is returned" do
+      describe "when a turn is captured with a session id, a group, an agent name, a user name and messages" do
+        test "while the backend acknowledges the capture > then success is returned" do
           unquote(setup_block).()
           configure_capture(:ok)
 
@@ -101,7 +101,7 @@ defmodule Gralkor.ClientContract do
                    )
         end
 
-        test "if the backend fails then {:error, reason} is returned" do
+        test "if the backend fails > then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_capture({:error, :write_failed})
 
@@ -115,7 +115,7 @@ defmodule Gralkor.ClientContract do
                    )
         end
 
-        test "then the write applies the deployment-configured ontology, the caller being given no ontology argument on this arity" do
+        test "while the messages are canonical message structs whose role is user, assistant or behaviour > then the write applies the deployment-configured ontology, the caller being given no ontology argument on this arity" do
           unquote(setup_block).()
 
           original_ontology = Application.get_env(:jido_gralkor, :ontology)
@@ -149,71 +149,58 @@ defmodule Gralkor.ClientContract do
           # write path resolves it from.
           assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
         end
-      end
 
-      describe "ex-client > capture/6" do
-        test "when the backend acknowledges the capture then :ok is returned" do
+        test "while the messages are canonical message structs whose role is user, assistant or behaviour > and every turn captured through this arity is learned from at its flush, there being no per-turn learning flag" do
           unquote(setup_block).()
           configure_capture(:ok)
 
           assert :ok =
                    client().capture(
                      "session-1",
-                     "operator-1",
+                     "group-1",
                      "TestAgent",
                      "Eli",
-                     [Gralkor.Message.new("user", "hi")],
-                     "observations"
+                     [Gralkor.Message.new("user", "hi")]
                    )
-        end
 
-        test "if the backend fails then {:error, reason} is returned" do
-          unquote(setup_block).()
-          configure_capture({:error, :write_failed})
-
-          assert {:error, :write_failed} =
-                   client().capture(
-                     "session-1",
-                     "operator-1",
-                     "TestAgent",
-                     "Eli",
-                     [Gralkor.Message.new("user", "hi")],
-                     "observations"
-                   )
+          assert [["session-1", "group-1", "TestAgent", "Eli", _messages]] =
+                   Gralkor.Client.InMemory.captures()
         end
       end
 
-      describe "ex-client > capture/7" do
-        test "when the backend acknowledges the capture then :ok is returned" do
+      describe "where a turn is captured through a named Lens, alone or together with additional Lenses" do
+        test "while the backend acknowledges the capture > then success is returned" do
           unquote(setup_block).()
           configure_capture(:ok)
 
-          assert :ok =
-                   client().capture(
-                     "session-1",
-                     "operator-1",
-                     "TestAgent",
-                     "Eli",
-                     [Gralkor.Message.new("user", "hi")],
-                     "observations",
-                     ["generalisations"]
-                   )
+          for lens_args <- [["observations"], ["observations", ["generalisations"]]] do
+            assert :ok =
+                     apply(client(), :capture, [
+                       "session-1",
+                       "operator-1",
+                       "TestAgent",
+                       "Eli",
+                       [Gralkor.Message.new("user", "hi")]
+                       | lens_args
+                     ])
+          end
         end
 
-        test "if the backend fails then {:error, reason} is returned" do
+        test "if the backend fails > then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_capture({:error, :write_failed})
 
-          assert {:error, :write_failed} =
-                   client().capture(
-                     "session-1",
-                     "operator-1",
-                     "TestAgent",
-                     "Eli",
-                     [Gralkor.Message.new("user", "hi")],
-                     "observations",
-                     ["generalisations"]
-                   )
+          for lens_args <- [["observations"], ["observations", ["generalisations"]]] do
+            assert {:error, :write_failed} =
+                     apply(client(), :capture, [
+                       "session-1",
+                       "operator-1",
+                       "TestAgent",
+                       "Eli",
+                       [Gralkor.Message.new("user", "hi")]
+                       | lens_args
+                     ])
+          end
         end
       end
 
