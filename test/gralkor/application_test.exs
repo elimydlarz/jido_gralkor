@@ -152,7 +152,6 @@ defmodule Gralkor.ApplicationTest do
 
       assert {:remote, _} = Keyword.fetch!(opts, :falkordb_spec)
     end
-
   end
 
   describe "if the remote FalkorDB configuration is not a keyword list carrying a host and a port" do
@@ -256,7 +255,9 @@ defmodule Gralkor.ApplicationTest do
     test "and the flush reports success" do
       cb =
         App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o, _opts -> flunk("add_episode should not be called") end
+          add_episode_fn: fn _g, _b, _s, _o, _opts ->
+            flunk("add_episode should not be called")
+          end
         )
 
       assert :ok = cb.("g", "TestAgent", "Eli", nil, [])
@@ -388,7 +389,12 @@ defmodule Gralkor.ApplicationTest do
         :ok
       end
 
-      cb = App.build_flush_callback(nil, add_episode_fn: add, learn_fn: fn _t, _a, _u -> {:ok, learning} end)
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add,
+          learn_fn: fn _t, _a, _u -> {:ok, learning} end
+        )
+
       assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn])
       assert_received {:add, "g1", _transcript, "captured", :ont, captured_opts}
       refute Keyword.get(captured_opts, :merge_learning_entity, false)
@@ -665,10 +671,11 @@ defmodule Gralkor.ApplicationTest do
   end
 
   describe "if producing a learning result raises or returns an unexpected shape" do
-    test "then the exception propagates, because an unexpected inference response is a fault rather than a best-effort drop", %{
-      recording_add: add,
-      turn: turn
-    } do
+    test "then the exception propagates, because an unexpected inference response is a fault rather than a best-effort drop",
+         %{
+           recording_add: add,
+           turn: turn
+         } do
       cb =
         App.build_flush_callback(nil,
           add_episode_fn: add,
