@@ -1745,7 +1745,7 @@ defmodule Gralkor.GraphitiPoolTest do
   describe "when the pool starts > while an embedded connection is configured" do
     @describetag :integration
 
-    test "then any resume-cache file left beside the database is removed before the embedded database is constructed, so a stale socket from a previous boot cannot be reconnected to" do
+    test "then stale embedded resume state is removed before database construction" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 

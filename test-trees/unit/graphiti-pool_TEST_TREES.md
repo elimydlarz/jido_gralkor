@@ -20,7 +20,7 @@ when the pool starts
       then each client is still built for its own role's provider
       and startup completes
   while an embedded connection is configured
-    then any resume-cache file left beside the database is removed before the embedded database is constructed, so a stale socket from a previous boot cannot be reconnected to
+    then stale embedded resume state is removed before database construction
     and the embedded database is constructed once and held for the pool's lifetime
   while a remote connection is configured
     then the remote database is constructed once and held for the pool's lifetime
