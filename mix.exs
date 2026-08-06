@@ -62,7 +62,7 @@ defmodule JidoGralkor.MixProject do
       "test.integration": ["test --only integration"],
       "test.functional": ["test --only functional"],
       "test.journey": ["test --only journey"],
-      "test.all": ["test --include functional --include journey"]
+      "test.all": ["test --include functional --include journey", "cmd node --test"]
     ]
   end
 
