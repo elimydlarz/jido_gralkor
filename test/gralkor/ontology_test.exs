@@ -249,8 +249,8 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "ex-ontology > from blocks" do
-    test "bare verb produces a relationship with uppercase edge name and no fields" do
+  describe "when an ontology declares `from Source do … end` with an alias > where the block calls `verb Target` with no do-block" do
+    test "then a relationship is declared from the source entity to the target entity under the verb's edge name" do
       defmodule BareVerbOntology do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
 
@@ -268,11 +268,16 @@ defmodule Gralkor.OntologyTest do
       end
 
       ontology = BareVerbOntology.__ontology__()
-      assert [%{name: "PREFERS", fields: []}] = ontology.edge_types
       assert [{{"User", "Preference"}, ["PREFERS"]}] == ontology.edge_type_map
     end
 
-    test "verb with do-block carries edge property fields" do
+    test "and that relationship carries no edge properties" do
+      assert [%{name: "PREFERS", fields: []}] = BareVerbOntology.__ontology__().edge_types
+    end
+  end
+
+  describe "when an ontology declares `from Source do … end` with an alias > where the block calls `verb Target do … end`" do
+    test "then a relationship is declared from the source entity to the target entity under the verb's edge name" do
       defmodule EdgePropertyOntology do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
 
@@ -291,11 +296,24 @@ defmodule Gralkor.OntologyTest do
         end
       end
 
+      assert [{{"User", "Preference"}, ["PREFERS"]}] ==
+               EdgePropertyOntology.__ontology__().edge_type_map
+    end
+
+    test "and the do-block's `field` declarations become that relationship's edge properties, with the same name, type, required and doc semantics as entity fields" do
       [%{fields: [field]}] = EdgePropertyOntology.__ontology__().edge_types
       assert field == %{name: :since, type: :string, required: false, doc: "date first observed"}
     end
+  end
 
-    test "verb with underscores uppercases each segment" do
+  describe "when an ontology declares `from Source do … end` with an alias > where the verb is a single lowercase word (\"prefers\")" do
+    test "then the edge name is that word uppercased (\"PREFERS\")" do
+      assert [%{name: "PREFERS"}] = BareVerbOntology.__ontology__().edge_types
+    end
+  end
+
+  describe "when an ontology declares `from Source do … end` with an alias > where the verb contains underscores (\"relates_to\")" do
+    test "then the edge name uppercases each segment and preserves the underscores (\"RELATES_TO\")" do
       defmodule UnderscoreVerbOntology do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
 
@@ -311,8 +329,30 @@ defmodule Gralkor.OntologyTest do
       [edge_type] = UnderscoreVerbOntology.__ontology__().edge_types
       assert edge_type.name == "RELATES_TO"
     end
+  end
 
-    test "same verb across multiple from blocks unions endpoints under one edge type" do
+  describe "when an ontology declares `from Source do … end` with an alias > where the verb's target is the source entity itself" do
+    test "then the endpoint pair records that entity as both source and target" do
+      defmodule SelfReferenceOntology do
+        use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+        entity User do
+          field(:handle, :string)
+        end
+
+        from User do
+          trusts(User)
+        end
+      end
+
+      assert SelfReferenceOntology.__ontology__().edge_type_map == [
+               {{"User", "User"}, ["TRUSTS"]}
+             ]
+    end
+  end
+
+  describe "when an ontology declares `from Source do … end` with an alias > where the same verb appears in several `from` blocks with matching edge-property schemas" do
+    test "then exactly one edge type is declared for that verb" do
       defmodule MultiEndpointOntology do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
 
@@ -339,14 +379,37 @@ defmodule Gralkor.OntologyTest do
 
       ontology = MultiEndpointOntology.__ontology__()
       assert [%{name: "ENDORSES"}] = ontology.edge_types
+    end
 
+    test "and the endpoint map gains one entry per distinct (source, target) pair where the verb appeared, in the order those pairs were declared" do
+      ontology = MultiEndpointOntology.__ontology__()
       assert ontology.edge_type_map == [
                {{"User", "Preference"}, ["ENDORSES"]},
                {{"Org", "Preference"}, ["ENDORSES"]}
              ]
     end
+  end
 
-    test "conflicting property schemas across blocks raise" do
+  describe "when an ontology declares `from Source do … end` with an alias > if the verb's target is not an alias" do
+    test "then compilation fails with an error showing the expected `verb Target` form" do
+      assert_raise CompileError, ~r/verb Target/, fn ->
+        defmodule NonAliasTargetOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+          entity User do
+            field(:handle, :string)
+          end
+
+          from User do
+            knows("Ghost")
+          end
+        end
+      end
+    end
+  end
+
+  describe "when an ontology declares `from Source do … end` with an alias > if the same verb is declared again with a differing edge-property schema (field names, types or required flags)" do
+    test "then compilation fails with an error naming the conflicting verb" do
       assert_raise CompileError, ~r/conflicting/, fn ->
         defmodule ConflictEdgeOntology do
           use Gralkor.Ontology, entities: :open, relationships: :scoped
@@ -374,7 +437,10 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
-    test "unknown source entity raises" do
+  end
+
+  describe "when an ontology declares `from Source do … end` with an alias > if the source alias does not name a declared entity" do
+    test "then compilation fails at the end of the module naming the unknown source" do
       assert_raise CompileError, ~r/Ghost/, fn ->
         defmodule UnknownSourceOntology do
           use Gralkor.Ontology, entities: :open, relationships: :scoped
@@ -390,7 +456,10 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
-    test "unknown target entity raises" do
+  end
+
+  describe "when an ontology declares `from Source do … end` with an alias > if a relationship's target alias does not name a declared entity" do
+    test "then compilation fails at the end of the module naming the unknown target" do
       assert_raise CompileError, ~r/Ghost/, fn ->
         defmodule UnknownTargetOntology do
           use Gralkor.Ontology, entities: :open, relationships: :scoped
@@ -406,38 +475,6 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
-    test "target that is not an alias raises" do
-      assert_raise CompileError, ~r/verb Target/, fn ->
-        defmodule NonAliasTargetOntology do
-          use Gralkor.Ontology, entities: :open, relationships: :scoped
-
-          entity User do
-            field(:handle, :string)
-          end
-
-          from User do
-            knows("Ghost")
-          end
-        end
-      end
-    end
-
-    test "self-reference works (e.g. trusts User inside from User)" do
-      defmodule SelfReferenceOntology do
-        use Gralkor.Ontology, entities: :open, relationships: :scoped
-
-        entity User do
-          field(:handle, :string)
-        end
-
-        from User do
-          trusts(User)
-        end
-      end
-
-      ontology = SelfReferenceOntology.__ontology__()
-      assert ontology.edge_type_map == [{{"User", "User"}, ["TRUSTS"]}]
-    end
   end
 
   describe "ex-ontology-payload > excluded_entity_types" do
