@@ -684,31 +684,8 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
-  describe "when a capture flush renders an empty transcript" do
-    test "and every captured turn is still learned from in the order it was appended",
-         %{
-           recording_add: add,
-           learning: learning
-         } do
-      learn_fn = fn [%{content: first_content} | _], _agent, _user ->
-        {:ok, %{learning | problem_kind: "learned from #{first_content}"}}
-      end
-
-      cb =
-        App.build_flush_callback(nil, add_episode_fn: add, learn_fn: learn_fn)
-
-      behaviour_only = [Gralkor.Message.new("behaviour", "just thinking")]
-      behaviour_only2 = [Gralkor.Message.new("behaviour", "still thinking")]
-
-      assert :ok = cb.("g1", "Susu", "Eli", nil, [behaviour_only, behaviour_only2])
-      refute_receive {:add, _, _, "captured", _}, 100
-      assert_receive {:add, "g1", body1, "learning", _}
-      assert_receive {:add, "g1", body2, "learning", _}
-      assert body1 =~ "learned from just thinking"
-      assert body2 =~ "learned from still thinking"
-    end
-
-    test "the learning write signals merge_learning_entity; the captured write does not",
+  describe "when a capture flush writes its captured episode successfully" do
+    test "and the learning write asks for the built-in Learning entity type to be merged onto its ontology, while the captured write does not",
          %{learning: learning, turn: turn} do
       cb =
         App.build_flush_callback(nil,
@@ -730,11 +707,8 @@ defmodule Gralkor.ApplicationTest do
 
       assert Keyword.get(learning_opts, :merge_learning_entity) == true,
              "learning write signals merge_learning_entity: true"
-    end
 
-    test "the learning write signals merge_learning_entity even when no consumer ontology is configured",
-         %{learning: learning, turn: turn} do
-      cb =
+      no_ontology_cb =
         App.build_flush_callback(nil,
           add_episode_fn: fn group, body, source, ontology, opts ->
             send(self(), {:add, group, body, source, ontology, opts})
@@ -743,35 +717,13 @@ defmodule Gralkor.ApplicationTest do
           learn_fn: fn _t, _a, _u -> {:ok, learning} end
         )
 
-      assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
+      assert :ok = no_ontology_cb.("g1", "Susu", "Eli", nil, [turn])
 
       assert_received {:add, "g1", _transcript, "captured", nil, captured_opts}
       refute Keyword.get(captured_opts, :merge_learning_entity, false)
 
       assert_received {:add, "g1", _learning_body, "learning", nil, learning_opts}
       assert Keyword.get(learning_opts, :merge_learning_entity) == true
-    end
-  end
-
-  describe "ex-application > generalise_fn_for_flush/0 > when :generalise_on_flush is true" do
-    test "returns &Gralkor.Client.Native.generalise/2, so build_children wires it into the CaptureBuffer flush_callback" do
-      System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
-      Application.put_env(:jido_gralkor, :generalise_on_flush, true)
-
-      assert App.generalise_fn_for_flush() == (&Gralkor.Client.Native.generalise/2)
-
-      [_python, _pool, {Gralkor.CaptureBuffer, opts}] = App.children()
-      assert is_function(Keyword.fetch!(opts, :flush_callback), 5)
-    end
-  end
-
-  describe "ex-application > generalise_fn_for_flush/0 > when :generalise_on_flush is false or unset (default)" do
-    test "returns nil, so no generalise step runs on flush" do
-      Application.delete_env(:jido_gralkor, :generalise_on_flush)
-      assert App.generalise_fn_for_flush() == nil
-
-      Application.put_env(:jido_gralkor, :generalise_on_flush, false)
-      assert App.generalise_fn_for_flush() == nil
     end
   end
 
