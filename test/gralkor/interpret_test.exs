@@ -5,82 +5,59 @@ defmodule Gralkor.InterpretTest do
   alias Gralkor.InterpretParseFailed
   alias Gralkor.Message
 
-  # ── ex-interpret ─────────────────────────────────────────────
-
-  describe "ex-interpret > interpret_facts/6 calls the configured LLM with the prompt" do
-    test "the prompt includes the labelled conversation messages and the formatted facts" do
-      ref = make_ref()
-      test_pid = self()
-
-      interpret_fn = fn prompt, _budget ->
-        send(test_pid, {ref, prompt})
-        {:ok, []}
-      end
-
-      _ =
-        Interpret.interpret_facts(
-          [Message.new("user", "what about X?")],
-          "tell me about X",
-          "- X is a thing (created 2020)",
-          interpret_fn,
-          "Susu"
-        )
-
-      assert_receive {^ref, prompt}
-      assert prompt =~ "User: what about X?"
-      assert prompt =~ "- X is a thing (created 2020)"
+  describe "when facts are interpreted for a request against a conversation" do
+    test "then the prompt sent to the model carries the labelled conversation messages" do
+      assert captured_prompt() =~ "User: what about X?"
     end
 
-    test "the prompt carries the request, so relevance is judged against it even when no conversation carried it" do
-      ref = make_ref()
-      test_pid = self()
-
-      interpret_fn = fn prompt, _budget ->
-        send(test_pid, {ref, prompt})
-        {:ok, []}
-      end
-
-      _ =
-        Interpret.interpret_facts(
-          [],
-          "Where does Eli work?",
-          "- Eli works at Anthropic",
-          interpret_fn,
-          "Susu"
-        )
-
-      assert_receive {^ref, prompt}
-      assert prompt =~ "Request to answer:\nWhere does Eli work?"
+    test "and the prompt carries the request the facts were recalled for, so relevance is judged against what was asked even when the conversation never carried it" do
+      assert captured_prompt() =~ "Request to answer:\ntell me about X"
     end
 
-    test "the prompt gently frames memory as source-derived understanding rather than proven truth" do
-      ref = make_ref()
-      test_pid = self()
+    test "and the prompt carries the formatted facts" do
+      assert captured_prompt() =~ "- X is a thing (created 2020)"
+    end
 
-      interpret_fn = fn prompt, _budget ->
-        send(test_pid, {ref, prompt})
-        {:ok, []}
-      end
-
-      _ =
-        Interpret.interpret_facts(
-          [Message.new("user", "what do we know about X?")],
-          "what do we know about X?",
-          "- X is a thing",
-          interpret_fn,
-          "Susu"
-        )
-
-      assert_receive {^ref, prompt}
+    test "and the prompt frames retrieved facts as understandings extracted from source material rather than proven claims" do
+      prompt = captured_prompt()
       assert prompt =~ ~r/understandings extracted from source material/i
       assert prompt =~ ~r/rather than proven/i
-      assert prompt =~ ~r/mention the source context.*when available.*only where natural/is
+    end
 
+    test "and the prompt asks for the source context, when available, to be mentioned only where natural" do
+      prompt = captured_prompt()
+      assert prompt =~ ~r/mention the source context.*when available.*only where natural/is
+    end
+
+    test "and the prompt rules out confidence labels, truth adjudication, and repetitive uncertainty warnings" do
+      prompt = captured_prompt()
       assert prompt =~
                ~r/without confidence labels, truth adjudication, or repetitive uncertainty warnings/i
+    end
 
+    test "and the prompt asks that conflicting retrieved facts be preserved as separate accounts rather than one being chosen as true" do
+      prompt = captured_prompt()
       assert prompt =~
                ~r/when retrieved memory facts conflict.*return every conflicting account.*never single one out as the true one.*even where the request asks/is
+    end
+
+    test "and the structured-output schema requires the relevant facts as a list of strings" do
+      schema = Interpret.interpret_schema()
+      assert schema[:relevantFacts][:type] == {:list, :string}
+      assert schema[:relevantFacts][:required] == true
+    end
+
+    test "and the schema instructs the model to copy each fact line verbatim, preserving every timestamp parenthetical and dropping the leading \"- \"" do
+      doc = Interpret.interpret_schema()[:relevantFacts][:doc]
+      assert doc =~ ~r/verbatim/i
+      assert doc =~ ~r/timestamp/i
+      assert doc =~ "dropping the leading '- '"
+    end
+
+    test "and the schema asks for ' — ' and a one-sentence relevance reason after each copied fact" do
+      doc = Interpret.interpret_schema()[:relevantFacts][:doc]
+      assert doc =~ "' — '"
+      assert doc =~ ~r/one-sentence relevance reason/i
     end
   end
 
