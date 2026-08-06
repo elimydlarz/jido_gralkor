@@ -2061,6 +2061,9 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  defp restore_env(name, nil), do: System.delete_env(name)
+  defp restore_env(name, value), do: System.put_env(name, value)
+
   defp fact_search_result do
     {graph, _} =
       Pythonx.eval(
