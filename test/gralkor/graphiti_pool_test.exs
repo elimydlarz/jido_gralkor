@@ -518,6 +518,11 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
+
+    test "and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints" do
+      assert {:ok, [%{fact: "X is a thing"} = fact]} = fact_search_result()
+      refute Map.has_key?(fact, :name)
+    end
   end
 
   describe "if running a fact search raises inside the graph library" do
@@ -651,6 +656,22 @@ defmodule Gralkor.GraphitiPoolTest do
       refute rec["node_config"]
 
       GenServer.stop(pid)
+    end
+
+    test "and it is restricted to the sanitised group id the episodes were written under" do
+      {_episode, recorded} = episode_search_result()
+      assert recorded["group_ids"] == ["group_with_hyphens"]
+    end
+
+    test "and each returned episode is rendered with the body that was written and its source description" do
+      {episode, _recorded} = episode_search_result()
+      assert episode.content == "GEN|v1|{}\nEli consistently prefers dark mode"
+      assert episode.source_description == "generalisation"
+    end
+
+    test "and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned" do
+      {episode, _recorded} = episode_search_result()
+      assert episode.content =~ "Eli consistently prefers dark mode"
     end
   end
 
