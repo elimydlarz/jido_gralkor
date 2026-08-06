@@ -416,8 +416,8 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "when memory is added with a group, content and a source description > where an ontology override is supplied" do
-        test "while the backend acknowledges the add > then success is returned" do
+      describe "when memory is added with a group, content and a source description > where an ontology override is supplied > while the backend acknowledges the add" do
+        test "then success is returned" do
           unquote(setup_block).()
           configure_memory_add(:ok)
 
@@ -429,15 +429,19 @@ defmodule Gralkor.ClientContract do
                      Gralkor.TestOntologies.Strict
                    )
         end
+      end
 
-        test "if the backend fails > then that failure is returned unchanged" do
+      describe "when memory is added with a group, content and a source description > where an ontology override is supplied > if the backend fails" do
+        test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_memory_add({:error, :extract_failed})
 
           assert {:error, :extract_failed} =
                    client().memory_add("group-1", "x", nil, Gralkor.TestOntologies.Strict)
         end
+      end
 
+      describe "when memory is added with a group, content and a source description > where an ontology override is supplied" do
         test "then the override is applied to the write" do
           unquote(setup_block).()
 
