@@ -62,8 +62,15 @@ defmodule JidoGralkor.MixProject do
       "test.integration": ["test --only integration"],
       "test.functional": ["test --only functional"],
       "test.journey": ["test --only journey"],
-      "test.all": ["test --include functional --include journey", "cmd node --test"]
+      "test.all": [&test_all/1]
     ]
+  end
+
+  defp test_all(_) do
+    Enum.each(
+      ["mix test --include functional --include journey", "node --test"],
+      &Mix.shell().cmd/1
+    )
   end
 
   defp description do
