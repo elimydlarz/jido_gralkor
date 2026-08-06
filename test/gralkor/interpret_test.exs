@@ -31,12 +31,14 @@ defmodule Gralkor.InterpretTest do
 
     test "and the prompt rules out confidence labels, truth adjudication, and repetitive uncertainty warnings" do
       prompt = captured_prompt()
+
       assert prompt =~
                ~r/without confidence labels, truth adjudication, or repetitive uncertainty warnings/i
     end
 
     test "and the prompt asks that conflicting retrieved facts be preserved as separate accounts rather than one being chosen as true" do
       prompt = captured_prompt()
+
       assert prompt =~
                ~r/when retrieved memory facts conflict.*return every conflicting account.*never single one out as the true one.*even where the request asks/is
     end
@@ -136,7 +138,6 @@ defmodule Gralkor.InterpretTest do
       assert error.raw_response == {:ok, %{not: "a list"}}
       assert Exception.message(error) =~ ~s(%{not: "a list"})
     end
-
   end
 
   describe "if the model call itself fails" do
@@ -285,7 +286,6 @@ defmodule Gralkor.InterpretTest do
 
       assert ctx =~ preserved
     end
-
   end
 
   describe "when the interpretation context is built from messages, a request, facts, and an agent name > if the agent name is missing or blank" do
@@ -373,7 +373,6 @@ defmodule Gralkor.InterpretTest do
       assert ctx =~ "User: third"
       assert ctx =~ "Susu: fourth"
     end
-
   end
 
   describe "when the interpretation context is built from messages, a request, facts, and an agent name > if even a single message on its own exceeds the character budget" do
