@@ -127,6 +127,44 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
+  describe "while a thread is committed, when rotate_now/2 is called and installing the fresh thread fails after the flush succeeded" do
+    @describetag timeout: 15_000
+
+    test "then the failure reason is returned to the caller and the agent process is still running afterwards" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+      seed_thread(pid, "pre-rotation")
+
+      # rotate_now reads the agent's state twice via `Jido.AgentServer.state/1`
+      # (once to capture the pre-flush thread, once after the flush to find
+      # any in-flight entries) before it attempts to install the rotated
+      # thread via `:sys.replace_state/2`. OTP records a debug `:out` event
+      # only *after* a `handle_call` reply has already been sent (see
+      # `gen_server:reply/5`), so blocking inside the debug hook on the
+      # second `:get_state` reply lets both reads succeed and only occupies
+      # the agent process afterwards — exactly the window `swap_thread`
+      # needs. `:sys.replace_state/2` uses a 5s default timeout, so a 6s
+      # block guarantees the swap times out and hits the `catch :exit`
+      # clause in `JidoGralkor.ContextRotator`'s `swap_thread/3`.
+      block_second_get_state_reply = fn count, event, _proc_state ->
+        case event do
+          {:out, {:ok, %Jido.AgentServer.State{}}, _from, _state} ->
+            count = count + 1
+            if count == 2, do: Process.sleep(6_000)
+            count
+
+          _ ->
+            count
+        end
+      end
+
+      assert :ok = :sys.install(pid, {block_second_get_state_reply, 0})
+
+      assert {:error, _reason} = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+      assert Process.alive?(pid)
+    end
+  end
+
   describe "while a thread is committed, when rotate_now/2 is called with keep_last_n > 0 and the thread has more entries than keep_last_n" do
     test "then the rotated thread is seeded with the most recent keep_last_n entries, dropping everything before them" do
       InMemory.set_flush_and_await(:ok)
