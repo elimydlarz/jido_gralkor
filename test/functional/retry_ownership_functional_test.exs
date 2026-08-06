@@ -19,6 +19,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client.Native
+  alias Gralkor.Application, as: GralkorApplication
   alias Gralkor.GraphitiPool
   alias Gralkor.Interpret
   alias Gralkor.InterpretParseFailed
@@ -125,6 +126,32 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     counter
   end
 
+  defp learning_failure_buffer do
+    learning_attempts = :counters.new(1, [])
+    captured_writes = :counters.new(1, [])
+
+    callback =
+      GralkorApplication.build_flush_callback(nil,
+        add_episode_fn: fn _group, _content, source, _ontology, _opts ->
+          if source == "captured", do: :counters.add(captured_writes, 1, 1)
+          :ok
+        end,
+        learn_fn: fn _turn, _agent, _user ->
+          :counters.add(learning_attempts, 1, 1)
+          {:error, :rate_limited}
+        end
+      )
+
+    start_supervised!({CaptureBuffer, flush_callback: callback, retries: [0]})
+
+    %{learning_attempts: learning_attempts, captured_writes: captured_writes}
+  end
+
+  defp capture_and_flush_learning_failure do
+    :ok = Native.capture("learning-s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+    Native.flush_and_await("learning-s1", 2_000)
+  end
+
   describe "when a capture callback returns an upstream rate-limit failure" do
     test "then the capture buffer does not retry the returned failure and logs it" do
       counter = counting_buffer(fn _n -> {:error, {:upstream_llm, :rate_limited}} end)
@@ -151,6 +178,30 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
       assert {:error, {:upstream_llm, :bad_request}} = Native.flush_and_await("s1", 2_000)
       assert :counters.get(counter, 1) == 1
+    end
+  end
+
+  describe "when learning inference fails after the captured episode is written" do
+    test "then the capture buffer returns a failure classified as upstream" do
+      learning_failure_buffer()
+
+      assert {:error, {:upstream_llm, :rate_limited}} = capture_and_flush_learning_failure()
+    end
+
+    test "and the learning inference is attempted only once" do
+      %{learning_attempts: attempts} = learning_failure_buffer()
+
+      _result = capture_and_flush_learning_failure()
+
+      assert :counters.get(attempts, 1) == 1
+    end
+
+    test "and the captured episode is written only once" do
+      %{captured_writes: writes} = learning_failure_buffer()
+
+      _result = capture_and_flush_learning_failure()
+
+      assert :counters.get(writes, 1) == 1
     end
   end
 
