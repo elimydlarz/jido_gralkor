@@ -1,6 +1,6 @@
 Functional: native-memory-round-trip (src: lib/gralkor/client/native.ex, lib/gralkor/recall.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/application.ex; functional: test/functional/native_memory_round_trip_functional_test.exs)
 
-while the native adapter runs against a deterministic graph and a deterministic model
+while the native adapter runs against a deterministic graph and the configured model
   when a fact is written into an operator's memory
     then the write reaches the graph as a plain-text episode under that operator's group
     when a later recall from a session that never held the conversation asks about it
