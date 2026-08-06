@@ -33,11 +33,14 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
     },
   );
 
-  await context.test("and the complete test suite passes before release state changes", async () => {
+  await context.test(
+    "and the complete test suite passes through `mix test.all` before release state changes",
+    async () => {
     const skill = await readFile(skillUrl, "utf8");
 
-    assert.match(skill, /Run `mix test`, `mix test\.functional`, and `mix test\.journey` before editing the version\./);
-  });
+      assert.match(skill, /Run `mix test\.all` before editing the version\./);
+    },
+  );
 
   await context.test(
     "and the required Hex and GitHub credentials are shell-loaded from the repository environment using their current names",
