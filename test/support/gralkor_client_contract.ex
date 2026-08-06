@@ -512,15 +512,17 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "when community building is requested for a group" do
-        test "while the backend returns counts > then the number of communities and the number of edges are returned as a success" do
+      describe "when community building is requested for a group > while the backend returns counts" do
+        test "then the number of communities and the number of edges are returned as a success" do
           unquote(setup_block).()
           configure_build_communities({:ok, %{communities: 3, edges: 7}})
 
           assert {:ok, %{communities: 3, edges: 7}} = client().build_communities("group-1")
         end
+      end
 
-        test "if the backend fails > then that failure is returned unchanged" do
+      describe "when community building is requested for a group > if the backend fails" do
+        test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_build_communities({:error, :upstream})
 
