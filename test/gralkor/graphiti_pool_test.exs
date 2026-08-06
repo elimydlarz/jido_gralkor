@@ -1560,7 +1560,7 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when the pool starts > while both configured model specs name a supported inference provider > where the credential was set from Elixir rather than exported into the OS process" do
-    test "then it still reaches the client, so a consumer's runtime configuration and a test helper's loaded `.env` both work" do
+    test "then the credential still reaches the provider client" do
       var = "GRALKOR_CREDENTIAL_DELIVERY_PROBE_#{System.unique_integer([:positive])}"
       on_exit(fn -> System.delete_env(var) end)
 
