@@ -77,8 +77,8 @@ defmodule Gralkor.OntologyTest do
 
   end
 
-  describe "when an ontology declares an aliased entity > where the declaration passes a description before the block" do
-    test "then that description is recorded on the entity, so the extractor is told when to mint it" do
+  describe "when an ontology declares an aliased entity > where the entity has a description" do
+    test "then that description is recorded for extraction" do
       defmodule DescribedEntityOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -91,7 +91,7 @@ defmodule Gralkor.OntologyTest do
                DescribedEntityOntology.__ontology__().entity_types
     end
 
-    test "if the description is neither a string nor absent > then compilation fails with an error naming the entity and the rejected description" do
+    test "if the description is invalid > then compilation fails naming the entity and rejected description" do
       assert_raise CompileError, ~r/User.*description.*42/s, fn ->
         defmodule BadDescriptionOntology do
           use Gralkor.Ontology, entities: :open, relationships: :open
