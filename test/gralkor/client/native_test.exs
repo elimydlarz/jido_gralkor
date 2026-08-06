@@ -179,7 +179,6 @@ defmodule Gralkor.Client.NativeTest do
         Native.memory_add("g", "content", "manual", Gralkor.TestOntologies.NotAnOntology)
       end
     end
-
   end
 
   describe "when memory is added with a group and content > if the ontology supplied is not a module" do
@@ -768,7 +767,11 @@ defmodule Gralkor.Client.NativeTest do
 
     setup do
       original = Application.get_env(:jido_gralkor, :recall_deadline_ms)
-      on_exit(fn -> Application.put_env(:jido_gralkor, :recall_deadline_ms, original || 12_000) end)
+
+      on_exit(fn ->
+        Application.put_env(:jido_gralkor, :recall_deadline_ms, original || 12_000)
+      end)
+
       Application.put_env(:jido_gralkor, :recall_deadline_ms, 50)
       :ok
     end
@@ -834,6 +837,7 @@ defmodule Gralkor.Client.NativeTest do
 
     test "then the group is sanitised before use" do
       assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("with-hyphens")
+
       assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
                group == "with_hyphens"
              end)
@@ -841,6 +845,7 @@ defmodule Gralkor.Client.NativeTest do
 
     test "and community building is scoped to the sanitised group" do
       assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("with-hyphens")
+
       assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
                group == "with_hyphens"
              end)
@@ -863,75 +868,75 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   defp start_recall_recording_pool(_ctx) do
-      {g, _} =
-        Pythonx.eval(
-          """
-          import asyncio
+    {g, _} =
+      Pythonx.eval(
+        """
+        import asyncio
 
-          class _Episode:
-              def __init__(self, content):
-                  self.content = content
-                  self.source_description = "generalisation"
+        class _Episode:
+            def __init__(self, content):
+                self.content = content
+                self.source_description = "generalisation"
 
-          class _Results:
-              def __init__(self, episodes=None):
-                  self.nodes = []
-                  self.episodes = episodes or []
+        class _Results:
+            def __init__(self, episodes=None):
+                self.nodes = []
+                self.episodes = episodes or []
 
-          class _FakeGraphiti:
-              def __init__(self):
-                  self.recorded = {}
+        class _FakeGraphiti:
+            def __init__(self):
+                self.recorded = {}
 
-              async def search(self, query, num_results=10, search_filter=None):
-                  self.recorded.setdefault('fact_queries', []).append(query)
-                  return []
+            async def search(self, query, num_results=10, search_filter=None):
+                self.recorded.setdefault('fact_queries', []).append(query)
+                return []
 
-              async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                  self.recorded.setdefault('queries', []).append(query)
-                  self.recorded.setdefault('group_ids', []).append(group_ids or [])
-                  if config is not None and config.episode_config is not None:
-                      if query.startswith('fail:'):
-                          raise RuntimeError('generalisation search refused')
-                      self.recorded.setdefault('episode_calls', []).append(
-                          [m.value for m in config.episode_config.search_methods]
-                      )
-                      return _Results(episodes=[
-                          _Episode('GEN|v1|{"id":"gen-1","level":0,"confidence":0.8,"generalises":[]}\\nEli prefers dark mode'),
-                          _Episode('not a generalisation'),
-                      ])
+            async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                self.recorded.setdefault('queries', []).append(query)
+                self.recorded.setdefault('group_ids', []).append(group_ids or [])
+                if config is not None and config.episode_config is not None:
+                    if query.startswith('fail:'):
+                        raise RuntimeError('generalisation search refused')
+                    self.recorded.setdefault('episode_calls', []).append(
+                        [m.value for m in config.episode_config.search_methods]
+                    )
+                    return _Results(episodes=[
+                        _Episode('GEN|v1|{"id":"gen-1","level":0,"confidence":0.8,"generalises":[]}\\nEli prefers dark mode'),
+                        _Episode('not a generalisation'),
+                    ])
 
-                  self.recorded.setdefault('node_label_calls', []).append(
-                      list(search_filter.node_labels)
-                      if search_filter is not None and search_filter.node_labels
-                      else []
-                  )
-                  return _Results()
+                self.recorded.setdefault('node_label_calls', []).append(
+                    list(search_filter.node_labels)
+                    if search_filter is not None and search_filter.node_labels
+                    else []
+                )
+                return _Results()
 
-          _FakeGraphiti()
-          """,
-          %{}
-        )
+        _FakeGraphiti()
+        """,
+        %{}
+      )
 
-      {:ok, pid} =
-        GraphitiPool.start_link(
-          name: Gralkor.GraphitiPool,
-          table: :gralkor_graphiti_instances,
-          falkordb_spec: {:embedded, "/tmp/never_used"},
-          construct_falkor_db: fn _spec -> :stub_falkor_db end,
-          construct_shared_clients: fn _llm, _embedder ->
-            %{llm_client: nil, embedder: nil, cross_encoder: nil}
-          end,
-          construct_instance: fn _db, _shared, _group_id -> g end,
-          initialise_instance: fn _instance -> :ok end,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
+    {:ok, pid} =
+      GraphitiPool.start_link(
+        name: Gralkor.GraphitiPool,
+        table: :gralkor_graphiti_instances,
+        falkordb_spec: {:embedded, "/tmp/never_used"},
+        construct_falkor_db: fn _spec -> :stub_falkor_db end,
+        construct_shared_clients: fn _llm, _embedder ->
+          %{llm_client: nil, embedder: nil, cross_encoder: nil}
+        end,
+        construct_instance: fn _db, _shared, _group_id -> g end,
+        initialise_instance: fn _instance -> :ok end,
+        warmup: false,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0
+      )
 
-      on_exit(fn ->
-        if Process.alive?(pid), do: GenServer.stop(pid)
-      end)
+    on_exit(fn ->
+      if Process.alive?(pid), do: GenServer.stop(pid)
+    end)
 
-      %{pid: pid, g: g}
+    %{pid: pid, g: g}
   end
 
   describe "when recall is requested for a group, agent and query" do
@@ -943,6 +948,7 @@ defmodule Gralkor.Client.NativeTest do
       {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
       recorded = Pythonx.decode(recorded)
       assert recorded["fact_queries"] == ["raw query"]
+
       assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
                group == "operator_group"
              end)
@@ -990,7 +996,9 @@ defmodule Gralkor.Client.NativeTest do
          %{g: g} do
       assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "exact raw query")
       {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      assert Enum.count((recorded |> Pythonx.decode())["queries"], &(&1 == "exact raw query")) == 2
+
+      assert Enum.count((recorded |> Pythonx.decode())["queries"], &(&1 == "exact raw query")) ==
+               2
     end
 
     test "and that learning search asks the graph for nodes labelled `Learning` rather than for edges, so standalone learning nodes are returned instead of nothing",
