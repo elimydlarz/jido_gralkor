@@ -262,35 +262,25 @@ defmodule Gralkor.ApplicationTest do
       assert :ok = cb.("g", "TestAgent", "Eli", nil, [])
     end
 
-    test "and every captured turn is still learned from in the order it was appended" do
-      test_pid = self()
-
-      learning = %Gralkor.AgentLearning{
-        problem_kind: "empty transcript",
-        approach: "inspect behaviour",
-        success: true,
-        lesson: "behaviour still teaches"
-      }
-
-      learn_fn = fn [%{content: content}], _agent, _user ->
-        send(test_pid, {:learned, content})
-        {:ok, learning}
+    test "and every captured turn is still learned from in the order it was appended", %{
+      recording_add: add,
+      learning: learning
+    } do
+      learn_fn = fn [%{content: first_content} | _], _agent, _user ->
+        {:ok, %{learning | problem_kind: "learned from #{first_content}"}}
       end
 
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o, _opts -> :ok end,
-          learn_fn: learn_fn
-        )
+      cb = App.build_flush_callback(nil, add_episode_fn: add, learn_fn: learn_fn)
 
-      turns = [
-        [Gralkor.Message.new("behaviour", "first")],
-        [Gralkor.Message.new("behaviour", "second")]
-      ]
+      behaviour_only = [Gralkor.Message.new("behaviour", "just thinking")]
+      behaviour_only2 = [Gralkor.Message.new("behaviour", "still thinking")]
 
-      assert :ok = cb.("g", "TestAgent", "Eli", nil, turns)
-      assert_receive {:learned, "first"}
-      assert_receive {:learned, "second"}
+      assert :ok = cb.("g1", "Susu", "Eli", nil, [behaviour_only, behaviour_only2])
+      refute_receive {:add, _, _, "captured", _}, 100
+      assert_receive {:add, "g1", body1, "learning", _}
+      assert_receive {:add, "g1", body2, "learning", _}
+      assert body1 =~ "learned from just thinking"
+      assert body2 =~ "learned from still thinking"
     end
   end
 
