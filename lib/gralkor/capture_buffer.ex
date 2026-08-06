@@ -493,9 +493,17 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   defp safe_invoke(cb, group, agent, user, ontology, turns) do
-    cb.(group, agent, user, ontology, turns)
-  rescue
-    e -> {:exception, e, __STACKTRACE__}
+    try do
+      case cb.(group, agent, user, ontology, turns) do
+        :ok -> :ok
+        {:error, _reason} = error -> error
+        other -> {:error, {:unexpected_callback_result, other}}
+      end
+    rescue
+      e -> {:exception, e, __STACKTRACE__}
+    catch
+      kind, reason -> {:error, {:caught_callback_outcome, kind, reason}}
+    end
   end
 
   defp retry(_group, _agent, _user, _ontology, _turns, _cb, [], _t0) do
