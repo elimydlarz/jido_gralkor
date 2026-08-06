@@ -190,6 +190,43 @@ defmodule Gralkor.GeneraliseTest do
                  )
                )
     end
+
+    test "a save decision ignores an unrelated existing id and remains an independent level-0 generalisation" do
+      existing_gen = %Gralkor.Generalisation{
+        id: "gen-existing",
+        content: "Existing",
+        level: 4,
+        confidence: 0.7
+      }
+
+      add_fn = fn _group, body, _source, _ontology, _opts ->
+        {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
+        assert generalisation.level == 0
+        assert generalisation.generalises == []
+        :ok
+      end
+
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise([%{content: "New", confidence: 0.9}]),
+                   search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing_gen)]),
+                   evaluate_fn:
+                     ok_evaluate([
+                       %{
+                         action: "save",
+                         hypothesis_index: 0,
+                         confidence: 0.9,
+                         content: "New",
+                         existing_id: "gen-existing"
+                       }
+                     ]),
+                   add_episode_fn: add_fn
+                 )
+               )
+    end
   end
 
   describe "ex-generalise > evaluate > broadens" do
