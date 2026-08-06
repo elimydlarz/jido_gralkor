@@ -5,12 +5,12 @@ This repository is the canonical development and distribution home for Jido-firs
 ## World-to-Code Mapping
 
 - **`JidoGralkor.Plugin`** — the Jido hook that watches `ai.react.query` / `ai.request.completed` / `ai.request.failed` signals and plants context / fires captures.
-- **`JidoGralkor.Actions.MemorySearch` / `MemoryAdd`** — ReAct tools the LLM calls; `MemorySearch` is the only recall path (no auto-recall in the plugin).
+- **`JidoGralkor.Actions.MemorySearch` / `MemoryAdd` / `MemoryBuildIndices` / `MemoryBuildCommunities`** — the plugin's four ReAct tools; `MemorySearch` is the only recall path (no auto-recall in the plugin), and the two build actions are description-gated operator maintenance.
 - **`JidoGralkor.ReAct.maybe_force_memory_search/2`** — folds `tool_choice` into the consumer's transformer overrides on iter-1, making recall agentic.
 - **`JidoGralkor.Canonical.to_messages/3`** — normalises a Jido/ReAct turn into Gralkor's `[%Message{role, content}]` shape.
 - **`JidoGralkor.Lifecycle`** — graceful-shutdown flush via `Gralkor.Client.flush/1`.
 - **`JidoGralkor.ContextRotator`** — synchronous rotate-on-demand: flush, retain recent and in-flight entries, then install a fresh thread.
-- **`Gralkor.Client` / `Gralkor.Ingest` / `Gralkor.Search`** — the callable Lens boundary and its request values. A registered `Gralkor.Lens` owns its name, ontology, operator-or-global scope, and ingestion module; `Gralkor.Lens.Store` owns group resolution and provenance.
+- **`Gralkor.Client` / `Gralkor.Ingest` / `Gralkor.Search`** — the callable Lens boundary and its request values. A registered `Gralkor.Lens` owns its name, ontology, operator-or-global scope, and ingestion module; `Gralkor.Lens.Store` owns group resolution and provenance; `Gralkor.Lens.Ingestion.ingest/2` is the callback an application implements, and `Gralkor.Lens.Ingestion.Generalise` is the built-in generalising one.
 
 ## Ubiquitous Language
 
@@ -22,6 +22,10 @@ This repository is the canonical development and distribution home for Jido-firs
 - *operator* — the application identity whose local memory is isolated; it is not a Lens and does not determine global visibility.
 - *Lens* — a named ingestion and search channel with an ontology, an ingestion process, and `:operator` or `:global` scope; reserved `default` is the operator's baseline Lens and reserved `global` names the shared group.
 - *group* — where episodes are stored; graphiti's `group_id`. Every Lens resolves to one: an operator Lens to a group derived from the operator id and Lens name, every global Lens to the one shared `global` group, which is searched unfiltered by originating Lens.
+- *episode* — the unit written to graphiti; an episode search reads back the body that was written, while node and edge search return what the extractor derived from it.
+- *fact* — the text of one edge an edge search returned; recall interprets facts, it does not adjudicate them.
+- *node* — one entity graphiti extracted; a custom entity type (`Learning`) is reachable by node search alone, edge search matching edges by their endpoints.
+- *entity description* — the sentence an ontology entity carries; graphiti's extractor reads it to decide when to mint that entity.
 - *role* — one of the two inference slots, `llm` or `embedder`, each selecting its provider from its own model spec. The cross-encoder has no spec and follows the llm role; a credential is required only for a provider some role selects.
 
 ## Bounded Contexts
@@ -38,13 +42,14 @@ Two cooperating contexts live in this package: `Gralkor.*` owns the memory domai
 - A local Lens store resolves its group from the operator id and Lens name; every store write through a global Lens uses the shared global group.
 - Public search always includes the requesting operator's reserved `"default"` Lens first and validates every selected Lens before any query begins. Naming a global Lens searches the whole shared global group, because that is the group its episodes live in; originating Lens is attribution, not a filter.
 - Lens definitions are application-owned and selected by name. The selected callback controls zero, one, or many bound-store writes; `Client.ingest/1` returns its result without an implicit fallback write.
+- Every recall carries its query through to interpretation as a required argument, whatever the buffered conversation holds.
 
 ## Decision Rationale
 
 - The iter-1 `tool_choice` forcing is a workaround: `Jido.AI.Reasoning.ReAct.Config` lacks a `:preamble_tool` knob, and `tool_choice` is applied uniformly across the ReAct loop today. The helper exists to pin it for one iteration without forking the strategy.
 - Capture is not gated on calling a memory tool: completed or failed turns with a committed thread and non-empty canonical event trace are captured. Canonical filters empty turns, and the selected Lens ingestion process decides downstream retention.
 - Recalled graph content is memory context, not adjudicated truth. Gralkor preserves and retrieves understandings extracted from source material without imposing confidence or verification semantics on the ontology; truth-sensitive verification belongs to the consuming application.
-- Interpretation judges relevance against the recall query, which travels to it separately from the conversation. A recall may come from a session that never carried the query — a fresh session, or a `memory_search` whose query is not the last thing the user said — so the buffered conversation alone cannot say what was asked.
+- The recall query travels to interpretation separately from the conversation because a recall may come from a session that never carried it — a fresh session, or a `memory_search` whose query is not the last thing the user said — so the buffered conversation alone cannot say what was asked.
 - What graphiti derives from an episode is not knowable in advance: a statement naming one subject yields a node and no edge, and on another run may yield neither. Retrieval therefore matches the primitive to what was stored — episode search returns the body Gralkor wrote and must read back verbatim, node and edge search return what the extractor derived — and a custom entity type carries a description, because that is what the extractor reads to decide when to mint it.
 - Consumer configuration is read from the `:jido_gralkor` app env and documented system environment variables. Request-time settings resolve per call; startup backend selection through `:falkordb` or `GRALKOR_DATA_DIR` requires restarting the application.
 - Ontology selection belongs to the selected Lens. The implicit `"default"` Lens retains deployment-wide `:ontology` as the compatibility path for calls or mounts that do not select a registered Lens.
