@@ -374,6 +374,159 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
+  # The adapter's write and admin calls go through GraphitiPool, so exercising
+  # them means starting the pool over a fake graphiti that records what it was
+  # asked for. Everything the adapter is supposed to decide — the sanitised
+  # group, the source description, which ontology applies — is visible in that
+  # recording.
+  defp start_recording_pool(_ctx) do
+    {g, _} =
+      Pythonx.eval(
+        """
+        class _FakeGraphiti:
+            def __init__(self):
+                self.recorded = {"episodes": [], "communities": 0}
+
+            async def add_episode(self, **kwargs):
+                if kwargs.get("episode_body") == "boom":
+                    raise RuntimeError("graph refused the write")
+                self.recorded["episodes"].append({
+                    "name": kwargs.get("name"),
+                    "group_id": kwargs.get("group_id"),
+                    "body": kwargs.get("episode_body"),
+                    "source_description": kwargs.get("source_description"),
+                    "entity_types": sorted((kwargs.get("entity_types") or {}).keys()),
+                    "edge_types": sorted((kwargs.get("edge_types") or {}).keys()),
+                    "excluded_entity_types": kwargs.get("excluded_entity_types"),
+                    "kwargs": sorted(kwargs.keys()),
+                })
+
+            async def build_indices_and_constraints(self):
+                pass
+
+            async def build_communities(self):
+                if self.recorded["communities"] == "fail":
+                    raise RuntimeError("communities refused")
+                return ([1, 2, 3], [4])
+
+        _FakeGraphiti()
+        """,
+        %{}
+      )
+
+    {:ok, pid} =
+      GraphitiPool.start_link(
+        name: Gralkor.GraphitiPool,
+        table: :gralkor_graphiti_instances,
+        falkordb_spec: {:embedded, "/tmp/never_used"},
+        construct_falkor_db: fn _spec -> :stub_falkor_db end,
+        construct_shared_clients: fn _llm, _embedder ->
+          %{llm_client: nil, embedder: nil, cross_encoder: nil}
+        end,
+        construct_instance: fn _db, _shared, _group_id -> g end,
+        warmup: false,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0
+      )
+
+    on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+
+    original = Application.get_env(:jido_gralkor, :ontology)
+
+    on_exit(fn ->
+      case original do
+        nil -> Application.delete_env(:jido_gralkor, :ontology)
+        v -> Application.put_env(:jido_gralkor, :ontology, v)
+      end
+    end)
+
+    Application.delete_env(:jido_gralkor, :ontology)
+
+    %{pool: pid, g: g}
+  end
+
+  defp episodes(g) do
+    {raw, _} = Pythonx.eval("g.recorded['episodes']", %{"g" => g})
+    Pythonx.decode(raw)
+  end
+
+  describe "ex-client-native > when memory is added with a group and content" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the group is sanitised, the content is written as a plain-text episode, and success is returned",
+         %{g: g} do
+      assert :ok = Native.memory_add("operator-with-hyphens", "Eli works at Anthropic", "manual")
+
+      assert [episode] = episodes(g)
+      assert episode["group_id"] == "operator_with_hyphens"
+      assert episode["body"] == "Eli works at Anthropic"
+      assert episode["source_description"] == "manual"
+      assert episode["name"] =~ ~r/^manual-add-\d+$/
+    end
+
+    test "then a supplied source description is what the episode records", %{g: g} do
+      assert :ok = Native.memory_add("g1", "content", "captured")
+
+      assert [%{"source_description" => "captured"}] = episodes(g)
+    end
+
+    test "if the graph fails the write, that failure is returned unchanged", %{g: g} do
+      assert {:error, {:python, reason}} = Native.memory_add("g1", "boom", "manual")
+      assert reason =~ "graph refused the write"
+      assert episodes(g) == []
+    end
+
+    test "while no ontology override is supplied, the deployment-configured ontology governs the write",
+         %{g: g} do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+
+      assert :ok = Native.memory_add("g1", "content", "manual")
+
+      assert [episode] = episodes(g)
+      assert episode["entity_types"] != []
+      assert "entity_types" in episode["kwargs"]
+    end
+
+    test "where an ontology override is supplied, it governs the write and the configured one is not consulted",
+         %{g: g} do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+
+      assert :ok = Native.memory_add("g1", "content", "manual", nil)
+
+      assert [episode] = episodes(g)
+      refute "entity_types" in episode["kwargs"]
+    end
+
+    test "while the ontology that applies resolves to nothing, extraction stays generic", %{g: g} do
+      assert :ok = Native.memory_add("g1", "content", "manual")
+
+      assert [episode] = episodes(g)
+      refute "entity_types" in episode["kwargs"]
+      refute "edge_types" in episode["kwargs"]
+      refute "excluded_entity_types" in episode["kwargs"]
+    end
+  end
+
+  describe "ex-client-native > when an index and constraint rebuild is requested" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then a status is returned once the rebuild completes" do
+      Native.memory_add("g1", "content", "manual")
+
+      assert {:ok, %{status: "built"}} = Native.build_indices()
+    end
+  end
+
+  describe "ex-client-native > when community building is requested for a group" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then it is scoped to the sanitised group and the community and edge counts are returned" do
+      assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("with-hyphens")
+    end
+  end
+
   # The adapter's search wiring is private, so the only way to exercise it is
   # through the public calls the plugin makes. A wrong call does not raise here —
   # Recall.await_aux swallows an auxiliary search's exit and logs it — so each
