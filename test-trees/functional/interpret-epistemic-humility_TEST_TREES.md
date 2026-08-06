@@ -1,6 +1,6 @@
 Functional: interpret-epistemic-humility (functional: test/functional/interpret_epistemic_humility_test.exs)
 
-while a real language model interprets memory deterministically
+while a real language model interprets memory
   when relevant memory holds accounts drawn from sources of differing apparent veracity
     then every account needed to answer the query is retained with its source wording intact
     but no account is ranked as more or less reliable than another

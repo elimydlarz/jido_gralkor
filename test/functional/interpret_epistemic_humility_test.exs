@@ -111,10 +111,7 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
   defp openai_interpret(prompt, max_tokens) do
     schema = Interpret.interpret_schema()
 
-    case ReqLLM.generate_object(@model, prompt, schema,
-           max_tokens: max_tokens,
-           temperature: 0.0
-         ) do
+    case ReqLLM.generate_object(@model, prompt, schema, max_tokens: max_tokens) do
       {:ok, response} ->
         object = ReqLLM.Response.object(response)
         {:ok, Map.get(object, :relevantFacts) || Map.get(object, "relevantFacts") || []}
