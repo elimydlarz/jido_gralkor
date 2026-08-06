@@ -337,11 +337,26 @@ defmodule Gralkor.RecallTest do
   end
 
   describe "ex-recall > recall deadline" do
-    test "if the budget is exhausted before the call returns, returns {:error, :recall_deadline_expired}" do
+    test "if the budget is exhausted before the call returns, returns {:error, :recall_deadline_expired} and logs the expiry as a warning" do
       slow_search = fn _g, _q, _max ->
         Process.sleep(500)
         {:ok, []}
       end
+
+      logs =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:error, :recall_deadline_expired} =
+                   Recall.recall(
+                     "g",
+                     "TestAgent",
+                     "expiring-session",
+                     "q",
+                     default_opts(search_fn: slow_search, deadline_ms: 50)
+                   )
+        end)
+
+      assert logs =~ "recall deadline expired"
+      assert logs =~ "session:expiring-session"
 
       assert {:error, :recall_deadline_expired} =
                Recall.recall(
