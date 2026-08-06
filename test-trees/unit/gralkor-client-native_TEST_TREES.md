@@ -92,7 +92,7 @@ if a flush-and-await is requested with a missing or non-positive timeout
 when memory is added with a group and content
   then the group is sanitised before the write
   and the content is written to the graph as a plain-text episode scoped to the sanitised group
-  and the episode carries a generated name combining the current millisecond timestamp with a positive monotonic unique integer, so concurrent writes remain distinguishable
+  and the generated name combines the millisecond timestamp with a positive monotonic integer
   and success is returned once the graph accepts the write
   if the graph fails
     then that failure is returned unchanged
@@ -106,7 +106,7 @@ when memory is added with a group and content
   where no source description is supplied
     then the source recorded on the episode is "manual"
   while the ontology that applies resolves to nothing
-    then the write declares no entity types, edge types, edge-type map or excluded entity types, so extraction stays generic
+    then the write omits all four ontology collections, preserving generic extraction
   while the ontology that applies is a module declaring an ontology
     then the write forwards all four declared ontology collections
   if the ontology supplied is a module that declares no ontology
@@ -130,7 +130,7 @@ when community building is requested for a group
 when generalisations are searched for a group
   then the group is sanitised before use
   and the search is scoped to the `_gen` group derived from it
-  and it asks the graph for episodes rather than for facts, because a generalisation is read back from the body that was written rather than from what an extractor derived
+  and episode search reads written bodies rather than extracted facts
   and every result that decodes as a generalisation is returned carrying its decoded content, level and confidence
   but a result that does not decode as a generalisation is left out rather than surfaced raw
   if the search fails

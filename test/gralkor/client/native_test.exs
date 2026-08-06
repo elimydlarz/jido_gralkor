@@ -603,7 +603,7 @@ defmodule Gralkor.Client.NativeTest do
       assert episode["source_description"] == "manual"
     end
 
-    test "and the episode carries a generated name combining the current millisecond timestamp with a positive monotonic unique integer, so concurrent writes remain distinguishable",
+    test "and the generated name combines the millisecond timestamp with a positive monotonic integer",
          %{g: g} do
       assert :ok = Native.memory_add("g1", "first", "manual")
       assert :ok = Native.memory_add("g1", "second", "manual")
@@ -690,7 +690,7 @@ defmodule Gralkor.Client.NativeTest do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then the write declares no entity types, edge types, edge-type map or excluded entity types, so extraction stays generic",
+    test "then the write omits all four ontology collections, preserving generic extraction",
          %{g: g} do
       assert :ok = Native.memory_add("g1", "content", "manual")
       assert [episode] = episodes(g)
@@ -1109,7 +1109,7 @@ defmodule Gralkor.Client.NativeTest do
       assert ["operator_gen"] in (recorded |> Pythonx.decode())["group_ids"]
     end
 
-    test "and it asks the graph for episodes rather than for facts, because a generalisation is read back from the body that was written rather than from what an extractor derived",
+    test "and episode search reads written bodies rather than extracted facts",
          %{g: g} do
       assert {:ok, [_generalisation]} = Native.search_generalisations("g", "dark mode", 5)
       {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
