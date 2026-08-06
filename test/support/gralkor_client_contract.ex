@@ -564,8 +564,8 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "when generalisations are searched for a group with a query and a result ceiling" do
-        test "while the backend returns generalisations > then they are returned as a success carrying their decoded content, level and confidence" do
+      describe "when generalisations are searched for a group with a query and a result ceiling > while the backend returns generalisations" do
+        test "then they are returned as a success carrying their decoded content, level and confidence" do
           unquote(setup_block).()
 
           gen = %Gralkor.Generalisation{
@@ -585,15 +585,19 @@ defmodule Gralkor.ClientContract do
           assert g.level == 0
           assert g.confidence == 0.85
         end
+      end
 
-        test "while the backend returns none > then an empty list is returned as a success rather than an error" do
+      describe "when generalisations are searched for a group with a query and a result ceiling > while the backend returns none" do
+        test "then an empty list is returned as a success rather than an error" do
           unquote(setup_block).()
           configure_search_generalisations({:ok, []})
 
           assert {:ok, []} = client().search_generalisations("group-1", "nonexistent", 3)
         end
+      end
 
-        test "if the backend fails > then that failure is returned unchanged" do
+      describe "when generalisations are searched for a group with a query and a result ceiling > if the backend fails" do
+        test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_search_generalisations({:error, :search_down})
 
