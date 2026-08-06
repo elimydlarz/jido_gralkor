@@ -14,8 +14,7 @@ defmodule Gralkor.LegacyFlushGeneralisationFunctionalTest do
     %{turns: turns}
   end
 
-  describe "where legacy generalisation on flush is enabled" do
-    describe "when an implicit-default captured transcript is flushed successfully" do
+  describe "where legacy generalisation on flush is enabled > when an implicit-default captured transcript is flushed successfully" do
       test "then generalisation is started with that transcript under the capture's group without delaying the flush result",
            %{turns: turns} do
         test_pid = self()
@@ -42,18 +41,15 @@ defmodule Gralkor.LegacyFlushGeneralisationFunctionalTest do
 
         assert :ok = callback.("operator_one", "Susu", "Eli", nil, turns)
       end
-    end
   end
 
-  describe "where legacy generalisation on flush is disabled" do
-    describe "when an implicit-default captured transcript is flushed successfully" do
+  describe "where legacy generalisation on flush is disabled > when an implicit-default captured transcript is flushed successfully" do
       test "then no generalisation is started", %{turns: turns} do
         callback = successful_callback(nil)
 
         assert :ok = callback.("operator_one", "Susu", "Eli", nil, turns)
         refute_receive {:generalised, _, _}
       end
-    end
   end
 
   defp successful_callback(generalise_fn) do
