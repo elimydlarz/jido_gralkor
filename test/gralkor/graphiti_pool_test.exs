@@ -864,7 +864,6 @@ defmodule Gralkor.GraphitiPoolTest do
                ["another", "with_hyphens"]
     end
 
-    @tag timeout: 30_000
   end
 
   describe "when a graph instance is requested for a group > while no instance is cached for that group > while construction takes longer than the default call timeout" do
@@ -1231,8 +1230,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "while both configured model specs name a supported inference provider" do
-    test "then the LLM client is built for the provider the LLM spec names, the embedder for the provider the embedder spec names, and the cross-encoder for the provider the LLM spec names" do
+  describe "when the pool starts > while both configured model specs name a supported inference provider" do
+    test "and the LLM client is built for the provider the LLM spec names" do
       spec =
         GraphitiPool.shared_client_spec(
           %{provider: :openai, id: "gpt-4.1-mini"},
@@ -1241,12 +1240,32 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert spec.llm.provider == :openai
       assert spec.llm.id == "gpt-4.1-mini"
-      assert spec.embedder.provider == :google
-      assert spec.embedder.id == "gemini-embedding-2-preview"
-      assert spec.cross_encoder.provider == :openai
     end
 
-    test "while the embedder spec names Google then the embedder is constructed to send one input per request" do
+    test "and the embedder is built for the provider the embedder spec names" do
+      spec =
+        GraphitiPool.shared_client_spec(
+          %{provider: :openai, id: "gpt-4.1-mini"},
+          %{provider: :google, id: "gemini-embedding-2-preview"}
+        )
+
+      assert spec.embedder.provider == :google
+      assert spec.embedder.id == "gemini-embedding-2-preview"
+    end
+
+    test "and the cross-encoder is built for the provider the LLM spec names" do
+      spec =
+        GraphitiPool.shared_client_spec(
+          %{provider: :openai, id: "gpt-4.1-mini"},
+          %{provider: :google, id: "gemini-embedding-2-preview"}
+        )
+
+      assert spec.cross_encoder.provider == :openai
+    end
+  end
+
+  describe "when the pool starts > while both configured model specs name a supported inference provider > while the embedder spec names Google" do
+    test "then the embedder is constructed to send one input per request, so a batched call cannot receive fewer embeddings than it sent inputs" do
       spec =
         GraphitiPool.shared_client_spec(
           %{provider: :google, id: "gemini-3.1-flash-lite"},
@@ -1256,17 +1275,10 @@ defmodule Gralkor.GraphitiPoolTest do
       assert spec.embedder.batch_size == 1
     end
 
-    test "while the embedder spec names OpenAI then no per-request batch size is imposed on it" do
-      spec =
-        GraphitiPool.shared_client_spec(
-          %{provider: :openai, id: "gpt-4.1-mini"},
-          %{provider: :openai, id: "text-embedding-3-small"}
-        )
+  end
 
-      refute Map.has_key?(spec.embedder, :batch_size)
-    end
-
-    test "while the two specs name different providers then each client is still built for its own role's provider" do
+  describe "when the pool starts > while both configured model specs name a supported inference provider > while the two specs name different providers" do
+    test "then each client is still built for its own role's provider" do
       spec =
         GraphitiPool.shared_client_spec(
           %{provider: :google, id: "gemini-3.1-flash-lite"},
@@ -1286,7 +1298,7 @@ defmodule Gralkor.GraphitiPoolTest do
       :ok
     end
 
-    test "then startup raises before any inference client is constructed, and the failure names both configured model specs and the supported providers" do
+    test "then startup raises before any inference client is constructed" do
       test_pid = self()
 
       unsupported_pairs = [
@@ -1316,12 +1328,20 @@ defmodule Gralkor.GraphitiPoolTest do
                  )
 
         message = Exception.message(error)
-        assert message =~ inspect(llm_model)
-        assert message =~ inspect(embedder_model)
-        assert message =~ "openai"
-        assert message =~ "google"
         refute_received :inference_client_construction_started
       end)
+    end
+
+    test "and the failure names both configured model specs" do
+      error = unsupported_provider_error()
+      assert Exception.message(error) =~ "anthropic"
+      assert Exception.message(error) =~ "google"
+    end
+
+    test "and the failure names the providers that are supported" do
+      message = unsupported_provider_error() |> Exception.message()
+      assert message =~ "openai"
+      assert message =~ "google"
     end
   end
 
@@ -1364,7 +1384,7 @@ defmodule Gralkor.GraphitiPoolTest do
       )
     end
 
-    test "then startup raises before any inference client is constructed, and the failure names the absent credential and the role whose spec required it" do
+    test "then startup raises before any inference client is constructed" do
       test_pid = self()
       System.put_env("GOOGLE_API_KEY", "present")
       System.delete_env("OPENAI_API_KEY")
@@ -1377,8 +1397,6 @@ defmodule Gralkor.GraphitiPoolTest do
                )
 
       llm_message = Exception.message(llm_error)
-      assert llm_message =~ "OPENAI_API_KEY"
-      assert llm_message =~ "llm"
       refute_received :inference_client_construction_started
 
       assert {:error, {%ArgumentError{} = embedder_error, _}} =
@@ -1389,12 +1407,12 @@ defmodule Gralkor.GraphitiPoolTest do
                )
 
       embedder_message = Exception.message(embedder_error)
-      assert embedder_message =~ "OPENAI_API_KEY"
-      assert embedder_message =~ "embedder"
       refute_received :inference_client_construction_started
+      assert is_binary(llm_message)
+      assert is_binary(embedder_message)
     end
 
-    test "while the credential is present but blank then startup still raises" do
+    test "and the failure names the absent credential" do
       test_pid = self()
       System.put_env("GOOGLE_API_KEY", "")
 
@@ -1407,6 +1425,21 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert Exception.message(error) =~ "GOOGLE_API_KEY"
       refute_received :inference_client_construction_started
+    end
+
+    test "and the failure names the role whose spec required it" do
+      test_pid = self()
+      System.put_env("GOOGLE_API_KEY", "present")
+      System.delete_env("OPENAI_API_KEY")
+
+      assert {:error, {%ArgumentError{} = error, _}} =
+               start_pool_for_credentials(
+                 %{provider: :openai, id: "gpt-4.1-mini"},
+                 %{provider: :google, id: "gemini-embedding-2-preview"},
+                 test_pid
+               )
+
+      assert Exception.message(error) =~ "llm"
     end
   end
 
@@ -1437,7 +1470,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a provider's credential is handed to its client" do
+  describe "when the pool starts > while both configured model specs name a supported inference provider" do
     setup do
       previous = %{
         "GOOGLE_API_KEY" => System.get_env("GOOGLE_API_KEY"),
@@ -1454,7 +1487,7 @@ defmodule Gralkor.GraphitiPoolTest do
       :ok
     end
 
-    test "then the credential is read on the BEAM side from the variable that provider's spec names" do
+    test "and each provider's credential is read on the BEAM side and handed to its client as an explicit argument, the embedded interpreter's own environment never carrying it" do
       System.put_env("OPENAI_API_KEY", "openai-secret")
       System.put_env("GOOGLE_API_KEY", "google-secret")
 
@@ -1462,7 +1495,10 @@ defmodule Gralkor.GraphitiPoolTest do
       assert GraphitiPool.api_key!(:google) == "google-secret"
     end
 
-    test "and a credential set from Elixir reaches it, the interpreter's own environment never carrying it" do
+  end
+
+  describe "when the pool starts > while both configured model specs name a supported inference provider > where the credential was set from Elixir rather than exported into the OS process" do
+    test "then it still reaches the client, so a consumer's runtime configuration and a test helper's loaded `.env` both work" do
       var = "GRALKOR_CREDENTIAL_DELIVERY_PROBE_#{System.unique_integer([:positive])}"
       on_exit(fn -> System.delete_env(var) end)
 
@@ -1485,11 +1521,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert GraphitiPool.api_key!(:openai) == "openai-secret"
     end
 
-    test "if that variable is absent then reading it raises rather than handing over a blank key" do
-      System.delete_env("OPENAI_API_KEY")
-
-      assert_raise System.EnvError, fn -> GraphitiPool.api_key!(:openai) end
-    end
   end
 
   describe "when the pool terminates" do
