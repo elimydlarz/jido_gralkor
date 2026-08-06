@@ -16,4 +16,12 @@ test("when a maintainer asks Mix to run the complete test suite", async (context
       assert.match(stdout, /test --include functional --include journey/);
     },
   );
+
+  await context.test("and the publish-skill contract runs after ExUnit succeeds", async () => {
+    const { stdout } = await run("mix", ["help", "test.all"], { cwd: projectRoot });
+    const exUnit = stdout.indexOf("test --include functional --include journey");
+    const node = stdout.indexOf("cmd node --test");
+
+    assert.ok(node > exUnit);
+  });
 });
