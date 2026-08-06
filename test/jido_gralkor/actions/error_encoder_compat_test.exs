@@ -35,21 +35,21 @@ defmodule JidoGralkor.Actions.ErrorEncoderCompatTest do
     "Gralkor server unreachable"
   ]
 
-  describe "when any error reason our actions can return is normalised into a tool-error envelope" do
-    test "then the envelope encodes to JSON without raising, so the agent server survives the failure" do
+  describe "when an action error is normalised into a tool-error envelope" do
+    test "then the envelope encodes to JSON without raising" do
       for reason <- @reasons do
         envelope = normalise(reason)
         assert is_binary(Jason.encode!(%{ok: false, error: envelope}))
       end
     end
 
-    test "and the envelope's details never hold a struct, which JSON encoding cannot serialise" do
+    test "and its details hold no struct" do
       for reason <- @reasons do
         refute is_struct(normalise(reason)[:details])
       end
     end
 
-    test "and the guarantee holds for every reason shape our actions produce, including recall deadlines, Python exception tuples, timeouts, bare atoms, and plain strings" do
+    test "and every produced reason shape is covered" do
       assert Enum.count(@reasons) == 5
       assert Enum.all?(@reasons, &(normalise(&1) |> is_map()))
     end
