@@ -92,8 +92,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when inference is needed to extract entities and edges from an episode, to embed a search query, or to rerank search candidates" do
-    test "then the call is issued by the graph library's own provider client rather than by the BEAM-side LLM client" do
+  describe "when the graph library needs inference" do
+    test "then its own provider client issues the call" do
       {g, _} =
         Pythonx.eval(
           """
@@ -1369,7 +1369,7 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when the pool starts > while both configured model specs name a supported inference provider > while the embedder spec names Google" do
-    test "then the embedder is constructed to send one input per request, so a batched call cannot receive fewer embeddings than it sent inputs" do
+    test "then the embedder sends one input per request" do
       spec =
         GraphitiPool.shared_client_spec(
           %{provider: :google, id: "gemini-3.1-flash-lite"},
@@ -1559,7 +1559,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when the pool starts > while both configured model specs name a supported inference provider > where the credential was set from Elixir rather than exported into the OS process" do
+  describe "when the pool starts > while both configured model specs name a supported inference provider > where the credential exists only in the BEAM environment" do
     test "then the credential still reaches the provider client" do
       var = "GRALKOR_CREDENTIAL_DELIVERY_PROBE_#{System.unique_integer([:positive])}"
       on_exit(fn -> System.delete_env(var) end)
@@ -1968,7 +1968,7 @@ defmodule Gralkor.GraphitiPoolTest do
   describe "when an episode is added > while the write asks for the built-in Learning entity type" do
     @describetag :integration
 
-    test "then it is merged onto whatever entity types the supplied ontology declares, so a learning is extracted whether or not a consumer configured an ontology" do
+    test "then Learning is merged into the effective entity types even without a supplied ontology" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 

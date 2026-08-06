@@ -1,7 +1,7 @@
 Unit: graphiti-pool (src: lib/gralkor/graphiti_pool.ex; integration: test/gralkor/graphiti_pool_test.exs; unit: test/gralkor/graphiti_pool_test.exs)
 
-when inference is needed to extract entities and edges from an episode, to embed a search query, or to rerank search candidates
-  then the call is issued by the graph library's own provider client rather than by the BEAM-side LLM client
+when the graph library needs inference
+  then its own provider client issues the call
 
 when the pool starts
   then the shared asyncio runtime is installed, so the pool can be started on its own
@@ -12,10 +12,10 @@ when the pool starts
     and the embedder is built for the provider the embedder spec names
     and the cross-encoder is built for the provider the LLM spec names
     and each provider credential is passed explicitly from the BEAM side
-      where the credential was set from Elixir rather than exported into the OS process
+      where the credential exists only in the BEAM environment
         then the credential still reaches the provider client
     while the embedder spec names Google
-      then the embedder is constructed to send one input per request, so a batched call cannot receive fewer embeddings than it sent inputs
+      then the embedder sends one input per request
     while the two specs name different providers
       then each client is still built for its own role's provider
       and startup completes
@@ -80,7 +80,7 @@ when an episode is added
   while an episode identifier is supplied
     then that identifier is forwarded to the graph library, so re-adding under it updates the episode by re-extraction
   while the write asks for the built-in Learning entity type
-    then it is merged onto whatever entity types the supplied ontology declares, so a learning is extracted whether or not a consumer configured an ontology
+    then Learning is merged into the effective entity types even without a supplied ontology
     and the merged translation is cached separately from the same ontology's unmerged translation
 
 if adding an episode raises inside the graph library
