@@ -258,7 +258,7 @@ defmodule Gralkor.InterpretTest do
       assert ctx |> String.split("User:") |> length() == 2
     end
 
-    test "assembles context as 'Conversation context:\\n{messages}\\n\\nRequest to answer:\\n{query}\\n\\nMemory facts to interpret:\\n{facts}'" do
+    test "and the context reads \"Conversation context:\\n{messages}\\n\\nRequest to answer:\\n{query}\\n\\nMemory facts to interpret:\\n{facts}\"" do
       ctx =
         Interpret.build_interpretation_context(
           [Message.new("user", "q")],
