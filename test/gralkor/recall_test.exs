@@ -174,8 +174,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > request shape > max_results" do
-    test "when called with max_results, that value is forwarded to search" do
+  describe "when a maximum result count is supplied" do
+    test "then that count is forwarded to the main search" do
       ref = make_ref()
       test_pid = self()
 
@@ -195,8 +195,10 @@ defmodule Gralkor.RecallTest do
 
       assert_receive {^ref, 5}
     end
+  end
 
-    test "when called without max_results, the default 10 is applied" do
+  describe "when no maximum result count is supplied" do
+    test "then the main search receives the default count of ten" do
       ref = make_ref()
       test_pid = self()
 
@@ -211,8 +213,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > request shape > output_token_budget" do
-    test "when called with an output_token_budget option, it is forwarded to Gralkor.Interpret.interpret_facts" do
+  describe "when an output token budget is supplied" do
+    test "then that budget is forwarded to interpretation" do
       ref = make_ref()
       test_pid = self()
 
@@ -236,8 +238,10 @@ defmodule Gralkor.RecallTest do
 
       assert_receive {^ref, 4321}
     end
+  end
 
-    test "when called without an output_token_budget option, Gralkor.Interpret.interpret_facts applies its default (2000)" do
+  describe "when no output token budget is supplied" do
+    test "then interpretation receives its default budget of two thousand" do
       ref = make_ref()
       test_pid = self()
 
