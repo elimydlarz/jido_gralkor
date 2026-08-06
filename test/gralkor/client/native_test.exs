@@ -387,38 +387,54 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "ex-flush > when called with a session_id with buffered turns" do
+  describe "when a session holding buffered turns is flushed" do
     setup :start_capture_buffer
 
-    test "the buffered turns are scheduled for flush and :ok is returned" do
+    test "then those turns are scheduled for flush" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert :ok = Native.flush("s1")
       assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
     end
+
+    test "and success is returned before that flush completes" do
+      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      assert :ok = Native.flush("s1")
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
+    end
   end
 
-  describe "ex-flush > when called with a session_id with no buffered turns" do
+  describe "when a session holding no buffered turns is flushed" do
     setup :start_capture_buffer
 
-    test ":ok is returned and no work is scheduled" do
+    test "then success is returned" do
+      assert :ok = Native.flush("nope")
+    end
+
+    test "and no flush work is scheduled" do
       assert :ok = Native.flush("nope")
       refute_receive {:flushed, _, _, _, _, _}, 100
     end
   end
 
-  describe "ex-flush-and-await > when called with a session_id with buffered turns and a positive timeout_ms" do
+  describe "when a session holding buffered turns is flushed and awaited with a positive timeout > while the flush completes inside the timeout" do
     setup :start_capture_buffer
 
-    test ":ok is returned when the flush completes within the timeout" do
+    test "then success is returned" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert :ok = Native.flush_and_await("s1", 1_000)
       assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
     end
+
+    test "and a recall for the bound group made immediately afterwards surfaces the just-flushed turns" do
+      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      assert :ok = Native.flush_and_await("s1", 1_000)
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "x"}]]}
+    end
   end
 
-  describe "ex-flush-and-await > when the flush does not finish inside the timeout" do
+  describe "when a session holding buffered turns is flushed and awaited with a positive timeout > while the flush does not complete inside the timeout" do
     setup do
       test_pid = self()
 
@@ -432,7 +448,14 @@ defmodule Gralkor.Client.NativeTest do
       :ok
     end
 
-    test "a timeout error is returned and the buffered turns remain available to flush later" do
+    test "then a timeout error is returned" do
+      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+
+      assert {:error, :timeout} = Native.flush_and_await("s1", 50)
+      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
+    end
+
+    test "and the buffered turns remain available to flush on a later call" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, :timeout} = Native.flush_and_await("s1", 50)
@@ -443,7 +466,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "ex-flush-and-await > when the backend fails before the timeout elapses" do
+  describe "when a session holding buffered turns is flushed and awaited with a positive timeout > if the backend fails before the timeout elapses" do
     setup do
       start_supervised!(
         {CaptureBuffer,
@@ -453,17 +476,17 @@ defmodule Gralkor.Client.NativeTest do
       :ok
     end
 
-    test "that failure is returned unchanged" do
+    test "then that failure is returned unchanged" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, :capture_client_4xx} = Native.flush_and_await("s1", 1_000)
     end
   end
 
-  describe "ex-flush-and-await > when called with a session_id with no buffered turns" do
+  describe "when a session holding no buffered turns is flushed and awaited" do
     setup :start_capture_buffer
 
-    test ":ok is returned" do
+    test "then success is returned" do
       assert :ok = Native.flush_and_await("nope", 1_000)
     end
   end
