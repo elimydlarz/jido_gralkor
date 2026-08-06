@@ -372,4 +372,130 @@ defmodule Gralkor.Client.NativeTest do
       assert :ok = Native.flush_and_await("nope", 1_000)
     end
   end
+
+  # The adapter's search wiring is private, so the only way to exercise it is
+  # through the public calls the plugin makes. A wrong call does not raise here —
+  # Recall.await_aux swallows an auxiliary search's exit and logs it — so each
+  # test below asserts both the absence of that log and what the graph was
+  # actually asked for.
+  describe "ex-client-native > when a recall runs through the adapter's own search wiring" do
+    @describetag :integration
+
+    setup do
+      {g, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+
+          class _Episode:
+              def __init__(self, content):
+                  self.content = content
+                  self.source_description = "generalisation"
+
+          class _Results:
+              def __init__(self, episodes=None):
+                  self.nodes = []
+                  self.episodes = episodes or []
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded = {}
+
+              # the main recall search uses edge search
+              async def search(self, query, num_results=10, search_filter=None):
+                  return []
+
+              # the generalisation and learning searches use NODE search, and
+              # reading generalisations back uses EPISODE search — both arrive
+              # here as g.search_, so every call is recorded by what it asked for
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  if config is not None and config.episode_config is not None:
+                      self.recorded.setdefault('episode_calls', []).append(
+                          [m.value for m in config.episode_config.search_methods]
+                      )
+                      return _Results(episodes=[
+                          _Episode('GEN|v1|{"id":"gen-1","level":0,"confidence":0.8,"generalises":[]}\\nEli prefers dark mode'),
+                      ])
+
+                  self.recorded.setdefault('node_label_calls', []).append(
+                      list(search_filter.node_labels)
+                      if search_filter is not None and search_filter.node_labels
+                      else []
+                  )
+                  return _Results()
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      {:ok, pid} =
+        GraphitiPool.start_link(
+          name: Gralkor.GraphitiPool,
+          table: :gralkor_graphiti_instances,
+          falkordb_spec: {:embedded, "/tmp/never_used"},
+          construct_falkor_db: fn _spec -> :stub_falkor_db end,
+          construct_shared_clients: fn _llm, _embedder ->
+            %{llm_client: nil, embedder: nil, cross_encoder: nil}
+          end,
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      on_exit(fn ->
+        if Process.alive?(pid), do: GenServer.stop(pid)
+      end)
+
+      %{pid: pid, g: g}
+    end
+
+    test "then the learning search reaches the graph as a node search restricted to the node label Learning",
+         %{g: g} do
+      import ExUnit.CaptureLog
+
+      logs =
+        capture_log(fn ->
+          assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "how do I schedule X")
+        end)
+
+      # The real learning_search_fn closure (Native.learning_search_fn/0) called
+      # GraphitiPool.search_nodes and returned without raising. If it had raised,
+      # Recall.await_aux would have logged "[gralkor] recall learning search failed".
+      refute String.contains?(logs, "learning search failed")
+
+      # And it ran as a NODE search filtered to node_labels: ["Learning"] — the
+      # fake graphiti recorded the labels of every search_ it received.
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert ["Learning"] in (rec |> Pythonx.decode())["node_label_calls"]
+    end
+
+    test "then the generalisation search reaches the graph as a node search, so a generalisation naming a single subject is returned",
+         %{g: g} do
+      import ExUnit.CaptureLog
+
+      logs =
+        capture_log(fn ->
+          assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "what does Eli prefer")
+        end)
+
+      refute String.contains?(logs, "gen search failed")
+
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert [] in (rec |> Pythonx.decode())["node_label_calls"]
+    end
+
+    test "then searching generalisations asks the graph for episodes and decodes the stored bodies",
+         %{g: g} do
+      assert {:ok, [generalisation]} = Native.search_generalisations("g", "dark mode", 5)
+
+      assert generalisation.id == "gen-1"
+      assert generalisation.content == "Eli prefers dark mode"
+      assert generalisation.level == 0
+      assert generalisation.confidence == 0.8
+
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert (rec |> Pythonx.decode())["episode_calls"] == [["bm25"]]
+    end
+  end
 end
