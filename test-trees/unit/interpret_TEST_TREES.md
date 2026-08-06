@@ -23,6 +23,7 @@ when the model returns an empty list
 if the model response is not a list of strings
   then Gralkor.InterpretParseFailed is raised as a failure distinct from an upstream error
   and no partial list is returned
+  and the raised failure carries the response that could not be parsed, so a caller can see what came back
 
 if the model call itself fails
   then a RuntimeError naming the interpret failure is raised

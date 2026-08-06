@@ -134,6 +134,18 @@ defmodule Gralkor.InterpretTest do
       end
     end
 
+    test "the raised failure carries the response that could not be parsed" do
+      interpret_fn = fn _, _ -> {:ok, %{not: "a list"}} end
+
+      error =
+        assert_raise InterpretParseFailed, fn ->
+          Interpret.interpret_facts([Message.new("user", "q")], "q", "- f", interpret_fn, "Susu")
+        end
+
+      assert error.raw_response == %{not: "a list"}
+      assert Exception.message(error) =~ ~s(%{not: "a list"})
+    end
+
     test "raises Gralkor.InterpretParseFailed when any list element is not a string" do
       interpret_fn = fn _, _ -> {:ok, ["valid", 123]} end
 

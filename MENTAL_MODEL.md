@@ -21,7 +21,7 @@ This repository is the canonical development and distribution home for Jido-firs
 - *forced recall* — the iter-1 `tool_choice` override that pins `memory_search` on the first ReAct iteration.
 - *operator* — the application identity whose local memory is isolated; it is not a Lens and does not determine global visibility.
 - *Lens* — a named ingestion and search channel with an ontology, an ingestion process, and `:operator` or `:global` scope; reserved `default` is the operator's baseline Lens and reserved `global` names the shared group.
-- *group* — where episodes are stored; graphiti's `group_id`. Every Lens resolves to one: an operator Lens to a group derived from the operator id and Lens name, every global Lens to the one shared `global` group, which is searched unfiltered by originating Lens.
+- *group* — where episodes are stored; graphiti's `group_id`, and its own FalkorDB database, so isolation between groups is physical rather than a filter applied at search time. Every Lens resolves to one: an operator Lens to a group derived from the operator id and Lens name, every global Lens to the one shared `global` group, which is searched unfiltered by originating Lens.
 - *episode* — the unit written to graphiti; an episode search reads back the body that was written, while node and edge search return what the extractor derived from it.
 - *fact* — the text of one edge an edge search returned; recall interprets facts, it does not adjudicate them.
 - *node* — one entity graphiti extracted; a custom entity type (`Learning`) is reachable by node search alone, edge search matching edges by their endpoints.
