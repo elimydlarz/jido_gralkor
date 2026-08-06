@@ -137,10 +137,12 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     end
 
     test "and an invalid Lens definition shape is identified" do
-      Application.put_env(:jido_gralkor, :lenses, [%{name: "observations"}])
+      for definition <- [%{name: "observations"}, [:not_a_keyword_entry]] do
+        Application.put_env(:jido_gralkor, :lenses, [definition])
 
-      assert_raise ArgumentError, ~r/invalid Lens definition/, fn ->
-        Client.lens!("observations")
+        assert_raise ArgumentError, ~r/invalid Lens definition/, fn ->
+          Client.lens!("observations")
+        end
       end
     end
 

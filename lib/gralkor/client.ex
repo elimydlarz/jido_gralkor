@@ -190,6 +190,10 @@ defmodule Gralkor.Client do
   end
 
   defp validate_lens!(definition) when is_list(definition) do
+    unless Keyword.keyword?(definition) do
+      raise ArgumentError, "invalid Lens definition #{inspect(definition)}"
+    end
+
     name = Keyword.get(definition, :name)
     ontology = Keyword.get(definition, :ontology)
     scope = Keyword.get(definition, :scope)
