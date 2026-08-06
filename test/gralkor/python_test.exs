@@ -64,8 +64,28 @@ defmodule Gralkor.PythonTest do
       assert :ok = Python.smoke_import_graphiti()
     end
 
+    test "and every supported provider's clients are smoke-imported before the runtime reports ready" do
+      test_pid = self()
+
+      assert {:ok, _} =
+               Python.init(
+                 reap_orphans: false,
+                 uv_init: fn -> :ok end,
+                 smoke_import: fn -> :ok end,
+                 smoke_import_provider: fn provider ->
+                   send(test_pid, {:provider_imported, provider})
+                   :ok
+                 end,
+                 install_loop: false
+               )
+
+      for provider <- Gralkor.GraphitiPool.supported_providers() do
+        assert_received {:provider_imported, ^provider}
+      end
+    end
+
     @tag :integration
-    test "and every supported provider's clients import successfully" do
+    test "and the packaged clients for every supported provider import successfully" do
       for provider <- Gralkor.GraphitiPool.supported_providers() do
         assert :ok == Python.smoke_import_provider_clients(provider)
       end

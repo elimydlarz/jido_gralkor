@@ -110,6 +110,17 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
 
       assert {:error, :unavailable} = ingest("operator-one", "Unavailable distillation.")
     end
+
+    test "and string-keyed candidate content and confidence are accepted from structured model output" do
+      Application.put_env(:jido_gralkor, :generalise_hypothesise_fn, fn _prompt ->
+        {:ok, [%{"content" => "Eli prefers Friday launches.", "confidence" => 0.9}]}
+      end)
+
+      assert :ok = ingest("operator-one", "A Friday launch was chosen.")
+
+      assert [%{content: "Eli prefers Friday launches."}] =
+               episodes({"operator-one", "generalisations"})
+    end
   end
 
   describe "where the generalising Lens is operator-local" do

@@ -304,12 +304,7 @@ defmodule Gralkor.ClientContract do
           unquote(setup_block).()
           configure_flush({:error, :flush_failed})
 
-          # fire-and-forget — the contract is that the return value is :ok
-          # before the backend has finished. The error path exists in the
-          # backend but is not surfaced here. Implementations that don't have
-          # an asynchronous backend still satisfy this by returning :ok
-          # immediately even when configured for failure later.
-          assert client().flush("session-1") in [:ok, {:error, :flush_failed}]
+          assert :ok = client().flush("session-1")
         end
       end
 

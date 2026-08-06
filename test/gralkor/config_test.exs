@@ -152,6 +152,11 @@ defmodule Gralkor.ConfigTest do
 
       refute stderr =~ "Using unverified model"
     end
+
+    test "and surrounding whitespace around the provider and model id is ignored" do
+      System.put_env("GRALKOR_LLM_MODEL", "  openai : gpt-4.1  ")
+      assert Config.llm_model() == %{provider: :openai, id: "gpt-4.1"}
+    end
   end
 
   describe "when no model override is configured for a role" do
@@ -161,12 +166,14 @@ defmodule Gralkor.ConfigTest do
     end
   end
 
-  describe "when a role's model override is configured as a blank value" do
+  describe "when a role's model override is configured as a blank value, including whitespace alone" do
     test "then the Google default model spec for that role is returned" do
-      System.put_env("GRALKOR_LLM_MODEL", "")
-      System.put_env("GRALKOR_EMBEDDER_MODEL", "")
-      assert Config.llm_model() == %{provider: :google, id: "gemini-3.1-flash-lite"}
-      assert Config.embedder_model() == %{provider: :google, id: "gemini-embedding-2-preview"}
+      for blank <- ["", "  \t  "] do
+        System.put_env("GRALKOR_LLM_MODEL", blank)
+        System.put_env("GRALKOR_EMBEDDER_MODEL", blank)
+        assert Config.llm_model() == %{provider: :google, id: "gemini-3.1-flash-lite"}
+        assert Config.embedder_model() == %{provider: :google, id: "gemini-embedding-2-preview"}
+      end
     end
   end
 
@@ -180,18 +187,22 @@ defmodule Gralkor.ConfigTest do
     end
   end
 
-  describe "if a role's model override leaves the provider or the model id blank" do
+  describe "if a role's model override leaves the provider or the model id blank after surrounding whitespace is removed" do
     test "then resolving that role's model raises, naming the environment variable and the offending value" do
-      System.put_env("GRALKOR_EMBEDDER_MODEL", ":gemini-embedding-2-preview")
+      for value <- [":gemini-embedding-2-preview", "  :gemini-embedding-2-preview"] do
+        System.put_env("GRALKOR_EMBEDDER_MODEL", value)
 
-      assert_raise ArgumentError,
-                   ~r/GRALKOR_EMBEDDER_MODEL.*:gemini-embedding-2-preview/,
-                   fn -> Config.embedder_model() end
+        assert_raise ArgumentError, ~r/GRALKOR_EMBEDDER_MODEL/, fn ->
+          Config.embedder_model()
+        end
+      end
 
-      System.put_env("GRALKOR_LLM_MODEL", "google:")
+      for value <- ["google:", "google:   "] do
+        System.put_env("GRALKOR_LLM_MODEL", value)
 
-      assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL.*google:/, fn ->
-        Config.llm_model()
+        assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL/, fn ->
+          Config.llm_model()
+        end
       end
     end
   end

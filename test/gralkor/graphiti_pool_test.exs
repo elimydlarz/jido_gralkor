@@ -1447,7 +1447,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "if the credential for a provider named by a configured model spec is absent" do
+  describe "if the credential for a provider named by a configured model spec is absent or blank" do
     setup do
       previous_trap_exit = Process.flag(:trap_exit, true)
       on_exit(fn -> Process.flag(:trap_exit, previous_trap_exit) end)
@@ -1516,17 +1516,20 @@ defmodule Gralkor.GraphitiPoolTest do
 
     test "and the failure names the absent credential" do
       test_pid = self()
-      System.put_env("GOOGLE_API_KEY", "")
 
-      assert {:error, {%ArgumentError{} = error, _}} =
-               start_pool_for_credentials(
-                 %{provider: :google, id: "gemini-3.1-flash-lite"},
-                 %{provider: :google, id: "gemini-embedding-2-preview"},
-                 test_pid
-               )
+      for blank <- ["", "  \t  "] do
+        System.put_env("GOOGLE_API_KEY", blank)
 
-      assert Exception.message(error) =~ "GOOGLE_API_KEY"
-      refute_received :inference_client_construction_started
+        assert {:error, {%ArgumentError{} = error, _}} =
+                 start_pool_for_credentials(
+                   %{provider: :google, id: "gemini-3.1-flash-lite"},
+                   %{provider: :google, id: "gemini-embedding-2-preview"},
+                   test_pid
+                 )
+
+        assert Exception.message(error) =~ "GOOGLE_API_KEY"
+        refute_received :inference_client_construction_started
+      end
     end
 
     test "and the failure names the role whose spec required it" do

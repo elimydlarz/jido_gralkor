@@ -1,8 +1,8 @@
 defmodule JidoGralkor.Actions.ErrorEncoderCompatTest do
   @moduledoc """
-  Wire contract: every `{:error, reason}` our actions are allowed to return must
-  survive `Jido.AI.Signal.Helpers.normalize_error/4` → `Jason.encode!/1` without
-  crashing the AgentServer.
+  Wire compatibility samples for action errors that must survive
+  `Jido.AI.Signal.Helpers.normalize_error/4` → `Jason.encode!/1` without crashing
+  the AgentServer.
 
   In jido_ai 2.1.0 `normalize_error`'s `%{message: …}` clause did `Map.drop`
   on the struct reason, which preserves `__struct__`; `Jason.encode!` then
@@ -10,17 +10,17 @@ defmodule JidoGralkor.Actions.ErrorEncoderCompatTest do
   on `main` (refactor commit `d60699c0`, 2026-05-21) by reordering clauses
   and routing `Jido.Action.Error.*` through `Jido.Error.to_map/1`. Until the
   fix is published and pinned (last release: v2.1.0), this test pins our
-  side of the contract — every `{:error, reason}` shape any of our actions
-  can produce must encode cleanly. Plan to simplify or delete once jido_ai
-  > 2.1.0 ships and we bump.
+  side of the contract through five explicit representative fixtures. This is
+  not an exhaustive algebra of every term a configured client may return.
+  Plan to simplify or delete once jido_ai > 2.1.0 ships and we bump.
   """
 
   use ExUnit.Case, async: true
 
   alias Jido.AI.Signal.Helpers, as: SignalHelpers
 
-  # Every error reason any of `JidoGralkor.Actions.*` can produce today.
-  # If you add a new error path, append it here.
+  # Explicit compatibility fixtures, not an exhaustive list of every term a
+  # configured client can return.
   @reasons [
     # Gralkor.Recall.recall/5
     :recall_deadline_expired,
@@ -49,7 +49,7 @@ defmodule JidoGralkor.Actions.ErrorEncoderCompatTest do
       end
     end
 
-    test "and every produced reason shape is covered" do
+    test "and all five explicitly listed compatibility fixtures normalise to maps" do
       assert Enum.count(@reasons) == 5
       assert Enum.all?(@reasons, &(normalise(&1) |> is_map()))
     end
