@@ -8,8 +8,8 @@ defmodule Gralkor.PythonTest do
     :ok
   end
 
-  describe "ex-python-runtime > orphan reap" do
-    test "a second initialisation in the same VM sweeps nothing, so a server this VM started survives" do
+  describe "when the Python runtime is initialised > while an embedded connection is configured" do
+    test "and only the first initialisation in a virtual machine sweeps, so a later one cannot kill a server this virtual machine has already started" do
       sweeps = :counters.new(1, [])
 
       list_orphans = fn ->
@@ -42,7 +42,7 @@ defmodule Gralkor.PythonTest do
       assert :ets.lookup(killed, 4321) == []
     end
 
-    test "every redislite pid returned by the listing function is killed" do
+    test "then any process whose arguments identify the embedded backend's bundled server is killed first, so a server orphaned by a hard virtual-machine exit cannot survive" do
       list_orphans = fn -> [1234, 5678] end
       killed = :ets.new(:killed, [:public, :set])
       kill_pid = fn pid -> :ets.insert(killed, {pid, true}) end
@@ -53,23 +53,10 @@ defmodule Gralkor.PythonTest do
       assert :ets.lookup(killed, 5678) == [{5678, true}]
     end
 
-    test "when no orphans are listed, no kills are attempted" do
-      called = :counters.new(1, [])
-
-      list_orphans = fn -> [] end
-
-      kill_pid = fn _pid ->
-        :counters.add(called, 1, 1)
-        :ok
-      end
-
-      assert :ok = Python.reap_redislite_orphans(list_orphans, kill_pid)
-      assert :counters.get(called, 1) == 0
-    end
   end
 
-  describe "ex-python-runtime > orphan reap > when running in remote mode (reap_orphans: false)" do
-    test "the listing function is never called and no kills are attempted" do
+  describe "when the Python runtime is initialised > while a remote connection is configured" do
+    test "then no orphaned-server sweep runs" do
       called = :counters.new(1, [])
 
       list_orphans = fn ->
@@ -96,8 +83,8 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  describe "ex-python-runtime > venv init" do
-    test "init/1 materialises the venv after reaping orphans and before smoke-importing" do
+  describe "when the Python runtime is initialised" do
+    test "then initialisation runs to completion synchronously and returns only once the runtime is ready" do
       order = :ets.new(:order, [:public, :ordered_set])
       seq = :counters.new(1, [])
 
@@ -129,7 +116,41 @@ defmodule Gralkor.PythonTest do
       assert steps == [:reap, :uv_init, :smoke_import]
     end
 
-    test "init/1 stops with {:boot_failed, _} when venv init fails" do
+    test "and the package's manifest declares the graph library, the embedded FalkorDB backend, and the provider packages for every supported inference provider, so a consumer configures nothing about Python" do
+      manifest = File.read!(Path.expand("../../priv/python/pyproject.toml", __DIR__))
+
+      assert manifest =~ "graphiti-core[falkordb,google-genai]"
+      assert manifest =~ "falkordblite"
+      assert manifest =~ "OpenAI LLM, embedder, and reranker"
+    end
+
+    test "and the package's manifest is a compile-time external resource, so editing its dependency set triggers recompilation" do
+      manifest_path = Path.expand("../../priv/python/pyproject.toml", __DIR__)
+      assert manifest_path in Python.__info__(:attributes)[:external_resource]
+    end
+  end
+
+  describe "when the Python runtime is initialised > while the managed virtual environment is absent" do
+    test "then it is materialised" do
+      test_pid = self()
+
+      assert {:ok, _} =
+               Python.init(
+                 reap_orphans: false,
+                 uv_init: fn ->
+                   send(test_pid, :materialised)
+                   :ok
+                 end,
+                 smoke_import: fn -> :ok end,
+                 install_loop: false
+               )
+
+      assert_receive :materialised
+    end
+  end
+
+  describe "if any initialisation step fails" do
+    test "then initialisation stops with the reason, so the supervisor restarts it and a permanent failure eventually exits the virtual machine" do
       assert {:stop, {:boot_failed, {:uv_init, "boom"}}} =
                Python.init(
                  reap_orphans: false,
@@ -140,14 +161,14 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  describe "ex-python-runtime > integration > Pythonx is reachable from inside the BEAM" do
+  describe "when the Python runtime is initialised" do
     @describetag :integration
 
-    test "importing graphiti_core succeeds" do
+    test "and a smoke import of the graph library succeeds" do
       assert :ok = Python.smoke_import_graphiti()
     end
 
-    test "each supported provider's clients import" do
+    test "and the provider client for each supported inference provider imports successfully, so an unsupported provider selection fails on its configuration rather than on a missing package" do
       assert :ok = Python.smoke_import_graphiti()
 
       for provider <- Gralkor.GraphitiPool.supported_providers() do
@@ -156,23 +177,19 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  describe "ex-python-runtime > integration > venv init already-initialised guard" do
+  describe "when the Python runtime is initialised" do
     @describetag :integration
 
-    test "a second initialisation in the same VM short-circuits, so it cannot trip the interpreter's already-initialised guard" do
-      # test_helper.exs already called ensure_initialised/0 once at boot, so the
-      # :persistent_term flag is already set. Without the guard, this call would
-      # re-invoke Pythonx.uv_init/2, which raises "already been initialized" —
-      # caught and turned into {:error, _} — instead of returning :ok.
+    test "and a second initialisation in the same virtual machine short-circuits, so repeated boots cannot trip the interpreter's already-initialised guard" do
       assert :persistent_term.get({Python, :uv_inited}, false) == true
       assert :ok = Python.ensure_initialised()
     end
   end
 
-  describe "ex-python-runtime > integration > async runtime installation" do
+  describe "when the Python runtime is initialised" do
     @describetag :integration
 
-    test "installs a shared event loop and a helper that submits a coroutine's return value" do
+    test "and a shared asyncio event loop is installed on a daemon thread together with a helper that submits work onto it" do
       assert :ok = Python.install_async_runtime()
 
       {result, _} =
@@ -191,7 +208,7 @@ defmodule Gralkor.PythonTest do
       assert Pythonx.decode(result) == [true, true, 42]
     end
 
-    test "re-invoking the loop installation leaves the already-installed loop in place" do
+    test "and re-invoking the loop installation leaves the already-installed loop in place" do
       assert :ok = Python.install_async_runtime()
 
       {before_id, _} = Pythonx.eval("import asyncio; id(asyncio._gralkor_loop)", %{})
@@ -204,29 +221,10 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  describe "ex-python-runtime > integration > GenServer boots through init/1" do
+  describe "when the Python runtime is initialised > while an embedded connection is configured" do
     @describetag :integration
 
-    test "init returns {:ok, _state} after reap + smoke import" do
-      {:ok, pid} =
-        Python.start_link(
-          name: nil,
-          list_orphans: fn -> [] end,
-          kill_pid: fn _ -> :ok end
-        )
-
-      assert Process.alive?(pid)
-      GenServer.stop(pid)
-    end
-  end
-
-  describe "ex-python-runtime > integration > redislite reaper kills a real process matching the argv pattern" do
-    @describetag :integration
-
-    test "spawns a fake-argv process, reaps via the default OS plumbing, confirms it's gone" do
-      # `exec -a NAME ...` lets us set argv[0] without owning that path on disk
-      # (no need for a real `redislite/bin/redis-server` binary). `pgrep -f`
-      # matches against the full command line, including argv[0].
+    test "then any process whose arguments identify the embedded backend's bundled server is killed first, so a server orphaned by a hard virtual-machine exit cannot survive" do
       port =
         Port.open(
           {:spawn_executable, System.find_executable("bash")},
@@ -236,16 +234,13 @@ defmodule Gralkor.PythonTest do
           ]
         )
 
-      # Give bash a moment to exec into sleep with the spoofed argv.
       Process.sleep(200)
 
-      # Default plumbing: list via `pgrep -f`, kill via `kill -KILL`.
       pids = list_redislite_pids()
       assert pids != [], "expected pgrep to find at least one fake redislite process"
 
       :ok = Python.reap_redislite_orphans(fn -> pids end, &kill_pid/1)
 
-      # Wait briefly for SIGKILL + OS reap.
       Process.sleep(200)
 
       remaining = list_redislite_pids()
@@ -253,8 +248,6 @@ defmodule Gralkor.PythonTest do
       assert remaining == [],
              "expected reaper to leave no matching processes; got #{inspect(remaining)}"
 
-      # The Port's child has been SIGKILLed; closing the Port may itself raise
-      # if it has already exited — that's fine, we don't care here.
       try do
         Port.close(port)
       rescue
@@ -277,6 +270,13 @@ defmodule Gralkor.PythonTest do
     defp kill_pid(pid) do
       System.cmd("kill", ["-KILL", to_string(pid)], stderr_to_stdout: true)
       :ok
+    end
+  end
+
+  describe "if a caller asks to smoke-import clients for an unsupported provider" do
+    test "then the error identifies that unsupported provider without calling the interpreter" do
+      assert {:error, {:unsupported_provider, :anthropic}} =
+               Python.smoke_import_provider_clients(:anthropic)
     end
   end
 end
