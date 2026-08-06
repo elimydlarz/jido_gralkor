@@ -6,6 +6,7 @@ defmodule Gralkor.Client.NativeTest do
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Client.Native
+  alias Gralkor.GraphitiPool
   alias Gralkor.Message
 
   defp start_capture_buffer(_ctx) do
