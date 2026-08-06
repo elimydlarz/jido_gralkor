@@ -33,7 +33,8 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
     :ok
   end
 
-  test "returns immediately without waiting on the client" do
+  describe "when the memory add tool runs with content and a source description" do
+    test "then it returns an acknowledgement immediately, without waiting on the write" do
     InMemory.set_memory_add(:ok)
 
     assert {:ok, %{result: "Ingesting."}} =
@@ -41,22 +42,24 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                %{content: "Eli prefers tea", source_description: "user preference"},
                %{agent_id: "01USER"}
              )
+    end
+
+    test "and the write is carried out in the background under the operator's sanitised group id, carrying the content and source description as given" do
+      InMemory.set_memory_add(:ok)
+
+      MemoryAdd.run(
+        %{content: "reflection", source_description: "agent thought"},
+        %{agent_id: "user-id"}
+      )
+
+      assert eventually(fn ->
+               InMemory.adds() == [["user_id", "reflection", "agent thought"]]
+             end)
+    end
   end
 
-  test "spawns a background Task that calls the client with sanitized group_id, content, and source_description" do
-    InMemory.set_memory_add(:ok)
-
-    MemoryAdd.run(
-      %{content: "reflection", source_description: "agent thought"},
-      %{agent_id: "user-id"}
-    )
-
-    assert eventually(fn ->
-             InMemory.adds() == [["user_id", "reflection", "agent thought"]]
-           end)
-  end
-
-  test "when context selects a Lens then Gralkor.Client.ingest/1 is called in a background Task with the operator, Lens, content, and source description" do
+  describe "when the memory add tool runs with content and a source description > where the tool context selects a Lens" do
+    test "then the background write is routed to that Lens's ingestion for the operator, carrying the content and source description" do
     Process.register(self(), :memory_add_lens_test)
 
     Application.put_env(:jido_gralkor, :lenses, [
@@ -81,9 +84,11 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                       content: "We chose Friday.",
                       source_description: "agent decision"
                     }, %{lens: %{name: "decisions"}}}
+    end
   end
 
-  test "if the background Task's client call fails, the failure is logged" do
+  describe "when the memory add tool runs with content and a source description > if the background write fails" do
+    test "then the failure is logged" do
     InMemory.set_memory_add({:error, :boom})
 
     log =
@@ -98,12 +103,22 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                  InMemory.adds() == [["01USER", "something", "agent thought"]]
                end)
 
-        # Give Logger.error time to flush after the Task's client call.
         Process.sleep(50)
       end)
 
     assert log =~ "[gralkor] memory_add failed"
     assert log =~ ":boom"
+    end
+
+    test "and the caller's acknowledgement is unaffected" do
+      InMemory.set_memory_add({:error, :boom})
+
+      assert {:ok, %{result: "Ingesting."}} =
+               MemoryAdd.run(
+                 %{content: "something", source_description: "agent thought"},
+                 %{agent_id: "01USER"}
+               )
+    end
   end
 
   defp eventually(fun, timeout_ms \\ 500, interval_ms \\ 10) do

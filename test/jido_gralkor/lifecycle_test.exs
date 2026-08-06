@@ -33,13 +33,13 @@ defmodule JidoGralkor.LifecycleTest do
     end
   end
 
-  test "then implements `Jido.AgentServer.Lifecycle` so the AgentServer calls `terminate/2` on graceful stop" do
-    assert Code.ensure_loaded?(Lifecycle)
-    behaviours = Lifecycle.module_info(:attributes)[:behaviour] || []
-    assert Jido.AgentServer.Lifecycle in behaviours
-  end
-
   describe "when a consumer wires the module as an agent server's lifecycle" do
+    test "then it declares the Jido agent-server lifecycle behaviour, so the agent server calls terminate on graceful stop" do
+      assert Code.ensure_loaded?(Lifecycle)
+      behaviours = Lifecycle.module_info(:attributes)[:behaviour] || []
+      assert Jido.AgentServer.Lifecycle in behaviours
+    end
+
     test "and initialisation hands back the agent server's state unchanged, so wiring it in alters nothing about the agent" do
       s = state(%{__thread__: %{id: "thread-init"}, other: :data})
 
@@ -55,8 +55,8 @@ defmodule JidoGralkor.LifecycleTest do
     end
   end
 
-  describe "when the AgentServer terminates with a committed thread" do
-    test "then `Gralkor.Client.flush(thread_id)` is invoked without blocking termination" do
+  describe "when the agent server terminates > while a thread is committed to agent state" do
+    test "then that thread's buffered memory is flushed without blocking termination" do
       InMemory.set_flush(:ok)
       thread_id = "thread-term"
 
@@ -85,8 +85,8 @@ defmodule JidoGralkor.LifecycleTest do
     end
   end
 
-  describe "when the AgentServer terminates with a committed thread, if the background flush call fails" do
-    test "then the failure is logged and termination is unaffected" do
+  describe "when the agent server terminates > while a thread is committed to agent state > if the flush call fails" do
+    test "then the failure is logged" do
       InMemory.set_flush({:error, :boom})
       thread_id = "thread-fail"
 
@@ -102,10 +102,17 @@ defmodule JidoGralkor.LifecycleTest do
       assert log =~ "[gralkor] flush failed"
       assert log =~ ":boom"
     end
+
+    test "and termination completes normally regardless" do
+      InMemory.set_flush({:error, :boom})
+      s = state(%{__thread__: %{id: "thread-fail"}})
+
+      assert :ok = Lifecycle.terminate(:normal, s)
+    end
   end
 
-  describe "when the AgentServer terminates without a committed thread" do
-    test "then Gralkor is not called" do
+  describe "when the agent server terminates > while no thread is committed to agent state" do
+    test "then no flush is requested at all" do
       s = state(%{})
 
       assert :ok = Lifecycle.terminate(:normal, s)

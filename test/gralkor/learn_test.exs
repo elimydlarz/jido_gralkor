@@ -16,50 +16,64 @@ defmodule Gralkor.LearnTest do
 
   defp ok_learn(record), do: fn _prompt -> {:ok, record} end
 
-  describe "ex-learn > validation" do
-    test "raises when agent_name is blank" do
+  describe "when one reasoning turn is learned from > if the agent name is missing or blank" do
+    test "then an argument error is raised" do
       assert_raise ArgumentError, fn ->
         Learn.learn(turn(), ok_learn(%{}), "  ", "Eli")
       end
     end
 
-    test "raises when user_name is blank" do
+  end
+
+  describe "when one reasoning turn is learned from > if the user name is missing or blank" do
+    test "then an argument error is raised, because the lesson names the human and a generic label corrupts the record" do
       assert_raise ArgumentError, fn ->
         Learn.learn(turn(), ok_learn(%{}), "Susu", "")
       end
     end
   end
 
-  describe "ex-learn > request shape" do
-    test "learn_fn receives a prompt rendering the turn with role labels" do
-      capture = fn prompt ->
-        send(self(), {:prompt, prompt})
-        {:ok, %{problem_kind: "k", approach: "a", success: true, lesson: "l"}}
-      end
+  describe "when one reasoning turn is learned from" do
+    test "then the injected learning caller is asked exactly once, that single call producing the whole record" do
+      assert {:ok, %AgentLearning{}} =
+               Learn.learn(
+                 turn(),
+                 fn _prompt ->
+                   send(self(), :called)
+                   {:ok, %{problem_kind: "k", approach: "a", success: true, lesson: "l"}}
+                 end,
+                 "Susu",
+                 "Eli"
+               )
 
-      Learn.learn(turn(), capture, "Susu", "Eli")
+      assert_received :called
+      refute_received :called
+    end
 
-      assert_received {:prompt, prompt}
+    test "and the prompt renders each user message as \"{user_name}: {content}\"" do
+      prompt = captured_prompt()
       assert prompt =~ "Eli: the deploy keeps timing out"
-      assert prompt =~ "Susu: (behaviour: thought: the health check waits on a cold cache)"
-      assert prompt =~ "Susu: (behaviour: tool inspect_logs → cache miss on first request)"
+    end
+
+    test "and the prompt renders each assistant message as \"{agent_name}: {content}\"" do
+      prompt = captured_prompt()
       assert prompt =~ "Susu: I warmed the cache at boot"
     end
 
-    test "the prompt asks what was learned that enabled solving the problem" do
-      capture = fn prompt ->
-        send(self(), {:prompt, prompt})
-        {:ok, %{problem_kind: "k", approach: "a", success: true, lesson: "l"}}
-      end
+    test "and the prompt renders each behaviour message as \"{agent_name}: (behaviour: {content})\"" do
+      prompt = captured_prompt()
+      assert prompt =~ "Susu: (behaviour: thought: the health check waits on a cold cache)"
+      assert prompt =~ "Susu: (behaviour: tool inspect_logs → cache miss on first request)"
+    end
 
-      Learn.learn(turn(), capture, "Susu", "Eli")
-      assert_received {:prompt, prompt}
+    test "and the prompt asks what was learned that enabled solving the problem" do
+      prompt = captured_prompt()
       assert prompt =~ "learn"
     end
   end
 
-  describe "ex-learn > result" do
-    test "builds an AgentLearning from atom-keyed learn_fn output" do
+  describe "when one reasoning turn is learned from > while the learning caller returns an atom-keyed record" do
+    test "then a learning record carrying the problem kind, the approach, the success flag, and the lesson is returned" do
       record = %{
         problem_kind: "deploy timeout",
         approach: "warm cache at boot",
@@ -75,8 +89,10 @@ defmodule Gralkor.LearnTest do
       assert learning.success == true
       assert learning.lesson == "cold caches fail the first health check"
     end
+  end
 
-    test "normalises string-keyed learn_fn output and coerces success to boolean" do
+  describe "when one reasoning turn is learned from > while the learning caller returns a string-keyed record" do
+    setup do
       record = %{
         "problem_kind" => "deploy timeout",
         "approach" => "warm cache at boot",
@@ -84,39 +100,76 @@ defmodule Gralkor.LearnTest do
         "lesson" => "cold caches fail the first health check"
       }
 
-      assert {:ok, %AgentLearning{} = learning} =
-               Learn.learn(turn(), ok_learn(record), "Susu", "Eli")
+      {:ok, learning} = Learn.learn(turn(), ok_learn(record), "Susu", "Eli")
+      %{learning: learning}
+    end
 
+    test "then its string keys are normalised into a learning record carrying those same four values", %{learning: learning} do
+      assert %AgentLearning{} = learning
       assert learning.problem_kind == "deploy timeout"
       assert learning.approach == "warm cache at boot"
-      assert learning.success == false
       assert learning.lesson == "cold caches fail the first health check"
     end
 
-    test "propagates {:error, reason} from learn_fn" do
+    test "and its success flag is a boolean", %{learning: learning} do
+      assert learning.success == false
+    end
+  end
+
+  describe "when one reasoning turn is learned from > if the learning caller returns an error" do
+    test "then that error is returned to the caller unchanged, never swallowed" do
       assert {:error, :upstream} =
                Learn.learn(turn(), fn _ -> {:error, :upstream} end, "Susu", "Eli")
     end
+  end
 
-    test "raises when learn_fn returns a shape that is neither a record nor an error" do
+  describe "when one reasoning turn is learned from > if the learning caller returns anything that is neither a record nor an error" do
+    test "then the unexpected shape raises rather than being swallowed" do
       assert_raise CaseClauseError, fn ->
         Learn.learn(turn(), fn _ -> :oops end, "Susu", "Eli")
       end
     end
   end
 
-  describe "ex-learn > learn_schema/0" do
-    test "declares required problem_kind, approach, success, lesson fields" do
+  describe "when the structured-output schema for learning is requested" do
+    test "then the problem kind is a required string" do
       schema = Learn.learn_schema()
       assert schema[:problem_kind][:type] == :string
       assert schema[:problem_kind][:required] == true
+    end
+
+    test "and the approach is a required string" do
+      schema = Learn.learn_schema()
       assert schema[:approach][:type] == :string
       assert schema[:approach][:required] == true
+    end
+
+    test "and the success flag is a required boolean" do
+      schema = Learn.learn_schema()
       assert schema[:success][:type] == :boolean
       assert schema[:success][:required] == true
+    end
+
+    test "and the lesson is a required string" do
+      schema = Learn.learn_schema()
       assert schema[:lesson][:type] == :string
       assert schema[:lesson][:required] == true
-      assert schema[:lesson][:doc] =~ "learn"
     end
+
+    test "and the lesson field instructs the model to answer what it learned that enabled it to solve the problem" do
+      assert Learn.learn_schema()[:lesson][:doc] =~ "learn"
+    end
+  end
+
+  defp captured_prompt do
+      capture = fn prompt ->
+        send(self(), {:prompt, prompt})
+        {:ok, %{problem_kind: "k", approach: "a", success: true, lesson: "l"}}
+      end
+
+      Learn.learn(turn(), capture, "Susu", "Eli")
+
+      assert_received {:prompt, prompt}
+      prompt
   end
 end
