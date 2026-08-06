@@ -699,12 +699,19 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "does not retry — would amplify load on the struggling upstream" do
+    test "does not retry — would amplify load on the struggling upstream, and a dropped-on-upstream-error line is logged at warning" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
-      :ok = CaptureBuffer.flush("s")
 
-      assert_receive {:attempt, 1}, 200
-      refute_receive {:attempt, 2}, 100
+      log =
+        capture_log(fn ->
+          :ok = CaptureBuffer.flush("s")
+
+          assert_receive {:attempt, 1}, 200
+          refute_receive {:attempt, 2}, 100
+        end)
+
+      assert log =~ "[warning]"
+      assert log =~ "[gralkor] capture dropped (upstream error)"
     end
   end
 
