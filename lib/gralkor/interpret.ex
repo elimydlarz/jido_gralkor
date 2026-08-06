@@ -150,7 +150,8 @@ defmodule Gralkor.Interpret do
       "than proven claims. Mention the source context, when available, only where natural, " <>
       "without confidence labels, truth adjudication, or repetitive uncertainty warnings. " <>
       "When retrieved memory facts conflict, return every conflicting account: never drop one and " <>
-      "never single one out as the true one, however the request is phrased."
+      "never single one out as the true one, even where the request asks which account is true, " <>
+      "verified, or correct."
   end
 
   defp raise_if_blank!(name) when is_binary(name) do
