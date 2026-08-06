@@ -49,7 +49,6 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       GenServer.stop(pool)
       File.rm_rf!(data_dir)
     end
-
   end
 
   describe "when an application starts with an embedded memory backend > when the application stops" do
