@@ -48,6 +48,8 @@ when the pool has constructed its database
 
 when the pool terminates
   then the database it held for its lifetime is closed through the shared asyncio runtime
+  while a remote connection is configured
+    then the remote database client is closed before termination completes
   while an embedded connection is configured
     then the owned embedded server exits before termination completes
     and finalising the async wrapper emits no unawaited-coroutine warning

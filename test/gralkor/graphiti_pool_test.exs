@@ -1479,6 +1479,62 @@ defmodule Gralkor.GraphitiPoolTest do
     end
 
     @tag :integration
+    test "while a remote connection is configured then the remote database client is closed before termination completes" do
+      previous_key = System.get_env("OPENAI_API_KEY")
+      System.put_env("OPENAI_API_KEY", "test-key")
+
+      {original, _} =
+        Pythonx.eval(
+          """
+          import falkordb.asyncio as falkor_asyncio
+          original = falkor_asyncio.FalkorDB
+
+          class _CloseProbe:
+              def __init__(self, **kwargs):
+                  self.closed = False
+
+              async def aclose(self):
+                  self.closed = True
+
+          falkor_asyncio.FalkorDB = _CloseProbe
+          original
+          """,
+          %{}
+        )
+
+      on_exit(fn ->
+        if previous_key,
+          do: System.put_env("OPENAI_API_KEY", previous_key),
+          else: System.delete_env("OPENAI_API_KEY")
+
+        Pythonx.eval(
+          "import falkordb.asyncio as falkor_asyncio; falkor_asyncio.FalkorDB = original",
+          %{"original" => original}
+        )
+      end)
+
+      table = :"remote_close_pool_#{System.unique_integer([:positive])}"
+
+      {:ok, pid} =
+        GraphitiPool.start_link(
+          name: nil,
+          table: table,
+          falkordb_spec: {:remote, host: "memory.example", port: 6379},
+          construct_shared_clients: fn _llm, _embedder ->
+            %{llm_client: nil, embedder: nil, cross_encoder: nil}
+          end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      database = :sys.get_state(pid).falkor_db
+      GenServer.stop(pid)
+
+      {closed, _} = Pythonx.eval("database.closed", %{"database" => database})
+      assert Pythonx.decode(closed)
+    end
+
+    @tag :integration
     test "while an embedded connection is configured then its server exits and finalisation emits no unawaited-coroutine warning" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_close_#{System.unique_integer([:positive])}")
