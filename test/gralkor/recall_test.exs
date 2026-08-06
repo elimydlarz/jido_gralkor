@@ -384,8 +384,12 @@ defmodule Gralkor.RecallTest do
         end)
 
       assert logs =~ "[gralkor] recall — session:session-1"
+      assert logs =~ "group:g"
       assert logs =~ "queryChars:10"
-      assert logs =~ "[gralkor] recall result"
+      assert logs =~ "max:10"
+      assert logs =~ "[gralkor] recall result — 1 facts"
+      assert logs =~ "blockChars:"
+      assert logs =~ "search:"
     end
 
     @tag :capture_log
