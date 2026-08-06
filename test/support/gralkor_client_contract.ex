@@ -416,6 +416,34 @@ defmodule Gralkor.ClientContract do
 
           assert {:error, :extract_failed} = client().memory_add("group-1", "x", nil)
         end
+
+        test "then the write applies the deployment-configured ontology, so a caller is never required to supply one" do
+          unquote(setup_block).()
+
+          original_ontology = Application.get_env(:jido_gralkor, :ontology)
+
+          on_exit(fn ->
+            case original_ontology do
+              nil -> Application.delete_env(:jido_gralkor, :ontology)
+              value -> Application.put_env(:jido_gralkor, :ontology, value)
+            end
+          end)
+
+          Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+          configure_memory_add(:ok)
+
+          assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual")
+
+          # memory_add/3 gives the caller no way to pass an ontology — the
+          # recorded call carries only the three arguments the caller supplied.
+          assert [["group-1", "Eli prefers concise", "manual"]] =
+                   Gralkor.Client.InMemory.adds()
+
+          # which is exactly why the write must be the one reaching for the
+          # deployment-configured ontology — the single source of truth every
+          # write path resolves it from.
+          assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
+        end
       end
 
       describe "ex-client > memory_add with an ontology override" do
@@ -438,6 +466,34 @@ defmodule Gralkor.ClientContract do
 
           assert {:error, :extract_failed} =
                    client().memory_add("group-1", "x", nil, Gralkor.TestOntologies.Strict)
+        end
+
+        test "then the override is applied to the write and the deployment-configured ontology is not consulted" do
+          unquote(setup_block).()
+
+          original_ontology = Application.get_env(:jido_gralkor, :ontology)
+
+          on_exit(fn ->
+            case original_ontology do
+              nil -> Application.delete_env(:jido_gralkor, :ontology)
+              value -> Application.put_env(:jido_gralkor, :ontology, value)
+            end
+          end)
+
+          # The deployment default is configured to Strict; the caller
+          # overrides to nil ("no ontology") for this one write.
+          Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+          configure_memory_add(:ok)
+
+          assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual", nil)
+
+          # the write receives exactly the override, not the deployment default …
+          assert [["group-1", "Eli prefers concise", "manual", nil]] =
+                   Gralkor.Client.InMemory.adds()
+
+          # … even though the deployment-configured ontology remains set to
+          # something else, proving it was not consulted for this write.
+          assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
         end
       end
 
