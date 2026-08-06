@@ -28,6 +28,11 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
   @moduletag timeout: 120_000
 
   setup do
+    # graphiti_core's own modules import each other; letting the first import
+    # happen inside the shared loop thread surfaces as a circular-import error
+    # rather than as the failure under test.
+    :ok = Gralkor.Python.smoke_import_graphiti()
+
     original_client = Application.get_env(:jido_gralkor, :client)
     Application.put_env(:jido_gralkor, :client, Native)
 
