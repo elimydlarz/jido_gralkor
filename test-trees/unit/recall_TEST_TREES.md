@@ -1,4 +1,4 @@
-Unit: recall (src: lib/gralkor/recall.ex; integration: test/gralkor/recall_test.exs; unit: test/gralkor/recall_test.exs)
+Unit: recall (src: lib/gralkor/recall.ex; unit: test/gralkor/recall_test.exs)
 
 when a recall is requested
   then the group id is sanitised by replacing hyphens with underscores before any search runs
