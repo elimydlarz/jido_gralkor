@@ -81,7 +81,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert {:error, {:python, ^reason}} = {:error, {:python, reason}}
       assert reason == "ValueError: bad thing happened"
     end
-
   end
 
   describe "if adding an episode raises inside the graph library > if the raised exception carries no detail" do
@@ -653,7 +652,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
-
   end
 
   describe "if running an episode search raises inside the graph library" do
@@ -755,7 +753,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
-
   end
 
   describe "when a node search is run for a group > while no node labels are supplied" do
@@ -863,7 +860,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Enum.sort(Enum.map(:ets.tab2list(table), fn {k, _} -> k end)) ==
                ["another", "with_hyphens"]
     end
-
   end
 
   describe "when a graph instance is requested for a group > while no instance is cached for that group > while construction takes longer than the default call timeout" do
@@ -878,7 +874,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert {:stub_graphiti, "slowgroup"} = GraphitiPool.for(pid, "slowgroup")
     end
-
   end
 
   describe "when a graph instance is requested for a group > while no instance is cached for that group" do
@@ -915,7 +910,6 @@ defmodule Gralkor.GraphitiPoolTest do
       {count, _} = Pythonx.eval("g.initialisation_count", %{"g" => instance})
       assert Pythonx.decode(count) == 1
     end
-
   end
 
   describe "when a graph instance is requested for a group > while no instance is cached for that group > if index and constraint building fails" do
@@ -949,7 +943,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert log =~ "build_indices_and_constraints failed (non-fatal)"
       assert log =~ "RuntimeError: index setup unavailable"
     end
-
   end
 
   describe "when a graph instance is requested for a group > while instances are already cached for their groups" do
@@ -1083,7 +1076,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert length(shareds) == 3
       assert Enum.uniq(shareds) == [shared]
     end
-
   end
 
   describe "when the pool starts > while both configured model specs name a supported inference provider" do
@@ -1112,7 +1104,6 @@ defmodule Gralkor.GraphitiPoolTest do
         assert Process.alive?(pid)
       end)
     end
-
   end
 
   describe "when the pool starts > while both configured model specs name a supported inference provider > while the two specs name different providers" do
@@ -1134,7 +1125,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert_receive {:construct_shared, ^llm_model, ^embedder_model}
       assert Process.alive?(pid)
     end
-
   end
 
   describe "when the pool has constructed its database" do
@@ -1274,7 +1264,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert spec.embedder.batch_size == 1
     end
-
   end
 
   describe "when the pool starts > while both configured model specs name a supported inference provider > while the two specs name different providers" do
@@ -1494,7 +1483,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert GraphitiPool.api_key!(:openai) == "openai-secret"
       assert GraphitiPool.api_key!(:google) == "google-secret"
     end
-
   end
 
   describe "when the pool starts > while both configured model specs name a supported inference provider > where the credential was set from Elixir rather than exported into the OS process" do
@@ -1520,7 +1508,6 @@ defmodule Gralkor.GraphitiPoolTest do
       System.put_env("OPENAI_API_KEY", "openai-secret")
       assert GraphitiPool.api_key!(:openai) == "openai-secret"
     end
-
   end
 
   describe "when the pool terminates" do
@@ -1539,7 +1526,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert_receive {:closed, :stub_falkor_db}
     end
-
   end
 
   describe "when the pool terminates > while a remote connection is configured" do
@@ -1599,7 +1585,6 @@ defmodule Gralkor.GraphitiPoolTest do
       {closed, _} = Pythonx.eval("database.closed", %{"database" => database})
       assert Pythonx.decode(closed)
     end
-
   end
 
   describe "when the pool terminates > while an embedded connection is configured" do
@@ -1634,7 +1619,9 @@ defmodule Gralkor.GraphitiPoolTest do
       %{database: database, data_dir: data_dir, server_pid: server_pid}
     end
 
-    test "then the owned embedded server exits before termination completes", %{server_pid: server_pid} do
+    test "then the owned embedded server exits before termination completes", %{
+      server_pid: server_pid
+    } do
       assert {_, status} = System.cmd("ps", ["-p", to_string(server_pid), "-o", "pid="])
       assert status != 0
     end
@@ -1867,7 +1854,6 @@ defmodule Gralkor.GraphitiPoolTest do
         File.rm_rf!(data_dir)
       end
     end
-
   end
 
   describe "when an episode is added > while the write asks for the built-in Learning entity type" do
