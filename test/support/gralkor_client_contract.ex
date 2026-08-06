@@ -494,15 +494,17 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "when an index rebuild is requested" do
-        test "while the backend acknowledges the rebuild > then its status is returned as a success" do
+      describe "when an index rebuild is requested > while the backend acknowledges the rebuild" do
+        test "then its status is returned as a success" do
           unquote(setup_block).()
           configure_build_indices({:ok, %{status: "built"}})
 
           assert {:ok, %{status: "built"}} = client().build_indices()
         end
+      end
 
-        test "if the backend fails > then that failure is returned unchanged" do
+      describe "when an index rebuild is requested > if the backend fails" do
+        test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_build_indices({:error, :nope})
 
