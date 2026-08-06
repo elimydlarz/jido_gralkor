@@ -218,7 +218,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
   end
 
   describe "when the implicit `default` Lens is added to or searched" do
-    test "then graph operations use the operator's existing sanitized group_id" do
+    test "then graph operations use the operator's existing sanitised group id" do
       store = %Store{
         operator_id: "operator-one",
         lens: %Lens{
