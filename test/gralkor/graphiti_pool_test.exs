@@ -4,6 +4,7 @@ defmodule Gralkor.GraphitiPoolTest do
   import ExUnit.CaptureLog
 
   alias Gralkor.GraphitiPool
+  alias Gralkor.GraphitiPoolTest.StrictOntologyForGraphitiTest
 
   def start_pool(opts) do
     table = :"pool_table_#{System.unique_integer([:positive])}"
@@ -595,16 +596,29 @@ defmodule Gralkor.GraphitiPoolTest do
     test "and a group whose instance has never been created is left alone, its indices being built the moment it is" do
       construction_count = :counters.new(1, [])
 
-      %{pid: pid} =
-        start_pool(
-          construct_instance: fn _db, _shared, group ->
-            :counters.add(construction_count, 1, 1)
-            {:instance, group}
-          end,
-          initialise_instance: fn _instance -> :ok end
+      {instance, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              async def build_indices_and_constraints(self):
+                  pass
+
+          _FakeGraphiti()
+          """,
+          %{}
         )
 
-      assert {:instance, "created"} = GraphitiPool.for(pid, "created")
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group ->
+            :counters.add(construction_count, 1, 1)
+            instance
+          end,
+          initialise_instance: &GraphitiPool.initialise_instance/1,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert ^instance = GraphitiPool.for(pid, "created")
       assert {:ok, %{status: "built"}} = GraphitiPool.build_indices(pid)
       assert :counters.get(construction_count, 1) == 1
     end
@@ -1416,7 +1430,6 @@ defmodule Gralkor.GraphitiPoolTest do
                    warmup: false
                  )
 
-        message = Exception.message(error)
         refute_received :inference_client_construction_started
       end)
     end
