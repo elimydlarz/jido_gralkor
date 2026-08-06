@@ -409,6 +409,50 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
+  describe "ex-interpret-context > where no character budget is supplied" do
+    test "then a default of 8000 characters governs the fit" do
+      # Measure the fixed overhead a single-message context carries (the
+      # template text plus the "User: " prefix) using an explicit, very
+      # large budget so nothing gets trimmed. Content length grows the
+      # rendered context 1:1, so this pins the exact boundary of the
+      # default budget without hardcoding the template's own length.
+      uncapped =
+        Interpret.build_interpretation_context(
+          [Message.new("user", "a")],
+          "q",
+          "- f",
+          "Susu",
+          budget: 1_000_000
+        )
+
+      overhead = String.length(uncapped) - 1
+
+      fits = 8_000 - overhead
+      exceeds = fits + 1
+
+      ctx_fits =
+        Interpret.build_interpretation_context(
+          [Message.new("user", String.duplicate("a", fits))],
+          "q",
+          "- f",
+          "Susu"
+        )
+
+      assert String.length(ctx_fits) == 8_000
+      assert ctx_fits =~ "User:"
+
+      ctx_exceeds =
+        Interpret.build_interpretation_context(
+          [Message.new("user", String.duplicate("a", exceeds))],
+          "q",
+          "- f",
+          "Susu"
+        )
+
+      refute ctx_exceeds =~ "User:"
+    end
+  end
+
   describe "ex-interpret-context > when total char length exceeds budget" do
     test "oldest messages are dropped until context fits" do
       msgs = [
