@@ -10,7 +10,7 @@ when a module declares an ontology with `use Gralkor.Ontology`
   if the `:relationships` option is any value other than `:scoped` or `:open`
     then compilation fails with an error naming `:relationships` and the rejected value
 
-when an ontology declares `entity Foo do … end` with an alias
+when an ontology declares an aliased entity
   then the entity is named with the alias' last segment as a string ("Foo")
   and no module named Foo is defined by the declaration
   and the entity carries no description, so the extractor decides from the entity's name and fields alone
@@ -18,7 +18,7 @@ when an ontology declares `entity Foo do … end` with an alias
     then that description is recorded on the entity, so the extractor is told when to mint it
     if the description is neither a string nor absent
       then compilation fails with an error naming the entity and the rejected description
-  where the block calls `field :name, :type`
+  where the entity declares a field
     then the entity carries a field with that name and type
     where the call passes `required: true`
       then the field is recorded as required
@@ -28,8 +28,8 @@ when an ontology declares `entity Foo do … end` with an alias
       then the doc string is recorded as the field's description
     where the call omits `:doc`
       then the field's description is recorded as nil
-    if `:type` is outside the supported set (`:string`, `:integer`, `:float`, `:boolean`)
-      then compilation fails with an error naming the rejected type
+    if the field type is unsupported
+      then compilation fails naming the rejected type
     if `:required` is given a non-boolean value
       then compilation fails with an error naming `:required`
     if `:doc` is given a value that is neither a string nor nil
@@ -41,7 +41,7 @@ when an ontology declares `entity Foo do … end` with an alias
   if the same entity name is declared more than once in one ontology
     then compilation fails with an error naming the duplicated entity
 
-when an ontology declares `from Source do … end` with an alias
+when an ontology declares an aliased relationship source
   where the block calls `verb Target` with no do-block
     then a relationship is declared from the source entity to the target entity under the verb's edge name
     and that relationship carries no edge properties
@@ -54,19 +54,19 @@ when an ontology declares `from Source do … end` with an alias
     then the edge name uppercases each segment and preserves the underscores ("RELATES_TO")
   where the verb's target is the source entity itself
     then the endpoint pair records that entity as both source and target
-  where the same verb appears in several `from` blocks with matching edge-property schemas
+  where matching relationship verbs span several source blocks
     then exactly one edge type is declared for that verb
-    and the endpoint map gains one entry per distinct (source, target) pair where the verb appeared, in the order those pairs were declared
+    and the endpoint map preserves each distinct declared source-target pair in order
   if the verb's target is not an alias
     then compilation fails with an error showing the expected `verb Target` form
-  if the same verb is declared again with a differing edge-property schema (field names, types or required flags)
+  if repeated verbs have different edge-property schemas
     then compilation fails with an error naming the conflicting verb
   if the source alias does not name a declared entity
     then compilation fails at the end of the module naming the unknown source
   if a relationship's target alias does not name a declared entity
     then compilation fails at the end of the module naming the unknown target
 
-when a consumer calls `__ontology__/0` on a declared ontology module
+when a consumer reads a declared ontology
   then it returns a map whose keys are exactly `:entity_types`, `:edge_types`, `:edge_type_map` and `:excluded_entity_types`
   and `:entity_types` lists one `%{name: String.t(), fields: [field()]}` entry per declared entity, in declaration order
   and `:edge_types` lists one `%{name: String.t(), fields: [field()]}` entry per declared verb, deduplicated across `from` blocks

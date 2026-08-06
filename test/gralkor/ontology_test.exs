@@ -46,7 +46,7 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "when an ontology declares `entity Foo do … end` with an alias" do
+  describe "when an ontology declares an aliased entity" do
     test "then the entity is named with the alias' last segment as a string (\"Foo\")" do
       defmodule EntityNameOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
@@ -77,7 +77,7 @@ defmodule Gralkor.OntologyTest do
 
   end
 
-  describe "when an ontology declares `entity Foo do … end` with an alias > where the declaration passes a description before the block" do
+  describe "when an ontology declares an aliased entity > where the declaration passes a description before the block" do
     test "then that description is recorded on the entity, so the extractor is told when to mint it" do
       defmodule DescribedEntityOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
@@ -105,7 +105,7 @@ defmodule Gralkor.OntologyTest do
 
   end
 
-  describe "when an ontology declares `entity Foo do … end` with an alias > where the block calls `field :name, :type`" do
+  describe "when an ontology declares an aliased entity > where the entity declares a field" do
     test "then the entity carries a field with that name and type" do
       defmodule RequiredFieldOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
@@ -156,7 +156,7 @@ defmodule Gralkor.OntologyTest do
       assert field.doc == nil
     end
 
-    test "if `:type` is outside the supported set (`:string`, `:integer`, `:float`, `:boolean`) > then compilation fails with an error naming the rejected type" do
+    test "if the field type is unsupported > then compilation fails naming the rejected type" do
       assert_raise CompileError, ~r/atom/, fn ->
         defmodule BadTypeOntology do
           use Gralkor.Ontology, entities: :open, relationships: :open
@@ -194,7 +194,7 @@ defmodule Gralkor.OntologyTest do
 
   end
 
-  describe "when an ontology declares `entity Foo do … end` with an alias > if two fields in the same entity share a name" do
+  describe "when an ontology declares an aliased entity > if two fields in the same entity share a name" do
     test "then compilation fails with an error naming the duplicated field" do
       assert_raise CompileError, ~r/handle/, fn ->
         defmodule DuplicateFieldOntology do
@@ -210,7 +210,7 @@ defmodule Gralkor.OntologyTest do
 
   end
 
-  describe "when an ontology declares `entity Foo do … end` with an alias > if a relationship-style call appears inside the block" do
+  describe "when an ontology declares an aliased entity > if a relationship-style call appears inside the block" do
     test "then compilation fails, relationships living in `from` blocks" do
       diagnostic =
         capture_io(:stderr, fn ->
@@ -231,7 +231,7 @@ defmodule Gralkor.OntologyTest do
 
   end
 
-  describe "when an ontology declares `entity Foo do … end` with an alias > if the same entity name is declared more than once in one ontology" do
+  describe "when an ontology declares an aliased entity > if the same entity name is declared more than once in one ontology" do
     test "then compilation fails with an error naming the duplicated entity" do
       assert_raise CompileError, ~r/User/, fn ->
         defmodule DuplicateEntityOntology do
@@ -249,7 +249,7 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "when an ontology declares `from Source do … end` with an alias > where the block calls `verb Target` with no do-block" do
+  describe "when an ontology declares an aliased relationship source > where the block calls `verb Target` with no do-block" do
     test "then a relationship is declared from the source entity to the target entity under the verb's edge name" do
       defmodule BareVerbOntology do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
@@ -276,7 +276,7 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "when an ontology declares `from Source do … end` with an alias > where the block calls `verb Target do … end`" do
+  describe "when an ontology declares an aliased relationship source > where the block calls `verb Target do … end`" do
     test "then a relationship is declared from the source entity to the target entity under the verb's edge name" do
       defmodule EdgePropertyOntology do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
@@ -306,13 +306,13 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "when an ontology declares `from Source do … end` with an alias > where the verb is a single lowercase word (\"prefers\")" do
+  describe "when an ontology declares an aliased relationship source > where the verb is a single lowercase word (\"prefers\")" do
     test "then the edge name is that word uppercased (\"PREFERS\")" do
       assert [%{name: "PREFERS"}] = BareVerbOntology.__ontology__().edge_types
     end
   end
 
-  describe "when an ontology declares `from Source do … end` with an alias > where the verb contains underscores (\"relates_to\")" do
+  describe "when an ontology declares an aliased relationship source > where the verb contains underscores (\"relates_to\")" do
     test "then the edge name uppercases each segment and preserves the underscores (\"RELATES_TO\")" do
       defmodule UnderscoreVerbOntology do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
@@ -331,7 +331,7 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "when an ontology declares `from Source do … end` with an alias > where the verb's target is the source entity itself" do
+  describe "when an ontology declares an aliased relationship source > where the verb's target is the source entity itself" do
     test "then the endpoint pair records that entity as both source and target" do
       defmodule SelfReferenceOntology do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
@@ -351,7 +351,7 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "when an ontology declares `from Source do … end` with an alias > where the same verb appears in several `from` blocks with matching edge-property schemas" do
+  describe "when an ontology declares an aliased relationship source > where matching relationship verbs span several source blocks" do
     test "then exactly one edge type is declared for that verb" do
       defmodule MultiEndpointOntology do
         use Gralkor.Ontology, entities: :open, relationships: :scoped
@@ -381,7 +381,7 @@ defmodule Gralkor.OntologyTest do
       assert [%{name: "ENDORSES"}] = ontology.edge_types
     end
 
-    test "and the endpoint map gains one entry per distinct (source, target) pair where the verb appeared, in the order those pairs were declared" do
+    test "and the endpoint map preserves each distinct declared source-target pair in order" do
       ontology = MultiEndpointOntology.__ontology__()
       assert ontology.edge_type_map == [
                {{"User", "Preference"}, ["ENDORSES"]},
@@ -390,7 +390,7 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "when an ontology declares `from Source do … end` with an alias > if the verb's target is not an alias" do
+  describe "when an ontology declares an aliased relationship source > if the verb's target is not an alias" do
     test "then compilation fails with an error showing the expected `verb Target` form" do
       assert_raise CompileError, ~r/verb Target/, fn ->
         defmodule NonAliasTargetOntology do
@@ -408,7 +408,7 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "when an ontology declares `from Source do … end` with an alias > if the same verb is declared again with a differing edge-property schema (field names, types or required flags)" do
+  describe "when an ontology declares an aliased relationship source > if repeated verbs have different edge-property schemas" do
     test "then compilation fails with an error naming the conflicting verb" do
       assert_raise CompileError, ~r/conflicting/, fn ->
         defmodule ConflictEdgeOntology do
@@ -439,7 +439,7 @@ defmodule Gralkor.OntologyTest do
 
   end
 
-  describe "when an ontology declares `from Source do … end` with an alias > if the source alias does not name a declared entity" do
+  describe "when an ontology declares an aliased relationship source > if the source alias does not name a declared entity" do
     test "then compilation fails at the end of the module naming the unknown source" do
       assert_raise CompileError, ~r/Ghost/, fn ->
         defmodule UnknownSourceOntology do
@@ -458,7 +458,7 @@ defmodule Gralkor.OntologyTest do
 
   end
 
-  describe "when an ontology declares `from Source do … end` with an alias > if a relationship's target alias does not name a declared entity" do
+  describe "when an ontology declares an aliased relationship source > if a relationship's target alias does not name a declared entity" do
     test "then compilation fails at the end of the module naming the unknown target" do
       assert_raise CompileError, ~r/Ghost/, fn ->
         defmodule UnknownTargetOntology do
@@ -556,7 +556,7 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "when a consumer calls `__ontology__/0` on a declared ontology module" do
+  describe "when a consumer reads a declared ontology" do
     defmodule SusuLikeOntology do
       use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
