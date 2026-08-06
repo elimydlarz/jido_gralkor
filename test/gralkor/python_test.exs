@@ -46,7 +46,9 @@ defmodule Gralkor.PythonTest do
 
     test "and changing the packaged manifest triggers recompilation" do
       manifest_path = Path.expand("../../priv/python/pyproject.toml", __DIR__)
-      assert manifest_path in Python.__info__(:attributes)[:external_resource]
+
+      assert manifest_path in
+               Enum.map(Python.__info__(:attributes)[:external_resource], &Path.expand/1)
     end
 
     @tag :integration
