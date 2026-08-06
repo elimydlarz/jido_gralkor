@@ -512,7 +512,7 @@ defmodule Gralkor.ApplicationTest do
   end
 
   describe "when a capture flush writes its captured episode successfully" do
-    test "every turn is learned from, in the order it was appended — each becomes a separate 'learning' episode in the same group/ontology",
+    test "and every captured turn is learned from in the order it was appended",
          %{recording_add: add, learning: learning, turn: turn} do
       turn2 = [Gralkor.Message.new("user", "Q2"), Gralkor.Message.new("assistant", "A2")]
 
@@ -536,7 +536,29 @@ defmodule Gralkor.ApplicationTest do
       assert body1 =~ "cold caches fail the first health check"
     end
 
-    test "when the learning add_episode_fn returns {:error, reason}, the flush callback returns it (not swallowed)",
+    test "and each learning result is written as its own separate episode carrying the same group and ontology as the captured episode",
+         %{recording_add: add, learning: learning, turn: turn} do
+      turn2 = [Gralkor.Message.new("user", "Q2"), Gralkor.Message.new("assistant", "A2")]
+
+      learn_fn = fn [%{content: first_content} | _], _agent, _user ->
+        {:ok, %{learning | problem_kind: "learned from #{first_content}"}}
+      end
+
+      cb = App.build_flush_callback(nil, add_episode_fn: add, learn_fn: learn_fn)
+
+      assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn, turn2])
+
+      assert_receive {:add, "g1", _transcript, "captured", :ont}
+      assert_receive {:add, "g1", body1, "learning", :ont}
+      assert_receive {:add, "g1", body2, "learning", :ont}
+      assert body1 =~ "learned from Q"
+      assert body2 =~ "learned from Q2"
+      assert body1 =~ "cold caches fail the first health check"
+    end
+  end
+
+  describe "if writing a learning episode fails" do
+    test "then the failure is returned unchanged rather than swallowed, so the capture buffer owns whether to retry or drop it",
          %{learning: learning, turn: turn} do
       add = fn _g, _b, source, _o, _opts ->
         if source == "learning", do: {:error, :graph_down}, else: :ok
@@ -550,8 +572,10 @@ defmodule Gralkor.ApplicationTest do
 
       assert {:error, :graph_down} = cb.("g1", "Susu", "Eli", nil, [turn])
     end
+  end
 
-    test "when learn_fn returns {:error, reason}, the flush callback returns it (not swallowed)",
+  describe "if producing a learning result fails" do
+    test "then the failure is returned unchanged",
          %{
            recording_add: add,
            turn: turn
@@ -565,7 +589,27 @@ defmodule Gralkor.ApplicationTest do
       assert {:error, :upstream} = cb.("g1", "Susu", "Eli", nil, [turn])
     end
 
-    test "when learn_fn raises, the exception propagates (not swallowed)", %{
+    test "and the failure is not retried at the flush, because retry belongs to the inference call itself",
+         %{recording_add: add, turn: turn} do
+      test_pid = self()
+
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add,
+          learn_fn: fn _t, _a, _u ->
+            send(test_pid, :learn_attempted)
+            {:error, :upstream}
+          end
+        )
+
+      assert {:error, :upstream} = cb.("g1", "Susu", "Eli", nil, [turn])
+      assert_received :learn_attempted
+      refute_received :learn_attempted
+    end
+  end
+
+  describe "if producing a learning result raises or returns an unexpected shape" do
+    test "then the exception propagates, because an unexpected inference response is a fault rather than a best-effort drop", %{
       recording_add: add,
       turn: turn
     } do
@@ -576,22 +620,19 @@ defmodule Gralkor.ApplicationTest do
         )
 
       assert_raise RuntimeError, "boom", fn -> cb.("g1", "Susu", "Eli", nil, [turn]) end
-    end
 
-    test "when learn_fn returns an unexpected shape, the exception propagates (not swallowed)", %{
-      recording_add: add,
-      turn: turn
-    } do
-      cb =
+      unexpected_cb =
         App.build_flush_callback(nil,
           add_episode_fn: add,
           learn_fn: fn _t, _a, _u -> :something_else end
         )
 
-      assert_raise CaseClauseError, fn -> cb.("g1", "Susu", "Eli", nil, [turn]) end
+      assert_raise CaseClauseError, fn -> unexpected_cb.("g1", "Susu", "Eli", nil, [turn]) end
     end
+  end
 
-    test "when the same flush is retried after its captured episode landed, that episode is written again",
+  describe "when a capture flush is retried after its captured episode has already been written" do
+    test "then that captured episode is written a second time, because episode writes are not idempotent",
          %{
            recording_add: add,
            turn: turn
@@ -604,8 +645,10 @@ defmodule Gralkor.ApplicationTest do
       assert_receive {:add, "g1", body, "captured", nil}
       assert_receive {:add, "g1", ^body, "captured", nil}
     end
+  end
 
-    test "when learn_fn is nil (default), no learning episode is added", %{
+  describe "when a capture flush runs > while no learning step is wired" do
+    test "then no learning episode is written", %{
       recording_add: add,
       turn: turn
     } do
@@ -615,8 +658,10 @@ defmodule Gralkor.ApplicationTest do
       assert_receive {:add, "g1", _b, "captured", nil}
       refute_receive {:add, _, _, "learning", _}, 100
     end
+  end
 
-    test "when the captured add fails, no learning episode is written (no double-write on retry)",
+  describe "if writing the captured episode fails" do
+    test "and no learning episode is written on that attempt, so a retried flush cannot write learning twice",
          %{
            learning: learning,
            turn: turn
@@ -637,9 +682,20 @@ defmodule Gralkor.ApplicationTest do
       assert {:error, :disk_full} = cb.("g1", "Susu", "Eli", nil, [turn])
       assert_receive {:add, "g1", _b, "captured", nil}
       refute_receive {:add, _, _, "learning", _}, 100
-    end
 
-    test "turns whose transcript is empty are still learned from, in the order they were appended",
+      generalise_cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: fn _g, _b, _s, _o, _opts -> {:error, :disk_full} end,
+          generalise_fn: fn _group_id, _body -> send(self(), :generalise_called) end
+        )
+
+      assert {:error, :disk_full} = generalise_cb.("g1", "Susu", "Eli", nil, [turn])
+      refute_received :generalise_called
+    end
+  end
+
+  describe "when a capture flush renders an empty transcript" do
+    test "and every captured turn is still learned from in the order it was appended",
          %{
            recording_add: add,
            learning: learning
