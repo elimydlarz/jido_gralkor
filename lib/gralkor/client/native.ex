@@ -317,9 +317,6 @@ defmodule Gralkor.Client.Native do
     end
   end
 
-  @doc false
-  def generalise_evaluate_callback, do: evaluate_gen_fn()
-
   defp search_gen_fn do
     fn gen_group_id, query, max_results ->
       case GraphitiPool.search(gen_group_id, query, max_results) do
