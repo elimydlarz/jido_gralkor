@@ -284,6 +284,29 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
+  describe "when a capture flush runs" do
+    test "then the transcript episode is rendered from the user and assistant text of every captured turn only, with no agent reasoning and no inference call",
+         %{recording_add: add, turn: turn} do
+      cb = App.build_flush_callback(nil, add_episode_fn: add)
+
+      assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
+      assert_receive {:add, "g1", body, "captured", nil}
+      assert body =~ "Eli: Q"
+      assert body =~ "Susu: A"
+      refute body =~ "thinking"
+    end
+
+    test "and the rendered transcript is written as a captured episode", %{
+      recording_add: add,
+      turn: turn
+    } do
+      cb = App.build_flush_callback(nil, add_episode_fn: add)
+
+      assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn])
+      assert_receive {:add, "g1", "Eli: Q\nSusu: A", "captured", :ont}
+    end
+  end
+
   describe "when a capture flush writes its captured episode successfully" do
     @tag :capture_log
     test "then a single line reporting the group, the transcript size, and the duration is logged" do
