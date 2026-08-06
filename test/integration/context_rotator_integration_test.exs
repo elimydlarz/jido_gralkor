@@ -225,6 +225,34 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
+  describe "when context rotation is requested > while the agent has a committed thread > while its session flush succeeds > while entries arrive after flushing and before the fresh thread is installed" do
+    test "then every in-flight entry is carried into the fresh thread exactly once" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+      seed_thread_with_entries(pid, "pre-rotation", [%{role: :user, content: "flushed"}])
+      pause_second_state_read(pid, self())
+
+      rotation =
+        Task.async(fn ->
+          ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000, keep_last_n: 0)
+        end)
+
+      assert_receive :second_state_read
+
+      append =
+        Task.async(fn ->
+          append_thread_entry(pid, %{role: :assistant, content: "in-flight"})
+        end)
+
+      send(pid, :continue_rotation)
+
+      assert :ok = Task.await(append)
+      assert :ok = Task.await(rotation)
+
+      assert [%{payload: %{content: "in-flight"}}] = committed_entries(pid)
+    end
+  end
+
   defp force_install_failure(pid) do
     block_second_get_state_reply = fn count, event, _proc_state ->
       case event do
@@ -239,5 +267,38 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
 
     assert :ok = :sys.install(pid, {block_second_get_state_reply, 0})
+  end
+
+  defp pause_second_state_read(pid, test_pid) do
+    pause = fn count, event, _proc_state ->
+      case event do
+        {:out, {:ok, %Jido.AgentServer.State{}}, _from, _state} ->
+          count = count + 1
+
+          if count == 2 do
+            send(test_pid, :second_state_read)
+
+            receive do
+              :continue_rotation -> :ok
+            end
+          end
+
+          count
+
+        _ ->
+          count
+      end
+    end
+
+    assert :ok = :sys.install(pid, {pause, 0})
+  end
+
+  defp append_thread_entry(pid, payload) do
+    :sys.replace_state(pid, fn state ->
+      thread = Jido.Thread.append(state.agent.state[:__thread__], [%{kind: :ai_message, payload: payload}])
+      put_in(state.agent.state[:__thread__], thread)
+    end)
+
+    :ok
   end
 end
