@@ -732,7 +732,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "ex-client-native > when a recall runs" do
+  describe "when a recall runs" do
     @describetag :integration
     setup :start_recording_pool
 
@@ -750,14 +750,12 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     @tag :capture_log
-    test "then it carries the deadline the deployment configures in place of the pipeline's own" do
+    test "then it carries the recall pipeline's deadline, twelve seconds unless the deployment configures another" do
       Application.put_env(:jido_gralkor, :recall_deadline_ms, 50)
 
       assert {:error, :recall_deadline_expired} =
                Native.recall("g", "TestAgent", nil, "slow: what do we know")
-    end
 
-    test "where the deployment configures none, the pipeline's own twelve-second default governs it" do
       Application.delete_env(:jido_gralkor, :recall_deadline_ms)
 
       assert {:ok, block} = Native.recall("g", "TestAgent", nil, "slow: what do we know")
@@ -765,23 +763,103 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "ex-client-native > when an index and constraint rebuild is requested" do
+  describe "when a recall runs > if that deadline is exceeded" do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then a status is returned once the rebuild completes" do
-      Native.memory_add("g1", "content", "manual")
+    setup do
+      original = Application.get_env(:jido_gralkor, :recall_deadline_ms)
+      on_exit(fn -> Application.put_env(:jido_gralkor, :recall_deadline_ms, original || 12_000) end)
+      Application.put_env(:jido_gralkor, :recall_deadline_ms, 50)
+      :ok
+    end
 
+    @tag :capture_log
+    test "then an error identifying the expired deadline is returned to the caller" do
+      assert {:error, :recall_deadline_expired} =
+               Native.recall("g", "TestAgent", nil, "slow: what do we know")
+    end
+
+    @tag :capture_log
+    test "and the work already handed to the embedded interpreter finishes unobserved, no layer being able to cancel it" do
+      assert {:error, :recall_deadline_expired} =
+               Native.recall("g", "TestAgent", nil, "slow: what do we know")
+
+      Process.sleep(350)
+      assert Process.alive?(Process.whereis(Gralkor.GraphitiPool))
+    end
+  end
+
+  describe "where any adapter operation other than recall runs" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then it carries no deadline of its own, so a memory addition, a capture flush, an index rebuild and a community build each run for as long as the graph takes" do
+      assert :ok = Native.memory_add("g1", "content", "manual")
+      assert {:ok, %{status: "built"}} = Native.build_indices()
+      assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("g1")
+    end
+  end
+
+  describe "when an index and constraint rebuild is requested" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the rebuild is applied to the whole graph rather than to a single group", %{g: g} do
+      Native.memory_add("g1", "content", "manual")
+      assert {:ok, %{status: "built"}} = Native.build_indices()
+
+      {recorded, _} = Pythonx.eval("g.recorded['indices']", %{"g" => g})
+      assert Pythonx.decode(recorded) == 1
+    end
+
+    test "and a status is returned once the rebuild completes" do
       assert {:ok, %{status: "built"}} = Native.build_indices()
     end
   end
 
-  describe "ex-client-native > when community building is requested for a group" do
+  describe "when an index and constraint rebuild is requested > if the graph fails" do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then it is scoped to the sanitised group and the community and edge counts are returned" do
+    test "then that failure is returned unchanged", %{g: g} do
+      Pythonx.eval("g.recorded['indices'] = 'fail'", %{"g" => g})
+      assert {:error, {:python, reason}} = Native.build_indices()
+      assert reason =~ "indices refused"
+    end
+  end
+
+  describe "when community building is requested for a group" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the group is sanitised before use" do
       assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("with-hyphens")
+      assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
+               group == "with_hyphens"
+             end)
+    end
+
+    test "and community building is scoped to the sanitised group" do
+      assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("with-hyphens")
+      assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
+               group == "with_hyphens"
+             end)
+    end
+
+    test "and the number of communities and the number of edges built are returned" do
+      assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("with-hyphens")
+    end
+  end
+
+  describe "when community building is requested for a group > if the graph fails" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then that failure is returned unchanged", %{g: g} do
+      Pythonx.eval("g.recorded['communities'] = 'fail'", %{"g" => g})
+      assert {:error, {:python, reason}} = Native.build_communities("g1")
+      assert reason =~ "communities refused"
     end
   end
 
