@@ -94,7 +94,7 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "when a turn is captured with a session id, a group, an agent name, a user name and messages" do
+      describe "when a canonical turn is captured for a named session, group, agent and user" do
         test "while the backend acknowledges the capture > then success is returned" do
           unquote(setup_block).()
           configure_capture(:ok)
@@ -123,7 +123,7 @@ defmodule Gralkor.ClientContract do
                    )
         end
 
-        test "while the messages are canonical message structs whose role is user, assistant or behaviour > then the write applies the deployment-configured ontology, the caller being given no ontology argument on this arity" do
+        test "while its messages have user, assistant or behaviour roles > then the write uses the deployment ontology without a caller ontology argument" do
           unquote(setup_block).()
 
           original_ontology = Application.get_env(:jido_gralkor, :ontology)
@@ -158,7 +158,7 @@ defmodule Gralkor.ClientContract do
           assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
         end
 
-        test "while the messages are canonical message structs whose role is user, assistant or behaviour > and every turn captured through this arity is learned from at its flush, there being no per-turn learning flag" do
+        test "while its messages have user, assistant or behaviour roles > and the turn is learned at flush with no per-turn flag" do
           unquote(setup_block).()
           configure_capture(:ok)
 

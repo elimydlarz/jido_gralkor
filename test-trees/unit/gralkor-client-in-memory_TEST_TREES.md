@@ -27,10 +27,10 @@ where a recall is requested with no session id
   if the backend fails
     then that failure is returned unchanged
 
-when a turn is captured with a session id, a group, an agent name, a user name and messages
-  while the messages are canonical message structs whose role is user, assistant or behaviour
-    then the write applies the deployment-configured ontology, the caller being given no ontology argument on this arity
-    and every turn captured through this arity is learned from at its flush, there being no per-turn learning flag
+when a canonical turn is captured for a named session, group, agent and user
+  while its messages have user, assistant or behaviour roles
+    then the write uses the deployment ontology without a caller ontology argument
+    and the turn is learned at flush with no per-turn flag
   while the backend acknowledges the capture
     then success is returned
   if the backend fails
