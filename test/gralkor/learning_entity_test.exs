@@ -3,44 +3,48 @@ defmodule Gralkor.LearningEntityTest do
 
   alias Gralkor.LearningEntity
 
-  describe "ex-learning-entity > spec/0" do
-    test "returns the entity-types entry for Learning" do
-      assert %{name: "Learning", fields: fields} = LearningEntity.spec()
+  describe "when the built-in learning entity type is requested" do
+    test "then it is named \"Learning\"" do
+      assert %{name: "Learning"} = LearningEntity.spec()
+    end
+
+    test "and it carries a non-empty description, without which the extraction model never mints a learning node" do
+      assert %{description: description} = LearningEntity.spec()
+      assert String.length(description) > 0
+    end
+
+    test "and it declares the problem kind, the approach, the success flag, and the lesson, in that order" do
+      assert %{fields: fields} = LearningEntity.spec()
 
       field_names = Enum.map(fields, & &1.name)
       assert field_names == [:problem_kind, :approach, :success, :lesson]
     end
 
-    test "carries a non-empty description (graphiti uses the class docstring to extract the entity)" do
-      assert %{description: description} = LearningEntity.spec()
-      assert String.length(description) > 0
-    end
-
-    test "problem_kind is an optional string" do
+    test "and the problem kind is an optional string, so extraction never drops the entity over a missing attribute" do
       field = find_field(LearningEntity.spec(), :problem_kind)
       assert field.type == :string
       assert field.required == false
     end
 
-    test "approach is an optional string" do
+    test "and the approach is an optional string" do
       field = find_field(LearningEntity.spec(), :approach)
       assert field.type == :string
       assert field.required == false
     end
 
-    test "success is an optional boolean" do
+    test "and the success flag is an optional boolean" do
       field = find_field(LearningEntity.spec(), :success)
       assert field.type == :boolean
       assert field.required == false
     end
 
-    test "lesson is an optional string" do
+    test "and the lesson is an optional string" do
       field = find_field(LearningEntity.spec(), :lesson)
       assert field.type == :string
       assert field.required == false
     end
 
-    test "no field name is Graphiti-protected" do
+    test "and no field takes a name the graph store reserves for itself" do
       protected = [
         :uuid,
         :name,
@@ -60,12 +64,8 @@ defmodule Gralkor.LearningEntityTest do
     end
   end
 
-  describe "ex-learning-entity > merge_entity_types/1" do
-    test "appends Learning to an empty list" do
-      assert LearningEntity.merge_entity_types([]) == [LearningEntity.spec()]
-    end
-
-    test "appends Learning after a consumer's existing entities" do
+  describe "when a consumer's entity-type list is merged with the built-in learning entity type > while the list declares no entity named \"Learning\"" do
+    test "then the learning entry is appended after every entry the consumer declared" do
       consumer = [
         %{name: "User", fields: [%{name: :handle, type: :string, required: true, doc: nil}]}
       ]
@@ -77,15 +77,24 @@ defmodule Gralkor.LearningEntityTest do
       assert List.last(result) == LearningEntity.spec()
     end
 
-    test "returns the list unchanged when Learning is already present" do
+  end
+
+  describe "when a consumer's entity-type list is merged with the built-in learning entity type > while the list declares no entity types at all" do
+    test "then the learning entry is the only entry returned" do
+      assert LearningEntity.merge_entity_types([]) == [LearningEntity.spec()]
+    end
+  end
+
+  describe "when a consumer's entity-type list is merged with the built-in learning entity type > if the list already declares an entity named \"Learning\"" do
+    test "then the list is returned unchanged, so a consumer's own learning entity is never overridden" do
       learning = LearningEntity.spec()
       consumer = [%{name: "User", fields: []}, learning]
       assert LearningEntity.merge_entity_types(consumer) == consumer
     end
   end
 
-  describe "ex-learning-entity > merge_ontology_payload/1" do
-    test "merges Learning into a consumer payload, preserving the other three keys" do
+  describe "when a consumer ontology payload is merged with the built-in learning entity type" do
+    setup do
       payload = %{
         entity_types: [%{name: "User", fields: []}],
         edge_types: [%{name: "PREFERS", fields: []}],
@@ -95,17 +104,34 @@ defmodule Gralkor.LearningEntityTest do
 
       result = LearningEntity.merge_ontology_payload(payload)
 
-      assert result.edge_types == payload.edge_types
-      assert result.edge_type_map == payload.edge_type_map
-      assert result.excluded_entity_types == payload.excluded_entity_types
+      %{payload: payload, result: result}
+    end
+
+    test "then the payload's entity types gain the learning entry", %{result: result} do
       assert List.last(result.entity_types) == LearningEntity.spec()
       assert length(result.entity_types) == 2
     end
 
-    test "with nil, returns a payload carrying only the Learning entity_types entry" do
+    test "and the payload's edge types, edge-type map, and excluded entity types are preserved unchanged", %{
+      payload: payload,
+      result: result
+    } do
+      assert result.edge_types == payload.edge_types
+      assert result.edge_type_map == payload.edge_type_map
+      assert result.excluded_entity_types == payload.excluded_entity_types
+    end
+  end
+
+  describe "while no consumer ontology payload is supplied > when the built-in learning entity type is merged" do
+    test "then a payload carrying only the learning entity type is returned, so learning extraction is not gated on a configured ontology" do
       result = LearningEntity.merge_ontology_payload(nil)
 
       assert result.entity_types == [LearningEntity.spec()]
+    end
+
+    test "and that payload declares no edge types, no edge-type map, and no excluded entity types" do
+      result = LearningEntity.merge_ontology_payload(nil)
+
       assert result.edge_types == []
       assert result.edge_type_map == []
       assert result.excluded_entity_types == nil
