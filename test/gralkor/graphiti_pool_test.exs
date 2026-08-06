@@ -585,8 +585,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "search_episodes/4" do
-    test "then graphiti's g.search_ is invoked with an episode-only config, returning the bodies that were written" do
+  describe "when an episode search is run for a group" do
+    test "then the graph library is asked for episodes only, with the requested result count" do
       {g, _} =
         Pythonx.eval(
           """
@@ -654,7 +654,10 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "then when graphiti raises, an error carrying the exception is returned" do
+  end
+
+  describe "if running an episode search raises inside the graph library" do
+    test "then an error carrying the raised exception is returned" do
       {g, _} =
         Pythonx.eval(
           """
@@ -681,8 +684,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "search_nodes/5, when called with node_labels" do
-    test "then graphiti's g.search_ is invoked (NODE search) with the node_labels SearchFilter, returning node name/summary/attributes" do
+  describe "when a node search is run for a group > while node labels are supplied" do
+    test "then the graph library's node search is invoked with the requested result count and a filter carrying those labels" do
       {g, _} =
         Pythonx.eval(
           """
@@ -753,7 +756,10 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "then when no node_labels are given, g.search_ is invoked with an unfiltered SearchFilters" do
+  end
+
+  describe "when a node search is run for a group > while no node labels are supplied" do
+    test "then the graph library's node search is invoked with every node eligible" do
       {g, _} =
         Pythonx.eval(
           """
@@ -796,7 +802,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "search_nodes/5, if running a node search raises inside the graph library" do
+  describe "if running a node search raises inside the graph library" do
     test "then an error carrying the raised exception is returned" do
       {g, _} =
         Pythonx.eval(
@@ -824,8 +830,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "for/1 (group_id), when called against an embedded spec" do
-    test "then the Graphiti instance for the sanitized group_id is looked up from a shared ETS cache; on first use it is constructed and inserted, then lives for the lifetime of the GenServer" do
+  describe "when a graph instance is requested for a group" do
+    test "then the instance is looked up from a cache shared across callers" do
       counter = :counters.new(1, [])
       test_pid = self()
 
@@ -859,7 +865,11 @@ defmodule Gralkor.GraphitiPoolTest do
     end
 
     @tag timeout: 30_000
-    test "then construction runs to completion even when it exceeds the GenServer.call default 5s timeout" do
+  end
+
+  describe "when a graph instance is requested for a group > while no instance is cached for that group > while construction takes longer than the default call timeout" do
+    @tag timeout: 30_000
+    test "then construction still runs to completion" do
       slow_construct = fn _db, _shared, group ->
         Process.sleep(5_500)
         {:stub_graphiti, group}
@@ -870,7 +880,10 @@ defmodule Gralkor.GraphitiPoolTest do
       assert {:stub_graphiti, "slowgroup"} = GraphitiPool.for(pid, "slowgroup")
     end
 
-    test "when a fresh per-group Graphiti instance is constructed then build_indices_and_constraints is invoked before the instance is cached and returned" do
+  end
+
+  describe "when a graph instance is requested for a group > while no instance is cached for that group" do
+    test "and index and constraint building is invoked before the instance is cached and returned" do
       {instance, _} =
         Pythonx.eval(
           """
@@ -904,7 +917,10 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Pythonx.decode(count) == 1
     end
 
-    test "when a fresh per-group Graphiti instance is constructed if build_indices_and_constraints fails then the failure is non-fatal and the instance is still cached and returned" do
+  end
+
+  describe "when a graph instance is requested for a group > while no instance is cached for that group > if index and constraint building fails" do
+    test "then the failure is non-fatal" do
       {instance, _} =
         Pythonx.eval(
           """
@@ -935,7 +951,10 @@ defmodule Gralkor.GraphitiPoolTest do
       assert log =~ "RuntimeError: index setup unavailable"
     end
 
-    test "then concurrent callers proceed in parallel" do
+  end
+
+  describe "when a graph instance is requested for a group > while instances are already cached for their groups" do
+    test "then concurrent callers read those instances in parallel without passing through the pool process" do
       construct_instance = fn _db, _shared, group ->
         Process.sleep(100)
         {:stub_graphiti, group}
@@ -972,8 +991,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "for/1 (group_id), when called against a remote spec" do
-    test "then the AsyncFalkorDB is built once at init and the per-group Graphiti instance is cached in shared ETS and reused — nothing is reconstructed per call, exactly as for embedded" do
+  describe "when the pool starts > while a remote connection is configured" do
+    test "then the remote database is constructed once and held for the pool's lifetime" do
       falkor_db_count = :counters.new(1, [])
       instance_count = :counters.new(1, [])
 
@@ -1019,8 +1038,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "init/1 runs synchronously" do
-    test "then `Gralkor.Python.install_async_runtime/0` is invoked so the pool can be booted standalone" do
+  describe "when the pool starts" do
+    test "then the shared asyncio runtime is installed, so the pool can be started on its own" do
       install_count = :counters.new(1, [])
 
       install_loop_fn = fn ->
@@ -1033,7 +1052,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert :counters.get(install_count, 1) == 1
     end
 
-    test "then the graphiti-core LLM client, embedder, and cross-encoder are constructed once via Pythonx and shared across every Graphiti instance for the lifetime of the GenServer" do
+    test "and the LLM client, the embedder, and the cross-encoder are each constructed once and shared by every graph instance for the pool's lifetime" do
       shared_count = :counters.new(1, [])
       instance_shareds = :ets.new(:shareds, [:public, :duplicate_bag])
 
@@ -1066,7 +1085,10 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Enum.uniq(shareds) == [shared]
     end
 
-    test "while both configured model specs name a supported inference provider then client construction proceeds using the configured model ids" do
+  end
+
+  describe "when the pool starts > while both configured model specs name a supported inference provider" do
+    test "then client construction proceeds using the configured model ids" do
       test_pid = self()
 
       supported_pairs = [
@@ -1092,7 +1114,10 @@ defmodule Gralkor.GraphitiPoolTest do
       end)
     end
 
-    test "while both configured model specs name a supported inference provider, while the two specs name different providers, then each client is still built for its own role's provider and startup completes" do
+  end
+
+  describe "when the pool starts > while both configured model specs name a supported inference provider > while the two specs name different providers" do
+    test "and startup completes" do
       test_pid = self()
       llm_model = %{provider: :openai, id: "gpt-4.1-mini"}
       embedder_model = %{provider: :google, id: "gemini-embedding-2-preview"}
@@ -1111,7 +1136,10 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Process.alive?(pid)
     end
 
-    test "then warmup runs: search is invoked once with a throwaway query and group_id, then Gralkor.Interpret.interpret_facts is invoked once" do
+  end
+
+  describe "when the pool has constructed its database" do
+    test "then a warmup search runs once against a throwaway query and group, paying the cold-start cost before any consumer can recall" do
       interpret_count = :counters.new(1, [])
 
       interpret_fn = fn _text, _budget ->
@@ -1132,7 +1160,7 @@ defmodule Gralkor.GraphitiPoolTest do
              "search is invoked once (with stubs it fails the rescued Pythonx eval; the warning line proves the invocation)"
     end
 
-    test "then logs \"[gralkor] warmup — search:… interpret:… <total>ms\" at :info" do
+    test "and a single line reporting the search, interpretation, and total warmup durations is logged" do
       log =
         capture_log(fn ->
           %{pid: pid} = start_pool(interpret_fn: fn _, _ -> :ok end, warmup: true)
@@ -1142,7 +1170,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert log =~ ~r/\[gralkor\] warmup — search:\d+ interpret:\d+ \d+ms/
     end
 
-    test "then the warmup search runs against the literal throwaway query \"warmup\" and the literal throwaway group \"warmup\", and the warmup interpretation runs against an empty conversation and throwaway facts" do
+    test "and a warmup interpretation runs once against an empty conversation and throwaway facts" do
       test_pid = self()
 
       {g, _} =
