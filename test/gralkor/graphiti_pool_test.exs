@@ -90,6 +90,214 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "add_episode/6, if adding an episode raises inside the graph library" do
+    test "then {:error, {:python, reason}} is returned, reason carrying only the raised exception's class and message" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              async def add_episode(self, **kwargs):
+                  raise RuntimeError("graph library exploded")
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:error, {:python, reason}} =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil)
+
+      assert reason =~ "RuntimeError"
+      assert reason =~ "graph library exploded"
+      refute reason =~ "Traceback"
+      refute reason =~ "\n"
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "add_episode/6, when an episode is added, while an episode identifier is supplied" do
+    test "then that identifier is forwarded to graphiti's add_episode as uuid, so re-adding under it updates the episode by re-extraction" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded_kwargs = None
+
+              async def add_episode(self, **kwargs):
+                  self.recorded_kwargs = kwargs
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
+                 uuid: "existing-episode-uuid"
+               )
+
+      {uuid, _} = Pythonx.eval("g.recorded_kwargs['uuid']", %{"g" => g})
+      assert Pythonx.decode(uuid) == "existing-episode-uuid"
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "add_episode/6, when an episode is added, while no ontology is supplied" do
+    test "then the graph library receives no entity_types, edge_types, edge_type_map, or excluded_entity_types kwargs" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded_kwargs = None
+
+              async def add_episode(self, **kwargs):
+                  self.recorded_kwargs = kwargs
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok = GraphitiPool.add_episode(pid, "g1", "content", "source", nil)
+
+      {keys, _} = Pythonx.eval("sorted(g.recorded_kwargs.keys())", %{"g" => g})
+
+      assert Pythonx.decode(keys) == [
+               "episode_body",
+               "group_id",
+               "name",
+               "reference_time",
+               "source",
+               "source_description"
+             ]
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "add_episode/6, when an episode is added, while an ontology module is supplied" do
+    @describetag :integration
+
+    defmodule OntologyForwardingOntology do
+      use Gralkor.Ontology, entities: :strict, relationships: :scoped
+
+      entity Widget do
+        field(:label, :string, required: true)
+      end
+
+      entity Gadget do
+        field(:kind, :string, required: true)
+      end
+
+      from Widget do
+        linked_to Gadget do
+          field(:since, :string)
+        end
+      end
+    end
+
+    test "then the translated entity types, edge types, edge type map, and excluded entity types are forwarded to the graph library, using its kwarg names outside and the ontology's declared type names inside" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded_kwargs = None
+
+              async def add_episode(self, **kwargs):
+                  self.recorded_kwargs = kwargs
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 pid,
+                 "g1",
+                 "content",
+                 "source",
+                 OntologyForwardingOntology
+               )
+
+      {inspection, _} =
+        Pythonx.eval(
+          """
+          kwargs = g.recorded_kwargs
+          {
+              "keys": sorted(kwargs.keys()),
+              "entity_type_keys": sorted(kwargs["entity_types"].keys()),
+              "entity_type_names": sorted(cls.__name__ for cls in kwargs["entity_types"].values()),
+              "edge_type_keys": sorted(kwargs["edge_types"].keys()),
+              "edge_type_names": sorted(cls.__name__ for cls in kwargs["edge_types"].values()),
+              "edge_type_map": sorted(
+                  [str(k[0]), str(k[1]), sorted(v)] for k, v in kwargs["edge_type_map"].items()
+              ),
+              "excluded_entity_types": kwargs["excluded_entity_types"],
+          }
+          """,
+          %{"g" => g}
+        )
+
+      inspection = Pythonx.decode(inspection)
+
+      assert inspection["keys"] == [
+               "edge_type_map",
+               "edge_types",
+               "entity_types",
+               "episode_body",
+               "excluded_entity_types",
+               "group_id",
+               "name",
+               "reference_time",
+               "source",
+               "source_description"
+             ]
+
+      assert inspection["entity_type_keys"] == ["Gadget", "Widget"]
+      assert inspection["entity_type_names"] == ["Gadget", "Widget"]
+      assert inspection["edge_type_keys"] == ["LINKED_TO"]
+      assert inspection["edge_type_names"] == ["LINKED_TO"]
+      assert inspection["edge_type_map"] == [["Widget", "Gadget", ["LINKED_TO"]]]
+      assert inspection["excluded_entity_types"] == ["Entity"]
+
+      GenServer.stop(pid)
+    end
+  end
+
   describe "remove_episode/3, when graphiti's remove_episode raises" do
     test "then {:error, {:python, reason}} is returned with reason summarised to the Python error's class and message — not the full multi-line traceback" do
       err = %Pythonx.Error{
