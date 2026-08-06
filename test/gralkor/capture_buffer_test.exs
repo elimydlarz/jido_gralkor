@@ -626,6 +626,34 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "ex-capture-buffer > flush_all/0 when one session's flush fails" do
+    setup do
+      test_pid = self()
+
+      flush_callback = fn group_id, agent_name, user_name, ontology, turns ->
+        if group_id == "bad" do
+          {:error, :boom}
+        else
+          send(test_pid, {:flushed, group_id, agent_name, user_name, ontology, turns})
+          :ok
+        end
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+      {:ok, _} = start_supervised({CaptureBuffer, flush_callback: flush_callback, retries: []})
+      :ok
+    end
+
+    test "the other session's flush still completes" do
+      :ok = CaptureBuffer.append("failing", "bad", "Susu", "Eli", nil, [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("ok", "g", "Susu", "Eli", nil, [Message.new("user", "y")])
+
+      assert :ok = CaptureBuffer.flush_all()
+
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "y"}]]}, 1_000
+    end
+  end
+
   describe "ex-capture-buffer > retry schedule" do
     setup do
       test_pid = self()
