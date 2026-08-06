@@ -1,6 +1,6 @@
 Unit: context-rotator (src: lib/jido_gralkor/context_rotator.ex; unit: test/jido_gralkor/context_rotator_test.exs)
 
-when a rotation seed is computed from the flushed entries, the thread's current entries, and a retention count
+when a rotation seed is computed
   while every current entry was in the flushed set
     then the seed is the most recent entries up to the retention count
     while the retention count is zero

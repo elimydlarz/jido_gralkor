@@ -931,6 +931,9 @@ defmodule Gralkor.GraphitiPoolTest do
                ["another", "with_hyphens"]
     end
 
+  end
+
+  describe "when a graph instance is requested for a group > while no instance is cached for that group" do
     test "then the instance is constructed, cached, and held for the pool's lifetime" do
       construction_count = :counters.new(1, [])
 

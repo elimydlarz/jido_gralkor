@@ -66,7 +66,7 @@ defmodule JidoGralkor.LifecycleTest do
       assert eventually(fn -> InMemory.flushes() == [[thread_id]] end)
     end
 
-    test "and the flush is logged at :info naming the session id and the terminate reason" do
+    test "and the flush is logged at info naming the session id and the terminate reason" do
       InMemory.set_flush(:ok)
       thread_id = "thread-log"
       s = state(%{__thread__: %{id: thread_id}})
