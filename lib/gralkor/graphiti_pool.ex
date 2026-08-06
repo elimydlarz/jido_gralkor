@@ -1168,14 +1168,19 @@ defmodule Gralkor.GraphitiPool do
     e in Pythonx.Error -> {:error, Exception.message(e)}
   end
 
-  defp time_warmup_interpret(%{interpret_fn: nil}), do: {0, :ok}
+  defp time_warmup_interpret(%{interpret_fn: nil}), do: {:ok, 0}
 
   defp time_warmup_interpret(%{interpret_fn: interpret_fn}) when is_function(interpret_fn, 2) do
     time(fn ->
       try do
         prompt = Interpret.build_interpretation_context([], "warmup", "- warmup", "warmup")
-        interpret_fn.(prompt, 2_000)
-        :ok
+
+        case interpret_fn.(prompt, 2_000) do
+          :ok -> :ok
+          {:ok, _result} -> :ok
+          {:error, _reason} = error -> error
+          other -> {:error, {:unexpected_result, other}}
+        end
       rescue
         e -> {:error, Exception.message(e)}
       end
