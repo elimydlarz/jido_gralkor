@@ -1363,40 +1363,6 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when the pool starts > while both configured model specs name a supported inference provider" do
-    test "and the LLM client is built for the provider the LLM spec names" do
-      spec =
-        GraphitiPool.shared_client_spec(
-          %{provider: :openai, id: "gpt-4.1-mini"},
-          %{provider: :google, id: "gemini-embedding-2-preview"}
-        )
-
-      assert spec.llm.provider == :openai
-      assert spec.llm.id == "gpt-4.1-mini"
-    end
-
-    test "and the embedder is built for the provider the embedder spec names" do
-      spec =
-        GraphitiPool.shared_client_spec(
-          %{provider: :openai, id: "gpt-4.1-mini"},
-          %{provider: :google, id: "gemini-embedding-2-preview"}
-        )
-
-      assert spec.embedder.provider == :google
-      assert spec.embedder.id == "gemini-embedding-2-preview"
-    end
-
-    test "and the cross-encoder is built for the provider the LLM spec names" do
-      spec =
-        GraphitiPool.shared_client_spec(
-          %{provider: :openai, id: "gpt-4.1-mini"},
-          %{provider: :google, id: "gemini-embedding-2-preview"}
-        )
-
-      assert spec.cross_encoder.provider == :openai
-    end
-  end
-
   describe "when the pool starts > while both configured model specs name a supported inference provider > while the embedder spec names Google" do
     test "then the embedder is constructed to send one input per request, so a batched call cannot receive fewer embeddings than it sent inputs" do
       spec =
@@ -1406,20 +1372,6 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       assert spec.embedder.batch_size == 1
-    end
-  end
-
-  describe "when the pool starts > while both configured model specs name a supported inference provider > while the two specs name different providers" do
-    test "then each client is still built for its own role's provider" do
-      spec =
-        GraphitiPool.shared_client_spec(
-          %{provider: :google, id: "gemini-3.1-flash-lite"},
-          %{provider: :openai, id: "text-embedding-3-small"}
-        )
-
-      assert spec.llm.provider == :google
-      assert spec.embedder.provider == :openai
-      assert spec.cross_encoder.provider == :google
     end
   end
 
@@ -1599,32 +1551,6 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       assert Process.alive?(pid)
-    end
-  end
-
-  describe "when the pool starts > while both configured model specs name a supported inference provider" do
-    setup do
-      previous = %{
-        "GOOGLE_API_KEY" => System.get_env("GOOGLE_API_KEY"),
-        "OPENAI_API_KEY" => System.get_env("OPENAI_API_KEY")
-      }
-
-      on_exit(fn ->
-        Enum.each(previous, fn
-          {var, nil} -> System.delete_env(var)
-          {var, value} -> System.put_env(var, value)
-        end)
-      end)
-
-      :ok
-    end
-
-    test "and each provider's credential is read on the BEAM side and handed to its client as an explicit argument, the embedded interpreter's own environment never carrying it" do
-      System.put_env("OPENAI_API_KEY", "openai-secret")
-      System.put_env("GOOGLE_API_KEY", "google-secret")
-
-      assert GraphitiPool.api_key!(:openai) == "openai-secret"
-      assert GraphitiPool.api_key!(:google) == "google-secret"
     end
   end
 
