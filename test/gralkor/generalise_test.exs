@@ -92,15 +92,19 @@ defmodule Gralkor.GeneraliseTest do
       assert prompt =~ "exactly at"
       refute prompt =~ "just below"
     end
+  end
 
-    test "if every hypothesised candidate falls below the minimum confidence > then nothing is persisted" do
+  describe "when a transcript is generalised > if every hypothesised candidate falls below the minimum confidence" do
+    test "then nothing is persisted" do
       refute_persistence([
         %{content: "weak", confidence: 0.1},
         %{content: "vague", confidence: 0.25}
       ])
     end
+  end
 
-    test "if no candidates are hypothesised at all > then nothing is persisted" do
+  describe "when a transcript is generalised > if no candidates are hypothesised at all" do
+    test "then nothing is persisted" do
       refute_persistence([])
     end
   end
@@ -122,28 +126,43 @@ defmodule Gralkor.GeneraliseTest do
     end
   end
 
-  for {action, wording} <- [
-        {"broadens", "when evaluation decides a candidate broadens an existing generalisation"},
-        {"narrows", "when evaluation decides a candidate narrows an existing generalisation"}
-      ] do
-    describe wording do
-      test "then a new generalisation is persisted one level above the existing one" do
-        existing = existing_generalisation(1)
-        {generalisation, _body, _opts} = persisted(unquote(action), existing)
-        assert generalisation.level == 2
-      end
+  describe "when evaluation decides a candidate broadens an existing generalisation" do
+    test "then a new generalisation is persisted one level above the existing one" do
+      existing = existing_generalisation(1)
+      {generalisation, _body, _opts} = persisted("broadens", existing)
+      assert generalisation.level == 2
+    end
 
-      test "and it records the existing generalisation's id as generalised" do
-        existing = existing_generalisation(1)
-        {generalisation, _body, _opts} = persisted(unquote(action), existing)
-        assert generalisation.generalises == [existing.id]
-      end
+    test "and it records the existing generalisation's id as generalised" do
+      existing = existing_generalisation(1)
+      {generalisation, _body, _opts} = persisted("broadens", existing)
+      assert generalisation.generalises == [existing.id]
+    end
 
-      test "and the existing generalisation is left active" do
-        existing = existing_generalisation(1)
-        persisted(unquote(action), existing)
-        assert existing == existing_generalisation(1)
-      end
+    test "and the existing generalisation is left active" do
+      existing = existing_generalisation(1)
+      persisted("broadens", existing)
+      assert existing == existing_generalisation(1)
+    end
+  end
+
+  describe "when evaluation decides a candidate narrows an existing generalisation" do
+    test "then a new generalisation is persisted one level above the existing one" do
+      existing = existing_generalisation(1)
+      {generalisation, _body, _opts} = persisted("narrows", existing)
+      assert generalisation.level == 2
+    end
+
+    test "and it records the existing generalisation's id as generalised" do
+      existing = existing_generalisation(1)
+      {generalisation, _body, _opts} = persisted("narrows", existing)
+      assert generalisation.generalises == [existing.id]
+    end
+
+    test "and the existing generalisation is left active" do
+      existing = existing_generalisation(1)
+      persisted("narrows", existing)
+      assert existing == existing_generalisation(1)
     end
   end
 
