@@ -223,10 +223,23 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "ex-capture > request shape > capture/5" do
+  describe "when a turn is captured for a session under a group, with an agent name, a user name and messages" do
     setup :start_capture_buffer
 
-    test "invokes CaptureBuffer.append/6 with sanitized group_id, names, ontology, and messages" do
+    setup do
+      original = Application.get_env(:jido_gralkor, :ontology)
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :ontology)
+          value -> Application.put_env(:jido_gralkor, :ontology, value)
+        end
+      end)
+
+      :ok
+    end
+
+    test "then the group is sanitised before it is buffered" do
       msgs = [Message.new("user", "hi")]
 
       assert :ok = Native.capture("s1", "with-hyphens", "Susu", "Eli", msgs)
@@ -235,12 +248,48 @@ defmodule Gralkor.Client.NativeTest do
       :ok = CaptureBuffer.flush("s1")
       assert_receive {:flushed, "with_hyphens", "Susu", "Eli", nil, [^msgs]}
     end
+
+    test "and the deployment-configured ontology is resolved, the caller being given no ontology argument of its own" do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      assert :ok = Native.flush("s1")
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.TestOntologies.Strict, _turns}
+    end
+
+    test "and that resolved ontology is buffered alongside the turn" do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      assert :ok = Native.flush("s1")
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.TestOntologies.Strict, _turns}
+    end
+
+    test "and the sanitised group, the agent name, the user name, the resolved ontology and the messages are appended to the capture buffer under that session" do
+      msgs = [Message.new("user", "hi")]
+      assert :ok = Native.capture("s1", "with-hyphens", "Susu", "Eli", msgs)
+      assert [^msgs] = CaptureBuffer.turns_for("s1")
+      assert :ok = CaptureBuffer.flush("s1")
+      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", nil, [^msgs]}
+    end
+
+    test "and success is returned immediately, no distillation running before the call returns" do
+      assert :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      assert [_turn] = CaptureBuffer.turns_for("s1")
+    end
+
+    test "and nothing is logged for the turn itself, captured content becoming observable only at flush" do
+      logs =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+        end)
+
+      assert logs == ""
+    end
   end
 
-  describe "ex-capture > request shape > capture/6 with a Lens" do
+  describe "where a turn is captured through a named Lens" do
     setup :start_capture_buffer
 
-    test "invokes CaptureBuffer.append_lens/6 with the operator id, names, Lens, and messages" do
+    test "then the operator id is buffered unsanitised, so the Lens keeps the operator's original identity" do
       msgs = [Message.new("user", "hi")]
 
       assert :ok =
@@ -258,12 +307,46 @@ defmodule Gralkor.Client.NativeTest do
 
       assert_receive {:flushed, "operator-with-hyphens", "Susu", "Eli", "observations", [^msgs]}
     end
+
+    test "and the agent name, the user name, the Lens name and the messages are appended to the capture buffer under that session" do
+      msgs = [Message.new("user", "hi")]
+
+      assert :ok =
+               Native.capture("s1", "operator", "Susu", "Eli", msgs, "observations")
+
+      assert [^msgs] = CaptureBuffer.turns_for("s1")
+      assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
+      assert_receive {:flushed, "operator", "Susu", "Eli", "observations", [^msgs]}
+    end
+
+    test "and the deployment-configured ontology is not consulted, a Lens owning its own ontology" do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
+      msgs = [Message.new("user", "hi")]
+
+      assert :ok =
+               Native.capture("s1", "operator", "Susu", "Eli", msgs, "observations")
+
+      assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
+      assert_receive {:flushed, "operator", "Susu", "Eli", "observations", [^msgs]}
+    end
+
+    test "and success is returned immediately" do
+      assert :ok =
+               Native.capture(
+                 "s1",
+                 "operator",
+                 "Susu",
+                 "Eli",
+                 [Message.new("user", "hi")],
+                 "observations"
+               )
+    end
   end
 
-  describe "ex-capture > request shape > capture/7 with primary and additional Lenses" do
+  describe "where a turn is captured through a primary Lens together with additional Lenses" do
     setup :start_capture_buffer
 
-    test "invokes CaptureBuffer.append_lenses/6 with the operator id, names, Lenses, and messages" do
+    test "then each named Lens receives that turn in its own flush batch" do
       msgs = [Message.new("user", "hi")]
 
       assert :ok =
@@ -285,38 +368,22 @@ defmodule Gralkor.Client.NativeTest do
       assert_receive {:flushed, "operator-with-hyphens", "Susu", "Eli", "generalisations",
                       [^msgs]}
     end
-  end
 
-  describe "ex-capture > then returns :ok immediately (does not call distill synchronously)" do
-    setup :start_capture_buffer
+    test "but the session buffers the turn only once" do
+      msgs = [Message.new("user", "hi")]
 
-    test "returns :ok" do
-      assert :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
-    end
-  end
+      assert :ok =
+               Native.capture(
+                 "s1",
+                 "operator",
+                 "Susu",
+                 "Eli",
+                 msgs,
+                 "observations",
+                 ["generalisations"]
+               )
 
-  describe "ex-capture > when the deployment configures an ontology" do
-    setup :start_capture_buffer
-
-    setup do
-      original = Application.get_env(:jido_gralkor, :ontology)
-      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
-
-      on_exit(fn ->
-        case original do
-          nil -> Application.delete_env(:jido_gralkor, :ontology)
-          v -> Application.put_env(:jido_gralkor, :ontology, v)
-        end
-      end)
-
-      :ok
-    end
-
-    test "it is resolved by the adapter and buffered alongside the turn, the caller supplying none" do
-      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
-
-      assert :ok = Native.flush("s1")
-      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.TestOntologies.Strict, _turns}
+      assert [^msgs] = CaptureBuffer.turns_for("s1")
     end
   end
 
