@@ -4,12 +4,8 @@ defmodule JidoGralkor.CanonicalTest do
   alias Gralkor.Message
   alias JidoGralkor.Canonical
 
-  describe "to_messages/3 — completed turn" do
-    test "returns [] when query is empty, answer is empty, and there are no events" do
-      assert Canonical.to_messages("", [], {:completed, ""}) == []
-    end
-
-    test "passes the user_query through to the user message content as given (no envelope stripping — the plugin's contract is that :query is the user's actual words)" do
+  describe "when a turn is rendered into canonical messages" do
+    test "then the user's query becomes the opening user message exactly as given, with no envelope stripping" do
       query = "  <example>kept</example>\n\nactual question  "
 
       [user | _] = Canonical.to_messages(query, [], {:completed, "a"})
@@ -17,7 +13,41 @@ defmodule JidoGralkor.CanonicalTest do
       assert user == Message.new("user", query)
     end
 
-    test "emits a 'thought: …' behaviour message for :llm_completed events" do
+    test "and the messages run user first, then the behaviour trace in order, then the turn's outcome last" do
+      events = [
+        %{kind: :llm_completed, data: %{text: "first thought", tool_calls: [%{name: "t"}]}},
+        %{kind: :tool_completed, data: %{tool_name: "t", result: "r"}},
+        %{kind: :llm_completed, data: %{text: "second thought", tool_calls: [%{name: "t"}]}}
+      ]
+
+      messages = Canonical.to_messages("q", events, {:completed, "a"})
+
+      assert Enum.map(messages, & &1.role) == [
+               "user",
+               "behaviour",
+               "behaviour",
+               "behaviour",
+               "assistant"
+             ]
+
+      assert Enum.map(messages, & &1.content) == [
+               "q",
+               "thought: first thought",
+               "tool t → r",
+               "thought: second thought",
+               "a"
+             ]
+    end
+  end
+
+  describe "when a turn is rendered into canonical messages > while the query, the outcome, and the event trace are all empty" do
+    test "then nothing is rendered at all, so the caller can skip the write" do
+      assert Canonical.to_messages("", [], {:completed, ""}) == []
+    end
+  end
+
+  describe "when a turn is rendered into canonical messages > while the trace holds a completed llm event that requested tools" do
+    test "then it renders as a behaviour message reading `thought: …`" do
       events = [
         %{kind: :llm_completed, data: %{text: "considering options", tool_calls: [%{name: "t"}]}}
       ]
@@ -30,7 +60,40 @@ defmodule JidoGralkor.CanonicalTest do
              end)
     end
 
-    test "emits a 'tool NAME → RESULT' behaviour message for :tool_completed events" do
+  end
+
+  describe "when a turn is rendered into canonical messages > while the trace holds a completed llm event that requested tools > while that event's content is a list of blocks rather than a string" do
+    test "then the text parts are concatenated into a single thought" do
+      events = [
+        %{
+          kind: :llm_completed,
+          data: %{
+            text: [%{type: "text", text: "hello"}, %{type: "text", text: "world"}],
+            tool_calls: [%{name: "t"}]
+          }
+        }
+      ]
+
+      behaviour =
+        Canonical.to_messages("q", events, {:completed, "a"})
+        |> Enum.find(&(&1.role == "behaviour"))
+
+      assert behaviour.content == "thought: hello world"
+    end
+  end
+
+  describe "when a turn is rendered into canonical messages > while the trace holds a completed llm event that requested no tools" do
+    test "then no thought behaviour message is rendered for it" do
+      events = [%{kind: :llm_completed, data: %{text: "direct answer", tool_calls: []}}]
+
+      messages = Canonical.to_messages("q", events, {:completed, "direct answer"})
+
+      refute Enum.any?(messages, &(&1.role == "behaviour" and &1.content =~ "thought"))
+    end
+  end
+
+  describe "when a turn is rendered into canonical messages > while the trace holds a completed tool event" do
+    test "then it renders as a behaviour message reading `tool NAME → RESULT`" do
       events = [
         %{
           kind: :tool_completed,
@@ -48,27 +111,10 @@ defmodule JidoGralkor.CanonicalTest do
       assert behaviour.content =~ "ok 3 facts"
     end
 
-    test "preserves event order in the emitted behaviour messages" do
-      events = [
-        %{kind: :llm_completed, data: %{text: "first thought", tool_calls: [%{name: "t"}]}},
-        %{kind: :tool_completed, data: %{tool_name: "t", result: "r"}},
-        %{kind: :llm_completed, data: %{text: "second thought", tool_calls: [%{name: "t"}]}}
-      ]
+  end
 
-      behaviours =
-        "q"
-        |> Canonical.to_messages(events, {:completed, "a"})
-        |> Enum.filter(&(&1.role == "behaviour"))
-        |> Enum.map(& &1.content)
-
-      assert behaviours == [
-               "thought: first thought",
-               "tool t → r",
-               "thought: second thought"
-             ]
-    end
-
-    test "ignores events whose :kind is not memory-worthy" do
+  describe "when a turn is rendered into canonical messages > while the trace holds events that are not memory-worthy" do
+    test "then those events contribute no messages" do
       events = [
         %{kind: :telemetry_ping, data: %{anything: "x"}},
         %{kind: :llm_completed, data: %{text: "kept", tool_calls: [%{name: "t"}]}}
@@ -83,88 +129,54 @@ defmodule JidoGralkor.CanonicalTest do
       assert hd(behaviours).content == "thought: kept"
     end
 
-    test "omits the assistant message when the completed answer is empty" do
-      messages = Canonical.to_messages("q", [], {:completed, ""})
-      refute Enum.any?(messages, &(&1.role == "assistant"))
-    end
+  end
 
-    test "orders messages user → behaviour(s) → assistant" do
+  describe "when a turn is rendered into canonical messages > while the turn completed" do
+    test "then the completed answer terminates the messages as the assistant message" do
       events = [
         %{kind: :llm_completed, data: %{text: "t", tool_calls: [%{name: "x"}]}},
         %{kind: :tool_completed, data: %{tool_name: "x", result: "r"}}
       ]
 
       messages = Canonical.to_messages("q", events, {:completed, "a"})
-      roles = Enum.map(messages, & &1.role)
-
-      assert roles == ["user", "behaviour", "behaviour", "assistant"]
-    end
-
-    test "handles list-shaped llm content (Anthropic-style blocks) by concatenating text parts" do
-      events = [
-        %{
-          kind: :llm_completed,
-          data: %{
-            text: [%{type: "text", text: "hello"}, %{type: "text", text: "world"}],
-            tool_calls: [%{name: "t"}]
-          }
-        }
-      ]
-
-      behaviour =
-        Canonical.to_messages("q", [hd(events)], {:completed, "a"})
-        |> Enum.find(&(&1.role == "behaviour"))
-
-      assert behaviour.content == "thought: hello world"
+      assert List.last(messages) == Message.new("assistant", "a")
     end
   end
 
-  describe "while the trace holds a completed tool event > while that event carries no result" do
-    test "then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing, when the result is nil" do
-      events = [%{kind: :tool_completed, data: %{tool_name: "memory_search", result: nil}}]
+  describe "when a turn is rendered into canonical messages > while the trace holds a completed tool event > while that event carries no result" do
+    test "then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing" do
+      for result <- [nil, ""] do
+        events = [%{kind: :tool_completed, data: %{tool_name: "memory_search", result: result}}]
 
-      [_user, behaviour] = Canonical.to_messages("q", events, {:completed, ""})
+        [_user, behaviour] = Canonical.to_messages("q", events, {:completed, ""})
 
-      assert behaviour == Message.new("behaviour", "tool memory_search")
-    end
-
-    test "then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing, when the result is an empty string" do
-      events = [%{kind: :tool_completed, data: %{tool_name: "memory_search", result: ""}}]
-
-      [_user, behaviour] = Canonical.to_messages("q", events, {:completed, ""})
-
-      assert behaviour == Message.new("behaviour", "tool memory_search")
+        assert behaviour == Message.new("behaviour", "tool memory_search")
+      end
     end
   end
 
-  describe "to_messages/3 — :llm_completed tool_calls discrimination" do
-    test "on a completed turn, a :llm_completed with empty tool_calls emits no 'thought:' behaviour" do
-      events = [%{kind: :llm_completed, data: %{text: "direct answer", tool_calls: []}}]
-
-      messages = Canonical.to_messages("q", events, {:completed, "direct answer"})
-
-      assert Enum.map(messages, & &1.role) == ["user", "assistant"]
-      refute Enum.any?(messages, &(&1.role == "behaviour" and &1.content =~ "thought"))
+  describe "when a turn is rendered into canonical messages > while the turn completed > while the completed answer is empty" do
+    test "then no assistant message is emitted" do
+      messages = Canonical.to_messages("q", [], {:completed, ""})
+      refute Enum.any?(messages, &(&1.role == "assistant"))
     end
   end
 
-  describe "to_messages/3 — failed turn" do
-    test "emits a terminal 'request failed: …' behaviour message in place of the assistant answer" do
+  describe "when a turn is rendered into canonical messages > while the turn failed" do
+    test "then a terminal behaviour message reading `request failed: …` takes the place of the assistant answer" do
       events = [%{kind: :llm_completed, data: %{text: "trying"}}]
 
       messages = Canonical.to_messages("q", events, {:failed, :boom})
 
       assert List.last(messages) == Message.new("behaviour", "request failed: :boom")
+    end
+
+    test "and no assistant message is emitted" do
+      messages = Canonical.to_messages("q", [], {:failed, :boom})
       refute Enum.any?(messages, &(&1.role == "assistant"))
     end
 
-    test "renders {:error, reason} error terms via the same formatter as tool results" do
-      messages = Canonical.to_messages("q", [], {:failed, {:error, :timeout}})
-
-      assert List.last(messages) == Message.new("behaviour", "request failed: error :timeout")
-    end
-
-    test "keeps the user query and event trace ahead of the failure marker" do
+    test "and the user's query and the behaviour trace still precede that failure message" do
       events = [
         %{kind: :llm_completed, data: %{text: "thinking", tool_calls: [%{name: "t"}]}},
         %{kind: :tool_completed, data: %{tool_name: "t", result: {:error, :nope}}}
@@ -175,6 +187,14 @@ defmodule JidoGralkor.CanonicalTest do
 
       assert roles == ["user", "behaviour", "behaviour", "behaviour"]
       assert List.last(messages).content == "request failed: :boom"
+    end
+  end
+
+  describe "when a turn is rendered into canonical messages > while the turn failed > while the failure reason is an error tuple" do
+    test "then it is rendered by the same formatter that renders tool results" do
+      messages = Canonical.to_messages("q", [], {:failed, {:error, :timeout}})
+
+      assert List.last(messages) == Message.new("behaviour", "request failed: error :timeout")
     end
   end
 end
