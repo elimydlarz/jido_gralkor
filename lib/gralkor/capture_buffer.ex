@@ -69,6 +69,11 @@ defmodule Gralkor.CaptureBuffer do
         raise ArgumentError,
               "session #{inspect(session_id)} is bound to ontology #{inspect(bound_ontology)}; " <>
                 "refusing to append under ontology #{inspect(new_ontology)}"
+
+      {:capture_mode_mismatch, :lens, :legacy} ->
+        raise ArgumentError,
+              "session #{inspect(session_id)} already holds Lens-selected turns; " <>
+                "refusing to append without a Lens"
     end
   end
 
@@ -107,6 +112,11 @@ defmodule Gralkor.CaptureBuffer do
         raise ArgumentError,
               "session #{inspect(session_id)} is bound to user #{inspect(bound_user)}; " <>
                 "refusing to append under user #{inspect(new_user)}"
+
+      {:capture_mode_mismatch, :legacy, :lens} ->
+        raise ArgumentError,
+              "session #{inspect(session_id)} already holds turns without a Lens; " <>
+                "refusing to append a Lens-selected turn"
     end
   end
 
@@ -163,8 +173,11 @@ defmodule Gralkor.CaptureBuffer do
       ) do
     sanitized = Client.sanitize_group_id(group_id)
 
-    case Map.get(state.entries, session_id) do
-      nil ->
+    case {Map.has_key?(state.lens_entries, session_id), Map.get(state.entries, session_id)} do
+      {true, _entry} ->
+        {:reply, {:capture_mode_mismatch, :lens, :legacy}, state}
+
+      {false, nil} ->
         entries =
           Map.put(
             state.entries,
@@ -174,7 +187,7 @@ defmodule Gralkor.CaptureBuffer do
 
         {:reply, :ok, %{state | entries: entries}}
 
-      {^sanitized, ^agent_name, ^user_name, ^ontology, turns} ->
+      {false, {^sanitized, ^agent_name, ^user_name, ^ontology, turns}} ->
         entries =
           Map.put(
             state.entries,
@@ -184,19 +197,19 @@ defmodule Gralkor.CaptureBuffer do
 
         {:reply, :ok, %{state | entries: entries}}
 
-      {other_group, _bound_agent, _bound_user, _bound_ontology, _turns}
+      {false, {other_group, _bound_agent, _bound_user, _bound_ontology, _turns}}
       when other_group != sanitized ->
         {:reply, {:group_mismatch, sanitized, other_group}, state}
 
-      {^sanitized, bound_agent, _bound_user, _bound_ontology, _turns}
+      {false, {^sanitized, bound_agent, _bound_user, _bound_ontology, _turns}}
       when bound_agent != agent_name ->
         {:reply, {:agent_mismatch, agent_name, bound_agent}, state}
 
-      {^sanitized, ^agent_name, bound_user, _bound_ontology, _turns}
+      {false, {^sanitized, ^agent_name, bound_user, _bound_ontology, _turns}}
       when bound_user != user_name ->
         {:reply, {:user_mismatch, user_name, bound_user}, state}
 
-      {^sanitized, ^agent_name, ^user_name, bound_ontology, _turns} ->
+      {false, {^sanitized, ^agent_name, ^user_name, bound_ontology, _turns}} ->
         {:reply, {:ontology_mismatch, ontology, bound_ontology}, state}
     end
   end
@@ -206,8 +219,11 @@ defmodule Gralkor.CaptureBuffer do
         _from,
         state
       ) do
-    case Map.get(state.lens_entries, session_id) do
-      nil ->
+    case {Map.has_key?(state.entries, session_id), Map.get(state.lens_entries, session_id)} do
+      {true, _entry} ->
+        {:reply, {:capture_mode_mismatch, :legacy, :lens}, state}
+
+      {false, nil} ->
         entry = %{
           operator_id: operator_id,
           agent_name: agent_name,
@@ -219,7 +235,8 @@ defmodule Gralkor.CaptureBuffer do
 
         {:reply, :ok, %{state | lens_entries: Map.put(state.lens_entries, session_id, entry)}}
 
-      %{operator_id: ^operator_id, agent_name: ^agent_name, user_name: ^user_name} = entry ->
+      {false,
+       %{operator_id: ^operator_id, agent_name: ^agent_name, user_name: ^user_name} = entry} ->
         new_lenses = Enum.reject(Enum.uniq(lenses), &Map.has_key?(entry.batches, &1))
 
         batches =
@@ -236,13 +253,13 @@ defmodule Gralkor.CaptureBuffer do
 
         {:reply, :ok, %{state | lens_entries: Map.put(state.lens_entries, session_id, entry)}}
 
-      %{operator_id: bound_operator} when bound_operator != operator_id ->
+      {false, %{operator_id: bound_operator}} when bound_operator != operator_id ->
         {:reply, {:operator_mismatch, operator_id, bound_operator}, state}
 
-      %{agent_name: bound_agent} when bound_agent != agent_name ->
+      {false, %{agent_name: bound_agent}} when bound_agent != agent_name ->
         {:reply, {:agent_mismatch, agent_name, bound_agent}, state}
 
-      %{user_name: bound_user} ->
+      {false, %{user_name: bound_user}} ->
         {:reply, {:user_mismatch, user_name, bound_user}, state}
     end
   end
