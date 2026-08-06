@@ -537,8 +537,10 @@ defmodule Gralkor.ClientContract do
 
           assert :ok = client().generalise("group-1", "distilled transcript")
         end
+      end
 
-        test "if the pipeline's upstream inference fails > then success is still returned, generalisation being fire-and-forget and its failures only logged" do
+      describe "when generalisation is requested for a group and a transcript > if the pipeline's upstream inference fails" do
+        test "then success is still returned, generalisation being fire-and-forget and its failures only logged" do
           unquote(setup_block).()
           configure_generalise({:error, :upstream_llm_failed})
 
