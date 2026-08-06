@@ -1910,6 +1910,41 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
 
+    test "and a later add with the same ontology reuses the translated representation rather than rebuilding it" do
+      data_dir =
+        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+
+      File.mkdir_p!(data_dir)
+      {:ok, pid} = start_embedded_pool(data_dir)
+
+      try do
+        first = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
+        second = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
+        assert first === second
+      after
+        GenServer.stop(pid)
+        File.rm_rf!(data_dir)
+      end
+    end
+
+    test "and the forwarded dictionary carries exactly the keys the ontology selects, omitting the rest" do
+      data_dir =
+        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+
+      File.mkdir_p!(data_dir)
+      {:ok, pid} = start_embedded_pool(data_dir)
+
+      try do
+        strict = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
+
+        assert Enum.sort(Map.keys(strict)) ==
+                 ["edge_type_map", "edge_types", "entity_types", "excluded_entity_types"]
+      after
+        GenServer.stop(pid)
+        File.rm_rf!(data_dir)
+      end
+    end
+
     test "and the forwarded dictionary uses the graph library's key names outside and the ontology's declared type names inside" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
@@ -1985,19 +2020,19 @@ defmodule Gralkor.GraphitiPoolTest do
       {:ok, pid} = start_embedded_pool(data_dir)
 
       try do
-        merged = GenServer.call(pid, {:materialise, nil, true}, :infinity)
+        plain = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
 
-        {names, _} =
-          Pythonx.eval(
-            "[cls.__name__ for cls in entity_types.values()]",
-            %{"entity_types" => merged["entity_types"]}
-          )
+        merged =
+          GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest, true}, :infinity)
 
-        assert names |> Pythonx.decode() |> List.to_string() == "Learning"
+        plain_again = GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
 
-        refute Map.has_key?(merged, "edge_types")
-        refute Map.has_key?(merged, "edge_type_map")
-        refute Map.has_key?(merged, "excluded_entity_types")
+        merged_again =
+          GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest, true}, :infinity)
+
+        assert plain === plain_again
+        assert merged === merged_again
+        refute plain === merged
       after
         GenServer.stop(pid)
         File.rm_rf!(data_dir)
