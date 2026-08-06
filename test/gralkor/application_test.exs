@@ -329,6 +329,84 @@ defmodule Gralkor.ApplicationTest do
       assert logs =~ ~r/bodyChars:\d+/
       assert logs =~ ~r/\d+ms/
     end
+
+    @tag :capture_log
+    test "and the flush reports success" do
+      cb = App.build_flush_callback(nil, add_episode_fn: fn _g, _b, _s, _o, _opts -> :ok end)
+      turns = [[Gralkor.Message.new("user", "hi")]]
+
+      logs =
+        ExUnit.CaptureLog.capture_log([level: :info], fn ->
+          assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
+        end)
+
+      assert logs =~ "[gralkor] capture flushed"
+      assert logs =~ "group:g1"
+      refute logs =~ "capture flush failed"
+    end
+
+    test "and every captured turn is learned from in the order it was appended",
+         %{recording_add: add, learning: learning, turn: turn} do
+      turn2 = [Gralkor.Message.new("user", "Q2"), Gralkor.Message.new("assistant", "A2")]
+
+      learn_fn = fn [%{content: first_content} | _], _agent, _user ->
+        {:ok, %{learning | problem_kind: "learned from #{first_content}"}}
+      end
+
+      cb = App.build_flush_callback(nil, add_episode_fn: add, learn_fn: learn_fn)
+      assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn, turn2])
+      assert_receive {:add, "g1", _transcript, "captured", :ont}
+      assert_receive {:add, "g1", body1, "learning", :ont}
+      assert_receive {:add, "g1", body2, "learning", :ont}
+      assert body1 =~ "learned from Q"
+      assert body2 =~ "learned from Q2"
+      assert body1 =~ "cold caches fail the first health check"
+    end
+
+    test "and each learning result is written as its own separate episode carrying the same group and ontology as the captured episode",
+         %{recording_add: add, learning: learning, turn: turn} do
+      turn2 = [Gralkor.Message.new("user", "Q2"), Gralkor.Message.new("assistant", "A2")]
+
+      learn_fn = fn [%{content: first_content} | _], _agent, _user ->
+        {:ok, %{learning | problem_kind: "learned from #{first_content}"}}
+      end
+
+      cb = App.build_flush_callback(nil, add_episode_fn: add, learn_fn: learn_fn)
+      assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn, turn2])
+      assert_receive {:add, "g1", _transcript, "captured", :ont}
+      assert_receive {:add, "g1", body1, "learning", :ont}
+      assert_receive {:add, "g1", body2, "learning", :ont}
+      assert body1 =~ "learned from Q"
+      assert body2 =~ "learned from Q2"
+      assert body1 =~ "cold caches fail the first health check"
+    end
+
+    test "and the learning write asks for the built-in Learning entity type to be merged onto its ontology, while the captured write does not",
+         %{learning: learning, turn: turn} do
+      add = fn group, body, source, ontology, opts ->
+        send(self(), {:add, group, body, source, ontology, opts})
+        :ok
+      end
+
+      cb = App.build_flush_callback(nil, add_episode_fn: add, learn_fn: fn _t, _a, _u -> {:ok, learning} end)
+      assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn])
+      assert_received {:add, "g1", _transcript, "captured", :ont, captured_opts}
+      refute Keyword.get(captured_opts, :merge_learning_entity, false)
+      assert_received {:add, "g1", _learning_body, "learning", :ont, learning_opts}
+      assert Keyword.get(learning_opts, :merge_learning_entity) == true
+
+      no_ontology_cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add,
+          learn_fn: fn _t, _a, _u -> {:ok, learning} end
+        )
+
+      assert :ok = no_ontology_cb.("g1", "Susu", "Eli", nil, [turn])
+      assert_received {:add, "g1", _transcript, "captured", nil, no_ontology_captured_opts}
+      refute Keyword.get(no_ontology_captured_opts, :merge_learning_entity, false)
+      assert_received {:add, "g1", _learning_body, "learning", nil, no_ontology_learning_opts}
+      assert Keyword.get(no_ontology_learning_opts, :merge_learning_entity) == true
+    end
   end
 
   describe "when a capture flush writes its captured episode successfully > where test mode is enabled" do
