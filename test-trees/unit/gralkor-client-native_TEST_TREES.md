@@ -92,8 +92,7 @@ if a flush-and-await is requested with a missing or non-positive timeout
 when memory is added with a group and content
   then the group is sanitised before the write
   and the content is written to the graph as a plain-text episode scoped to the sanitised group
-  and the episode carries a generated name of "manual-add-" followed by the current millisecond timestamp
-  and the episode carries a generated idempotency key rendered from a positive monotonic unique integer
+  and the episode carries a generated name combining the current millisecond timestamp with a positive monotonic unique integer, so concurrent writes remain distinguishable
   and success is returned once the graph accepts the write
   if the graph fails
     then that failure is returned unchanged
