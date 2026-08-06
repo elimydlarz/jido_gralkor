@@ -244,6 +244,7 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
           append_thread_entry(pid, %{role: :assistant, content: "in-flight"})
         end)
 
+      wait_for_queued_system_request(pid)
       send(pid, :continue_rotation)
 
       assert :ok = Task.await(append)
@@ -300,5 +301,19 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end)
 
     :ok
+  end
+
+  defp wait_for_queued_system_request(pid, attempts \\ 100)
+
+  defp wait_for_queued_system_request(_pid, 0),
+    do: flunk("the in-flight append was not queued before rotation continued")
+
+  defp wait_for_queued_system_request(pid, attempts) do
+    case Process.info(pid, :message_queue_len) do
+      {:message_queue_len, count} when count > 0 -> :ok
+      _ ->
+        Process.sleep(1)
+        wait_for_queued_system_request(pid, attempts - 1)
+    end
   end
 end
