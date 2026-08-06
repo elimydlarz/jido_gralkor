@@ -312,11 +312,19 @@ defmodule Gralkor.InterpretTest do
       assert schema[:relevantFacts][:required] == true
     end
 
-    test "the schema's doc instructs the LLM to copy facts verbatim and preserve timestamps" do
+    test "the schema's doc instructs the LLM to copy facts verbatim, preserve timestamps and drop the leading marker" do
       doc = Interpret.interpret_schema()[:relevantFacts][:doc]
 
       assert doc =~ ~r/verbatim/i
       assert doc =~ ~r/timestamp/i
+      assert doc =~ "dropping the leading '- '"
+    end
+
+    test "the schema's doc asks for ' — ' and a one-sentence relevance reason after each fact" do
+      doc = Interpret.interpret_schema()[:relevantFacts][:doc]
+
+      assert doc =~ "' — '"
+      assert doc =~ ~r/one-sentence relevance reason/i
     end
   end
 
@@ -414,6 +422,23 @@ defmodule Gralkor.InterpretTest do
       assert String.length(ctx) <= 200
       assert ctx =~ "User: newest"
       refute ctx =~ "oldest"
+    end
+
+    test "every newer message that fits is retained, not just the newest one" do
+      msgs = [
+        Message.new("user", String.duplicate("oldest ", 40)),
+        Message.new("assistant", "second"),
+        Message.new("user", "third"),
+        Message.new("assistant", "fourth")
+      ]
+
+      ctx = Interpret.build_interpretation_context(msgs, "q", "- f", "Susu", budget: 200)
+
+      assert String.length(ctx) <= 200
+      refute ctx =~ "oldest"
+      assert ctx =~ "Susu: second"
+      assert ctx =~ "User: third"
+      assert ctx =~ "Susu: fourth"
     end
 
     test "if even one message exceeds the budget, the request and the facts are still included" do
