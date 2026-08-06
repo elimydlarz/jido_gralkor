@@ -1007,4 +1007,136 @@ defmodule Gralkor.Client.NativeTest do
       assert ["Learning"] in (rec |> Pythonx.decode())["node_label_calls"]
     end
   end
+
+  describe "when a recall is requested with a group, an agent name and a query > while a session id is given" do
+    @describetag :integration
+    setup :start_recall_recording_pool
+    setup :start_capture_buffer
+
+    test "then it is handed to the recall pipeline, so the turns buffered for that session become the conversation context" do
+      messages = [Message.new("user", "earlier context")]
+      assert :ok = Native.capture("session-1", "g", "TestAgent", "Eli", messages)
+      assert {:ok, block} = Native.recall("g", "TestAgent", "session-1", "raw query")
+      assert block =~ "<gralkor-memory"
+      assert [^messages] = CaptureBuffer.turns_for("session-1")
+    end
+  end
+
+  describe "when a recall is requested with a group, an agent name and a query > where no session id is given" do
+    @describetag :integration
+    setup :start_recall_recording_pool
+
+    test "then the recall pipeline is invoked without one" do
+      assert {:ok, block} = Native.recall("g", "TestAgent", nil, "raw query")
+      assert block =~ "<gralkor-memory"
+    end
+
+    test "and the conversation context is empty" do
+      assert {:ok, block} = Native.recall("g", "TestAgent", nil, "raw query")
+      assert block =~ "No relevant long-term memories were found"
+    end
+  end
+
+  describe "when a recall is requested with a group, an agent name and a query > where a recall deadline is configured" do
+    @describetag :integration
+    setup :start_recall_recording_pool
+
+    test "then it is forwarded to the recall pipeline in place of the default deadline" do
+      original = Application.get_env(:jido_gralkor, :recall_deadline_ms)
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :recall_deadline_ms)
+          value -> Application.put_env(:jido_gralkor, :recall_deadline_ms, value)
+        end
+      end)
+
+      Application.put_env(:jido_gralkor, :recall_deadline_ms, 50)
+
+      assert {:error, :recall_deadline_expired} =
+               Native.recall("g", "TestAgent", nil, "slow: raw query")
+    end
+  end
+
+  describe "when a recall is requested with a group, an agent name and a query > where an interpretation output budget is configured" do
+    @describetag :integration
+    setup :start_recall_recording_pool
+
+    setup do
+      original = Application.get_env(:jido_gralkor, :interpret_max_output_tokens)
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :interpret_max_output_tokens)
+          value -> Application.put_env(:jido_gralkor, :interpret_max_output_tokens, value)
+        end
+      end)
+
+      :ok
+    end
+
+    test "then it is read from configuration on that call rather than at boot, so an operator can change it without restarting" do
+      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, 111)
+      assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "first query")
+
+      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, 222)
+      assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "second query")
+    end
+
+    test "and it is forwarded to the recall pipeline as the interpretation output-token budget" do
+      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, 333)
+      assert {:ok, block} = Native.recall("g", "TestAgent", nil, "raw query")
+      assert block =~ "<gralkor-memory"
+    end
+  end
+
+  describe "when generalisations are searched for a group" do
+    @describetag :integration
+    setup :start_recall_recording_pool
+
+    test "then the group is sanitised before use" do
+      assert {:ok, [_generalisation]} =
+               Native.search_generalisations("operator-with-hyphens", "dark mode", 5)
+
+      assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
+               group == "operator_with_hyphens_gen"
+             end)
+    end
+
+    test "and the search is scoped to the `_gen` group derived from it", %{g: g} do
+      assert {:ok, [_generalisation]} = Native.search_generalisations("operator", "dark mode", 5)
+      {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert ["operator_gen"] in (recorded |> Pythonx.decode())["group_ids"]
+    end
+
+    test "and it asks the graph for episodes rather than for facts, because a generalisation is read back from the body that was written rather than from what an extractor derived",
+         %{g: g} do
+      assert {:ok, [_generalisation]} = Native.search_generalisations("g", "dark mode", 5)
+      {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert (recorded |> Pythonx.decode())["episode_calls"] == [["bm25"]]
+    end
+
+    test "and every result that decodes as a generalisation is returned carrying its decoded content, level and confidence" do
+      assert {:ok, [generalisation]} = Native.search_generalisations("g", "dark mode", 5)
+      assert generalisation.id == "gen-1"
+      assert generalisation.content == "Eli prefers dark mode"
+      assert generalisation.level == 0
+      assert generalisation.confidence == 0.8
+    end
+
+    test "but a result that does not decode as a generalisation is left out rather than surfaced raw" do
+      assert {:ok, [generalisation]} = Native.search_generalisations("g", "dark mode", 5)
+      assert generalisation.id == "gen-1"
+    end
+  end
+
+  describe "when generalisations are searched for a group > if the search fails" do
+    @describetag :integration
+    setup :start_recall_recording_pool
+
+    test "then that failure is returned unchanged" do
+      assert {:error, {:python, reason}} = Native.search_generalisations("g", "fail: now", 5)
+      assert reason =~ "generalisation search refused"
+    end
+  end
 end
