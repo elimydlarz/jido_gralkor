@@ -480,8 +480,8 @@ defmodule Gralkor.CaptureBufferTest do
     )
   end
 
-  describe "ex-capture-buffer > flush/1 when called for a session_id with buffered turns" do
-    test "the flush callback is scheduled with (group_id, agent_name, user_name, [[Message]]) and the call returns without awaiting" do
+  describe "when a session holding turns is flushed without awaiting" do
+    test "then the flush callback is scheduled with the session's group, agent name, user name, ontology, and every buffered turn" do
       msgs = [Message.new("user", "hi")]
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, msgs)
 
@@ -490,14 +490,33 @@ defmodule Gralkor.CaptureBufferTest do
       assert_receive {:flushed, "g", "Susu", "Eli", nil, [^msgs]}, 1_000
     end
 
-    test "the entry is removed from the buffer" do
+    test "and the call returns without waiting for the scheduled flush" do
+      test_pid = self()
+
+      callback = fn _g, _a, _u, _o, _turns ->
+        send(test_pid, :started)
+        Process.sleep(200)
+        :ok
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+      {:ok, _} = start_supervised({CaptureBuffer, flush_callback: callback, retries: []})
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      started_at = System.monotonic_time(:millisecond)
+      assert :ok = CaptureBuffer.flush("s")
+      assert System.monotonic_time(:millisecond) - started_at < 100
+      assert_receive :started
+    end
+
+    test "and the entry is removed, so reading the session's turns back returns nothing" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.flush("s")
 
       assert [] = CaptureBuffer.turns_for("s")
     end
 
-    test "a [gralkor] flush scheduled — session:<id> turns:<n> line is emitted at :info" do
+    test "and a scheduled-flush line naming the session and its turn count is logged at info, so a successful flush is observable from logs alone" do
       :ok = CaptureBuffer.append("sess-x", "g", "Susu", "Eli", nil, [Message.new("user", "a")])
       :ok = CaptureBuffer.append("sess-x", "g", "Susu", "Eli", nil, [Message.new("user", "b")])
 
@@ -512,14 +531,14 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > flush/1 when called for a session_id with no entry" do
-    test "returns without scheduling any flush" do
+  describe "when a session holding no turns is flushed without awaiting" do
+    test "then no flush is scheduled" do
       :ok = CaptureBuffer.flush("never-existed")
 
       refute_receive {:flushed, _, _, _, _, _}, 100
     end
 
-    test "a [gralkor] flush — session:<id> empty line is emitted at :info" do
+    test "and an empty-flush line naming the session is logged at info, so an empty flush is distinguishable from no flush attempted" do
       log =
         capture_log([level: :info], fn ->
           :ok = CaptureBuffer.flush("ghost")
@@ -530,17 +549,22 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > flush_and_await/2 when called for a session_id with buffered turns and the flush callback returns :ok within the timeout" do
-    test "returns :ok and consumes the entry" do
+  describe "when a session holding turns is flushed and awaited > while the flush callback succeeds within the caller's timeout" do
+    test "then success is returned" do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
 
       assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
       assert_receive {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "1"}]]}, 1_000
+    end
 
+    test "and the entry is consumed, so reading the session's turns back returns nothing" do
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
+
+      assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
       assert [] = CaptureBuffer.turns_for("s1")
     end
 
-    test "logs a flush-completed event at :info" do
+    test "and a flush-completed event naming the session and its outcome is logged at info" do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
 
       logs =
@@ -552,7 +576,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > flush_and_await/2 when called for a session_id with buffered turns and the flush callback does not return within the timeout" do
+  describe "when a session holding turns is flushed and awaited > if the flush callback does not finish within the caller's timeout" do
     setup do
       test_pid = self()
 
@@ -567,7 +591,22 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "returns {:error, :timeout} and the entry remains available to flush later" do
+    test "then a timeout error is returned" do
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      assert {:error, :timeout} = CaptureBuffer.flush_and_await("s1", 50)
+      assert_receive :callback_started, 1_000
+    end
+
+    test "and the buffered turns remain available to flush again" do
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      assert {:error, :timeout} = CaptureBuffer.flush_and_await("s1", 50)
+      assert_receive :callback_started, 1_000
+      assert [[%Message{content: "x"}]] = CaptureBuffer.turns_for("s1")
+    end
+
+    test "and a timeout event naming the session is logged at warning" do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       log =
@@ -575,14 +614,11 @@ defmodule Gralkor.CaptureBufferTest do
           assert {:error, :timeout} = CaptureBuffer.flush_and_await("s1", 50)
         end)
 
-      assert_receive :callback_started, 1_000
-
-      assert [[%Message{content: "x"}]] = CaptureBuffer.turns_for("s1")
       assert log =~ "flush_and_await timeout — session:s1"
     end
   end
 
-  describe "ex-capture-buffer > flush_and_await/2 when called for a session_id with buffered turns and the callback returns a non-retryable error" do
+  describe "when a session holding turns is flushed and awaited > while the flush callback reports a client contract error" do
     setup do
       test_pid = self()
 
@@ -596,16 +632,23 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "propagates the error without retry and consumes the entry" do
+    test "then that error is returned without any retry" do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       assert {:error, :capture_client_4xx} = CaptureBuffer.flush_and_await("s1", 1_000)
       assert_receive :callback_invoked, 500
+      refute_receive :callback_invoked, 50
+    end
+
+    test "and the entry is still consumed" do
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      assert {:error, :capture_client_4xx} = CaptureBuffer.flush_and_await("s1", 1_000)
       assert [] = CaptureBuffer.turns_for("s1")
     end
   end
 
-  describe "ex-capture-buffer > flush_and_await/2 when called for a session_id with buffered turns and the callback reports an upstream-LLM error" do
+  describe "when a session holding turns is flushed and awaited > while the flush callback reports an upstream-LLM error" do
     setup do
       test_pid = self()
       attempts = :counters.new(1, [])
@@ -624,7 +667,7 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "returns the error without retry" do
+    test "then that error is returned without any retry" do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       assert {:error, {:upstream_llm, :rate_limited}} =
@@ -635,7 +678,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > flush_and_await/2 when called for a session_id with buffered turns and the callback fails for any other reason across the caller's timeout" do
+  describe "when a session holding turns is flushed and awaited > while the flush callback fails for any other reason" do
     setup do
       flush_callback = fn _g, _a, _u, _o, _t -> raise "internal: still broken" end
       :ok = stop_supervised(CaptureBuffer)
@@ -646,27 +689,49 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "returns {:error, :timeout} once the configured backoff schedule outlasts the timeout" do
+    test "then the same configured backoff schedule applies, bounded by the caller's timeout" do
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      assert {:error, :timeout} = CaptureBuffer.flush_and_await("s1", 80)
+    end
+  end
+
+  describe "when a session holding turns is flushed and awaited > while the flush callback fails for any other reason > when the retries together outlast that timeout" do
+    setup do
+      flush_callback = fn _g, _a, _u, _o, _t -> raise "internal: still broken" end
+      :ok = stop_supervised(CaptureBuffer)
+
+      {:ok, _} =
+        start_supervised({CaptureBuffer, flush_callback: flush_callback, retries: [50, 50, 50]})
+
+      :ok
+    end
+
+    test "then a timeout error is returned" do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       assert {:error, :timeout} = CaptureBuffer.flush_and_await("s1", 30)
     end
   end
 
-  describe "ex-capture-buffer > flush_and_await/2 when called for a session_id with no entry" do
-    test "returns :ok without scheduling a flush and logs an empty-flush event" do
+  describe "when a session holding no turns is flushed and awaited" do
+    test "then success is returned without scheduling any flush" do
+      assert :ok = CaptureBuffer.flush_and_await("unknown", 1_000)
+      refute_receive {:flushed, _, _, _, _, _}, 100
+    end
+
+    test "and an empty-flush event naming the session is logged at info" do
       logs =
         capture_log(fn ->
           assert :ok = CaptureBuffer.flush_and_await("unknown", 1_000)
         end)
 
       assert logs =~ "[gralkor] flush_and_await — session:unknown empty"
-      refute_receive {:flushed, _, _, _, _, _}, 100
     end
   end
 
-  describe "ex-capture-buffer > flush_all/0" do
-    test "when called with pending entries, every entry is flushed and awaited" do
+  describe "when every buffered session is flushed at once" do
+    test "then each session's turns go through the same flush callback and retry schedule" do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
       :ok = CaptureBuffer.append("s2", "g", "Susu", "Eli", nil, [Message.new("user", "2")])
 
@@ -676,12 +741,21 @@ defmodule Gralkor.CaptureBufferTest do
       assert_receive {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "2"}]]}, 1_000
     end
 
-    test "when called with no entries, returns immediately" do
+    test "and the call returns only once every one of those flushes has been awaited" do
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
       assert :ok = CaptureBuffer.flush_all()
+      assert_received {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "1"}]]}
     end
   end
 
-  describe "ex-capture-buffer > flush_all/0 when one session's flush fails" do
+  describe "when a flush of every buffered session finds none buffered" do
+    test "then the call returns immediately without invoking the flush callback" do
+      assert :ok = CaptureBuffer.flush_all()
+      refute_receive {:flushed, _, _, _, _, _}
+    end
+  end
+
+  describe "when every buffered session is flushed at once > if one session's flush fails" do
     setup do
       test_pid = self()
 
@@ -699,7 +773,7 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "the other session's flush still completes" do
+    test "then the other sessions' flushes still complete" do
       :ok = CaptureBuffer.append("failing", "bad", "Susu", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.append("ok", "g", "Susu", "Eli", nil, [Message.new("user", "y")])
 
