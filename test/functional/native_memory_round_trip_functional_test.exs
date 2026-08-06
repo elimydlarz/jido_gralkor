@@ -150,9 +150,10 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   end
 
   describe "native-memory-round-trip > when a fact is written into an operator's memory" do
-    test "then the write reaches the graph as a plain-text episode under that operator's group", %{
-      g: g
-    } do
+    test "then the write reaches the graph as a plain-text episode under that operator's group",
+         %{
+           g: g
+         } do
       assert :ok =
                Native.memory_add(
                  "operator-one",
@@ -175,7 +176,8 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
         "- The office plant is a monstera."
       ])
 
-      assert {:ok, block} = Native.recall("operator_one", "TestAgent", "fresh-session", "Where does Eli work?")
+      assert {:ok, block} =
+               Native.recall("operator_one", "TestAgent", "fresh-session", "Where does Eli work?")
 
       assert block =~ ~r/<gralkor-memory trust="untrusted">/
       assert block =~ "</gralkor-memory>"
@@ -260,7 +262,9 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   end
 
   describe "native-memory-round-trip > if the graph fails the search a recall runs" do
-    test "then that failure is returned to the caller and no memory block is manufactured", %{g: g} do
+    test "then that failure is returned to the caller and no memory block is manufactured", %{
+      g: g
+    } do
       fail_search(g)
 
       assert {:error, {:python, reason}} =
