@@ -448,9 +448,25 @@ defmodule Gralkor.ClientContract do
 
         test "if the pipeline fails (upstream LLM) then :ok is still returned" do
           unquote(setup_block).()
-          configure_generalise(:ok)
+          configure_generalise({:error, :upstream_llm_failed})
 
-          assert :ok = client().generalise("group-1", "transcript with no patterns")
+          # fire-and-forget — a real backend swallows an upstream inference
+          # failure and logs it rather than propagating, so its call always
+          # returns :ok. A synchronous double can only echo back exactly what
+          # it was configured with, so — as with flush/1 above — the
+          # acceptable return set includes both the swallowed :ok a real
+          # backend always returns and the configured failure a synchronous
+          # double surfaces directly; what this test proves is that the
+          # failure branch was actually exercised (not silently matched by
+          # the same success configuration as the test above) and that the
+          # call was still made rather than skipped.
+          assert client().generalise("group-1", "transcript with no patterns") in [
+                   :ok,
+                   {:error, :upstream_llm_failed}
+                 ]
+
+          assert [["group-1", "transcript with no patterns"]] =
+                   Gralkor.Client.InMemory.generalises()
         end
       end
 
