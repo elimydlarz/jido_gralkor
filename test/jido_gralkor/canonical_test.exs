@@ -59,7 +59,6 @@ defmodule JidoGralkor.CanonicalTest do
                _ -> false
              end)
     end
-
   end
 
   describe "when a turn is rendered into canonical messages > while the trace holds a completed llm event that requested tools > while that event's content is a list of blocks rather than a string" do
@@ -110,7 +109,6 @@ defmodule JidoGralkor.CanonicalTest do
       assert behaviour.content =~ "tool memory_search"
       assert behaviour.content =~ "ok 3 facts"
     end
-
   end
 
   describe "when a turn is rendered into canonical messages > while the trace holds events that are not memory-worthy" do
@@ -128,7 +126,6 @@ defmodule JidoGralkor.CanonicalTest do
       assert length(behaviours) == 1
       assert hd(behaviours).content == "thought: kept"
     end
-
   end
 
   describe "when a turn is rendered into canonical messages > while the turn completed" do

@@ -12,7 +12,6 @@ defmodule JidoGralkor.ContextRotatorTest do
 
       assert ContextRotator.compute_seed(pre, pre, 2) == [entry(2, "c"), entry(3, "d")]
     end
-
   end
 
   describe "when a rotation seed is computed from the flushed entries, the thread's current entries, and a retention count > while every current entry was in the flushed set > while the retention count is zero" do
@@ -21,7 +20,6 @@ defmodule JidoGralkor.ContextRotatorTest do
 
       assert ContextRotator.compute_seed(pre, pre, 0) == []
     end
-
   end
 
   describe "when a rotation seed is computed from the flushed entries, the thread's current entries, and a retention count > while the current entries include in-flight entries that arrived after the flushed ones" do
@@ -40,7 +38,6 @@ defmodule JidoGralkor.ContextRotatorTest do
       assert ContextRotator.compute_seed(pre, current, 1) ==
                [entry(2, "c"), entry(3, "inflight")]
     end
-
   end
 
   describe "when a rotation seed is computed from the flushed entries, the thread's current entries, and a retention count > while the current entries include in-flight entries that arrived after the flushed ones > while there were no flushed entries at all" do
@@ -49,7 +46,6 @@ defmodule JidoGralkor.ContextRotatorTest do
 
       assert ContextRotator.compute_seed([], current, 4) == [entry(0, "inflight-only")]
     end
-
   end
 
   describe "when a rotation seed is computed from the flushed entries, the thread's current entries, and a retention count > while every current entry was in the flushed set > while the retention count exceeds the number of flushed entries" do

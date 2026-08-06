@@ -36,9 +36,10 @@ defmodule Gralkor.AgentLearningTest do
       %{learning: learning}
     end
 
-    test "then the body states the problem kind verbatim, so a problem-kind-seeded hybrid search surfaces it", %{
-      learning: learning
-    } do
+    test "then the body states the problem kind verbatim, so a problem-kind-seeded hybrid search surfaces it",
+         %{
+           learning: learning
+         } do
       assert AgentLearning.to_episode(learning) =~ "intermittent deadlock"
     end
 
@@ -46,9 +47,10 @@ defmodule Gralkor.AgentLearningTest do
       assert AgentLearning.to_episode(learning) =~ "ordered lock acquisition"
     end
 
-    test "and the body carries the lesson verbatim, so the domain entities it names stay linkable", %{
-      learning: learning
-    } do
+    test "and the body carries the lesson verbatim, so the domain entities it names stay linkable",
+         %{
+           learning: learning
+         } do
       assert AgentLearning.to_episode(learning) =~
                "Eli's scheduler acquires locks in declaration order to avoid cycles"
     end
