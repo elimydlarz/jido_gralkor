@@ -110,6 +110,60 @@ defmodule Gralkor.GeneraliseTest do
     end
   end
 
+  describe "when structured model output contains string-keyed nested maps > while it contains hypothesised candidates" do
+    test "then their content and confidence are read the same as atom-keyed candidate fields" do
+      prompt = evaluation_prompt([%{"content" => "string-keyed candidate", "confidence" => 0.9}])
+      assert prompt =~ "string-keyed candidate"
+    end
+  end
+
+  describe "when structured model output contains string-keyed nested maps > while it contains evaluation decisions" do
+    test "then their action, content, confidence, hypothesis index and existing id are read the same as atom-keyed decision fields" do
+      existing = existing_generalisation(2)
+      parent = self()
+
+      decisions = [
+        %{"action" => "skip", "hypothesis_index" => 7},
+        %{
+          "action" => "broadens",
+          "content" => "string-keyed decision",
+          "confidence" => 0.85,
+          "hypothesis_index" => 0,
+          "existing_id" => existing.id
+        }
+      ]
+
+      add_fn = fn _group, body, _source, _ontology, _opts ->
+        send(parent, {:persisted, body})
+        :ok
+      end
+
+      logs =
+        capture_log(fn ->
+          assert :ok =
+                   Generalise.generalise(
+                     "g",
+                     "transcript",
+                     default_opts(
+                       hypothesise_fn:
+                         ok_hypothesise([%{content: "candidate", confidence: 0.9}]),
+                       search_gen_fn: ok_search([Gralkor.Generalisation.encode(existing)]),
+                       evaluate_fn: ok_evaluate(decisions),
+                       add_episode_fn: add_fn
+                     )
+                   )
+        end)
+
+      assert logs =~ "skip — hypothesis #7"
+      assert_receive {:persisted, body}
+      assert {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
+      assert generalisation.content == "string-keyed decision"
+      assert generalisation.confidence == 0.85
+      assert generalisation.level == 3
+      assert generalisation.generalises == [existing.id]
+    end
+  end
+
   describe "when evaluation decides to save a candidate" do
     test "then a new generalisation is persisted at level 0" do
       {generalisation, _body, _opts} = persisted("save", nil)
