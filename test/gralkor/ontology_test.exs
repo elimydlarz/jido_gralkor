@@ -3,8 +3,8 @@ defmodule Gralkor.OntologyTest do
 
   import ExUnit.CaptureIO
 
-  describe "ex-ontology > use opts validation" do
-    test "missing :entities raises CompileError" do
+  describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:entities` option is not provided" do
+    test "then compilation fails with an error naming `:entities` and its allowed values `:strict` and `:open`" do
       assert_raise CompileError, ~r/:entities/, fn ->
         defmodule UseMissingEntities do
           use Gralkor.Ontology, relationships: :scoped
@@ -12,7 +12,10 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
-    test "bad :entities value raises CompileError" do
+  end
+
+  describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:entities` option is any value other than `:strict` or `:open`" do
+    test "then compilation fails with an error naming `:entities` and the rejected value" do
       assert_raise CompileError, ~r/:entities/, fn ->
         defmodule UseBadEntities do
           use Gralkor.Ontology, entities: :loose, relationships: :scoped
@@ -20,7 +23,10 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
-    test "missing :relationships raises CompileError" do
+  end
+
+  describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:relationships` option is not provided" do
+    test "then compilation fails with an error naming `:relationships` and its allowed values `:scoped` and `:open`" do
       assert_raise CompileError, ~r/:relationships/, fn ->
         defmodule UseMissingRels do
           use Gralkor.Ontology, entities: :strict
@@ -28,7 +34,10 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
-    test "bad :relationships value raises CompileError" do
+  end
+
+  describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:relationships` option is any value other than `:scoped` or `:open`" do
+    test "then compilation fails with an error naming `:relationships` and the rejected value" do
       assert_raise CompileError, ~r/:relationships/, fn ->
         defmodule UseBadRels do
           use Gralkor.Ontology, entities: :strict, relationships: :loose
@@ -37,8 +46,8 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "ex-ontology > entity declarations" do
-    test "alias becomes the entity's string name" do
+  describe "when an ontology declares `entity Foo do … end` with an alias" do
+    test "then the entity is named with the alias' last segment as a string (\"Foo\")" do
       defmodule EntityNameOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -50,7 +59,11 @@ defmodule Gralkor.OntologyTest do
       assert [%{name: "User"}] = EntityNameOntology.__ontology__().entity_types
     end
 
-    test "an entity declared without a description carries none" do
+    test "and no module named Foo is defined by the declaration" do
+      refute Code.ensure_loaded?(Gralkor.OntologyTest.EntityNameOntology.User)
+    end
+
+    test "and the entity carries no description, so the extractor decides from the entity's name and fields alone" do
       defmodule NoDescriptionOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -62,7 +75,10 @@ defmodule Gralkor.OntologyTest do
       assert [%{description: nil}] = NoDescriptionOntology.__ontology__().entity_types
     end
 
-    test "a description given before the block is recorded on the entity" do
+  end
+
+  describe "when an ontology declares `entity Foo do … end` with an alias > where the declaration passes a description before the block" do
+    test "then that description is recorded on the entity, so the extractor is told when to mint it" do
       defmodule DescribedEntityOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -75,7 +91,7 @@ defmodule Gralkor.OntologyTest do
                DescribedEntityOntology.__ontology__().entity_types
     end
 
-    test "a description that is not a string raises, naming the entity and the rejected description" do
+    test "if the description is neither a string nor absent > then compilation fails with an error naming the entity and the rejected description" do
       assert_raise CompileError, ~r/User.*description.*42/s, fn ->
         defmodule BadDescriptionOntology do
           use Gralkor.Ontology, entities: :open, relationships: :open
@@ -87,7 +103,10 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
-    test "field with required: true records required" do
+  end
+
+  describe "when an ontology declares `entity Foo do … end` with an alias > where the block calls `field :name, :type`" do
+    test "then the entity carries a field with that name and type" do
       defmodule RequiredFieldOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -97,10 +116,16 @@ defmodule Gralkor.OntologyTest do
       end
 
       [%{fields: [field]}] = RequiredFieldOntology.__ontology__().entity_types
+      assert field.name == :handle
+      assert field.type == :string
+    end
+
+    test "where the call passes `required: true` > then the field is recorded as required" do
+      [%{fields: [field]}] = RequiredFieldOntology.__ontology__().entity_types
       assert field == %{name: :handle, type: :string, required: true, doc: nil}
     end
 
-    test "field defaults to optional and nil doc" do
+    test "where the call omits `:required` or passes `required: false` > then the field is recorded as optional" do
       defmodule OptionalFieldOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -110,10 +135,10 @@ defmodule Gralkor.OntologyTest do
       end
 
       [%{fields: [field]}] = OptionalFieldOntology.__ontology__().entity_types
-      assert field == %{name: :nickname, type: :string, required: false, doc: nil}
+      refute field.required
     end
 
-    test "field doc is recorded" do
+    test "where the call passes `doc: \"…\"` > then the doc string is recorded as the field's description" do
       defmodule DocFieldOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -126,31 +151,12 @@ defmodule Gralkor.OntologyTest do
       assert field.doc == "stable login handle"
     end
 
-    test "field required must be boolean" do
-      assert_raise CompileError, ~r/required/, fn ->
-        defmodule InvalidRequiredOntology do
-          use Gralkor.Ontology, entities: :open, relationships: :open
-
-          entity User do
-            field(:handle, :string, required: :truthy)
-          end
-        end
-      end
+    test "where the call omits `:doc` > then the field's description is recorded as nil" do
+      [%{fields: [field]}] = OptionalFieldOntology.__ontology__().entity_types
+      assert field.doc == nil
     end
 
-    test "field doc must be a string or nil" do
-      assert_raise CompileError, ~r/doc/, fn ->
-        defmodule InvalidDocOntology do
-          use Gralkor.Ontology, entities: :open, relationships: :open
-
-          entity User do
-            field(:handle, :string, doc: 123)
-          end
-        end
-      end
-    end
-
-    test "unsupported field type raises" do
+    test "if `:type` is outside the supported set (`:string`, `:integer`, `:float`, `:boolean`) > then compilation fails with an error naming the rejected type" do
       assert_raise CompileError, ~r/atom/, fn ->
         defmodule BadTypeOntology do
           use Gralkor.Ontology, entities: :open, relationships: :open
@@ -162,7 +168,34 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
-    test "duplicate field name in same entity raises" do
+    test "if `:required` is given a non-boolean value > then compilation fails with an error naming `:required`" do
+      assert_raise CompileError, ~r/required/, fn ->
+        defmodule InvalidRequiredOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :open
+
+          entity User do
+            field(:handle, :string, required: :truthy)
+          end
+        end
+      end
+    end
+
+    test "if `:doc` is given a value that is neither a string nor nil > then compilation fails with an error naming `:doc`" do
+      assert_raise CompileError, ~r/doc/, fn ->
+        defmodule InvalidDocOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :open
+
+          entity User do
+            field(:handle, :string, doc: 123)
+          end
+        end
+      end
+    end
+
+  end
+
+  describe "when an ontology declares `entity Foo do … end` with an alias > if two fields in the same entity share a name" do
+    test "then compilation fails with an error naming the duplicated field" do
       assert_raise CompileError, ~r/handle/, fn ->
         defmodule DuplicateFieldOntology do
           use Gralkor.Ontology, entities: :open, relationships: :open
@@ -175,7 +208,10 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
-    test "a relationship declared inside an entity block raises, relationships living in from blocks" do
+  end
+
+  describe "when an ontology declares `entity Foo do … end` with an alias > if a relationship-style call appears inside the block" do
+    test "then compilation fails, relationships living in `from` blocks" do
       diagnostic =
         capture_io(:stderr, fn ->
           assert_raise CompileError, fn ->
@@ -193,7 +229,10 @@ defmodule Gralkor.OntologyTest do
       assert diagnostic =~ "undefined function prefers/1"
     end
 
-    test "duplicate entity declarations raise" do
+  end
+
+  describe "when an ontology declares `entity Foo do … end` with an alias > if the same entity name is declared more than once in one ontology" do
+    test "then compilation fails with an error naming the duplicated entity" do
       assert_raise CompileError, ~r/User/, fn ->
         defmodule DuplicateEntityOntology do
           use Gralkor.Ontology, entities: :open, relationships: :open
