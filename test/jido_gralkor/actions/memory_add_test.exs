@@ -35,13 +35,13 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
   describe "when the memory add tool runs with content and a source description" do
     test "then it returns an acknowledgement immediately, without waiting on the write" do
-    InMemory.set_memory_add(:ok)
+      InMemory.set_memory_add(:ok)
 
-    assert {:ok, %{result: "Ingesting."}} =
-             MemoryAdd.run(
-               %{content: "Eli prefers tea", source_description: "user preference"},
-               %{agent_id: "01USER"}
-             )
+      assert {:ok, %{result: "Ingesting."}} =
+               MemoryAdd.run(
+                 %{content: "Eli prefers tea", source_description: "user preference"},
+                 %{agent_id: "01USER"}
+               )
     end
 
     test "and the write is carried out in the background under the operator's sanitised group id, carrying the content and source description as given" do
@@ -60,54 +60,54 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
   describe "when the memory add tool runs with content and a source description > where the tool context selects a Lens" do
     test "then the background write is routed to that Lens's ingestion for the operator, carrying the content and source description" do
-    Process.register(self(), :memory_add_lens_test)
+      Process.register(self(), :memory_add_lens_test)
 
-    Application.put_env(:jido_gralkor, :lenses, [
-      [
-        name: "decisions",
-        ontology: LensOntology,
-        scope: :operator,
-        ingestion: RecordingIngestion
-      ]
-    ])
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "decisions",
+          ontology: LensOntology,
+          scope: :operator,
+          ingestion: RecordingIngestion
+        ]
+      ])
 
-    assert {:ok, %{result: "Ingesting."}} =
-             MemoryAdd.run(
-               %{content: "We chose Friday.", source_description: "agent decision"},
-               %{agent_id: "operator-one", lens: "decisions"}
-             )
+      assert {:ok, %{result: "Ingesting."}} =
+               MemoryAdd.run(
+                 %{content: "We chose Friday.", source_description: "agent decision"},
+                 %{agent_id: "operator-one", lens: "decisions"}
+               )
 
-    assert_receive {:lens_ingest,
-                    %Gralkor.Ingest{
-                      operator_id: "operator-one",
-                      lens: "decisions",
-                      content: "We chose Friday.",
-                      source_description: "agent decision"
-                    }, %{lens: %{name: "decisions"}}}
+      assert_receive {:lens_ingest,
+                      %Gralkor.Ingest{
+                        operator_id: "operator-one",
+                        lens: "decisions",
+                        content: "We chose Friday.",
+                        source_description: "agent decision"
+                      }, %{lens: %{name: "decisions"}}}
     end
   end
 
   describe "when the memory add tool runs with content and a source description > if the background write fails" do
     test "then the failure is logged" do
-    InMemory.set_memory_add({:error, :boom})
+      InMemory.set_memory_add({:error, :boom})
 
-    log =
-      capture_log(fn ->
-        assert {:ok, %{result: "Ingesting."}} =
-                 MemoryAdd.run(
-                   %{content: "something", source_description: "agent thought"},
-                   %{agent_id: "01USER"}
-                 )
+      log =
+        capture_log(fn ->
+          assert {:ok, %{result: "Ingesting."}} =
+                   MemoryAdd.run(
+                     %{content: "something", source_description: "agent thought"},
+                     %{agent_id: "01USER"}
+                   )
 
-        assert eventually(fn ->
-                 InMemory.adds() == [["01USER", "something", "agent thought"]]
-               end)
+          assert eventually(fn ->
+                   InMemory.adds() == [["01USER", "something", "agent thought"]]
+                 end)
 
-        Process.sleep(50)
-      end)
+          Process.sleep(50)
+        end)
 
-    assert log =~ "[gralkor] memory_add failed"
-    assert log =~ ":boom"
+      assert log =~ "[gralkor] memory_add failed"
+      assert log =~ ":boom"
     end
 
     test "and the caller's acknowledgement is unaffected" do

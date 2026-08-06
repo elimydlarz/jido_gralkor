@@ -22,7 +22,6 @@ defmodule Gralkor.LearnTest do
         Learn.learn(turn(), ok_learn(%{}), "  ", "Eli")
       end
     end
-
   end
 
   describe "when one reasoning turn is learned from > if the user name is missing or blank" do
@@ -104,7 +103,8 @@ defmodule Gralkor.LearnTest do
       %{learning: learning}
     end
 
-    test "then its string keys are normalised into a learning record carrying those same four values", %{learning: learning} do
+    test "then its string keys are normalised into a learning record carrying those same four values",
+         %{learning: learning} do
       assert %AgentLearning{} = learning
       assert learning.problem_kind == "deploy timeout"
       assert learning.approach == "warm cache at boot"
@@ -162,14 +162,14 @@ defmodule Gralkor.LearnTest do
   end
 
   defp captured_prompt do
-      capture = fn prompt ->
-        send(self(), {:prompt, prompt})
-        {:ok, %{problem_kind: "k", approach: "a", success: true, lesson: "l"}}
-      end
+    capture = fn prompt ->
+      send(self(), {:prompt, prompt})
+      {:ok, %{problem_kind: "k", approach: "a", success: true, lesson: "l"}}
+    end
 
-      Learn.learn(turn(), capture, "Susu", "Eli")
+    Learn.learn(turn(), capture, "Susu", "Eli")
 
-      assert_received {:prompt, prompt}
-      prompt
+    assert_received {:prompt, prompt}
+    prompt
   end
 end

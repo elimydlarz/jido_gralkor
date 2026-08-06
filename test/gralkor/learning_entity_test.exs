@@ -76,7 +76,6 @@ defmodule Gralkor.LearningEntityTest do
       assert hd(result) == hd(consumer)
       assert List.last(result) == LearningEntity.spec()
     end
-
   end
 
   describe "when a consumer's entity-type list is merged with the built-in learning entity type > while the list declares no entity types at all" do
@@ -112,10 +111,11 @@ defmodule Gralkor.LearningEntityTest do
       assert length(result.entity_types) == 2
     end
 
-    test "and the payload's edge types, edge-type map, and excluded entity types are preserved unchanged", %{
-      payload: payload,
-      result: result
-    } do
+    test "and the payload's edge types, edge-type map, and excluded entity types are preserved unchanged",
+         %{
+           payload: payload,
+           result: result
+         } do
       assert result.edge_types == payload.edge_types
       assert result.edge_type_map == payload.edge_type_map
       assert result.excluded_entity_types == payload.excluded_entity_types
