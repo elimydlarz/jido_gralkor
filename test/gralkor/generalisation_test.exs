@@ -51,7 +51,6 @@ defmodule Gralkor.GeneralisationTest do
       assert meta["confidence"] == 0.92
       assert meta["generalises"] == ["def456", "ghi789"]
     end
-
   end
 
   describe "when a generalisation is encoded > where the generalisation generalises nothing" do
@@ -114,7 +113,6 @@ defmodule Gralkor.GeneralisationTest do
       assert {:ok, _gen, plain} = Generalisation.decode(encoded)
       assert plain == "padded content"
     end
-
   end
 
   describe "when a string carrying the \"GEN|v1|\" prefix is decoded > where the content spans several lines" do
@@ -127,7 +125,6 @@ defmodule Gralkor.GeneralisationTest do
       assert gen.level == 1
       assert plain == "Line 1\nLine 2\nLine 3"
     end
-
   end
 
   describe "when a string carrying the \"GEN|v1|\" prefix is decoded > if the JSON metadata is malformed" do
@@ -136,7 +133,6 @@ defmodule Gralkor.GeneralisationTest do
         Generalisation.decode("GEN|v1|not-json\ncontent")
       end
     end
-
   end
 
   describe "when a string carrying the \"GEN|v1|\" prefix is decoded > if the id, the level, or the confidence is missing from the metadata" do

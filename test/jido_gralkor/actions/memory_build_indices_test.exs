@@ -11,12 +11,12 @@ defmodule JidoGralkor.Actions.MemoryBuildIndicesTest do
 
   describe "when a model reads the build-indices tool's description" do
     test "then it is told not to call the tool unless the operator explicitly asks" do
-    description =
-      MemoryBuildIndices.__action_metadata__()
-      |> Map.get(:description)
-      |> to_string()
+      description =
+        MemoryBuildIndices.__action_metadata__()
+        |> Map.get(:description)
+        |> to_string()
 
-    assert description =~ "DO NOT CALL"
+      assert description =~ "DO NOT CALL"
     end
   end
 
