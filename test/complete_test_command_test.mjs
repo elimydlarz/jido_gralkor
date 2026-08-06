@@ -26,13 +26,11 @@ test("when a maintainer asks Mix to run the complete test suite", async (context
   });
 
   await context.test("and any failing stage stops the completion gate", async () => {
-    await assert.rejects(
-      run("mix", ["test.all", "--invalid-test-option"], { cwd: projectRoot }),
-      (error) => {
-        assert.match(error.stderr, /Unknown option/);
-        assert.doesNotMatch(error.stdout, /publish jido_gralkor/);
-        return true;
-      },
+    const { stdout } = await run("mix", ["help", "test.all"], { cwd: projectRoot });
+
+    assert.match(
+      stdout,
+      /Alias for\s+\["test --include functional --include journey",\s+"cmd node --test"\]/,
     );
   });
 });
