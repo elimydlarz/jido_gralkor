@@ -61,8 +61,8 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/6 when the LLM returns relevant facts" do
-    test "returns the list unchanged" do
+  describe "when the model returns relevant facts" do
+    test "then the list is returned unchanged" do
       facts = [
         "X is a thing (created 2020) — relevant because the user asked about X",
         "Y was deprecated (invalid since 2022) — context for the timeline question"
@@ -81,8 +81,8 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/6 when the LLM returns an empty list" do
-    test "returns []" do
+  describe "when the model returns an empty list" do
+    test "then an empty list is returned" do
       interpret_fn = fn _, _ -> {:ok, []} end
 
       assert [] =
@@ -96,8 +96,8 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/6 if the LLM response cannot be parsed against the schema" do
-    test "raises Gralkor.InterpretParseFailed (a distinct exception; no partial list is returned)" do
+  describe "if the model response is not a list of strings" do
+    test "then Gralkor.InterpretParseFailed is raised as a failure distinct from an upstream error" do
       interpret_fn = fn _, _ -> {:ok, %{not: "a list"}} end
 
       assert_raise InterpretParseFailed, fn ->
@@ -111,19 +111,7 @@ defmodule Gralkor.InterpretTest do
       end
     end
 
-    test "the raised failure carries the response that could not be parsed" do
-      interpret_fn = fn _, _ -> {:ok, %{not: "a list"}} end
-
-      error =
-        assert_raise InterpretParseFailed, fn ->
-          Interpret.interpret_facts([Message.new("user", "q")], "q", "- f", interpret_fn, "Susu")
-        end
-
-      assert error.raw_response == {:ok, %{not: "a list"}}
-      assert Exception.message(error) =~ ~s(%{not: "a list"})
-    end
-
-    test "raises Gralkor.InterpretParseFailed when any list element is not a string" do
+    test "and no partial list is returned" do
       interpret_fn = fn _, _ -> {:ok, ["valid", 123]} end
 
       assert_raise InterpretParseFailed, fn ->
@@ -137,7 +125,22 @@ defmodule Gralkor.InterpretTest do
       end
     end
 
-    test "raises RuntimeError when the call returns {:error, _} (upstream LLM failure, distinct from parse failure)" do
+    test "and the raised failure carries the response that could not be parsed, so a caller can see what came back" do
+      interpret_fn = fn _, _ -> {:ok, %{not: "a list"}} end
+
+      error =
+        assert_raise InterpretParseFailed, fn ->
+          Interpret.interpret_facts([Message.new("user", "q")], "q", "- f", interpret_fn, "Susu")
+        end
+
+      assert error.raw_response == {:ok, %{not: "a list"}}
+      assert Exception.message(error) =~ ~s(%{not: "a list"})
+    end
+
+  end
+
+  describe "if the model call itself fails" do
+    test "then a RuntimeError naming the interpret failure is raised" do
       interpret_fn = fn _, _ -> {:error, :upstream} end
 
       assert_raise RuntimeError, ~r/interpret failed/, fn ->
@@ -152,28 +155,18 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret > interpret_facts/6 if agent_name is missing or blank" do
-    test "raises ArgumentError on blank" do
-      assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Interpret.interpret_facts(
-          [Message.new("user", "q")],
-          "q",
-          "- f",
-          fn _, _ -> {:ok, []} end,
-          ""
-        )
-      end
-    end
-
-    test "raises ArgumentError on nil" do
-      assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Interpret.interpret_facts(
-          [Message.new("user", "q")],
-          "q",
-          "- f",
-          fn _, _ -> {:ok, []} end,
-          nil
-        )
+  describe "when facts are interpreted for a request against a conversation > if the agent name is missing or blank" do
+    test "then an ArgumentError is raised" do
+      for agent_name <- ["", nil] do
+        assert_raise ArgumentError, ~r/agent_name/, fn ->
+          Interpret.interpret_facts(
+            [Message.new("user", "q")],
+            "q",
+            "- f",
+            fn _, _ -> {:ok, []} end,
+            agent_name
+          )
+        end
       end
     end
   end
