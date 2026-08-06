@@ -21,8 +21,9 @@ defmodule Gralkor.Python do
        throws "already been initialized" on a second call) so multiple boots
        in one VM — as functional-test modules do — are safe.
 
-    3. **Smoke-import `graphiti_core`** through PythonX so any venv / import
-       failure surfaces at boot rather than on the first real call.
+    3. **Smoke-import `graphiti_core` and every supported provider client**
+       through PythonX so any venv / import failure surfaces at boot rather
+       than on the first real call.
 
   See `test-trees/unit/python-runtime_TEST_TREES.md`.
   """
