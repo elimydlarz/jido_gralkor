@@ -37,7 +37,7 @@ defmodule Gralkor.LegacyFlushGeneralisationFunctionalTest do
       end
 
       test "and a generalisation failure does not change the successful flush result", %{turns: turns} do
-        callback = successful_callback(fn _group_id, _transcript -> raise "generalise failed" end)
+        callback = successful_callback(fn _group_id, _transcript -> {:error, :generalise_failed} end)
 
         assert :ok = callback.("operator_one", "Susu", "Eli", nil, turns)
       end
