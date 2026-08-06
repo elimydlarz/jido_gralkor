@@ -32,7 +32,7 @@ Run every read-only Git inspection as its own standalone command. Do not compose
 
 Do not run direct write-side Git commands, including `git fetch`, `git add`, `git commit`, `git tag`, or `git push`. Trunk-sync exclusively owns commits and branch synchronization. Do not run `scripts/publish.sh` because it performs direct write-side Git commands.
 
-Run `mix test`, `mix test.functional`, and `mix test.journey` before editing the version.
+Run `mix test.all` before editing the version.
 
 Do not change release state before every preflight check and test command passes.
 
