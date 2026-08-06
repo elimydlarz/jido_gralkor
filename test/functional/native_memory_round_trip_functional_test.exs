@@ -108,13 +108,22 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
     on_exit(fn -> if Process.alive?(pool), do: GenServer.stop(pool) end)
 
-    %{g: g}
-  end
+    learning = %Gralkor.AgentLearning{
+      problem_kind: "scheduling conflict",
+      approach: "moved the vacuum job",
+      success: true,
+      lesson: "separate overlapping jobs"
+    }
 
-  defp start_buffer(learn_fn) do
     start_supervised!(
-      {CaptureBuffer, [flush_callback: App.build_flush_callback(nil, learn_fn: learn_fn)]}
+      {CaptureBuffer,
+       [
+         flush_callback:
+           App.build_flush_callback(nil, learn_fn: fn _t, _a, _u -> {:ok, learning} end)
+       ]}
     )
+
+    %{g: g}
   end
 
   defp episodes(g) do
@@ -193,8 +202,6 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   describe "native-memory-round-trip > when a captured turn is flushed for its session" do
     test "then the flush is accepted immediately, the transcript reaches the graph, and the buffered turns are consumed",
          %{g: g} do
-      start_buffer(nil)
-
       :ok =
         Native.capture("session-1", "operator_one", "Susu", "Eli", [
           Message.new("user", "my favourite colour is teal"),
@@ -218,15 +225,6 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   describe "native-memory-round-trip > while learning is wired into the flush" do
     test "then a flushed turn's learning reaches the graph as its own episode asking for the Learning entity type",
          %{g: g} do
-      learning = %Gralkor.AgentLearning{
-        problem_kind: "scheduling conflict",
-        approach: "moved the vacuum job",
-        success: true,
-        lesson: "separate overlapping jobs"
-      }
-
-      start_buffer(fn _turn, _agent, _user -> {:ok, learning} end)
-
       :ok =
         Native.capture("session-2", "operator_one", "Susu", "Eli", [
           Message.new("user", "the backup keeps failing"),
