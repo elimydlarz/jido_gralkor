@@ -42,68 +42,68 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
   describe "when the memory search tool runs with a query and a committed session > while the backend returns a memory block" do
     test "then the action result carries that block" do
-    InMemory.set_recall({:ok, "Facts:\n- Eli likes tea"})
+      InMemory.set_recall({:ok, "Facts:\n- Eli likes tea"})
 
-    assert {:ok, %{result: "Facts:\n- Eli likes tea"}} =
-             MemorySearch.run(%{query: "preferences"}, %{
-               agent_id: "01USER",
-               session_id: "thr-1",
-               agent_name: "TestAgent"
-             })
+      assert {:ok, %{result: "Facts:\n- Eli likes tea"}} =
+               MemorySearch.run(%{query: "preferences"}, %{
+                 agent_id: "01USER",
+                 session_id: "thr-1",
+                 agent_name: "TestAgent"
+               })
     end
   end
 
   describe "when the memory search tool runs with a query and a committed session > if the backend fails" do
     test "then the failure reason is returned to the caller unchanged" do
-    InMemory.set_recall({:error, :boom})
+      InMemory.set_recall({:error, :boom})
 
-    assert {:error, :boom} =
-             MemorySearch.run(%{query: "preferences"}, %{
-               agent_id: "01USER",
-               session_id: "thr-1",
-               agent_name: "TestAgent"
-             })
+      assert {:error, :boom} =
+               MemorySearch.run(%{query: "preferences"}, %{
+                 agent_id: "01USER",
+                 session_id: "thr-1",
+                 agent_name: "TestAgent"
+               })
     end
   end
 
   describe "when the memory search tool runs with a query and a committed session" do
     test "then the operator's sanitised group id, the agent name, and the session id from the tool context are passed to the memory backend with the query" do
-    InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
+      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
 
-    MemorySearch.run(%{query: "q"}, %{
-      agent_id: "user-with-hyphens",
-      session_id: "thr-xyz",
-      agent_name: "Susu"
-    })
+      MemorySearch.run(%{query: "q"}, %{
+        agent_id: "user-with-hyphens",
+        session_id: "thr-xyz",
+        agent_name: "Susu"
+      })
 
-    assert [[group_id, agent_name, session_id, "q"]] = InMemory.recalls()
-    assert group_id == "user_with_hyphens"
-    assert agent_name == "Susu"
-    assert session_id == "thr-xyz"
+      assert [[group_id, agent_name, session_id, "q"]] = InMemory.recalls()
+      assert group_id == "user_with_hyphens"
+      assert agent_name == "Susu"
+      assert session_id == "thr-xyz"
     end
   end
 
   describe "when the memory search tool runs with a query and a committed session > where the tool context selects Lenses to search" do
     setup do
-    Process.register(self(), :memory_search_lens_test)
-    Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+      Process.register(self(), :memory_search_lens_test)
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
 
-    Application.put_env(:jido_gralkor, :lenses, [
-      [
-        name: "observations",
-        ontology: LensOntology,
-        scope: :operator,
-        ingestion: Gralkor.Lens.Ingestion.Store
-      ]
-    ])
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: LensOntology,
+          scope: :operator,
+          ingestion: Gralkor.Lens.Ingestion.Store
+        ]
+      ])
 
       assert {:ok, %{result: result}} =
-             MemorySearch.run(%{query: "launch"}, %{
-               agent_id: "operator-one",
-               session_id: "thread-one",
-               agent_name: "Susu",
-               search_lenses: ["observations"]
-             })
+               MemorySearch.run(%{query: "launch"}, %{
+                 agent_id: "operator-one",
+                 session_id: "thread-one",
+                 agent_name: "Susu",
+                 search_lenses: ["observations"]
+               })
 
       %{result: result}
     end
@@ -114,11 +114,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
     test "and the operator's reserved `default` Lens is searched alongside every selected Lens" do
       assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "default"}},
-                    "launch", 10}
+                      "launch", 10}
 
-      assert_receive {:lens_search,
-                      %{operator_id: "operator-one", lens: %{name: "observations"}},
-                    "launch", 10}
+      assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "observations"}},
+                      "launch", 10}
     end
 
     test "and the results of all searched Lenses are joined into one result", %{result: result} do
@@ -194,7 +193,9 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       assert InMemory.recalls() == []
     end
 
-    test "and the result explicitly states that long-term memory was not queried", %{result: result} do
+    test "and the result explicitly states that long-term memory was not queried", %{
+      result: result
+    } do
       assert result =~ "long-term memory was NOT queried"
     end
 
