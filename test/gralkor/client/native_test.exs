@@ -509,7 +509,7 @@ defmodule Gralkor.Client.NativeTest do
 
         class _FakeGraphiti:
             def __init__(self):
-                self.recorded = {"episodes": [], "communities": 0}
+                self.recorded = {"episodes": [], "communities": 0, "indices": 0}
 
             async def search(self, query, num_results=10, search_filter=None):
                 if query.startswith("slow:"):
@@ -536,7 +536,9 @@ defmodule Gralkor.Client.NativeTest do
                 })
 
             async def build_indices_and_constraints(self):
-                pass
+                if self.recorded["indices"] == "fail":
+                    raise RuntimeError("indices refused")
+                self.recorded["indices"] += 1
 
             async def build_communities(self):
                 if self.recorded["communities"] == "fail":
