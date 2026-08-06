@@ -12,8 +12,8 @@ when context rotation is requested
       while no entries are retained
       and every prior entry was flushed
         then the rotated thread is empty
-      while entries arrive after flushing and before the fresh thread is installed
-        then every in-flight entry is carried into the fresh thread exactly once
+      while entries arrive before installation
+        then each arrives in the fresh thread once
     if installing the fresh thread fails after flushing
       then the failure reason is returned to the caller
       and the agent process is still running afterwards

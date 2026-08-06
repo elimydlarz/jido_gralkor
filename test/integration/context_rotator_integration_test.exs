@@ -225,8 +225,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "when context rotation is requested > while the agent has a committed thread > while its session flush succeeds > while entries arrive after flushing and before the fresh thread is installed" do
-    test "then every in-flight entry is carried into the fresh thread exactly once" do
+  describe "when context rotation is requested > while the agent has a committed thread > while its session flush succeeds > while entries arrive before installation" do
+    test "then each arrives in the fresh thread once" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
       seed_thread_with_entries(pid, "pre-rotation", [%{role: :user, content: "flushed"}])
