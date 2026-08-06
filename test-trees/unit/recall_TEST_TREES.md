@@ -48,13 +48,14 @@ where a generalisation search is supplied
   then it runs in parallel with the main search over the same sanitised group
   and it asks for one third of the main result limit, never fewer than one
   and its results are combined with the regular facts before interpretation
-  and it is abandoned after a five-second yield that is independent of the overall recall deadline
+  and it may use up to the shared five-second auxiliary yield while the outer recall deadline remains available
   if it fails or times out
-    then recall proceeds with only the regular facts
+    then it contributes no facts to interpretation
+    and successful learning-search facts remain eligible for interpretation
 
 where no generalisation search is supplied
   then no generalisation search is issued
-  and recall still returns its memory block from the main search alone
+  and a supplied learning search still contributes its successful facts
 
 where a learning search is supplied
   then it runs on every recall without any opt-in flag
@@ -62,17 +63,23 @@ where a learning search is supplied
   and it is seeded with the raw user query rather than a classified or LLM-rewritten query
   and it asks for one third of the main result limit, never fewer than one
   and its results are combined with the regular facts before interpretation
-  and it is abandoned after a five-second yield that is independent of the overall recall deadline
+  and it may use up to the shared five-second auxiliary yield while the outer recall deadline remains available
   if it fails or times out
-    then recall proceeds with only the regular facts
+    then it contributes no facts to interpretation
+    and successful generalisation-search facts remain eligible for interpretation
 
 where no learning search is supplied
   then no learning search is issued
-  and the main search remains the only query sent to the graph
+  and a supplied generalisation search still contributes its successful facts
+
+where neither auxiliary search is supplied
+  then the main search is the only search issued
 
 where generalisation and learning searches are both supplied
   if both searches outlast their auxiliary yield
     then both searches are abandoned within one shared five-second window
+  if the outer recall deadline expires before their auxiliary yield
+    then the recall deadline ends the call before the five-second auxiliary window elapses
 
 while a deadline budget governs the call
   if the upstream answers inside the budget
@@ -80,7 +87,7 @@ while a deadline budget governs the call
   if the budget is exhausted before the call returns
     then {:error, :recall_deadline_expired} is returned
     and the expiry is logged as a warning naming the session and the budget
-    and the upstream work already started finishes unobserved, nothing being able to cancel it
+    and ordinary BEAM work owned by the recall task is stopped
 
 when no deadline is supplied
   then a default budget of 12 seconds governs the call
