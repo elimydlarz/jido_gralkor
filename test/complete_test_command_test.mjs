@@ -24,4 +24,15 @@ test("when a maintainer asks Mix to run the complete test suite", async (context
 
     assert.ok(node > exUnit);
   });
+
+  await context.test("and any failing stage stops the completion gate", async () => {
+    await assert.rejects(
+      run("mix", ["test.all", "--invalid-test-option"], { cwd: projectRoot }),
+      (error) => {
+        assert.match(error.stderr, /Unknown option/);
+        assert.doesNotMatch(error.stdout, /publish jido_gralkor/);
+        return true;
+      },
+    );
+  });
 });
