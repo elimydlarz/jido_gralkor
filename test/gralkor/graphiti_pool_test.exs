@@ -164,6 +164,42 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "build_indices/1" do
+    test "then every group this pool holds an instance for is rebuilt, not one database standing for the whole graph" do
+      {instance, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.initialisation_count = 0
+
+              async def build_indices_and_constraints(self):
+                  self.initialisation_count += 1
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group -> instance end,
+          initialise_instance: fn _instance -> :ok end,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      GraphitiPool.for(pid, "operator_one")
+      GraphitiPool.for(pid, "operator_two")
+
+      assert {:ok, %{status: "built"}} = GraphitiPool.build_indices(pid)
+
+      {count, _} = Pythonx.eval("g.initialisation_count", %{"g" => instance})
+      assert Pythonx.decode(count) == 2
+
+      GenServer.stop(pid)
+    end
+  end
+
   describe "search_episodes/4" do
     test "then graphiti's g.search_ is invoked with an episode-only config, returning the bodies that were written" do
       {g, _} =
