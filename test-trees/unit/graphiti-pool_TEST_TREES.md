@@ -48,6 +48,9 @@ when the pool has constructed its database
 
 when the pool terminates
   then the database it held for its lifetime is closed through the shared asyncio runtime
+  while an embedded connection is configured
+    then the owned embedded server exits before termination completes
+    and finalising the async wrapper emits no unawaited-coroutine warning
 
 when a graph instance is requested for a group
   then the instance is looked up from a cache shared across callers
