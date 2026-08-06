@@ -172,7 +172,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
   end
 
   describe "when a graph write raises inside a capture chain" do
-    test "then the capture buffer retries with one-second and two-second backoffs" do
+    test "then the capture buffer retries with its default one-second and two-second backoffs" do
       counter = counting_buffer(fn n -> if n < 3, do: raise("graph unavailable"), else: :ok end)
 
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
