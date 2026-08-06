@@ -584,6 +584,15 @@ defmodule Gralkor.GraphitiPool do
 
     construct_falkor_db = Keyword.get(opts, :construct_falkor_db, &default_construct_falkor_db/1)
 
+    close_falkor_db =
+      Keyword.get_lazy(opts, :close_falkor_db, fn ->
+        if Keyword.has_key?(opts, :construct_falkor_db) do
+          fn _database -> :ok end
+        else
+          fn database -> default_close_falkor_db(database, falkordb_spec) end
+        end
+      end)
+
     construct_shared_clients =
       Keyword.get(opts, :construct_shared_clients, &default_construct_shared_clients/2)
 
@@ -614,6 +623,7 @@ defmodule Gralkor.GraphitiPool do
       table: table,
       falkordb_spec: falkordb_spec,
       falkor_db: falkor_db,
+      close_falkor_db: close_falkor_db,
       shared: shared,
       construct_instance: construct_instance,
       initialise_instance: initialise_instance,
@@ -675,6 +685,7 @@ defmodule Gralkor.GraphitiPool do
 
   @impl true
   def terminate(_reason, state) do
+    :ok = state.close_falkor_db.(state.falkor_db)
     unregister_table(self())
     :ets.delete(state.table)
     :ok
@@ -869,6 +880,37 @@ defmodule Gralkor.GraphitiPool do
       )
 
     db
+  end
+
+  defp default_close_falkor_db(falkor_db, {:embedded, _data_dir}) do
+    Pythonx.eval(
+      """
+      import asyncio
+      async def close_embedded(database):
+          client = database.client
+          await client._client.aclose()
+          sync_client = client._sync_client
+          sync_client._async_managed = False
+          sync_client._cleanup()
+          client._async_managed = True
+      asyncio._gralkor_run(close_embedded(database))
+      """,
+      %{"database" => falkor_db}
+    )
+
+    :ok
+  end
+
+  defp default_close_falkor_db(falkor_db, {:remote, _options}) do
+    Pythonx.eval(
+      """
+      import asyncio
+      asyncio._gralkor_run(database.aclose())
+      """,
+      %{"database" => falkor_db}
+    )
+
+    :ok
   end
 
   defp default_construct_instance(falkor_db, shared, sanitized_group_id) do
