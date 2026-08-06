@@ -1540,8 +1540,12 @@ defmodule Gralkor.GraphitiPoolTest do
       assert_receive {:closed, :stub_falkor_db}
     end
 
-    @tag :integration
-    test "while a remote connection is configured then the remote database client is closed before termination completes" do
+  end
+
+  describe "when the pool terminates > while a remote connection is configured" do
+    @describetag :integration
+
+    test "then the remote database client is closed before termination completes" do
       previous_key = System.get_env("OPENAI_API_KEY")
       System.put_env("OPENAI_API_KEY", "test-key")
 
@@ -1596,8 +1600,12 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Pythonx.decode(closed)
     end
 
-    @tag :integration
-    test "while an embedded connection is configured then its server exits and finalisation emits no unawaited-coroutine warning" do
+  end
+
+  describe "when the pool terminates > while an embedded connection is configured" do
+    @describetag :integration
+
+    setup do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_close_#{System.unique_integer([:positive])}")
 
@@ -1623,9 +1631,18 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
 
+      %{database: database, data_dir: data_dir, server_pid: server_pid}
+    end
+
+    test "then the owned embedded server exits before termination completes", %{server_pid: server_pid} do
       assert {_, status} = System.cmd("ps", ["-p", to_string(server_pid), "-o", "pid="])
       assert status != 0
+    end
 
+    test "and finalising the async wrapper emits no unawaited-coroutine warning", %{
+      database: database,
+      data_dir: data_dir
+    } do
       {warnings, _globals} =
         Pythonx.eval(
           """
@@ -1643,8 +1660,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "init/1 runs synchronously, if any warmup call raises or returns {:error, _}" do
-    test "then it is caught and logged at :warning as \"[gralkor] warmup failed (non-fatal) — <stage>: <reason>\" and boot proceeds" do
+  describe "when the pool has constructed its database > if a warmup call raises or returns an error" do
+    test "then the failure is logged as non-fatal, naming the stage and the reason" do
       log =
         capture_log(fn ->
           %{pid: pid} = start_pool(interpret_fn: fn _, _ -> :ok end, warmup: true)
@@ -1654,12 +1671,20 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert log =~ "[gralkor] warmup failed (non-fatal) — search:"
     end
+
+    test "and startup completes anyway" do
+      capture_log(fn ->
+        %{pid: pid} = start_pool(interpret_fn: fn _, _ -> :ok end, warmup: true)
+        assert Process.alive?(pid)
+        GenServer.stop(pid)
+      end)
+    end
   end
 
-  describe "init/1 runs synchronously, when started with an embedded spec" do
+  describe "when the pool starts > while an embedded connection is configured" do
     @describetag :integration
 
-    test "then <data_dir>/gralkor.db.settings is removed if present, immediately before constructing AsyncFalkorDB" do
+    test "then any resume-cache file left beside the database is removed before the embedded database is constructed, so a stale socket from a previous boot cannot be reconnected to" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 
@@ -1705,7 +1730,7 @@ defmodule Gralkor.GraphitiPoolTest do
       File.rm_rf!(stale_tmp)
     end
 
-    test "then the embedded FalkorDB construction boundary receives the data directory once and the resulting database is held for the lifetime of the GenServer" do
+    test "and the embedded database is constructed once and held for the pool's lifetime" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 
@@ -1743,7 +1768,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "ex-graphiti-pool > ontology materialisation > when an ontology module is materialised" do
+  describe "when an episode is added > while an ontology module is supplied" do
     @describetag :integration
 
     defmodule StrictOntologyForGraphitiTest do
@@ -1780,7 +1805,7 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
 
-    test "then the graphiti kwargs dict carries exactly the spec-selected keys (omitting unselected) and is reused per `{ontology module, merge_learning?}` cache key" do
+    test "then that ontology is translated into the graph library's schema representation on first encounter" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 
@@ -1814,7 +1839,7 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
 
-    test "and graphiti dictionaries use selected kwarg names outside and declared entity/edge type names inside" do
+    test "and the forwarded dictionary uses the graph library's key names outside and the ontology's declared type names inside" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 
@@ -1843,7 +1868,12 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
 
-    test "then materialising with merge_learning_entity: true unions a Learning Pydantic class onto entity_types" do
+  end
+
+  describe "when an episode is added > while the write asks for the built-in Learning entity type" do
+    @describetag :integration
+
+    test "then it is merged onto whatever entity types the supplied ontology declares, so a learning is extracted whether or not a consumer configured an ontology" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 
@@ -1876,7 +1906,7 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
 
-    test "then materialising nil with merge_learning_entity: true yields a dict carrying only the Learning entity type" do
+    test "and the merged translation is cached separately from the same ontology's unmerged translation" do
       data_dir =
         Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
 
