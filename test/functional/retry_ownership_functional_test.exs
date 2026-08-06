@@ -45,6 +45,8 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     {g, _} =
       Pythonx.eval(
         """
+        import asyncio
+
         class _Results:
             def __init__(self):
                 self.nodes = []
@@ -63,7 +65,6 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
             async def search(self, query, num_results=10, search_filter=None):
                 self.attempts["search"] += 1
-                import asyncio
                 await asyncio.sleep(0.3)
                 return []
 
@@ -95,7 +96,12 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
   end
 
   defp attempts(g, key) do
-    {raw, _} = Pythonx.eval("g.attempts[key]", %{"g" => g, "key" => key})
+    {raw, _} =
+      Pythonx.eval(
+        "g.attempts[key.decode('utf-8') if isinstance(key, bytes) else key]",
+        %{"g" => g, "key" => key}
+      )
+
     Pythonx.decode(raw)
   end
 
