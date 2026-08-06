@@ -930,7 +930,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Enum.sort(Enum.map(:ets.tab2list(table), fn {k, _} -> k end)) ==
                ["another", "with_hyphens"]
     end
-
   end
 
   describe "when a graph instance is requested for a group > while no instance is cached for that group" do

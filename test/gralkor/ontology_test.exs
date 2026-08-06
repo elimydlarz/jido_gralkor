@@ -11,7 +11,6 @@ defmodule Gralkor.OntologyTest do
         end
       end
     end
-
   end
 
   describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:entities` option is any value other than `:strict` or `:open`" do
@@ -22,7 +21,6 @@ defmodule Gralkor.OntologyTest do
         end
       end
     end
-
   end
 
   describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:relationships` option is not provided" do
@@ -33,7 +31,6 @@ defmodule Gralkor.OntologyTest do
         end
       end
     end
-
   end
 
   describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:relationships` option is any value other than `:scoped` or `:open`" do
@@ -74,7 +71,6 @@ defmodule Gralkor.OntologyTest do
 
       assert [%{description: nil}] = NoDescriptionOntology.__ontology__().entity_types
     end
-
   end
 
   describe "when an ontology declares an aliased entity > where the entity has a description" do
@@ -104,7 +100,6 @@ defmodule Gralkor.OntologyTest do
         end
       end
     end
-
   end
 
   describe "when an ontology declares an aliased entity > where the entity declares a field" do
@@ -117,7 +112,9 @@ defmodule Gralkor.OntologyTest do
         end
       end
 
-      [%{fields: [field]}] = Gralkor.OntologyTest.RequiredFieldOntology.__ontology__().entity_types
+      [%{fields: [field]}] =
+        Gralkor.OntologyTest.RequiredFieldOntology.__ontology__().entity_types
+
       assert field.name == :handle
       assert field.type == :string
     end
@@ -141,7 +138,9 @@ defmodule Gralkor.OntologyTest do
         end
       end
 
-      [%{fields: [field]}] = Gralkor.OntologyTest.OptionalFieldOntology.__ontology__().entity_types
+      [%{fields: [field]}] =
+        Gralkor.OntologyTest.OptionalFieldOntology.__ontology__().entity_types
+
       refute field.required
     end
   end
@@ -209,7 +208,6 @@ defmodule Gralkor.OntologyTest do
         end
       end
     end
-
   end
 
   describe "when an ontology declares an aliased entity > if two fields in the same entity share a name" do
@@ -225,7 +223,6 @@ defmodule Gralkor.OntologyTest do
         end
       end
     end
-
   end
 
   describe "when an ontology declares an aliased entity > if a relationship-style call appears inside the block" do
@@ -246,7 +243,6 @@ defmodule Gralkor.OntologyTest do
 
       assert diagnostic =~ "undefined function prefers/1"
     end
-
   end
 
   describe "when an ontology declares an aliased entity > if the same entity name is declared more than once in one ontology" do
@@ -291,6 +287,7 @@ defmodule Gralkor.OntologyTest do
 
     test "and that relationship carries no edge properties" do
       ontology_module = Gralkor.OntologyTest.BareVerbOntology
+
       assert [%{name: "PREFERS", fields: []}] =
                apply(ontology_module, :__ontology__, []).edge_types
     end
@@ -406,6 +403,7 @@ defmodule Gralkor.OntologyTest do
     test "and the endpoint map preserves each distinct declared source-target pair in order" do
       ontology_module = Gralkor.OntologyTest.MultiEndpointOntology
       ontology = apply(ontology_module, :__ontology__, [])
+
       assert ontology.edge_type_map == [
                {{"User", "Preference"}, ["ENDORSES"]},
                {{"Org", "Preference"}, ["ENDORSES"]}
@@ -459,7 +457,6 @@ defmodule Gralkor.OntologyTest do
         end
       end
     end
-
   end
 
   describe "when an ontology declares an aliased relationship source > if the source alias does not name a declared entity" do
@@ -478,7 +475,6 @@ defmodule Gralkor.OntologyTest do
         end
       end
     end
-
   end
 
   describe "when an ontology declares an aliased relationship source > if a relationship's target alias does not name a declared entity" do
@@ -497,7 +493,6 @@ defmodule Gralkor.OntologyTest do
         end
       end
     end
-
   end
 
   describe "while an ontology is declared with `entities: :strict`" do
@@ -512,7 +507,6 @@ defmodule Gralkor.OntologyTest do
 
       assert StrictEntitiesOntology.__ontology__().excluded_entity_types == ["Entity"]
     end
-
   end
 
   describe "while an ontology is declared with `entities: :open`" do
@@ -627,6 +621,7 @@ defmodule Gralkor.OntologyTest do
 
     test "and `:edge_type_map` lists `{{source_name, target_name}, [edge_name]}` pairs preserving declaration order across `from` blocks" do
       ontology = SusuLikeOntology.__ontology__()
+
       assert ontology.edge_type_map == [
                {{"User", "Preference"}, ["PREFERS"]},
                {{"User", "User"}, ["TRUSTS"]}
