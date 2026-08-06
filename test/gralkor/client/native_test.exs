@@ -556,7 +556,17 @@ defmodule Gralkor.Client.NativeTest do
       assert episode["group_id"] == "operator_with_hyphens"
       assert episode["body"] == "Eli works at Anthropic"
       assert episode["source_description"] == "manual"
-      assert episode["name"] =~ ~r/^manual-add-\d+$/
+    end
+
+    test "and the episode carries a generated name combining the current millisecond timestamp with a positive monotonic unique integer, so concurrent writes remain distinguishable",
+         %{g: g} do
+      assert :ok = Native.memory_add("g1", "first", "manual")
+      assert :ok = Native.memory_add("g1", "second", "manual")
+
+      assert [first, second] = episodes(g)
+      assert first["name"] =~ ~r/^manual-add-\d+-\d+$/
+      assert second["name"] =~ ~r/^manual-add-\d+-\d+$/
+      refute first["name"] == second["name"]
     end
 
     test "then a supplied source description is what the episode records", %{g: g} do
