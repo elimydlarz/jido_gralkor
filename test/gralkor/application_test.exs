@@ -459,6 +459,9 @@ defmodule Gralkor.ApplicationTest do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
       Application.put_env(:jido_gralkor, :generalise_on_flush, true)
       assert App.generalise_fn_for_flush() == (&Gralkor.Client.Native.generalise/2)
+
+      [_python, _pool, {Gralkor.CaptureBuffer, opts}] = App.children()
+      assert is_function(Keyword.fetch!(opts, :flush_callback), 5)
     end
 
     test "and a generalisation failure does not change the flush result" do
