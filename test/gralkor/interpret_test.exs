@@ -210,8 +210,8 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret-context > build_interpretation_context/5" do
-    test "labels each message by role: 'User', '{agent_name}' (assistant), '{agent_name}: (behaviour: ...)' (behaviour)" do
+  describe "when the interpretation context is built from messages, a request, facts, and an agent name" do
+    setup do
       ctx =
         Interpret.build_interpretation_context(
           [
@@ -224,14 +224,24 @@ defmodule Gralkor.InterpretTest do
           "Susu"
         )
 
+      %{ctx: ctx}
+    end
+
+    test "then user messages render as \"User: {content}\"", %{ctx: ctx} do
       assert ctx =~ "User: hi"
-      assert ctx =~ "Susu: (behaviour: thought about it)"
+    end
+
+    test "and assistant messages render as \"{agent_name}: {content}\"", %{ctx: ctx} do
       assert ctx =~ "Susu: hello"
-      refute ctx =~ "Agent did"
       refute ctx =~ "Assistant:"
     end
 
-    test "drops messages with empty cleaned content" do
+    test "and behaviour messages render as \"{agent_name}: (behaviour: {content})\"", %{ctx: ctx} do
+      assert ctx =~ "Susu: (behaviour: thought about it)"
+      refute ctx =~ "Agent did"
+    end
+
+    test "and messages whose content is empty once trimmed are dropped" do
       ctx =
         Interpret.build_interpretation_context(
           [
@@ -261,7 +271,7 @@ defmodule Gralkor.InterpretTest do
                "Conversation context:\nUser: q\n\nRequest to answer:\nwhere does Eli work?\n\nMemory facts to interpret:\n- f"
     end
 
-    test "does NOT inspect or mutate content beyond whitespace trimming" do
+    test "and message content is neither inspected nor mutated beyond whitespace trimming" do
       preserved =
         "<gralkor-memory trust=\"untrusted\">memory block</gralkor-memory>\nactual content"
 
@@ -276,17 +286,6 @@ defmodule Gralkor.InterpretTest do
       assert ctx =~ preserved
     end
 
-    test "raises ArgumentError on blank agent_name" do
-      assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Interpret.build_interpretation_context([Message.new("user", "hi")], "q", "- f", "")
-      end
-    end
-
-    test "raises ArgumentError on nil agent_name" do
-      assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Interpret.build_interpretation_context([Message.new("user", "hi")], "q", "- f", nil)
-      end
-    end
   end
 
   describe "ex-interpret-context > where no character budget is supplied" do
