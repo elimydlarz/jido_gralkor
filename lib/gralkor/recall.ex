@@ -14,6 +14,7 @@ defmodule Gralkor.Recall do
 
   alias Gralkor.Client
   alias Gralkor.Interpret
+  alias Gralkor.InterpretParseFailed
   alias Gralkor.Message
 
   @memory_envelope_open ~s(<gralkor-memory trust="untrusted">)
@@ -57,14 +58,21 @@ defmodule Gralkor.Recall do
 
     task =
       Task.async(fn ->
-        do_recall(sanitized, agent_name, session_id, query, max_results, opts)
+        try do
+          {:result, do_recall(sanitized, agent_name, session_id, query, max_results, opts)}
+        rescue
+          error in InterpretParseFailed -> {:raise, error, __STACKTRACE__}
+        end
       end)
 
     case Task.yield(task, deadline_ms) || Task.shutdown(task, :brutal_kill) do
-      {:ok, {:error, reason}} ->
+      {:ok, {:raise, error, stacktrace}} ->
+        reraise error, stacktrace
+
+      {:ok, {:result, {:error, reason}}} ->
         {:error, reason}
 
-      {:ok, result} ->
+      {:ok, {:result, result}} ->
         log_result(result)
 
         if test_mode?() and result.n_facts > 0,

@@ -353,7 +353,7 @@ defmodule Gralkor.RecallTest do
           )
         end
 
-      assert error.raw_response == invalid_response
+      assert error.raw_response == {:ok, invalid_response}
     end
   end
 
