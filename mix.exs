@@ -28,7 +28,8 @@ defmodule JidoGralkor.MixProject do
         "test.unit": :test,
         "test.integration": :test,
         "test.functional": :test,
-        "test.journey": :test
+        "test.journey": :test,
+        "test.all": :test
       ]
     ]
   end
@@ -60,7 +61,8 @@ defmodule JidoGralkor.MixProject do
       "test.unit": ["test --exclude integration --exclude functional --exclude journey"],
       "test.integration": ["test --only integration"],
       "test.functional": ["test --only functional"],
-      "test.journey": ["test --only journey"]
+      "test.journey": ["test --only journey"],
+      "test.all": ["test --include functional --include journey"]
     ]
   end
 
