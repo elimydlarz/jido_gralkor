@@ -57,8 +57,9 @@ defmodule Gralkor.FormatTest do
       assert "2020-01-02T03:04:05-8" = Format.format_timestamp("2020-01-02T03:04:05-08:00")
     end
 
-    test "preserves a non-zero minute offset as +H:MM" do
+    test "a zone offset with non-zero minutes is preserved as +H:MM or -H:MM" do
       assert "2020-01-02T03:04:05+5:30" = Format.format_timestamp("2020-01-02T03:04:05+05:30")
+      assert "2020-01-02T03:04:05-8:45" = Format.format_timestamp("2020-01-02T03:04:05-08:45")
     end
   end
 
