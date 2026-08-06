@@ -57,7 +57,7 @@ if writing a learning episode fails
   then the failure is returned unchanged rather than swallowed, so the capture buffer owns whether to retry or drop it
 
 if producing a learning result fails
-  then the failure is returned unchanged
+  then the failure is classified as upstream for capture-buffer retry ownership
   and the failure is not retried at the flush, because retry belongs to the inference call itself
 
 if producing a learning result raises or returns an unexpected shape
