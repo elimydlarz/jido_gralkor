@@ -342,6 +342,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  end
+
 
   describe "when an episode is removed" do
     test "then the graph library deletes that episode along with the nodes and edges it orphans" do
