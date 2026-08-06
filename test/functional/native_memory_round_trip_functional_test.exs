@@ -54,8 +54,12 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
                 self.facts = []
                 self.learning_nodes = []
                 self.search_fails = False
+                self.add_delay = 0
 
             async def add_episode(self, **kwargs):
+                if self.add_delay:
+                    import asyncio
+                    await asyncio.sleep(self.add_delay)
                 self.recorded["episodes"].append({
                     "group_id": kwargs.get("group_id"),
                     "body": kwargs.get("episode_body"),
@@ -143,6 +147,9 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
   defp fail_search(g), do: Pythonx.eval("g.search_fails = True", %{"g" => g})
 
+  defp delay_add(g, seconds),
+    do: Pythonx.eval("g.add_delay = seconds", %{"g" => g, "seconds" => seconds})
+
   defp await_episode(g, source, budget_ms \\ 10_000)
 
   defp await_episode(_g, _source, budget_ms) when budget_ms <= 0, do: nil
@@ -158,8 +165,8 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
     end
   end
 
-  describe "native-memory-round-trip > when a fact is written into an operator's memory" do
-    test "then the write reaches the graph as a plain-text episode under that operator's group",
+  describe "when a fact is written into an operator's memory" do
+    test "then the graph stores its plain text under the operator's group",
          %{
            g: g
          } do
@@ -176,7 +183,7 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       assert episode["source_description"] == "manual"
     end
 
-    test "then a later recall from a session that never held the conversation returns an untrusted memory block carrying what interpretation kept",
+    test "and a fresh recall returns query-relevant facts inside an untrusted memory block",
          %{g: g} do
       :ok = Native.memory_add("operator_one", "Eli works at Anthropic in Sydney.", "manual")
 
@@ -199,31 +206,40 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
     end
   end
 
-  describe "native-memory-round-trip > when a captured turn is flushed for its session" do
-    test "then the flush is accepted immediately, the transcript reaches the graph, and the buffered turns are consumed",
-         %{g: g} do
-      :ok =
-        Native.capture("session-1", "operator_one", "Susu", "Eli", [
-          Message.new("user", "my favourite colour is teal"),
-          Message.new("assistant", "Noted — teal it is.")
-        ])
+  describe "when a captured turn is flushed for its session" do
+    test "then flush returns before graph ingestion completes", %{g: g} do
+      delay_add(g, 0.5)
+      capture("session-immediate")
 
-      assert :ok = Native.flush("session-1")
+      started_at = System.monotonic_time(:millisecond)
+      assert :ok = Native.flush("session-immediate")
+      assert System.monotonic_time(:millisecond) - started_at < 250
+      assert episodes(g) == []
+      assert await_episode(g, "captured")
+    end
 
+    test "and the rendered transcript eventually reaches the session's group", %{g: g} do
+      capture("session-transcript")
+      assert :ok = Native.flush("session-transcript")
       episode = await_episode(g, "captured")
       assert episode, "expected a captured episode to reach the graph"
       assert episode["group_id"] == "operator_one"
       assert episode["body"] =~ "teal"
+    end
 
-      assert :ok = Native.flush("session-1")
+    test "and a second flush writes no duplicate transcript", %{g: g} do
+      capture("session-consumed")
+      assert :ok = Native.flush("session-consumed")
+      assert await_episode(g, "captured")
+      assert :ok = Native.flush("session-consumed")
       Process.sleep(200)
 
       assert Enum.count(episodes(g), &(&1["source_description"] == "captured")) == 1
     end
   end
 
-  describe "native-memory-round-trip > while learning is wired into the flush" do
-    test "then a flushed turn's learning reaches the graph as its own episode asking for the Learning entity type",
+  describe "when learning is enabled for a captured turn" do
+    test "then flush stores the turn's learning with the built-in Learning entity type",
          %{g: g} do
       :ok =
         Native.capture("session-2", "operator_one", "Susu", "Eli", [
@@ -239,9 +255,9 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       assert "Learning" in episode["entity_types"]
     end
 
-    test "then a later recall combines what the learning search returns with the regular facts before interpretation",
+    test "and recall combines relevant learning with relevant regular facts before interpretation",
          %{g: g} do
-      put_facts(g, ["- Eli prefers concise answers."])
+      put_facts(g, ["- Two overlapping jobs can cause a scheduling conflict."])
       put_learning(g, "scheduling conflict", "Move one of two overlapping jobs to a later hour.")
 
       assert {:ok, block} =
@@ -256,11 +272,14 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
       assert lower =~ "overlapping" or lower =~ "later hour",
              "expected the learning search's result to reach interpretation; got: #{block}"
+
+      assert lower =~ "scheduling conflict",
+             "expected the regular search's result to reach interpretation; got: #{block}"
     end
   end
 
-  describe "native-memory-round-trip > if the graph fails the search a recall runs" do
-    test "then that failure is returned to the caller and no memory block is manufactured", %{
+  describe "if the graph fails a recall search" do
+    test "then recall returns the graph failure without a memory block", %{
       g: g
     } do
       fail_search(g)
@@ -270,5 +289,12 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
       assert reason =~ "graph refused the search"
     end
+  end
+
+  defp capture(session_id) do
+    Native.capture(session_id, "operator_one", "Susu", "Eli", [
+      Message.new("user", "my favourite colour is teal"),
+      Message.new("assistant", "Noted — teal it is.")
+    ])
   end
 end
