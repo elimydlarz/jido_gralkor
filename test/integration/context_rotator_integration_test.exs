@@ -272,10 +272,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
 
   defp pause_second_state_read(pid, test_pid) do
     pause = fn count, event, _proc_state ->
-      IO.inspect(event, label: "SYS_EVENT")
-
       case event do
-        {:out, {:ok, %Jido.AgentServer.State{}}, _from, _state} ->
+        {:in, {:"$gen_call", _from, :get_state}} ->
           count = count + 1
 
           if count == 2 do
@@ -319,7 +317,7 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
       |> Process.info(:messages)
       |> elem(1)
       |> Enum.any?(fn
-        {:"$gen_call", _from, {:system, {:replace_state, _fun}}} -> true
+        {:system, _from, {:replace_state, _fun}} -> true
         _other -> false
       end)
 
