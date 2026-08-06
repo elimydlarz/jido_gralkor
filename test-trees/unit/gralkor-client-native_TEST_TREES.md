@@ -161,3 +161,7 @@ when an interpretation output-token option is built for a supported provider
     then the option uses `max_completion_tokens`, which OpenAI structured-output requests accept
   while the provider is Google
     then the option uses `max_tokens`, which ReqLLM translates for that provider
+
+when the native adapter reads a structured interpretation response
+  if the required relevant facts field is absent
+    then the absent value remains malformed rather than becoming a valid empty selection

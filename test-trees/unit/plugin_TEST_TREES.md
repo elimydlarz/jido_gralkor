@@ -59,6 +59,8 @@ when an agent turn fails
     then the turn is captured with the failure surfaced as a terminal `request failed: …` behaviour message
     and no assistant message is captured for the failed turn
     and the user's original query is captured ahead of the failure message
+    while the failed turn's request trace holds no events
+      then the user's query and terminal failure are still sent for capture
   while no thread has committed to agent state
     then capture is skipped
     and a warning naming the operator is logged

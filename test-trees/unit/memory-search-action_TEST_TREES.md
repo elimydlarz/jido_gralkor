@@ -24,5 +24,5 @@ if the memory search tool runs with no usable session id in its tool context
   and the result explicitly states that long-term memory was not queried
   and the result explicitly states that it is a non-result
   and a warning naming the operator is logged
-  while the session id is blank
+  while the session id is only whitespace
     then it counts as no session id

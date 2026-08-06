@@ -42,9 +42,14 @@ when the pool has constructed its database
   then a warmup search runs once against a throwaway query and group, paying the cold-start cost before any consumer can recall
   and a warmup interpretation runs once against an empty conversation and throwaway facts
   and a single line reporting the search, interpretation, and total warmup durations is logged
+  where no warmup interpretation callback is configured
+    then warmup interpretation is skipped with a numeric zero duration
+    and startup completes
   if a warmup call raises or returns an error
     then the failure is logged as non-fatal, naming the stage and the reason
     and startup completes anyway
+    while warmup interpretation returns an error
+      then the interpretation failure is logged with its returned reason
 
 when the pool terminates
   then the database it held for its lifetime is closed through the shared asyncio runtime

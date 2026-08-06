@@ -25,6 +25,9 @@ if a turn is appended for an existing session under a different user name
 if a turn is appended for an existing session under a different ontology
   then an argument error is raised, one episode never mixing entity and edge schemas
 
+if a turn without a Lens is appended for a session that already holds Lens-selected turns
+  then an argument error is raised before the new turn is buffered, preserving the Lens-selected turns unchanged
+
 if the agent name is missing or blank
   then an argument error is raised
 
@@ -42,6 +45,8 @@ where captured turns select a Lens
     then an argument error is raised
   if a turn is appended for an existing session under a different user name
     then an argument error is raised
+  if a Lens-selected turn is appended for a session that already holds turns without a Lens
+    then an argument error is raised before the new turn is buffered, preserving the turns without a Lens unchanged
   when turns in one session select different Lenses
     then each turn stays associated with the Lens it selected
     and reading the session's turns back returns every turn in append order across Lenses
@@ -83,6 +88,8 @@ if the flush callback reports an upstream-LLM error
 
 if the flush callback raises or fails for any other reason
   then the flush is retried on the configured backoff schedule, which defaults to 1s, then 2s, then 4s
+  when the callback throws, exits, or returns a value outside its contract
+    then the outcome is retried as a failure without stopping the buffer
   when that schedule is exhausted
     then the turns are dropped
     and an exhausted line is logged at error
@@ -99,6 +106,8 @@ when a session holding turns is flushed and awaited
     then that error is returned without any retry
   while the flush callback fails for any other reason
     then the same configured backoff schedule applies, bounded by the caller's timeout
+    when the callback throws, exits, or returns a value outside its contract
+      then the outcome is retried as a failure without stopping the buffer
     when the retries together outlast that timeout
       then a timeout error is returned
   if the flush callback does not finish within the caller's timeout
