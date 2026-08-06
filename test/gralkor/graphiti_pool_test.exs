@@ -860,6 +860,23 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Enum.sort(Enum.map(:ets.tab2list(table), fn {k, _} -> k end)) ==
                ["another", "with_hyphens"]
     end
+
+    test "then the instance is constructed, cached, and held for the pool's lifetime" do
+      construction_count = :counters.new(1, [])
+
+      %{pid: pid, table: table} =
+        start_pool(
+          construct_instance: fn _db, _shared, group ->
+            :counters.add(construction_count, 1, 1)
+            {:instance, group}
+          end
+        )
+
+      assert {:instance, "operator_one"} = GraphitiPool.for(pid, "operator-one")
+      assert [{"operator_one", {:instance, "operator_one"}}] = :ets.lookup(table, "operator_one")
+      assert {:instance, "operator_one"} = GraphitiPool.for(pid, "operator-one")
+      assert :counters.get(construction_count, 1) == 1
+    end
   end
 
   describe "when a graph instance is requested for a group > while no instance is cached for that group > while construction takes longer than the default call timeout" do
@@ -942,6 +959,21 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert log =~ "build_indices_and_constraints failed (non-fatal)"
       assert log =~ "RuntimeError: index setup unavailable"
+    end
+
+    test "and the instance is still cached and returned" do
+      %{pid: pid, table: table} =
+        start_pool(
+          construct_instance: fn _db, _shared, group -> {:instance, group} end,
+          initialise_instance: fn _instance -> raise "index setup unavailable" end
+        )
+
+      capture_log(fn ->
+        assert {:instance, "best_effort"} = GraphitiPool.for(pid, "best-effort")
+      end)
+
+      assert [{"best_effort", {:instance, "best_effort"}}] =
+               :ets.lookup(table, "best_effort")
     end
   end
 
