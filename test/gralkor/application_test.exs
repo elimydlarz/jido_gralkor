@@ -426,14 +426,18 @@ defmodule Gralkor.ApplicationTest do
       %{recording_add: recording_add, learning: learning, turn: turn}
     end
 
-    test "every turn is learned from — each becomes a separate 'learning' episode in the same group/ontology",
+    test "every turn is learned from, in the order it was appended — each becomes a separate 'learning' episode in the same group/ontology",
          %{recording_add: add, learning: learning, turn: turn} do
       turn2 = [Gralkor.Message.new("user", "Q2"), Gralkor.Message.new("assistant", "A2")]
+
+      learn_fn = fn [%{content: first_content} | _], _agent, _user ->
+        {:ok, %{learning | problem_kind: "learned from #{first_content}"}}
+      end
 
       cb =
         App.build_flush_callback(nil,
           add_episode_fn: add,
-          learn_fn: fn _turn, _agent, _user -> {:ok, learning} end
+          learn_fn: learn_fn
         )
 
       assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn, turn2])
@@ -441,8 +445,9 @@ defmodule Gralkor.ApplicationTest do
       assert_receive {:add, "g1", _transcript, "captured", :ont}
       assert_receive {:add, "g1", body1, "learning", :ont}
       assert_receive {:add, "g1", body2, "learning", :ont}
-      assert body1 =~ "deploy timeout"
-      assert body2 =~ "cold caches fail the first health check"
+      assert body1 =~ "learned from Q"
+      assert body2 =~ "learned from Q2"
+      assert body1 =~ "cold caches fail the first health check"
     end
 
     test "when the learning add_episode_fn returns {:error, reason}, the flush callback returns it (not swallowed)",
@@ -521,21 +526,27 @@ defmodule Gralkor.ApplicationTest do
       refute_receive {:add, _, _, "learning", _}, 100
     end
 
-    test "a turn whose transcript is empty still writes the learning", %{
-      recording_add: add,
-      learning: learning
-    } do
+    test "turns whose transcript is empty are still learned from, in the order they were appended",
+         %{
+           recording_add: add,
+           learning: learning
+         } do
+      learn_fn = fn [%{content: first_content} | _], _agent, _user ->
+        {:ok, %{learning | problem_kind: "learned from #{first_content}"}}
+      end
+
       cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: add,
-          learn_fn: fn _t, _a, _u -> {:ok, learning} end
-        )
+        App.build_flush_callback(nil, add_episode_fn: add, learn_fn: learn_fn)
 
       behaviour_only = [Gralkor.Message.new("behaviour", "just thinking")]
+      behaviour_only2 = [Gralkor.Message.new("behaviour", "still thinking")]
 
-      assert :ok = cb.("g1", "Susu", "Eli", nil, [behaviour_only])
+      assert :ok = cb.("g1", "Susu", "Eli", nil, [behaviour_only, behaviour_only2])
       refute_receive {:add, _, _, "captured", _}, 100
-      assert_receive {:add, "g1", _b, "learning", _}
+      assert_receive {:add, "g1", body1, "learning", _}
+      assert_receive {:add, "g1", body2, "learning", _}
+      assert body1 =~ "learned from just thinking"
+      assert body2 =~ "learned from still thinking"
     end
 
     test "the learning write signals merge_learning_entity; the captured write does not",
