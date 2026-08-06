@@ -242,7 +242,7 @@ defmodule Gralkor.GraphitiPool do
 
   @doc """
   Ingest one episode (text content) into `group_id` via graphiti's
-  `add_episode`. Auto-generates `name` and `idempotency_key`. When
+  `add_episode`. Auto-generates a unique episode `name`. When
   `ontology` is a module declared with `use Gralkor.Ontology`, its payload
   is materialised into graphiti's `entity_types`, `edge_types`,
   `edge_type_map`, and `excluded_entity_types` (cached per ontology module
@@ -281,8 +281,8 @@ defmodule Gralkor.GraphitiPool do
     instance = __MODULE__.for(server, group_id)
     source_description = lens_source_description(source_description, Keyword.get(opts, :lens))
 
-    name = "manual-add-" <> Integer.to_string(System.system_time(:millisecond))
-    idempotency_key = "key-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
+    name =
+      "manual-add-#{System.system_time(:millisecond)}-#{System.unique_integer([:positive, :monotonic])}"
 
     sanitized = Client.sanitize_group_id(group_id)
     merge_learning? = Keyword.get(opts, :merge_learning_entity, false)
@@ -341,7 +341,6 @@ defmodule Gralkor.GraphitiPool do
           "source" => source_description,
           "name" => name,
           "group" => sanitized,
-          "_idem" => idempotency_key,
           "ontology_dicts" => ontology_dicts,
           "uuid" => uuid
         }
