@@ -88,10 +88,11 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
     log =
       capture_log(fn ->
-        MemoryAdd.run(
-          %{content: "something", source_description: "agent thought"},
-          %{agent_id: "01USER"}
-        )
+        assert {:ok, %{result: "Ingesting."}} =
+                 MemoryAdd.run(
+                   %{content: "something", source_description: "agent thought"},
+                   %{agent_id: "01USER"}
+                 )
 
         assert eventually(fn ->
                  InMemory.adds() == [["01USER", "something", "agent thought"]]
