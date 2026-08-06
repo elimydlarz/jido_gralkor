@@ -668,7 +668,7 @@ defmodule Gralkor.RecallTest do
       elapsed_ms = div(elapsed_us, 1000)
       assert elapsed_ms >= 5_000, "expected the aux yield to be waited out; took #{elapsed_ms}ms"
 
-      assert elapsed_ms < 15_000,
+      assert elapsed_ms < 7_000,
              "expected both aux searches to share one five-second yield; took #{elapsed_ms}ms"
     end
   end
