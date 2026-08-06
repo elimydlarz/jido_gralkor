@@ -389,20 +389,21 @@ defmodule Gralkor.GraphitiPool do
     e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
   end
 
-  @doc "Build indices and constraints across the whole graph."
+  @doc """
+  Rebuild indices and constraints across the whole graph.
+
+  Every group is its own FalkorDB database, so "the whole graph" is every
+  group this pool holds an instance for — rebuilding one group's database
+  would leave every other group untouched. A group whose instance has not been
+  created yet needs no rebuild: `initialise_instance/1` builds its indices the
+  moment it is.
+  """
   @spec build_indices(GenServer.server()) :: {:ok, %{status: String.t()}} | {:error, term()}
   def build_indices(server \\ __MODULE__) do
-    instance = __MODULE__.for(server, "default_db")
-
-    {_, _} =
-      Pythonx.eval(
-        """
-        import asyncio
-        asyncio._gralkor_run(g.build_indices_and_constraints())
-        None
-        """,
-        %{"g" => instance}
-      )
+    server
+    |> table_for()
+    |> :ets.tab2list()
+    |> Enum.each(fn {_group_id, instance} -> initialise_instance(instance) end)
 
     {:ok, %{status: "built"}}
   rescue
