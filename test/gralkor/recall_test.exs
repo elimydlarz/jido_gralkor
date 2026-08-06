@@ -821,4 +821,234 @@ defmodule Gralkor.RecallTest do
       refute_received {:searched, _other}
     end
   end
+
+  describe "where a generalisation search is supplied > if it fails or times out" do
+    test "then it contributes no facts to interpretation" do
+      test_pid = self()
+
+      interpret_fn = fn prompt, _budget ->
+        send(test_pid, {:interpreted, prompt})
+        {:ok, ["main — relevant"]}
+      end
+
+      assert {:ok, _} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "q",
+                 default_opts(
+                   search_fn: ok_search(["main"]),
+                   gen_search_fn: fn _, _, _ -> {:error, :failed} end,
+                   interpret_fn: interpret_fn
+                 )
+               )
+
+      assert_receive {:interpreted, prompt}
+      assert prompt =~ "main"
+      refute prompt =~ "generalisation"
+    end
+
+    test "and successful learning-search facts remain eligible for interpretation" do
+      test_pid = self()
+
+      interpret_fn = fn prompt, _budget ->
+        send(test_pid, {:interpreted, prompt})
+        {:ok, ["learning — relevant"]}
+      end
+
+      assert {:ok, _} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "q",
+                 default_opts(
+                   search_fn: ok_search(["main"]),
+                   gen_search_fn: fn _, _, _ -> {:error, :failed} end,
+                   learning_search_fn: ok_search(["learning"]),
+                   interpret_fn: interpret_fn
+                 )
+               )
+
+      assert_receive {:interpreted, prompt}
+      assert prompt =~ "learning"
+    end
+  end
+
+  describe "where no generalisation search is supplied" do
+    test "and a supplied learning search still contributes its successful facts" do
+      test_pid = self()
+
+      interpret_fn = fn prompt, _budget ->
+        send(test_pid, {:interpreted, prompt})
+        {:ok, ["learning — relevant"]}
+      end
+
+      assert {:ok, _} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "q",
+                 default_opts(
+                   search_fn: ok_search(["main"]),
+                   learning_search_fn: ok_search(["learning"]),
+                   interpret_fn: interpret_fn
+                 )
+               )
+
+      assert_receive {:interpreted, prompt}
+      assert prompt =~ "learning"
+    end
+  end
+
+  describe "where a learning search is supplied > if it fails or times out" do
+    test "then it contributes no facts to interpretation" do
+      test_pid = self()
+
+      interpret_fn = fn prompt, _budget ->
+        send(test_pid, {:interpreted, prompt})
+        {:ok, ["main — relevant"]}
+      end
+
+      assert {:ok, _} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "q",
+                 default_opts(
+                   search_fn: ok_search(["main"]),
+                   learning_search_fn: fn _, _, _ -> {:error, :failed} end,
+                   interpret_fn: interpret_fn
+                 )
+               )
+
+      assert_receive {:interpreted, prompt}
+      assert prompt =~ "main"
+      refute prompt =~ "learning"
+    end
+
+    test "and successful generalisation-search facts remain eligible for interpretation" do
+      test_pid = self()
+
+      interpret_fn = fn prompt, _budget ->
+        send(test_pid, {:interpreted, prompt})
+        {:ok, ["generalisation — relevant"]}
+      end
+
+      assert {:ok, _} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "q",
+                 default_opts(
+                   search_fn: ok_search(["main"]),
+                   gen_search_fn: ok_search(["generalisation"]),
+                   learning_search_fn: fn _, _, _ -> {:error, :failed} end,
+                   interpret_fn: interpret_fn
+                 )
+               )
+
+      assert_receive {:interpreted, prompt}
+      assert prompt =~ "generalisation"
+    end
+  end
+
+  describe "where no learning search is supplied" do
+    test "and a supplied generalisation search still contributes its successful facts" do
+      test_pid = self()
+
+      interpret_fn = fn prompt, _budget ->
+        send(test_pid, {:interpreted, prompt})
+        {:ok, ["generalisation — relevant"]}
+      end
+
+      assert {:ok, _} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "q",
+                 default_opts(
+                   search_fn: ok_search(["main"]),
+                   gen_search_fn: ok_search(["generalisation"]),
+                   interpret_fn: interpret_fn
+                 )
+               )
+
+      assert_receive {:interpreted, prompt}
+      assert prompt =~ "generalisation"
+    end
+  end
+
+  describe "where neither auxiliary search is supplied" do
+    test "then the main search is the only search issued" do
+      test_pid = self()
+
+      search_fn = fn _, _, _ ->
+        send(test_pid, :main_search)
+        {:ok, []}
+      end
+
+      assert {:ok, _} =
+               Recall.recall("g", "TestAgent", nil, "q", default_opts(search_fn: search_fn))
+
+      assert_receive :main_search
+      refute_received :auxiliary_search
+    end
+  end
+
+  describe "where generalisation and learning searches are both supplied > if the outer recall deadline expires before their auxiliary yield" do
+    test "then the recall deadline ends the call before the five-second auxiliary window elapses" do
+      slow = fn _, _, _ ->
+        Process.sleep(30_000)
+        {:ok, []}
+      end
+
+      {elapsed_us, result} =
+        :timer.tc(fn ->
+          Recall.recall(
+            "g",
+            "TestAgent",
+            nil,
+            "q",
+            default_opts(
+              search_fn: ok_search(["main"]),
+              gen_search_fn: slow,
+              learning_search_fn: slow,
+              deadline_ms: 50
+            )
+          )
+        end)
+
+      assert result == {:error, :recall_deadline_expired}
+      assert div(elapsed_us, 1000) < 1_000
+    end
+  end
+
+  describe "while a deadline budget governs the call > if the budget is exhausted before the call returns" do
+    test "and ordinary BEAM work owned by the recall task is stopped" do
+      test_pid = self()
+
+      search_fn = fn _, _, _ ->
+        Process.sleep(200)
+        send(test_pid, :search_finished)
+        {:ok, []}
+      end
+
+      assert {:error, :recall_deadline_expired} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "q",
+                 default_opts(search_fn: search_fn, deadline_ms: 20)
+               )
+
+      refute_receive :search_finished, 300
+    end
+  end
 end
