@@ -272,6 +272,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
 
   defp pause_second_state_read(pid, test_pid) do
     pause = fn count, event, _proc_state ->
+      IO.inspect(event, label: "SYS_EVENT")
+
       case event do
         {:out, {:ok, %Jido.AgentServer.State{}}, _from, _state} ->
           count = count + 1
