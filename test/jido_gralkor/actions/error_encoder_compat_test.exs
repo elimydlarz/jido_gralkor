@@ -35,21 +35,29 @@ defmodule JidoGralkor.Actions.ErrorEncoderCompatTest do
     "Gralkor server unreachable"
   ]
 
-  for reason <- @reasons do
-    @reason reason
-    test "error reason #{inspect(reason)} survives normalize_error → Jason.encode!" do
-      envelope =
-        SignalHelpers.normalize_error(@reason, :execution_error, "Tool execution failed", %{
-          tool_name: "memory_search"
-        })
-
-      payload = %{ok: false, error: envelope}
-
-      assert is_binary(Jason.encode!(payload))
-      assert is_map(envelope)
-
-      refute is_struct(envelope[:details]),
-             "envelope :details must not be a struct — Jason.encode! would crash"
+  describe "when any error reason our actions can return is normalised into a tool-error envelope" do
+    test "then the envelope encodes to JSON without raising, so the agent server survives the failure" do
+      for reason <- @reasons do
+        envelope = normalise(reason)
+        assert is_binary(Jason.encode!(%{ok: false, error: envelope}))
+      end
     end
+
+    test "and the envelope's details never hold a struct, which JSON encoding cannot serialise" do
+      for reason <- @reasons do
+        refute is_struct(normalise(reason)[:details])
+      end
+    end
+
+    test "and the guarantee holds for every reason shape our actions produce, including recall deadlines, Python exception tuples, timeouts, bare atoms, and plain strings" do
+      assert Enum.count(@reasons) == 5
+      assert Enum.all?(@reasons, &(normalise(&1) |> is_map()))
+    end
+  end
+
+  defp normalise(reason) do
+    SignalHelpers.normalize_error(reason, :execution_error, "Tool execution failed", %{
+      tool_name: "memory_search"
+    })
   end
 end
