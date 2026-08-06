@@ -1008,8 +1008,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > application shutdown when the supervision tree is stopping" do
-    test "Gralkor.CaptureBuffer.terminate/2 drains every pending entry via the flush callback before returning" do
+  describe "when the supervision tree stops the buffer" do
+    test "then every pending entry is drained through the flush callback before termination returns" do
       test_pid = self()
 
       flush_callback = fn group, agent, user, ontology, turns ->
