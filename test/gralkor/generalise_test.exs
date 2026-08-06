@@ -1,7 +1,7 @@
 defmodule Gralkor.GeneraliseTest do
   use ExUnit.Case, async: true
 
-  require Logger
+  import ExUnit.CaptureLog
 
   alias Gralkor.Generalise
 
@@ -37,6 +37,32 @@ defmodule Gralkor.GeneraliseTest do
                )
 
       refute Process.get(:add_episode_called, false)
+    end
+
+    test "with no min_confidence supplied, the default of 0.3 decides what reaches evaluation" do
+      candidates = [
+        %{content: "just below", confidence: 0.29},
+        %{content: "exactly at", confidence: 0.3}
+      ]
+
+      evaluate_fn = fn prompt ->
+        Process.put(:evaluate_prompt, prompt)
+        {:ok, []}
+      end
+
+      assert :ok =
+               Generalise.generalise(
+                 "g",
+                 "transcript",
+                 default_opts(
+                   hypothesise_fn: ok_hypothesise(candidates),
+                   evaluate_fn: evaluate_fn
+                 )
+               )
+
+      prompt = Process.get(:evaluate_prompt)
+      assert prompt =~ "exactly at"
+      refute prompt =~ "just below"
     end
 
     test "candidates below min_confidence are dropped" do
@@ -335,19 +361,30 @@ defmodule Gralkor.GeneraliseTest do
   end
 
   describe "ex-generalise > error handling" do
-    test "when hypothesise LLM fails, generalise returns :ok (best-effort)" do
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: fn _prompt -> {:error, {:upstream_llm, :timeout}} end
-                 )
-               )
+    test "when hypothesise LLM fails, generalise returns :ok (best-effort) and logs the failure" do
+      logs =
+        capture_log(fn ->
+          assert :ok =
+                   Generalise.generalise(
+                     "g",
+                     "transcript",
+                     default_opts(
+                       hypothesise_fn: fn _prompt -> {:error, {:upstream_llm, :timeout}} end
+                     )
+                   )
+        end)
+
+      assert logs =~ "generalise upstream LLM error"
+      assert logs =~ ":timeout"
     end
 
-    test "when evaluate LLM fails, generalise returns :ok (best-effort)" do
+    test "when evaluate LLM fails, generalise returns :ok (best-effort) and persists nothing" do
       candidates = [%{content: "test", confidence: 0.8}]
+
+      add_fn = fn _g, _b, _s, _ont, _opts ->
+        Process.put(:add_called, true)
+        :ok
+      end
 
       assert :ok =
                Generalise.generalise(
@@ -355,14 +392,22 @@ defmodule Gralkor.GeneraliseTest do
                  "transcript",
                  default_opts(
                    hypothesise_fn: ok_hypothesise(candidates),
-                   evaluate_fn: fn _prompt -> {:error, {:upstream_llm, :rate_limited}} end
+                   evaluate_fn: fn _prompt -> {:error, {:upstream_llm, :rate_limited}} end,
+                   add_episode_fn: add_fn
                  )
                )
+
+      refute Process.get(:add_called, false)
     end
 
-    test "when search fails for a hypothesis, it continues with empty existing list" do
+    test "when search fails for a hypothesis, evaluation still runs against an empty existing list" do
       candidates = [%{content: "test", confidence: 0.8}]
       decisions = [%{hypothesis_index: 0, action: "save", confidence: 0.8, content: "test"}]
+
+      evaluate_fn = fn prompt ->
+        Process.put(:evaluate_prompt, prompt)
+        {:ok, decisions}
+      end
 
       assert :ok =
                Generalise.generalise(
@@ -371,25 +416,51 @@ defmodule Gralkor.GeneraliseTest do
                  default_opts(
                    hypothesise_fn: ok_hypothesise(candidates),
                    search_gen_fn: fn _p, _q, _m -> {:error, :search_failed} end,
-                   evaluate_fn: ok_evaluate(decisions)
+                   evaluate_fn: evaluate_fn
                  )
                )
+
+      assert Process.get(:evaluate_prompt) =~ "(no existing generalisations in memory)"
     end
 
-    test "when add_episode fails, it logs and continues" do
-      candidates = [%{content: "test", confidence: 0.8}]
-      decisions = [%{hypothesis_index: 0, action: "save", confidence: 0.8, content: "test"}]
+    test "when add_episode fails, the failure is logged and the remaining decisions are still applied" do
+      candidates = [
+        %{content: "first", confidence: 0.9},
+        %{content: "second", confidence: 0.8}
+      ]
 
-      assert :ok =
-               Generalise.generalise(
-                 "g",
-                 "transcript",
-                 default_opts(
-                   hypothesise_fn: ok_hypothesise(candidates),
-                   evaluate_fn: ok_evaluate(decisions),
-                   add_episode_fn: fn _g, _b, _s, _ont, _opts -> {:error, :disk_full} end
-                 )
-               )
+      decisions = [
+        %{hypothesis_index: 0, action: "save", confidence: 0.9, content: "first"},
+        %{hypothesis_index: 1, action: "save", confidence: 0.8, content: "second"}
+      ]
+
+      add_fn = fn _g, body, _s, _ont, _opts ->
+        {:ok, generalisation, _plain} = Gralkor.Generalisation.decode(body)
+        Process.put(:persisted, [generalisation.content | Process.get(:persisted, [])])
+
+        case generalisation.content do
+          "first" -> {:error, :disk_full}
+          _ -> :ok
+        end
+      end
+
+      logs =
+        capture_log(fn ->
+          assert :ok =
+                   Generalise.generalise(
+                     "g",
+                     "transcript",
+                     default_opts(
+                       hypothesise_fn: ok_hypothesise(candidates),
+                       evaluate_fn: ok_evaluate(decisions),
+                       add_episode_fn: add_fn
+                     )
+                   )
+        end)
+
+      assert logs =~ "generalise persist failed"
+      assert logs =~ ":disk_full"
+      assert Enum.sort(Process.get(:persisted)) == ["first", "second"]
     end
   end
 
