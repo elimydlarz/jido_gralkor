@@ -337,27 +337,6 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "if removing an episode raises inside the graph library" do
-    test "and the logged diagnostic is a single concise line rather than a full traceback" do
-      err = %Pythonx.Error{
-        type: nil,
-        value: nil,
-        traceback: nil,
-        lines: [
-          "Traceback (most recent call last):\n",
-          "  File \"/app/graphiti_core/graphiti.py\", line 600, in remove_episode\n    await self.driver.execute_query(delete_query)\n",
-          "RuntimeError: episode not found\n"
-        ]
-      }
-
-      reason = GraphitiPool.summarise_python_error(err)
-
-      assert reason == "RuntimeError: episode not found"
-      refute reason =~ "Traceback"
-      refute reason =~ "\n"
-    end
-  end
-
   describe "when an episode is removed" do
     test "then the graph library deletes that episode along with the nodes and edges it orphans" do
       {g, _} =
@@ -389,6 +368,25 @@ defmodule Gralkor.GraphitiPoolTest do
       assert rec["uuid"] == "episode-uuid-123"
 
       GenServer.stop(pid)
+    end
+
+    test "and the logged diagnostic is a single concise line rather than a full traceback" do
+      err = %Pythonx.Error{
+        type: nil,
+        value: nil,
+        traceback: nil,
+        lines: [
+          "Traceback (most recent call last):\n",
+          "  File \"/app/graphiti_core/graphiti.py\", line 600, in remove_episode\n    await self.driver.execute_query(delete_query)\n",
+          "RuntimeError: episode not found\n"
+        ]
+      }
+
+      reason = GraphitiPool.summarise_python_error(err)
+
+      assert reason == "RuntimeError: episode not found"
+      refute reason =~ "Traceback"
+      refute reason =~ "\n"
     end
   end
 
