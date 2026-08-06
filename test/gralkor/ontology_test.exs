@@ -73,8 +73,8 @@ defmodule Gralkor.OntologyTest do
                DescribedEntityOntology.__ontology__().entity_types
     end
 
-    test "a description that is not a string raises" do
-      assert_raise CompileError, ~r/description/, fn ->
+    test "a description that is not a string raises, naming the entity and the rejected description" do
+      assert_raise CompileError, ~r/User.*description.*42/s, fn ->
         defmodule BadDescriptionOntology do
           use Gralkor.Ontology, entities: :open, relationships: :open
 
