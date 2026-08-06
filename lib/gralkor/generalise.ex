@@ -223,16 +223,8 @@ defmodule Gralkor.Generalise do
         :skip ->
           Logger.info("[gralkor] generalise skip — hypothesis ##{idx}")
 
-        a when a in [:save, :broadens, :narrows, :contradicts] ->
-          generalises = if existing_id, do: [existing_id], else: []
-
-          child_level =
-            case Map.get(existing_by_id, existing_id) do
-              nil -> -1
-              gen -> gen.level
-            end
-
-          level = child_level + 1
+        action when action in [:save, :broadens, :narrows, :contradicts] ->
+          {generalises, level} = ancestry(action, existing_id, existing_by_id)
 
           gen = %Generalisation{
             id: generate_id(),
@@ -269,6 +261,18 @@ defmodule Gralkor.Generalise do
   defp normalize_action("skip"), do: :skip
   defp normalize_action(other) when is_atom(other), do: other
   defp normalize_action(_), do: :unknown
+
+  defp ancestry(:save, _existing_id, _existing_by_id), do: {[], 0}
+
+  defp ancestry(_action, existing_id, existing_by_id) do
+    level =
+      case Map.get(existing_by_id, existing_id) do
+        nil -> 0
+        generalisation -> generalisation.level + 1
+      end
+
+    {if(existing_id, do: [existing_id], else: []), level}
+  end
 
   defp generate_id do
     "gen-" <> Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)
