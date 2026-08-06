@@ -3,6 +3,100 @@ defmodule Gralkor.OntologyTest do
 
   import ExUnit.CaptureIO
 
+  defmodule RequiredFieldOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity User do
+      field(:handle, :string, required: true)
+    end
+  end
+
+  defmodule OptionalFieldOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity User do
+      field(:nickname, :string)
+    end
+  end
+
+  defmodule BareVerbOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+    entity User do
+      field(:handle, :string)
+    end
+
+    entity Preference do
+      field(:description, :string)
+    end
+
+    from User do
+      prefers(Preference)
+    end
+  end
+
+  defmodule EdgePropertyOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+    entity User do
+      field(:handle, :string)
+    end
+
+    entity Preference do
+      field(:description, :string)
+    end
+
+    from User do
+      prefers Preference do
+        field(:since, :string, doc: "date first observed")
+      end
+    end
+  end
+
+  defmodule MultiEndpointOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+    entity User do
+      field(:handle, :string)
+    end
+
+    entity Org do
+      field(:name, :string)
+    end
+
+    entity Preference do
+      field(:description, :string)
+    end
+
+    from User do
+      endorses(Preference)
+    end
+
+    from Org do
+      endorses(Preference)
+    end
+  end
+
+  defmodule OpenRelsOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity User do
+      field(:handle, :string)
+    end
+
+    entity Preference do
+      field(:description, :string)
+    end
+
+    from User do
+      prefers(Preference)
+    end
+  end
+
+  defmodule EmptyOntology do
+    use Gralkor.Ontology, entities: :strict, relationships: :scoped
+  end
+
   describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:entities` option is not provided" do
     test "then compilation fails with an error naming `:entities` and its allowed values `:strict` and `:open`" do
       assert_raise CompileError, ~r/:entities/, fn ->
@@ -104,14 +198,6 @@ defmodule Gralkor.OntologyTest do
 
   describe "when an ontology declares an aliased entity > where the entity declares a field" do
     test "then the entity carries a field with that name and type" do
-      defmodule RequiredFieldOntology do
-        use Gralkor.Ontology, entities: :open, relationships: :open
-
-        entity User do
-          field(:handle, :string, required: true)
-        end
-      end
-
       [%{fields: [field]}] =
         Gralkor.OntologyTest.RequiredFieldOntology.__ontology__().entity_types
 
@@ -130,14 +216,6 @@ defmodule Gralkor.OntologyTest do
 
   describe "when an ontology declares an aliased entity > where the entity declares a field > where the call omits `:required` or passes `required: false`" do
     test "then the field is recorded as optional" do
-      defmodule OptionalFieldOntology do
-        use Gralkor.Ontology, entities: :open, relationships: :open
-
-        entity User do
-          field(:nickname, :string)
-        end
-      end
-
       [%{fields: [field]}] =
         Gralkor.OntologyTest.OptionalFieldOntology.__ontology__().entity_types
 
@@ -265,22 +343,6 @@ defmodule Gralkor.OntologyTest do
 
   describe "when an ontology declares an aliased relationship source > where the block calls `verb Target` with no do-block" do
     test "then a relationship is declared from the source entity to the target entity under the verb's edge name" do
-      defmodule BareVerbOntology do
-        use Gralkor.Ontology, entities: :open, relationships: :scoped
-
-        entity User do
-          field(:handle, :string)
-        end
-
-        entity Preference do
-          field(:description, :string)
-        end
-
-        from User do
-          prefers(Preference)
-        end
-      end
-
       ontology = BareVerbOntology.__ontology__()
       assert [{{"User", "Preference"}, ["PREFERS"]}] == ontology.edge_type_map
     end
@@ -295,24 +357,6 @@ defmodule Gralkor.OntologyTest do
 
   describe "when an ontology declares an aliased relationship source > where the block calls `verb Target do … end`" do
     test "then a relationship is declared from the source entity to the target entity under the verb's edge name" do
-      defmodule EdgePropertyOntology do
-        use Gralkor.Ontology, entities: :open, relationships: :scoped
-
-        entity User do
-          field(:handle, :string)
-        end
-
-        entity Preference do
-          field(:description, :string)
-        end
-
-        from User do
-          prefers Preference do
-            field(:since, :string, doc: "date first observed")
-          end
-        end
-      end
-
       assert [{{"User", "Preference"}, ["PREFERS"]}] ==
                EdgePropertyOntology.__ontology__().edge_type_map
     end
@@ -372,30 +416,6 @@ defmodule Gralkor.OntologyTest do
 
   describe "when an ontology declares an aliased relationship source > where matching relationship verbs span several source blocks" do
     test "then exactly one edge type is declared for that verb" do
-      defmodule MultiEndpointOntology do
-        use Gralkor.Ontology, entities: :open, relationships: :scoped
-
-        entity User do
-          field(:handle, :string)
-        end
-
-        entity Org do
-          field(:name, :string)
-        end
-
-        entity Preference do
-          field(:description, :string)
-        end
-
-        from User do
-          endorses(Preference)
-        end
-
-        from Org do
-          endorses(Preference)
-        end
-      end
-
       ontology = Gralkor.OntologyTest.MultiEndpointOntology.__ontology__()
       assert [%{name: "ENDORSES"}] = ontology.edge_types
     end
@@ -525,22 +545,6 @@ defmodule Gralkor.OntologyTest do
 
   describe "while an ontology is declared with `relationships: :open` > where relationships were declared" do
     test "then `__ontology__/0` returns an empty `:edge_type_map`, so every named edge stays allowed everywhere" do
-      defmodule OpenRelsOntology do
-        use Gralkor.Ontology, entities: :open, relationships: :open
-
-        entity User do
-          field(:handle, :string)
-        end
-
-        entity Preference do
-          field(:description, :string)
-        end
-
-        from User do
-          prefers(Preference)
-        end
-      end
-
       ontology = Gralkor.OntologyTest.OpenRelsOntology.__ontology__()
       assert ontology.edge_type_map == []
     end
@@ -554,10 +558,6 @@ defmodule Gralkor.OntologyTest do
 
   describe "while an ontology declares no entities and no relationships" do
     test "then `__ontology__/0` still returns a valid payload with an empty `:entity_types`" do
-      defmodule EmptyOntology do
-        use Gralkor.Ontology, entities: :strict, relationships: :scoped
-      end
-
       assert EmptyOntology.__ontology__().entity_types == []
     end
 
