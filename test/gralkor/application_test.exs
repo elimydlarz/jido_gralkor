@@ -380,6 +380,25 @@ defmodule Gralkor.ApplicationTest do
       assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
     end
 
+    test "when generalise_fn fails, the flush result is unchanged" do
+      add_fn = fn _g, _b, _s, _o, _opts -> :ok end
+      test_pid = self()
+
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add_fn,
+          generalise_fn: fn _group_id, _body ->
+            send(test_pid, {:generalise_called})
+            raise "generalisation blew up"
+          end
+        )
+
+      turns = [[Gralkor.Message.new("user", "hi")]]
+
+      assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
+      assert_receive {:generalise_called}, 500
+    end
+
     test "when add_episode_fn fails, generalise_fn is NOT called" do
       add_fn = fn _g, _b, _s, _o, _opts -> {:error, :disk_full} end
       test_pid = self()
@@ -490,6 +509,33 @@ defmodule Gralkor.ApplicationTest do
         )
 
       assert_raise RuntimeError, "boom", fn -> cb.("g1", "Susu", "Eli", nil, [turn]) end
+    end
+
+    test "when learn_fn returns an unexpected shape, the exception propagates (not swallowed)", %{
+      recording_add: add,
+      turn: turn
+    } do
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: add,
+          learn_fn: fn _t, _a, _u -> :something_else end
+        )
+
+      assert_raise CaseClauseError, fn -> cb.("g1", "Susu", "Eli", nil, [turn]) end
+    end
+
+    test "when the same flush is retried after its captured episode landed, that episode is written again",
+         %{
+           recording_add: add,
+           turn: turn
+         } do
+      cb = App.build_flush_callback(nil, add_episode_fn: add)
+
+      assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
+      assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
+
+      assert_receive {:add, "g1", body, "captured", nil}
+      assert_receive {:add, "g1", ^body, "captured", nil}
     end
 
     test "when learn_fn is nil (default), no learning episode is added", %{
