@@ -19,8 +19,8 @@ defmodule Gralkor.RecallTest do
     )
   end
 
-  describe "ex-recall > when a recall is requested" do
-    test "the query reaches interpretation, so relevance is judged against what was asked" do
+  describe "when a recall is requested" do
+    test "then the query reaches interpretation even when the session conversation does not contain it" do
       ref = make_ref()
       test_pid = self()
 
@@ -47,8 +47,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > when no relevant facts are found" do
-    test "memory_block body is 'No relevant memories found.' (search returned empty)" do
+  describe "when no relevant facts are found" do
+    test "then an empty graph result produces the no-memories body" do
       assert {:ok, block} =
                Recall.recall("g", "TestAgent", nil, "q", default_opts(search_fn: ok_search([])))
 
@@ -57,7 +57,7 @@ defmodule Gralkor.RecallTest do
       assert block =~ "</gralkor-memory>"
     end
 
-    test "memory_block body is 'No relevant memories found.' (interpret filtered to empty)" do
+    test "and interpretation selecting no facts produces the no-memories body" do
       assert {:ok, block} =
                Recall.recall(
                  "g",
@@ -74,8 +74,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > when relevant facts are found" do
-    test "memory_block lists them, one per line, verbatim" do
+  describe "when interpretation selects relevant facts" do
+    test "then the memory block lists every interpreted line verbatim and in order" do
       facts_relevant = [
         "X is a thing (created 2020) — relevant: user asked about X",
         "Y was deprecated (invalid since 2022) — relevant: timeline context"
@@ -98,8 +98,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > request shape > when called with a non-blank session_id" do
-    test "conversation context is sourced from CaptureBuffer.turns_for(session_id), flat-walked in order with role labels rendered using agent_name" do
+  describe "when a non-blank session id is supplied" do
+    test "then buffered turns are flat-walked in order with user and named-agent labels" do
       ref = make_ref()
       test_pid = self()
 
@@ -136,8 +136,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > request shape > when called with a nil session_id" do
-    test "conversation context is empty AND the buffer is not consulted" do
+  describe "when a nil session id is supplied" do
+    test "then conversation context is empty and the turn buffer is not consulted" do
       called = :counters.new(1, [])
 
       turns_fn = fn _ ->
@@ -262,8 +262,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > request shape > group_id sanitization" do
-    test "group_id is sanitized (hyphens → underscores) before use" do
+  describe "when a group id contains hyphens" do
+    test "then every hyphen is replaced with an underscore before search" do
       ref = make_ref()
       test_pid = self()
 
@@ -299,8 +299,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > orchestration > memory_block envelope" do
-    test "wraps body in <gralkor-memory trust='untrusted'> and includes the further-querying instruction" do
+  describe "when recall returns a memory block" do
+    test "then the block is marked as untrusted and instructs the caller to search again for more detail" do
       assert {:ok, block} =
                Recall.recall(
                  "g",
@@ -319,8 +319,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > orchestration > if the main graph search fails" do
-    test "then {:error, reason} is returned" do
+  describe "if the main graph search fails" do
+    test "then its failure is returned without manufacturing a memory block" do
       assert {:error, :unavailable} =
                Recall.recall(
                  "g",
