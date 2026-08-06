@@ -9,29 +9,45 @@ defmodule JidoGralkor.Actions.MemoryBuildCommunitiesTest do
     :ok
   end
 
-  test "the action description tells the LLM DO NOT CALL unless asked" do
+  describe "when a model reads the build-communities tool's description" do
+    test "then it is told not to call the tool unless the operator explicitly asks" do
     description =
       MemoryBuildCommunities.__action_metadata__()
       |> Map.get(:description)
       |> to_string()
 
     assert description =~ "DO NOT CALL"
+    end
   end
 
-  test "passes sanitized group_id from context.agent_id to the client" do
-    InMemory.set_build_communities({:ok, %{communities: 3, edges: 17}})
+  describe "when the build-communities tool runs" do
+    test "then the operator's sanitised group id from the tool context is passed to the backend" do
+      InMemory.set_build_communities({:ok, %{communities: 3, edges: 17}})
 
-    assert {:ok, %{result: result}} =
-             MemoryBuildCommunities.run(%{}, %{agent_id: "user-with-hyphens"})
+      assert {:ok, %{result: _result}} =
+               MemoryBuildCommunities.run(%{}, %{agent_id: "user-with-hyphens"})
 
-    assert result =~ "3"
-    assert result =~ "17"
-    assert InMemory.communities_builds() == [["user_with_hyphens"]]
+      assert InMemory.communities_builds() == [["user_with_hyphens"]]
+    end
   end
 
-  test "when the client returns {:error, reason}, the error is propagated" do
-    InMemory.set_build_communities({:error, :boom})
+  describe "when the build-communities tool runs > while the backend reports how many communities and edges it built" do
+    test "then the action result reports both counts" do
+      InMemory.set_build_communities({:ok, %{communities: 3, edges: 17}})
 
-    assert {:error, :boom} = MemoryBuildCommunities.run(%{}, %{agent_id: "01USER"})
+      assert {:ok, %{result: result}} =
+               MemoryBuildCommunities.run(%{}, %{agent_id: "user-with-hyphens"})
+
+      assert result =~ "3"
+      assert result =~ "17"
+    end
+  end
+
+  describe "when the build-communities tool runs > if the backend fails" do
+    test "then the failure reason is returned to the caller unchanged" do
+      InMemory.set_build_communities({:error, :boom})
+
+      assert {:error, :boom} = MemoryBuildCommunities.run(%{}, %{agent_id: "01USER"})
+    end
   end
 end

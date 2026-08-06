@@ -9,27 +9,42 @@ defmodule JidoGralkor.Actions.MemoryBuildIndicesTest do
     :ok
   end
 
-  test "the action description tells the LLM DO NOT CALL unless asked" do
+  describe "when a model reads the build-indices tool's description" do
+    test "then it is told not to call the tool unless the operator explicitly asks" do
     description =
       MemoryBuildIndices.__action_metadata__()
       |> Map.get(:description)
       |> to_string()
 
     assert description =~ "DO NOT CALL"
+    end
   end
 
-  test "when the client returns {:ok, %{status: status}}, the action result reports success" do
-    InMemory.set_build_indices({:ok, %{status: "stored"}})
+  describe "when the build-indices tool runs" do
+    test "then the backend is asked to build indices once, unscoped to any operator" do
+      InMemory.set_build_indices({:ok, %{status: "stored"}})
 
-    assert {:ok, %{result: result}} = MemoryBuildIndices.run(%{}, %{agent_id: "01USER"})
+      assert {:ok, %{result: _result}} = MemoryBuildIndices.run(%{}, %{agent_id: "01USER"})
 
-    assert result =~ "stored"
-    assert InMemory.indices_builds() == [[]]
+      assert InMemory.indices_builds() == [[]]
+    end
   end
 
-  test "when the client returns {:error, reason}, the error is propagated" do
-    InMemory.set_build_indices({:error, :boom})
+  describe "when the build-indices tool runs > while the backend reports a status" do
+    test "then the action result reports success carrying that status" do
+      InMemory.set_build_indices({:ok, %{status: "stored"}})
 
-    assert {:error, :boom} = MemoryBuildIndices.run(%{}, %{agent_id: "01USER"})
+      assert {:ok, %{result: result}} = MemoryBuildIndices.run(%{}, %{agent_id: "01USER"})
+
+      assert result =~ "stored"
+    end
+  end
+
+  describe "when the build-indices tool runs > if the backend fails" do
+    test "then the failure reason is returned to the caller unchanged" do
+      InMemory.set_build_indices({:error, :boom})
+
+      assert {:error, :boom} = MemoryBuildIndices.run(%{}, %{agent_id: "01USER"})
+    end
   end
 end
