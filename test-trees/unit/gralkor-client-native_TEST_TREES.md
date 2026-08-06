@@ -1,4 +1,4 @@
-Unit: gralkor-client-native (src: lib/gralkor/client.ex, lib/gralkor/client/native.ex; unit: test/gralkor/client/native_test.exs)
+Unit: gralkor-client-native (src: lib/gralkor/client.ex, lib/gralkor/client/native.ex; unit: test/gralkor/client/native_test.exs; integration: test/gralkor/client/native_test.exs)
 
 when any adapter operation is called
   then the work runs in the calling node's own processes, no HTTP request or other network transport being involved
@@ -149,17 +149,10 @@ when the client implementation is resolved
     then the native adapter is returned
 
 when a recall runs
-  then it carries a deadline of twelve seconds
+  then it carries the recall pipeline's deadline, twelve seconds unless the deployment configures another
   if that deadline is exceeded
-    then the in-flight Python work is cancelled through the graph pool worker
-    and an error identifying the expired deadline is returned
+    then an error identifying the expired deadline is returned to the caller
+    and the work already handed to the embedded interpreter finishes unobserved, no layer being able to cancel it
 
-when a memory add runs
-  then it carries a deadline of sixty seconds, covering the graph library's entity and edge extraction
-  if that deadline is exceeded
-    then the in-flight Python work is cancelled through the graph pool worker
-    and an error identifying the expired deadline is returned
-
-where any adapter operation other than recall and memory add runs
-  then it carries no deadline of its own
-  and it either runs to completion or crashes its worker
+where any adapter operation other than recall runs
+  then it carries no deadline of its own, so a memory addition, a capture flush, an index rebuild and a community build each run for as long as the graph takes

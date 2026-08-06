@@ -2,6 +2,8 @@ Unit: lifecycle (src: lib/jido_gralkor/lifecycle.ex; unit: test/jido_gralkor/lif
 
 when a consumer wires the module as an agent server's lifecycle
   then it declares the Jido agent-server lifecycle behaviour, so the agent server calls terminate on graceful stop
+  and initialisation hands back the agent server's state unchanged, so wiring it in alters nothing about the agent
+  and every lifecycle event it is handed continues to the rest of the server with state unchanged, so it observes without intercepting
 
 when the agent server terminates
   while a thread is committed to agent state

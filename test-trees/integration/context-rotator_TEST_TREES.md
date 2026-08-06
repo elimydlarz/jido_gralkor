@@ -12,6 +12,9 @@ when a running agent is asked to rotate its context now
       while the caller retains nothing
       and every pre-rotation entry was already flushed
         then the rotated thread starts empty
+    if installing the fresh thread fails after the flush succeeded
+      then the failure reason is returned to the caller
+      and the agent process is still running afterwards
     if the flush of the committed session fails
       then the failure reason is returned to the caller
       and the active session id is left unchanged

@@ -4,6 +4,9 @@ when an application registers a valid Lens
   then direct callers and mounted memory plugins can select that Lens by name
   and every consumer observes the same application-owned Lens definition
 
+if an application's Lens registry is not a list
+  then configuration resolution raises `ArgumentError` naming what it found instead
+
 if an application registers an invalid Lens
   then configuration resolution raises `ArgumentError` before ingestion or search begins
     where the Lens name is blank

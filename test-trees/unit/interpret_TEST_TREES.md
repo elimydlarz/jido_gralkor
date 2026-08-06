@@ -47,6 +47,8 @@ when the interpretation context is built from messages, a request, facts, and an
   and message content is neither inspected nor mutated beyond whitespace trimming
   if the agent name is missing or blank
     then an ArgumentError is raised
+  where no character budget is supplied
+    then a default of 8000 characters governs the fit
   when the rendered messages exceed the character budget
     then the oldest messages are dropped until the context fits
     but the newest messages that fit are retained

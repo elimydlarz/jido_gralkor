@@ -1,5 +1,14 @@
 Unit: generalise (src: lib/gralkor/generalise.ex; unit: test/gralkor/generalise_test.exs)
 
+when the structured-output schema for hypothesising is requested
+  then it requires the generalisations as a list of maps
+  and it tells the model each entry carries content and a confidence between 0.0 and 1.0
+
+when the structured-output schema for evaluating is requested
+  then it requires the decisions as a list of maps
+  and it tells the model each decision carries an action, the hypothesis index, a confidence and the content to save
+  and it tells the model which actions are available
+
 when a transcript is generalised
   then only hypothesised candidates at or above the minimum confidence reach evaluation
   and candidates reach evaluation sorted by confidence descending

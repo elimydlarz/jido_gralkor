@@ -15,5 +15,5 @@ while a real language model interprets memory deterministically
     then the irrelevant facts are omitted
     and the relevant fact keeps its natural source context
 
-if the model credential is absent or blank
-  then the suite fails before any model call is made
+if no real model credential is available
+  then the suite fails on the model call rather than skipping, the harness supplying an obvious placeholder rather than a reason to opt out

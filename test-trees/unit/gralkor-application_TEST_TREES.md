@@ -4,11 +4,13 @@ when the application starts
   while a remote FalkorDB connection is configured
     then the Python runtime, the graph pool, and the capture buffer are supervised in that order
     and the graph pool is constructed with the remote connection, so no embedded server is spawned
+    and the Python runtime is told not to sweep for orphaned embedded servers, this deployment never having spawned one
     and a configured data directory is ignored
   while a data directory is configured
   and no remote connection is configured
     then the Python runtime, the graph pool, and the capture buffer are supervised in that order
     and the graph pool is constructed with the embedded connection
+    and the Python runtime is told to sweep for orphaned embedded servers, this deployment spawning one of its own
     and startup returns only once all three have initialised, so a consumer needs no separate readiness gate
   while neither a remote connection nor a data directory is configured
     then no children are supervised, because the consumer has not opted into the native runtime
@@ -33,6 +35,9 @@ when a capture flush writes its captured episode successfully
   and the flush reports success
   and every captured turn is learned from in the order it was appended
   and each learning result is written as its own separate episode carrying the same group and ontology as the captured episode
+  and the learning write asks for the built-in Learning entity type to be merged onto its ontology, while the captured write does not
+  where test mode is enabled
+    then the rendered transcript itself is logged, so what actually landed in memory is readable from the logs
   while generalisation on flush is enabled
     then generalisation is started against the group and the rendered transcript without blocking the flush
     and a generalisation failure does not change the flush result

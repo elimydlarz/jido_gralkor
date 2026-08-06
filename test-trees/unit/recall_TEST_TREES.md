@@ -70,17 +70,13 @@ where no learning search is supplied
   then no learning search is issued
   and the main search remains the only query sent to the graph
 
-when recall runs through the production client wiring
-  then the learning search reaches the graph as a node search restricted to the node label "Learning"
-  and each returned learning node is rendered from its name, summary, and attributes
-  and no learning-search failure is logged
-
 while a deadline budget governs the call
   if the upstream answers inside the budget
     then the memory block is returned normally
   if the budget is exhausted before the call returns
-    then in-flight upstream work is cancelled
-    and {:error, :recall_deadline_expired} is returned
+    then {:error, :recall_deadline_expired} is returned
+    and the expiry is logged as a warning naming the session and the budget
+    and the upstream work already started finishes unobserved, nothing being able to cancel it
 
 when no deadline is supplied
   then a default budget of 12 seconds governs the call

@@ -1,4 +1,4 @@
-Functional: retry-ownership (functional: none)
+Functional: retry-ownership (functional: test/functional/retry_ownership_functional_test.exs)
 
 when any failure class arises anywhere in the stack
   then exactly one layer retries it
@@ -15,7 +15,7 @@ when the configured inference provider fails a call for a reason other than rate
   and the failure surfaces to the caller as it was returned
 
 when the inference provider returns output that cannot be parsed into the requested structure
-  then the graph library owns the retry and makes two attempts
+  then the graph library owns the retry, up to the maximum its own client sets for the configured provider
   and the parse error text is appended to the prompt of the following attempt
   and no layer above the graph library retries it
 

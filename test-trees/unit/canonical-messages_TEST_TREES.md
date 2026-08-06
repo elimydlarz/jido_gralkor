@@ -13,6 +13,8 @@ when a turn is rendered into canonical messages
     then no thought behaviour message is rendered for it
   while the trace holds a completed tool event
     then it renders as a behaviour message reading `tool NAME → RESULT`
+    while that event carries no result
+      then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing
   while the trace holds events that are not memory-worthy
     then those events contribute no messages
   while the turn completed

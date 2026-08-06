@@ -69,6 +69,9 @@ when an episode is added
     and the forwarded dictionary uses the graph library's key names outside and the ontology's declared type names inside
   while an episode identifier is supplied
     then that identifier is forwarded to the graph library, so re-adding under it updates the episode by re-extraction
+  while the write asks for the built-in Learning entity type
+    then it is merged onto whatever entity types the supplied ontology declares, so a learning is extracted whether or not a consumer configured an ontology
+    and the merged translation is cached separately from the same ontology's unmerged translation
 
 if adding an episode raises inside the graph library
   then an error carrying only the raised exception's class and message is returned
@@ -88,6 +91,9 @@ when a fact search is run for a group
   and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps
   and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints
 
+if running a fact search raises inside the graph library
+  then an error carrying the raised exception is returned
+
 when an episode search is run for a group
   then the graph library is asked for episodes only, with the requested result count
   and it is restricted to the sanitised group id the episodes were written under
@@ -104,3 +110,10 @@ when a node search is run for a group
     and each returned node is rendered with its name, summary, and attributes, ordered by relevance
   while no node labels are supplied
     then the graph library's node search is invoked with every node eligible
+
+if running a node search raises inside the graph library
+  then an error carrying the raised exception is returned
+
+when an index and constraint rebuild is requested for the whole graph
+  then every group the pool holds an instance for is rebuilt, each group being its own database
+  and a group whose instance has never been created is left alone, its indices being built the moment it is

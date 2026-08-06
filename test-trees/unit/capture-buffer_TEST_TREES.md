@@ -32,6 +32,12 @@ if the user name is missing or blank
   then an argument error is raised
 
 where captured turns select a Lens
+  if a turn is appended for an existing session under a different operator
+    then an argument error is raised, a session not being re-bindable across operators
+  if a turn is appended for an existing session under a different agent name
+    then an argument error is raised
+  if a turn is appended for an existing session under a different user name
+    then an argument error is raised
   when turns in one session select different Lenses
     then each turn stays associated with the Lens it selected
     and reading the session's turns back returns every turn in append order across Lenses
