@@ -28,15 +28,35 @@ defmodule Gralkor.CaptureBufferTest do
     %{pid: pid}
   end
 
-  describe "ex-capture-buffer > append/6 when called for a new session_id" do
-    test "an entry is created bound to the sanitized group_id, agent_name, user_name, and the turn" do
+  describe "when a turn is appended for a session that holds none" do
+    test "then the turn is buffered and readable back for that session" do
       msgs = [Message.new("user", "hi")]
       :ok = CaptureBuffer.append("session-1", "group-1", "Susu", "Eli", nil, msgs)
 
       assert [^msgs] = CaptureBuffer.turns_for("session-1")
     end
 
-    test "the group_id is stored in sanitized form (hyphens → underscores)" do
+    test "and it stays buffered until a flush is explicitly requested, the buffer having no idle-flush policy of its own" do
+      msgs = [Message.new("user", "hi")]
+      :ok = CaptureBuffer.append("session-1", "group-1", "Susu", "Eli", nil, msgs)
+
+      Process.sleep(20)
+
+      assert [^msgs] = CaptureBuffer.turns_for("session-1")
+    end
+
+    test "and the entry binds the session to its group, agent name, user name, and ontology, the ontology being a module or nothing" do
+      :ok =
+        CaptureBuffer.append("s", "g", "Susu", "Eli", FakeOntologyA, [
+          Message.new("user", "x")
+        ])
+
+      :ok = CaptureBuffer.flush("s")
+
+      assert_receive {:flushed, "g", "Susu", "Eli", FakeOntologyA, _turns}
+    end
+
+    test "and the group it binds is the sanitised form of the group supplied" do
       :ok =
         CaptureBuffer.append("s", "with-hyphens", "Susu", "Eli", nil, [Message.new("user", "x")])
 
@@ -45,7 +65,7 @@ defmodule Gralkor.CaptureBufferTest do
       assert_receive {:flushed, "with_hyphens", "Susu", "Eli", nil, _turns}
     end
 
-    test "the agent_name and user_name are forwarded to the flush callback" do
+    test "and the bound group, agent name, user name, and ontology are what the flush callback later receives" do
       :ok = CaptureBuffer.append("s", "g", "Gralkor", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.flush("s")
 
@@ -53,8 +73,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 when called again for the same session_id" do
-    test "the new turn is appended and prior turns remain buffered" do
+  describe "when a further turn is appended for a session that already holds turns" do
+    test "then it is buffered after the turns already held, which remain buffered" do
       t1 = [Message.new("user", "first")]
       t2 = [Message.new("user", "second")]
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, t1)
@@ -64,8 +84,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 when called for multiple session_ids" do
-    test "each session_id has an independent entry" do
+  describe "when turns are appended for several sessions" do
+    test "then each session buffers its own turns independently of the others" do
       :ok = CaptureBuffer.append("a", "g", "Susu", "Eli", nil, [Message.new("user", "a-msg")])
       :ok = CaptureBuffer.append("b", "g", "Susu", "Eli", nil, [Message.new("user", "b-msg")])
 
@@ -74,8 +94,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 when called for an existing session_id with a different group_id" do
-    test "raises (sessions are not re-bindable across groups)" do
+  describe "if a turn is appended for an existing session under a different group" do
+    test "then an argument error is raised, a session not being re-bindable across groups" do
       :ok = CaptureBuffer.append("s", "g1", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       assert_raise ArgumentError, ~r/group/i, fn ->
@@ -84,8 +104,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 when called for an existing session_id with a different agent_name" do
-    test "raises (sessions are not re-bindable across agents)" do
+  describe "if a turn is appended for an existing session under a different agent name" do
+    test "then an argument error is raised" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       assert_raise ArgumentError, ~r/agent/i, fn ->
@@ -94,8 +114,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 when called for an existing session_id with a different user_name" do
-    test "raises (sessions are not re-bindable across users)" do
+  describe "if a turn is appended for an existing session under a different user name" do
+    test "then an argument error is raised, the human's identity being fixed at the session's first append" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       assert_raise ArgumentError, ~r/user/i, fn ->
@@ -104,8 +124,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 when called for an existing session_id with a different ontology" do
-    test "raises (one episode never mixes entity and edge schemas)" do
+  describe "if a turn is appended for an existing session under a different ontology" do
+    test "then an argument error is raised, one episode never mixing entity and edge schemas" do
       :ok =
         CaptureBuffer.append(
           "s",
@@ -129,36 +149,54 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append/6 if agent_name is missing or blank" do
-    test "raises ArgumentError on blank agent_name" do
-      assert_raise ArgumentError, ~r/agent_name/, fn ->
-        CaptureBuffer.append("s", "g", "", "Eli", nil, [Message.new("user", "x")])
-      end
-    end
-
-    test "raises ArgumentError on nil agent_name" do
-      assert_raise ArgumentError, ~r/agent_name/, fn ->
-        CaptureBuffer.append("s", "g", nil, "Eli", nil, [Message.new("user", "x")])
+  describe "if the agent name is missing or blank" do
+    test "then an argument error is raised" do
+      for agent_name <- [nil, ""] do
+        assert_raise ArgumentError, ~r/agent_name/, fn ->
+          CaptureBuffer.append("s", "g", agent_name, "Eli", nil, [Message.new("user", "x")])
+        end
       end
     end
   end
 
-  describe "ex-capture-buffer > append/6 if user_name is missing or blank" do
-    test "raises ArgumentError on blank user_name" do
-      assert_raise ArgumentError, ~r/user_name/, fn ->
-        CaptureBuffer.append("s", "g", "Susu", "", nil, [Message.new("user", "x")])
-      end
-    end
-
-    test "raises ArgumentError on nil user_name" do
-      assert_raise ArgumentError, ~r/user_name/, fn ->
-        CaptureBuffer.append("s", "g", "Susu", nil, nil, [Message.new("user", "x")])
+  describe "if the user name is missing or blank" do
+    test "then an argument error is raised" do
+      for user_name <- [nil, ""] do
+        assert_raise ArgumentError, ~r/user_name/, fn ->
+          CaptureBuffer.append("s", "g", "Susu", user_name, nil, [Message.new("user", "x")])
+        end
       end
     end
   end
 
-  describe "ex-capture-buffer > append_lens/6 when called for an existing session_id with a different operator" do
-    test "raises (sessions are not re-bindable across operators)" do
+  describe "where captured turns select a Lens > if no Lens is selected" do
+    test "then an argument error is raised before any turn is buffered" do
+      assert_raise ArgumentError, ~r/lenses/, fn ->
+        CaptureBuffer.append_lenses("s", "operator", "Susu", "Eli", [], [
+          Message.new("user", "x")
+        ])
+      end
+
+      assert CaptureBuffer.turns_for("s") == []
+    end
+  end
+
+  describe "where captured turns select a Lens > if a selected Lens name is missing or blank" do
+    test "then an argument error is raised before any turn is buffered" do
+      for lens <- [nil, ""] do
+        assert_raise ArgumentError, ~r/lens/, fn ->
+          CaptureBuffer.append_lenses("s", "operator", "Susu", "Eli", [lens], [
+            Message.new("user", "x")
+          ])
+        end
+      end
+
+      assert CaptureBuffer.turns_for("s") == []
+    end
+  end
+
+  describe "where captured turns select a Lens > if a turn is appended for an existing session under a different operator" do
+    test "then an argument error is raised, a session not being re-bindable across operators" do
       :ok =
         CaptureBuffer.append_lens(
           "session",
@@ -182,8 +220,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append_lens/6 when called for an existing session_id with a different agent_name" do
-    test "raises (sessions are not re-bindable across agents)" do
+  describe "where captured turns select a Lens > if a turn is appended for an existing session under a different agent name" do
+    test "then an argument error is raised" do
       :ok =
         CaptureBuffer.append_lens(
           "session",
@@ -207,8 +245,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append_lens/6 when called for an existing session_id with a different user_name" do
-    test "raises (sessions are not re-bindable across users)" do
+  describe "where captured turns select a Lens > if a turn is appended for an existing session under a different user name" do
+    test "then an argument error is raised" do
       :ok =
         CaptureBuffer.append_lens(
           "session",
@@ -232,8 +270,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append_lens/6 when turns in one session select different Lenses" do
-    test "then each turn remains associated with its selected Lens" do
+  describe "where captured turns select a Lens > when turns in one session select different Lenses" do
+    test "then each turn stays associated with the Lens it selected" do
       observation = [Message.new("user", "an observation")]
       decision = [Message.new("user", "a decision")]
 
@@ -265,7 +303,7 @@ defmodule Gralkor.CaptureBufferTest do
       assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "decisions", [^decision]}
     end
 
-    test "and turns_for/1 returns every turn in append order across Lenses" do
+    test "and reading the session's turns back returns every turn in append order across Lenses" do
       observation = [Message.new("user", "an observation")]
       decision = [Message.new("user", "a decision")]
 
@@ -293,8 +331,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > append_lens/6 when the session is flushed" do
-    test "then the Lens flush callback receives one batch per Lens containing only that Lens's turns" do
+  describe "where captured turns select a Lens > when the session is flushed" do
+    test "then the Lens flush callback receives one batch per Lens carrying only that Lens's turns" do
       observation = [Message.new("user", "an observation")]
       decision = [Message.new("user", "a decision")]
 
