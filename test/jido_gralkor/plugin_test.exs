@@ -314,6 +314,7 @@ defmodule JidoGralkor.PluginTest do
         Plugin.handle_signal(signal, context(ag))
       end
     end
+  end
 
   describe "when an agent turn completes > while no thread has committed to agent state" do
     test "then capture is skipped" do
