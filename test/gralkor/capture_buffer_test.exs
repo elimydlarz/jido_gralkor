@@ -172,8 +172,13 @@ defmodule Gralkor.CaptureBufferTest do
   describe "where captured turns select a Lens > if no Lens is selected" do
     test "then an argument error is raised before any turn is buffered" do
       assert_raise ArgumentError, ~r/lenses/, fn ->
-        CaptureBuffer.append_lenses("s", "operator", "Susu", "Eli", [], [
-          Message.new("user", "x")
+        apply(CaptureBuffer, :append_lenses, [
+          "s",
+          "operator",
+          "Susu",
+          "Eli",
+          [],
+          [Message.new("user", "x")]
         ])
       end
 
