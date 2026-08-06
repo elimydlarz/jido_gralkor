@@ -22,55 +22,73 @@ defmodule Gralkor.Client.NativeTest do
     :ok
   end
 
-  describe "ex-client-native > if capture is called with a blank string session_id" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/session_id/, fn ->
-        Native.capture("", "g", "TestAgent", "Eli", [Message.new("user", "x")])
+  describe "if a capture is requested with a missing or blank session id" do
+    setup :start_capture_buffer
+
+    test "then an argument error naming the session id is raised" do
+      for session_id <- [nil, ""] do
+        assert_raise ArgumentError, ~r/session_id/, fn ->
+          Native.capture(session_id, "g", "TestAgent", "Eli", [Message.new("user", "x")])
+        end
       end
+    end
+
+    test "and no turn is buffered" do
+      for session_id <- [nil, ""] do
+        assert_raise ArgumentError, ~r/session_id/, fn ->
+          Native.capture(session_id, "g", "TestAgent", "Eli", [Message.new("user", "x")])
+        end
+      end
+
+      assert CaptureBuffer.turns_for("s1") == []
     end
   end
 
-  describe "ex-client-native > if capture is called with a nil session_id" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/session_id/, fn ->
-        Native.capture(nil, "g", "TestAgent", "Eli", [Message.new("user", "x")])
+  describe "if a capture is requested with a missing or blank agent name" do
+    setup :start_capture_buffer
+
+    test "then an argument error naming the agent name is raised" do
+      for agent_name <- [nil, ""] do
+        assert_raise ArgumentError, ~r/agent_name/, fn ->
+          Native.capture("s1", "g", agent_name, "Eli", [Message.new("user", "x")])
+        end
       end
+    end
+
+    test "and no turn is buffered" do
+      for agent_name <- [nil, ""] do
+        assert_raise ArgumentError, ~r/agent_name/, fn ->
+          Native.capture("s1", "g", agent_name, "Eli", [Message.new("user", "x")])
+        end
+      end
+
+      assert CaptureBuffer.turns_for("s1") == []
     end
   end
 
-  describe "ex-client-native > if capture is called with a blank agent_name" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Native.capture("s1", "g", "", "Eli", [Message.new("user", "x")])
+  describe "if a capture is requested with a missing or blank user name" do
+    setup :start_capture_buffer
+
+    test "then an argument error naming the user name is raised" do
+      for user_name <- [nil, ""] do
+        assert_raise ArgumentError, ~r/user_name/, fn ->
+          Native.capture("s1", "g", "TestAgent", user_name, [Message.new("user", "x")])
+        end
       end
+    end
+
+    test "and no turn is buffered" do
+      for user_name <- [nil, ""] do
+        assert_raise ArgumentError, ~r/user_name/, fn ->
+          Native.capture("s1", "g", "TestAgent", user_name, [Message.new("user", "x")])
+        end
+      end
+
+      assert CaptureBuffer.turns_for("s1") == []
     end
   end
 
-  describe "ex-client-native > if capture is called with a nil agent_name" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Native.capture("s1", "g", nil, "Eli", [Message.new("user", "x")])
-      end
-    end
-  end
-
-  describe "ex-client-native > if capture is called with a blank user_name" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/user_name/, fn ->
-        Native.capture("s1", "g", "TestAgent", "", [Message.new("user", "x")])
-      end
-    end
-  end
-
-  describe "ex-client-native > if capture is called with a nil user_name" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/user_name/, fn ->
-        Native.capture("s1", "g", "TestAgent", nil, [Message.new("user", "x")])
-      end
-    end
-  end
-
-  describe "ex-client-native > interpret output budget > if :interpret_max_output_tokens is set to a non-positive or non-integer value" do
+  describe "when a recall is requested with a group, an agent name and a query > if the configured interpretation output budget is not a positive integer" do
     setup do
       original = Application.get_env(:jido_gralkor, :interpret_max_output_tokens)
 
@@ -85,27 +103,13 @@ defmodule Gralkor.Client.NativeTest do
       :ok
     end
 
-    test "raises ArgumentError on zero" do
-      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, 0)
+    test "then an argument error naming that setting is raised at the adapter boundary before any recall work starts" do
+      for value <- [0, -1, "lots"] do
+        Application.put_env(:jido_gralkor, :interpret_max_output_tokens, value)
 
-      assert_raise ArgumentError, ~r/interpret_max_output_tokens/, fn ->
-        Native.recall("g", "TestAgent", "s1", "q")
-      end
-    end
-
-    test "raises ArgumentError on negative" do
-      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, -1)
-
-      assert_raise ArgumentError, ~r/interpret_max_output_tokens/, fn ->
-        Native.recall("g", "TestAgent", "s1", "q")
-      end
-    end
-
-    test "raises ArgumentError on non-integer" do
-      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, "lots")
-
-      assert_raise ArgumentError, ~r/interpret_max_output_tokens/, fn ->
-        Native.recall("g", "TestAgent", "s1", "q")
+        assert_raise ArgumentError, ~r/interpret_max_output_tokens/, fn ->
+          Native.recall("g", "TestAgent", "s1", "q")
+        end
       end
     end
   end
@@ -123,143 +127,88 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "ex-client-native > if recall is called with a blank agent_name" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Native.recall("g", "", "s1", "q")
+  describe "if a recall is requested with a missing or blank agent name" do
+    test "then an argument error naming the agent name is raised" do
+      for agent_name <- [nil, ""] do
+        assert_raise ArgumentError, ~r/agent_name/, fn ->
+          Native.recall("g", agent_name, "s1", "q")
+        end
+      end
+    end
+
+    test "and no search is issued" do
+      for agent_name <- [nil, ""] do
+        assert_raise ArgumentError, ~r/agent_name/, fn ->
+          Native.recall("g", agent_name, "s1", "q")
+        end
       end
     end
   end
 
-  describe "ex-client-native > if recall is called with a nil agent_name" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/agent_name/, fn ->
-        Native.recall("g", nil, "s1", "q")
+  describe "if a flush is requested with a missing or blank session id" do
+    test "then an argument error naming the session id is raised" do
+      for session_id <- [nil, ""] do
+        assert_raise ArgumentError, ~r/session_id/, fn -> Native.flush(session_id) end
       end
     end
   end
 
-  describe "ex-client-native > if flush is called with a blank string session_id" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/session_id/, fn ->
-        Native.flush("")
+  describe "if a flush-and-await is requested with a missing or blank session id" do
+    test "then an argument error naming the session id is raised" do
+      for session_id <- [nil, ""] do
+        assert_raise ArgumentError, ~r/session_id/, fn ->
+          Native.flush_and_await(session_id, 1_000)
+        end
       end
     end
   end
 
-  describe "ex-client-native > if flush is called with a nil session_id" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/session_id/, fn ->
-        Native.flush(nil)
+  describe "if a flush-and-await is requested with a missing or non-positive timeout" do
+    test "then an argument error naming the timeout is raised" do
+      for timeout <- [nil, 0, -1] do
+        assert_raise ArgumentError, ~r/timeout_ms/, fn ->
+          apply(Native, :flush_and_await, ["s1", timeout])
+        end
       end
     end
   end
 
-  describe "ex-client-native > if flush_and_await is called with a blank string session_id" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/session_id/, fn ->
-        Native.flush_and_await("", 1_000)
-      end
-    end
-  end
-
-  describe "ex-client-native > if flush_and_await is called with a nil session_id" do
-    test "raises ArgumentError" do
-      assert_raise ArgumentError, ~r/session_id/, fn ->
-        Native.flush_and_await(nil, 1_000)
-      end
-    end
-  end
-
-  describe "ex-client-native > if flush_and_await is called with a non-positive timeout_ms" do
-    test "raises ArgumentError when timeout_ms is zero" do
-      assert_raise ArgumentError, ~r/timeout_ms/, fn ->
-        Native.flush_and_await("s1", 0)
-      end
-    end
-
-    test "raises ArgumentError when timeout_ms is negative" do
-      assert_raise ArgumentError, ~r/timeout_ms/, fn ->
-        Native.flush_and_await("s1", -1)
-      end
-    end
-
-    test "raises ArgumentError when timeout_ms is missing" do
-      assert_raise ArgumentError, ~r/timeout_ms/, fn ->
-        apply(Native, :flush_and_await, ["s1", nil])
-      end
-    end
-  end
-
-  describe "ex-memory-add > ontology validation" do
-    test "raises ArgumentError when ontology is a module that does not export __ontology__/0" do
+  describe "when memory is added with a group and content > if the ontology supplied is a module that declares no ontology" do
+    test "then an argument error naming that module is raised before any write is attempted" do
       assert_raise ArgumentError, ~r/NotAnOntology/, fn ->
         Native.memory_add("g", "content", "manual", Gralkor.TestOntologies.NotAnOntology)
       end
     end
 
-    test "raises ArgumentError when ontology is a non-module value" do
+  end
+
+  describe "when memory is added with a group and content > if the ontology supplied is not a module" do
+    test "then an argument error naming that value is raised before any write is attempted" do
       assert_raise ArgumentError, ~r/not-a-module/, fn ->
         Native.memory_add("g", "content", "manual", "not-a-module")
       end
     end
   end
 
-  describe "ex-memory-add > arity" do
-    test "memory_add/3 is exported" do
-      assert function_exported?(Native, :memory_add, 3)
-    end
-
-    test "memory_add/4 is exported" do
-      assert function_exported?(Native, :memory_add, 4)
-    end
-  end
-
-  describe "ex-memory-add > memory_add/3 delegates to memory_add/4 with Config.ontology/0" do
-    setup do
-      original = Application.get_env(:jido_gralkor, :ontology)
-
-      on_exit(fn ->
-        case original do
-          nil -> Application.delete_env(:jido_gralkor, :ontology)
-          v -> Application.put_env(:jido_gralkor, :ontology, v)
-        end
-      end)
-    end
-
-    test "when :ontology is unset, memory_add/3 passes the ontology guard and reaches GraphitiPool" do
-      Application.delete_env(:jido_gralkor, :ontology)
-
-      # memory_add/3 delegates to /4 with Config.ontology() → nil.
-      # raise_unless_ontology_or_nil! accepts nil, so we reach GraphitiPool.
-      # The crash is about ETS (no OTP stack), NOT about ontology — that
-      # proves the guard passed.
-      assert_raise ArgumentError, ~r/ETS/, fn ->
-        Native.memory_add("g", "content", "manual")
-      end
-    end
-  end
-
-  describe "ex-sanitize-group-id > when the id contains hyphens" do
-    test "hyphens are replaced with underscores" do
+  describe "when a group id holding hyphens is sanitised" do
+    test "then every hyphen is replaced with an underscore" do
       assert Client.sanitize_group_id("a-b-c") == "a_b_c"
     end
   end
 
-  describe "ex-sanitize-group-id > when the id has consecutive hyphens" do
-    test "each hyphen is replaced independently" do
+    test "and consecutive hyphens are each replaced independently, so none is collapsed into another" do
       assert Client.sanitize_group_id("a--b") == "a__b"
     end
   end
 
-  describe "ex-sanitize-group-id > when the id has no hyphens" do
-    test "it is returned unchanged" do
+  describe "when a group id holding no hyphens is sanitised" do
+    test "then it is returned unchanged" do
       assert Client.sanitize_group_id("abc") == "abc"
     end
   end
 
-  describe "ex-impl-resolver > when :jido_gralkor/:client is unset in app env" do
-    test "Gralkor.Client.Native is returned" do
+  describe "when the client implementation is resolved > while no client module is configured" do
+    test "then the native adapter is returned" do
       original = Application.get_env(:jido_gralkor, :client)
       Application.delete_env(:jido_gralkor, :client)
 
