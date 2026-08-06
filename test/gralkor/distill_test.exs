@@ -37,7 +37,6 @@ defmodule Gralkor.DistillTest do
       refute result =~ "behaviour"
       refute result =~ "secret thinking"
     end
-  end
 
     test "and the rendered turns are joined with newlines" do
       result =
