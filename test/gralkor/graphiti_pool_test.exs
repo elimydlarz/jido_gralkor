@@ -1225,7 +1225,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert spec.cross_encoder.provider == :openai
     end
 
-    test "and each provider's credential is read on the BEAM side and handed to its client as an explicit argument, the embedded interpreter's own environment never carrying it" do
+    test "and each provider credential is passed explicitly from the BEAM side" do
       previous_openai = System.get_env("OPENAI_API_KEY")
       previous_google = System.get_env("GOOGLE_API_KEY")
 
