@@ -83,30 +83,27 @@ defmodule JidoGralkor.ContextRotator do
         case safe_flush_and_await(session_id, flush_timeout_ms) do
           :ok ->
             new_session_id = mint_session_id()
+            retained_count = length(retain_tail(pre_flush_entries, keep_last_n))
 
-            case inflight_entries(agent_pid, pre_flush_entries) do
-              {:ok, inflight} ->
-                retained_pre = retain_tail(pre_flush_entries, keep_last_n)
-                seed = retained_pre ++ inflight
+            case swap_thread(
+                   agent_pid,
+                   new_session_id,
+                   pre_flush_entries,
+                   keep_last_n
+                 ) do
+              {:ok, seed_count} ->
+                Logger.info(
+                  "[jido_gralkor] context rotated — session:#{session_id}→#{new_session_id} kept:#{retained_count} inflight:#{seed_count - retained_count}"
+                )
 
-                case swap_thread(agent_pid, new_session_id, seed) do
-                  :ok ->
-                    Logger.info(
-                      "[jido_gralkor] context rotated — session:#{session_id}→#{new_session_id} kept:#{length(retained_pre)} inflight:#{length(inflight)}"
-                    )
-
-                    :ok
-
-                  {:error, reason} ->
-                    Logger.warning(
-                      "[jido_gralkor] context rotator failed to swap thread — session:#{session_id} reason:#{inspect(reason)}"
-                    )
-
-                    {:error, reason}
-                end
+                :ok
 
               {:error, reason} ->
-                {:error, {:state_read_failed, reason}}
+                Logger.warning(
+                  "[jido_gralkor] context rotator failed to swap thread — session:#{session_id} reason:#{inspect(reason)}"
+                )
+
+                {:error, reason}
             end
 
           {:error, reason} ->
@@ -123,19 +120,6 @@ defmodule JidoGralkor.ContextRotator do
     Client.impl().flush_and_await(session_id, timeout_ms)
   catch
     :exit, reason -> {:error, {:flush_exit, reason}}
-  end
-
-  defp inflight_entries(agent_pid, pre_flush_entries) do
-    case fetch_thread(agent_pid) do
-      {:ok, %{entries: current_entries}} ->
-        {:ok, new_inflight(pre_flush_entries, current_entries)}
-
-      {:ok, nil} ->
-        {:error, :thread_missing_after_flush}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
   end
 
   @doc false
@@ -196,17 +180,28 @@ defmodule JidoGralkor.ContextRotator do
     Enum.take(entries, -n)
   end
 
-  defp swap_thread(agent_pid, new_session_id, retained_entries) when is_pid(agent_pid) do
-    seeded = build_seeded_thread(new_session_id, retained_entries)
-
+  defp swap_thread(agent_pid, new_session_id, pre_flush_entries, keep_last_n)
+       when is_pid(agent_pid) do
     try do
-      :sys.replace_state(agent_pid, fn server_state ->
-        agent = server_state.agent
-        agent = %{agent | state: Map.put(agent.state, :__thread__, seeded)}
-        %{server_state | agent: agent}
-      end)
+      updated_state =
+        :sys.replace_state(agent_pid, fn server_state ->
+          case server_state.agent.state[:__thread__] do
+            %{entries: current_entries} when is_list(current_entries) ->
+              seed = compute_seed(pre_flush_entries, current_entries, keep_last_n)
+              seeded = build_seeded_thread(new_session_id, seed)
+              agent = server_state.agent
+              agent = %{agent | state: Map.put(agent.state, :__thread__, seeded)}
+              %{server_state | agent: agent}
 
-      :ok
+            _other ->
+              server_state
+          end
+        end)
+
+      case updated_state.agent.state[:__thread__] do
+        %{id: ^new_session_id, entries: entries} -> {:ok, length(entries)}
+        _other -> {:error, :thread_missing_after_flush}
+      end
     catch
       :exit, reason -> {:error, reason}
     end
