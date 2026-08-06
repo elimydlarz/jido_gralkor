@@ -812,7 +812,7 @@ defmodule Gralkor.Client.NativeTest do
       assert {:ok, %{status: "built"}} = Native.build_indices()
 
       {recorded, _} = Pythonx.eval("g.recorded['indices']", %{"g" => g})
-      assert Pythonx.decode(recorded) == 1
+      assert Pythonx.decode(recorded) == 2
     end
 
     test "and a status is returned once the rebuild completes" do
@@ -825,6 +825,7 @@ defmodule Gralkor.Client.NativeTest do
     setup :start_recording_pool
 
     test "then that failure is returned unchanged", %{g: g} do
+      assert :ok = Native.memory_add("g1", "content", "manual")
       Pythonx.eval("g.recorded['indices'] = 'fail'", %{"g" => g})
       assert {:error, {:python, reason}} = Native.build_indices()
       assert reason =~ "indices refused"
@@ -889,11 +890,15 @@ defmodule Gralkor.Client.NativeTest do
 
             async def search(self, query, num_results=10, search_filter=None):
                 self.recorded.setdefault('fact_queries', []).append(query)
+                if query.startswith('slow:'):
+                    await asyncio.sleep(0.3)
                 return []
 
             async def search_(self, query, config=None, group_ids=None, search_filter=None):
                 self.recorded.setdefault('queries', []).append(query)
                 self.recorded.setdefault('group_ids', []).append(group_ids or [])
+                if query.startswith('slow:'):
+                    await asyncio.sleep(0.3)
                 if config is not None and config.episode_config is not None:
                     if query.startswith('fail:'):
                         raise RuntimeError('generalisation search refused')
@@ -1041,7 +1046,7 @@ defmodule Gralkor.Client.NativeTest do
 
     test "and the conversation context is empty" do
       assert {:ok, block} = Native.recall("g", "TestAgent", nil, "raw query")
-      assert block =~ "No relevant long-term memories were found"
+      assert block =~ "No relevant memories found."
     end
   end
 
