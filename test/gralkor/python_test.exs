@@ -47,8 +47,10 @@ defmodule Gralkor.PythonTest do
     test "and changing the packaged manifest triggers recompilation" do
       manifest_path = Path.expand("../../priv/python/pyproject.toml", __DIR__)
 
-      assert manifest_path in
-               Enum.map(Python.__info__(:attributes)[:external_resource], &Path.expand/1)
+      assert manifest_path in Enum.map(
+               Python.__info__(:attributes)[:external_resource],
+               &Path.expand/1
+             )
     end
 
     @tag :integration
@@ -119,9 +121,12 @@ defmodule Gralkor.PythonTest do
   describe "when the Python runtime initialises > while the embedded backend is configured" do
     test "then every process identified as its bundled server is killed before startup" do
       killed = :ets.new(:killed, [:public, :set])
-      assert :ok = Python.reap_redislite_orphans(fn -> [1234, 5678] end, fn pid ->
-               :ets.insert(killed, {pid, true})
-             end)
+
+      assert :ok =
+               Python.reap_redislite_orphans(fn -> [1234, 5678] end, fn pid ->
+                 :ets.insert(killed, {pid, true})
+               end)
+
       assert :ets.lookup(killed, 1234) == [{1234, true}]
       assert :ets.lookup(killed, 5678) == [{5678, true}]
     end

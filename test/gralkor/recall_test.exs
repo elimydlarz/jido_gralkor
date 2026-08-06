@@ -406,7 +406,6 @@ defmodule Gralkor.RecallTest do
       assert logs =~ "blockChars:"
       assert logs =~ "search:"
     end
-
   end
 
   describe "when recall begins and completes > where interpretation does not run" do
@@ -582,7 +581,6 @@ defmodule Gralkor.RecallTest do
       assert_receive :interpret_saw_gen, 500
       assert block =~ "<gralkor-memory"
     end
-
   end
 
   describe "where a generalisation search is supplied > if it fails" do
@@ -605,7 +603,6 @@ defmodule Gralkor.RecallTest do
       assert block =~ "<gralkor-memory"
       assert block =~ "some fact"
     end
-
   end
 
   describe "where a generalisation search is supplied > while it returns no facts" do
@@ -774,7 +771,6 @@ defmodule Gralkor.RecallTest do
 
       assert_receive :interpret_saw_learning, 500
     end
-
   end
 
   describe "where a learning search is supplied > if it fails" do
@@ -796,7 +792,6 @@ defmodule Gralkor.RecallTest do
 
       assert block =~ "some fact"
     end
-
   end
 
   describe "where a learning search is supplied > while it returns no facts" do
