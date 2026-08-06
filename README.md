@@ -589,3 +589,5 @@ The skill runs the full suite before changing release state, verifies or transfe
 ## License
 
 MIT.
+
+<!-- README sync proof: temporary matching documentation change. -->
