@@ -230,24 +230,28 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
       seed_thread_with_entries(pid, "pre-rotation", [%{role: :user, content: "flushed"}])
-      pause_before_installation(pid, self())
+      test_pid = self()
+
+      before_install_fn = fn ->
+        send(test_pid, :before_installation)
+
+        receive do
+          :continue_rotation -> :ok
+        end
+      end
 
       rotation =
         Task.async(fn ->
-          ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000, keep_last_n: 0)
+          ContextRotator.rotate_now(pid,
+            flush_timeout_ms: 1_000,
+            keep_last_n: 0,
+            before_install_fn: before_install_fn
+          )
         end)
 
       assert_receive :before_installation
-
-      append =
-        Task.async(fn ->
-          append_thread_entry(pid, %{role: :assistant, content: "in-flight"})
-        end)
-
-      wait_for_queued_system_request(pid)
-      send(pid, :continue_rotation)
-
-      assert :ok = Task.await(append)
+      assert :ok = append_thread_entry(pid, %{role: :assistant, content: "in-flight"})
+      send(rotation.pid, :continue_rotation)
       assert :ok = Task.await(rotation)
 
       assert [%{payload: %{content: "in-flight"}}] = committed_entries(pid)
@@ -270,40 +274,6 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     assert :ok = :sys.install(pid, {block_second_get_state_reply, 0})
   end
 
-  defp pause_before_installation(pid, test_pid) do
-    pause = fn state, event, _proc_state ->
-      if match?({:in, _}, event), do: IO.inspect(event, label: "SYS_IN")
-
-      case event do
-        {:in, {:"$gen_call", _from, :get_state}} ->
-          state = %{state | reads: state.reads + 1}
-
-          if state.reads == 2 do
-            pause_rotation(test_pid)
-          end
-
-          state
-
-        {:in, {:system, _from, {:replace_state, _fun}}} when state.reads == 1 ->
-          pause_rotation(test_pid)
-          state
-
-        _ ->
-          state
-      end
-    end
-
-    assert :ok = :sys.install(pid, {pause, %{reads: 0}})
-  end
-
-  defp pause_rotation(test_pid) do
-    send(test_pid, :before_installation)
-
-    receive do
-      :continue_rotation -> :ok
-    end
-  end
-
   defp append_thread_entry(pid, payload) do
     :sys.replace_state(pid, fn state ->
       thread = Jido.Thread.append(state.agent.state[:__thread__], [%{kind: :ai_message, payload: payload}])
@@ -311,31 +281,5 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end)
 
     :ok
-  end
-
-  defp wait_for_queued_system_request(pid, attempts \\ 100)
-
-  defp wait_for_queued_system_request(pid, 0),
-    do:
-      flunk(
-        "the in-flight append was not queued before rotation continued: #{inspect(Process.info(pid, :messages))}"
-      )
-
-  defp wait_for_queued_system_request(pid, attempts) do
-    queued? =
-      pid
-      |> Process.info(:messages)
-      |> elem(1)
-      |> Enum.any?(fn
-        {:system, _from, {:replace_state, _fun}} -> true
-        _other -> false
-      end)
-
-    if queued? do
-      :ok
-    else
-        Process.sleep(1)
-        wait_for_queued_system_request(pid, attempts - 1)
-    end
   end
 end
