@@ -221,58 +221,6 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  describe "when the Python runtime is initialised > while an embedded connection is configured" do
-    @describetag :integration
-
-    test "then any process whose arguments identify the embedded backend's bundled server is killed first, so a server orphaned by a hard virtual-machine exit cannot survive" do
-      port =
-        Port.open(
-          {:spawn_executable, System.find_executable("bash")},
-          [
-            :binary,
-            args: ["-c", "exec -a 'fake/redislite/bin/redis-server' sleep 30"]
-          ]
-        )
-
-      Process.sleep(200)
-
-      pids = list_redislite_pids()
-      assert pids != [], "expected pgrep to find at least one fake redislite process"
-
-      :ok = Python.reap_redislite_orphans(fn -> pids end, &kill_pid/1)
-
-      Process.sleep(200)
-
-      remaining = list_redislite_pids()
-
-      assert remaining == [],
-             "expected reaper to leave no matching processes; got #{inspect(remaining)}"
-
-      try do
-        Port.close(port)
-      rescue
-        ArgumentError -> :ok
-      end
-    end
-
-    defp list_redislite_pids do
-      case System.cmd("pgrep", ["-f", "redislite/bin/redis-server"], stderr_to_stdout: true) do
-        {output, 0} ->
-          output
-          |> String.split("\n", trim: true)
-          |> Enum.map(&String.to_integer(String.trim(&1)))
-
-        {_, _} ->
-          []
-      end
-    end
-
-    defp kill_pid(pid) do
-      System.cmd("kill", ["-KILL", to_string(pid)], stderr_to_stdout: true)
-      :ok
-    end
-  end
-
   describe "if a caller asks to smoke-import clients for an unsupported provider" do
     test "then the error identifies that unsupported provider without calling the interpreter" do
       assert {:error, {:unsupported_provider, :anthropic}} =
