@@ -35,8 +35,8 @@ defmodule Gralkor.Interpret do
   filtered list of relevant facts.
 
   `opts[:output_token_budget]` (default `#{@default_output_token_budget}`) is
-  passed to `interpret_fn` so the LLM-side wiring can set `max_tokens` on the
-  provider call, and is also rendered into the prompt as a self-limit
+  passed to `interpret_fn` so the LLM-side wiring can set the provider's output
+  token limit, and is also rendered into the prompt as a self-limit
   instruction.
 
   Raises `Gralkor.InterpretParseFailed` if the LLM returns a response that

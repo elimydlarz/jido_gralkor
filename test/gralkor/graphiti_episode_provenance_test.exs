@@ -113,6 +113,7 @@ defmodule Gralkor.GraphitiEpisodeProvenanceTest do
         %{llm_client: nil, embedder: nil, cross_encoder: nil}
       end,
       construct_instance: fn _db, _shared, _group_id -> graphiti end,
+      initialise_instance: fn _instance -> :ok end,
       warmup: false,
       install_loop_fn: &Gralkor.Python.install_async_runtime/0
     ]

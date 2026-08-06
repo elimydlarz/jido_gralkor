@@ -3,8 +3,6 @@ defmodule JidoGralkor.LifecycleTest do
 
   import ExUnit.CaptureLog
 
-  require Logger
-
   alias Gralkor.Client.InMemory
   alias JidoGralkor.Lifecycle
 

@@ -1,6 +1,8 @@
 defmodule Gralkor.OntologyTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureIO
+
   describe "ex-ontology > use opts validation" do
     test "missing :entities raises CompileError" do
       assert_raise CompileError, ~r/:entities/, fn ->
@@ -174,16 +176,21 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "a relationship declared inside an entity block raises, relationships living in from blocks" do
-      assert_raise CompileError, fn ->
-        defmodule RelationshipInsideEntityOntology do
-          use Gralkor.Ontology, entities: :open, relationships: :open
+      diagnostic =
+        capture_io(:stderr, fn ->
+          assert_raise CompileError, fn ->
+            defmodule RelationshipInsideEntityOntology do
+              use Gralkor.Ontology, entities: :open, relationships: :open
 
-          entity User do
-            field(:handle, :string)
-            prefers(Preference)
+              entity User do
+                field(:handle, :string)
+                prefers(Preference)
+              end
+            end
           end
-        end
-      end
+        end)
+
+      assert diagnostic =~ "undefined function prefers/1"
     end
 
     test "duplicate entity declarations raise" do

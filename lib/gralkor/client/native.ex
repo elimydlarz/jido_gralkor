@@ -206,8 +206,14 @@ defmodule Gralkor.Client.Native do
     model = Config.llm_model()
     schema = Interpret.interpret_schema()
 
-    fn prompt, max_tokens ->
-      case ReqLLM.generate_object(model, prompt, schema, max_tokens: max_tokens) do
+    fn prompt, output_token_budget ->
+      options =
+        case model.provider do
+          :openai -> [max_completion_tokens: output_token_budget]
+          _provider -> [max_tokens: output_token_budget]
+        end
+
+      case ReqLLM.generate_object(model, prompt, schema, options) do
         {:ok, response} ->
           object = ReqLLM.Response.object(response)
           {:ok, Map.get(object, :relevantFacts) || Map.get(object, "relevantFacts") || []}

@@ -13,7 +13,7 @@ defmodule Gralkor.LearningEntityTest do
 
     test "carries a non-empty description (graphiti uses the class docstring to extract the entity)" do
       assert %{description: description} = LearningEntity.spec()
-      assert is_binary(description) and String.length(description) > 0
+      assert String.length(description) > 0
     end
 
     test "problem_kind is an optional string" do

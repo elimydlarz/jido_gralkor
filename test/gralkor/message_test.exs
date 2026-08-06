@@ -28,7 +28,7 @@ defmodule Gralkor.MessageTest do
 
   describe "when a canonical message is built from a role and content > if the content is not a string" do
     test "then no message is built" do
-      assert_raise FunctionClauseError, fn -> Message.new("user", :not_a_string) end
+      assert_raise FunctionClauseError, fn -> apply(Message, :new, ["user", :not_a_string]) end
     end
   end
 end

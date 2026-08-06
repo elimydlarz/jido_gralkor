@@ -1,8 +1,6 @@
 defmodule Gralkor.Client.NativeTest do
   use ExUnit.Case, async: false
 
-  require Logger
-
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Client.Native
@@ -175,7 +173,7 @@ defmodule Gralkor.Client.NativeTest do
 
     test "raises ArgumentError when timeout_ms is missing" do
       assert_raise ArgumentError, ~r/timeout_ms/, fn ->
-        Native.flush_and_await("s1", nil)
+        apply(Native, :flush_and_await, ["s1", nil])
       end
     end
   end
@@ -724,6 +722,7 @@ defmodule Gralkor.Client.NativeTest do
             %{llm_client: nil, embedder: nil, cross_encoder: nil}
           end,
           construct_instance: fn _db, _shared, _group_id -> g end,
+          initialise_instance: fn _instance -> :ok end,
           warmup: false,
           install_loop_fn: &Gralkor.Python.install_async_runtime/0
         )

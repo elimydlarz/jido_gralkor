@@ -1,8 +1,6 @@
 defmodule Gralkor.ApplicationTest do
   use ExUnit.Case, async: false
 
-  require Logger
-
   alias Gralkor.Application, as: App
 
   setup do

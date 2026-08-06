@@ -1,10 +1,6 @@
 defmodule Gralkor.RecallTest do
   use ExUnit.Case, async: true
 
-  require Logger
-
-  alias Gralkor.Client.Native
-  alias Gralkor.GraphitiPool
   alias Gralkor.Message
   alias Gralkor.Recall
 

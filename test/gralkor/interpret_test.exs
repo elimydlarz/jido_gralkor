@@ -267,7 +267,7 @@ defmodule Gralkor.InterpretTest do
   end
 
   describe "ex-interpret > interpret_facts/6 calls interpret_fn with the prompt AND the output_token_budget" do
-    test "interpret_fn receives both the prompt and the configured budget so it can pass max_tokens to the provider" do
+    test "interpret_fn receives both the prompt and the configured budget so it can set the provider's output token limit" do
       ref = make_ref()
       test_pid = self()
 
