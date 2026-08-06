@@ -263,7 +263,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                query(agent(plugin_state), "decisions")
     end
 
-    test "when the matching request completes without repeating its Lens, then automatic capture uses the retained request Lens rather than the plugin default" do
+    test "and completion without a repeated Lens captures through the retained request Lens" do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
@@ -323,7 +323,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                InMemory.captures()
     end
 
-    test "when the matching request fails without repeating its Lens, then automatic capture uses the retained request Lens rather than the plugin default" do
+    test "and failure without a repeated Lens captures through the retained request Lens" do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
@@ -466,13 +466,13 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "where the default Lens is unknown, then the error identifies the unknown default Lens" do
+    test "and an unknown default Lens is identified" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{}, agent_name: "Susu", default_lens: "missing")
       end
     end
 
-    test "where a Lens to search is unknown, then the error identifies the unknown Lens" do
+    test "and an unknown Lens to search is identified" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
@@ -482,7 +482,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "where the generalising Lens is unknown, then the error identifies the unknown generalising Lens" do
+    test "and an unknown generalising Lens is identified" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
@@ -492,7 +492,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "where the generalising Lens duplicates the default Lens, then the error identifies that the two selections must differ" do
+    test "and a generalising Lens that duplicates the default is identified" do
       assert_raise ArgumentError, ~r/must differ/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
@@ -502,7 +502,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "where Lens options are supplied without a default Lens, then the error identifies that a default Lens is required" do
+    test "and Lens options without a default Lens identify the required default" do
       for lens_options <- [
             [search_lenses: ["observations"]],
             [generalise_lens: "generalisations"]
@@ -510,6 +510,16 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         assert_raise ArgumentError, ~r/default_lens is required/, fn ->
           Plugin.mount(%{}, Keyword.merge([agent_name: "Susu"], lens_options))
         end
+      end
+    end
+
+    test "and a non-list Lens search selection is identified" do
+      assert_raise ArgumentError, ~r/search_lenses must be a list/, fn ->
+        Plugin.mount(%{},
+          agent_name: "Susu",
+          default_lens: "observations",
+          search_lenses: "observations"
+        )
       end
     end
   end

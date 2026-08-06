@@ -12,8 +12,8 @@ where a mounted memory plugin has no additional Lenses to search
 where an agent turn selects another registered Lens
   then memory addition uses the turn-selected Lens
   and that Lens is retained for the request
-    when the matching request completes or fails without repeating its Lens
-      then automatic capture uses the retained request Lens rather than the plugin default
+  and completion without a repeated Lens captures through the retained request Lens
+  and failure without a repeated Lens captures through the retained request Lens
 
 when turns in one session select different Lenses
   then each Lens retains only the turns selected for it
@@ -22,13 +22,9 @@ when turns in one session select different Lenses
 
 if a mounted plugin receives invalid Lens configuration
   then mounting fails before the plugin handles an agent signal
-    where the default Lens is unknown
-      then the error identifies the unknown default Lens
-    where a Lens to search is unknown
-      then the error identifies the unknown Lens
-    where the generalising Lens is unknown
-      then the error identifies the unknown generalising Lens
-    where the generalising Lens duplicates the default Lens
-      then the error identifies that the two selections must differ
-    where Lens options are supplied without a default Lens
-      then the error identifies that a default Lens is required
+  and an unknown default Lens is identified
+  and an unknown Lens to search is identified
+  and an unknown generalising Lens is identified
+  and a generalising Lens that duplicates the default is identified
+  and Lens options without a default Lens identify the required default
+  and a non-list Lens search selection is identified
