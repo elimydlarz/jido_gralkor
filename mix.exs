@@ -67,10 +67,13 @@ defmodule JidoGralkor.MixProject do
   end
 
   defp test_all(_) do
-    Enum.each(
-      ["mix test --include functional --include journey", "node --test"],
-      &Mix.shell().cmd/1
-    )
+    statuses =
+      Enum.map(
+        ["mix test --include functional --include journey", "node --test"],
+        &Mix.shell().cmd/1
+      )
+
+    if Enum.any?(statuses, &(&1 != 0)), do: Mix.raise("Tests failed")
   end
 
   defp description do
