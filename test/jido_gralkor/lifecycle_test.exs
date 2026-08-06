@@ -8,7 +8,11 @@ defmodule JidoGralkor.LifecycleTest do
 
   defmodule FailingClient do
     def flush(session_id) do
-      send(Application.fetch_env!(:jido_gralkor, :lifecycle_test_pid), {:failing_flush, session_id})
+      send(
+        Application.fetch_env!(:jido_gralkor, :lifecycle_test_pid),
+        {:failing_flush, session_id}
+      )
+
       {:error, :boom}
     end
   end
