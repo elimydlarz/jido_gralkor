@@ -477,8 +477,8 @@ defmodule Gralkor.OntologyTest do
 
   end
 
-  describe "ex-ontology-payload > excluded_entity_types" do
-    test "entities: :strict sets [\"Entity\"]" do
+  describe "while an ontology is declared with `entities: :strict`" do
+    test "then `__ontology__/0` returns `[\"Entity\"]` for `:excluded_entity_types`, so only declared types are extracted" do
       defmodule StrictEntitiesOntology do
         use Gralkor.Ontology, entities: :strict, relationships: :open
 
@@ -490,7 +490,10 @@ defmodule Gralkor.OntologyTest do
       assert StrictEntitiesOntology.__ontology__().excluded_entity_types == ["Entity"]
     end
 
-    test "entities: :open sets nil" do
+  end
+
+  describe "while an ontology is declared with `entities: :open`" do
+    test "then `__ontology__/0` returns nil for `:excluded_entity_types`, leaving generic Entity extraction enabled" do
       defmodule OpenEntitiesOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -503,8 +506,8 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
-  describe "ex-ontology-payload > edge_type_map" do
-    test "relationships: :open empties the map even when relationships are declared" do
+  describe "while an ontology is declared with `relationships: :open` > where relationships were declared" do
+    test "then `__ontology__/0` returns an empty `:edge_type_map`, so every named edge stays allowed everywhere" do
       defmodule OpenRelsOntology do
         use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -523,26 +526,37 @@ defmodule Gralkor.OntologyTest do
 
       ontology = OpenRelsOntology.__ontology__()
       assert ontology.edge_type_map == []
+    end
+
+    test "but the declared verbs still appear in `:edge_types`" do
+      ontology = OpenRelsOntology.__ontology__()
       assert [%{name: "PREFERS"}] = ontology.edge_types
     end
   end
 
-  describe "ex-ontology-payload > empty ontology" do
-    test "no entities and no relationships still produces a valid payload" do
+  describe "while an ontology declares no entities and no relationships" do
+    test "then `__ontology__/0` still returns a valid payload with an empty `:entity_types`" do
       defmodule EmptyOntology do
         use Gralkor.Ontology, entities: :strict, relationships: :scoped
       end
 
-      assert EmptyOntology.__ontology__() == %{
-               entity_types: [],
-               edge_types: [],
-               edge_type_map: [],
-               excluded_entity_types: ["Entity"]
-             }
+      assert EmptyOntology.__ontology__().entity_types == []
+    end
+
+    test "and an empty `:edge_types`" do
+      assert EmptyOntology.__ontology__().edge_types == []
+    end
+
+    test "and an empty `:edge_type_map`" do
+      assert EmptyOntology.__ontology__().edge_type_map == []
+    end
+
+    test "and an `:excluded_entity_types` that still follows the declared `:entities` option" do
+      assert EmptyOntology.__ontology__().excluded_entity_types == ["Entity"]
     end
   end
 
-  describe "ex-ontology > integration example" do
+  describe "when a consumer calls `__ontology__/0` on a declared ontology module" do
     defmodule SusuLikeOntology do
       use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
@@ -564,25 +578,52 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
-    test "entity_types preserves declaration order" do
+    test "then it returns a map whose keys are exactly `:entity_types`, `:edge_types`, `:edge_type_map` and `:excluded_entity_types`" do
+      assert Map.keys(SusuLikeOntology.__ontology__()) |> Enum.sort() ==
+               [:edge_type_map, :edge_types, :entity_types, :excluded_entity_types]
+    end
+
+    test "and `:entity_types` lists one `%{name: String.t(), fields: [field()]}` entry per declared entity, in declaration order" do
       ontology = SusuLikeOntology.__ontology__()
       assert Enum.map(ontology.entity_types, & &1.name) == ["User", "Preference"]
     end
 
-    test "edge_types covers both declared verbs" do
+    test "and `:edge_types` lists one `%{name: String.t(), fields: [field()]}` entry per declared verb, deduplicated across `from` blocks" do
       ontology = SusuLikeOntology.__ontology__()
       assert Enum.map(ontology.edge_types, & &1.name) |> Enum.sort() == ["PREFERS", "TRUSTS"]
     end
 
-    test "edge_type_map covers both (User, Preference) and (User, User)" do
+    test "and `:edge_types` preserves the verbs' first-declaration order" do
       ontology = SusuLikeOntology.__ontology__()
-      assert {{"User", "Preference"}, ["PREFERS"]} in ontology.edge_type_map
-      assert {{"User", "User"}, ["TRUSTS"]} in ontology.edge_type_map
+      assert Enum.map(ontology.edge_types, & &1.name) == ["PREFERS", "TRUSTS"]
     end
 
-    test "excluded_entity_types reflects :strict" do
+    test "and `:edge_type_map` lists `{{source_name, target_name}, [edge_name]}` pairs preserving declaration order across `from` blocks" do
       ontology = SusuLikeOntology.__ontology__()
-      assert ontology.excluded_entity_types == ["Entity"]
+      assert ontology.edge_type_map == [
+               {{"User", "Preference"}, ["PREFERS"]},
+               {{"User", "User"}, ["TRUSTS"]}
+             ]
+    end
+
+    test "and each field entry is `%{name: atom(), type: atom(), required: boolean(), doc: String.t() | nil}`" do
+      ontology = SusuLikeOntology.__ontology__()
+
+      assert hd(hd(ontology.entity_types).fields) == %{
+               name: :handle,
+               type: :string,
+               required: true,
+               doc: "stable login handle"
+             }
+    end
+  end
+
+  describe "while an ontology is declared with `relationships: :scoped`" do
+    test "then `__ontology__/0` returns exactly the declared (source, target) → [edge_name] entries in `:edge_type_map`" do
+      assert SusuLikeOntology.__ontology__().edge_type_map == [
+               {{"User", "Preference"}, ["PREFERS"]},
+               {{"User", "User"}, ["TRUSTS"]}
+             ]
     end
   end
 end
