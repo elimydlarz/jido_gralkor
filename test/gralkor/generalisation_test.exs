@@ -110,15 +110,21 @@ defmodule Gralkor.GeneralisationTest do
       end
     end
 
-    test "raises GeneralisationParseFailed when required fields are missing" do
-      assert_raise GeneralisationParseFailed, fn ->
-        Generalisation.decode(~s(GEN|v1|{"id":"x"}\ncontent))
+    test "raises GeneralisationParseFailed when the id is missing" do
+      assert_raise GeneralisationParseFailed, ~r/"id"/, fn ->
+        Generalisation.decode(~s(GEN|v1|{"level":0,"confidence":0.5,"generalises":[]}\ncontent))
       end
     end
 
     test "raises GeneralisationParseFailed when level is missing" do
-      assert_raise GeneralisationParseFailed, fn ->
+      assert_raise GeneralisationParseFailed, ~r/"level"/, fn ->
         Generalisation.decode(~s(GEN|v1|{"id":"x","confidence":0.5,"generalises":[]}\ncontent))
+      end
+    end
+
+    test "raises GeneralisationParseFailed when the confidence is missing" do
+      assert_raise GeneralisationParseFailed, ~r/"confidence"/, fn ->
+        Generalisation.decode(~s(GEN|v1|{"id":"x","level":0,"generalises":[]}\ncontent))
       end
     end
   end

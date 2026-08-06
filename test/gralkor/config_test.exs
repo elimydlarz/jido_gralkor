@@ -146,18 +146,18 @@ defmodule Gralkor.ConfigTest do
       end
     end
 
-    test "GRALKOR_EMBEDDER_MODEL with a blank provider half raises ArgumentError" do
+    test "GRALKOR_EMBEDDER_MODEL with a blank provider half raises ArgumentError naming the env var and value" do
       System.put_env("GRALKOR_EMBEDDER_MODEL", ":gemini-embedding-2-preview")
 
-      assert_raise ArgumentError, ~r/GRALKOR_EMBEDDER_MODEL/, fn ->
-        Config.embedder_model()
-      end
+      assert_raise ArgumentError,
+                   ~r/GRALKOR_EMBEDDER_MODEL.*:gemini-embedding-2-preview/,
+                   fn -> Config.embedder_model() end
     end
 
-    test "GRALKOR_LLM_MODEL with a blank model half raises ArgumentError" do
+    test "GRALKOR_LLM_MODEL with a blank model half raises ArgumentError naming the env var and value" do
       System.put_env("GRALKOR_LLM_MODEL", "google:")
 
-      assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL/, fn ->
+      assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL.*google:/, fn ->
         Config.llm_model()
       end
     end
