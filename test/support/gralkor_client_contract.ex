@@ -468,11 +468,9 @@ defmodule Gralkor.ClientContract do
         end
 
         test "and this override is the only per-call ontology surface the client exposes" do
-          assert function_exported?(client(), :memory_add, 4)
-          refute function_exported?(client(), :capture, 6) and
-                   match?({:ontology, _}, {:lens, "observations"})
-
-          assert function_exported?(client(), :capture, 6)
+          assert Gralkor.Client.behaviour_info(:callbacks)
+                 |> Enum.filter(fn {name, _arity} -> name == :memory_add end)
+                 |> Enum.sort() == [memory_add: 3, memory_add: 4]
         end
       end
 
