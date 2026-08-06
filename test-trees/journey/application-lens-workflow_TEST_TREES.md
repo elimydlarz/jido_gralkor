@@ -1,16 +1,7 @@
 Journey: application-lens-workflow (journey: test/journey/application_lens_workflow_journey_test.exs)
 
-when an application registers operator-local observation and decision Lenses and a global generalisation Lens
-  then direct consumers and the mounted memory plugin use the same application-owned Lens definitions
-    when a consumer ingests an observation without starting an agent turn
-      then the observation becomes searchable only through that operator's observation Lens
-    when an agent records a decision through a turn-selected Lens
-      then the decision becomes searchable through that operator's decision Lens rather than the plugin's default Lens
-    when the agent's completed turn is also submitted through the generalisation Lens
-      then durable generalisations enter the shared global group with their originating Lens recorded
-    when the agent searches its selected local Lenses and the global group
-      then one memory response contains relevant results from the operator's default group and the additional selected Lenses
-      and another operator's local memory is absent
+when an application runs a workflow across registered local and global Lenses
+  then application-owned Lens identity and scope are preserved throughout the workflow
 
 if the application selects an unknown Lens
   then the operation fails before memory is ingested or searched

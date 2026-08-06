@@ -86,8 +86,8 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
     :ok
   end
 
-  describe "when an application registers operator-local observation and decision Lenses and a global generalisation Lens" do
-    test "then direct consumers and the mounted memory plugin use the same application-owned Lens definitions" do
+  describe "when an application runs a workflow across registered local and global Lenses" do
+    test "then application-owned Lens identity and scope are preserved throughout the workflow" do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
