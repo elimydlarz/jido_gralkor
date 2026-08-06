@@ -287,6 +287,19 @@ defmodule Gralkor.Client.NativeTest do
   describe "where a turn is captured through a named Lens" do
     setup :start_capture_buffer
 
+    setup do
+      original = Application.get_env(:jido_gralkor, :ontology)
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :ontology)
+          value -> Application.put_env(:jido_gralkor, :ontology, value)
+        end
+      end)
+
+      :ok
+    end
+
     test "then the operator id is buffered unsanitised, so the Lens keeps the operator's original identity" do
       msgs = [Message.new("user", "hi")]
 
@@ -769,7 +782,10 @@ defmodule Gralkor.Client.NativeTest do
       original = Application.get_env(:jido_gralkor, :recall_deadline_ms)
 
       on_exit(fn ->
-        Application.put_env(:jido_gralkor, :recall_deadline_ms, original || 12_000)
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :recall_deadline_ms)
+          value -> Application.put_env(:jido_gralkor, :recall_deadline_ms, value)
+        end
       end)
 
       Application.put_env(:jido_gralkor, :recall_deadline_ms, 50)
