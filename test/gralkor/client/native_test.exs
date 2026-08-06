@@ -335,6 +335,31 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
+  describe "ex-capture > when the deployment configures an ontology" do
+    setup :start_capture_buffer
+
+    setup do
+      original = Application.get_env(:jido_gralkor, :ontology)
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :ontology)
+          v -> Application.put_env(:jido_gralkor, :ontology, v)
+        end
+      end)
+
+      :ok
+    end
+
+    test "it is resolved by the adapter and buffered alongside the turn, the caller supplying none" do
+      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+
+      assert :ok = Native.flush("s1")
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.TestOntologies.Strict, _turns}
+    end
+  end
+
   describe "ex-flush > when called with a session_id with buffered turns" do
     setup :start_capture_buffer
 
@@ -363,6 +388,48 @@ defmodule Gralkor.Client.NativeTest do
 
       assert :ok = Native.flush_and_await("s1", 1_000)
       assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
+    end
+  end
+
+  describe "ex-flush-and-await > when the flush does not finish inside the timeout" do
+    setup do
+      test_pid = self()
+
+      callback = fn group, agent, user, ontology, turns ->
+        send(test_pid, {:flush_started, group, agent, user, ontology, turns})
+        Process.sleep(5_000)
+        :ok
+      end
+
+      start_supervised!({CaptureBuffer, flush_callback: callback, retries: []})
+      :ok
+    end
+
+    test "a timeout error is returned and the buffered turns remain available to flush later" do
+      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+
+      assert {:error, :timeout} = Native.flush_and_await("s1", 50)
+      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
+
+      assert :ok = Native.flush("s1")
+      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
+    end
+  end
+
+  describe "ex-flush-and-await > when the backend fails before the timeout elapses" do
+    setup do
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _g, _a, _u, _o, _t -> {:error, :capture_client_4xx} end, retries: []}
+      )
+
+      :ok
+    end
+
+    test "that failure is returned unchanged" do
+      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+
+      assert {:error, :capture_client_4xx} = Native.flush_and_await("s1", 1_000)
     end
   end
 
@@ -504,6 +571,53 @@ defmodule Gralkor.Client.NativeTest do
       refute "entity_types" in episode["kwargs"]
       refute "edge_types" in episode["kwargs"]
       refute "excluded_entity_types" in episode["kwargs"]
+    end
+  end
+
+  describe "ex-client-native > when any adapter operation is called" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the work runs in this node's own processes, a configured HTTP endpoint being consulted by nothing",
+         %{g: g} do
+      assert Application.get_env(:jido_gralkor, :client_http) != nil
+
+      assert :ok = Native.memory_add("g1", "written in-process", "manual")
+
+      assert [%{"body" => "written in-process"}] = episodes(g)
+    end
+  end
+
+  describe "ex-client-native > when a recall runs" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    setup do
+      original = Application.get_env(:jido_gralkor, :recall_deadline_ms)
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :recall_deadline_ms)
+          v -> Application.put_env(:jido_gralkor, :recall_deadline_ms, v)
+        end
+      end)
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "then it carries the deadline the deployment configures in place of the pipeline's own" do
+      Application.put_env(:jido_gralkor, :recall_deadline_ms, 1)
+
+      assert {:error, :recall_deadline_expired} =
+               Native.recall("g", "TestAgent", nil, "what do we know")
+    end
+
+    test "where the deployment configures none, the pipeline's twelve-second default governs it" do
+      Application.delete_env(:jido_gralkor, :recall_deadline_ms)
+
+      assert {:ok, block} = Native.recall("g", "TestAgent", nil, "what do we know")
+      assert block =~ "<gralkor-memory"
     end
   end
 
