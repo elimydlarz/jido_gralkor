@@ -890,11 +890,14 @@ defmodule Gralkor.Client.NativeTest do
                   self.recorded.setdefault('queries', []).append(query)
                   self.recorded.setdefault('group_ids', []).append(group_ids or [])
                   if config is not None and config.episode_config is not None:
+                      if query.startswith('fail:'):
+                          raise RuntimeError('generalisation search refused')
                       self.recorded.setdefault('episode_calls', []).append(
                           [m.value for m in config.episode_config.search_methods]
                       )
                       return _Results(episodes=[
                           _Episode('GEN|v1|{"id":"gen-1","level":0,"confidence":0.8,"generalises":[]}\\nEli prefers dark mode'),
+                          _Episode('not a generalisation'),
                       ])
 
                   self.recorded.setdefault('node_label_calls', []).append(
