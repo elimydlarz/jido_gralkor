@@ -54,7 +54,8 @@ when the pool terminates
 
 when a graph instance is requested for a group
   then the instance is looked up from a cache shared across callers
-  and concurrent callers for different groups proceed in parallel
+  while instances are already cached for their groups
+    then concurrent callers read those instances in parallel without passing through the pool process
   while no instance is cached for that group
     then the instance is constructed, cached, and held for the pool's lifetime
     and index and constraint building is invoked before the instance is cached and returned

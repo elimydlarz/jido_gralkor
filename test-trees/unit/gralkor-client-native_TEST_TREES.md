@@ -156,3 +156,9 @@ when a recall runs
 
 where any adapter operation other than recall runs
   then it carries no deadline of its own, so a memory addition, a capture flush, an index rebuild and a community build each run for as long as the graph takes
+
+when an interpretation output-token option is built for a supported provider
+  while the provider is OpenAI
+    then the option uses `max_completion_tokens`, which OpenAI structured-output requests accept
+  while the provider is Google
+    then the option uses `max_tokens`, which ReqLLM translates for that provider
