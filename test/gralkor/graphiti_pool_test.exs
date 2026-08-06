@@ -756,6 +756,34 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "search_nodes/5, if running a node search raises inside the graph library" do
+    test "then an error carrying the raised exception is returned" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  raise RuntimeError("boom")
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:error, {:python, message}} = GraphitiPool.search_nodes(pid, "g1", "q", 5)
+      assert message =~ "boom"
+
+      GenServer.stop(pid)
+    end
+  end
+
   describe "for/1 (group_id), when called against an embedded spec" do
     test "then the Graphiti instance for the sanitized group_id is looked up from a shared ETS cache; on first use it is constructed and inserted, then lives for the lifetime of the GenServer" do
       counter = :counters.new(1, [])
