@@ -411,6 +411,34 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
+  describe "when an agent turn fails > while a thread has committed to agent state > while the failed turn's request trace holds no events" do
+    test "then the user's query and terminal failure are still sent for capture" do
+      InMemory.set_capture(:ok)
+      request_id = "req-empty-failure"
+
+      ag =
+        agent("user-01",
+          thread_id: "thr-fail",
+          request_traces: %{request_id => %{events: [], truncated?: false}},
+          requests: %{
+            request_id => %{query: "original question", status: :pending, result: nil}
+          }
+        )
+
+      signal =
+        Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
+
+      assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
+
+      assert [[_session, _group, _agent, _user, messages]] = InMemory.captures()
+
+      assert messages == [
+               %Message{role: "user", content: "original question"},
+               %Message{role: "behaviour", content: "request failed: :boom"}
+             ]
+    end
+  end
+
   describe "when an agent turn fails > while no thread has committed to agent state" do
     test "then capture is skipped" do
       {_log, captures} = failed_without_thread()
