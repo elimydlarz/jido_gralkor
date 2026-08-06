@@ -1,17 +1,17 @@
 # jido_gralkor
 
-Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded Gralkor memory adapter — Graphiti + FalkorDB driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), no external server to run.
+Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded Gralkor memory adapter — Graphiti driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), with no separate Gralkor service to deploy. Storage uses either an embedded FalkorDB child or a remote FalkorDB deployment.
 
 You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, and **Lenses**: named, independently configurable ingestion and search channels, each with its own ontology, scope, and consumer-defined ingestion process.
 
-This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 5.0"}` for the whole memory stack.
+This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 6.0"}` for the whole memory stack.
 
 ## Install
 
 ```elixir
 def deps do
   [
-    {:jido_gralkor, "~> 5.0"}
+    {:jido_gralkor, "~> 6.0"}
   ]
 end
 ```
@@ -22,11 +22,11 @@ Then fetch:
 mix deps.get
 ```
 
-This transitively pulls `:jido`, `:jido_ai`, `:pythonx`, `:req_llm`, and `:jason`. Pythonx materialises its venv (with `graphiti-core` + `falkordblite` from PyPI) on first boot — ~3 s the first time, ~21 ms thereafter.
+The package requires Elixir `~> 1.18` and directly depends on `:jido`, `:jido_ai`, `:pythonx`, `:req_llm`, and `:jason`. On the first native-runtime boot, Pythonx materialises a managed Python 3.12 environment with `graphiti-core` and `falkordblite`; consumers do not install Python themselves, but the boot needs package-download access and a writable cache.
 
 ## Required configuration
 
-Three things the consumer must set up.
+Four things the consumer must set up.
 
 **1. A FalkorDB backend.** Graphiti runs in-process via Pythonx and connects to FalkorDB either as an embedded `falkordblite` child or over the network. Pick one:
 
@@ -111,9 +111,13 @@ When the client and Lens storage use these in-memory adapters, the native superv
 
 ```elixir
 defmodule MyApp.Jido do
-  use Jido, default_plugins: [Jido.Thread.Plugin, Jido.Identity.Plugin]
+  use Jido,
+    otp_app: :my_app,
+    default_plugins: [Jido.Thread.Plugin, Jido.Identity.Plugin]
 end
 ```
+
+**4. A non-blank human name in agent state.** Before any completed or failed turn is captured, populate `agent.state[:user_name]` with the current human's name (for example, from the request's tool context in `on_before_cmd/2`). The plugin deliberately has no generic `"User"` fallback: a missing or blank value raises `ArgumentError` before capture.
 
 `:jido_gralkor` auto-supervises its native runtime (Python → GraphitiPool → CaptureBuffer) when a FalkorDB backend is configured — no separate `Gralkor.Server` to wire into your supervision tree, and no readiness gate to add. By the time `Application.start/2` returns, `Gralkor.Client` is ready.
 
@@ -127,14 +131,14 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
 | `:lenses` | list of keyword definitions (`:name`, `:ontology`, `:scope`, `:ingestion`) | `[]` | The Lens registry — named ingestion/search channels. Each definition's `:ontology` is a module atom pointing at an ontology module you define in your own application's `lib/` (see [Ontology DSL](#ontology-dsl)) — resolved directly, with no intermediate registry or config-side declaration. Blank, duplicate, reserved (`"default"`, `"global"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
-| `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"default"` Lens only — the channel used by mounts with no `:default_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises at the write boundary. |
+| `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"default"` Lens only — the channel used by mounts with no `:default_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises whenever the implicit default Lens is resolved, including for search. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1` or `search/1`. |
 | `:generalise_on_flush` | boolean | `false` | Fires the legacy `Gralkor.Generalise` pipeline after each successful implicit-default capture flush. Lens mounts use `generalise_lens` instead. |
-| `:generalise_min_confidence` | float | `0.3` | Minimum confidence a generalisation hypothesis must reach to be persisted. Applies to both the legacy pipeline and `Gralkor.Lens.Ingestion.Generalise`. |
+| `:generalise_min_confidence` | float | `0.3` | Minimum confidence a `Gralkor.Lens.Ingestion.Generalise` hypothesis must reach to be persisted. The retained legacy generalisation callback uses its own `0.3` default. |
 | `:interpret_max_output_tokens` | positive integer | `2000` | Output ceiling for the per-recall interpret LLM call. Raise it if recall surfaces many candidate facts and you see `Gralkor.InterpretParseFailed` (the parser refuses truncated responses). Lower it to cap latency and cost. A non-positive value raises. |
 | `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall (search + interpret). On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. The auxiliary generalisation and learning searches share one fixed 5 s yield window inside this budget and degrade to no extra facts on timeout. |
-| `:test` | boolean | `false` | Verbose diagnostic logging: recall queries and returned facts, flushed capture bodies, and generalisation prompts/candidates/decisions are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
+| `:test` | boolean | `false` | Verbose diagnostic logging: recall queries, returned facts, and flushed capture bodies are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
 | `:generalise_hypothesise_fn` | 1-arity fun | live ReqLLM call | Test seam: replaces the LLM call `Gralkor.Lens.Ingestion.Generalise` makes, so Lens generalisation can be exercised deterministically. |
 
 ```elixir
@@ -278,7 +282,7 @@ plugins: [
 
 That mount writes captured turns and `memory_add` calls to `"observations"`, submits each flushed transcript independently to `"generalisations"`, and searches the operator's reserved `"default"` Lens (always first, implicitly), then `"decisions"`, then the shared `"global"` group.
 
-**On `:ontology` vs. Lens `ontology:`.** They are not a declaration and a reference to it; they are two different channels, each with its own binding. `:ontology` configures exactly one channel — the implicit `"default"` Lens, which cannot be registered in `:lenses` because the name is reserved. Set `:ontology` only if you run mounts without `:default_lens` (implicit-default mode), or call the legacy `memory_add/3` and `capture/5` surface directly. It has no effect on writes through a registered Lens. Reads are unaffected either way: search never consults an ontology, only writes do.
+**On `:ontology` vs. Lens `ontology:`.** They are not a declaration and a reference to it; they are two different channels, each with its own binding. `:ontology` configures exactly one channel — the implicit `"default"` Lens, which cannot be registered in `:lenses` because the name is reserved. Set `:ontology` only if you run mounts without `:default_lens` (implicit-default mode), or call the legacy `memory_add/3` and `capture/5` surface directly. It has no effect on writes through a registered Lens or on search filtering and results, though resolving the implicit default Lens during search still validates the configured module.
 
 ## Wire it on your agent
 
@@ -286,11 +290,12 @@ That mount writes captured turns and `memory_add` calls to `"observations"`, sub
 defmodule MyApp.ChatAgent do
   use Jido.Agent,
     name: "my_chat",
+    schema: [user_name: [type: :string, required: true]],
     strategy:
       {Jido.AI.Reasoning.ReAct.Strategy,
        tools: [
          JidoGralkor.Actions.MemorySearch,
-         JidoGralkor.Actions.MemoryAdd
+         JidoGralkor.Actions.MemoryAdd,
          # ... your other tools
        ],
        system_prompt: """
@@ -318,8 +323,8 @@ defmodule MyApp.ChatAgent do
     @behaviour Jido.AI.Reasoning.ReAct.RequestTransformer
 
     @impl true
-    def transform_request(_messages, overrides, _runtime_context, state) do
-      JidoGralkor.ReAct.maybe_force_memory_search(overrides, state)
+    def transform_request(_request, state, _config, _runtime_context) do
+      {:ok, JidoGralkor.ReAct.maybe_force_memory_search(%{}, state)}
     end
   end
 end
@@ -327,9 +332,9 @@ end
 
 The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed), `:agent_name`, the selected `:lens`, and `:search_lenses` on the signal's `tool_context`. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
 
-Set `tool_context[:lens]` on an individual query to override `default_lens` for that turn. The plugin retains the selection on the request's Jido thread entry, making it authoritative for both `memory_add` and later completion or failure capture after ReAct has released its transient tool context. If `generalise_lens` is configured, the same completed turn is also submitted to that Lens without duplicating it in session context.
+Set `tool_context[:lens]` on an individual query to override `default_lens` for that turn. The plugin retains the selection on the request's Jido thread entry, making it authoritative for both `memory_add` and later completion or failure capture after ReAct has released its transient tool context. If `generalise_lens` is configured, the same captured turn is also submitted to that Lens without duplicating it in session context.
 
-The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your consumer's responsibility to populate (e.g. via `on_before_cmd` from the signal's `tool_context`) so distill renders user lines under the human's actual name rather than a generic "User".
+The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate it before each request (for example, via `on_before_cmd/2` from the signal's `tool_context`) so distill renders user lines under the correct human identity. Missing and blank names raise; there is no generic fallback.
 
 ## What happens at runtime
 
@@ -339,11 +344,21 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]` — your co
 
 **First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus configured `:lens` and `:search_lenses`, but no `:session_id`; completed and failed turn capture are both skipped with a warning until a committed thread supplies that identity. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
 
-**Death-triggered flush.** `JidoGralkor.Lifecycle` is an optional `Jido.AgentServer.Lifecycle` implementation. When wired as `lifecycle_mod:` on the agent, graceful termination of the AgentServer fires `Gralkor.Client.flush/1` for the active thread so an orphaned agent doesn't strand its capture buffer. No idle-timer machinery — Jido's `AgentServer` owns `:idle_timeout` directly.
+**Death-triggered flush.** `JidoGralkor.Lifecycle` is an optional `Jido.AgentServer.Lifecycle` implementation. When wired as `lifecycle_mod:` on the agent, graceful termination of the AgentServer calls the configured client's `flush/1` callback for the active thread so an orphaned agent doesn't strand its capture buffer. The plugin mount alone does not enable this lifecycle. No idle-timer machinery — Jido's `AgentServer` owns `:idle_timeout` directly.
 
-**Context rotation.** `JidoGralkor.ContextRotator.rotate_now/2` synchronously flushes the active session via `flush_and_await/2`, installs a fresh Jido thread, and seeds the rotated thread with the most-recent `:keep_last_n` pre-flush entries plus any turns that landed during the flush. The agent process is never stopped. Use it from a `/new` chat command or a small wrapper GenServer that fires on an interval.
+```elixir
+{:ok, pid} =
+  MyApp.Jido.start_agent(
+    MyApp.ChatAgent,
+    id: "operator-42",
+    initial_state: %{user_name: current_user.name},
+    lifecycle_mod: JidoGralkor.Lifecycle
+  )
+```
 
-**Fail-fast.** Gralkor errors raise. Your supervision tree decides how to react.
+**Context rotation.** `JidoGralkor.ContextRotator.rotate_now/2` synchronously flushes the active session via `flush_and_await/2`, installs a fresh Jido thread, and seeds the rotated thread with the most-recent `:keep_last_n` pre-flush entries plus any turns that landed during the flush. It returns `:ok` when there is no committed thread and `{:error, reason}` when state reading, flushing, or thread installation fails. The agent process is never stopped. Use it from a `/new` chat command or a small wrapper GenServer that fires on an interval.
+
+**Error contracts.** Invalid configuration and automatic plugin-capture failures raise. Explicit `Gralkor.Client.ingest/1`, `search/1`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
 
 **`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 
@@ -499,7 +514,7 @@ Generalise persists the strongest hypotheses above a configurable confidence thr
 config :jido_gralkor, generalise_min_confidence: 0.5
 ```
 
-The older `Gralkor.Client.generalise/2` and `search_generalisations/3` APIs remain available for compatibility. Lens-based consumers should prefer the unified ingest/search boundary above.
+The configured adapter's older `generalise/2` and `search_generalisations/3` callbacks remain available through `Gralkor.Client.impl()` for compatibility. Lens-based consumers should prefer the unified ingest/search boundary above.
 
 ## Experiential learning (legacy default pipeline)
 
