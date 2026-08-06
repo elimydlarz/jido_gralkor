@@ -19,42 +19,38 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
     :ok
   end
 
-  describe "when an application rotates a running agent's memory context" do
-    describe "while a thread is committed" do
-      describe "while its buffered memory flush succeeds" do
-        test "then the application receives success after the active session is replaced" do
-          InMemory.set_flush_and_await(:ok)
-          pid = start_agent()
-          seed_thread(pid, "before-rotation")
+  describe "when an application rotates a running agent whose committed thread flushes successfully" do
+    test "then the application receives success after the active session is replaced" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+      seed_thread(pid, "before-rotation")
 
-          assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
-          assert InMemory.flush_and_awaits() == [["before-rotation", 1_000]]
-          refute thread_id(pid) == "before-rotation"
-        end
-      end
-
-      describe "if its buffered memory flush fails" do
-        test "then the application receives the failure and the active session remains unchanged" do
-          InMemory.set_flush_and_await({:error, :unavailable})
-          pid = start_agent()
-          seed_thread(pid, "before-rotation")
-
-          assert {:error, :unavailable} =
-                   ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
-
-          assert thread_id(pid) == "before-rotation"
-        end
-      end
+      assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+      assert InMemory.flush_and_awaits() == [["before-rotation", 1_000]]
+      refute thread_id(pid) == "before-rotation"
     end
+  end
 
-    describe "while no thread is committed" do
-      test "then the application receives success without a flush or a new session" do
-        pid = start_agent()
+  describe "when an application rotates a running agent whose committed thread fails to flush" do
+    test "then the application receives the failure and the active session remains unchanged" do
+      InMemory.set_flush_and_await({:error, :unavailable})
+      pid = start_agent()
+      seed_thread(pid, "before-rotation")
 
-        assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
-        assert InMemory.flush_and_awaits() == []
-        assert thread_id(pid) == nil
-      end
+      assert {:error, :unavailable} =
+               ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+
+      assert thread_id(pid) == "before-rotation"
+    end
+  end
+
+  describe "when an application rotates a running agent with no committed thread" do
+    test "then the application receives success without a flush or a new session" do
+      pid = start_agent()
+
+      assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+      assert InMemory.flush_and_awaits() == []
+      assert thread_id(pid) == nil
     end
   end
 
