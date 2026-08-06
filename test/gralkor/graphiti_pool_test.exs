@@ -1101,6 +1101,62 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert log =~ ~r/\[gralkor\] warmup — search:\d+ interpret:\d+ \d+ms/
     end
+
+    test "then the warmup search runs against the literal throwaway query \"warmup\" and the literal throwaway group \"warmup\", and the warmup interpretation runs against an empty conversation and throwaway facts" do
+      test_pid = self()
+
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded = {}
+
+              async def search(self, query, num_results=10):
+                  self.recorded['query'] = query
+                  self.recorded['num_results'] = num_results
+                  return []
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      construct_instance = fn _db, _shared, group_id ->
+        send(test_pid, {:construct_instance, group_id})
+        g
+      end
+
+      interpret_fn = fn text, budget ->
+        send(test_pid, {:interpret_fn, text, budget})
+        :ok
+      end
+
+      log =
+        capture_log(fn ->
+          %{pid: pid} =
+            start_pool(
+              construct_instance: construct_instance,
+              interpret_fn: interpret_fn,
+              warmup: true,
+              install_loop_fn: &Gralkor.Python.install_async_runtime/0
+            )
+
+          assert Process.alive?(pid)
+          GenServer.stop(pid)
+        end)
+
+      assert_receive {:construct_instance, "warmup"}
+      assert_receive {:interpret_fn, prompt, 2_000}
+      assert prompt == "Conversation context:\n\n\nMemory facts to interpret:\n- warmup"
+
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      rec = Pythonx.decode(rec)
+      assert rec["query"] == "warmup"
+      assert rec["num_results"] == 1
+
+      refute log =~ "warmup failed"
+    end
   end
 
   describe "while both configured model specs name a supported inference provider" do
