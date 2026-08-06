@@ -41,6 +41,22 @@ defmodule JidoGralkor.LifecycleTest do
     assert Jido.AgentServer.Lifecycle in behaviours
   end
 
+  describe "when a consumer wires the module as an agent server's lifecycle" do
+    test "and initialisation hands back the agent server's state unchanged, so wiring it in alters nothing about the agent" do
+      s = state(%{__thread__: %{id: "thread-init"}, other: :data})
+
+      assert Lifecycle.init([], s) == s
+      assert Lifecycle.init([some: :opts], s) == s
+    end
+
+    test "and every lifecycle event it is handed continues to the rest of the server with state unchanged, so it observes without intercepting" do
+      s = state(%{__thread__: %{id: "thread-event"}, other: :data})
+
+      assert Lifecycle.handle_event(%{kind: :anything}, s) == {:cont, s}
+      assert Lifecycle.handle_event(:some_event, s) == {:cont, s}
+    end
+  end
+
   describe "when the AgentServer terminates with a committed thread" do
     test "then `Gralkor.Client.flush(thread_id)` is invoked without blocking termination" do
       InMemory.set_flush(:ok)
