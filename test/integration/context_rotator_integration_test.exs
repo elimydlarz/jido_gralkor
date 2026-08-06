@@ -277,7 +277,11 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
 
   defp append_thread_entry(pid, payload) do
     :sys.replace_state(pid, fn state ->
-      thread = Jido.Thread.append(state.agent.state[:__thread__], [%{kind: :ai_message, payload: payload}])
+      thread =
+        Jido.Thread.append(state.agent.state[:__thread__], [
+          %{kind: :ai_message, payload: payload}
+        ])
+
       put_in(state.agent.state[:__thread__], thread)
     end)
 

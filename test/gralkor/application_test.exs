@@ -666,6 +666,7 @@ defmodule Gralkor.ApplicationTest do
 
       assert {:error, {:upstream_llm, :upstream}} =
                cb.("g1", "Susu", "Eli", nil, [turn])
+
       assert_received :learn_attempted
       refute_received :learn_attempted
     end
