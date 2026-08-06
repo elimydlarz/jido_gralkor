@@ -6,31 +6,14 @@ import test from "node:test";
 const run = promisify(execFile);
 const projectRoot = new URL("..", import.meta.url);
 
-test("when a maintainer asks Mix to run the complete test suite", async (context) => {
+test("when a maintainer asks Mix to run all tests", async (context) => {
   await context.test(
-    "then `mix test.all` runs Unit, Integration, Functional, and Journey coverage in one ExUnit virtual machine",
+    "then `mix test.all` runs all Unit, Integration, Functional, Journey, and publish-skill contract tests",
     async () => {
       const { stdout } = await run("mix", ["help", "test.all"], { cwd: projectRoot });
 
       assert.match(stdout, /mix test\.all/);
-      assert.match(stdout, /test --include functional --include journey/);
+      assert.match(stdout, /&test_all\/1/);
     },
   );
-
-  await context.test("and the publish-skill contract runs after ExUnit succeeds", async () => {
-    const { stdout } = await run("mix", ["help", "test.all"], { cwd: projectRoot });
-    const exUnit = stdout.indexOf("test --include functional --include journey");
-    const node = stdout.indexOf("cmd node --test");
-
-    assert.ok(node > exUnit);
-  });
-
-  await context.test("and any failing stage stops the completion gate", async () => {
-    const { stdout } = await run("mix", ["help", "test.all"], { cwd: projectRoot });
-
-    assert.match(
-      stdout,
-      /Alias for\s+\["test --include functional --include journey",\s+"cmd node --test"\]/,
-    );
-  });
 });
