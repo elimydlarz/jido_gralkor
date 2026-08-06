@@ -170,7 +170,7 @@ defmodule JidoGralkor.Plugin do
     session_id = thread_id(agent)
 
     cond do
-      events == [] ->
+      events == [] and match?({:completed, _result}, outcome) ->
         :ok
 
       is_nil(session_id) ->
