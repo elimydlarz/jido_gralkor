@@ -213,9 +213,9 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
-  describe "ex-capture > flush > when the transcript episode body is empty" do
+  describe "when a capture flush renders an empty transcript" do
     @tag :capture_log
-    test "no episode is added and nothing is logged" do
+    test "then no captured episode is written" do
       add_episode_fn = fn _g, _b, _s, _o, _opts -> flunk("add_episode should not be called") end
 
       cb =
@@ -231,11 +231,51 @@ defmodule Gralkor.ApplicationTest do
       refute logs =~ "[gralkor] capture flushed"
       refute logs =~ "[gralkor] [test] capture flush body"
     end
+
+    test "and the flush reports success" do
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: fn _g, _b, _s, _o, _opts -> flunk("add_episode should not be called") end
+        )
+
+      assert :ok = cb.("g", "TestAgent", "Eli", nil, [])
+    end
+
+    test "and every captured turn is still learned from in the order it was appended" do
+      test_pid = self()
+
+      learning = %Gralkor.AgentLearning{
+        problem_kind: "empty transcript",
+        approach: "inspect behaviour",
+        success: true,
+        lesson: "behaviour still teaches"
+      }
+
+      learn_fn = fn [%{content: content}], _agent, _user ->
+        send(test_pid, {:learned, content})
+        {:ok, learning}
+      end
+
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: fn _g, _b, _s, _o, _opts -> :ok end,
+          learn_fn: learn_fn
+        )
+
+      turns = [
+        [Gralkor.Message.new("behaviour", "first")],
+        [Gralkor.Message.new("behaviour", "second")]
+      ]
+
+      assert :ok = cb.("g", "TestAgent", "Eli", nil, turns)
+      assert_receive {:learned, "first"}
+      assert_receive {:learned, "second"}
+    end
   end
 
-  describe "ex-capture > flush > when the episode is added" do
+  describe "when a capture flush writes its captured episode successfully" do
     @tag :capture_log
-    test "logs the group, body size, and how long the add took" do
+    test "then a single line reporting the group, the transcript size, and the duration is logged" do
       add_episode_fn = fn _g, _b, _s, _o, _opts -> :ok end
 
       cb =
@@ -257,7 +297,7 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
-  describe "ex-capture > flush > when test mode is enabled" do
+  describe "when a capture flush writes its captured episode successfully > where test mode is enabled" do
     setup do
       Application.put_env(:jido_gralkor, :test, true)
       on_exit(fn -> Application.delete_env(:jido_gralkor, :test) end)
@@ -265,7 +305,7 @@ defmodule Gralkor.ApplicationTest do
     end
 
     @tag :capture_log
-    test "also logs the captured transcript body" do
+    test "then the rendered transcript itself is logged, so what actually landed in memory is readable from the logs" do
       add_episode_fn = fn _g, _b, _s, _o, _opts -> :ok end
 
       cb =
@@ -282,31 +322,28 @@ defmodule Gralkor.ApplicationTest do
 
       assert logs =~ "[gralkor] [test] capture flush body:"
       assert logs =~ "Eli: hi"
-    end
-  end
 
-  describe "ex-capture > flush > when test mode is disabled" do
-    @tag :capture_log
-    test "does not log the captured transcript body" do
+      Application.delete_env(:jido_gralkor, :test)
+
       cb =
         App.build_flush_callback(nil,
           add_episode_fn: fn _g, _b, _s, _o, _opts -> :ok end
         )
 
-      turns = [[Gralkor.Message.new("user", "hi")]]
+      disabled_turns = [[Gralkor.Message.new("user", "hi")]]
 
-      logs =
+      disabled_logs =
         ExUnit.CaptureLog.capture_log(fn ->
-          assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
+          assert :ok = cb.("g1", "TestAgent", "Eli", nil, disabled_turns)
         end)
 
-      refute logs =~ "[gralkor] [test]"
+      refute disabled_logs =~ "[gralkor] [test]"
     end
   end
 
-  describe "ex-application > build_flush_callback/2 > when add_episode_fn returns :ok" do
+  describe "when a capture flush writes its captured episode successfully" do
     @tag :capture_log
-    test "logs '[gralkor] capture flushed' at :info and returns :ok" do
+    test "and the flush reports success" do
       cb =
         App.build_flush_callback(nil,
           add_episode_fn: fn _g, _b, _s, _o, _opts -> :ok end
