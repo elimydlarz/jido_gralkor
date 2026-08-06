@@ -104,6 +104,31 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "ex-capture-buffer > append/6 when called for an existing session_id with a different ontology" do
+    test "raises (one episode never mixes entity and edge schemas)" do
+      :ok =
+        CaptureBuffer.append(
+          "s",
+          "g",
+          "Susu",
+          "Eli",
+          Gralkor.CaptureBufferTest.FakeOntologyA,
+          [Message.new("user", "x")]
+        )
+
+      assert_raise ArgumentError, ~r/ontology/i, fn ->
+        CaptureBuffer.append(
+          "s",
+          "g",
+          "Susu",
+          "Eli",
+          Gralkor.CaptureBufferTest.FakeOntologyB,
+          [Message.new("user", "y")]
+        )
+      end
+    end
+  end
+
   describe "ex-capture-buffer > append/6 if agent_name is missing or blank" do
     test "raises ArgumentError on blank agent_name" do
       assert_raise ArgumentError, ~r/agent_name/, fn ->
