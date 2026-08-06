@@ -65,8 +65,8 @@ defmodule JidoGralkor.LifecycleIntegrationTest do
     end
   end
 
-  describe "while a thread is committed, when the AgentServer is stopped gracefully" do
-    test "then `Gralkor.Client.flush` is invoked once with the thread id" do
+  describe "when a running agent server is stopped gracefully > while a thread is committed to its agent state" do
+    test "then that thread's buffered memory is flushed exactly once, under the committed thread id" do
       {pid, _id} = start_agent()
       thread_id = "thread-stop"
       seed_thread(pid, thread_id)
@@ -77,8 +77,8 @@ defmodule JidoGralkor.LifecycleIntegrationTest do
     end
   end
 
-  describe "while no thread is committed, when the AgentServer is stopped gracefully" do
-    test "then `Gralkor.Client.flush` is not invoked" do
+  describe "when a running agent server is stopped gracefully > while no thread is committed to its agent state" do
+    test "then no flush is requested at all" do
       {pid, _id} = start_agent()
 
       :ok = GenServer.stop(pid, :shutdown, 5_000)
