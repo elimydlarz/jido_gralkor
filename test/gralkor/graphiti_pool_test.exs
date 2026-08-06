@@ -319,6 +319,73 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "remove_episode/3, when an episode is removed" do
+    test "then graphiti's remove_episode is invoked with the episode uuid, deleting that episode along with the nodes and edges it orphans" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded = {}
+
+              async def remove_episode(self, uuid):
+                  self.recorded['uuid'] = uuid
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok = GraphitiPool.remove_episode(pid, "g1", "episode-uuid-123")
+
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      rec = Pythonx.decode(rec)
+      assert rec["uuid"] == "episode-uuid-123"
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "remove_episode/3, if removing an episode raises inside the graph library" do
+    test "then {:error, {:python, reason}} is returned, reason carrying only the raised exception's class and message" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              async def remove_episode(self, uuid):
+                  raise RuntimeError("episode vanished")
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:error, {:python, reason}} =
+               GraphitiPool.remove_episode(pid, "g1", "episode-uuid-123")
+
+      assert reason =~ "RuntimeError"
+      assert reason =~ "episode vanished"
+      refute reason =~ "Traceback"
+      refute reason =~ "\n"
+
+      GenServer.stop(pid)
+    end
+  end
+
   describe "search/4 (edge search)" do
     test "then graphiti's g.search is invoked with num_results and the edges are returned as fact maps" do
       # A Pythonx-built fake graphiti whose search coroutine records its kwargs on the
