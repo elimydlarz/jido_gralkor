@@ -21,8 +21,8 @@ defmodule Gralkor.ClientContract do
 
   defmacro run_contract(do: setup_block) do
     quote do
-      describe "when a recall is requested with a group, an agent name, a session id and a query" do
-        test "while the backend returns a memory block > then that block is returned to the caller as a success" do
+      describe "when a recall is requested with a group, an agent name, a session id and a query > while the backend returns a memory block" do
+        test "then that block is returned to the caller as a success" do
           unquote(setup_block).()
 
           configure_recall({:ok, "<gralkor-memory>some block</gralkor-memory>"})
@@ -30,8 +30,10 @@ defmodule Gralkor.ClientContract do
           assert {:ok, "<gralkor-memory>some block</gralkor-memory>"} =
                    client().recall("group-1", "TestAgent", "session-1", "what is X?")
         end
+      end
 
-        test "if the backend fails > then that failure is returned unchanged" do
+      describe "when a recall is requested with a group, an agent name, a session id and a query > if the backend fails" do
+        test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_recall({:error, :backend_down})
 
@@ -40,16 +42,18 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "where a recall is requested with no session id" do
-        test "while the backend returns a memory block > then that block is returned to the caller as a success" do
+      describe "where a recall is requested with no session id > while the backend returns a memory block" do
+        test "then that block is returned to the caller as a success" do
           unquote(setup_block).()
           configure_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
 
           assert {:ok, "<gralkor-memory>x</gralkor-memory>"} =
                    client().recall("group-1", "TestAgent", nil, "anything?")
         end
+      end
 
-        test "if the backend fails > then that failure is returned unchanged" do
+      describe "where a recall is requested with no session id > if the backend fails" do
+        test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_recall({:error, :nope})
 
