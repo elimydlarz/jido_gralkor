@@ -40,7 +40,8 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     :ok
   end
 
-  test "when the client returns {:ok, memory_block} the result wraps the block" do
+  describe "when the memory search tool runs with a query and a committed session > while the backend returns a memory block" do
+    test "then the action result carries that block" do
     InMemory.set_recall({:ok, "Facts:\n- Eli likes tea"})
 
     assert {:ok, %{result: "Facts:\n- Eli likes tea"}} =
@@ -49,9 +50,11 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                session_id: "thr-1",
                agent_name: "TestAgent"
              })
+    end
   end
 
-  test "when the client errors the action propagates {:error, reason}" do
+  describe "when the memory search tool runs with a query and a committed session > if the backend fails" do
+    test "then the failure reason is returned to the caller unchanged" do
     InMemory.set_recall({:error, :boom})
 
     assert {:error, :boom} =
@@ -60,9 +63,11 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                session_id: "thr-1",
                agent_name: "TestAgent"
              })
+    end
   end
 
-  test "passes sanitized group_id, agent_name, and session_id from context to recall" do
+  describe "when the memory search tool runs with a query and a committed session" do
+    test "then the operator's sanitised group id, the agent name, and the session id from the tool context are passed to the memory backend with the query" do
     InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
 
     MemorySearch.run(%{query: "q"}, %{
@@ -75,9 +80,11 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     assert group_id == "user_with_hyphens"
     assert agent_name == "Susu"
     assert session_id == "thr-xyz"
+    end
   end
 
-  test "when context contains search_lenses then default and selected Lens results are joined" do
+  describe "when the memory search tool runs with a query and a committed session > where the tool context selects Lenses to search" do
+    setup do
     Process.register(self(), :memory_search_lens_test)
     Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
 
@@ -90,7 +97,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       ]
     ])
 
-    assert {:ok, %{result: "selected local memory\nselected local memory"}} =
+      assert {:ok, %{result: result}} =
              MemorySearch.run(%{query: "launch"}, %{
                agent_id: "operator-one",
                session_id: "thread-one",
@@ -98,17 +105,29 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                search_lenses: ["observations"]
              })
 
-    assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "default"}},
+      %{result: result}
+    end
+
+    test "then the Lens search is used in place of the legacy recall" do
+      assert [] = InMemory.recalls()
+    end
+
+    test "and the operator's reserved `default` Lens is searched alongside every selected Lens" do
+      assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "default"}},
                     "launch", 10}
 
-    assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "observations"}},
+      assert_receive {:lens_search,
+                      %{operator_id: "operator-one", lens: %{name: "observations"}},
                     "launch", 10}
+    end
 
-    assert [] = InMemory.recalls()
+    test "and the results of all searched Lenses are joined into one result", %{result: result} do
+      assert result == "selected local memory\nselected local memory"
+    end
   end
 
-  describe "when the query is blank or missing (defensive against forced-tool-call paths)" do
-    test "returns an explicit no-query non-result, does not call the client, and logs a warning" do
+  describe "if the memory search tool runs without a usable query" do
+    setup do
       log =
         capture_log(fn ->
           assert {:ok, %{result: result}} =
@@ -118,16 +137,33 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                      agent_name: "Susu"
                    })
 
-          assert result =~ "no query was provided"
-          assert result =~ "NON-RESULT"
+          send(self(), {:result, result})
         end)
 
+      assert_received {:result, result}
+      %{log: log, result: result}
+    end
+
+    test "then no search is issued against any backend" do
       assert InMemory.recalls() == []
+    end
+
+    test "and the result explicitly states that no query was provided", %{result: result} do
+      assert result =~ "no query was provided"
+    end
+
+    test "and the result explicitly states that it is a non-result", %{result: result} do
+      assert result =~ "NON-RESULT"
+    end
+
+    test "and a warning naming the short-circuit is logged", %{log: log} do
       assert log =~ "[jido_gralkor] memory_search short-circuited"
       assert log =~ "blank query"
     end
+  end
 
-    test "whitespace-only query is treated as blank" do
+  describe "if the memory search tool runs without a usable query > while the query is only whitespace" do
+    test "then it counts as no query" do
       assert {:ok, %{result: result}} =
                MemorySearch.run(%{query: "   "}, %{
                  agent_id: "01USER",
@@ -140,25 +176,41 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     end
   end
 
-  describe "when session_id is absent from context (first query before a thread is committed)" do
-    test "returns an explicit non-result message, does not call the client, and logs a warning" do
+  describe "if the memory search tool runs with no usable session id in its tool context" do
+    setup do
       log =
         capture_log(fn ->
           assert {:ok, %{result: result}} =
                    MemorySearch.run(%{query: "q"}, %{agent_id: "01USER"})
 
-          assert is_binary(result)
-          assert result =~ "NON-RESULT"
-          assert result =~ "long-term memory was NOT queried"
+          send(self(), {:result, result})
         end)
 
+      assert_received {:result, result}
+      %{log: log, result: result}
+    end
+
+    test "then no search is issued against any backend" do
       assert InMemory.recalls() == []
+    end
+
+    test "and the result explicitly states that long-term memory was not queried", %{result: result} do
+      assert result =~ "long-term memory was NOT queried"
+    end
+
+    test "and the result explicitly states that it is a non-result", %{result: result} do
+      assert result =~ "NON-RESULT"
+    end
+
+    test "and a warning naming the operator is logged", %{log: log} do
       assert log =~ "[jido_gralkor] memory_search short-circuited"
       assert log =~ "01USER"
       assert log =~ "JIDO_CHANGE_SUGGESTIONS.md"
     end
+  end
 
-    test "same when session_id is blank" do
+  describe "if the memory search tool runs with no usable session id in its tool context > while the session id is blank" do
+    test "then it counts as no session id" do
       log =
         capture_log(fn ->
           assert {:ok, %{result: result}} =
