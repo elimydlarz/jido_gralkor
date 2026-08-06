@@ -128,8 +128,6 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
   end
 
   describe "while a thread is committed, when rotate_now/2 is called and installing the fresh thread fails after the flush succeeded" do
-    @describetag timeout: 15_000
-
     test "then the failure reason is returned to the caller and the agent process is still running afterwards" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
