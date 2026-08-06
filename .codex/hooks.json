@@ -1,8 +1,4 @@
 {
-  "enabledPlugins": {
-    "trunk-sync@elimydlarz": true,
-    "fasset-harness@fasset-harness": true
-  },
   "hooks": {
     "Stop": [
       {
