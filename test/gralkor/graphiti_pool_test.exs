@@ -774,6 +774,13 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
+
+    test "and each returned node is rendered with its name, summary, and attributes, ordered by relevance" do
+      {node, _recorded} = node_search_result()
+      assert node.name == "resource contention"
+      assert node.summary == "rescheduled the vacuum job to 04:00"
+      assert node.attributes["lesson"] == "reschedule overlapping jobs"
+    end
   end
 
   describe "when a node search is run for a group > while no node labels are supplied" do
