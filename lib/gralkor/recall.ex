@@ -126,8 +126,10 @@ defmodule Gralkor.Recall do
       {:ok, facts} when is_list(facts) ->
         combined =
           facts ++
-            await_aux(gen_task, "gen search") ++
-            await_aux(learning_task, "learning search")
+            await_auxiliary_searches([
+              {gen_task, "gen search"},
+              {learning_task, "learning search"}
+            ])
 
         {body, n_facts, interpret_ms} =
           interpret_combined(combined, conversation, query, interpret_fn, agent_name, opts)
@@ -145,10 +147,18 @@ defmodule Gralkor.Recall do
   defp shutdown_aux(nil), do: :ok
   defp shutdown_aux(task), do: Task.shutdown(task, :brutal_kill)
 
-  defp await_aux(nil, _label), do: []
+  defp await_auxiliary_searches(tasks) do
+    labelled_tasks = Enum.reject(tasks, fn {task, _label} -> is_nil(task) end)
+    labels = Map.new(labelled_tasks)
 
-  defp await_aux(task, label) do
-    case Task.yield(task, 5_000) || Task.shutdown(task, :brutal_kill) do
+    labelled_tasks
+    |> Enum.map(&elem(&1, 0))
+    |> Task.yield_many(5_000)
+    |> Enum.flat_map(fn {task, result} -> auxiliary_search_facts(task, result, labels[task]) end)
+  end
+
+  defp auxiliary_search_facts(task, result, label) do
+    case result || Task.shutdown(task, :brutal_kill) do
       {:ok, {:ok, facts}} when is_list(facts) ->
         if test_mode?(),
           do:
