@@ -6,6 +6,11 @@ when a capture callback returns an upstream rate-limit failure
 when a capture callback returns another upstream failure
   then the capture buffer does not retry it and returns it unchanged
 
+when learning inference fails after the captured episode is written
+  then the capture buffer returns a failure classified as upstream
+  and the learning inference is attempted only once
+  and the captured episode is written only once
+
 when recall interpretation receives an invalid structured response
   then interpretation raises after one model call
 

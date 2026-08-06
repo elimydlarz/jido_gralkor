@@ -40,6 +40,9 @@ when recall returns a memory block
 if the main graph search fails
   then its failure is returned without manufacturing a memory block
 
+if interpretation cannot parse its structured response
+  then Gralkor.InterpretParseFailed carrying the invalid response reaches the recall caller
+
 while a deadline budget governs recall
   if the budget expires before recall returns
     then a deadline-expired error is returned and a warning names the session and budget

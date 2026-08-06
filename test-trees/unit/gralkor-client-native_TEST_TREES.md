@@ -136,6 +136,12 @@ when generalisations are searched for a group
   if the search fails
     then that failure is returned unchanged
 
+when the legacy generalisation pipeline searches for existing generalisations
+  then episode search reads written bodies from the supplied generalisation group
+  and every written body is returned unchanged to the generalisation pipeline
+  if the episode search fails
+    then that failure is returned unchanged
+
 when a group id holding hyphens is sanitised
   then every hyphen is replaced with an underscore
   and consecutive hyphens are each replaced independently, so none is collapsed into another
