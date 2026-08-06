@@ -50,15 +50,16 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       File.rm_rf!(data_dir)
     end
 
-    describe "when the application stops" do
-      test "then the owned embedded server exits before shutdown completes" do
-        %{pool: pool, server_pid: server_pid, data_dir: data_dir} = start_embedded_runtime()
+  end
 
-        GenServer.stop(pool)
+  describe "when an application starts with an embedded memory backend > when the application stops" do
+    test "then the owned embedded server exits before shutdown completes" do
+      %{pool: pool, server_pid: server_pid, data_dir: data_dir} = start_embedded_runtime()
 
-        refute process_running?(server_pid)
-        File.rm_rf!(data_dir)
-      end
+      GenServer.stop(pool)
+
+      refute process_running?(server_pid)
+      File.rm_rf!(data_dir)
     end
   end
 
