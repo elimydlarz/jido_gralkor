@@ -74,7 +74,7 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       assert.match(skill, /mix hex\.owner packages/);
       assert.match(skill, /mix hex\.owner transfer jido_gralkor elimydlarz/);
       assert.match(skill, /Require `jido_gralkor` to appear in `elimydlarz`'s owned-package list before editing `mix\.exs`\./);
-      assert.ok(skill.indexOf("mix test.journey") < skill.indexOf("mix hex.owner transfer"));
+      assert.ok(skill.indexOf("mix test.all") < skill.indexOf("mix hex.owner transfer"));
       assert.ok(skill.indexOf("mix hex.owner transfer") < skill.indexOf("edit only `@version` in `mix.exs`"));
     },
   );
