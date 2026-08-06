@@ -125,8 +125,8 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     counter
   end
 
-  describe "retry-ownership > when the configured inference provider rejects a call as rate-limited" do
-    test "then no memory endpoint or call site retries it a second time, and it surfaces immediately" do
+  describe "when a capture callback returns an upstream rate-limit failure" do
+    test "then the capture buffer does not retry the returned failure and logs it" do
       counter = counting_buffer(fn _n -> {:error, {:upstream_llm, :rate_limited}} end)
 
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
@@ -143,8 +143,8 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     end
   end
 
-  describe "retry-ownership > when the configured inference provider fails a call for a reason other than rate-limiting" do
-    test "then no layer retries it and the failure surfaces as it was returned" do
+  describe "when a capture callback returns another upstream failure" do
+    test "then the capture buffer does not retry it and returns it unchanged" do
       counter = counting_buffer(fn _n -> {:error, {:upstream_llm, :bad_request}} end)
 
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
@@ -154,8 +154,8 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     end
   end
 
-  describe "retry-ownership > when the inference provider returns output that cannot be parsed into the requested structure" do
-    test "then no layer above the parse retries it, the failure being raised at the boundary that saw it" do
+  describe "when recall interpretation receives an invalid structured response" do
+    test "then interpretation raises after one model call" do
       counter = :counters.new(1, [])
 
       interpret_fn = fn _prompt, _budget ->
@@ -171,8 +171,8 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     end
   end
 
-  describe "retry-ownership > when a write to the graph fails inside a capture chain" do
-    test "then the capture buffer owns the retry and backs off across one, two, and four seconds" do
+  describe "when a graph write raises inside a capture chain" do
+    test "then the capture buffer retries with one-second and two-second backoffs" do
       counter = counting_buffer(fn n -> if n < 3, do: raise("graph unavailable"), else: :ok end)
 
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
@@ -191,7 +191,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
       assert :counters.get(counter, 1) == 3
     end
 
-    test "and no layer above the capture buffer retries it" do
+    test "and a returned write failure is not retried by a second layer" do
       counter = counting_buffer(fn _n -> {:error, :capture_client_4xx} end)
 
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
@@ -204,8 +204,8 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     end
   end
 
-  describe "retry-ownership > when a write to the graph fails outside a capture chain" do
-    test "then no layer retries it and the failure surfaces to the caller immediately" do
+  describe "when a graph write fails outside a capture chain" do
+    test "then the direct caller receives the failure after one attempt" do
       %{g: g} = start_pool()
 
       assert {:error, {:python, reason}} = Native.memory_add("g1", "content", "manual")
@@ -215,8 +215,8 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     end
   end
 
-  describe "retry-ownership > when the consumer's own outermost budget expires" do
-    test "then the consumer returns without retrying, and the expiry is logged as a warning" do
+  describe "when recall's outermost deadline expires" do
+    test "then recall returns without retrying and logs the expiry as a warning" do
       %{g: g} = start_pool()
 
       original = Application.get_env(:jido_gralkor, :recall_deadline_ms)
