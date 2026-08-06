@@ -181,7 +181,6 @@ defmodule JidoGralkor.PluginTest do
                session_id: "thread-one"
              }
     end
-
   end
 
   describe "when an agent turn begins > where the plugin was mounted with Lens selections > while no thread has committed to agent state" do
@@ -246,7 +245,6 @@ defmodule JidoGralkor.PluginTest do
       [_session_id, _group_id, _agent_name, _user_name, messages] = completed_capture()
       assert List.last(messages) == %Message{role: "assistant", content: "you said hi"}
     end
-
   end
 
   describe "when an agent turn completes > while a thread has committed to agent state > if agent state holds no user name" do
@@ -282,7 +280,6 @@ defmodule JidoGralkor.PluginTest do
         Plugin.handle_signal(signal, context(ag))
       end
     end
-
   end
 
   describe "when an agent turn completes > while a thread has committed to agent state > if agent state holds a blank user name" do
@@ -394,6 +391,7 @@ defmodule JidoGralkor.PluginTest do
   describe "when an agent turn fails > while a thread has committed to agent state" do
     test "then the turn is captured with the failure surfaced as a terminal `request failed: …` behaviour message" do
       [_session_id, _group_id, _agent_name, _user_name, messages] = failed_capture()
+
       assert List.last(messages) == %Message{
                role: "behaviour",
                content: "request failed: :boom"
@@ -491,7 +489,9 @@ defmodule JidoGralkor.PluginTest do
         source: "/test"
       )
 
-    log = capture_log(fn -> assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag)) end)
+    log =
+      capture_log(fn -> assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag)) end)
+
     {log, InMemory.captures()}
   end
 
@@ -511,7 +511,9 @@ defmodule JidoGralkor.PluginTest do
     signal =
       Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
 
-    log = capture_log(fn -> assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag)) end)
+    log =
+      capture_log(fn -> assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag)) end)
+
     {log, InMemory.captures()}
   end
 

@@ -60,10 +60,11 @@ defmodule Gralkor.GeneraliseTest do
 
   describe "when a transcript is generalised" do
     test "then only hypothesised candidates at or above the minimum confidence reach evaluation" do
-      prompt = evaluation_prompt([
-        %{content: "xyzzy-below-threshold-unique", confidence: 0.2},
-        %{content: "above", confidence: 0.7}
-      ])
+      prompt =
+        evaluation_prompt([
+          %{content: "xyzzy-below-threshold-unique", confidence: 0.2},
+          %{content: "above", confidence: 0.7}
+        ])
 
       assert prompt =~ "above"
       refute prompt =~ "xyzzy-below-threshold-unique"
