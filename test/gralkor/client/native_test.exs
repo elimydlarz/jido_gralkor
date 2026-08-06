@@ -999,8 +999,8 @@ defmodule Gralkor.Client.NativeTest do
 
     test "and each learning node found is rendered from its name, its summary, and its lesson, approach and problem-kind attributes",
          %{g: g} do
+      assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "how do I schedule X")
       {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      Native.recall("g", "TestAgent", nil, "how do I schedule X")
       assert ["Learning"] in (rec |> Pythonx.decode())["node_label_calls"]
     end
   end
