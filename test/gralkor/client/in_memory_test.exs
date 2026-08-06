@@ -30,8 +30,8 @@ defmodule Gralkor.Client.InMemoryTest do
 
   run_contract(do: fn -> :ok end)
 
-  describe "ex-client-in-memory > when an operation is called" do
-    test "the call is recorded with its arguments (including agent_name) for later inspection" do
+  describe "when any client operation is called" do
+    test "then the call is recorded with every argument it was given, so a consumer's exact request can be inspected afterwards" do
       InMemory.set_recall({:ok, "block"})
       InMemory.recall("g-1", "TestAgent", "s-1", "q?")
 
@@ -39,25 +39,30 @@ defmodule Gralkor.Client.InMemoryTest do
     end
   end
 
-  describe "ex-client-in-memory > if no response is configured for an operation" do
-    test "{:error, :not_configured} is returned" do
+  describe "if an operation is called > while no response is configured for it" do
+    test "then a not-configured error is returned rather than a fabricated success" do
       assert {:error, :not_configured} = InMemory.recall("g", "TestAgent", "s", "q")
     end
   end
 
-  describe "ex-client-in-memory > when reset/0 is called" do
-    test "configured responses and recorded calls are cleared" do
+  describe "when the double is reset" do
+    test "then every configured response is cleared" do
+      InMemory.set_recall({:ok, "x"})
+      InMemory.reset()
+      assert {:error, :not_configured} = InMemory.recall("g", "TestAgent", "s", "q")
+    end
+
+    test "and every recorded call is cleared" do
       InMemory.set_recall({:ok, "x"})
       InMemory.recall("g", "TestAgent", "s", "q")
       InMemory.reset()
 
       assert [] = InMemory.recalls()
-      assert {:error, :not_configured} = InMemory.recall("g", "TestAgent", "s", "q")
     end
   end
 
-  describe "ex-impl-resolver > when :jido_gralkor/:client is configured to a module" do
-    test "that module is returned" do
+  describe "when the client implementation is resolved > while a client module is configured" do
+    test "then that configured module is returned" do
       assert Application.get_env(:jido_gralkor, :client) == Gralkor.Client.InMemory
       assert Gralkor.Client.impl() == Gralkor.Client.InMemory
     end
