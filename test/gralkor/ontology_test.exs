@@ -115,7 +115,7 @@ defmodule Gralkor.OntologyTest do
         end
       end
 
-      [%{fields: [field]}] = RequiredFieldOntology.__ontology__().entity_types
+      [%{fields: [field]}] = Gralkor.OntologyTest.RequiredFieldOntology.__ontology__().entity_types
       assert field.name == :handle
       assert field.type == :string
     end
@@ -134,7 +134,7 @@ defmodule Gralkor.OntologyTest do
         end
       end
 
-      [%{fields: [field]}] = OptionalFieldOntology.__ontology__().entity_types
+      [%{fields: [field]}] = Gralkor.OntologyTest.OptionalFieldOntology.__ontology__().entity_types
       refute field.required
     end
 
@@ -272,7 +272,8 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "and that relationship carries no edge properties" do
-      assert [%{name: "PREFERS", fields: []}] = BareVerbOntology.__ontology__().edge_types
+      assert [%{name: "PREFERS", fields: []}] =
+               Gralkor.OntologyTest.BareVerbOntology.__ontology__().edge_types
     end
   end
 
@@ -301,14 +302,16 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "and the do-block's `field` declarations become that relationship's edge properties, with the same name, type, required and doc semantics as entity fields" do
-      [%{fields: [field]}] = EdgePropertyOntology.__ontology__().edge_types
+      [%{fields: [field]}] =
+        Gralkor.OntologyTest.EdgePropertyOntology.__ontology__().edge_types
       assert field == %{name: :since, type: :string, required: false, doc: "date first observed"}
     end
   end
 
   describe "when an ontology declares an aliased relationship source > where the verb is a single lowercase word (\"prefers\")" do
     test "then the edge name is that word uppercased (\"PREFERS\")" do
-      assert [%{name: "PREFERS"}] = BareVerbOntology.__ontology__().edge_types
+      assert [%{name: "PREFERS"}] =
+               Gralkor.OntologyTest.BareVerbOntology.__ontology__().edge_types
     end
   end
 
@@ -377,7 +380,7 @@ defmodule Gralkor.OntologyTest do
         end
       end
 
-      ontology = MultiEndpointOntology.__ontology__()
+      ontology = Gralkor.OntologyTest.MultiEndpointOntology.__ontology__()
       assert [%{name: "ENDORSES"}] = ontology.edge_types
     end
 
@@ -524,7 +527,7 @@ defmodule Gralkor.OntologyTest do
         end
       end
 
-      ontology = OpenRelsOntology.__ontology__()
+      ontology = Gralkor.OntologyTest.OpenRelsOntology.__ontology__()
       assert ontology.edge_type_map == []
     end
 
@@ -544,15 +547,15 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "and an empty `:edge_types`" do
-      assert EmptyOntology.__ontology__().edge_types == []
+      assert Gralkor.OntologyTest.EmptyOntology.__ontology__().edge_types == []
     end
 
     test "and an empty `:edge_type_map`" do
-      assert EmptyOntology.__ontology__().edge_type_map == []
+      assert Gralkor.OntologyTest.EmptyOntology.__ontology__().edge_type_map == []
     end
 
     test "and an `:excluded_entity_types` that still follows the declared `:entities` option" do
-      assert EmptyOntology.__ontology__().excluded_entity_types == ["Entity"]
+      assert Gralkor.OntologyTest.EmptyOntology.__ontology__().excluded_entity_types == ["Entity"]
     end
   end
 
@@ -620,7 +623,7 @@ defmodule Gralkor.OntologyTest do
 
   describe "while an ontology is declared with `relationships: :scoped`" do
     test "then `__ontology__/0` returns exactly the declared (source, target) → [edge_name] entries in `:edge_type_map`" do
-      assert SusuLikeOntology.__ontology__().edge_type_map == [
+      assert Gralkor.OntologyTest.SusuLikeOntology.__ontology__().edge_type_map == [
                {{"User", "Preference"}, ["PREFERS"]},
                {{"User", "User"}, ["TRUSTS"]}
              ]
