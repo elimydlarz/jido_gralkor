@@ -13,7 +13,13 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
     {:ok, jido} = Jido.start(name: LifecycleTestJido, otp_app: :jido_gralkor)
 
     on_exit(fn ->
-      if Process.alive?(jido), do: GenServer.stop(jido, :normal, 5_000)
+      if Process.alive?(jido) do
+        try do
+          GenServer.stop(jido, :normal, 5_000)
+        catch
+          :exit, _reason -> :ok
+        end
+      end
     end)
 
     :ok
@@ -58,7 +64,7 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
     test "then the application receives a state-read failure rather than false success" do
       pid = spawn(fn -> :ok end)
       monitor = Process.monitor(pid)
-      assert_receive {:DOWN, ^monitor, :process, ^pid, :normal}
+      assert_receive {:DOWN, ^monitor, :process, ^pid, _reason}
 
       assert {:error, {:state_read_failed, _reason}} = ContextRotator.rotate_now(pid)
       assert InMemory.flush_and_awaits() == []
