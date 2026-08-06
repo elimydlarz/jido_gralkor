@@ -170,18 +170,33 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
       seed_thread(pid, "pre-rotation")
-      force_install_failure(pid)
 
-      assert {:error, _reason} = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+      install_thread_fn = fn _pid, _new_id, _entries, _keep_last_n ->
+        {:error, :install_failed}
+      end
+
+      assert {:error, :install_failed} =
+               ContextRotator.rotate_now(pid,
+                 flush_timeout_ms: 1_000,
+                 install_thread_fn: install_thread_fn
+               )
     end
 
     test "and the agent process is still running afterwards" do
       InMemory.set_flush_and_await(:ok)
       pid = start_agent()
       seed_thread(pid, "pre-rotation")
-      force_install_failure(pid)
 
-      assert {:error, _reason} = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+      install_thread_fn = fn _pid, _new_id, _entries, _keep_last_n ->
+        {:error, :install_failed}
+      end
+
+      assert {:error, :install_failed} =
+               ContextRotator.rotate_now(pid,
+                 flush_timeout_ms: 1_000,
+                 install_thread_fn: install_thread_fn
+               )
+
       assert Process.alive?(pid)
     end
   end
@@ -232,12 +247,14 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
       seed_thread_with_entries(pid, "pre-rotation", [%{role: :user, content: "flushed"}])
       test_pid = self()
 
-      before_install_fn = fn ->
+      install_thread_fn = fn agent_pid, new_session_id, entries, keep_last_n ->
         send(test_pid, :before_installation)
 
         receive do
           :continue_rotation -> :ok
         end
+
+        ContextRotator.install_thread(agent_pid, new_session_id, entries, keep_last_n)
       end
 
       rotation =
@@ -245,7 +262,7 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
           ContextRotator.rotate_now(pid,
             flush_timeout_ms: 1_000,
             keep_last_n: 0,
-            before_install_fn: before_install_fn
+            install_thread_fn: install_thread_fn
           )
         end)
 
@@ -256,22 +273,6 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
 
       assert [%{payload: %{content: "in-flight"}}] = committed_entries(pid)
     end
-  end
-
-  defp force_install_failure(pid) do
-    block_second_get_state_reply = fn count, event, _proc_state ->
-      case event do
-        {:out, {:ok, %Jido.AgentServer.State{}}, _from, _state} ->
-          count = count + 1
-          if count == 2, do: Process.sleep(6_000)
-          count
-
-        _ ->
-          count
-      end
-    end
-
-    assert :ok = :sys.install(pid, {block_second_get_state_reply, 0})
   end
 
   defp append_thread_entry(pid, payload) do
