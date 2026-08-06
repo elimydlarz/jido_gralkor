@@ -173,6 +173,19 @@ defmodule Gralkor.OntologyTest do
       end
     end
 
+    test "a relationship declared inside an entity block raises, relationships living in from blocks" do
+      assert_raise CompileError, fn ->
+        defmodule RelationshipInsideEntityOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :open
+
+          entity User do
+            field(:handle, :string)
+            prefers(Preference)
+          end
+        end
+      end
+    end
+
     test "duplicate entity declarations raise" do
       assert_raise CompileError, ~r/User/, fn ->
         defmodule DuplicateEntityOntology do
