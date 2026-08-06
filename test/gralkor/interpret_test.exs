@@ -80,7 +80,7 @@ defmodule Gralkor.InterpretTest do
                ~r/without confidence labels, truth adjudication, or repetitive uncertainty warnings/i
 
       assert prompt =~
-               ~r/when retrieved memory facts conflict.*preserve the relevant accounts.*rather than choosing one as true/is
+               ~r/when retrieved memory facts conflict.*return every conflicting account.*never single one out as the true one/is
     end
   end
 
