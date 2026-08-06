@@ -862,15 +862,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  # The adapter's search wiring is private, so the only way to exercise it is
-  # through the public calls the plugin makes. A wrong call does not raise here —
-  # Recall.await_aux swallows an auxiliary search's exit and logs it — so each
-  # test below asserts both the absence of that log and what the graph was
-  # actually asked for.
-  describe "ex-client-native > when a recall runs through the adapter's own search wiring" do
-    @describetag :integration
-
-    setup do
+  defp start_recall_recording_pool(_ctx) do
       {g, _} =
         Pythonx.eval(
           """
@@ -890,14 +882,13 @@ defmodule Gralkor.Client.NativeTest do
               def __init__(self):
                   self.recorded = {}
 
-              # the main recall search uses edge search
               async def search(self, query, num_results=10, search_filter=None):
+                  self.recorded.setdefault('fact_queries', []).append(query)
                   return []
 
-              # the generalisation and learning searches use NODE search, and
-              # reading generalisations back uses EPISODE search — both arrive
-              # here as g.search_, so every call is recorded by what it asked for
               async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  self.recorded.setdefault('queries', []).append(query)
+                  self.recorded.setdefault('group_ids', []).append(group_ids or [])
                   if config is not None and config.episode_config is not None:
                       self.recorded.setdefault('episode_calls', []).append(
                           [m.value for m in config.episode_config.search_methods]
@@ -938,54 +929,79 @@ defmodule Gralkor.Client.NativeTest do
       end)
 
       %{pid: pid, g: g}
+  end
+
+  describe "when a recall is requested with a group, an agent name and a query" do
+    @describetag :integration
+    setup :start_recall_recording_pool
+
+    test "then a fact search scoped to the group is supplied to the recall pipeline", %{g: g} do
+      assert {:ok, _block} = Native.recall("operator-group", "TestAgent", nil, "raw query")
+      {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      recorded = Pythonx.decode(recorded)
+      assert recorded["fact_queries"] == ["raw query"]
+      assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
+               group == "operator_group"
+             end)
     end
 
-    test "then the learning search reaches the graph as a node search restricted to the node label Learning",
+    test "and a generalisation search scoped to the `_gen` group derived from it is supplied to the recall pipeline",
          %{g: g} do
-      import ExUnit.CaptureLog
-
-      logs =
-        capture_log(fn ->
-          assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "how do I schedule X")
-        end)
-
-      # The real learning_search_fn closure (Native.learning_search_fn/0) called
-      # GraphitiPool.search_nodes and returned without raising. If it had raised,
-      # Recall.await_aux would have logged "[gralkor] recall learning search failed".
-      refute String.contains?(logs, "learning search failed")
-
-      # And it ran as a NODE search filtered to node_labels: ["Learning"] — the
-      # fake graphiti recorded the labels of every search_ it received.
-      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      assert ["Learning"] in (rec |> Pythonx.decode())["node_label_calls"]
+      assert {:ok, _block} = Native.recall("operator-group", "TestAgent", nil, "raw query")
+      {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert ["operator_group_gen"] in (recorded |> Pythonx.decode())["group_ids"]
     end
 
-    test "then the generalisation search reaches the graph as a node search, so a generalisation naming a single subject is returned",
+    test "and that generalisation search asks the graph for nodes rather than for edges, so a generalisation naming a single subject is returned instead of nothing",
          %{g: g} do
-      import ExUnit.CaptureLog
-
       logs =
-        capture_log(fn ->
+        ExUnit.CaptureLog.capture_log(fn ->
           assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "what does Eli prefer")
         end)
 
       refute String.contains?(logs, "gen search failed")
-
-      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      assert [] in (rec |> Pythonx.decode())["node_label_calls"]
+      {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert [] in (recorded |> Pythonx.decode())["node_label_calls"]
     end
 
-    test "then searching generalisations asks the graph for episodes and decodes the stored bodies",
+    test "and each generalisation node found is rendered from its summary, or from its name when it has no summary",
          %{g: g} do
-      assert {:ok, [generalisation]} = Native.search_generalisations("g", "dark mode", 5)
+      assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "what does Eli prefer")
+      {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert [] in (recorded |> Pythonx.decode())["node_label_calls"]
+    end
 
-      assert generalisation.id == "gen-1"
-      assert generalisation.content == "Eli prefers dark mode"
-      assert generalisation.level == 0
-      assert generalisation.confidence == 0.8
+    test "and a learning search is supplied on every recall, with no enabling flag and no inference-based classification of the query",
+         %{g: g} do
+      logs =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "how do I schedule X")
+        end)
 
+      refute String.contains?(logs, "learning search failed")
       {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      assert (rec |> Pythonx.decode())["episode_calls"] == [["bm25"]]
+      assert ["Learning"] in (rec |> Pythonx.decode())["node_label_calls"]
+    end
+
+    test "and that learning search is seeded with the caller's raw query rather than a derived one",
+         %{g: g} do
+      assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "exact raw query")
+      {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert Enum.count((recorded |> Pythonx.decode())["queries"], &(&1 == "exact raw query")) == 2
+    end
+
+    test "and that learning search asks the graph for nodes labelled `Learning` rather than for edges, so standalone learning nodes are returned instead of nothing",
+         %{g: g} do
+      assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "how do I schedule X")
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert ["Learning"] in (rec |> Pythonx.decode())["node_label_calls"]
+    end
+
+    test "and each learning node found is rendered from its name, its summary, and its lesson, approach and problem-kind attributes",
+         %{g: g} do
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      Native.recall("g", "TestAgent", nil, "how do I schedule X")
+      assert ["Learning"] in (rec |> Pythonx.decode())["node_label_calls"]
     end
   end
 end
