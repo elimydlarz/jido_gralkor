@@ -481,10 +481,6 @@ defmodule Gralkor.GraphitiPool do
   @spec supported_providers() :: [atom()]
   def supported_providers, do: @supported_providers
 
-  @doc false
-  @spec credential_env(atom()) :: String.t() | nil
-  def credential_env(provider), do: Map.get(@credential_env, provider)
-
   @doc """
   Decide which provider builds each shared client, from the two configured model
   specs. Pure — no Pythonx, no credentials read — so the per-role dispatch is
