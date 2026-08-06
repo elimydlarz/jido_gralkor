@@ -37,16 +37,16 @@ defmodule Gralkor.ApplicationTest do
     :ok
   end
 
-  describe "ex-application > start/2 child specs > when neither :falkordb nor GRALKOR_DATA_DIR is set" do
-    test "the supervisor includes no children" do
+  describe "when the application starts > while neither a remote connection nor a data directory is configured" do
+    test "then no children are supervised, because the consumer has not opted into the native runtime" do
       System.delete_env("GRALKOR_DATA_DIR")
 
       assert [] = App.children()
     end
   end
 
-  describe "ex-application > start/2 child specs > when GRALKOR_DATA_DIR is set and :falkordb is unset (embedded)" do
-    test "the supervisor includes Gralkor.Python, Gralkor.GraphitiPool, Gralkor.CaptureBuffer in order" do
+  describe "when the application starts > while a data directory is configured > and no remote connection is configured" do
+    test "then the Python runtime, the graph pool, and the capture buffer are supervised in that order" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
 
       children = App.children()
@@ -60,18 +60,20 @@ defmodule Gralkor.ApplicationTest do
       assert {Gralkor.CaptureBuffer, _} = third
     end
 
-    test "the same set is returned when client is explicitly Gralkor.Client.Native" do
+    test "and startup returns only once all three have initialised, so a consumer needs no separate readiness gate" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
 
       assert [
                {Gralkor.Python, [reap_orphans: true]},
                {Gralkor.GraphitiPool, _},
-               {Gralkor.CaptureBuffer, _}
+               {Gralkor.CaptureBuffer, opts}
              ] = App.children()
+
+      assert is_function(Keyword.fetch!(opts, :flush_callback), 5)
     end
 
-    test "GraphitiPool is configured with an :embedded falkordb_spec carrying the expanded data_dir" do
+    test "and the graph pool is constructed with the embedded connection" do
       data_dir = Path.join(System.tmp_dir!(), "ex_app_test_#{System.unique_integer([:positive])}")
       System.put_env("GRALKOR_DATA_DIR", data_dir)
 
@@ -80,40 +82,27 @@ defmodule Gralkor.ApplicationTest do
       assert Keyword.fetch!(opts, :falkordb_spec) == {:embedded, Path.expand(data_dir)}
     end
 
-    test "CaptureBuffer is configured with a flush_callback function" do
+    test "and the Python runtime is told to sweep for orphaned embedded servers, this deployment spawning one of its own" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
 
-      [_python, _pool, {Gralkor.CaptureBuffer, opts}] = App.children()
-
-      assert is_function(Keyword.fetch!(opts, :flush_callback), 5)
+      assert [{Gralkor.Python, [reap_orphans: true]}, _, _] = App.children()
     end
   end
 
-  describe "ex-application > start/2 child specs > when :falkordb is set (remote)" do
-    test "the supervisor includes Gralkor.Python with reap_orphans: false, GraphitiPool with the remote spec, and CaptureBuffer" do
+  describe "when the application starts > while a remote FalkorDB connection is configured" do
+    test "then the Python runtime, the graph pool, and the capture buffer are supervised in that order" do
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
-      [
-        {Gralkor.Python, [reap_orphans: false]},
-        {Gralkor.GraphitiPool, opts},
-        {Gralkor.CaptureBuffer, _}
-      ] =
-        App.children()
+      children = App.children()
 
-      assert Keyword.fetch!(opts, :falkordb_spec) ==
-               {:remote, [host: "falkor.example", port: 6379]}
+      assert Enum.map(children, fn {module, _opts} -> module end) == [
+               Gralkor.Python,
+               Gralkor.GraphitiPool,
+               Gralkor.CaptureBuffer
+             ]
     end
 
-    test "remote wins over GRALKOR_DATA_DIR when both are set" do
-      System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
-      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
-
-      [{Gralkor.Python, [reap_orphans: false]}, {Gralkor.GraphitiPool, opts}, _] = App.children()
-
-      assert {:remote, _} = Keyword.fetch!(opts, :falkordb_spec)
-    end
-
-    test "username and password are carried through to the remote spec" do
+    test "and the graph pool is constructed with the remote connection, so no embedded server is spawned" do
       Application.put_env(:jido_gralkor, :falkordb,
         host: "falkor.example",
         port: 6379,
@@ -123,32 +112,43 @@ defmodule Gralkor.ApplicationTest do
 
       [_python, {Gralkor.GraphitiPool, opts}, _] = App.children()
 
-      {:remote, kw} = Keyword.fetch!(opts, :falkordb_spec)
-      assert Keyword.fetch!(kw, :username) == "alice"
-      assert Keyword.fetch!(kw, :password) == "secret"
+      assert Keyword.fetch!(opts, :falkordb_spec) ==
+               {:remote,
+                [host: "falkor.example", port: 6379, username: "alice", password: "secret"]}
     end
 
-    test "raises ArgumentError when :falkordb is missing :host" do
+    test "and the Python runtime is told not to sweep for orphaned embedded servers, this deployment never having spawned one" do
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
+
+      assert [{Gralkor.Python, [reap_orphans: false]}, _, _] = App.children()
+    end
+
+    test "and a configured data directory is ignored" do
+      System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
+
+      [{Gralkor.Python, [reap_orphans: false]}, {Gralkor.GraphitiPool, opts}, _] = App.children()
+
+      assert {:remote, _} = Keyword.fetch!(opts, :falkordb_spec)
+    end
+
+  end
+
+  describe "if the remote FalkorDB configuration is not a keyword list carrying a host and a port" do
+    test "then startup raises before any child starts" do
       Application.put_env(:jido_gralkor, :falkordb, port: 6379)
-
       assert_raise ArgumentError, ~r/:host/, fn -> App.children() end
-    end
 
-    test "raises ArgumentError when :falkordb is missing :port" do
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example")
-
       assert_raise ArgumentError, ~r/:port/, fn -> App.children() end
-    end
 
-    test "raises ArgumentError when :falkordb is not a keyword list" do
       Application.put_env(:jido_gralkor, :falkordb, "falkor://host:6379")
-
       assert_raise ArgumentError, ~r/keyword list/, fn -> App.children() end
     end
   end
 
-  describe "ex-application > build_lens_flush_callback/1" do
-    test "renders the selected turns and submits the transcript through the selected Lens" do
+  describe "when a Lens capture flush runs" do
+    test "then the selected turns are rendered in the order they were appended" do
       test_pid = self()
 
       ingest = fn request ->
@@ -174,10 +174,37 @@ defmodule Gralkor.ApplicationTest do
                         source_description: "captured"
                       }}
     end
+
+    test "and the rendered transcript is submitted through the selected Lens as a captured episode" do
+      test_pid = self()
+
+      callback =
+        App.build_lens_flush_callback(
+          ingest_fn: fn request ->
+            send(test_pid, {:ingested, request})
+            :ok
+          end
+        )
+
+      turns = [
+        [Gralkor.Message.new("user", "Remember this")],
+        [Gralkor.Message.new("assistant", "I will")]
+      ]
+
+      assert :ok = callback.("operator-one", "Susu", "Eli", "observations", turns)
+
+      assert_receive {:ingested,
+                      %Gralkor.Ingest{
+                        operator_id: "operator-one",
+                        lens: "observations",
+                        content: "Eli: Remember this\nSusu: I will",
+                        source_description: "captured"
+                      }}
+    end
   end
 
-  describe "ex-application > start/2 child specs > when `:jido_gralkor, :client` is configured to Gralkor.Client.InMemory" do
-    test "the supervisor includes no children regardless of GRALKOR_DATA_DIR or :falkordb" do
+  describe "when the application starts > while the in-memory client is configured" do
+    test "then no children are supervised regardless of any data directory or remote connection, so a consumer that pinned the in-memory client is never forced into the native boot path" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
