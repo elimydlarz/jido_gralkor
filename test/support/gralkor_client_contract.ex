@@ -98,8 +98,8 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "when a canonical turn is captured for a named session, group, agent and user" do
-        test "while the backend acknowledges the capture > then success is returned" do
+      describe "when a canonical turn is captured for a named session, group, agent and user > while the backend acknowledges the capture" do
+        test "then success is returned" do
           unquote(setup_block).()
           configure_capture(:ok)
 
@@ -112,8 +112,10 @@ defmodule Gralkor.ClientContract do
                      [Gralkor.Message.new("user", "hi")]
                    )
         end
+      end
 
-        test "if the backend fails > then that failure is returned unchanged" do
+      describe "when a canonical turn is captured for a named session, group, agent and user > if the backend fails" do
+        test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_capture({:error, :write_failed})
 
@@ -126,8 +128,10 @@ defmodule Gralkor.ClientContract do
                      [Gralkor.Message.new("user", "hi")]
                    )
         end
+      end
 
-        test "while its messages have user, assistant or behaviour roles > then the write uses the deployment ontology without a caller ontology argument" do
+      describe "when a canonical turn is captured for a named session, group, agent and user > while its messages have user, assistant or behaviour roles" do
+        test "then the write uses the deployment ontology without a caller ontology argument" do
           unquote(setup_block).()
 
           original_ontology = Application.get_env(:jido_gralkor, :ontology)
@@ -162,7 +166,7 @@ defmodule Gralkor.ClientContract do
           assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
         end
 
-        test "while its messages have user, assistant or behaviour roles > and the turn is learned at flush with no per-turn flag" do
+        test "and the turn is learned at flush with no per-turn flag" do
           unquote(setup_block).()
           configure_capture(:ok)
 
