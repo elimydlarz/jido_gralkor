@@ -148,9 +148,9 @@ defmodule Gralkor.Application do
   end
 
   # Learning: every turn becomes a separate AgentLearning episode in the same
-  # group_id. Fail-fast — a learn_fn error, a learning-write error, or any raise
-  # propagates out so the CaptureBuffer retry/backoff owns recovery; nothing is
-  # swallowed. Runs in append order, only on a path that returns :ok.
+  # group_id. Inference errors are tagged as upstream so CaptureBuffer does not
+  # retry the already-written transcript; learning-write errors remain eligible
+  # for its retry/backoff. Raises are never swallowed. Runs in append order.
   defp write_learnings(_turns, _group_id, _ontology, _agent, _user, nil, _add_episode_fn), do: :ok
 
   defp write_learnings(turns, group_id, ontology, agent_name, user_name, learn_fn, add_episode_fn) do
