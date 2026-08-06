@@ -210,12 +210,12 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     end
   end
 
-  describe "if the memory search tool runs with no usable session id in its tool context > while the session id is blank" do
+  describe "if the memory search tool runs with no usable session id in its tool context > while the session id is only whitespace" do
     test "then it counts as no session id" do
       log =
         capture_log(fn ->
           assert {:ok, %{result: result}} =
-                   MemorySearch.run(%{query: "q"}, %{agent_id: "01USER", session_id: ""})
+                   MemorySearch.run(%{query: "q"}, %{agent_id: "01USER", session_id: "   "})
 
           assert is_binary(result)
           assert result =~ "NON-RESULT"
