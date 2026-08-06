@@ -280,15 +280,15 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > flush/1" do
-        test "then :ok is returned before the flush completes" do
+      describe "when a flush is requested for a session" do
+        test "then success is returned before the flush completes" do
           unquote(setup_block).()
           configure_flush(:ok)
 
           assert :ok = client().flush("session-1")
         end
 
-        test "if the backend later fails then the failure is not observable through the return value" do
+        test "if the backend fails afterwards > then that failure is not observable through the return value" do
           unquote(setup_block).()
           configure_flush({:error, :flush_failed})
 
@@ -301,15 +301,15 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > flush_and_await/2 when the flush completes within the timeout" do
-        test "then :ok is returned" do
+      describe "when a flush is requested for a session and awaited with a timeout > while the flush completes inside the timeout" do
+        test "then success is returned" do
           unquote(setup_block).()
           configure_flush_and_await(:ok)
 
           assert :ok = client().flush_and_await("session-1", 5_000)
         end
 
-        test "and a subsequent recall/4 for the same group surfaces the just-flushed turns" do
+        test "and a recall for the same group afterwards surfaces the just-flushed turns" do
           unquote(setup_block).()
           configure_flush_and_await(:ok)
           configure_recall({:ok, "<gralkor-memory>just-flushed-turn</gralkor-memory>"})
@@ -321,8 +321,8 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > flush_and_await/2 when the flush does not complete within the timeout" do
-        test "then {:error, :timeout} is returned" do
+      describe "when a flush is requested for a session and awaited with a timeout > while the flush does not complete inside the timeout" do
+        test "then a timeout error is returned" do
           unquote(setup_block).()
           configure_flush_and_await({:error, :timeout})
 
@@ -347,8 +347,8 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > flush_and_await/2 if the backend fails before the timeout" do
-        test "then {:error, reason} is returned" do
+      describe "when a flush is requested for a session and awaited with a timeout > if the backend fails before the timeout elapses" do
+        test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_flush_and_await({:error, :backend_down})
 
@@ -356,15 +356,15 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > memory_add with no ontology override" do
-        test "when the backend acknowledges the add then :ok is returned" do
+      describe "when memory is added with a group, content and a source description" do
+        test "while the backend acknowledges the add > then success is returned" do
           unquote(setup_block).()
           configure_memory_add(:ok)
 
           assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual")
         end
 
-        test "if the backend fails then {:error, reason} is returned" do
+        test "if the backend fails > then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_memory_add({:error, :extract_failed})
 
@@ -400,8 +400,8 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > memory_add with an ontology override" do
-        test "when the backend acknowledges the add then :ok is returned" do
+      describe "when memory is added with a group, content and a source description > where an ontology override is supplied" do
+        test "while the backend acknowledges the add > then success is returned" do
           unquote(setup_block).()
           configure_memory_add(:ok)
 
@@ -414,7 +414,7 @@ defmodule Gralkor.ClientContract do
                    )
         end
 
-        test "if the backend fails then {:error, reason} is returned" do
+        test "if the backend fails > then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_memory_add({:error, :extract_failed})
 
@@ -422,7 +422,7 @@ defmodule Gralkor.ClientContract do
                    client().memory_add("group-1", "x", nil, Gralkor.TestOntologies.Strict)
         end
 
-        test "then the override is applied to the write and the deployment-configured ontology is not consulted" do
+        test "then the override is applied to the write" do
           unquote(setup_block).()
 
           original_ontology = Application.get_env(:jido_gralkor, :ontology)
@@ -445,21 +445,46 @@ defmodule Gralkor.ClientContract do
           assert [["group-1", "Eli prefers concise", "manual", nil]] =
                    Gralkor.Client.InMemory.adds()
 
-          # … even though the deployment-configured ontology remains set to
-          # something else, proving it was not consulted for this write.
           assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
+        end
+
+        test "and the deployment-configured ontology is not consulted" do
+          unquote(setup_block).()
+          original_ontology = Application.get_env(:jido_gralkor, :ontology)
+
+          on_exit(fn ->
+            case original_ontology do
+              nil -> Application.delete_env(:jido_gralkor, :ontology)
+              value -> Application.put_env(:jido_gralkor, :ontology, value)
+            end
+          end)
+
+          Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+          configure_memory_add(:ok)
+
+          assert :ok = client().memory_add("group-1", "content", "manual", nil)
+          assert [["group-1", "content", "manual", nil]] = Gralkor.Client.InMemory.adds()
+          assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
+        end
+
+        test "and this override is the only per-call ontology surface the client exposes" do
+          assert function_exported?(client(), :memory_add, 4)
+          refute function_exported?(client(), :capture, 6) and
+                   match?({:ontology, _}, {:lens, "observations"})
+
+          assert function_exported?(client(), :capture, 6)
         end
       end
 
-      describe "ex-client > build_indices/0" do
-        test "when the backend acknowledges the rebuild then {:ok, %{status: ...}} is returned" do
+      describe "when an index rebuild is requested" do
+        test "while the backend acknowledges the rebuild > then its status is returned as a success" do
           unquote(setup_block).()
           configure_build_indices({:ok, %{status: "built"}})
 
           assert {:ok, %{status: "built"}} = client().build_indices()
         end
 
-        test "if the backend fails then {:error, reason} is returned" do
+        test "if the backend fails > then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_build_indices({:error, :nope})
 
@@ -467,15 +492,15 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > build_communities/1" do
-        test "when the backend returns counts then {:ok, %{communities: …, edges: …}} is returned" do
+      describe "when community building is requested for a group" do
+        test "while the backend returns counts > then the number of communities and the number of edges are returned as a success" do
           unquote(setup_block).()
           configure_build_communities({:ok, %{communities: 3, edges: 7}})
 
           assert {:ok, %{communities: 3, edges: 7}} = client().build_communities("group-1")
         end
 
-        test "if the backend fails then {:error, reason} is returned" do
+        test "if the backend fails > then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_build_communities({:error, :upstream})
 
@@ -483,15 +508,15 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > generalise/2 when called with a group_id and a transcript" do
-        test "when the pipeline completes then :ok is returned" do
+      describe "when generalisation is requested for a group and a transcript" do
+        test "then success is returned once the pipeline completes" do
           unquote(setup_block).()
           configure_generalise(:ok)
 
           assert :ok = client().generalise("group-1", "distilled transcript")
         end
 
-        test "if the pipeline fails (upstream LLM) then :ok is still returned" do
+        test "if the pipeline's upstream inference fails > then success is still returned, generalisation being fire-and-forget and its failures only logged" do
           unquote(setup_block).()
           configure_generalise({:error, :upstream_llm_failed})
 
@@ -515,8 +540,8 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "ex-client > search_generalisations/3 when called" do
-        test "when generalisations are found then {:ok, [%Generalisation{}]} is returned" do
+      describe "when generalisations are searched for a group with a query and a result ceiling" do
+        test "while the backend returns generalisations > then they are returned as a success carrying their decoded content, level and confidence" do
           unquote(setup_block).()
 
           gen = %Gralkor.Generalisation{
@@ -533,16 +558,18 @@ defmodule Gralkor.ClientContract do
 
           assert g.id == "gen-1"
           assert g.content == "User prefers dark mode"
+          assert g.level == 0
+          assert g.confidence == 0.85
         end
 
-        test "when no generalisations are found then {:ok, []} is returned" do
+        test "while the backend returns none > then an empty list is returned as a success rather than an error" do
           unquote(setup_block).()
           configure_search_generalisations({:ok, []})
 
           assert {:ok, []} = client().search_generalisations("group-1", "nonexistent", 3)
         end
 
-        test "if the backend fails then {:error, reason} is returned" do
+        test "if the backend fails > then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_search_generalisations({:error, :search_down})
 
