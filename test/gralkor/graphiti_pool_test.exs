@@ -2039,4 +2039,148 @@ defmodule Gralkor.GraphitiPoolTest do
       end
     end
   end
+
+  defp unsupported_provider_error do
+    previous_trap_exit = Process.flag(:trap_exit, true)
+
+    try do
+      assert {:error, {%ArgumentError{} = error, _stacktrace}} =
+               GraphitiPool.start_link(
+                 name: nil,
+                 table: :"pool_table_#{System.unique_integer([:positive])}",
+                 falkordb_spec: {:embedded, "/tmp/never_used"},
+                 llm_model: %{provider: :anthropic, id: "claude-opus-5"},
+                 embedder_model: %{provider: :google, id: "gemini-embedding-2-preview"},
+                 construct_shared_clients: fn _, _ ->
+                   %{llm_client: nil, embedder: nil, cross_encoder: nil}
+                 end,
+                 construct_falkor_db: fn _ -> :stub_falkor_db end,
+                 construct_instance: fn _, _, group -> {:stub_graphiti, group} end,
+                 initialise_instance: fn _ -> :ok end,
+                 install_loop_fn: fn -> :ok end,
+                 warmup: false
+               )
+
+      error
+    after
+      Process.flag(:trap_exit, previous_trap_exit)
+    end
+  end
+
+  defp fact_search_result do
+    {graph, _} =
+      Pythonx.eval(
+        """
+        class _Edge:
+            def __init__(self):
+                self.fact = "X is a thing"
+                self.created_at = None
+                self.valid_at = None
+                self.invalid_at = None
+                self.expired_at = None
+
+        class _FakeGraphiti:
+            async def search(self, query, num_results=10):
+                return [_Edge()]
+
+        _FakeGraphiti()
+        """,
+        %{}
+      )
+
+    %{pid: pid} =
+      start_pool(
+        construct_instance: fn _db, _shared, _group -> graph end,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0
+      )
+
+    result = GraphitiPool.search(pid, "g1", "q", 5)
+    GenServer.stop(pid)
+    result
+  end
+
+  defp episode_search_result do
+    {graph, _} =
+      Pythonx.eval(
+        """
+        class _Episode:
+            def __init__(self):
+                self.content = "GEN|v1|{}\\nEli consistently prefers dark mode"
+                self.source_description = "generalisation"
+
+        class _Results:
+            def __init__(self):
+                self.episodes = [_Episode()]
+                self.nodes = []
+                self.edges = []
+
+        class _FakeGraphiti:
+            def __init__(self):
+                self.group_ids = []
+
+            async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                self.group_ids = list(group_ids)
+                return _Results()
+
+        _FakeGraphiti()
+        """,
+        %{}
+      )
+
+    %{pid: pid} =
+      start_pool(
+        construct_instance: fn _db, _shared, _group -> graph end,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0
+      )
+
+    assert {:ok, [episode]} =
+             GraphitiPool.search_episodes(pid, "group-with-hyphens", "dark mode", 5)
+
+    {group_ids, _} = Pythonx.eval("g.group_ids", %{"g" => graph})
+    GenServer.stop(pid)
+    {episode, %{"group_ids" => Pythonx.decode(group_ids)}}
+  end
+
+  defp node_search_result do
+    {graph, _} =
+      Pythonx.eval(
+        """
+        class _Node:
+            def __init__(self):
+                self.name = "resource contention"
+                self.summary = "rescheduled the vacuum job to 04:00"
+                self.attributes = {"lesson": "reschedule overlapping jobs"}
+
+        class _Results:
+            def __init__(self):
+                self.nodes = [_Node()]
+
+        class _FakeGraphiti:
+            def __init__(self):
+                self.group_ids = []
+
+            async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                self.group_ids = list(group_ids)
+                return _Results()
+
+        _FakeGraphiti()
+        """,
+        %{}
+      )
+
+    %{pid: pid} =
+      start_pool(
+        construct_instance: fn _db, _shared, _group -> graph end,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0
+      )
+
+    assert {:ok, [node]} =
+             GraphitiPool.search_nodes(pid, "group-with-hyphens", "conflict", 5,
+               node_labels: ["Learning"]
+             )
+
+    {group_ids, _} = Pythonx.eval("g.group_ids", %{"g" => graph})
+    GenServer.stop(pid)
+    {node, %{"group_ids" => Pythonx.decode(group_ids)}}
+  end
 end
