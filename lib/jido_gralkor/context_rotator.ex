@@ -73,32 +73,40 @@ defmodule JidoGralkor.ContextRotator do
     keep_last_n = Keyword.get(opts, :keep_last_n, @default_keep_last_n)
 
     case fetch_thread(agent_pid) do
-      nil ->
+      {:ok, nil} ->
         :ok
 
-      %{id: session_id, entries: pre_flush_entries} ->
+      {:error, reason} ->
+        {:error, {:state_read_failed, reason}}
+
+      {:ok, %{id: session_id, entries: pre_flush_entries}} ->
         case safe_flush_and_await(session_id, flush_timeout_ms) do
           :ok ->
             new_session_id = mint_session_id()
 
-            inflight = inflight_entries(agent_pid, pre_flush_entries)
-            retained_pre = retain_tail(pre_flush_entries, keep_last_n)
-            seed = retained_pre ++ inflight
+            case inflight_entries(agent_pid, pre_flush_entries) do
+              {:ok, inflight} ->
+                retained_pre = retain_tail(pre_flush_entries, keep_last_n)
+                seed = retained_pre ++ inflight
 
-            case swap_thread(agent_pid, new_session_id, seed) do
-              :ok ->
-                Logger.info(
-                  "[jido_gralkor] context rotated — session:#{session_id}→#{new_session_id} kept:#{length(retained_pre)} inflight:#{length(inflight)}"
-                )
+                case swap_thread(agent_pid, new_session_id, seed) do
+                  :ok ->
+                    Logger.info(
+                      "[jido_gralkor] context rotated — session:#{session_id}→#{new_session_id} kept:#{length(retained_pre)} inflight:#{length(inflight)}"
+                    )
 
-                :ok
+                    :ok
+
+                  {:error, reason} ->
+                    Logger.warning(
+                      "[jido_gralkor] context rotator failed to swap thread — session:#{session_id} reason:#{inspect(reason)}"
+                    )
+
+                    {:error, reason}
+                end
 
               {:error, reason} ->
-                Logger.warning(
-                  "[jido_gralkor] context rotator failed to swap thread — session:#{session_id} reason:#{inspect(reason)}"
-                )
-
-                {:error, reason}
+                {:error, {:state_read_failed, reason}}
             end
 
           {:error, reason} ->
@@ -119,11 +127,14 @@ defmodule JidoGralkor.ContextRotator do
 
   defp inflight_entries(agent_pid, pre_flush_entries) do
     case fetch_thread(agent_pid) do
-      %{entries: current_entries} ->
-        new_inflight(pre_flush_entries, current_entries)
+      {:ok, %{entries: current_entries}} ->
+        {:ok, new_inflight(pre_flush_entries, current_entries)}
 
-      _ ->
-        []
+      {:ok, nil} ->
+        {:error, :thread_missing_after_flush}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -163,15 +174,20 @@ defmodule JidoGralkor.ContextRotator do
   defp fetch_thread(agent_pid) do
     case Jido.AgentServer.state(agent_pid) do
       {:ok, server_state} ->
-        case server_state.agent.state[:__thread__] do
-          %Thread{} = thread -> thread
-          %{id: id, entries: entries} when is_binary(id) -> %{id: id, entries: entries}
-          _ -> nil
-        end
+        thread =
+          case server_state.agent.state[:__thread__] do
+            %Thread{} = thread -> thread
+            %{id: id, entries: entries} when is_binary(id) -> %{id: id, entries: entries}
+            _ -> nil
+          end
 
-      {:error, _} ->
-        nil
+        {:ok, thread}
+
+      {:error, reason} ->
+        {:error, reason}
     end
+  catch
+    :exit, reason -> {:error, reason}
   end
 
   defp retain_tail(_entries, 0), do: []
