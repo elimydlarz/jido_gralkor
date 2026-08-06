@@ -25,3 +25,4 @@ jido_gralkor-*.tar
 # Local environment file (loaded by test_helper.exs); commit .env.example only.
 .env
 
+.fasset-harness/state/
