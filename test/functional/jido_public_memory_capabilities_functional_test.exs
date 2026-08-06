@@ -17,45 +17,31 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   end
 
   describe "when an application gracefully stops an agent with a committed thread" do
-    test "then the configured memory client flushes that thread without delaying termination" do
-      InMemory.set_flush(:ok)
-      {:ok, jido} = Jido.start(name: LifecycleTestJido, otp_app: :jido_gralkor)
-
-      on_exit(fn ->
-        if Process.alive?(jido) do
-          try do
-            GenServer.stop(jido, :normal, 5_000)
-          catch
-            :exit, _reason -> :ok
-          end
-        end
-      end)
-
-      {:ok, pid} =
-        Jido.start_agent(
-          LifecycleTestJido,
-          LifecycleTestAgent,
-          id: "agent-#{System.unique_integer([:positive])}",
-          lifecycle_mod: JidoGralkor.Lifecycle
-        )
-
-      :sys.replace_state(pid, fn state ->
-        put_in(state.agent.state[:__thread__], %{id: "committed-thread"})
-      end)
-
+    test "then termination returns without waiting for the memory flush" do
+      pid = start_agent_with_thread("committed-thread")
       started_at = System.monotonic_time(:millisecond)
       assert :ok = GenServer.stop(pid, :shutdown, 5_000)
       assert System.monotonic_time(:millisecond) - started_at < 1_000
+    end
+
+    test "and the configured memory client flushes the committed thread" do
+      pid = start_agent_with_thread("committed-thread")
+      assert :ok = GenServer.stop(pid, :shutdown, 5_000)
       assert eventually(fn -> InMemory.flushes() == [["committed-thread"]] end)
     end
   end
 
   describe "when an operator runs the build-indices memory action" do
-    test "then the action reports the backend status after one unscoped index build" do
+    test "then the action reports the backend status" do
       InMemory.set_build_indices({:ok, %{status: "stored"}})
 
       assert {:ok, %{result: result}} = MemoryBuildIndices.run(%{}, %{})
       assert result =~ "stored"
+    end
+
+    test "and the backend receives one unscoped index build" do
+      InMemory.set_build_indices({:ok, %{status: "stored"}})
+      assert {:ok, _result} = MemoryBuildIndices.run(%{}, %{})
       assert InMemory.indices_builds() == [[]]
     end
 
@@ -66,7 +52,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   end
 
   describe "when an operator runs the build-communities memory action" do
-    test "then the action reports the backend counts after one build for the operator's sanitised group" do
+    test "then the action reports the backend counts" do
       InMemory.set_build_communities({:ok, %{communities: 3, edges: 17}})
 
       assert {:ok, %{result: result}} =
@@ -74,6 +60,14 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert result =~ "3"
       assert result =~ "17"
+    end
+
+    test "and the backend receives one build for the operator's sanitised group" do
+      InMemory.set_build_communities({:ok, %{communities: 3, edges: 17}})
+
+      assert {:ok, _result} =
+               MemoryBuildCommunities.run(%{}, %{agent_id: "operator-one"})
+
       assert InMemory.communities_builds() == [["operator_one"]]
     end
 
@@ -84,46 +78,52 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   end
 
   describe "if an agent invokes memory search without a usable query" do
-    test "then no backend is queried and the agent receives an explicit non-result" do
+    test "then no backend is queried" do
+      assert {:ok, _result} = memory_search(%{query: "  "}, session_id: "thread-one")
+      assert InMemory.recalls() == []
+    end
+
+    test "and the agent receives an explicit non-result" do
       assert {:ok, %{result: result}} =
-               MemorySearch.run(%{query: "  "}, %{
-                 agent_id: "operator-one",
-                 agent_name: "Susu",
-                 session_id: "thread-one"
-               })
+               memory_search(%{query: "  "}, session_id: "thread-one")
 
       assert result =~ "NON-RESULT"
       assert result =~ "no query was provided"
-      assert InMemory.recalls() == []
     end
   end
 
   describe "if an agent invokes memory search without a committed session" do
-    test "then no backend is queried and the agent receives an explicit non-result" do
+    test "then no backend is queried" do
+      assert {:ok, _result} = memory_search(%{query: "launch"}, [])
+      assert InMemory.recalls() == []
+    end
+
+    test "and the agent receives an explicit non-result" do
       assert {:ok, %{result: result}} =
-               MemorySearch.run(%{query: "launch"}, %{
-                 agent_id: "operator-one",
-                 agent_name: "Susu"
-               })
+               memory_search(%{query: "launch"}, [])
 
       assert result =~ "NON-RESULT"
       assert result =~ "long-term memory was NOT queried"
-      assert InMemory.recalls() == []
     end
   end
 
   describe "when a consumer prepares the first ReAct iteration" do
-    test "then memory search is forced while every existing request override is preserved" do
+    test "then memory search is forced" do
       overrides = %{messages: [:message], llm_opts: [temperature: 0.2]}
       result = ReAct.maybe_force_memory_search(overrides, %{iteration: 1})
-
-      assert result.messages == [:message]
-      assert result.llm_opts[:temperature] == 0.2
 
       assert result.llm_opts[:tool_choice] == %{
                type: "function",
                function: %{name: "memory_search"}
              }
+    end
+
+    test "and every existing request override is preserved" do
+      overrides = %{messages: [:message], llm_opts: [temperature: 0.2]}
+      result = ReAct.maybe_force_memory_search(overrides, %{iteration: 1})
+
+      assert result.messages == [:message]
+      assert result.llm_opts[:temperature] == 0.2
     end
   end
 
@@ -144,5 +144,42 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       Process.sleep(10)
       eventually(fun, attempts - 1)
     end
+  end
+
+  defp start_agent_with_thread(thread_id) do
+    InMemory.set_flush(:ok)
+    {:ok, jido} = Jido.start(name: LifecycleTestJido, otp_app: :jido_gralkor)
+
+    on_exit(fn ->
+      if Process.alive?(jido) do
+        try do
+          GenServer.stop(jido, :normal, 5_000)
+        catch
+          :exit, _reason -> :ok
+        end
+      end
+    end)
+
+    {:ok, pid} =
+      Jido.start_agent(
+        LifecycleTestJido,
+        LifecycleTestAgent,
+        id: "agent-#{System.unique_integer([:positive])}",
+        lifecycle_mod: JidoGralkor.Lifecycle
+      )
+
+    :sys.replace_state(pid, fn state ->
+      put_in(state.agent.state[:__thread__], %{id: thread_id})
+    end)
+
+    pid
+  end
+
+  defp memory_search(params, context_options) do
+    context =
+      %{agent_id: "operator-one", agent_name: "Susu"}
+      |> Map.merge(Map.new(context_options))
+
+    MemorySearch.run(params, context)
   end
 end
