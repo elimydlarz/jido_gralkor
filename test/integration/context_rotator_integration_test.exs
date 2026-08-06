@@ -305,8 +305,11 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
 
   defp wait_for_queued_system_request(pid, attempts \\ 100)
 
-  defp wait_for_queued_system_request(_pid, 0),
-    do: flunk("the in-flight append was not queued before rotation continued")
+  defp wait_for_queued_system_request(pid, 0),
+    do:
+      flunk(
+        "the in-flight append was not queued before rotation continued: #{inspect(Process.info(pid, :messages))}"
+      )
 
   defp wait_for_queued_system_request(pid, attempts) do
     queued? =
