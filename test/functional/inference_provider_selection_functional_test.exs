@@ -188,6 +188,7 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
 
       assert {:error, {%ArgumentError{} = blank, _}} = start_memory_runtime(self())
       assert Exception.message(blank) =~ "OPENAI_API_KEY"
+      assert Exception.message(blank) =~ "llm"
       refute_received {:constructed, _}
     end
 
