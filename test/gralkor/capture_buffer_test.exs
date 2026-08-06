@@ -664,12 +664,19 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "does not retry — the call is contract-error and dropped" do
+    test "does not retry — the call is contract-error and dropped, and a dropped-on-contract-error line is logged at warning" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
-      :ok = CaptureBuffer.flush("s")
 
-      assert_receive {:attempt, 1}, 200
-      refute_receive {:attempt, 2}, 100
+      log =
+        capture_log(fn ->
+          :ok = CaptureBuffer.flush("s")
+
+          assert_receive {:attempt, 1}, 200
+          refute_receive {:attempt, 2}, 100
+        end)
+
+      assert log =~ "[warning]"
+      assert log =~ "[gralkor] capture dropped (4xx)"
     end
   end
 
