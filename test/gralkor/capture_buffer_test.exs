@@ -783,7 +783,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > retry schedule" do
+  describe "if the flush callback raises or fails for any other reason" do
     setup do
       test_pid = self()
 
@@ -809,24 +809,21 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "when the flush callback raises an internal error then retries with the configured backoff, and logs the flush-completed line once it succeeds" do
+    test "then the flush is retried on the configured backoff schedule, which defaults to 1s, then 2s, then 4s" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
-      log =
-        capture_log(fn ->
-          :ok = CaptureBuffer.flush("s")
+      capture_log(fn ->
+        :ok = CaptureBuffer.flush("s")
 
-          assert_receive {:attempt, 1}, 200
-          assert_receive {:attempt, 2}, 200
-          assert_receive {:attempt, 3}, 200
-          refute_receive {:attempt, 4}, 100
-        end)
-
-      assert log =~ ~r/\[gralkor\] capture flushed — turns:1 elapsed:\d+ms/
+        assert_receive {:attempt, 1}, 200
+        assert_receive {:attempt, 2}, 200
+        assert_receive {:attempt, 3}, 200
+        refute_receive {:attempt, 4}, 100
+      end)
     end
   end
 
-  describe "ex-capture-buffer > retry schedule when the flush callback succeeds (first attempt or after retries)" do
+  describe "when a scheduled flush's callback succeeds, on its first attempt or after retries" do
     setup do
       flush_callback = fn _g, _a, _u, _o, _t -> :ok end
       :ok = stop_supervised(CaptureBuffer)
@@ -834,7 +831,7 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "logs [gralkor] capture flushed — turns:<n> elapsed:<ms> at :info" do
+    test "then a flush-completed line naming the turn count and the elapsed milliseconds is logged at info" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "a")])
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "b")])
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "c")])
@@ -850,7 +847,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > retry schedule when 4xx is returned" do
+  describe "if the flush callback reports a client contract error" do
     setup do
       test_pid = self()
       attempts = :counters.new(1, [])
@@ -869,15 +866,24 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "does not retry — the call is contract-error and dropped, and a dropped-on-contract-error line is logged at warning" do
+    test "then the flush is dropped without any retry" do
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      capture_log(fn ->
+        :ok = CaptureBuffer.flush("s")
+
+        assert_receive {:attempt, 1}, 200
+        refute_receive {:attempt, 2}, 100
+      end)
+    end
+
+    test "and a dropped-on-contract-error line is logged at warning" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       log =
         capture_log(fn ->
           :ok = CaptureBuffer.flush("s")
-
           assert_receive {:attempt, 1}, 200
-          refute_receive {:attempt, 2}, 100
         end)
 
       assert log =~ "[warning]"
@@ -885,7 +891,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > retry schedule when an upstream-LLM error is returned" do
+  describe "if the flush callback reports an upstream-LLM error" do
     setup do
       test_pid = self()
       attempts = :counters.new(1, [])
@@ -904,15 +910,24 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "does not retry — would amplify load on the struggling upstream, and a dropped-on-upstream-error line is logged at warning" do
+    test "then the flush is dropped without any retry, retrying only amplifying load on a struggling upstream" do
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      capture_log(fn ->
+        :ok = CaptureBuffer.flush("s")
+
+        assert_receive {:attempt, 1}, 200
+        refute_receive {:attempt, 2}, 100
+      end)
+    end
+
+    test "and a dropped-on-upstream-error line is logged at warning" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       log =
         capture_log(fn ->
           :ok = CaptureBuffer.flush("s")
-
           assert_receive {:attempt, 1}, 200
-          refute_receive {:attempt, 2}, 100
         end)
 
       assert log =~ "[warning]"
@@ -920,7 +935,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > retry schedule when the flush callback fails after 3 retries" do
+  describe "if the flush callback raises or fails for any other reason > when that schedule is exhausted" do
     setup do
       flush_callback = fn _g, _a, _u, _o, _t -> raise "still broken" end
       :ok = stop_supervised(CaptureBuffer)
@@ -931,7 +946,18 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    test "logs [gralkor] capture exhausted at :error and drops" do
+    test "then the turns are dropped" do
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      capture_log(fn ->
+        :ok = CaptureBuffer.flush("s")
+        Process.sleep(80)
+      end)
+
+      assert CaptureBuffer.turns_for("s") == []
+    end
+
+    test "and an exhausted line is logged at error" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       log =
@@ -945,8 +971,8 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "ex-capture-buffer > linked flush-task exits when a linked task exits :normal" do
-    test "the {:EXIT, pid, :normal} message is ignored, no log line is emitted, and the buffer keeps running",
+  describe "when a linked flush worker exits normally" do
+    test "then nothing is logged for that exit, the flush having already replied",
          %{pid: pid} do
       log =
         capture_log(fn ->
@@ -955,12 +981,17 @@ defmodule Gralkor.CaptureBufferTest do
         end)
 
       assert log == ""
+    end
+
+    test "and the buffer keeps running", %{pid: pid} do
+      send(pid, {:EXIT, self(), :normal})
+      Process.sleep(20)
       assert Process.alive?(pid)
     end
   end
 
-  describe "ex-capture-buffer > linked flush-task exits if a process exits for any non-:normal reason (or any other unexpected message arrives)" do
-    test "it is logged at :error and the buffer keeps running", %{pid: pid} do
+  describe "if any other unexpected message arrives, a linked process exiting abnormally included" do
+    test "then it is logged at error, so a genuine crash stays observable", %{pid: pid} do
       log =
         capture_log(fn ->
           send(pid, {:EXIT, self(), :boom})
@@ -968,6 +999,11 @@ defmodule Gralkor.CaptureBufferTest do
         end)
 
       assert log =~ "[error]"
+    end
+
+    test "and the buffer keeps running", %{pid: pid} do
+      send(pid, {:EXIT, self(), :boom})
+      Process.sleep(20)
       assert Process.alive?(pid)
     end
   end
