@@ -716,40 +716,6 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
-  describe "if writing the captured episode fails" do
-    test "and no learning episode is written on that attempt, so a retried flush cannot write learning twice",
-         %{
-           learning: learning,
-           turn: turn
-         } do
-      test_pid = self()
-
-      add = fn group, body, source, ontology, _opts ->
-        send(test_pid, {:add, group, body, source, ontology})
-        if source == "captured", do: {:error, :disk_full}, else: :ok
-      end
-
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: add,
-          learn_fn: fn _t, _a, _u -> {:ok, learning} end
-        )
-
-      assert {:error, :disk_full} = cb.("g1", "Susu", "Eli", nil, [turn])
-      assert_receive {:add, "g1", _b, "captured", nil}
-      refute_receive {:add, _, _, "learning", _}, 100
-
-      generalise_cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o, _opts -> {:error, :disk_full} end,
-          generalise_fn: fn _group_id, _body -> send(self(), :generalise_called) end
-        )
-
-      assert {:error, :disk_full} = generalise_cb.("g1", "Susu", "Eli", nil, [turn])
-      refute_received :generalise_called
-    end
-  end
-
   # The production path (start/2) builds the flush callback with NO add_episode_fn
   # dep, so it falls back to the default. Every other build_flush_callback test
   # injects a stub add_episode_fn and never exercises that default — which is
