@@ -3,4 +3,4 @@ Unit: actions-error-encoder-compat (unit: test/jido_gralkor/actions/error_encode
 when an action error is normalised into a tool-error envelope
   then the envelope encodes to JSON without raising
   and its details hold no struct
-  and every produced reason shape is covered
+  and all five explicitly listed compatibility fixtures normalise to maps

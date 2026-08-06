@@ -33,17 +33,18 @@ when a role's model override is configured as a provider and a model id joined b
   and the returned spec is not narrowed to any particular provider, so provider support is decided where the inference clients are built
   and only the first colon separates the provider from the model id, so a model id may itself contain colons
   and the inline spec avoids a catalog lookup and unverified-model warning
+  and surrounding whitespace around the provider and model id is ignored
 
 when no model override is configured for a role
   then the Google default model spec for that role is returned
 
-when a role's model override is configured as a blank value
+when a role's model override is configured as a blank value, including whitespace alone
   then the Google default model spec for that role is returned
 
 if a role's model override omits the colon separator
   then resolving that role's model raises, naming the environment variable and the offending value
 
-if a role's model override leaves the provider or the model id blank
+if a role's model override leaves the provider or the model id blank after surrounding whitespace is removed
   then resolving that role's model raises, naming the environment variable and the offending value
 
 when the deployment-wide ontology is resolved

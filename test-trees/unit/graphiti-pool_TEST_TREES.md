@@ -30,7 +30,7 @@ if either configured model spec names a provider that is neither OpenAI nor Goog
   and the failure names both configured model specs
   and the failure names the providers that are supported
 
-if the credential for a provider named by a configured model spec is absent
+if the credential for a provider named by a configured model spec is absent or blank
   then startup raises before any inference client is constructed
   and the failure names the absent credential
   and the failure names the role whose spec required it

@@ -6,7 +6,7 @@ when the Python runtime initialises
   and changing the packaged manifest triggers recompilation
   and a second initialisation in the same virtual machine short-circuits
   and the graph library imports successfully
-  and every supported provider's clients import successfully
+  and every supported provider's clients are smoke-imported before the runtime reports ready
   and a shared asyncio event loop and submission helper are installed
   and reinstalling the loop leaves the installed loop in place
   while the managed virtual environment is absent

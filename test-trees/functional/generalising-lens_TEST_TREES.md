@@ -5,6 +5,7 @@ when a transcript is submitted through Gralkor's generalising ingestion process
   and each resulting episode is added through the selected Lens with its ontology and group
   and repeated or contradicted generalisations are added as ordinary episodes without deleting earlier episodes
   and the caller observes whether ingestion succeeded or failed
+  and string-keyed candidate content and confidence are accepted from structured model output
 
 where the generalising Lens is operator-local
   then its resulting memory is available only to that operator through that Lens

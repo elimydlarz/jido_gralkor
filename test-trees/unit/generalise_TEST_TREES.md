@@ -18,6 +18,12 @@ when a transcript is generalised
   if no candidates are hypothesised at all
     then nothing is persisted
 
+when structured model output contains string-keyed nested maps
+  while it contains hypothesised candidates
+    then their content and confidence are read the same as atom-keyed candidate fields
+  while it contains evaluation decisions
+    then their action, content, confidence, hypothesis index and existing id are read the same as atom-keyed decision fields
+
 when evaluation decides to save a candidate
   then a new generalisation is persisted at level 0
   and it records no generalised ids
