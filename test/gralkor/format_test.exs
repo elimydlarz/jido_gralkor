@@ -3,12 +3,14 @@ defmodule Gralkor.FormatTest do
 
   alias Gralkor.Format
 
-  describe "ex-format-fact > format_fact/1" do
-    test "renders a fact with no timestamps as '- {fact}'" do
+  describe "when a fact is formatted" do
+    test "then it renders as \"- {fact}\"" do
       assert "- X is a thing" = Format.format_fact(%{fact: "X is a thing"})
     end
+  end
 
-    test "appends each present timestamp in parentheses in order" do
+  describe "when a fact is formatted > where the fact carries timestamps" do
+    test "then each present timestamp is appended in parentheses" do
       result =
         Format.format_fact(%{
           fact: "X is a thing",
@@ -23,6 +25,17 @@ defmodule Gralkor.FormatTest do
       assert result =~ "(valid from 2020-01-03T00:00:00+0)"
       assert result =~ "(invalid since 2022-06-01T12:00:00+0)"
       assert result =~ "(expired 2023-01-01T00:00:00+0)"
+    end
+
+    test "and the timestamps appear in the order created, valid from, invalid since, expired" do
+      result =
+        Format.format_fact(%{
+          fact: "X",
+          created_at: "2020-01-02T03:04:05Z",
+          valid_at: "2020-01-03T00:00:00Z",
+          invalid_at: "2022-06-01T12:00:00Z",
+          expired_at: "2023-01-01T00:00:00Z"
+        })
 
       created_idx = String.split(result, "(created") |> hd() |> String.length()
       valid_idx = String.split(result, "(valid from") |> hd() |> String.length()
@@ -34,41 +47,34 @@ defmodule Gralkor.FormatTest do
       assert invalid_idx < expired_idx
     end
 
-    test "skips absent timestamps" do
+    test "and absent timestamps contribute nothing to the rendering" do
       assert "- X (created 2020-01-02T03:04:05+0)" =
                Format.format_fact(%{fact: "X", created_at: "2020-01-02T03:04:05Z"})
     end
   end
 
-  describe "ex-format-fact > format_timestamp/1" do
-    test "strips fractional seconds" do
+  describe "when a timestamp is formatted" do
+    test "then fractional seconds are stripped" do
       assert "2020-01-02T03:04:05+0" = Format.format_timestamp("2020-01-02T03:04:05.123456Z")
     end
 
-    test "converts a trailing 'Z' to '+0'" do
+    test "and a trailing \"Z\" becomes \"+0\"" do
       assert "2020-01-02T03:04:05+0" = Format.format_timestamp("2020-01-02T03:04:05Z")
     end
 
-    test "compacts +HH:00 to +H" do
+    test "and a whole-hour zone offset drops zero-padding from its one- or two-digit hour" do
       assert "2020-01-02T03:04:05+5" = Format.format_timestamp("2020-01-02T03:04:05+05:00")
-    end
-
-    test "compacts -HH:00 to -H" do
       assert "2020-01-02T03:04:05-8" = Format.format_timestamp("2020-01-02T03:04:05-08:00")
     end
 
-    test "a zone offset with non-zero minutes is preserved as +H:MM or -H:MM" do
+    test "and a zone offset with non-zero minutes is preserved as \"+H:MM\" or \"-H:MM\"" do
       assert "2020-01-02T03:04:05+5:30" = Format.format_timestamp("2020-01-02T03:04:05+05:30")
       assert "2020-01-02T03:04:05-8:45" = Format.format_timestamp("2020-01-02T03:04:05-08:45")
     end
   end
 
-  describe "ex-format-fact > format_facts/1" do
-    test "when the list is empty, returns ''" do
-      assert "" = Format.format_facts([])
-    end
-
-    test "when the list has facts, joins format_fact/1 results with newlines" do
+  describe "when a list of facts is formatted" do
+    test "then the individually formatted facts are joined with newlines" do
       result =
         Format.format_facts([
           %{fact: "X"},
@@ -76,6 +82,16 @@ defmodule Gralkor.FormatTest do
         ])
 
       assert result == "- X\n- Y (created 2020-01-01T00:00:00+0)"
+    end
+
+    test "and no leading \"Facts:\" header is added, leaving the surrounding context to the caller" do
+      refute Format.format_facts([%{fact: "X"}]) =~ "Facts:"
+    end
+  end
+
+  describe "when a list of facts is formatted > where the list is empty" do
+    test "then an empty string is returned" do
+      assert "" = Format.format_facts([])
     end
   end
 end
