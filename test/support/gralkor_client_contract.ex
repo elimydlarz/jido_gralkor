@@ -368,21 +368,25 @@ defmodule Gralkor.ClientContract do
         end
       end
 
-      describe "when memory is added with a group, content and a source description" do
-        test "while the backend acknowledges the add > then success is returned" do
+      describe "when memory is added with a group, content and a source description > while the backend acknowledges the add" do
+        test "then success is returned" do
           unquote(setup_block).()
           configure_memory_add(:ok)
 
           assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual")
         end
+      end
 
-        test "if the backend fails > then that failure is returned unchanged" do
+      describe "when memory is added with a group, content and a source description > if the backend fails" do
+        test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_memory_add({:error, :extract_failed})
 
           assert {:error, :extract_failed} = client().memory_add("group-1", "x", nil)
         end
+      end
 
+      describe "when memory is added with a group, content and a source description" do
         test "then the write applies the deployment-configured ontology, so a caller is never required to supply one" do
           unquote(setup_block).()
 
