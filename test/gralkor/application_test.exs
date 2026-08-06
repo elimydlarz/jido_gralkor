@@ -738,7 +738,7 @@ defmodule Gralkor.ApplicationTest do
   # raised FunctionClauseError on every real capture, exhausting CaptureBuffer and
   # writing nothing. This wires the real GraphitiPool (fake graphiti recording the
   # add_episode call) and drives the DEFAULT-wired callback end-to-end.
-  describe "ex-application > build_flush_callback/2 > when no add_episode_fn dep is provided (integration)" do
+  describe "when a capture flush runs > while no episode-writing dependency is supplied" do
     @describetag :integration
 
     setup do
@@ -783,7 +783,8 @@ defmodule Gralkor.ApplicationTest do
       %{g: g}
     end
 
-    test "the default add_episode_fn reaches GraphitiPool.add_episode without raising", %{g: g} do
+    test "then the captured and learning writes reach the graph pool with its server named explicitly, so the transcript is written rather than raising on an argument shifted into the wrong position",
+         %{g: g} do
       cb = App.build_flush_callback({:embedded, "/tmp/never_used"})
 
       turns = [
