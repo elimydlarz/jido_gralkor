@@ -121,7 +121,8 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "where the call passes `required: true` > then the field is recorded as required" do
-      [%{fields: [field]}] = Gralkor.OntologyTest.RequiredFieldOntology.__ontology__().entity_types
+      ontology_module = Gralkor.OntologyTest.RequiredFieldOntology
+      [%{fields: [field]}] = ontology_module.__ontology__().entity_types
       assert field == %{name: :handle, type: :string, required: true, doc: nil}
     end
 
@@ -152,7 +153,8 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "where the call omits `:doc` > then the field's description is recorded as nil" do
-      [%{fields: [field]}] = Gralkor.OntologyTest.OptionalFieldOntology.__ontology__().entity_types
+      ontology_module = Gralkor.OntologyTest.OptionalFieldOntology
+      [%{fields: [field]}] = ontology_module.__ontology__().entity_types
       assert field.doc == nil
     end
 
@@ -272,8 +274,8 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "and that relationship carries no edge properties" do
-      assert [%{name: "PREFERS", fields: []}] =
-               Gralkor.OntologyTest.BareVerbOntology.__ontology__().edge_types
+      ontology_module = Gralkor.OntologyTest.BareVerbOntology
+      assert [%{name: "PREFERS", fields: []}] = ontology_module.__ontology__().edge_types
     end
   end
 
@@ -302,16 +304,16 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "and the do-block's `field` declarations become that relationship's edge properties, with the same name, type, required and doc semantics as entity fields" do
-      [%{fields: [field]}] =
-        Gralkor.OntologyTest.EdgePropertyOntology.__ontology__().edge_types
+      ontology_module = Gralkor.OntologyTest.EdgePropertyOntology
+      [%{fields: [field]}] = ontology_module.__ontology__().edge_types
       assert field == %{name: :since, type: :string, required: false, doc: "date first observed"}
     end
   end
 
   describe "when an ontology declares an aliased relationship source > where the verb is a single lowercase word (\"prefers\")" do
     test "then the edge name is that word uppercased (\"PREFERS\")" do
-      assert [%{name: "PREFERS"}] =
-               Gralkor.OntologyTest.BareVerbOntology.__ontology__().edge_types
+      ontology_module = Gralkor.OntologyTest.BareVerbOntology
+      assert [%{name: "PREFERS"}] = ontology_module.__ontology__().edge_types
     end
   end
 
@@ -385,7 +387,8 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "and the endpoint map preserves each distinct declared source-target pair in order" do
-      ontology = Gralkor.OntologyTest.MultiEndpointOntology.__ontology__()
+      ontology_module = Gralkor.OntologyTest.MultiEndpointOntology
+      ontology = ontology_module.__ontology__()
       assert ontology.edge_type_map == [
                {{"User", "Preference"}, ["ENDORSES"]},
                {{"Org", "Preference"}, ["ENDORSES"]}
@@ -532,7 +535,8 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "but the declared verbs still appear in `:edge_types`" do
-      ontology = Gralkor.OntologyTest.OpenRelsOntology.__ontology__()
+      ontology_module = Gralkor.OntologyTest.OpenRelsOntology
+      ontology = ontology_module.__ontology__()
       assert [%{name: "PREFERS"}] = ontology.edge_types
     end
   end
@@ -547,15 +551,18 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "and an empty `:edge_types`" do
-      assert Gralkor.OntologyTest.EmptyOntology.__ontology__().edge_types == []
+      ontology_module = Gralkor.OntologyTest.EmptyOntology
+      assert ontology_module.__ontology__().edge_types == []
     end
 
     test "and an empty `:edge_type_map`" do
-      assert Gralkor.OntologyTest.EmptyOntology.__ontology__().edge_type_map == []
+      ontology_module = Gralkor.OntologyTest.EmptyOntology
+      assert ontology_module.__ontology__().edge_type_map == []
     end
 
     test "and an `:excluded_entity_types` that still follows the declared `:entities` option" do
-      assert Gralkor.OntologyTest.EmptyOntology.__ontology__().excluded_entity_types == ["Entity"]
+      ontology_module = Gralkor.OntologyTest.EmptyOntology
+      assert ontology_module.__ontology__().excluded_entity_types == ["Entity"]
     end
   end
 
