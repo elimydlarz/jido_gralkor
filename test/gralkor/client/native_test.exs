@@ -583,14 +583,19 @@ defmodule Gralkor.Client.NativeTest do
     Pythonx.decode(raw)
   end
 
-  describe "ex-client-native > when memory is added with a group and content" do
+  describe "when memory is added with a group and content" do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then the group is sanitised, the content is written as a plain-text episode, and success is returned",
+    test "then the group is sanitised before the write", %{g: g} do
+      assert :ok = Native.memory_add("operator-with-hyphens", "Eli works at Anthropic", "manual")
+      assert [episode] = episodes(g)
+      assert episode["group_id"] == "operator_with_hyphens"
+    end
+
+    test "and the content is written to the graph as a plain-text episode scoped to the sanitised group",
          %{g: g} do
       assert :ok = Native.memory_add("operator-with-hyphens", "Eli works at Anthropic", "manual")
-
       assert [episode] = episodes(g)
       assert episode["group_id"] == "operator_with_hyphens"
       assert episode["body"] == "Eli works at Anthropic"
@@ -608,61 +613,114 @@ defmodule Gralkor.Client.NativeTest do
       refute first["name"] == second["name"]
     end
 
-    test "then a supplied source description is what the episode records", %{g: g} do
-      assert :ok = Native.memory_add("g1", "content", "captured")
+    test "and success is returned once the graph accepts the write", %{g: g} do
+      assert :ok = Native.memory_add("g1", "content", "manual")
+      assert [%{"body" => "content"}] = episodes(g)
+    end
+  end
 
+  describe "when memory is added with a group and content > where a source description is supplied" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then it is the source recorded on the episode", %{g: g} do
+      assert :ok = Native.memory_add("g1", "content", "captured")
       assert [%{"source_description" => "captured"}] = episodes(g)
     end
+  end
 
-    test "where no source description is supplied then the source recorded on the episode is \"manual\"",
-         %{g: g} do
+  describe "when memory is added with a group and content > where no source description is supplied" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the source recorded on the episode is \"manual\"", %{g: g} do
       assert :ok = Native.memory_add("g1", "content", nil)
-
       assert [%{"source_description" => "manual"}] = episodes(g)
     end
+  end
 
-    test "if the graph fails the write, that failure is returned unchanged", %{g: g} do
+  describe "when memory is added with a group and content > if the graph fails" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then that failure is returned unchanged", %{g: g} do
       assert {:error, {:python, reason}} = Native.memory_add("g1", "boom", "manual")
       assert reason =~ "graph refused the write"
       assert episodes(g) == []
     end
+  end
 
-    test "while no ontology override is supplied, the deployment-configured ontology governs the write",
+  describe "when memory is added with a group and content > while no ontology override is supplied" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the deployment-configured ontology is the one applied, so a caller is never required to supply one",
          %{g: g} do
+      assert function_exported?(Native, :memory_add, 3)
+      assert function_exported?(Native, :memory_add, 4)
       Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
-
       assert :ok = Native.memory_add("g1", "content", "manual")
-
       assert [episode] = episodes(g)
       assert episode["entity_types"] != []
       assert "entity_types" in episode["kwargs"]
     end
+  end
 
-    test "where an ontology override is supplied, it governs the write and the configured one is not consulted",
-         %{g: g} do
+  describe "when memory is added with a group and content > where an ontology override is supplied" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the override is the ontology applied", %{g: g} do
       Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
-
       assert :ok = Native.memory_add("g1", "content", "manual", nil)
-
       assert [episode] = episodes(g)
       refute "entity_types" in episode["kwargs"]
     end
 
-    test "while the ontology that applies resolves to nothing, extraction stays generic", %{g: g} do
-      assert :ok = Native.memory_add("g1", "content", "manual")
+    test "and the deployment-configured ontology is not consulted", %{g: g} do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+      assert :ok = Native.memory_add("g1", "content", "manual", nil)
+      assert [episode] = episodes(g)
+      refute "entity_types" in episode["kwargs"]
+    end
+  end
 
+  describe "when memory is added with a group and content > while the ontology that applies resolves to nothing" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the write declares no entity types, edge types, edge-type map or excluded entity types, so extraction stays generic",
+         %{g: g} do
+      assert :ok = Native.memory_add("g1", "content", "manual")
       assert [episode] = episodes(g)
       refute "entity_types" in episode["kwargs"]
       refute "edge_types" in episode["kwargs"]
+      refute "edge_type_map" in episode["kwargs"]
       refute "excluded_entity_types" in episode["kwargs"]
     end
   end
 
-  describe "ex-client-native > when any adapter operation is called" do
+  describe "when memory is added with a group and content > while the ontology that applies is a module declaring an ontology" do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then the work runs in this node's own processes, a configured HTTP endpoint being consulted by nothing",
+    test "then that module's declared entity types, edge types, edge-type map and excluded entity types are forwarded with the write",
+         %{g: g} do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+      assert :ok = Native.memory_add("g1", "content", "manual")
+      assert [episode] = episodes(g)
+      assert "entity_types" in episode["kwargs"]
+      assert "edge_types" in episode["kwargs"]
+      assert "edge_type_map" in episode["kwargs"]
+      assert "excluded_entity_types" in episode["kwargs"]
+    end
+  end
+
+  describe "when any adapter operation is called" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the work runs in the calling node's own processes, no HTTP request or other network transport being involved",
          %{g: g} do
       assert Application.get_env(:jido_gralkor, :client_http) != nil
 
