@@ -73,6 +73,10 @@ defmodule Gralkor.Recall do
         {:ok, result.block}
 
       nil ->
+        Logger.warning(
+          "[gralkor] recall deadline expired — session:#{session_id} group:#{sanitized} after:#{deadline_ms}ms"
+        )
+
         {:error, :recall_deadline_expired}
     end
   end
