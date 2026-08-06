@@ -3,7 +3,7 @@ Unit: gralkor-client-native (src: lib/gralkor/client.ex, lib/gralkor/client/nati
 when any adapter operation is called
   then the work runs in the calling node's own processes, no HTTP request or other network transport being involved
 
-when a recall is requested with a group, an agent name and a query
+when recall is requested for a group, agent and query
   then a fact search scoped to the group is supplied to the recall pipeline
   and a generalisation search scoped to the `_gen` group derived from it is supplied to the recall pipeline
   and that generalisation search asks the graph for nodes rather than for edges, so a generalisation naming a single subject is returned instead of nothing
@@ -20,20 +20,20 @@ when a recall is requested with a group, an agent name and a query
   where a recall deadline is configured
     then it is forwarded to the recall pipeline in place of the default deadline
   where an interpretation output budget is configured
-    then it is read from configuration on that call rather than at boot, so an operator can change it without restarting
+    then each call reads the current configured budget without requiring a restart
     and it is forwarded to the recall pipeline as the interpretation output-token budget
   if the configured interpretation output budget is not a positive integer
-    then an argument error naming that setting is raised at the adapter boundary before any recall work starts
+    then the adapter raises an argument error naming that setting before recall starts
 
 if a recall is requested with a missing or blank agent name
   then an argument error naming the agent name is raised
   and no search is issued
 
-when a turn is captured for a session under a group, with an agent name, a user name and messages
+when a grouped session captures messages with agent and user names
   then the group is sanitised before it is buffered
   and the deployment-configured ontology is resolved, the caller being given no ontology argument of its own
   and that resolved ontology is buffered alongside the turn
-  and the sanitised group, the agent name, the user name, the resolved ontology and the messages are appended to the capture buffer under that session
+  and the buffer receives the session, sanitised group, names, ontology and messages
   and success is returned immediately, no distillation running before the call returns
   and nothing is logged for the turn itself, captured content becoming observable only at flush
 
@@ -70,10 +70,10 @@ when a session holding no buffered turns is flushed
 if a flush is requested with a missing or blank session id
   then an argument error naming the session id is raised
 
-when a session holding buffered turns is flushed and awaited with a positive timeout
+when buffered turns are flushed and awaited with a positive timeout
   while the flush completes inside the timeout
     then success is returned
-    and a recall for the bound group made immediately afterwards surfaces the just-flushed turns
+    and immediate recall for the bound group surfaces the flushed turns
   while the flush does not complete inside the timeout
     then a timeout error is returned
     and the buffered turns remain available to flush on a later call
@@ -108,7 +108,7 @@ when memory is added with a group and content
   while the ontology that applies resolves to nothing
     then the write declares no entity types, edge types, edge-type map or excluded entity types, so extraction stays generic
   while the ontology that applies is a module declaring an ontology
-    then that module's declared entity types, edge types, edge-type map and excluded entity types are forwarded with the write
+    then the write forwards all four declared ontology collections
   if the ontology supplied is a module that declares no ontology
     then an argument error naming that module is raised before any write is attempted
   if the ontology supplied is not a module

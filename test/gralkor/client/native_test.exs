@@ -88,7 +88,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when a recall is requested with a group, an agent name and a query > if the configured interpretation output budget is not a positive integer" do
+  describe "when recall is requested for a group, agent and query > if the configured interpretation output budget is not a positive integer" do
     setup do
       original = Application.get_env(:jido_gralkor, :interpret_max_output_tokens)
 
@@ -103,7 +103,7 @@ defmodule Gralkor.Client.NativeTest do
       :ok
     end
 
-    test "then an argument error naming that setting is raised at the adapter boundary before any recall work starts" do
+    test "then the adapter raises an argument error naming that setting before recall starts" do
       for value <- [0, -1, "lots"] do
         Application.put_env(:jido_gralkor, :interpret_max_output_tokens, value)
 
@@ -222,7 +222,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when a turn is captured for a session under a group, with an agent name, a user name and messages" do
+  describe "when a grouped session captures messages with agent and user names" do
     setup :start_capture_buffer
 
     setup do
@@ -262,7 +262,7 @@ defmodule Gralkor.Client.NativeTest do
       assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.TestOntologies.Strict, _turns}
     end
 
-    test "and the sanitised group, the agent name, the user name, the resolved ontology and the messages are appended to the capture buffer under that session" do
+    test "and the buffer receives the session, sanitised group, names, ontology and messages" do
       msgs = [Message.new("user", "hi")]
       assert :ok = Native.capture("s1", "with-hyphens", "Susu", "Eli", msgs)
       assert [^msgs] = CaptureBuffer.turns_for("s1")
@@ -416,7 +416,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when a session holding buffered turns is flushed and awaited with a positive timeout > while the flush completes inside the timeout" do
+  describe "when buffered turns are flushed and awaited with a positive timeout > while the flush completes inside the timeout" do
     setup :start_capture_buffer
 
     test "then success is returned" do
@@ -426,14 +426,14 @@ defmodule Gralkor.Client.NativeTest do
       assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
     end
 
-    test "and a recall for the bound group made immediately afterwards surfaces the just-flushed turns" do
+    test "and immediate recall for the bound group surfaces the flushed turns" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush_and_await("s1", 1_000)
       assert_receive {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "x"}]]}
     end
   end
 
-  describe "when a session holding buffered turns is flushed and awaited with a positive timeout > while the flush does not complete inside the timeout" do
+  describe "when buffered turns are flushed and awaited with a positive timeout > while the flush does not complete inside the timeout" do
     setup do
       test_pid = self()
 
@@ -465,7 +465,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when a session holding buffered turns is flushed and awaited with a positive timeout > if the backend fails before the timeout elapses" do
+  describe "when buffered turns are flushed and awaited with a positive timeout > if the backend fails before the timeout elapses" do
     setup do
       start_supervised!(
         {CaptureBuffer,
@@ -705,7 +705,7 @@ defmodule Gralkor.Client.NativeTest do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then that module's declared entity types, edge types, edge-type map and excluded entity types are forwarded with the write",
+    test "then the write forwards all four declared ontology collections",
          %{g: g} do
       Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
       assert :ok = Native.memory_add("g1", "content", "manual")
@@ -934,7 +934,7 @@ defmodule Gralkor.Client.NativeTest do
       %{pid: pid, g: g}
   end
 
-  describe "when a recall is requested with a group, an agent name and a query" do
+  describe "when recall is requested for a group, agent and query" do
     @describetag :integration
     setup :start_recall_recording_pool
 
@@ -1008,7 +1008,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when a recall is requested with a group, an agent name and a query > while a session id is given" do
+  describe "when recall is requested for a group, agent and query > while a session id is given" do
     @describetag :integration
     setup :start_recall_recording_pool
     setup :start_capture_buffer
@@ -1022,7 +1022,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when a recall is requested with a group, an agent name and a query > where no session id is given" do
+  describe "when recall is requested for a group, agent and query > where no session id is given" do
     @describetag :integration
     setup :start_recall_recording_pool
 
@@ -1037,7 +1037,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when a recall is requested with a group, an agent name and a query > where a recall deadline is configured" do
+  describe "when recall is requested for a group, agent and query > where a recall deadline is configured" do
     @describetag :integration
     setup :start_recall_recording_pool
 
@@ -1058,7 +1058,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when a recall is requested with a group, an agent name and a query > where an interpretation output budget is configured" do
+  describe "when recall is requested for a group, agent and query > where an interpretation output budget is configured" do
     @describetag :integration
     setup :start_recall_recording_pool
 
@@ -1075,7 +1075,7 @@ defmodule Gralkor.Client.NativeTest do
       :ok
     end
 
-    test "then it is read from configuration on that call rather than at boot, so an operator can change it without restarting" do
+    test "then each call reads the current configured budget without requiring a restart" do
       Application.put_env(:jido_gralkor, :interpret_max_output_tokens, 111)
       assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "first query")
 
