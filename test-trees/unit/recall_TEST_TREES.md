@@ -43,7 +43,8 @@ if the main graph search fails
 while a deadline budget governs recall
   if the budget expires before recall returns
     then a deadline-expired error is returned and a warning names the session and budget
-    and ordinary BEAM work owned by the recall task is stopped
+    where upstream is ordinary BEAM work
+      then that work is stopped
   if recall finishes within the budget
     then the memory block is returned normally
 
@@ -66,7 +67,8 @@ where a generalisation search is supplied
   and successful generalisation facts reach interpretation with regular facts
   if it fails
     then it contributes no facts while regular facts remain eligible
-    and successful learning-search facts remain eligible
+    where a learning search is supplied
+      then successful learning-search facts remain eligible
   while it returns no facts
     then recall proceeds normally
 
@@ -80,7 +82,8 @@ where a learning search is supplied
   and successful learning facts reach interpretation with regular facts
   if it fails
     then it contributes no facts while regular facts remain eligible
-    and successful generalisation-search facts remain eligible
+    where a generalisation search is supplied
+      then successful generalisation-search facts remain eligible
   while it returns no facts
     then recall proceeds normally
 

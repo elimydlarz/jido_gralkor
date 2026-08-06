@@ -841,34 +841,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "where a generalisation search is supplied > if it fails or times out" do
-    test "then it contributes no facts to interpretation" do
-      test_pid = self()
-
-      interpret_fn = fn prompt, _budget ->
-        send(test_pid, {:interpreted, prompt})
-        {:ok, ["main — relevant"]}
-      end
-
-      assert {:ok, _} =
-               Recall.recall(
-                 "g",
-                 "TestAgent",
-                 nil,
-                 "q",
-                 default_opts(
-                   search_fn: ok_search(["main"]),
-                   gen_search_fn: fn _, _, _ -> {:error, :failed} end,
-                   interpret_fn: interpret_fn
-                 )
-               )
-
-      assert_receive {:interpreted, prompt}
-      assert prompt =~ "main"
-      refute prompt =~ "generalisation"
-    end
-
-    test "and successful learning-search facts remain eligible for interpretation" do
+  describe "where a generalisation search is supplied > if it fails > where a learning search is supplied" do
+    test "then successful learning-search facts remain eligible" do
       test_pid = self()
 
       interpret_fn = fn prompt, _budget ->
@@ -895,8 +869,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "where no generalisation search is supplied" do
-    test "and a supplied learning search still contributes its successful facts" do
+  describe "where no generalisation search is supplied > where a learning search is supplied" do
+    test "then its successful facts still reach interpretation" do
       test_pid = self()
 
       interpret_fn = fn prompt, _budget ->
@@ -922,34 +896,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "where a learning search is supplied > if it fails or times out" do
-    test "then it contributes no facts to interpretation" do
-      test_pid = self()
-
-      interpret_fn = fn prompt, _budget ->
-        send(test_pid, {:interpreted, prompt})
-        {:ok, ["main — relevant"]}
-      end
-
-      assert {:ok, _} =
-               Recall.recall(
-                 "g",
-                 "TestAgent",
-                 nil,
-                 "q",
-                 default_opts(
-                   search_fn: ok_search(["main"]),
-                   learning_search_fn: fn _, _, _ -> {:error, :failed} end,
-                   interpret_fn: interpret_fn
-                 )
-               )
-
-      assert_receive {:interpreted, prompt}
-      assert prompt =~ "main"
-      refute prompt =~ "learning"
-    end
-
-    test "and successful generalisation-search facts remain eligible for interpretation" do
+  describe "where a learning search is supplied > if it fails > where a generalisation search is supplied" do
+    test "then successful generalisation-search facts remain eligible" do
       test_pid = self()
 
       interpret_fn = fn prompt, _budget ->
@@ -976,8 +924,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "where no learning search is supplied" do
-    test "and a supplied generalisation search still contributes its successful facts" do
+  describe "where no learning search is supplied > where a generalisation search is supplied" do
+    test "then its successful facts still reach interpretation" do
       test_pid = self()
 
       interpret_fn = fn prompt, _budget ->
@@ -1020,8 +968,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "where generalisation and learning searches are both supplied > if the outer recall deadline expires before their auxiliary yield" do
-    test "then the recall deadline ends the call before the five-second auxiliary window elapses" do
+  describe "where both auxiliary searches outlast the outer deadline" do
+    test "then the outer deadline ends recall before the five-second auxiliary window elapses" do
       slow = fn _, _, _ ->
         Process.sleep(30_000)
         {:ok, []}
@@ -1048,8 +996,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "while a deadline budget governs the call > if the budget is exhausted before the call returns" do
-    test "and ordinary BEAM work owned by the recall task is stopped" do
+  describe "while a deadline budget governs recall > if the budget expires before recall returns > where upstream is ordinary BEAM work" do
+    test "then that work is stopped" do
       test_pid = self()
 
       search_fn = fn _, _, _ ->
