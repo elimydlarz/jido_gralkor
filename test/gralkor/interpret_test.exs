@@ -288,13 +288,23 @@ defmodule Gralkor.InterpretTest do
 
   end
 
-  describe "ex-interpret-context > where no character budget is supplied" do
+  describe "when the interpretation context is built from messages, a request, facts, and an agent name > if the agent name is missing or blank" do
+    test "then an ArgumentError is raised" do
+      for agent_name <- ["", nil] do
+        assert_raise ArgumentError, ~r/agent_name/, fn ->
+          Interpret.build_interpretation_context(
+            [Message.new("user", "hi")],
+            "q",
+            "- f",
+            agent_name
+          )
+        end
+      end
+    end
+  end
+
+  describe "when the interpretation context is built from messages, a request, facts, and an agent name > where no character budget is supplied" do
     test "then a default of 8000 characters governs the fit" do
-      # Measure the fixed overhead a single-message context carries (the
-      # template text plus the "User: " prefix) using an explicit, very
-      # large budget so nothing gets trimmed. Content length grows the
-      # rendered context 1:1, so this pins the exact boundary of the
-      # default budget without hardcoding the template's own length.
       uncapped =
         Interpret.build_interpretation_context(
           [Message.new("user", "a")],
@@ -332,8 +342,8 @@ defmodule Gralkor.InterpretTest do
     end
   end
 
-  describe "ex-interpret-context > when total char length exceeds budget" do
-    test "oldest messages are dropped until context fits" do
+  describe "when the interpretation context is built from messages, a request, facts, and an agent name > when the rendered messages exceed the character budget" do
+    test "then the oldest messages are dropped until the context fits" do
       msgs = [
         Message.new("user", String.duplicate("oldest oldest oldest ", 20)),
         Message.new("assistant", String.duplicate("middle middle middle ", 20)),
@@ -347,7 +357,7 @@ defmodule Gralkor.InterpretTest do
       refute ctx =~ "oldest"
     end
 
-    test "every newer message that fits is retained, not just the newest one" do
+    test "but the newest messages that fit are retained" do
       msgs = [
         Message.new("user", String.duplicate("oldest ", 40)),
         Message.new("assistant", "second"),
@@ -364,15 +374,53 @@ defmodule Gralkor.InterpretTest do
       assert ctx =~ "Susu: fourth"
     end
 
-    test "if even one message exceeds the budget, the request and the facts are still included" do
+  end
+
+  describe "when the interpretation context is built from messages, a request, facts, and an agent name > if even a single message on its own exceeds the character budget" do
+    test "then the conversation context is left empty" do
       msgs = [Message.new("user", String.duplicate("x", 1000))]
 
       ctx =
         Interpret.build_interpretation_context(msgs, "still asked", "- f", "Susu", budget: 100)
 
       refute ctx =~ "User:"
+    end
+
+    test "but the request and the memory facts are still included" do
+      msgs = [Message.new("user", String.duplicate("x", 1000))]
+
+      ctx =
+        Interpret.build_interpretation_context(msgs, "still asked", "- f", "Susu", budget: 100)
+
       assert ctx =~ "still asked"
       assert ctx =~ "- f"
     end
+  end
+
+  defp captured_prompt do
+    {prompt, _budget} = captured_budget([])
+    prompt
+  end
+
+  defp captured_budget(opts) do
+    ref = make_ref()
+    test_pid = self()
+
+    interpret_fn = fn prompt, budget ->
+      send(test_pid, {ref, prompt, budget})
+      {:ok, []}
+    end
+
+    Interpret.interpret_facts(
+      [Message.new("user", "what about X?")],
+      "tell me about X",
+      "- X is a thing (created 2020)",
+      interpret_fn,
+      "Susu",
+      opts
+    )
+
+    assert_receive {^ref, prompt, budget}
+    {prompt, budget}
   end
 end
