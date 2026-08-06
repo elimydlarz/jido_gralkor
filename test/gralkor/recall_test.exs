@@ -334,8 +334,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > recall deadline" do
-    test "if the budget is exhausted before the call returns, returns {:error, :recall_deadline_expired} and logs the expiry as a warning" do
+  describe "while a deadline budget governs recall > if the budget expires before recall returns" do
+    test "then a deadline-expired error is returned and a warning names the session and budget" do
       slow_search = fn _g, _q, _max ->
         Process.sleep(500)
         {:ok, []}
@@ -365,8 +365,10 @@ defmodule Gralkor.RecallTest do
                  default_opts(search_fn: slow_search, deadline_ms: 50)
                )
     end
+  end
 
-    test "completes within the budget when the upstream is fast" do
+  describe "while a deadline budget governs recall > if recall finishes within the budget" do
+    test "then the memory block is returned normally" do
       assert {:ok, _} =
                Recall.recall(
                  "g",
@@ -378,9 +380,9 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > observability" do
+  describe "when recall begins and completes" do
     @tag :capture_log
-    test "logs at :info on every call" do
+    test "then call metadata and result timing metrics are logged" do
       logs =
         ExUnit.CaptureLog.capture_log([level: :info], fn ->
           {:ok, _} =
@@ -405,8 +407,11 @@ defmodule Gralkor.RecallTest do
       assert logs =~ "search:"
     end
 
+  end
+
+  describe "when recall begins and completes > where interpretation does not run" do
     @tag :capture_log
-    test "interpret:0 is reported when interpret_facts was not called (empty search)" do
+    test "then the interpretation duration is logged as zero" do
       logs =
         ExUnit.CaptureLog.capture_log([level: :info], fn ->
           {:ok, _} =
@@ -417,7 +422,7 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > observability > when test mode is enabled" do
+  describe "where test mode is enabled" do
     setup do
       Application.put_env(:jido_gralkor, :test, true)
       on_exit(fn -> Application.delete_env(:jido_gralkor, :test) end)
@@ -425,7 +430,7 @@ defmodule Gralkor.RecallTest do
     end
 
     @tag :capture_log
-    test "also logs the raw query" do
+    test "then the raw query is logged" do
       logs =
         ExUnit.CaptureLog.capture_log(fn ->
           {:ok, _} =
@@ -442,7 +447,7 @@ defmodule Gralkor.RecallTest do
     end
 
     @tag :capture_log
-    test "when facts are returned, also logs the resulting memory block" do
+    test "and a returned-facts memory block is logged" do
       logs =
         ExUnit.CaptureLog.capture_log(fn ->
           {:ok, _} =
@@ -463,7 +468,7 @@ defmodule Gralkor.RecallTest do
     end
 
     @tag :capture_log
-    test "when no facts are returned, does not log the memory block" do
+    test "and an empty-result memory block is not logged" do
       logs =
         ExUnit.CaptureLog.capture_log(fn ->
           {:ok, _} =
@@ -474,7 +479,7 @@ defmodule Gralkor.RecallTest do
     end
 
     @tag :capture_log
-    test "for each auxiliary search that runs, logs how many results it returned and the results themselves" do
+    test "and each auxiliary result count and result body is logged" do
       logs =
         ExUnit.CaptureLog.capture_log(fn ->
           {:ok, _} =
@@ -498,9 +503,9 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "ex-recall > observability > when test mode is disabled" do
+  describe "where test mode is disabled" do
     @tag :capture_log
-    test "does not log the raw query or the memory block" do
+    test "then neither the raw query nor memory block is logged" do
       logs =
         ExUnit.CaptureLog.capture_log(fn ->
           {:ok, _} =

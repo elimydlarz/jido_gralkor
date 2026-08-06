@@ -47,9 +47,6 @@ while a deadline budget governs recall
   if recall finishes within the budget
     then the memory block is returned normally
 
-when no deadline is supplied
-  then twelve seconds governs recall
-
 when recall begins and completes
   then call metadata and result timing metrics are logged
   where interpretation does not run
