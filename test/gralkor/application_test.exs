@@ -225,7 +225,7 @@ defmodule Gralkor.ApplicationTest do
   end
 
   describe "when the application starts > while the in-memory client is configured" do
-    test "then no children are supervised regardless of any data directory or remote connection, so a consumer that pinned the in-memory client is never forced into the native boot path" do
+    test "then no children are supervised regardless of configured local or remote storage" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
@@ -769,7 +769,7 @@ defmodule Gralkor.ApplicationTest do
       %{g: g}
     end
 
-    test "then the captured and learning writes reach the graph pool with its server named explicitly, so the transcript is written rather than raising on an argument shifted into the wrong position",
+    test "then default writes name the graph pool server explicitly and reach it without shifted arguments",
          %{g: g} do
       cb = App.build_flush_callback({:embedded, "/tmp/never_used"})
 

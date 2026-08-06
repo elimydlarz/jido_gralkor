@@ -15,7 +15,7 @@ when the application starts
   while neither a remote connection nor a data directory is configured
     then no children are supervised, because the consumer has not opted into the native runtime
   while the in-memory client is configured
-    then no children are supervised regardless of any data directory or remote connection, so a consumer that pinned the in-memory client is never forced into the native boot path
+    then no children are supervised regardless of configured local or remote storage
 
 if the remote FalkorDB configuration is not a keyword list carrying a host and a port
   then startup raises before any child starts
@@ -26,7 +26,7 @@ when a capture flush runs
   while no learning step is wired
     then no learning episode is written
   while no episode-writing dependency is supplied
-    then the captured and learning writes reach the graph pool with its server named explicitly, so the transcript is written rather than raising on an argument shifted into the wrong position
+    then default writes name the graph pool server explicitly and reach it without shifted arguments
   while generalisation on flush is disabled
     then no generalisation step runs
 
