@@ -1440,6 +1440,52 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert_receive {:closed, :stub_falkor_db}
     end
+
+    @tag :integration
+    test "while an embedded connection is configured then its server exits and finalisation emits no unawaited-coroutine warning" do
+      data_dir =
+        Path.join(System.tmp_dir!(), "gralkor_close_#{System.unique_integer([:positive])}")
+
+      table = :"close_pool_#{System.unique_integer([:positive])}"
+
+      {:ok, pid} =
+        GraphitiPool.start_link(
+          name: nil,
+          table: table,
+          falkordb_spec: {:embedded, data_dir},
+          construct_shared_clients: fn _llm, _embedder ->
+            %{llm_client: nil, embedder: nil, cross_encoder: nil}
+          end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      database = :sys.get_state(pid).falkor_db
+      {server_pid, _globals} = Pythonx.eval("database.client.pid", %{"database" => database})
+      server_pid = Pythonx.decode(server_pid)
+
+      assert {_, 0} = System.cmd("ps", ["-p", to_string(server_pid), "-o", "pid="])
+
+      GenServer.stop(pid)
+
+      assert {_, status} = System.cmd("ps", ["-p", to_string(server_pid), "-o", "pid="])
+      assert status != 0
+
+      {warnings, _globals} =
+        Pythonx.eval(
+          """
+          import warnings
+          with warnings.catch_warnings(record=True) as caught:
+              warnings.simplefilter('always')
+              database.client._cleanup()
+          [str(item.message) for item in caught]
+          """,
+          %{"database" => database}
+        )
+
+      refute Enum.any?(Pythonx.decode(warnings), &String.contains?(&1, "was never awaited"))
+      File.rm_rf!(data_dir)
+    end
   end
 
   describe "init/1 runs synchronously, if any warmup call raises or returns {:error, _}" do
