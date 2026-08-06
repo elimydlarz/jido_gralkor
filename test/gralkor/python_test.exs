@@ -8,8 +8,8 @@ defmodule Gralkor.PythonTest do
     :ok
   end
 
-  describe "when the Python runtime is initialised" do
-    test "then initialisation runs to completion synchronously and returns only once the runtime is ready" do
+  describe "when the Python runtime initialises" do
+    test "then the call blocks until the runtime is ready" do
       test_pid = self()
 
       assert {:ok, _} =
@@ -36,7 +36,7 @@ defmodule Gralkor.PythonTest do
       assert_received :imported
     end
 
-    test "and the package's manifest declares the graph library, the embedded FalkorDB backend, and the provider packages for every supported inference provider, so a consumer configures nothing about Python" do
+    test "and the packaged manifest owns the graph library, embedded backend, and supported-provider packages" do
       manifest = File.read!(Path.expand("../../priv/python/pyproject.toml", __DIR__))
 
       assert manifest =~ "graphiti-core[falkordb,google-genai]"
@@ -44,31 +44,31 @@ defmodule Gralkor.PythonTest do
       assert manifest =~ "OpenAI LLM, embedder, and reranker"
     end
 
-    test "and the package's manifest is a compile-time external resource, so editing its dependency set triggers recompilation" do
+    test "and changing the packaged manifest triggers recompilation" do
       manifest_path = Path.expand("../../priv/python/pyproject.toml", __DIR__)
       assert manifest_path in Python.__info__(:attributes)[:external_resource]
     end
 
     @tag :integration
-    test "and a second initialisation in the same virtual machine short-circuits, so repeated boots cannot trip the interpreter's already-initialised guard" do
+    test "and a second initialisation in the same virtual machine short-circuits" do
       assert :persistent_term.get({Python, :uv_inited}, false) == true
       assert :ok = Python.ensure_initialised()
     end
 
     @tag :integration
-    test "and a smoke import of the graph library succeeds" do
+    test "and the graph library imports successfully" do
       assert :ok = Python.smoke_import_graphiti()
     end
 
     @tag :integration
-    test "and the provider client for each supported inference provider imports successfully, so an unsupported provider selection fails on its configuration rather than on a missing package" do
+    test "and every supported provider's clients import successfully" do
       for provider <- Gralkor.GraphitiPool.supported_providers() do
         assert :ok == Python.smoke_import_provider_clients(provider)
       end
     end
 
     @tag :integration
-    test "and a shared asyncio event loop is installed on a daemon thread together with a helper that submits work onto it" do
+    test "and a shared asyncio event loop and submission helper are installed" do
       assert :ok = Python.install_async_runtime()
 
       {result, _} =
@@ -86,7 +86,7 @@ defmodule Gralkor.PythonTest do
     end
 
     @tag :integration
-    test "and re-invoking the loop installation leaves the already-installed loop in place" do
+    test "and reinstalling the loop leaves the installed loop in place" do
       assert :ok = Python.install_async_runtime()
       {before_id, _} = Pythonx.eval("import asyncio; id(asyncio._gralkor_loop)", %{})
       assert :ok = Python.install_async_runtime()
@@ -95,7 +95,7 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  describe "when the Python runtime is initialised > while the managed virtual environment is absent" do
+  describe "when the Python runtime initialises > while the managed virtual environment is absent" do
     test "then it is materialised" do
       test_pid = self()
 
@@ -114,8 +114,8 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  describe "when the Python runtime is initialised > while an embedded connection is configured" do
-    test "then any process whose arguments identify the embedded backend's bundled server is killed first, so a server orphaned by a hard virtual-machine exit cannot survive" do
+  describe "when the Python runtime initialises > while the embedded backend is configured" do
+    test "then every process identified as its bundled server is killed before startup" do
       killed = :ets.new(:killed, [:public, :set])
       assert :ok = Python.reap_redislite_orphans(fn -> [1234, 5678] end, fn pid ->
                :ets.insert(killed, {pid, true})
@@ -124,7 +124,7 @@ defmodule Gralkor.PythonTest do
       assert :ets.lookup(killed, 5678) == [{5678, true}]
     end
 
-    test "and only the first initialisation in a virtual machine sweeps, so a later one cannot kill a server this virtual machine has already started" do
+    test "and only the first initialisation in a virtual machine sweeps for orphaned servers" do
       sweeps = :counters.new(1, [])
       killed = :ets.new(:killed, [:public, :set])
 
@@ -150,7 +150,7 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  describe "when the Python runtime is initialised > while a remote connection is configured" do
+  describe "when the Python runtime initialises > while the remote backend is configured" do
     test "then no orphaned-server sweep runs" do
       test_pid = self()
 
@@ -169,8 +169,8 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  describe "if any initialisation step fails" do
-    test "then initialisation stops with the reason, so the supervisor restarts it and a permanent failure eventually exits the virtual machine" do
+  describe "if an initialisation step fails" do
+    test "then initialisation stops with that reason" do
       assert {:stop, {:boot_failed, {:uv_init, "boom"}}} =
                Python.init(
                  reap_orphans: false,
@@ -181,8 +181,8 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  describe "if a caller asks to smoke-import clients for an unsupported provider" do
-    test "then the error identifies that unsupported provider without calling the interpreter" do
+  describe "if client smoke-import is requested for an unsupported provider" do
+    test "then an error identifies that provider without calling the interpreter" do
       assert {:error, {:unsupported_provider, :anthropic}} =
                Python.smoke_import_provider_clients(:anthropic)
     end
