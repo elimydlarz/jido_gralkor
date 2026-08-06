@@ -122,7 +122,7 @@ defmodule Gralkor.OntologyTest do
 
     test "where the call passes `required: true` > then the field is recorded as required" do
       ontology_module = Gralkor.OntologyTest.RequiredFieldOntology
-      [%{fields: [field]}] = ontology_module.__ontology__().entity_types
+      [%{fields: [field]}] = apply(ontology_module, :__ontology__, []).entity_types
       assert field == %{name: :handle, type: :string, required: true, doc: nil}
     end
 
@@ -154,7 +154,7 @@ defmodule Gralkor.OntologyTest do
 
     test "where the call omits `:doc` > then the field's description is recorded as nil" do
       ontology_module = Gralkor.OntologyTest.OptionalFieldOntology
-      [%{fields: [field]}] = ontology_module.__ontology__().entity_types
+      [%{fields: [field]}] = apply(ontology_module, :__ontology__, []).entity_types
       assert field.doc == nil
     end
 
@@ -275,7 +275,8 @@ defmodule Gralkor.OntologyTest do
 
     test "and that relationship carries no edge properties" do
       ontology_module = Gralkor.OntologyTest.BareVerbOntology
-      assert [%{name: "PREFERS", fields: []}] = ontology_module.__ontology__().edge_types
+      assert [%{name: "PREFERS", fields: []}] =
+               apply(ontology_module, :__ontology__, []).edge_types
     end
   end
 
@@ -305,7 +306,7 @@ defmodule Gralkor.OntologyTest do
 
     test "and the do-block's `field` declarations become that relationship's edge properties, with the same name, type, required and doc semantics as entity fields" do
       ontology_module = Gralkor.OntologyTest.EdgePropertyOntology
-      [%{fields: [field]}] = ontology_module.__ontology__().edge_types
+      [%{fields: [field]}] = apply(ontology_module, :__ontology__, []).edge_types
       assert field == %{name: :since, type: :string, required: false, doc: "date first observed"}
     end
   end
@@ -313,7 +314,7 @@ defmodule Gralkor.OntologyTest do
   describe "when an ontology declares an aliased relationship source > where the verb is a single lowercase word (\"prefers\")" do
     test "then the edge name is that word uppercased (\"PREFERS\")" do
       ontology_module = Gralkor.OntologyTest.BareVerbOntology
-      assert [%{name: "PREFERS"}] = ontology_module.__ontology__().edge_types
+      assert [%{name: "PREFERS"}] = apply(ontology_module, :__ontology__, []).edge_types
     end
   end
 
@@ -388,7 +389,7 @@ defmodule Gralkor.OntologyTest do
 
     test "and the endpoint map preserves each distinct declared source-target pair in order" do
       ontology_module = Gralkor.OntologyTest.MultiEndpointOntology
-      ontology = ontology_module.__ontology__()
+      ontology = apply(ontology_module, :__ontology__, [])
       assert ontology.edge_type_map == [
                {{"User", "Preference"}, ["ENDORSES"]},
                {{"Org", "Preference"}, ["ENDORSES"]}
@@ -536,7 +537,7 @@ defmodule Gralkor.OntologyTest do
 
     test "but the declared verbs still appear in `:edge_types`" do
       ontology_module = Gralkor.OntologyTest.OpenRelsOntology
-      ontology = ontology_module.__ontology__()
+      ontology = apply(ontology_module, :__ontology__, [])
       assert [%{name: "PREFERS"}] = ontology.edge_types
     end
   end
@@ -552,17 +553,17 @@ defmodule Gralkor.OntologyTest do
 
     test "and an empty `:edge_types`" do
       ontology_module = Gralkor.OntologyTest.EmptyOntology
-      assert ontology_module.__ontology__().edge_types == []
+      assert apply(ontology_module, :__ontology__, []).edge_types == []
     end
 
     test "and an empty `:edge_type_map`" do
       ontology_module = Gralkor.OntologyTest.EmptyOntology
-      assert ontology_module.__ontology__().edge_type_map == []
+      assert apply(ontology_module, :__ontology__, []).edge_type_map == []
     end
 
     test "and an `:excluded_entity_types` that still follows the declared `:entities` option" do
       ontology_module = Gralkor.OntologyTest.EmptyOntology
-      assert ontology_module.__ontology__().excluded_entity_types == ["Entity"]
+      assert apply(ontology_module, :__ontology__, []).excluded_entity_types == ["Entity"]
     end
   end
 
