@@ -297,8 +297,10 @@ defmodule Gralkor.ClientContract do
 
           assert :ok = client().flush("session-1")
         end
+      end
 
-        test "if the backend fails afterwards > then that failure is not observable through the return value" do
+      describe "when a flush is requested for a session > if the backend fails afterwards" do
+        test "then that failure is not observable through the return value" do
           unquote(setup_block).()
           configure_flush({:error, :flush_failed})
 
