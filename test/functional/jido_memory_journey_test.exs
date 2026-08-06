@@ -67,8 +67,8 @@ defmodule Gralkor.JidoMemoryJourneyTest do
     %{group_id: "journey_#{System.unique_integer([:positive])}"}
   end
 
-  describe "jido-memory-journey > round-trip" do
-    test "memory_add stores a fact, recall surfaces it under the same group_id", %{
+  describe "when a fact is written before a fresh-session recall" do
+    test "then the untrusted memory response semantically references the written fact", %{
       group_id: group_id
     } do
       :ok =
@@ -94,8 +94,8 @@ defmodule Gralkor.JidoMemoryJourneyTest do
     end
   end
 
-  describe "jido-memory-journey > flush" do
-    test "captured turns are flushed and become recallable after flush", %{
+  describe "when a captured turn is flushed before a fresh-session recall" do
+    test "then the turn becomes recallable under the same operator group", %{
       group_id: group_id
     } do
       session_id = "session_#{System.unique_integer([:positive])}"
@@ -134,8 +134,8 @@ defmodule Gralkor.JidoMemoryJourneyTest do
     end
   end
 
-  describe "jido-memory-journey > ERL round-trip" do
-    test "a captured turn becomes a learning recalled by the kind of problem", %{
+  describe "when a solved turn is flushed with learning enabled" do
+    test "then its lesson survives Learning-node retrieval and full recall", %{
       group_id: group_id
     } do
       session_id = "erl_#{System.unique_integer([:positive])}"
