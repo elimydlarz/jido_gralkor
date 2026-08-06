@@ -1412,7 +1412,7 @@ defmodule Gralkor.GraphitiPoolTest do
       ]
 
       Enum.each(unsupported_pairs, fn {llm_model, embedder_model} ->
-        assert {:error, {%ArgumentError{} = error, _stacktrace}} =
+        assert {:error, {%ArgumentError{}, _stacktrace}} =
                  GraphitiPool.start_link(
                    name: nil,
                    table: :"pool_table_#{System.unique_integer([:positive])}",
