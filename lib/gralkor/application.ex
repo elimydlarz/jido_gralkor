@@ -172,8 +172,11 @@ defmodule Gralkor.Application do
             {:error, _} = err -> {:halt, err}
           end
 
-        {:error, _} = err ->
-          {:halt, err}
+        {:error, {:upstream_llm, _reason}} = error ->
+          {:halt, error}
+
+        {:error, reason} ->
+          {:halt, {:error, {:upstream_llm, reason}}}
       end
     end)
   end

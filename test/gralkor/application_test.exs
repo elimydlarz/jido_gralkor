@@ -637,7 +637,7 @@ defmodule Gralkor.ApplicationTest do
   end
 
   describe "if producing a learning result fails" do
-    test "then the failure is returned unchanged",
+    test "then the failure is classified as upstream for capture-buffer retry ownership",
          %{
            recording_add: add,
            turn: turn
@@ -648,7 +648,7 @@ defmodule Gralkor.ApplicationTest do
           learn_fn: fn _t, _a, _u -> {:error, :upstream} end
         )
 
-      assert {:error, :upstream} = cb.("g1", "Susu", "Eli", nil, [turn])
+      assert {:error, {:upstream_llm, :upstream}} = cb.("g1", "Susu", "Eli", nil, [turn])
     end
 
     test "and the failure is not retried at the flush, because retry belongs to the inference call itself",
@@ -664,7 +664,8 @@ defmodule Gralkor.ApplicationTest do
           end
         )
 
-      assert {:error, :upstream} = cb.("g1", "Susu", "Eli", nil, [turn])
+      assert {:error, {:upstream_llm, :upstream}} =
+               cb.("g1", "Susu", "Eli", nil, [turn])
       assert_received :learn_attempted
       refute_received :learn_attempted
     end
