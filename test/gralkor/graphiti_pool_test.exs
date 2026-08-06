@@ -1424,6 +1424,24 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when the pool terminates" do
+    test "then the database it held for its lifetime is closed through the shared asyncio runtime" do
+      test_pid = self()
+
+      %{pid: pid} =
+        start_pool(
+          close_falkor_db: fn database ->
+            send(test_pid, {:closed, database})
+            :ok
+          end
+        )
+
+      GenServer.stop(pid)
+
+      assert_receive {:closed, :stub_falkor_db}
+    end
+  end
+
   describe "init/1 runs synchronously, if any warmup call raises or returns {:error, _}" do
     test "then it is caught and logged at :warning as \"[gralkor] warmup failed (non-fatal) — <stage>: <reason>\" and boot proceeds" do
       log =
