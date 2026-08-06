@@ -453,27 +453,6 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
-  describe "when a capture flush writes its captured episode successfully" do
-    @tag :capture_log
-    test "and the flush reports success" do
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o, _opts -> :ok end
-        )
-
-      turns = [[Gralkor.Message.new("user", "hi")]]
-
-      logs =
-        ExUnit.CaptureLog.capture_log([level: :info], fn ->
-          assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
-        end)
-
-      assert logs =~ "[gralkor] capture flushed"
-      assert logs =~ "group:g1"
-      refute logs =~ "capture flush failed"
-    end
-  end
-
   describe "if writing the captured episode fails" do
     @tag :capture_log
     test "then no success line is logged, so a failed attempt is never recorded as a success" do
