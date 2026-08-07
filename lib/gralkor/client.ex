@@ -209,8 +209,13 @@ defmodule Gralkor.Client do
     lenses = Enum.uniq(["default" | lenses])
     Enum.each(lenses, &validate_search_lens!/1)
 
-    Enum.reduce_while(lenses, {:ok, []}, fn lens_name, {:ok, results} ->
-      case search_lens(operator_id, lens_name, query, max_results) do
+    lenses
+    |> Enum.map(fn lens_name ->
+      Task.async(fn -> search_lens(operator_id, lens_name, query, max_results) end)
+    end)
+    |> Task.await_many(:infinity)
+    |> Enum.reduce_while({:ok, []}, fn search_result, {:ok, results} ->
+      case search_result do
         {:ok, lens_results} -> {:cont, {:ok, results ++ lens_results}}
         {:error, _reason} = error -> {:halt, error}
       end
