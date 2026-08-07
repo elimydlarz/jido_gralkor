@@ -3,7 +3,8 @@ defmodule Gralkor.Lens.Store do
   Storage capability passed to a `Gralkor.Lens.Ingestion` process.
 
   The Store is already bound to an operator and resolved Lens. Additions use
-  that Lens's ontology and scope; searches and removals use its group.
+  an appending Lens's ontology and scope; complete replacements use a
+  replaceable Lens's graph format and ownership; searches use its destination.
   Ingestion processes should use this capability rather than choose Graphiti
   group IDs themselves.
 
@@ -29,6 +30,7 @@ defmodule Gralkor.Lens.Store do
   end
 
   @spec replace_graph(t(), Gralkor.Graph.t()) :: :ok | {:error, term()}
+  @doc "Replaces the complete graph owned by the bound replaceable Lens."
   def replace_graph(%__MODULE__{} = store, graph) do
     storage().replace_graph(store, graph)
   end

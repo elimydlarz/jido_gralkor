@@ -30,7 +30,13 @@ defmodule Gralkor.GraphitiPool do
 
   # ── Public API ──────────────────────────────────────────────
 
-  @spec replace_graph(GenServer.server(), String.t(), String.t(), :property_graph, map()) ::
+  @spec replace_graph(
+          GenServer.server(),
+          String.t(),
+          String.t(),
+          :property_graph,
+          Gralkor.Graph.property_graph()
+        ) ::
           :ok | {:error, term()}
   def replace_graph(
         server \\ __MODULE__,

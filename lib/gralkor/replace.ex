@@ -1,4 +1,6 @@
 defmodule Gralkor.Replace do
+  @moduledoc "A request to replace all graph content owned by one replaceable Lens."
+
   @enforce_keys [:operator_id, :lens, :graph]
   defstruct [:operator_id, :lens, :graph]
 

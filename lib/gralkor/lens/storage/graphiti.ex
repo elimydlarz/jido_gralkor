@@ -15,7 +15,8 @@ defmodule Gralkor.Lens.Storage.Graphiti do
           (String.t(), String.t(), pos_integer() ->
              {:ok, [String.t()]} | {:error, term()})
   @type replace_graph_fn ::
-          (String.t(), String.t(), atom(), term() -> :ok | {:error, term()})
+          (String.t(), String.t(), :property_graph, Gralkor.Graph.property_graph() ->
+             :ok | {:error, term()})
 
   @impl true
   def add_episode(%Store{} = store, content, source_description) do

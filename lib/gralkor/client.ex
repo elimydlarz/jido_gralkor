@@ -2,9 +2,10 @@ defmodule Gralkor.Client do
   @moduledoc """
   Public entry point and adapter port for Gralkor memory.
 
-  Named Lens operations use `ingest/1` and `search/1`. Ingestion resolves the
-  application-owned Lens definition and invokes its ingestion process with a
-  Lens-bound store. Search always begins with the requesting operator's
+  Named Lens operations use `ingest/1`, `replace/1`, and `search/1`. Ingestion
+  resolves an appending Lens and invokes its ingestion process with a
+  Lens-bound store. Replacement validates and stores the complete graph for a
+  replaceable Lens. Search always begins with the requesting operator's
   reserved `"default"` Lens, then searches each additionally selected Lens.
   Every Lens resolves to the group its episodes live in, so naming a global
   Lens searches the whole shared `"global"` group; the originating Lens is

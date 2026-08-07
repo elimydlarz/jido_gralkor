@@ -41,7 +41,7 @@ Two cooperating contexts live in this package: `Gralkor.*` owns the memory domai
 - First-turn-on-fresh-agent: no thread at query time → `MemorySearch` short-circuits, and Lens mounts still plant `agent_name`, `lens`, and `search_lenses` without a session id; capture is skipped only if no thread is committed when completion or failure is handled.
 - A local Lens store resolves its group from the operator id and Lens name; every store write through a global Lens uses the shared global group.
 - Public search always includes the requesting operator's reserved `"default"` Lens first and validates every selected Lens before any query begins. Naming a global Lens searches the whole shared global group, because that is the group its episodes live in; originating Lens is attribution, not a filter.
-- Lens definitions are application-owned and selected by name. An appending Lens's callback controls zero, one, or many bound-store writes; a replaceable Lens atomically selects all graph content that Lens owns at its resolved destination. `Client.ingest/1` and `Client.replace/1` return their results without crossing write modes.
+- Lens definitions are application-owned and selected by name. An appending Lens's callback controls zero, one, or many bound-store writes; a replaceable Lens validates one complete graph before deleting and recreating the graph content tagged with that Lens at its resolved destination. `Client.ingest/1` and `Client.replace/1` return storage results without crossing write modes; replacement import failures do not roll back completed storage mutations.
 - Every recall carries its query through to interpretation as a required argument, whatever the buffered conversation holds.
 
 ## Decision Rationale

@@ -2,7 +2,7 @@
 
 Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded Gralkor memory adapter — Graphiti driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), with no separate Gralkor service to deploy. Storage uses either an embedded FalkorDB child or a remote FalkorDB deployment.
 
-You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, and **Lenses**: named, independently configurable ingestion and search channels, each with its own ontology, scope, and consumer-defined ingestion process.
+You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, and **Lenses**: named, scoped search channels whose write unit is either an episode handled by a consumer-defined ingestion process or a complete replacement graph.
 
 This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 6.0"}` for the whole memory stack.
 
@@ -133,7 +133,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:scope`, `:ontology`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:scope`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"default"`, `"global"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
 | `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"default"` Lens only — the channel used by mounts with no `:default_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises whenever the implicit default Lens is resolved, including for search. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
-| `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1` or `search/1`. |
+| `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
 | `:generalise_on_flush` | boolean | `false` | Fires the legacy `Gralkor.Generalise` pipeline after each successful implicit-default capture flush. Lens mounts use `generalise_lens` instead. |
 | `:generalise_min_confidence` | float | `0.3` | Minimum confidence a `Gralkor.Lens.Ingestion.Generalise` hypothesis must reach to be persisted. The retained legacy generalisation callback uses its own `0.3` default. |
 | `:interpret_max_output_tokens` | positive integer | `2000` | Output ceiling for the per-recall interpret LLM call. Raise it if recall surfaces many candidate facts and you see `Gralkor.InterpretParseFailed` (the parser refuses truncated responses). Lower it to cap latency and cost. A non-positive value raises. |
@@ -340,7 +340,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate i
 
 **Session identity.** `session_id` is the current Jido thread id (read from `agent.state[:__thread__].id`, populated by `Jido.Thread.Plugin`). The plugin does not mint its own identifier — Jido's thread lifecycle is the single source of truth.
 
-**Lens groups.** Every Lens resolves to the graphiti group its episodes live in. An operator-scoped Lens writes to a group derived from the operator id and Lens name, so different operators and different local Lenses remain isolated. Every global Lens writes to the one shared `global` group. The Lens store records a global episode's originating Lens in the source description supplied with the same Graphiti `add_episode` call; it does not mutate the graph afterward. Global search is deliberately unfiltered by originating Lens — naming a global Lens and naming `"global"` search the same group.
+**Lens destinations.** Every Lens resolves to a Graphiti group. An operator-scoped Lens writes to a group derived from the operator id and Lens name, so different operators and different local Lenses remain isolated. Every global Lens writes to the one shared `global` group. Appending writes record a global episode's originating Lens in its source description. Replacement writes inject `_gralkor_lens` into every supplied node and relationship so one Lens can replace its owned content without receiving an exclusive graph. Global search is deliberately unfiltered by originating Lens — naming a global Lens and naming `"global"` search the same group.
 
 **First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus configured `:lens` and `:search_lenses`, but no `:session_id`; completed and failed turn capture are both skipped with a warning until a committed thread supplies that identity. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
 
@@ -457,7 +457,7 @@ defmodule MyApp.DecisionIngestion do
 end
 ```
 
-The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The store, rather than consumer code, owns the group id, selected ontology, and global provenance. `Client.ingest/1` accepts appending Lenses; `Client.replace/1` accepts replaceable Lenses.
+The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The store, rather than consumer code, owns the group id, selected ontology, and global provenance. `Client.ingest/1` accepts appending Lenses and raises for replaceable Lenses; `Client.replace/1` accepts replaceable Lenses and raises for appending Lenses.
 
 The plugin mount chooses how an agent uses the registered Lenses:
 
@@ -502,9 +502,17 @@ Consumers that ingest, replace, or search outside an agent call the same public 
       format: :property_graph,
       data: %{
         nodes: [
-          %{id: "payments", labels: ["System"], properties: %{name: "Payments"}}
+          %{id: "payments", labels: ["System"], properties: %{name: "Payments"}},
+          %{id: "ledger", labels: ["System"], properties: %{name: "Ledger"}}
         ],
-        relationships: []
+        relationships: [
+          %{
+            from: "payments",
+            to: "ledger",
+            type: "DEPENDS_ON",
+            properties: %{protocol: "events"}
+          }
+        ]
       }
     }
   })
@@ -512,7 +520,11 @@ Consumers that ingest, replace, or search outside an agent call the same public 
 
 `Gralkor.Search.lenses` has the same additive meaning as the plugin option: the operator's reserved `"default"` Lens is always searched first. The result limit applies independently to default and every additional Lens, and results retain Lens order.
 
-Replacement is scoped through the Lens exactly like other Lens operations: an operator Lens replaces only that Lens's owned graph content for that operator, while a global Lens replaces that Lens's owned content in the shared global destination. Content owned by another Lens, or carrying no Lens ownership, remains unchanged. An empty graph removes all graph content owned by the selected Lens. The supplied graph format must match the Lens's configured `:graph_format`.
+`:property_graph` is the supported replacement format. Every node requires a unique, non-blank string `:id`, a list of non-blank string `:labels`, and a `:properties` map. Every relationship requires `:from` and `:to` identifiers naming supplied nodes, a non-blank string `:type`, and a `:properties` map. This payload is the whole current graph for the Lens; partial node and relationship operations are not supported.
+
+Replacement is scoped through the Lens exactly like other Lens operations: an operator Lens replaces only that Lens's owned graph content for that operator, while a global Lens replaces that Lens's owned content in the shared global destination. Gralkor overwrites any supplied `_gralkor_lens` property with the selected Lens name on every inserted node and relationship. Content owned by another Lens, or carrying no Lens ownership, remains unchanged. An empty graph removes all graph content owned by the selected Lens. The supplied graph format must match the Lens's configured `:graph_format`.
+
+Invalid Lens names, write modes, formats, and graph data raise `ArgumentError`; graph data is fully validated before storage mutation begins. Once a valid replacement starts, deletion and insertion are not transactional: an import error is returned, and content already removed or inserted is not rolled back.
 
 Registry and plugin configuration fail fast for blank, duplicate, reserved, or malformed Lens definitions and for unknown Lens names. If no Lens configuration is used, the implicit `"default"` Lens preserves the existing operator group and deployment-wide `:ontology` behavior.
 
