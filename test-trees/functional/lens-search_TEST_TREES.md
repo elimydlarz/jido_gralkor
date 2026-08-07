@@ -15,6 +15,9 @@ where a caller supplies additional Lenses to search
 where a caller supplies no additional Lenses to search
   then only the requesting operator's reserved `default` Lens is searched
 
+where a caller supplies no maximum result count
+  then every resolved destination receives the default maximum result count of twenty
+
 where a caller includes the reserved `default` Lens explicitly
   then the requesting operator's default group is searched only once
 
