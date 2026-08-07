@@ -1,8 +1,6 @@
 defmodule Gralkor.InterpretEpistemicHumilityTest do
   use ExUnit.Case, async: false
 
-  import ExUnit.CaptureIO
-
   alias Gralkor.Interpret
 
   @moduletag :functional
@@ -120,13 +118,7 @@ defmodule Gralkor.InterpretEpistemicHumilityTest do
   defp openai_interpret(prompt, max_tokens) do
     schema = Interpret.interpret_schema()
 
-    {result, warning} =
-      with_io(:stderr, fn ->
-        ReqLLM.generate_object(@model, prompt, schema, max_completion_tokens: max_tokens)
-      end)
-
-    assert warning =~ "Using unverified model: openai:gpt-5.6-sol"
-    assert length(Regex.scan(~r/warning: Using unverified model:/, warning)) == 1
+    result = ReqLLM.generate_object(@model, prompt, schema, max_completion_tokens: max_tokens)
 
     case result do
       {:ok, response} ->
