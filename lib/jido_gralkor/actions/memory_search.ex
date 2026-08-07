@@ -20,8 +20,9 @@ defmodule JidoGralkor.Actions.MemorySearch do
       (`tool_choice: memory_search`) where the LLM is required to
       invoke the tool but has nothing meaningful to search for.
 
-  Lens results are joined with newlines; legacy recall returns its memory
-  block unchanged. Errors propagate.
+  Lens results are returned as JSON carrying the searched Lens and fact for
+  every match; legacy recall returns its memory block unchanged. Errors
+  propagate.
   """
 
   use Jido.Action,
@@ -72,7 +73,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
             }
 
             case Client.search(request) do
-              {:ok, results} -> {:ok, %{result: Enum.join(results, "\n")}}
+              {:ok, results} -> {:ok, %{result: Jason.encode!(results)}}
               {:error, reason} -> {:error, reason}
             end
 
