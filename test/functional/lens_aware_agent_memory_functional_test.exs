@@ -131,7 +131,9 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  Map.put(tool_context, :agent_id, agent.id)
                )
 
-      assert result == "baseline memory"
+      assert Jason.decode!(result) == [
+               %{"lens" => "default", "fact" => "baseline memory"}
+             ]
     end
 
     test "and memory search also includes the configured additional Lenses" do
@@ -153,11 +155,15 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       agent = agent(plugin_state)
       assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(agent)
 
-      assert {:ok, %{result: "observation memory"}} =
+      assert {:ok, %{result: result}} =
                MemorySearch.run(
                  %{query: "memory"},
                  Map.put(tool_context, :agent_id, agent.id)
                )
+
+      assert Jason.decode!(result) == [
+               %{"lens" => "observations", "fact" => "observation memory"}
+             ]
     end
 
     test "and the plugin does not redefine a selected Lens's ontology, scope, or ingestion process" do
@@ -213,11 +219,15 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
                Plugin.handle_signal(query_signal, %{agent: agent})
 
-      assert {:ok, %{result: "baseline memory"}} =
+      assert {:ok, %{result: result}} =
                MemorySearch.run(
                  %{query: "baseline"},
                  Map.put(tool_context, :agent_id, agent.id)
                )
+
+      assert Jason.decode!(result) == [
+               %{"lens" => "default", "fact" => "baseline memory"}
+             ]
     end
   end
 

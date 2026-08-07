@@ -4,10 +4,12 @@ when a mounted memory plugin has a configured default ingestion Lens and optiona
   then automatic capture and memory addition use the registered default ingestion Lens
   and memory search always includes the requesting operator's reserved `default` Lens
   and memory search also includes the configured additional Lenses
+  and every returned fact identifies the Lens that contributed it
   and the plugin does not redefine a selected Lens's ontology, scope, or ingestion process
 
 where a mounted memory plugin has no additional Lenses to search
   then memory search uses only the requesting operator's reserved `default` Lens
+  and every returned fact identifies the reserved `default` Lens
 
 where an agent turn selects another registered Lens
   then memory addition uses the turn-selected Lens
