@@ -5,8 +5,9 @@ when a caller searches memory
   and another operator's default memory cannot contribute a result
 
 where a caller supplies additional Lenses to search
-  then every additional Lens is searched after the requesting operator's reserved `default` Lens
+  then the requesting operator's reserved `default` Lens and every additional Lens are searched concurrently
   and additional results retain their configured Lens order
+  and every result identifies the searched Lens that contributed it
   and repeated matches from different groups remain in the response
   and the same maximum result count applies independently to the default and every additional Lens
   and no unselected local Lens or another operator's local memory can contribute a result
@@ -25,8 +26,20 @@ where the selection names a registered global Lens
   then its group is the shared global group, so the whole global group is searched
   and originating Lens remains attribution rather than a search boundary
 
+where multiple selected Lens names resolve to the shared global group
+  then the shared global group is searched only once
+  and its results identify the reserved `global` search Lens
+
 if the selected memory search fails
   then the error is returned without manufacturing a partial memory response
+
+if search supplies a maximum result count that is not a positive integer
+  then search fails before any memory query is started
+  and the error identifies the invalid maximum result count
+
+if search selects a Lens that accepts only whole-graph replacement
+  then search fails before any memory query is started
+  and the error identifies that the Lens cannot be searched
 
 if search supplies an additional Lens that is neither registered nor reserved
   then search fails before any memory query is started
