@@ -286,6 +286,20 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
   end
 
+  describe "when a caller searches through a replaceable Lens" do
+    test "then the existing Lens search resolves and searches that Lens's scoped destination" do
+      Application.put_env(:jido_gralkor, :lens_storage, InMemory)
+
+      assert {:ok, []} =
+               Client.search(%Gralkor.Search{
+                 operator_id: "operator-one",
+                 lens: "systems",
+                 lenses: ["systems"],
+                 query: "How does settlement work?"
+               })
+    end
+  end
+
   defp use_in_memory(scope, lenses \\ nil) do
     Application.put_env(:jido_gralkor, :lens_storage, InMemory)
     Application.put_env(:jido_gralkor, :lenses, lenses || [replaceable_lens("systems", scope)])

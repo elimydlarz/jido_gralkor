@@ -35,3 +35,6 @@ when a global replaceable Lens store replaces a complete graph
   then graph replacement receives the fixed global group
   and graph replacement receives the selected Lens name, configured graph format, and supplied graph data
   and the graph replacement result is returned to the caller
+
+when an operator-local or global replaceable Lens store is searched
+  then graph search receives the destination resolved from the Lens scope

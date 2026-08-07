@@ -22,3 +22,6 @@ where a replaceable Lens store supplies an empty complete graph
 
 when a replaceable Lens store replaces its complete graph more than once
   then only the most recently supplied graph remains owned by that Lens at the resolved destination
+
+when an operator-local or global replaceable Lens store is searched
+  then the existing Lens search reads from the destination resolved from the Lens scope

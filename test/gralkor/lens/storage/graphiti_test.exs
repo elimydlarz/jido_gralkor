@@ -458,6 +458,32 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
+  describe "when an operator-local or global replaceable Lens store is searched" do
+    test "then graph search receives the destination resolved from the Lens scope" do
+      test_pid = self()
+
+      search_fn = fn group_id, query, max_results ->
+        send(test_pid, {:graph_search, group_id, query, max_results})
+        {:ok, []}
+      end
+
+      assert {:ok, []} =
+               Graphiti.search(replaceable_store(:operator), "settlement", 5,
+                 search_fn: search_fn
+               )
+
+      assert {:ok, []} =
+               Graphiti.search(replaceable_store(:global), "settlement", 5,
+                 search_fn: search_fn
+               )
+
+      assert_receive {:graph_search,
+                      "lens_6f70657261746f722d6f6e65_73797374656d73", "settlement", 5}
+
+      assert_receive {:graph_search, "global", "settlement", 5}
+    end
+  end
+
   defp local_store do
     %Store{
       operator_id: "operator-one",

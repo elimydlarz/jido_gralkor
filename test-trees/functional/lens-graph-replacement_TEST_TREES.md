@@ -38,3 +38,6 @@ if the supplied graph format differs from the selected Lens's configured graph f
 if the supplied complete graph cannot be imported
   then the import failure is returned to the caller
   and graph content already removed by the replacement is not restored
+
+when a caller searches through a replaceable Lens
+  then the existing Lens search resolves and searches that Lens's scoped destination

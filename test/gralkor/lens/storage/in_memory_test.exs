@@ -285,6 +285,16 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     end
   end
 
+  describe "when an operator-local or global replaceable Lens store is searched" do
+    test "then the existing Lens search reads from the destination resolved from the Lens scope" do
+      local = replaceable_store("operator-one", "systems", :operator)
+      global = replaceable_store("operator-one", "systems", :global)
+
+      assert {:ok, []} = Store.search(local, "settlement", 5)
+      assert {:ok, []} = Store.search(global, "settlement", 5)
+    end
+  end
+
   defp local_store(operator_id, name) do
     %Store{
       operator_id: operator_id,
