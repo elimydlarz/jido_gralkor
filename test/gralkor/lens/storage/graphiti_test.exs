@@ -382,6 +382,78 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert_receive {:graph_replaced,
                       "lens_6f70657261746f722d6f6e65_73797374656d73"}
     end
+
+    test "and graph replacement receives the selected Lens name, configured graph format, and supplied graph data" do
+      store = replaceable_store(:operator)
+      graph = property_graph()
+      test_pid = self()
+
+      replace_graph_fn = fn group_id, lens_name, format, data ->
+        send(test_pid, {:graph_replaced, group_id, lens_name, format, data})
+        :ok
+      end
+
+      assert :ok = Graphiti.replace_graph(store, graph, replace_graph_fn: replace_graph_fn)
+
+      assert_receive {:graph_replaced, _, "systems", :property_graph, ^graph.data}
+    end
+
+    test "and the graph replacement result is returned to the caller" do
+      replace_graph_fn = fn _group_id, _lens_name, _format, _data ->
+        {:error, :graph_unavailable}
+      end
+
+      assert {:error, :graph_unavailable} =
+               Graphiti.replace_graph(replaceable_store(:operator), property_graph(),
+                 replace_graph_fn: replace_graph_fn
+               )
+    end
+  end
+
+  describe "when a global replaceable Lens store replaces a complete graph" do
+    test "then graph replacement receives the fixed global group" do
+      test_pid = self()
+
+      replace_graph_fn = fn group_id, _lens_name, _format, _data ->
+        send(test_pid, {:graph_replaced, group_id})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.replace_graph(replaceable_store(:global), property_graph(),
+                 replace_graph_fn: replace_graph_fn
+               )
+
+      assert_receive {:graph_replaced, "global"}
+    end
+
+    test "and graph replacement receives the selected Lens name, configured graph format, and supplied graph data" do
+      graph = property_graph()
+      test_pid = self()
+
+      replace_graph_fn = fn group_id, lens_name, format, data ->
+        send(test_pid, {:graph_replaced, group_id, lens_name, format, data})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.replace_graph(replaceable_store(:global), graph,
+                 replace_graph_fn: replace_graph_fn
+               )
+
+      assert_receive {:graph_replaced, "global", "systems", :property_graph, ^graph.data}
+    end
+
+    test "and the graph replacement result is returned to the caller" do
+      replace_graph_fn = fn _group_id, _lens_name, _format, _data ->
+        {:error, :graph_unavailable}
+      end
+
+      assert {:error, :graph_unavailable} =
+               Graphiti.replace_graph(replaceable_store(:global), property_graph(),
+                 replace_graph_fn: replace_graph_fn
+               )
+    end
   end
 
   defp local_store do
