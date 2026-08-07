@@ -130,6 +130,19 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
     end
   end
 
+  describe "when the deployment configures an inference LLM and an embedder > while the LLM role selects an OpenAI model that accepts `none` but not `minimal`" do
+    test "then its client receives `none` explicitly, so graph-library family defaults cannot make memory writes fail" do
+      credentials("google-key", "openai-key")
+      configure("openai:gpt-5.6-luna", "openai:text-embedding-3-small")
+
+      {:ok, pid} = start_memory_runtime(self())
+
+      assert_receive {:constructed, spec}
+      assert spec.llm.reasoning == "none"
+      GenServer.stop(pid)
+    end
+  end
+
   describe "where the deployment configures no LLM or embedder override" do
     test "then Google configures both roles and its credential alone starts the memory runtime" do
       configure(nil, nil)
