@@ -92,6 +92,12 @@ defmodule Gralkor.LensSearchFunctionalTest do
         ontology: MemoryOntology,
         scope: :global,
         ingestion: Gralkor.Lens.Ingestion.Store
+      ],
+      [
+        name: "systems",
+        scope: :operator,
+        write: :replace_graph,
+        graph_format: :property_graph
       ]
     ])
 
@@ -500,6 +506,30 @@ defmodule Gralkor.LensSearchFunctionalTest do
             max_results: invalid
           })
         end
+      end
+    end
+  end
+
+  describe "if search selects a Lens that accepts only whole-graph replacement" do
+    test "then search fails before any memory query is started" do
+      Application.put_env(:jido_gralkor, :lens_storage, UnexpectedSearchStorage)
+
+      assert_raise ArgumentError, ~r/Lens "systems" cannot be searched/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "memory",
+          lenses: ["systems"]
+        })
+      end
+    end
+
+    test "and the error identifies that the Lens cannot be searched" do
+      assert_raise ArgumentError, ~r/accepts only whole-graph replacement/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "memory",
+          lenses: ["systems"]
+        })
       end
     end
   end
