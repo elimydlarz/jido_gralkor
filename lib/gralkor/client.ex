@@ -38,6 +38,11 @@ defmodule Gralkor.Client do
   @type user_name :: String.t()
   @type ontology :: module() | nil
   @type search_result :: %{lens: String.t(), fact: String.t()}
+  @type search_target :: %{
+          destination: :global | {:operator, String.t(), String.t()},
+          lens: String.t(),
+          store: Store.t()
+        }
 
   alias Gralkor.Ingest
   alias Gralkor.Lens
@@ -207,12 +212,15 @@ defmodule Gralkor.Client do
         lenses: lenses,
         max_results: max_results
       }) do
-    lenses = Enum.uniq(["default" | lenses])
-    Enum.each(lenses, &validate_search_lens!/1)
+    targets =
+      ["default" | lenses]
+      |> Enum.uniq()
+      |> Enum.map(&search_target!(operator_id, &1))
+      |> Enum.uniq_by(& &1.destination)
 
-    lenses
-    |> Enum.map(fn lens_name ->
-      Task.async(fn -> {lens_name, search_lens(operator_id, lens_name, query, max_results)} end)
+    targets
+    |> Enum.map(fn target ->
+      Task.async(fn -> {target.lens, Store.search(target.store, query, max_results)} end)
     end)
     |> Task.await_many(:infinity)
     |> Enum.reduce_while({:ok, []}, fn search_result, {:ok, results} ->
@@ -226,31 +234,30 @@ defmodule Gralkor.Client do
     end)
   end
 
-  @spec validate_search_lens!(term()) :: :ok
-  defp validate_search_lens!("global"), do: :ok
-
-  defp validate_search_lens!(name) when is_binary(name) do
-    lens!(name)
-    :ok
+  @spec search_target!(String.t(), term()) :: search_target()
+  defp search_target!(operator_id, "global") do
+    %{
+      destination: :global,
+      lens: "global",
+      store: %Store{operator_id: operator_id, lens: :global}
+    }
   end
 
-  defp validate_search_lens!(name) do
-    raise ArgumentError, "invalid Lens #{inspect(name)}"
+  defp search_target!(operator_id, name) when is_binary(name) do
+    case lens!(name) do
+      %Lens{scope: :global} ->
+        search_target!(operator_id, "global")
+
+      %Lens{} = lens ->
+        %{
+          destination: {:operator, operator_id, lens.name},
+          lens: lens.name,
+          store: %Store{operator_id: operator_id, lens: lens}
+        }
+    end
   end
 
-  @spec search_lens(String.t(), String.t(), String.t(), pos_integer()) ::
-          {:ok, [String.t()]} | {:error, term()}
-  defp search_lens(operator_id, "global", query, max_results) do
-    Store.search(%Store{operator_id: operator_id, lens: :global}, query, max_results)
-  end
-
-  defp search_lens(operator_id, name, query, max_results) do
-    Store.search(
-      %Store{operator_id: operator_id, lens: lens!(name)},
-      query,
-      max_results
-    )
-  end
+  defp search_target!(_operator_id, name), do: raise(ArgumentError, "invalid Lens #{inspect(name)}")
 
   @spec lens!(String.t()) :: Lens.t() | ReplaceableLens.t()
   def lens!(name) do
