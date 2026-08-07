@@ -500,10 +500,22 @@ defmodule Gralkor.GraphitiPool do
         }
   def shared_client_spec(llm_model, embedder_model) do
     %{
-      llm: %{provider: llm_model[:provider], id: llm_model[:id]},
+      llm: llm_spec(llm_model),
       embedder: embedder_spec(embedder_model),
       cross_encoder: %{provider: llm_model[:provider]}
     }
+  end
+
+  defp llm_spec(%{provider: :openai, id: "gpt-5.5" <> _ = id}) do
+    %{provider: :openai, id: id, reasoning: "none"}
+  end
+
+  defp llm_spec(%{provider: :openai, id: "gpt-5.6" <> _ = id}) do
+    %{provider: :openai, id: id, reasoning: "none"}
+  end
+
+  defp llm_spec(llm_model) do
+    %{provider: llm_model[:provider], id: llm_model[:id]}
   end
 
   # gemini-embedding-2-preview returns ONE embedding for N inputs in a single
@@ -1004,6 +1016,30 @@ defmodule Gralkor.GraphitiPool do
         GeminiClient(config=LLMConfig(model=ln), client=client)
         """,
         %{"llm_name" => llm_name, "client" => genai_client}
+      )
+
+    llm
+  end
+
+  defp construct_llm_client(
+         %{provider: :openai, id: llm_name, reasoning: reasoning},
+         _genai_client
+       ) do
+    {llm, _} =
+      Pythonx.eval(
+        """
+        from graphiti_core.llm_client.config import LLMConfig
+        from graphiti_core.llm_client.openai_client import OpenAIClient
+        ln = llm_name.decode('utf-8') if isinstance(llm_name, (bytes, bytearray)) else llm_name
+        k = api_key.decode('utf-8') if isinstance(api_key, (bytes, bytearray)) else api_key
+        r = reasoning.decode('utf-8') if isinstance(reasoning, (bytes, bytearray)) else reasoning
+        OpenAIClient(config=LLMConfig(model=ln, api_key=k, reasoning=r))
+        """,
+        %{
+          "llm_name" => llm_name,
+          "api_key" => api_key!(:openai),
+          "reasoning" => reasoning
+        }
       )
 
     llm
