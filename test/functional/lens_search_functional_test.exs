@@ -38,6 +38,26 @@ defmodule Gralkor.LensSearchFunctionalTest do
     def search(_store, _query, _max_results), do: raise("memory query started")
   end
 
+  defmodule ParallelSearchStorage do
+    @behaviour Gralkor.Lens.Storage
+
+    @impl true
+    def add_episode(_store, _content, _source_description), do: :ok
+
+    @impl true
+    def replace_graph(_store, _graph), do: :ok
+
+    @impl true
+    def search(%Gralkor.Lens.Store{lens: lens}, _query, _max_results) do
+      coordinator = Process.whereis(:lens_search_parallel_test)
+      send(coordinator, {:search_started, lens.name, self()})
+
+      receive do
+        :finish_search -> {:ok, ["#{lens.name} memory"]}
+      end
+    end
+  end
+
   setup do
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
     previous_ontology = Application.get_env(:jido_gralkor, :ontology)
@@ -170,6 +190,33 @@ defmodule Gralkor.LensSearchFunctionalTest do
   end
 
   describe "where a caller supplies additional Lenses to search" do
+    test "then the requesting operator's reserved `default` Lens and every additional Lens are searched concurrently" do
+      Process.register(self(), :lens_search_parallel_test)
+      Application.put_env(:jido_gralkor, :lens_storage, ParallelSearchStorage)
+
+      search =
+        Task.async(fn ->
+          Client.search(%Search{
+            operator_id: "operator-one",
+            query: "memory",
+            lenses: ["observations"]
+          })
+        end)
+
+      started =
+        for _ <- 1..2 do
+          assert_receive {:search_started, lens, search_process}
+          {lens, search_process}
+        end
+
+      assert started |> Enum.map(&elem(&1, 0)) |> MapSet.new() ==
+               MapSet.new(["default", "observations"])
+
+      Enum.each(started, fn {_lens, search_process} -> send(search_process, :finish_search) end)
+
+      assert {:ok, ["default memory", "observations memory"]} = Task.await(search)
+    end
+
     test "then every additional Lens is searched after the requesting operator's reserved `default` Lens" do
       for {lens, content} <- [
             {"default", "default memory"},
