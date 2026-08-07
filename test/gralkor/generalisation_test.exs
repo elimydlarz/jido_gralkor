@@ -132,6 +132,10 @@ defmodule Gralkor.GeneralisationTest do
       assert_raise GeneralisationParseFailed, fn ->
         Generalisation.decode("GEN|v1|not-json\ncontent")
       end
+
+      assert_raise GeneralisationParseFailed, fn ->
+        Generalisation.decode("GEN|v1|not-json")
+      end
     end
   end
 

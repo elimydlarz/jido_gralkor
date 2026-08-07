@@ -75,9 +75,13 @@ defmodule Gralkor.Generalisation do
   """
   @spec decode(String.t()) :: {:ok, t(), String.t()} | {:error, :not_a_generalisation}
   def decode(raw) when is_binary(raw) do
-    case String.split(raw, "\n", parts: 2) do
-      [first_line, rest] ->
-        case String.starts_with?(first_line, @prefix_v1) do
+    {first_line, rest} =
+      case String.split(raw, "\n", parts: 2) do
+        [first, content] -> {first, content}
+        [first] -> {first, ""}
+      end
+
+    case String.starts_with?(first_line, @prefix_v1) do
           true ->
             json = String.replace_prefix(first_line, @prefix_v1, "")
             meta = Jason.decode!(json)
@@ -94,10 +98,6 @@ defmodule Gralkor.Generalisation do
 
           false ->
             {:error, :not_a_generalisation}
-        end
-
-      _ ->
-        {:error, :not_a_generalisation}
     end
   rescue
     e in Jason.DecodeError ->
