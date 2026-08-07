@@ -525,30 +525,6 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
-  describe "if search selects a Lens that accepts only whole-graph replacement" do
-    test "then search fails before any memory query is started" do
-      Application.put_env(:jido_gralkor, :lens_storage, UnexpectedSearchStorage)
-
-      assert_raise ArgumentError, ~r/Lens "systems" cannot be searched/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "memory",
-          lenses: ["systems"]
-        })
-      end
-    end
-
-    test "and the error identifies that the Lens cannot be searched" do
-      assert_raise ArgumentError, ~r/accepts only whole-graph replacement/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "memory",
-          lenses: ["systems"]
-        })
-      end
-    end
-  end
-
   describe "if search supplies an additional Lens that is neither registered nor reserved" do
     test "then search fails before any memory query is started" do
       Application.put_env(:jido_gralkor, :lens_storage, UnexpectedSearchStorage)

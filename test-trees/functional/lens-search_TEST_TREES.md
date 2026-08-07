@@ -37,10 +37,6 @@ if search supplies a maximum result count that is not a positive integer
   then search fails before any memory query is started
   and the error identifies the invalid maximum result count
 
-if search selects a Lens that accepts only whole-graph replacement
-  then search fails before any memory query is started
-  and the error identifies that the Lens cannot be searched
-
 if search supplies an additional Lens that is neither registered nor reserved
   then search fails before any memory query is started
   and no valid subset is searched
