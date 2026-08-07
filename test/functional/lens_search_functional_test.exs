@@ -64,6 +64,22 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
+  defmodule LimitRecordingStorage do
+    @behaviour Gralkor.Lens.Storage
+
+    @impl true
+    def add_episode(_store, _content, _source_description), do: :ok
+
+    @impl true
+    def replace_graph(_store, _graph), do: :ok
+
+    @impl true
+    def search(%Gralkor.Lens.Store{lens: lens}, _query, max_results) do
+      send(Process.whereis(:lens_search_limit_test), {:search_limit, lens.name, max_results})
+      {:ok, []}
+    end
+  end
+
   setup do
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
     previous_ontology = Application.get_env(:jido_gralkor, :ontology)
@@ -196,6 +212,23 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  operator_id: "operator-one",
                  query: "memory"
                })
+    end
+  end
+
+  describe "where a caller supplies no maximum result count" do
+    test "then every resolved destination receives the default maximum result count of twenty" do
+      Process.register(self(), :lens_search_limit_test)
+      Application.put_env(:jido_gralkor, :lens_storage, LimitRecordingStorage)
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 lenses: ["observations"]
+               })
+
+      assert_receive {:search_limit, "default", 20}
+      assert_receive {:search_limit, "observations", 20}
     end
   end
 
