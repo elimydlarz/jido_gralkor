@@ -1020,7 +1020,10 @@ defmodule Gralkor.GraphitiPool do
     llm
   end
 
-  defp construct_llm_client(%{provider: :openai, id: llm_name, reasoning: reasoning}, _genai_client) do
+  defp construct_llm_client(
+         %{provider: :openai, id: llm_name, reasoning: reasoning},
+         _genai_client
+       ) do
     {llm, _} =
       Pythonx.eval(
         """
