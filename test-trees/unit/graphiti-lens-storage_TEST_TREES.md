@@ -25,3 +25,13 @@ when the reserved `global` Lens is searched
 
 when a store bound to a global Lens is searched by its ingestion process
   then graph search receives the fixed unfiltered global group
+
+when an operator-local replaceable Lens store replaces a complete graph
+  then graph replacement receives the same deterministic operator-and-Lens group used by existing Lens operations
+  and graph replacement receives the selected Lens name, configured graph format, and supplied graph data
+  and the graph replacement result is returned to the caller
+
+when a global replaceable Lens store replaces a complete graph
+  then graph replacement receives the fixed global group
+  and graph replacement receives the selected Lens name, configured graph format, and supplied graph data
+  and the graph replacement result is returned to the caller
