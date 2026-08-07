@@ -36,8 +36,16 @@ defmodule Gralkor.Lens.Storage.InMemory do
   end
 
   @impl Gralkor.Lens.Storage
-  def replace_graph(%Store{} = store, %Gralkor.Graph{data: graph}) do
-    GenServer.call(__MODULE__, {:replace_graph, key(store), graph})
+  def replace_graph(
+        %Store{lens: %Replaceable{name: lens_name}} = store,
+        %Gralkor.Graph{data: graph}
+      ) do
+    owned_graph = %{
+      nodes: Enum.map(graph.nodes, &put_owner(&1, lens_name)),
+      relationships: Enum.map(graph.relationships, &put_owner(&1, lens_name))
+    }
+
+    GenServer.call(__MODULE__, {:replace_graph, key(store), owned_graph})
   end
 
   @impl Gralkor.Lens.Storage
@@ -94,4 +102,8 @@ defmodule Gralkor.Lens.Storage.InMemory do
     do: {operator_id, lens_name}
 
   defp key(%Store{lens: %Replaceable{scope: :global}}), do: :global
+
+  defp put_owner(entity, lens_name) do
+    Map.update!(entity, :properties, &Map.put(&1, :_gralkor_lens, lens_name))
+  end
 end
