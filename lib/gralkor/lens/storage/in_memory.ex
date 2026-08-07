@@ -125,6 +125,6 @@ defmodule Gralkor.Lens.Storage.InMemory do
   end
 
   defp owned_by?(entity, lens_name) do
-    Map.get(entity.properties, :_gralkor_lens) == lens_name
+    Map.get(entity.properties, :_gralkor_lens, lens_name) == lens_name
   end
 end
