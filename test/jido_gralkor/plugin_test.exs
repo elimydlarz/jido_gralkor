@@ -279,6 +279,7 @@ defmodule JidoGralkor.PluginTest do
       assert [[_, _, _, _, _, "observations", ["generalisations"]]] = InMemory.captures()
 
       InMemory.reset()
+      InMemory.set_capture(:ok)
 
       failed = Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
       assert {:ok, :continue} = Plugin.handle_signal(failed, context(completion_agent))
