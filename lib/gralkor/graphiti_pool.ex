@@ -30,6 +30,11 @@ defmodule Gralkor.GraphitiPool do
 
   # ── Public API ──────────────────────────────────────────────
 
+  @spec replace_graph(String.t(), String.t(), atom(), term()) :: :ok | {:error, term()}
+  def replace_graph(_group_id, _lens_name, _format, _data) do
+    raise "NotImplemented"
+  end
+
   def start_link(opts \\ []) do
     name = Keyword.get(opts, :name, __MODULE__)
     GenServer.start_link(__MODULE__, opts, if(name, do: [name: name], else: []))

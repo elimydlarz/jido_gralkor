@@ -5,6 +5,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
 
   alias Gralkor.GraphitiPool
   alias Gralkor.Lens
+  alias Gralkor.Lens.Replaceable
   alias Gralkor.Lens.Store
 
   @type add_episode_fn ::
@@ -13,10 +14,40 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   @type search_fn ::
           (String.t(), String.t(), pos_integer() ->
              {:ok, [String.t()]} | {:error, term()})
+  @type replace_graph_fn ::
+          (String.t(), String.t(), atom(), term() -> :ok | {:error, term()})
 
   @impl true
   def add_episode(%Store{} = store, content, source_description) do
     add_episode(store, content, source_description, [])
+  end
+
+  @impl Gralkor.Lens.Storage
+  def replace_graph(%Store{} = store, graph) do
+    replace_graph(store, graph, [])
+  end
+
+  @spec replace_graph(Store.t(), Gralkor.Graph.t(), replace_graph_fn: replace_graph_fn()) ::
+          :ok | {:error, term()}
+  def replace_graph(
+        %Store{
+          operator_id: operator_id,
+          lens: %Replaceable{name: name, scope: :operator, graph_format: format}
+        },
+        %Gralkor.Graph{data: data},
+        opts
+      ) do
+    replace_graph_fn = replace_graph_option(opts)
+    replace_graph_fn.(group_id(operator_id, name), name, format, data)
+  end
+
+  def replace_graph(
+        %Store{lens: %Replaceable{name: name, scope: :global, graph_format: format}},
+        %Gralkor.Graph{data: data},
+        opts
+      ) do
+    replace_graph_fn = replace_graph_option(opts)
+    replace_graph_fn.("global", name, format, data)
   end
 
   @spec add_episode(Store.t(), String.t(), String.t(), keyword()) ::
@@ -96,6 +127,18 @@ defmodule Gralkor.Lens.Storage.Graphiti do
           :ok | {:error, term()}
   defp graph_add(group_id, content, source_description, ontology, graph_opts) do
     GraphitiPool.add_episode(group_id, content, source_description, ontology, graph_opts)
+  end
+
+  defp graph_replace(group_id, lens_name, format, data) do
+    GraphitiPool.replace_graph(group_id, lens_name, format, data)
+  end
+
+  defp replace_graph_option(opts) do
+    case Keyword.pop(opts, :replace_graph_fn, &graph_replace/4) do
+      {replace_graph_fn, []} -> replace_graph_fn
+      {_replace_graph_fn, unsupported} ->
+        raise ArgumentError, "unsupported replace options #{inspect(unsupported)}"
+    end
   end
 
   @spec add_options(keyword()) :: {add_episode_fn(), keyword()}
