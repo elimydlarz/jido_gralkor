@@ -166,6 +166,36 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
              ]
     end
 
+    test "and every returned fact identifies the Lens that contributed it" do
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "observations",
+                 content: "attributed observation",
+                 source_description: "functional"
+               })
+
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{},
+                 agent_name: "Susu",
+                 default_lens: "observations",
+                 search_lenses: ["observations"]
+               )
+
+      agent = agent(plugin_state)
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(agent)
+
+      assert {:ok, %{result: result}} =
+               MemorySearch.run(
+                 %{query: "attributed"},
+                 Map.put(tool_context, :agent_id, agent.id)
+               )
+
+      assert Jason.decode!(result) == [
+               %{"lens" => "observations", "fact" => "attributed observation"}
+             ]
+    end
+
     test "and the plugin does not redefine a selected Lens's ontology, scope, or ingestion process" do
       assert {:ok, %{lens: lens}} =
                Plugin.mount(%{},
@@ -227,6 +257,32 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert Jason.decode!(result) == [
                %{"lens" => "default", "fact" => "baseline memory"}
+             ]
+    end
+
+    test "and every returned fact identifies the reserved `default` Lens" do
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "default",
+                 content: "attributed baseline",
+                 source_description: "functional"
+               })
+
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{}, agent_name: "Susu", default_lens: "observations")
+
+      agent = agent(plugin_state)
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(agent)
+
+      assert {:ok, %{result: result}} =
+               MemorySearch.run(
+                 %{query: "attributed"},
+                 Map.put(tool_context, :agent_id, agent.id)
+               )
+
+      assert Jason.decode!(result) == [
+               %{"lens" => "default", "fact" => "attributed baseline"}
              ]
     end
   end

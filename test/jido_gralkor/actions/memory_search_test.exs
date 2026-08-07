@@ -21,6 +21,13 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     end
   end
 
+  defmodule FailingLensStorage do
+    @behaviour Gralkor.Lens.Storage
+
+    def add_episode(_store, _content, _source), do: :ok
+    def search(_store, _query, _max_results), do: {:error, :boom}
+  end
+
   setup do
     InMemory.reset()
 
@@ -128,6 +135,18 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                %{"lens" => "default", "fact" => "selected local memory"},
                %{"lens" => "observations", "fact" => "selected local memory"}
              ]
+    end
+
+    test "if a Lens backend fails, then the failure reason is returned to the caller unchanged" do
+      Application.put_env(:jido_gralkor, :lens_storage, FailingLensStorage)
+
+      assert {:error, :boom} =
+               MemorySearch.run(%{query: "launch"}, %{
+                 agent_id: "operator-one",
+                 session_id: "thread-one",
+                 agent_name: "Susu",
+                 search_lenses: ["observations"]
+               })
     end
   end
 
