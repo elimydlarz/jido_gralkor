@@ -101,6 +101,32 @@ if removing an episode raises inside the graph library
   then an error carrying only the raised exception's class and message is returned
   and the logged diagnostic is a single concise line rather than a full traceback
 
+when a complete property graph replaces content owned by a Lens in a group
+  then every relationship carrying that Lens's reserved ownership field is removed before owned nodes are removed
+  and every node carrying that Lens's reserved ownership field is removed
+  and each supplied node is inserted with its identifier, labels, properties, and reserved Lens ownership field
+  and each supplied relationship is inserted between its identified endpoints with its type, properties, and reserved Lens ownership field
+  and nodes and relationships owned by another Lens remain unchanged
+  and nodes and relationships without the reserved Lens ownership field remain unchanged
+  and success is returned after every supplied node and relationship is inserted
+
+where the supplied complete property graph is empty
+  then every node and relationship owned by the Lens is removed
+  and no node or relationship insertion is attempted
+
+if removing Lens-owned graph content fails
+  then the graph failure is returned
+  and no supplied node or relationship is inserted
+
+if inserting a supplied node fails
+  then the graph failure is returned
+  and no supplied relationship is inserted
+  and removed Lens-owned content is not restored
+
+if inserting a supplied relationship fails
+  then the graph failure is returned
+  and removed Lens-owned content and inserted nodes are not restored
+
 when a fact search is run for a group
   then the graph library's edge search is invoked with the requested result count
   and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps

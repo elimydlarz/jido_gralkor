@@ -21,4 +21,5 @@ if an application registers an invalid Lens
   and an invalid Lens ingestion process is identified with its Lens
   and an invalid Lens write mode is identified with its Lens
   and a replaceable Lens without a graph format is identified with its Lens
+  and a replaceable Lens with an unsupported graph format is identified with its Lens
   and a Lens definition that combines appending and replaceable write settings is identified with its Lens

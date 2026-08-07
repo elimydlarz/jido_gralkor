@@ -9,6 +9,14 @@ when a caller replaces the complete graph through a replaceable Lens
   and nodes and relationships without the reserved Lens ownership field at the resolved destination remain unchanged
   and the caller observes whether replacement succeeded or failed
 
+where the selected Lens uses the `property_graph` format
+  then every supplied node carries a unique identifier, labels, and properties
+  and every supplied relationship carries source and destination node identifiers, a type, and properties
+
+if a `property_graph` payload is malformed or names a missing relationship endpoint
+  then replacement fails before graph content is removed or inserted
+  and the error identifies the invalid graph data
+
 where the supplied complete graph is empty
   then every node and relationship previously written by that Lens at the resolved destination is removed
   and no replacement node or relationship is inserted
