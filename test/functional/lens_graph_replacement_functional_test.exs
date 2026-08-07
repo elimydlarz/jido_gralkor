@@ -61,7 +61,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       assert_receive {:replaced,
                       %Gralkor.Lens.Store{
                         operator_id: "operator-one",
-                        lens: %Gralkor.Lens{name: "systems", scope: :operator}
+                        lens: %Gralkor.Lens.Replaceable{name: "systems", scope: :operator}
                       }, ^graph}
     end
   end

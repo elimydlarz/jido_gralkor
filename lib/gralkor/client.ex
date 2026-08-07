@@ -41,7 +41,9 @@ defmodule Gralkor.Client do
   alias Gralkor.Ingest
   alias Gralkor.Lens
   alias Gralkor.Lens.Ingestion.Store, as: StoreIngestion
+  alias Gralkor.Lens.Replaceable, as: ReplaceableLens
   alias Gralkor.Lens.Store
+  alias Gralkor.Replace
   alias Gralkor.Search
 
   @callback recall(group_id(), agent_name(), session_id() | nil, query :: String.t()) ::
@@ -107,6 +109,13 @@ defmodule Gralkor.Client do
     lens.ingestion.ingest(request, store)
   end
 
+  @spec replace(Replace.t()) :: :ok | {:error, term()}
+  def replace(%Replace{lens: lens_name, graph: graph} = request) do
+    lens = lens!(lens_name)
+    store = %Store{operator_id: request.operator_id, lens: lens}
+    Store.replace_graph(store, graph)
+  end
+
   @spec search(Search.t()) :: {:ok, [String.t()]} | {:error, term()}
   def search(%Search{
         operator_id: operator_id,
@@ -151,7 +160,7 @@ defmodule Gralkor.Client do
     )
   end
 
-  @spec lens!(String.t()) :: Lens.t()
+  @spec lens!(String.t()) :: Lens.t() | ReplaceableLens.t()
   def lens!(name) do
     lenses = registered_lenses!()
 
@@ -168,11 +177,25 @@ defmodule Gralkor.Client do
         raise ArgumentError, "unknown Lens #{inspect(name)}"
 
       definition ->
+        resolve_lens(definition)
+    end
+  end
+
+  defp resolve_lens(definition) do
+    case Keyword.get(definition, :write, :append) do
+      :append ->
         %Lens{
           name: Keyword.fetch!(definition, :name),
           ontology: Keyword.fetch!(definition, :ontology),
           scope: Keyword.fetch!(definition, :scope),
           ingestion: Keyword.fetch!(definition, :ingestion)
+        }
+
+      :replace_graph ->
+        %ReplaceableLens{
+          name: Keyword.fetch!(definition, :name),
+          scope: Keyword.fetch!(definition, :scope),
+          graph_format: Keyword.fetch!(definition, :graph_format)
         }
     end
   end
@@ -195,9 +218,7 @@ defmodule Gralkor.Client do
     end
 
     name = Keyword.get(definition, :name)
-    ontology = Keyword.get(definition, :ontology)
     scope = Keyword.get(definition, :scope)
-    ingestion = Keyword.get(definition, :ingestion)
 
     unless is_binary(name) and String.trim(name) != "" do
       raise ArgumentError, "invalid Lens name #{inspect(name)}"
@@ -207,18 +228,36 @@ defmodule Gralkor.Client do
       raise ArgumentError, "invalid Lens #{inspect(name)}: name is reserved"
     end
 
-    unless is_atom(ontology) and Code.ensure_loaded?(ontology) and
-             function_exported?(ontology, :__ontology__, 0) do
-      raise ArgumentError, "invalid Lens #{inspect(name)} ontology #{inspect(ontology)}"
-    end
-
     unless scope in [:operator, :global] do
       raise ArgumentError, "invalid Lens #{inspect(name)} scope #{inspect(scope)}"
     end
 
-    unless is_atom(ingestion) and Code.ensure_loaded?(ingestion) and
-             function_exported?(ingestion, :ingest, 2) do
-      raise ArgumentError, "invalid Lens #{inspect(name)} ingestion #{inspect(ingestion)}"
+    validate_lens_write!(name, definition)
+  end
+
+  defp validate_lens_write!(name, definition) do
+    case Keyword.get(definition, :write, :append) do
+      :append ->
+        ontology = Keyword.get(definition, :ontology)
+        ingestion = Keyword.get(definition, :ingestion)
+
+        unless is_atom(ontology) and Code.ensure_loaded?(ontology) and
+                 function_exported?(ontology, :__ontology__, 0) do
+          raise ArgumentError, "invalid Lens #{inspect(name)} ontology #{inspect(ontology)}"
+        end
+
+        unless is_atom(ingestion) and Code.ensure_loaded?(ingestion) and
+                 function_exported?(ingestion, :ingest, 2) do
+          raise ArgumentError, "invalid Lens #{inspect(name)} ingestion #{inspect(ingestion)}"
+        end
+
+      :replace_graph ->
+        graph_format = Keyword.get(definition, :graph_format)
+
+        unless is_atom(graph_format) do
+          raise ArgumentError,
+                "invalid Lens #{inspect(name)} graph format #{inspect(graph_format)}"
+        end
     end
   end
 

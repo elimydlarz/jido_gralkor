@@ -12,19 +12,25 @@ defmodule Gralkor.Lens.Store do
   """
 
   alias Gralkor.Lens
+  alias Gralkor.Lens.Replaceable
 
   @enforce_keys [:operator_id, :lens]
   defstruct [:operator_id, :lens]
 
   @type t :: %__MODULE__{
           operator_id: String.t(),
-          lens: Lens.t() | :global
+          lens: Lens.t() | Replaceable.t() | :global
         }
 
   @spec add(t(), String.t(), String.t()) :: :ok | {:error, term()}
   @doc "Adds an episode through the bound Lens."
   def add(%__MODULE__{} = store, content, source_description) do
     storage().add_episode(store, content, source_description)
+  end
+
+  @spec replace_graph(t(), Gralkor.Graph.t()) :: :ok | {:error, term()}
+  def replace_graph(%__MODULE__{} = store, graph) do
+    storage().replace_graph(store, graph)
   end
 
   @spec search(t(), String.t(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}
