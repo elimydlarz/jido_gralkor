@@ -478,6 +478,32 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
+  describe "if search supplies a maximum result count that is not a positive integer" do
+    test "then search fails before any memory query is started" do
+      Application.put_env(:jido_gralkor, :lens_storage, UnexpectedSearchStorage)
+
+      assert_raise ArgumentError, ~r/max_results must be a positive integer/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "memory",
+          max_results: 0
+        })
+      end
+    end
+
+    test "and the error identifies the invalid maximum result count" do
+      for invalid <- [-1, 1.5, "10", nil] do
+        assert_raise ArgumentError, ~r/#{Regex.escape(inspect(invalid))}/, fn ->
+          Client.search(%Search{
+            operator_id: "operator-one",
+            query: "memory",
+            max_results: invalid
+          })
+        end
+      end
+    end
+  end
+
   describe "if search supplies an additional Lens that is neither registered nor reserved" do
     test "then search fails before any memory query is started" do
       Application.put_env(:jido_gralkor, :lens_storage, UnexpectedSearchStorage)
