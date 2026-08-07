@@ -247,6 +247,44 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     end
   end
 
+  describe "where a replaceable Lens store supplies an empty complete graph" do
+    test "then graph content previously owned by the replacing Lens at that destination is removed" do
+      systems = replaceable_store("operator-one", "systems", :global)
+
+      assert :ok =
+               Store.replace_graph(
+                 systems,
+                 %Gralkor.Graph{format: :property_graph, data: graph_data("old")}
+               )
+
+      assert :ok = Store.replace_graph(systems, empty_graph())
+      assert InMemory.graph(:global) == %{nodes: [], relationships: []}
+    end
+
+    test "and no replacement graph content is stored" do
+      systems = replaceable_store("operator-one", "systems", :global)
+
+      assert :ok = Store.replace_graph(systems, empty_graph())
+      assert InMemory.graph(:global) == %{nodes: [], relationships: []}
+    end
+  end
+
+  describe "when a replaceable Lens store replaces its complete graph more than once" do
+    test "then only the most recently supplied graph remains owned by that Lens at the resolved destination" do
+      systems = replaceable_store("operator-one", "systems", :global)
+
+      for id <- ["first", "second", "current"] do
+        assert :ok =
+                 Store.replace_graph(
+                   systems,
+                   %Gralkor.Graph{format: :property_graph, data: graph_data(id)}
+                 )
+      end
+
+      assert %{nodes: [%{id: "current"}], relationships: []} = InMemory.graph(:global)
+    end
+  end
+
   defp local_store(operator_id, name) do
     %Store{
       operator_id: operator_id,
@@ -270,5 +308,9 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
 
   defp graph_data(id) do
     %{nodes: [%{id: id, labels: ["System"], properties: %{name: id}}], relationships: []}
+  end
+
+  defp empty_graph do
+    %Gralkor.Graph{format: :property_graph, data: %{nodes: [], relationships: []}}
   end
 end
