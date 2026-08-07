@@ -3,7 +3,7 @@ Functional: lens-graph-replacement (functional: none)
 when a caller replaces the complete graph through a replaceable Lens
   then the Lens scope resolves the same operator-local or shared global destination used by existing Lens operations
   and every node and relationship previously written by that Lens at the resolved destination is removed
-  and every supplied node and relationship is inserted at the resolved destination with its original graph data
+  and every supplied node and relationship is inserted at the resolved destination with every non-reserved graph value unchanged
   and every inserted node and relationship carries the reserved Lens ownership field set to the selected Lens name
   and nodes and relationships owned by another Lens at the resolved destination remain unchanged
   and nodes and relationships without the reserved Lens ownership field at the resolved destination remain unchanged
@@ -29,4 +29,4 @@ if the supplied graph format differs from the selected Lens's configured graph f
 
 if the supplied complete graph cannot be imported
   then the import failure is returned to the caller
-  and no rollback, staging, merging, or generation management is performed
+  and graph content already removed by the replacement is not restored

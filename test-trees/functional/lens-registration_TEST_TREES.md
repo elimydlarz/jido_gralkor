@@ -4,6 +4,9 @@ when an application registers a valid append-oriented or replaceable Lens
   then direct callers and mounted memory plugins can select that Lens by name
   and every consumer observes the same application-owned Lens definition
 
+where an existing Lens definition provides an ontology and ingestion process without a write mode
+  then the Lens remains append-oriented with its existing ingestion behaviour
+
 if an application's Lens registry is not a list
   then configuration resolution raises `ArgumentError` naming what it found instead
 
