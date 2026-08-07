@@ -430,6 +430,42 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when a complete property graph replaces content owned by a Lens in a group" do
+    test "then every relationship carrying that Lens's reserved ownership field is removed before owned nodes are removed" do
+      {g, _} = replacement_graphiti()
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok =
+               GraphitiPool.replace_graph(
+                 pid,
+                 "g1",
+                 "systems",
+                 :property_graph,
+                 %{nodes: [], relationships: []}
+               )
+
+      {recorded, _} = Pythonx.eval("g.driver.recorded", %{"g" => g})
+
+      assert [
+               %{"query" => relationship_delete, "params" => %{"lens" => "systems"}},
+               %{"query" => node_delete, "params" => %{"lens" => "systems"}}
+             ] = Pythonx.decode(recorded)
+
+      assert relationship_delete =~ "MATCH ()-[relationship]-()"
+      assert relationship_delete =~ "relationship._gralkor_lens = $lens"
+      assert node_delete =~ "MATCH (node)"
+      assert node_delete =~ "node._gralkor_lens = $lens"
+
+      GenServer.stop(pid)
+    end
+  end
+
   describe "when a fact search is run for a group" do
     test "then the graph library's edge search is invoked with the requested result count" do
       # A Pythonx-built fake graphiti whose search coroutine records its kwargs on the
