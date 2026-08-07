@@ -37,13 +37,22 @@ defmodule Gralkor.GraphitiPool do
         group_id,
         lens_name,
         :property_graph,
-        %{nodes: _nodes, relationships: _relationships}
+        %{nodes: nodes, relationships: _relationships}
       ) do
     instance = __MODULE__.for(server, group_id)
 
     Pythonx.eval(
       """
       import asyncio
+      def text(value):
+          return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else str(value)
+
+      def get(mapping, key):
+          return mapping.get(key, mapping.get(key.encode('utf-8')))
+
+      def identifier(value):
+          return '`' + text(value).replace('`', '``') + '`'
+
       owner = lens.decode('utf-8') if isinstance(lens, (bytes, bytearray)) else lens
       asyncio._gralkor_run(g.driver.execute_query(
           'MATCH ()-[relationship]-() '
@@ -57,9 +66,20 @@ defmodule Gralkor.GraphitiPool do
           'DETACH DELETE node',
           lens=owner,
       ))
+      for supplied_node in nodes:
+          node_id = text(get(supplied_node, 'id'))
+          labels = ''.join(':' + identifier(label) for label in get(supplied_node, 'labels'))
+          supplied_properties = get(supplied_node, 'properties')
+          properties = {text(key): value for key, value in supplied_properties.items()}
+          properties['id'] = node_id
+          properties['_gralkor_lens'] = owner
+          asyncio._gralkor_run(g.driver.execute_query(
+              f'CREATE (node{labels}) SET node = $properties',
+              properties=properties,
+          ))
       None
       """,
-      %{"g" => instance, "lens" => lens_name}
+      %{"g" => instance, "lens" => lens_name, "nodes" => nodes}
     )
 
     :ok
