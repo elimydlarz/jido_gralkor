@@ -9,7 +9,7 @@ when the memory search tool runs with a query and a committed session
   where the tool context selects Lenses to search
     then the Lens search is used in place of the legacy recall
     and the operator's reserved `default` Lens is searched alongside every selected Lens
-    and every fact in the joined result identifies the searched Lens that contributed it
+    and the action result is JSON identifying the searched Lens that contributed every fact
 
 if the memory search tool runs without a usable query
   then no search is issued against any backend

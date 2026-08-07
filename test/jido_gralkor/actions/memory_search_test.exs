@@ -120,7 +120,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                       "launch", 20}
     end
 
-    test "and every fact in the joined result identifies the searched Lens that contributed it",
+    test "and the action result is JSON identifying the searched Lens that contributed every fact",
          %{
            result: result
          } do
