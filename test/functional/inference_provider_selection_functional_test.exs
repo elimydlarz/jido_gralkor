@@ -131,13 +131,15 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
 
     test "and an OpenAI LLM that rejects `minimal` receives `none` explicitly instead of the graph library's default" do
       credentials("google-key", "openai-key")
-      configure("openai:gpt-5.6-luna", "openai:text-embedding-3-small")
 
-      {:ok, pid} = start_memory_runtime(self())
+      for llm <- ["openai:gpt-5.5", "openai:gpt-5.6-luna"] do
+        configure(llm, "openai:text-embedding-3-small")
+        {:ok, pid} = start_memory_runtime(self())
 
-      assert_receive {:constructed, spec}
-      assert spec.llm.reasoning == "none"
-      GenServer.stop(pid)
+        assert_receive {:constructed, spec}
+        assert spec.llm.reasoning == "none"
+        GenServer.stop(pid)
+      end
     end
   end
 

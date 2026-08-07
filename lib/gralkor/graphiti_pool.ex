@@ -506,12 +506,11 @@ defmodule Gralkor.GraphitiPool do
     }
   end
 
-  defp llm_spec(%{provider: :openai, id: "gpt-5.5" <> _ = id}) do
-    %{provider: :openai, id: id, reasoning: "none"}
-  end
+  defp llm_spec(%{provider: :openai, id: id}) do
+    reasoning =
+      if String.starts_with?(id, ["gpt-5.5", "gpt-5.6"]), do: "none", else: "auto"
 
-  defp llm_spec(%{provider: :openai, id: "gpt-5.6" <> _ = id}) do
-    %{provider: :openai, id: id, reasoning: "none"}
+    %{provider: :openai, id: id, reasoning: reasoning}
   end
 
   defp llm_spec(llm_model) do
@@ -1021,10 +1020,7 @@ defmodule Gralkor.GraphitiPool do
     llm
   end
 
-  defp construct_llm_client(
-         %{provider: :openai, id: llm_name, reasoning: reasoning},
-         _genai_client
-       ) do
+  defp construct_llm_client(%{provider: :openai, id: llm_name, reasoning: reasoning}, _genai_client) do
     {llm, _} =
       Pythonx.eval(
         """
@@ -1040,22 +1036,6 @@ defmodule Gralkor.GraphitiPool do
           "api_key" => api_key!(:openai),
           "reasoning" => reasoning
         }
-      )
-
-    llm
-  end
-
-  defp construct_llm_client(%{provider: :openai, id: llm_name}, _genai_client) do
-    {llm, _} =
-      Pythonx.eval(
-        """
-        from graphiti_core.llm_client.config import LLMConfig
-        from graphiti_core.llm_client.openai_client import OpenAIClient
-        ln = llm_name.decode('utf-8') if isinstance(llm_name, (bytes, bytearray)) else llm_name
-        k = api_key.decode('utf-8') if isinstance(api_key, (bytes, bytearray)) else api_key
-        OpenAIClient(config=LLMConfig(model=ln, api_key=k))
-        """,
-        %{"llm_name" => llm_name, "api_key" => api_key!(:openai)}
       )
 
     llm
