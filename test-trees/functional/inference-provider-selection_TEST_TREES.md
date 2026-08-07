@@ -5,6 +5,8 @@ when the deployment configures an inference LLM and an embedder
   and an OpenAI LLM configures OpenAI reranking
   and a Google LLM configures Google reranking
   and differing role providers construct independent clients and start the memory runtime
+  while the LLM role selects an OpenAI model that accepts `none` but not `minimal`
+    then its client receives `none` explicitly, so graph-library family defaults cannot make memory writes fail
 
 where the deployment configures no LLM or embedder override
   then Google configures both roles and its credential alone starts the memory runtime
