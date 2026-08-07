@@ -104,9 +104,15 @@ defmodule Gralkor.Client do
 
   @spec ingest(Ingest.t()) :: :ok | {:error, term()}
   def ingest(%Ingest{lens: lens_name} = request) do
-    lens = lens!(lens_name)
-    store = %Store{operator_id: request.operator_id, lens: lens}
-    lens.ingestion.ingest(request, store)
+    case lens!(lens_name) do
+      %Lens{} = lens ->
+        store = %Store{operator_id: request.operator_id, lens: lens}
+        lens.ingestion.ingest(request, store)
+
+      %ReplaceableLens{} ->
+        raise ArgumentError,
+              "Lens #{inspect(lens_name)} accepts only whole-graph replacement"
+    end
   end
 
   @spec replace(Replace.t()) :: :ok | {:error, term()}
