@@ -37,6 +37,7 @@ defmodule Gralkor.Client do
   @type messages :: [Gralkor.Message.t()]
   @type user_name :: String.t()
   @type ontology :: module() | nil
+  @type search_result :: %{lens: String.t(), fact: String.t()}
 
   alias Gralkor.Ingest
   alias Gralkor.Lens
@@ -199,7 +200,7 @@ defmodule Gralkor.Client do
     raise ArgumentError, "invalid property_graph data: #{reason}; got #{inspect(data)}"
   end
 
-  @spec search(Search.t()) :: {:ok, [String.t()]} | {:error, term()}
+  @spec search(Search.t()) :: {:ok, [search_result()]} | {:error, term()}
   def search(%Search{
         operator_id: operator_id,
         query: query,
@@ -211,12 +212,15 @@ defmodule Gralkor.Client do
 
     lenses
     |> Enum.map(fn lens_name ->
-      Task.async(fn -> search_lens(operator_id, lens_name, query, max_results) end)
+      Task.async(fn -> {lens_name, search_lens(operator_id, lens_name, query, max_results)} end)
     end)
     |> Task.await_many(:infinity)
     |> Enum.reduce_while({:ok, []}, fn search_result, {:ok, results} ->
       case search_result do
-        {:ok, lens_results} -> {:cont, {:ok, results ++ lens_results}}
+        {lens_name, {:ok, lens_results}} ->
+          attributed = Enum.map(lens_results, &%{lens: lens_name, fact: &1})
+          {:cont, {:ok, results ++ attributed}}
+
         {:error, _reason} = error -> {:halt, error}
       end
     end)
