@@ -96,6 +96,57 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       assert InMemory.graph({"operator-two", "systems"}) == %{nodes: [], relationships: []}
     end
 
+    test "and every supplied node and relationship retains each non-reserved graph value" do
+      store = replaceable_store("operator-one", "systems", :operator)
+
+      graph = %Gralkor.Graph{
+        format: :property_graph,
+        data: %{
+          nodes: [
+            %{
+              id: "source",
+              labels: ["System", "Critical"],
+              properties: %{name: "payments", priority: 1}
+            },
+            %{id: "target", labels: ["System"], properties: %{name: "ledger"}}
+          ],
+          relationships: [
+            %{
+              from: "source",
+              to: "target",
+              type: "DEPENDS_ON",
+              properties: %{protocol: "events"}
+            }
+          ]
+        }
+      }
+
+      assert :ok = Store.replace_graph(store, graph)
+
+      assert %{
+               nodes: [
+                 %{
+                   id: "source",
+                   labels: ["System", "Critical"],
+                   properties: %{name: "payments", priority: 1, _gralkor_lens: "systems"}
+                 },
+                 %{
+                   id: "target",
+                   labels: ["System"],
+                   properties: %{name: "ledger", _gralkor_lens: "systems"}
+                 }
+               ],
+               relationships: [
+                 %{
+                   from: "source",
+                   to: "target",
+                   type: "DEPENDS_ON",
+                   properties: %{protocol: "events", _gralkor_lens: "systems"}
+                 }
+               ]
+             } = InMemory.graph({"operator-one", "systems"})
+    end
+
     test "and every supplied node and relationship records the replacing Lens as its owner" do
       store = replaceable_store("operator-one", "systems", :operator)
 
