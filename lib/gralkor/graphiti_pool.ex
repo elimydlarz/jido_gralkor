@@ -1032,7 +1032,7 @@ defmodule Gralkor.GraphitiPool do
         ln = llm_name.decode('utf-8') if isinstance(llm_name, (bytes, bytearray)) else llm_name
         k = api_key.decode('utf-8') if isinstance(api_key, (bytes, bytearray)) else api_key
         r = reasoning.decode('utf-8') if isinstance(reasoning, (bytes, bytearray)) else reasoning
-        OpenAIClient(config=LLMConfig(model=ln, api_key=k, reasoning=r))
+        OpenAIClient(config=LLMConfig(model=ln, api_key=k), reasoning=r)
         """,
         %{
           "llm_name" => llm_name,
