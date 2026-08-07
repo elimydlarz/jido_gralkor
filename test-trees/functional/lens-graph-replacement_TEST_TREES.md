@@ -1,4 +1,4 @@
-Functional: lens-graph-replacement (functional: none)
+Functional: lens-graph-replacement (functional: test/functional/lens_graph_replacement_functional_test.exs)
 
 when a caller replaces the complete graph through a replaceable Lens
   then the Lens scope resolves the same operator-local or shared global destination used by existing Lens operations
@@ -19,7 +19,7 @@ when a Lens graph is replaced more than once
 if replacement selects an invalid Lens
   then replacement fails before graph content is removed or inserted
 
-if replacement selects an episode-ingesting Lens
+if replacement selects an appending Lens
   then replacement fails with an error identifying that the Lens accepts only episode ingestion
   and no existing graph content is removed or inserted
 
