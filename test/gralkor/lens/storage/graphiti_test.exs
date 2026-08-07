@@ -2,6 +2,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
   use ExUnit.Case, async: true
 
   alias Gralkor.Lens
+  alias Gralkor.Lens.Replaceable
   alias Gralkor.Lens.Storage.Graphiti
   alias Gralkor.Lens.Store
   alias Gralkor.TestOntologies.Strict
@@ -365,6 +366,24 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
+  describe "when an operator-local replaceable Lens store replaces a complete graph" do
+    test "then graph replacement receives the same deterministic operator-and-Lens group used by existing Lens operations" do
+      store = replaceable_store(:operator)
+      graph = property_graph()
+      test_pid = self()
+
+      replace_graph_fn = fn group_id, _lens_name, _format, _data ->
+        send(test_pid, {:graph_replaced, group_id})
+        :ok
+      end
+
+      assert :ok = Graphiti.replace_graph(store, graph, replace_graph_fn: replace_graph_fn)
+
+      assert_receive {:graph_replaced,
+                      "lens_6f70657261746f722d6f6e65_73797374656d73"}
+    end
+  end
+
   defp local_store do
     %Store{
       operator_id: "operator-one",
@@ -373,6 +392,23 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
         ontology: Strict,
         scope: :operator,
         ingestion: String
+      }
+    }
+  end
+
+  defp replaceable_store(scope) do
+    %Store{
+      operator_id: "operator-one",
+      lens: %Replaceable{name: "systems", scope: scope, graph_format: :property_graph}
+    }
+  end
+
+  defp property_graph do
+    %Gralkor.Graph{
+      format: :property_graph,
+      data: %{
+        nodes: [%{id: "system", labels: ["System"], properties: %{name: "payments"}}],
+        relationships: []
       }
     }
   end
