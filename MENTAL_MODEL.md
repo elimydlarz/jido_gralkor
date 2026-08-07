@@ -10,7 +10,7 @@ This repository is the canonical development and distribution home for Jido-firs
 - **`JidoGralkor.Canonical.to_messages/3`** — normalises a Jido/ReAct turn into Gralkor's `[%Message{role, content}]` shape.
 - **`JidoGralkor.Lifecycle`** — graceful-shutdown flush via the configured Gralkor client adapter's `flush/1`.
 - **`JidoGralkor.ContextRotator`** — synchronous rotate-on-demand: flush, retain recent and in-flight entries, then install a fresh thread.
-- **`Gralkor.Client` / `Gralkor.Ingest` / `Gralkor.Search`** — the callable Lens boundary and its request values. A registered `Gralkor.Lens` owns its name, ontology, operator-or-global scope, and ingestion module; `Gralkor.Lens.Store` owns group resolution and provenance; `Gralkor.Lens.Ingestion.ingest/2` is the callback an application implements, and `Gralkor.Lens.Ingestion.Generalise` is the built-in generalising one.
+- **`Gralkor.Client` / `Gralkor.Ingest` / `Gralkor.Replace` / `Gralkor.Search`** — the callable Lens boundary and its request values. An appending `Gralkor.Lens` owns its ontology and ingestion module; a `Gralkor.Lens.Replaceable` owns its complete graph format; both own a name and operator-or-global scope. `Gralkor.Lens.Store` owns group resolution, provenance, and graph ownership; `Gralkor.Lens.Ingestion.ingest/2` is the callback an application implements, and `Gralkor.Lens.Ingestion.Generalise` is the built-in generalising one.
 
 ## Ubiquitous Language
 
@@ -20,7 +20,7 @@ This repository is the canonical development and distribution home for Jido-firs
 - *user_name* — the human's name per turn; stashed on `agent.state[:user_name]` by the consumer.
 - *forced recall* — the iter-1 `tool_choice` override that pins `memory_search` on the first ReAct iteration.
 - *operator* — the application identity whose local memory is isolated; it is not a Lens and does not determine global visibility.
-- *Lens* — a named ingestion and search channel with an ontology, an ingestion process, and `:operator` or `:global` scope; reserved `default` is the operator's baseline Lens and reserved `global` names the shared group.
+- *Lens* — a named, scoped memory channel. An appending Lens has an ontology and ingestion process; a replaceable Lens has a complete graph format. Reserved `default` is the operator's baseline Lens and reserved `global` names the shared group.
 - *group* — where episodes are stored; graphiti's `group_id`, and its own FalkorDB database, so isolation between groups is physical rather than a filter applied at search time. Every Lens resolves to one: an operator Lens to a group derived from the operator id and Lens name, every global Lens to the one shared `global` group, which is searched unfiltered by originating Lens.
 - *episode* — the unit written to graphiti; an episode search reads back the body that was written, while node and edge search return what the extractor derived from it.
 - *fact* — the text of one edge an edge search returned; recall interprets facts, it does not adjudicate them.
@@ -41,7 +41,7 @@ Two cooperating contexts live in this package: `Gralkor.*` owns the memory domai
 - First-turn-on-fresh-agent: no thread at query time → `MemorySearch` short-circuits, and Lens mounts still plant `agent_name`, `lens`, and `search_lenses` without a session id; capture is skipped only if no thread is committed when completion or failure is handled.
 - A local Lens store resolves its group from the operator id and Lens name; every store write through a global Lens uses the shared global group.
 - Public search always includes the requesting operator's reserved `"default"` Lens first and validates every selected Lens before any query begins. Naming a global Lens searches the whole shared global group, because that is the group its episodes live in; originating Lens is attribution, not a filter.
-- Lens definitions are application-owned and selected by name. The selected callback controls zero, one, or many bound-store writes; `Client.ingest/1` returns its result without an implicit fallback write.
+- Lens definitions are application-owned and selected by name. An appending Lens's callback controls zero, one, or many bound-store writes; a replaceable Lens atomically selects all graph content that Lens owns at its resolved destination. `Client.ingest/1` and `Client.replace/1` return their results without crossing write modes.
 - Every recall carries its query through to interpretation as a required argument, whatever the buffered conversation holds.
 
 ## Decision Rationale

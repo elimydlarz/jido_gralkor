@@ -130,7 +130,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
-| `:lenses` | list of keyword definitions (`:name`, `:ontology`, `:scope`, `:ingestion`) | `[]` | The Lens registry — named ingestion/search channels. Each definition's `:ontology` is a module atom pointing at an ontology module you define in your own application's `lib/` (see [Ontology DSL](#ontology-dsl)) — resolved directly, with no intermediate registry or config-side declaration. Blank, duplicate, reserved (`"default"`, `"global"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
+| `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:scope`, `:ontology`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:scope`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"default"`, `"global"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
 | `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"default"` Lens only — the channel used by mounts with no `:default_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises whenever the implicit default Lens is resolved, including for search. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1` or `search/1`. |
@@ -358,13 +358,15 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate i
 
 **Context rotation.** `JidoGralkor.ContextRotator.rotate_now/2` synchronously flushes the active session via `flush_and_await/2`, installs a fresh Jido thread, and seeds the rotated thread with the most-recent `:keep_last_n` pre-flush entries plus any turns that landed during the flush. It returns `:ok` when there is no committed thread and `{:error, reason}` when state reading, flushing, or thread installation fails. The agent process is never stopped. Use it from a `/new` chat command or a small wrapper GenServer that fires on an interval.
 
-**Error contracts.** Invalid configuration and automatic plugin-capture failures raise. Explicit `Gralkor.Client.ingest/1`, `search/1`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
+**Error contracts.** Invalid configuration and automatic plugin-capture failures raise. Explicit `Gralkor.Client.ingest/1`, `replace/1`, `search/1`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
 
 **`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 
 ## Configure Lenses
 
-A Lens is an application-owned memory channel. Its definition supplies a name, a graphiti ontology, a scope, and the ingestion process Gralkor invokes when content is sent through it.
+A Lens is an application-owned memory channel with `:operator` or `:global` scope. Its write mode is either append, which sends content through an ingestion process, or whole-graph replacement, which replaces the graph content owned by that Lens.
+
+Appending is the default write mode. An appending Lens supplies an ontology and the ingestion process Gralkor invokes when content is sent through it; `write: :append` may be stated explicitly or omitted.
 
 The ontology is a module you compile into your own application — declared once in `lib/`, then named by module in each Lens that should extract with it:
 
@@ -419,6 +421,20 @@ config :jido_gralkor,
   ]
 ```
 
+A replaceable Lens declares `write: :replace_graph` and the graph format it accepts instead of `:ontology` and `:ingestion`:
+
+```elixir
+config :jido_gralkor,
+  lenses: [
+    [
+      name: "systems",
+      scope: :operator,
+      write: :replace_graph,
+      graph_format: :property_graph
+    ]
+  ]
+```
+
 `:operator` Lenses are local to the operator and isolated from every other local Lens. `:global` Lenses all write into the same shared global group. Each global episode records the Lens it arrived through, but searches of that group are intentionally unfiltered and return relevant memory from the whole group.
 
 `Gralkor.Lens.Ingestion.Store` is the built-in straight-through process. A consumer can define any other ingestion process by implementing one callback:
@@ -441,7 +457,7 @@ defmodule MyApp.DecisionIngestion do
 end
 ```
 
-The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The store, rather than consumer code, owns the group id, selected ontology, and global provenance.
+The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The store, rather than consumer code, owns the group id, selected ontology, and global provenance. `Client.ingest/1` accepts appending Lenses; `Client.replace/1` accepts replaceable Lenses.
 
 The plugin mount chooses how an agent uses the registered Lenses:
 
@@ -459,7 +475,7 @@ The plugin mount chooses how an agent uses the registered Lenses:
 - `search_lenses` is an optional list of additional registered Lens names and/or the reserved `"global"` Lens. Every Lens-aware search always includes the requesting operator's reserved `"default"` Lens first; configured Lenses are additive. Omitting the option or using `[]` therefore searches only `"default"`. Naming `"default"` explicitly does not search it twice. Naming a global Lens searches the whole shared `"global"` group, because that is the group its episodes live in.
 - `generalise_lens` is optional. It submits each flushed transcript to a second Lens independently of the primary capture Lens.
 
-Consumers that ingest or search outside an agent call the same public boundary directly:
+Consumers that ingest, replace, or search outside an agent call the same public boundary directly:
 
 ```elixir
 :ok =
@@ -477,9 +493,26 @@ Consumers that ingest or search outside an agent call the same public boundary d
     lenses: ["decisions", "global"],
     max_results: 10
   })
+
+:ok =
+  Gralkor.Client.replace(%Gralkor.Replace{
+    operator_id: "operator-42",
+    lens: "systems",
+    graph: %Gralkor.Graph{
+      format: :property_graph,
+      data: %{
+        nodes: [
+          %{id: "payments", labels: ["System"], properties: %{name: "Payments"}}
+        ],
+        relationships: []
+      }
+    }
+  })
 ```
 
 `Gralkor.Search.lenses` has the same additive meaning as the plugin option: the operator's reserved `"default"` Lens is always searched first. The result limit applies independently to default and every additional Lens, and results retain Lens order.
+
+Replacement is scoped through the Lens exactly like other Lens operations: an operator Lens replaces only that Lens's owned graph content for that operator, while a global Lens replaces that Lens's owned content in the shared global destination. Content owned by another Lens, or carrying no Lens ownership, remains unchanged. An empty graph removes all graph content owned by the selected Lens. The supplied graph format must match the Lens's configured `:graph_format`.
 
 Registry and plugin configuration fail fast for blank, duplicate, reserved, or malformed Lens definitions and for unknown Lens names. If no Lens configuration is used, the implicit `"default"` Lens preserves the existing operator group and deployment-wide `:ontology` behavior.
 
@@ -563,11 +596,11 @@ The Jido glue:
 
 The embedded Gralkor adapter (under `lib/gralkor/`):
 
-- `Gralkor.Client` — legacy adapter behaviour plus the public `ingest/1` and `search/1` Lens boundary.
+- `Gralkor.Client` — legacy adapter behaviour plus the public `ingest/1`, `replace/1`, and `search/1` Lens boundary.
 - `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, `GraphitiPool`, `Generalise`, and `req_llm`.
 - `Gralkor.Client.InMemory` — test twin.
-- `Gralkor.Lens`, `Gralkor.Ingest`, `Gralkor.Search` — the resolved Lens model and consumer request values.
-- `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — the ingestion capability and its collision-safe local/shared-global Graphiti placement.
+- `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, `Gralkor.Ingest`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Search` — the resolved Lens models and consumer request values.
+- `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — append, replacement, and search capabilities with collision-safe local/shared-global Graphiti placement.
 - `Gralkor.Lens.Ingestion.Store` / `Generalise` — built-in straight-through and generalising ingestion processes.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
 - `Gralkor.Generalise` — the retained legacy `_gen` hypothesise → evaluate → persist pipeline.
