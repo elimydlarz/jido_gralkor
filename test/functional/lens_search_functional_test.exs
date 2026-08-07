@@ -262,6 +262,32 @@ defmodule Gralkor.LensSearchFunctionalTest do
                })
     end
 
+    test "and every result identifies the searched Lens that contributed it" do
+      for {lens, content} <- [
+            {"default", "default memory"},
+            {"observations", "observation memory"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   operator_id: "operator-one",
+                   lens: lens,
+                   content: content,
+                   source_description: "functional"
+                 })
+      end
+
+      assert {:ok,
+              [
+                %{lens: "default", fact: "default memory"},
+                %{lens: "observations", fact: "observation memory"}
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 lenses: ["observations"]
+               })
+    end
+
     test "and repeated matches from different groups remain in the response" do
       for lens <- ["observations", "decisions"] do
         assert :ok =
