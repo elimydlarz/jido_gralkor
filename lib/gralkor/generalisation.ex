@@ -82,22 +82,22 @@ defmodule Gralkor.Generalisation do
       end
 
     case String.starts_with?(first_line, @prefix_v1) do
-          true ->
-            json = String.replace_prefix(first_line, @prefix_v1, "")
-            meta = Jason.decode!(json)
+      true ->
+        json = String.replace_prefix(first_line, @prefix_v1, "")
+        meta = Jason.decode!(json)
 
-            gen = %__MODULE__{
-              id: Map.fetch!(meta, "id"),
-              content: String.trim(rest),
-              level: Map.fetch!(meta, "level"),
-              confidence: Map.fetch!(meta, "confidence"),
-              generalises: Map.get(meta, "generalises", [])
-            }
+        gen = %__MODULE__{
+          id: Map.fetch!(meta, "id"),
+          content: String.trim(rest),
+          level: Map.fetch!(meta, "level"),
+          confidence: Map.fetch!(meta, "confidence"),
+          generalises: Map.get(meta, "generalises", [])
+        }
 
-            {:ok, gen, String.trim(rest)}
+        {:ok, gen, String.trim(rest)}
 
-          false ->
-            {:error, :not_a_generalisation}
+      false ->
+        {:error, :not_a_generalisation}
     end
   rescue
     e in Jason.DecodeError ->

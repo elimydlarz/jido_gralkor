@@ -235,13 +235,19 @@ defmodule JidoGralkor.PluginTest do
   describe "when an agent turn begins > while a thread has committed to agent state > where the incoming tool context selects a Lens" do
     test "then the selected Lens is validated and retained on the request-correlated thread entry" do
       plugin_state = lens_plugin_state()
-      signal = Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: "observations"}}, source: "/test")
+
+      signal =
+        Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: "observations"}},
+          source: "/test"
+        )
 
       lens_agent =
         agent("operator-one", thread_id: "thread-one")
         |> put_in([:state, :__memory__], plugin_state)
 
-      assert {:ok, {:continue, %Signal{data: %{tool_context: %{lens: "observations"}, extra_refs: refs}}}} =
+      assert {:ok,
+              {:continue,
+               %Signal{data: %{tool_context: %{lens: "observations"}, extra_refs: refs}}}} =
                Plugin.handle_signal(signal, context(lens_agent))
 
       assert refs.jido_gralkor_lens == "observations"
@@ -251,7 +257,11 @@ defmodule JidoGralkor.PluginTest do
       InMemory.set_capture(:ok)
       plugin_state = lens_plugin_state()
       request_id = "request-retained-lens"
-      signal = Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: "observations"}}, source: "/test")
+
+      signal =
+        Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: "observations"}},
+          source: "/test"
+        )
 
       query_agent =
         agent("operator-one", thread_id: "thread-one")
@@ -281,7 +291,9 @@ defmodule JidoGralkor.PluginTest do
       InMemory.reset()
       InMemory.set_capture(:ok)
 
-      failed = Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
+      failed =
+        Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
+
       assert {:ok, :continue} = Plugin.handle_signal(failed, context(completion_agent))
       assert [[_, _, _, _, _, "observations", ["generalisations"]]] = InMemory.captures()
     end
