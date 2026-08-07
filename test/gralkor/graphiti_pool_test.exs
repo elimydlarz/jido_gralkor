@@ -2170,6 +2170,27 @@ defmodule Gralkor.GraphitiPoolTest do
   defp restore_env(name, nil), do: System.delete_env(name)
   defp restore_env(name, value), do: System.put_env(name, value)
 
+  defp replacement_graphiti do
+    Pythonx.eval(
+      """
+      class _ReplacementDriver:
+          def __init__(self):
+              self.recorded = []
+
+          async def execute_query(self, query, **params):
+              self.recorded.append({"query": query, "params": params})
+              return []
+
+      class _ReplacementGraphiti:
+          def __init__(self):
+              self.driver = _ReplacementDriver()
+
+      _ReplacementGraphiti()
+      """,
+      %{}
+    )
+  end
+
   defp fact_search_result do
     {graph, _} =
       Pythonx.eval(
