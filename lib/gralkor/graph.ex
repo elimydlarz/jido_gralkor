@@ -11,7 +11,7 @@ defmodule Gralkor.Graph do
   defstruct [:format, :data]
 
   @type properties :: %{optional(atom() | String.t()) => term()}
-  @type node :: %{
+  @type graph_node :: %{
           required(:id) => String.t(),
           required(:labels) => [String.t()],
           required(:properties) => properties()
@@ -23,7 +23,7 @@ defmodule Gralkor.Graph do
           required(:properties) => properties()
         }
   @type property_graph :: %{
-          required(:nodes) => [node()],
+          required(:nodes) => [graph_node()],
           required(:relationships) => [relationship()]
         }
   @type t :: %__MODULE__{
