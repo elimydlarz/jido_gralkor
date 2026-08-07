@@ -248,7 +248,41 @@ defmodule JidoGralkor.PluginTest do
     end
 
     test "and the selected Lens remains available to completion and failure capture" do
-      assert true
+      InMemory.set_capture(:ok)
+      plugin_state = lens_plugin_state()
+      request_id = "request-retained-lens"
+      signal = Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: "observations"}}, source: "/test")
+
+      query_agent =
+        agent("operator-one", thread_id: "thread-one")
+        |> put_in([:state, :__memory__], plugin_state)
+
+      assert {:ok, {:continue, %{data: %{extra_refs: refs}}}} =
+               Plugin.handle_signal(signal, context(query_agent))
+
+      request_refs = Map.put(refs, :request_id, request_id)
+
+      completion_agent =
+        query_agent
+        |> put_in([:state, :__thread__], %{id: "thread-one", entries: [%{refs: request_refs}]})
+        |> put_in([:state, :__strategy__, :request_traces], %{
+          request_id => %{events: [%{kind: :llm_completed, data: %{}}]}
+        })
+        |> put_in([:state, :requests], %{request_id => %{query: "hi"}})
+
+      completed =
+        Signal.new!("ai.request.completed", %{request_id: request_id, result: "done"},
+          source: "/test"
+        )
+
+      assert {:ok, :continue} = Plugin.handle_signal(completed, context(completion_agent))
+      assert [[_, _, _, _, _, "observations"]] = InMemory.captures()
+
+      InMemory.reset()
+
+      failed = Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
+      assert {:ok, :continue} = Plugin.handle_signal(failed, context(completion_agent))
+      assert [[_, _, _, _, _, "observations"]] = InMemory.captures()
     end
   end
 
