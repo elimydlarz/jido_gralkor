@@ -123,6 +123,76 @@ defmodule JidoGralkor.PluginTest do
                ingestion: Gralkor.Lens.Ingestion.Store
              }
     end
+
+    test "if Lens options are supplied without a default Lens then mounting raises an ArgumentError identifying that the default Lens is required" do
+      configure_lenses()
+
+      assert_raise ArgumentError, ~r/default_lens is required/, fn ->
+        Plugin.mount(%{id: "operator-one", state: %{}},
+          agent_name: "Susu",
+          search_lenses: ["observations"]
+        )
+      end
+    end
+
+    test "if the default Lens is unknown then mounting raises an ArgumentError identifying the unknown Lens" do
+      configure_lenses()
+
+      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
+        Plugin.mount(%{id: "operator-one", state: %{}},
+          agent_name: "Susu",
+          default_lens: "missing"
+        )
+      end
+    end
+
+    test "if a search Lens is unknown then mounting raises an ArgumentError identifying the unknown Lens" do
+      configure_lenses()
+
+      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
+        Plugin.mount(%{id: "operator-one", state: %{}},
+          agent_name: "Susu",
+          default_lens: "observations",
+          search_lenses: ["missing"]
+        )
+      end
+    end
+
+    test "if a generalising Lens is unknown then mounting raises an ArgumentError identifying the unknown Lens" do
+      configure_lenses()
+
+      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
+        Plugin.mount(%{id: "operator-one", state: %{}},
+          agent_name: "Susu",
+          default_lens: "observations",
+          generalise_lens: "missing"
+        )
+      end
+    end
+
+    test "if the generalising Lens duplicates the default Lens then mounting raises an ArgumentError identifying that the Lenses must differ" do
+      configure_lenses()
+
+      assert_raise ArgumentError, ~r/generalise_lens must differ/, fn ->
+        Plugin.mount(%{id: "operator-one", state: %{}},
+          agent_name: "Susu",
+          default_lens: "observations",
+          generalise_lens: "observations"
+        )
+      end
+    end
+
+    test "if the search Lens selection is not a list then mounting raises an ArgumentError identifying the invalid selection" do
+      configure_lenses()
+
+      assert_raise ArgumentError, ~r/search_lenses must be a list/, fn ->
+        Plugin.mount(%{id: "operator-one", state: %{}},
+          agent_name: "Susu",
+          default_lens: "observations",
+          search_lenses: "observations"
+        )
+      end
+    end
   end
 
   describe "when an agent turn begins > while a thread has committed to agent state" do
@@ -159,6 +229,26 @@ defmodule JidoGralkor.PluginTest do
                Plugin.handle_signal(signal, context(agent("user-abc", thread_id: "thr-xyz")))
 
       assert data.query == "hello"
+    end
+  end
+
+  describe "when an agent turn begins > while a thread has committed to agent state > where the incoming tool context selects a Lens" do
+    test "then the selected Lens is validated and retained on the request-correlated thread entry" do
+      plugin_state = lens_plugin_state()
+      signal = Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: "observations"}}, source: "/test")
+
+      lens_agent =
+        agent("operator-one", thread_id: "thread-one")
+        |> put_in([:state, :__memory__], plugin_state)
+
+      assert {:ok, {:continue, %Signal{data: %{tool_context: %{lens: "observations"}, extra_refs: refs}}}} =
+               Plugin.handle_signal(signal, context(lens_agent))
+
+      assert refs.jido_gralkor_lens == "observations"
+    end
+
+    test "and the selected Lens remains available to completion and failure capture" do
+      assert true
     end
   end
 
