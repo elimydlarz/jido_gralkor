@@ -26,7 +26,19 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     def add_episode(_store, _content, _source_description), do: :ok
 
     @impl true
-    def search(_store, _query, _max_results), do: {:ok, []}
+    def search(store, query, max_results) do
+      send(Process.whereis(:lens_graph_replacement_functional), {
+        :searched,
+        store,
+        query,
+        max_results
+      })
+
+      case store.lens.name do
+        "systems" -> {:ok, ["replacement-owned fact"]}
+        _other -> {:ok, []}
+      end
+    end
 
     @impl true
     def replace_graph(store, graph) do
@@ -295,14 +307,18 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
 
   describe "when a caller searches through a replaceable Lens" do
     test "then the existing Lens search resolves and searches that Lens's scoped destination" do
-      Application.put_env(:jido_gralkor, :lens_storage, InMemory)
-
-      assert {:ok, []} =
+      assert {:ok, [%{lens: "systems", fact: "replacement-owned fact"}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
                  lenses: ["systems"],
                  query: "How does settlement work?"
                })
+
+      assert_receive {:searched,
+                      %Gralkor.Lens.Store{
+                        operator_id: "operator-one",
+                        lens: %Gralkor.Lens.Replaceable{name: "systems", scope: :operator}
+                      }, "How does settlement work?", 20}
     end
   end
 

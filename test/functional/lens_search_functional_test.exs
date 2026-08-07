@@ -127,7 +127,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
   end
 
   describe "when a caller searches memory" do
-    test "then the requesting operator's reserved `default` Lens is always searched first" do
+    test "then results from the requesting operator's reserved `default` Lens precede additional-Lens results" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",

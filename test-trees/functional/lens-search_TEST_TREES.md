@@ -1,7 +1,7 @@
 Functional: lens-search (functional: test/functional/lens_search_functional_test.exs)
 
 when a caller searches memory
-  then the requesting operator's reserved `default` Lens is always searched first
+  then results from the requesting operator's reserved `default` Lens precede additional-Lens results
   and another operator's default memory cannot contribute a result
 
 where a caller supplies additional Lenses to search

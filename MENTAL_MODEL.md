@@ -1,6 +1,6 @@
 ## Core Domain Identity
 
-This repository is the canonical development and distribution home for Jido-first Gralkor. The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` layer owns memory-domain behavior, and applications extend it with Lens ingestion modules.
+This repository is the canonical development and distribution home for Jido-first Gralkor. The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` layer owns memory-domain behavior, and applications extend it with Lens definitions and, for appending Lenses, ingestion modules.
 
 ## World-to-Code Mapping
 
@@ -60,4 +60,4 @@ Two cooperating contexts live in this package: `Gralkor.*` owns the memory domai
 
 ## Temporal View
 
-`ai.react.query` → plant `:session_id` when committed plus `:agent_name`, selected `:lens`, and additional `:search_lenses`, retaining the selected Lens on the request-correlated Jido thread entry → ReAct tools ingest through the default or per-turn Lens and search the operator's reserved `default` Lens followed by each additional selected Lens → a completed or failed request with a committed thread and non-empty canonical trace is buffered under the retained and optional generalising Lenses → flush submits each Lens batch independently. With a committed thread, AgentServer termination starts a fire-and-forget flush. Manual rotation without a thread is a no-op; otherwise `ContextRotator.rotate_now/2` installs a fresh thread seeded with retained and in-flight entries only after a successful synchronous flush, and preserves the current thread when flushing fails.
+`ai.react.query` → plant `:session_id` when committed plus `:agent_name`, selected `:lens`, and additional `:search_lenses`, retaining the selected Lens on the request-correlated Jido thread entry → ReAct tools ingest through the default or per-turn Lens and concurrently search distinct resolved destinations, collapsing all global aliases while returning the reserved `default` results before additional-Lens results → a completed or failed request with a committed thread and non-empty canonical trace is buffered under the retained and optional generalising Lenses → flush submits each Lens batch independently. With a committed thread, AgentServer termination starts a fire-and-forget flush. Manual rotation without a thread is a no-op; otherwise `ContextRotator.rotate_now/2` installs a fresh thread seeded with retained and in-flight entries only after a successful synchronous flush, and preserves the current thread when flushing fails.

@@ -170,7 +170,7 @@ config :jido_gralkor,
 | --- | --- | --- | --- |
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
 | `:default_lens` | no | unset (implicit-default mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. |
-| `:search_lenses` | no | `[]` | Additional registered Lens names and/or the reserved `"global"` Lens. The operator's reserved `"default"` Lens is always searched first; naming it explicitly doesn't search it twice. |
+| `:search_lenses` | no | `[]` | Additional registered Lens names and/or the reserved `"global"` Lens. The operator's reserved `"default"` Lens is always included and its results are returned first; naming it explicitly doesn't search it twice. |
 | `:generalise_lens` | no | unset | Second registered Lens that independently receives each flushed transcript. Must differ from `:default_lens`. |
 
 Per-turn, `tool_context[:lens]` overrides `:default_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
@@ -280,7 +280,7 @@ plugins: [
 ]
 ```
 
-That mount writes captured turns and `memory_add` calls to `"observations"`, submits each flushed transcript independently to `"generalisations"`, and searches the operator's reserved `"default"` Lens (always first, implicitly), then `"decisions"`, then the shared `"global"` group.
+That mount writes captured turns and `memory_add` calls to `"observations"`, submits each flushed transcript independently to `"generalisations"`, and concurrently searches the operator's reserved `"default"` Lens, `"decisions"`, and the shared `"global"` group. Results remain ordered as `"default"`, `"decisions"`, then `"global"`.
 
 **On `:ontology` vs. Lens `ontology:`.** They are not a declaration and a reference to it; they are two different channels, each with its own binding. `:ontology` configures exactly one channel — the implicit `"default"` Lens, which cannot be registered in `:lenses` because the name is reserved. Set `:ontology` only if you run mounts without `:default_lens` (implicit-default mode), or call the legacy `memory_add/3` and `capture/5` surface directly. It has no effect on writes through a registered Lens or on search filtering and results, though resolving the implicit default Lens during search still validates the configured module.
 
