@@ -464,6 +464,51 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
+
+    test "and each supplied node is inserted with its identifier, labels, properties, and reserved Lens ownership field" do
+      {g, _} = replacement_graphiti()
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok =
+               GraphitiPool.replace_graph(
+                 pid,
+                 "g1",
+                 "systems",
+                 :property_graph,
+                 %{
+                   nodes: [
+                     %{
+                       id: "payments",
+                       labels: ["System", "Critical"],
+                       properties: %{name: "Payments", priority: 1}
+                     }
+                   ],
+                   relationships: []
+                 }
+               )
+
+      {recorded, _} = Pythonx.eval("g.driver.recorded", %{"g" => g})
+      [_, _, node_insert] = Pythonx.decode(recorded)
+
+      assert node_insert["query"] =~ "CREATE (node:`System`:`Critical`)"
+
+      assert node_insert["params"] == %{
+               "properties" => %{
+                 "id" => "payments",
+                 "name" => "Payments",
+                 "priority" => 1,
+                 "_gralkor_lens" => "systems"
+               }
+             }
+
+      GenServer.stop(pid)
+    end
   end
 
   describe "when a fact search is run for a group" do
