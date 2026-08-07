@@ -151,7 +151,9 @@ defmodule Gralkor.Lens.Storage.Graphiti do
 
   defp replace_graph_option(opts) do
     case Keyword.pop(opts, :replace_graph_fn, &graph_replace/4) do
-      {replace_graph_fn, []} -> replace_graph_fn
+      {replace_graph_fn, []} ->
+        replace_graph_fn
+
       {_replace_graph_fn, unsupported} ->
         raise ArgumentError, "unsupported replace options #{inspect(unsupported)}"
     end

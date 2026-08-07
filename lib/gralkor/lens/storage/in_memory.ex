@@ -121,7 +121,7 @@ defmodule Gralkor.Lens.Storage.InMemory do
          operator_id: operator_id,
          lens: %Replaceable{name: lens_name, scope: :operator}
        }),
-    do: {operator_id, lens_name}
+       do: {operator_id, lens_name}
 
   defp key(%Store{lens: %Replaceable{scope: :global}}), do: :global
 

@@ -617,7 +617,6 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-
   describe "where the supplied complete property graph is empty" do
     test "then every node and relationship owned by the Lens is removed" do
       {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})

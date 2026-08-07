@@ -134,7 +134,10 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
 
     test "and nodes and relationships owned by another Lens at the resolved destination remain unchanged" do
-      use_in_memory(:global, [replaceable_lens("systems", :global), replaceable_lens("catalogue", :global)])
+      use_in_memory(:global, [
+        replaceable_lens("systems", :global),
+        replaceable_lens("catalogue", :global)
+      ])
 
       assert :ok = Client.replace(request(graph("catalogue"), "catalogue"))
       assert :ok = Client.replace(request(graph("systems")))
@@ -145,7 +148,11 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     test "and nodes and relationships without the reserved Lens ownership field at the resolved destination remain unchanged" do
       use_in_memory(:global)
 
-      unowned = %{nodes: [%{id: "manual", labels: ["External"], properties: %{}}], relationships: []}
+      unowned = %{
+        nodes: [%{id: "manual", labels: ["External"], properties: %{}}],
+        relationships: []
+      }
+
       :sys.replace_state(InMemory, &Map.put(&1, {:graph, :global}, unowned))
 
       assert :ok = Client.replace(request(graph("systems")))
@@ -359,8 +366,17 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     [
       %{},
       %{nodes: :invalid, relationships: []},
-      %{nodes: [%{id: "duplicate", labels: [], properties: %{}}, %{id: "duplicate", labels: [], properties: %{}}], relationships: []},
-      %{nodes: [%{id: "source", labels: [], properties: %{}}], relationships: [%{from: "source", to: "missing", type: "LINKS", properties: %{}}]}
+      %{
+        nodes: [
+          %{id: "duplicate", labels: [], properties: %{}},
+          %{id: "duplicate", labels: [], properties: %{}}
+        ],
+        relationships: []
+      },
+      %{
+        nodes: [%{id: "source", labels: [], properties: %{}}],
+        relationships: [%{from: "source", to: "missing", type: "LINKS", properties: %{}}]
+      }
     ]
   end
 

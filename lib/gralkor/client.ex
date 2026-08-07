@@ -156,7 +156,8 @@ defmodule Gralkor.Client do
     validate_property_graph_relationships!(relationships, node_ids, data)
   end
 
-  defp validate_property_graph!(data), do: invalid_property_graph!("expected node and relationship lists", data)
+  defp validate_property_graph!(data),
+    do: invalid_property_graph!("expected node and relationship lists", data)
 
   defp validate_property_graph_nodes!(nodes, data) do
     Enum.reduce(nodes, MapSet.new(), fn node, node_ids ->
@@ -232,7 +233,8 @@ defmodule Gralkor.Client do
           attributed = Enum.map(lens_results, &%{lens: lens_name, fact: &1})
           {:cont, {:ok, results ++ attributed}}
 
-        {_lens_name, {:error, _reason} = error} -> {:halt, error}
+        {_lens_name, {:error, _reason} = error} ->
+          {:halt, error}
       end
     end)
   end
@@ -264,7 +266,8 @@ defmodule Gralkor.Client do
     end
   end
 
-  defp search_target!(_operator_id, name), do: raise(ArgumentError, "invalid Lens #{inspect(name)}")
+  defp search_target!(_operator_id, name),
+    do: raise(ArgumentError, "invalid Lens #{inspect(name)}")
 
   @spec validate_max_results!(term()) :: :ok
   defp validate_max_results!(max_results) when is_integer(max_results) and max_results > 0,

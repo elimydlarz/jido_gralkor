@@ -379,8 +379,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
       assert :ok = Graphiti.replace_graph(store, graph, replace_graph_fn: replace_graph_fn)
 
-      assert_receive {:graph_replaced,
-                      "lens_6f70657261746f722d6f6e65_73797374656d73"}
+      assert_receive {:graph_replaced, "lens_6f70657261746f722d6f6e65_73797374656d73"}
     end
 
     test "and graph replacement receives the selected Lens name, configured graph format, and supplied graph data" do
@@ -473,12 +472,10 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                )
 
       assert {:ok, []} =
-               Graphiti.search(replaceable_store(:global), "settlement", 5,
-                 search_fn: search_fn
-               )
+               Graphiti.search(replaceable_store(:global), "settlement", 5, search_fn: search_fn)
 
-      assert_receive {:graph_search,
-                      "lens_6f70657261746f722d6f6e65_73797374656d73", "settlement", 5}
+      assert_receive {:graph_search, "lens_6f70657261746f722d6f6e65_73797374656d73", "settlement",
+                      5}
 
       assert_receive {:graph_search, "global", "settlement", 5}
     end
