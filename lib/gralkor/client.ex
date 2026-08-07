@@ -117,9 +117,86 @@ defmodule Gralkor.Client do
 
   @spec replace(Replace.t()) :: :ok | {:error, term()}
   def replace(%Replace{lens: lens_name, graph: graph} = request) do
-    lens = lens!(lens_name)
-    store = %Store{operator_id: request.operator_id, lens: lens}
-    Store.replace_graph(store, graph)
+    case lens!(lens_name) do
+      %ReplaceableLens{} = lens ->
+        validate_graph!(lens, graph)
+        store = %Store{operator_id: request.operator_id, lens: lens}
+        Store.replace_graph(store, graph)
+
+      %Lens{} ->
+        raise ArgumentError, "Lens #{inspect(lens_name)} accepts only episode ingestion"
+    end
+  end
+
+  defp validate_graph!(
+         %ReplaceableLens{graph_format: expected},
+         %Gralkor.Graph{format: supplied}
+       )
+       when expected != supplied do
+    raise ArgumentError,
+          "Lens graph format mismatch: expected #{inspect(expected)}, supplied #{inspect(supplied)}"
+  end
+
+  defp validate_graph!(%ReplaceableLens{graph_format: :property_graph}, %Gralkor.Graph{
+         data: data
+       }) do
+    validate_property_graph!(data)
+  end
+
+  defp validate_property_graph!(%{nodes: nodes, relationships: relationships} = data)
+       when is_list(nodes) and is_list(relationships) do
+    node_ids = validate_property_graph_nodes!(nodes, data)
+    validate_property_graph_relationships!(relationships, node_ids, data)
+  end
+
+  defp validate_property_graph!(data), do: invalid_property_graph!("expected node and relationship lists", data)
+
+  defp validate_property_graph_nodes!(nodes, data) do
+    Enum.reduce(nodes, MapSet.new(), fn node, node_ids ->
+      case node do
+        %{id: id, labels: labels, properties: properties}
+        when is_binary(id) and is_list(labels) and is_map(properties) ->
+          unless String.trim(id) != "" and
+                   Enum.all?(labels, &(is_binary(&1) and String.trim(&1) != "")) do
+            invalid_property_graph!("invalid node", data)
+          end
+
+          if MapSet.member?(node_ids, id) do
+            invalid_property_graph!("duplicate node identifier #{inspect(id)}", data)
+          end
+
+          MapSet.put(node_ids, id)
+
+        _ ->
+          invalid_property_graph!("invalid node", data)
+      end
+    end)
+  end
+
+  defp validate_property_graph_relationships!(relationships, node_ids, data) do
+    Enum.each(relationships, fn relationship ->
+      case relationship do
+        %{from: source, to: destination, type: type, properties: properties}
+        when is_binary(source) and is_binary(destination) and is_binary(type) and
+               is_map(properties) ->
+          unless String.trim(type) != "" do
+            invalid_property_graph!("invalid relationship", data)
+          end
+
+          Enum.each([source, destination], fn endpoint ->
+            unless MapSet.member?(node_ids, endpoint) do
+              invalid_property_graph!("missing relationship endpoint #{inspect(endpoint)}", data)
+            end
+          end)
+
+        _ ->
+          invalid_property_graph!("invalid relationship", data)
+      end
+    end)
+  end
+
+  defp invalid_property_graph!(reason, data) do
+    raise ArgumentError, "invalid property_graph data: #{reason}; got #{inspect(data)}"
   end
 
   @spec search(Search.t()) :: {:ok, [String.t()]} | {:error, term()}
