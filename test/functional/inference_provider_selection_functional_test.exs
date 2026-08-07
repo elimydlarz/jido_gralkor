@@ -142,12 +142,14 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       end
 
       configure("openai:gpt-5.6-luna", "openai:text-embedding-3-small")
+      data_dir = Path.join(System.tmp_dir!(), "gralkor_reasoning_#{System.unique_integer([:positive])}")
+      on_exit(fn -> File.rm_rf!(data_dir) end)
 
       {:ok, pid} =
         GraphitiPool.start_link(
           name: nil,
           table: :"provider_reasoning_#{System.unique_integer([:positive])}",
-          falkordb_spec: {:embedded, System.tmp_dir!()},
+          falkordb_spec: {:embedded, data_dir},
           llm_model: Config.llm_model(),
           embedder_model: Config.embedder_model(),
           construct_falkor_db: fn _ -> :stub_falkor_db end,
