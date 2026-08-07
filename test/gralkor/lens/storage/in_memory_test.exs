@@ -173,6 +173,30 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
                relationships: [%{properties: %{_gralkor_lens: "systems"}}]
              } = InMemory.graph({"operator-one", "systems"})
     end
+
+    test "and graph content owned by another Lens at that destination remains unchanged" do
+      catalogue = replaceable_store("operator-one", "catalogue", :global)
+      systems = replaceable_store("operator-one", "systems", :global)
+
+      assert :ok =
+               Store.replace_graph(
+                 catalogue,
+                 %Gralkor.Graph{format: :property_graph, data: graph_data("catalogue")}
+               )
+
+      assert :ok =
+               Store.replace_graph(
+                 systems,
+                 %Gralkor.Graph{format: :property_graph, data: graph_data("systems")}
+               )
+
+      assert %{nodes: nodes} = InMemory.graph(:global)
+
+      assert Enum.map(nodes, &{&1.id, &1.properties._gralkor_lens}) == [
+               {"catalogue", "catalogue"},
+               {"systems", "systems"}
+             ]
+    end
   end
 
   defp local_store(operator_id, name) do
