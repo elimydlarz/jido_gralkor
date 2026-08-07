@@ -1,6 +1,6 @@
 Functional: lens-registration (functional: test/functional/lens_registration_functional_test.exs)
 
-when an application registers a valid Lens
+when an application registers a valid append-oriented or replaceable Lens
   then direct callers and mounted memory plugins can select that Lens by name
   and every consumer observes the same application-owned Lens definition
 
@@ -16,3 +16,6 @@ if an application registers an invalid Lens
   and an invalid Lens ontology is identified with its Lens
   and an invalid Lens scope is identified with its Lens
   and an invalid Lens ingestion process is identified with its Lens
+  and an invalid Lens write mode is identified with its Lens
+  and a replaceable Lens without a graph format is identified with its Lens
+  and a Lens definition that combines append-oriented and replaceable write settings is identified with its Lens

@@ -12,6 +12,10 @@ where information is submitted directly without a mounted plugin or conversation
 if ingestion selects an invalid Lens
   then ingestion fails before an ingestion process runs or memory is stored
 
+if episode ingestion selects a replaceable Lens
+  then ingestion fails with an error identifying that the Lens accepts only whole-graph replacement
+  and no existing graph content is removed or inserted
+
 if the selected Lens's ingestion process fails
   then ingestion returns that failure to the caller
   and no fallback write bypasses the selected process
