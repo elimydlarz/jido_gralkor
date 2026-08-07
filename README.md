@@ -491,7 +491,7 @@ Consumers that ingest, replace, or search outside an agent call the same public 
     operator_id: "operator-42",
     query: "When should we release?",
     lenses: ["decisions", "global"],
-    max_results: 10
+    max_results: 20
   })
 
 :ok =
