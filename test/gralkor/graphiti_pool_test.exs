@@ -465,6 +465,17 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
+    test "and every node carrying that Lens's reserved ownership field is removed" do
+      {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
+
+      assert :ok = result
+      [_, node_delete] = recorded
+      assert node_delete["query"] =~ "DETACH DELETE node"
+      assert node_delete["params"] == %{"lens" => "systems"}
+
+      GenServer.stop(pid)
+    end
+
     test "and each supplied node is inserted with its identifier, labels, properties, and reserved Lens ownership field" do
       {g, _} = replacement_graphiti()
 
@@ -557,6 +568,173 @@ defmodule Gralkor.GraphitiPoolTest do
                  "_gralkor_lens" => "systems"
                }
              }
+
+      GenServer.stop(pid)
+    end
+
+    test "and nodes and relationships owned by another Lens remain unchanged" do
+      {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
+
+      assert :ok = result
+
+      assert Enum.all?(recorded, fn operation ->
+               operation["params"] == %{"lens" => "systems"}
+             end)
+
+      GenServer.stop(pid)
+    end
+
+    test "and nodes and relationships without the reserved Lens ownership field remain unchanged" do
+      {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
+
+      assert :ok = result
+
+      assert Enum.all?(recorded, fn operation ->
+               operation["query"] =~ "._gralkor_lens = $lens"
+             end)
+
+      GenServer.stop(pid)
+    end
+
+    test "and success is returned after every supplied node and relationship is inserted" do
+      graph = %{
+        nodes: [
+          %{id: "payments", labels: ["System"], properties: %{}},
+          %{id: "ledger", labels: ["System"], properties: %{}}
+        ],
+        relationships: [
+          %{from: "payments", to: "ledger", type: "DEPENDS_ON", properties: %{}}
+        ]
+      }
+
+      {result, recorded, pid} = run_graph_replacement(graph)
+
+      assert :ok = result
+      assert length(recorded) == 5
+
+      GenServer.stop(pid)
+    end
+  end
+
+
+  describe "where the supplied complete property graph is empty" do
+    test "then every node and relationship owned by the Lens is removed" do
+      {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
+
+      assert :ok = result
+      assert length(recorded) == 2
+
+      GenServer.stop(pid)
+    end
+
+    test "and no node or relationship insertion is attempted" do
+      {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
+
+      assert :ok = result
+      refute Enum.any?(recorded, &(&1["query"] =~ "CREATE"))
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "if removing Lens-owned graph content fails" do
+    test "then the graph failure is returned" do
+      {result, _recorded, pid} =
+        run_graph_replacement(%{nodes: [], relationships: []}, fail_at: 1)
+
+      assert {:error, {:python, reason}} = result
+      assert reason =~ "replacement query 1 failed"
+
+      GenServer.stop(pid)
+    end
+
+    test "and no supplied node or relationship is inserted" do
+      graph = %{
+        nodes: [%{id: "payments", labels: ["System"], properties: %{}}],
+        relationships: []
+      }
+
+      {_result, recorded, pid} = run_graph_replacement(graph, fail_at: 1)
+      assert length(recorded) == 1
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "if inserting a supplied node fails" do
+    test "then the graph failure is returned" do
+      graph = %{
+        nodes: [%{id: "payments", labels: ["System"], properties: %{}}],
+        relationships: []
+      }
+
+      {result, _recorded, pid} = run_graph_replacement(graph, fail_at: 3)
+      assert {:error, {:python, reason}} = result
+      assert reason =~ "replacement query 3 failed"
+
+      GenServer.stop(pid)
+    end
+
+    test "and no supplied relationship is inserted" do
+      graph = %{
+        nodes: [%{id: "payments", labels: ["System"], properties: %{}}],
+        relationships: [
+          %{from: "payments", to: "payments", type: "DEPENDS_ON", properties: %{}}
+        ]
+      }
+
+      {_result, recorded, pid} = run_graph_replacement(graph, fail_at: 3)
+      assert length(recorded) == 3
+
+      GenServer.stop(pid)
+    end
+
+    test "and removed Lens-owned content is not restored" do
+      graph = %{
+        nodes: [%{id: "payments", labels: ["System"], properties: %{}}],
+        relationships: []
+      }
+
+      {_result, recorded, pid} = run_graph_replacement(graph, fail_at: 3)
+      refute Enum.any?(recorded, &(&1["query"] =~ "RESTORE"))
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "if inserting a supplied relationship fails" do
+    test "then the graph failure is returned" do
+      graph = %{
+        nodes: [
+          %{id: "payments", labels: ["System"], properties: %{}},
+          %{id: "ledger", labels: ["System"], properties: %{}}
+        ],
+        relationships: [
+          %{from: "payments", to: "ledger", type: "DEPENDS_ON", properties: %{}}
+        ]
+      }
+
+      {result, _recorded, pid} = run_graph_replacement(graph, fail_at: 5)
+      assert {:error, {:python, reason}} = result
+      assert reason =~ "replacement query 5 failed"
+
+      GenServer.stop(pid)
+    end
+
+    test "and removed Lens-owned content and inserted nodes are not restored" do
+      graph = %{
+        nodes: [
+          %{id: "payments", labels: ["System"], properties: %{}},
+          %{id: "ledger", labels: ["System"], properties: %{}}
+        ],
+        relationships: [
+          %{from: "payments", to: "ledger", type: "DEPENDS_ON", properties: %{}}
+        ]
+      }
+
+      {_result, recorded, pid} = run_graph_replacement(graph, fail_at: 5)
+      assert length(recorded) == 5
+      refute Enum.any?(recorded, &(&1["query"] =~ "RESTORE"))
 
       GenServer.stop(pid)
     end
@@ -2266,25 +2444,43 @@ defmodule Gralkor.GraphitiPoolTest do
   defp restore_env(name, nil), do: System.delete_env(name)
   defp restore_env(name, value), do: System.put_env(name, value)
 
-  defp replacement_graphiti do
+  defp replacement_graphiti(fail_at \\ nil) do
     Pythonx.eval(
       """
       class _ReplacementDriver:
-          def __init__(self):
+          def __init__(self, fail_at):
               self.recorded = []
+              self.fail_at = fail_at
 
           async def execute_query(self, query, **params):
               self.recorded.append({"query": query, "params": params})
+              if self.fail_at == len(self.recorded):
+                  raise RuntimeError(f"replacement query {self.fail_at} failed")
               return []
 
       class _ReplacementGraphiti:
-          def __init__(self):
-              self.driver = _ReplacementDriver()
+          def __init__(self, fail_at):
+              self.driver = _ReplacementDriver(fail_at)
 
-      _ReplacementGraphiti()
+      _ReplacementGraphiti(fail_at)
       """,
-      %{}
+      %{"fail_at" => fail_at}
     )
+  end
+
+  defp run_graph_replacement(graph, opts \\ []) do
+    {g, _} = replacement_graphiti(Keyword.get(opts, :fail_at))
+
+    %{pid: pid} =
+      start_pool(
+        construct_instance: fn _db, _shared, _group_id -> g end,
+        warmup: false,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0
+      )
+
+    result = GraphitiPool.replace_graph(pid, "g1", "systems", :property_graph, graph)
+    {recorded, _} = Pythonx.eval("g.driver.recorded", %{"g" => g})
+    {result, Pythonx.decode(recorded), pid}
   end
 
   defp fact_search_result do
