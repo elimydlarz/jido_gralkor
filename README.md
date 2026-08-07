@@ -472,7 +472,7 @@ The plugin mount chooses how an agent uses the registered Lenses:
 ```
 
 - `default_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
-- `search_lenses` is an optional list of additional registered Lens names and/or the reserved `"global"` Lens. Every Lens-aware search always includes the requesting operator's reserved `"default"` Lens first; configured Lenses are additive. Omitting the option or using `[]` therefore searches only `"default"`. Naming `"default"` explicitly does not search it twice. Naming a global Lens searches the whole shared `"global"` group, because that is the group its episodes live in.
+- `search_lenses` is an optional list of additional registered Lens names and/or the reserved `"global"` Lens. Every Lens-aware search always includes the requesting operator's reserved `"default"` Lens; configured Lenses are additive and all resolved destinations are searched concurrently. Omitting the option or using `[]` therefore searches only `"default"`. Naming `"default"` explicitly does not search it twice. Naming one or more global Lenses searches the shared `"global"` group once.
 - `generalise_lens` is optional. It submits each flushed transcript to a second Lens independently of the primary capture Lens.
 
 Consumers that ingest, replace, or search outside an agent call the same public boundary directly:
@@ -518,7 +518,9 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   })
 ```
 
-`Gralkor.Search.lenses` has the same additive meaning as the plugin option: the operator's reserved `"default"` Lens is always searched first. The result limit applies independently to default and every additional Lens, and results retain Lens order.
+`Gralkor.Search.lenses` has the same additive meaning as the plugin option. The reserved `"default"` Lens is private to the requesting operator and preserves the original operator memory group. The reserved `"global"` Lens is the one shared group used by every global Lens and every operator; it is searched only when selected directly or through a registered global Lens. Distinct names resolving to that shared group cause one physical search.
+
+Searches run concurrently while results retain configured Lens order. `max_results` must be a positive integer and applies independently to every resolved destination. Each returned item has `%{lens: searched_lens, fact: fact}`; global results use `lens: "global"` because global search is unfiltered by originating Lens. Repeated facts from distinct local Lens groups remain separate results. The Lens-aware `memory_search` action returns this attributed list as JSON.
 
 `:property_graph` is the supported replacement format. Every node requires a unique, non-blank string `:id`, a list of non-blank string `:labels`, and a `:properties` map. Every relationship requires `:from` and `:to` identifiers naming supplied nodes, a non-blank string `:type`, and a `:properties` map. This payload is the whole current graph for the Lens; partial node and relationship operations are not supported.
 

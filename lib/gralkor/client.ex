@@ -5,11 +5,11 @@ defmodule Gralkor.Client do
   Named Lens operations use `ingest/1`, `replace/1`, and `search/1`. Ingestion
   resolves an appending Lens and invokes its ingestion process with a
   Lens-bound store. Replacement validates and stores the complete graph for a
-  replaceable Lens. Search always begins with the requesting operator's
-  reserved `"default"` Lens, then searches each additionally selected Lens.
-  Every Lens resolves to the group its episodes live in, so naming a global
-  Lens searches the whole shared `"global"` group; the originating Lens is
-  attribution, not a search boundary.
+  replaceable Lens. Search always includes the requesting operator's reserved
+  `"default"` Lens and searches every distinct selected destination
+  concurrently. Every Lens resolves to the group its content lives in, so all
+  selected global Lens names collapse to one shared `"global"` search. Results
+  retain Lens order and attribute each fact to its searched Lens.
 
   The compatibility surface remains `recall/4`, `capture/5`, `flush/1`,
   `flush_and_await/2`, and `memory_add/3` or `/4`. Lens-aware capture uses
