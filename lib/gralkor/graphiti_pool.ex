@@ -37,7 +37,7 @@ defmodule Gralkor.GraphitiPool do
         group_id,
         lens_name,
         :property_graph,
-        %{nodes: nodes, relationships: _relationships}
+        %{nodes: nodes, relationships: relationships}
       ) do
     instance = __MODULE__.for(server, group_id)
 
@@ -77,9 +77,32 @@ defmodule Gralkor.GraphitiPool do
               f'CREATE (node{labels}) SET node = $properties',
               properties=properties,
           ))
+      for supplied_relationship in relationships:
+          source_id = text(get(supplied_relationship, 'from'))
+          destination_id = text(get(supplied_relationship, 'to'))
+          relationship_type = identifier(get(supplied_relationship, 'type'))
+          supplied_properties = get(supplied_relationship, 'properties')
+          properties = {text(key): value for key, value in supplied_properties.items()}
+          properties['_gralkor_lens'] = owner
+          asyncio._gralkor_run(g.driver.execute_query(
+              'MATCH (source), (destination) '
+              'WHERE source._gralkor_lens = $lens AND source.id = $source_id '
+              'AND destination._gralkor_lens = $lens AND destination.id = $destination_id '
+              f'CREATE (source)-[relationship:{relationship_type}]->(destination) '
+              'SET relationship = $properties',
+              lens=owner,
+              source_id=source_id,
+              destination_id=destination_id,
+              properties=properties,
+          ))
       None
       """,
-      %{"g" => instance, "lens" => lens_name, "nodes" => nodes}
+      %{
+        "g" => instance,
+        "lens" => lens_name,
+        "nodes" => nodes,
+        "relationships" => relationships
+      }
     )
 
     :ok
