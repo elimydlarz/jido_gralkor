@@ -224,6 +224,27 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
                {"systems", "systems"}
              ]
     end
+
+    test "and graph content without a Lens owner at that destination remains unchanged" do
+      unowned_graph = %{
+        nodes: [%{id: "unowned", labels: ["External"], properties: %{source: "manual"}}],
+        relationships: []
+      }
+
+      :sys.replace_state(InMemory, &Map.put(&1, {:graph, :global}, unowned_graph))
+
+      systems = replaceable_store("operator-one", "systems", :global)
+
+      assert :ok =
+               Store.replace_graph(
+                 systems,
+                 %Gralkor.Graph{format: :property_graph, data: graph_data("systems")}
+               )
+
+      assert %{nodes: [unowned, owned]} = InMemory.graph(:global)
+      assert unowned == %{id: "unowned", labels: ["External"], properties: %{source: "manual"}}
+      assert owned.id == "systems"
+    end
   end
 
   defp local_store(operator_id, name) do
