@@ -232,7 +232,7 @@ defmodule Gralkor.Client do
           attributed = Enum.map(lens_results, &%{lens: lens_name, fact: &1})
           {:cont, {:ok, results ++ attributed}}
 
-        {:error, _reason} = error -> {:halt, error}
+        {_lens_name, {:error, _reason} = error} -> {:halt, error}
       end
     end)
   end

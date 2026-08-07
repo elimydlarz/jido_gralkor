@@ -128,7 +128,11 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  source_description: "observation"
                })
 
-      assert {:ok, ["default memory", "observation memory"]} =
+      assert {:ok,
+              [
+                %{lens: "default", fact: "default memory"},
+                %{lens: "observations", fact: "observation memory"}
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
@@ -150,7 +154,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  })
       end
 
-      assert {:ok, ["first operator memory"]} =
+      assert {:ok, [%{lens: "default", fact: "first operator memory"}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory"
@@ -168,7 +172,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  source_description: "legacy"
                })
 
-      assert {:ok, ["default memory"]} =
+      assert {:ok, [%{lens: "default", fact: "default memory"}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
@@ -187,7 +191,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  source_description: "legacy"
                })
 
-      assert {:ok, ["default memory"]} =
+      assert {:ok, [%{lens: "default", fact: "default memory"}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory"
@@ -220,30 +224,11 @@ defmodule Gralkor.LensSearchFunctionalTest do
 
       Enum.each(started, fn {_lens, search_process} -> send(search_process, :finish_search) end)
 
-      assert {:ok, ["default memory", "observations memory"]} = Task.await(search)
-    end
-
-    test "then every additional Lens is searched after the requesting operator's reserved `default` Lens" do
-      for {lens, content} <- [
-            {"default", "default memory"},
-            {"observations", "observation memory"},
-            {"decisions", "decision memory"}
-          ] do
-        assert :ok =
-                 Client.ingest(%Ingest{
-                   operator_id: "operator-one",
-                   lens: lens,
-                   content: content,
-                   source_description: "functional"
-                 })
-      end
-
-      assert {:ok, ["default memory", "decision memory", "observation memory"]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 lenses: ["decisions", "observations"]
-               })
+      assert {:ok,
+              [
+                %{lens: "default", fact: "default memory"},
+                %{lens: "observations", fact: "observations memory"}
+              ]} = Task.await(search)
     end
 
     test "and additional results retain their configured Lens order" do
@@ -260,7 +245,11 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  })
       end
 
-      assert {:ok, ["observation memory", "decision memory"]} =
+      assert {:ok,
+              [
+                %{lens: "observations", fact: "observation memory"},
+                %{lens: "decisions", fact: "decision memory"}
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
@@ -305,7 +294,11 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  })
       end
 
-      assert {:ok, ["shared memory", "shared memory"]} =
+      assert {:ok,
+              [
+                %{lens: "observations", fact: "shared memory"},
+                %{lens: "decisions", fact: "shared memory"}
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
@@ -329,7 +322,11 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  })
       end
 
-      assert {:ok, ["default one", "observation one"]} =
+      assert {:ok,
+              [
+                %{lens: "default", fact: "default one"},
+                %{lens: "observations", fact: "observation one"}
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
@@ -353,7 +350,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  })
       end
 
-      assert {:ok, ["selected memory"]} =
+      assert {:ok, [%{lens: "observations", fact: "selected memory"}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
@@ -377,7 +374,11 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  })
       end
 
-      assert {:ok, ["published observation", "published decision"]} =
+      assert {:ok,
+              [
+                %{lens: "global", fact: "published observation"},
+                %{lens: "global", fact: "published decision"}
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "published",
@@ -399,7 +400,11 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  })
       end
 
-      assert {:ok, ["published observation", "published decision"]} =
+      assert {:ok,
+              [
+                %{lens: "global", fact: "published observation"},
+                %{lens: "global", fact: "published decision"}
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "published",
@@ -412,7 +417,11 @@ defmodule Gralkor.LensSearchFunctionalTest do
     test "then its group is the shared global group, so the whole global group is searched" do
       publish_global_episodes()
 
-      assert {:ok, ["published observation", "published decision"]} =
+      assert {:ok,
+              [
+                %{lens: "global", fact: "published observation"},
+                %{lens: "global", fact: "published decision"}
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "published",
