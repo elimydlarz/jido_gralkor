@@ -293,7 +293,6 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       assert {:ok, []} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
-                 lens: "systems",
                  lenses: ["systems"],
                  query: "How does settlement work?"
                })
