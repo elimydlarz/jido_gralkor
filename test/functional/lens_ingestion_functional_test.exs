@@ -63,6 +63,12 @@ defmodule Gralkor.LensIngestionFunctionalTest do
 
     @impl true
     def search(_store, _query, _max_results), do: {:ok, []}
+
+    @impl true
+    def replace_graph(_store, _graph) do
+      send(Process.whereis(:lens_ingestion_functional), :graph_replaced)
+      :ok
+    end
   end
 
   setup do
@@ -152,6 +158,38 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       end
 
       refute_receive {:ingested, _, _}
+      refute_receive {:episode_added, _, _, _}
+    end
+  end
+
+  describe "if episode ingestion selects a replaceable Lens" do
+    test "then ingestion fails with an error identifying that the Lens accepts only whole-graph replacement" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          scope: :operator,
+          write: :replace_graph,
+          graph_format: :property_graph
+        ]
+      ])
+
+      assert_raise ArgumentError, ~r/observations.*only whole-graph replacement/, fn ->
+        Client.ingest(request("information"))
+      end
+    end
+
+    test "and no existing graph content is removed or inserted" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          scope: :operator,
+          write: :replace_graph,
+          graph_format: :property_graph
+        ]
+      ])
+
+      assert_raise ArgumentError, fn -> Client.ingest(request("information")) end
+      refute_receive :graph_replaced
       refute_receive {:episode_added, _, _, _}
     end
   end
