@@ -18,6 +18,18 @@ if mount is given a blank agent name
 when mount selects a default Lens, Lenses to search, and an optional generalising Lens
   then those selections are resolved against the application Lens registry and stored on the plugin state
   and the resolved Lens keeps the ontology, scope, and ingestion the registry declared for it, redefining none of them
+  if Lens options are supplied without a default Lens
+    then mounting raises an ArgumentError identifying that the default Lens is required
+  if the default Lens is unknown
+    then mounting raises an ArgumentError identifying the unknown Lens
+  if a search Lens is unknown
+    then mounting raises an ArgumentError identifying the unknown Lens
+  if a generalising Lens is unknown
+    then mounting raises an ArgumentError identifying the unknown Lens
+  if the generalising Lens duplicates the default Lens
+    then mounting raises an ArgumentError identifying that the Lenses must differ
+  if the search Lens selection is not a list
+    then mounting raises an ArgumentError identifying the invalid selection
 
 when an agent turn begins
   while a thread has committed to agent state
@@ -25,6 +37,9 @@ when an agent turn begins
     and the mounted agent name is planted on the tool context beside it
     and no recall is issued on the plugin's own initiative
     and the user's query is left untouched on the signal
+    where the incoming tool context selects a Lens
+      then the selected Lens is validated and retained on the request-correlated thread entry
+      and the selected Lens remains available to completion and failure capture
   while no thread has committed to agent state
     then only the mounted agent name is planted on the tool context, with no session id
     and no recall is issued on the plugin's own initiative
