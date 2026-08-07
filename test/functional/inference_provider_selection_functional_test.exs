@@ -128,9 +128,7 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       assert Process.alive?(pid)
       GenServer.stop(pid)
     end
-  end
 
-  describe "when the deployment configures an inference LLM and an embedder" do
     test "and an OpenAI LLM that rejects `minimal` receives `none` explicitly instead of the graph library's default" do
       credentials("google-key", "openai-key")
       configure("openai:gpt-5.6-luna", "openai:text-embedding-3-small")
