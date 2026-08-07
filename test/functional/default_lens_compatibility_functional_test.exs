@@ -40,7 +40,7 @@ defmodule Gralkor.DefaultLensCompatibilityFunctionalTest do
                  source_description: "legacy"
                })
 
-      assert {:ok, ["compatible memory"]} =
+      assert {:ok, [%{lens: "default", fact: "compatible memory"}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
                  query: "compatible"

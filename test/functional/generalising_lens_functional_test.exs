@@ -131,7 +131,8 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
 
       assert :ok = ingest("operator-one", "A Friday launch was chosen.")
 
-      assert {:ok, ["Eli prefers Friday launches."]} =
+      assert {:ok,
+              [%{lens: "generalisations", fact: "Eli prefers Friday launches."}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "Friday",
@@ -154,7 +155,7 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
 
       assert :ok = ingest("operator-one", "A Friday launch was chosen.")
 
-      assert {:ok, ["Eli prefers Friday launches."]} =
+      assert {:ok, [%{lens: "global", fact: "Eli prefers Friday launches."}]} =
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "Friday",

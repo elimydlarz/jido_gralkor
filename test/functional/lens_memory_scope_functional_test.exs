@@ -85,7 +85,11 @@ defmodule Gralkor.LensMemoryScopeFunctionalTest do
       assert :ok = ingest("operator-one", "published-observations", "public observation")
       assert :ok = ingest("operator-two", "published-decisions", "public decision")
 
-      assert {:ok, ["public observation", "public decision"]} =
+      assert {:ok,
+              [
+                %{lens: "global", fact: "public observation"},
+                %{lens: "global", fact: "public decision"}
+              ]} =
                search("operator-three", ["global"])
     end
 

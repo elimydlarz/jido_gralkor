@@ -107,7 +107,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
                })
 
       assert {:ok, observation_results} = search("operator-one", ["observations"])
-      assert "The launch window moved to Friday." in observation_results
+      assert "The launch window moved to Friday." in facts(observation_results)
 
       assert {:ok, []} = search("operator-two", ["observations"])
       assert {:ok, []} = search("operator-one", [])
@@ -154,11 +154,11 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
 
       assert eventually(fn ->
                {:ok, results} = search("operator-one", ["decisions"])
-               "We chose Friday." in results
+               "We chose Friday." in facts(results)
              end)
 
       assert {:ok, observation_results} = search("operator-one", ["observations"])
-      refute "We chose Friday." in observation_results
+      refute "We chose Friday." in facts(observation_results)
 
       capture_agent = %{
         base_agent
@@ -237,7 +237,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
       assert {:ok, operator_one_results} =
                search("operator-one", ["observations", "decisions", "global"])
 
-      refute "Another operator's local launch memory." in operator_one_results
+      refute "Another operator's local launch memory." in facts(operator_one_results)
     end
   end
 
@@ -273,6 +273,8 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
       lenses: lenses
     })
   end
+
+  defp facts(results), do: Enum.map(results, & &1.fact)
 
   defp eventually(fun, attempts \\ 50)
   defp eventually(fun, 0), do: fun.()
