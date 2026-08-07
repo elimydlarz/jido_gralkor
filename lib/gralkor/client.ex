@@ -235,6 +235,10 @@ defmodule Gralkor.Client do
     validate_lens_write!(name, definition)
   end
 
+  defp validate_lens!(definition) do
+    raise ArgumentError, "invalid Lens definition #{inspect(definition)}"
+  end
+
   defp validate_lens_write!(name, definition) do
     case Keyword.get(definition, :write, :append) do
       :append ->
@@ -254,15 +258,19 @@ defmodule Gralkor.Client do
       :replace_graph ->
         graph_format = Keyword.get(definition, :graph_format)
 
-        unless is_atom(graph_format) do
+        if Keyword.has_key?(definition, :ontology) or Keyword.has_key?(definition, :ingestion) do
+          raise ArgumentError,
+                "invalid Lens #{inspect(name)} combines appending and replaceable write settings"
+        end
+
+        unless graph_format == :property_graph do
           raise ArgumentError,
                 "invalid Lens #{inspect(name)} graph format #{inspect(graph_format)}"
         end
-    end
-  end
 
-  defp validate_lens!(definition) do
-    raise ArgumentError, "invalid Lens definition #{inspect(definition)}"
+      write ->
+        raise ArgumentError, "invalid Lens #{inspect(name)} write mode #{inspect(write)}"
+    end
   end
 
   defp validate_unique_names!(lenses) do
