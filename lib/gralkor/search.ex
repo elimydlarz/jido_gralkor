@@ -10,7 +10,7 @@ defmodule Gralkor.Search do
   """
 
   @enforce_keys [:operator_id, :query]
-  defstruct [:operator_id, :query, lenses: [], max_results: 10]
+  defstruct [:operator_id, :query, lenses: [], max_results: 20]
 
   @type t :: %__MODULE__{
           operator_id: String.t(),

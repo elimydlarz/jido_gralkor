@@ -114,10 +114,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
     test "and the operator's reserved `default` Lens is searched alongside every selected Lens" do
       assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "default"}},
-                      "launch", 10}
+                      "launch", 20}
 
       assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "observations"}},
-                      "launch", 10}
+                      "launch", 20}
     end
 
     test "and every fact in the joined result identifies the searched Lens that contributed it",
