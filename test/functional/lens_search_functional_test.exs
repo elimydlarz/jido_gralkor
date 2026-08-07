@@ -433,6 +433,38 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
+  describe "where multiple selected Lens names resolve to the shared global group" do
+    test "then the shared global group is searched only once" do
+      publish_global_episodes()
+
+      assert {:ok,
+              [
+                %{lens: "global", fact: "published observation"},
+                %{lens: "global", fact: "published decision"}
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-two",
+                 query: "published",
+                 lenses: ["published-observations", "global", "published-decisions"]
+               })
+    end
+
+    test "and its results identify the reserved `global` search Lens" do
+      publish_global_episodes()
+
+      assert {:ok,
+              [
+                %{lens: "global", fact: "published observation"},
+                %{lens: "global", fact: "published decision"}
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-two",
+                 query: "published",
+                 lenses: ["published-observations", "published-decisions"]
+               })
+    end
+  end
+
   describe "if the selected memory search fails" do
     test "then the error is returned without manufacturing a partial memory response" do
       Application.put_env(:jido_gralkor, :lens_storage, FailingSearchStorage)
