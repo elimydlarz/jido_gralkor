@@ -45,7 +45,7 @@ defmodule Gralkor.Lens.Storage.InMemory do
       relationships: Enum.map(graph.relationships, &put_owner(&1, lens_name))
     }
 
-    GenServer.call(__MODULE__, {:replace_graph, key(store), owned_graph})
+    GenServer.call(__MODULE__, {:replace_graph, key(store), lens_name, owned_graph})
   end
 
   @impl Gralkor.Lens.Storage
@@ -75,8 +75,18 @@ defmodule Gralkor.Lens.Storage.InMemory do
     {:reply, {:ok, contents}, state}
   end
 
-  def handle_call({:replace_graph, key, graph}, _from, state) do
-    {:reply, :ok, Map.put(state, {:graph, key}, graph)}
+  def handle_call({:replace_graph, key, lens_name, graph}, _from, state) do
+    retained =
+      state
+      |> Map.get({:graph, key}, %{nodes: [], relationships: []})
+      |> retain_other_owners(lens_name)
+
+    replacement = %{
+      nodes: retained.nodes ++ graph.nodes,
+      relationships: retained.relationships ++ graph.relationships
+    }
+
+    {:reply, :ok, Map.put(state, {:graph, key}, replacement)}
   end
 
   def handle_call({:episodes, key}, _from, state) do
@@ -105,5 +115,16 @@ defmodule Gralkor.Lens.Storage.InMemory do
 
   defp put_owner(entity, lens_name) do
     Map.update!(entity, :properties, &Map.put(&1, :_gralkor_lens, lens_name))
+  end
+
+  defp retain_other_owners(graph, lens_name) do
+    %{
+      nodes: Enum.reject(graph.nodes, &owned_by?(&1, lens_name)),
+      relationships: Enum.reject(graph.relationships, &owned_by?(&1, lens_name))
+    }
+  end
+
+  defp owned_by?(entity, lens_name) do
+    Map.get(entity.properties, :_gralkor_lens) == lens_name
   end
 end
