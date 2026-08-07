@@ -98,12 +98,6 @@ defmodule Gralkor.LensSearchFunctionalTest do
         ontology: MemoryOntology,
         scope: :global,
         ingestion: Gralkor.Lens.Ingestion.Store
-      ],
-      [
-        name: "systems",
-        scope: :operator,
-        write: :replace_graph,
-        graph_format: :property_graph
       ]
     ])
 
