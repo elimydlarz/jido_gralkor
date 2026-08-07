@@ -370,7 +370,6 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "then graph replacement receives the same deterministic operator-and-Lens group used by existing Lens operations" do
       store = replaceable_store(:operator)
       graph = property_graph()
-      data = graph.data
       test_pid = self()
 
       replace_graph_fn = fn group_id, _lens_name, _format, _data ->
@@ -387,6 +386,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "and graph replacement receives the selected Lens name, configured graph format, and supplied graph data" do
       store = replaceable_store(:operator)
       graph = property_graph()
+      data = graph.data
       test_pid = self()
 
       replace_graph_fn = fn group_id, lens_name, format, data ->
