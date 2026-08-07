@@ -104,8 +104,6 @@ defmodule Gralkor.Lens.Storage.InMemory do
   defp key(%Store{lens: %Replaceable{scope: :global}}), do: :global
 
   defp put_owner(entity, lens_name) do
-    entity
-    |> Map.delete(:labels)
-    |> Map.update!(:properties, &Map.put(&1, :_gralkor_lens, lens_name))
+    Map.update!(entity, :properties, &Map.put(&1, :_gralkor_lens, lens_name))
   end
 end
