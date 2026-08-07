@@ -509,6 +509,57 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
+
+    test "and each supplied relationship is inserted between its identified endpoints with its type, properties, and reserved Lens ownership field" do
+      {g, _} = replacement_graphiti()
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok =
+               GraphitiPool.replace_graph(
+                 pid,
+                 "g1",
+                 "systems",
+                 :property_graph,
+                 %{
+                   nodes: [
+                     %{id: "payments", labels: ["System"], properties: %{}},
+                     %{id: "ledger", labels: ["System"], properties: %{}}
+                   ],
+                   relationships: [
+                     %{
+                       from: "payments",
+                       to: "ledger",
+                       type: "DEPENDS_ON",
+                       properties: %{protocol: "events"}
+                     }
+                   ]
+                 }
+               )
+
+      {recorded, _} = Pythonx.eval("g.driver.recorded", %{"g" => g})
+      [_, _, _, _, relationship_insert] = Pythonx.decode(recorded)
+
+      assert relationship_insert["query"] =~
+               "CREATE (source)-[relationship:`DEPENDS_ON`]->(destination)"
+
+      assert relationship_insert["params"] == %{
+               "lens" => "systems",
+               "source_id" => "payments",
+               "destination_id" => "ledger",
+               "properties" => %{
+                 "protocol" => "events",
+                 "_gralkor_lens" => "systems"
+               }
+             }
+
+      GenServer.stop(pid)
+    end
   end
 
   describe "when a fact search is run for a group" do
