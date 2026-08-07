@@ -457,7 +457,7 @@ defmodule Gralkor.GraphitiPoolTest do
                %{"query" => node_delete, "params" => %{"lens" => "systems"}}
              ] = Pythonx.decode(recorded)
 
-      assert relationship_delete =~ "MATCH ()-[relationship]-()"
+      assert relationship_delete =~ "MATCH ()-[relationship]->()"
       assert relationship_delete =~ "relationship._gralkor_lens = $lens"
       assert node_delete =~ "MATCH (node)"
       assert node_delete =~ "node._gralkor_lens = $lens"
@@ -470,7 +470,8 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert :ok = result
       [_, node_delete] = recorded
-      assert node_delete["query"] =~ "DETACH DELETE node"
+      assert node_delete["query"] =~ "DELETE node"
+      refute node_delete["query"] =~ "DETACH DELETE"
       assert node_delete["params"] == %{"lens" => "systems"}
 
       GenServer.stop(pid)

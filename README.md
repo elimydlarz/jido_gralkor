@@ -358,7 +358,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate i
 
 **Context rotation.** `JidoGralkor.ContextRotator.rotate_now/2` synchronously flushes the active session via `flush_and_await/2`, installs a fresh Jido thread, and seeds the rotated thread with the most-recent `:keep_last_n` pre-flush entries plus any turns that landed during the flush. It returns `:ok` when there is no committed thread and `{:error, reason}` when state reading, flushing, or thread installation fails. The agent process is never stopped. Use it from a `/new` chat command or a small wrapper GenServer that fires on an interval.
 
-**Error contracts.** Invalid configuration and automatic plugin-capture failures raise. Explicit `Gralkor.Client.ingest/1`, `replace/1`, `search/1`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
+**Error contracts.** Invalid configuration, invalid Lens requests, and automatic plugin-capture failures raise. Valid explicit `Gralkor.Client.ingest/1`, `replace/1`, `search/1`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
 
 **`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 

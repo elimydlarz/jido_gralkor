@@ -61,7 +61,7 @@ defmodule Gralkor.GraphitiPool do
 
       owner = lens.decode('utf-8') if isinstance(lens, (bytes, bytearray)) else lens
       asyncio._gralkor_run(g.driver.execute_query(
-          'MATCH ()-[relationship]-() '
+          'MATCH ()-[relationship]->() '
           'WHERE relationship._gralkor_lens = $lens '
           'DELETE relationship',
           lens=owner,
@@ -69,7 +69,7 @@ defmodule Gralkor.GraphitiPool do
       asyncio._gralkor_run(g.driver.execute_query(
           'MATCH (node) '
           'WHERE node._gralkor_lens = $lens '
-          'DETACH DELETE node',
+          'DELETE node',
           lens=owner,
       ))
       for supplied_node in nodes:
