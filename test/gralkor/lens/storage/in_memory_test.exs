@@ -2,6 +2,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Lens
+  alias Gralkor.Lens.Replaceable
   alias Gralkor.Lens.Storage.InMemory
   alias Gralkor.Lens.Store
 
@@ -81,6 +82,21 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     end
   end
 
+  describe "when an operator-local or global replaceable Lens store replaces a complete graph" do
+    test "then the graph is stored within only the destination resolved from the Lens scope" do
+      local = replaceable_store("operator-one", "systems", :operator)
+      global = replaceable_store("operator-one", "catalogue", :global)
+      graph = %Gralkor.Graph{format: :property_graph, data: graph_data("system")}
+
+      assert :ok = Store.replace_graph(local, graph)
+      assert :ok = Store.replace_graph(global, graph)
+
+      assert %{nodes: [%{id: "system"}]} = InMemory.graph({"operator-one", "systems"})
+      assert %{nodes: [%{id: "system"}]} = InMemory.graph(:global)
+      assert InMemory.graph({"operator-two", "systems"}) == %{nodes: [], relationships: []}
+    end
+  end
+
   defp local_store(operator_id, name) do
     %Store{
       operator_id: operator_id,
@@ -93,5 +109,16 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       operator_id: "operator-one",
       lens: %Lens{name: name, ontology: nil, scope: :global, ingestion: String}
     }
+  end
+
+  defp replaceable_store(operator_id, name, scope) do
+    %Store{
+      operator_id: operator_id,
+      lens: %Replaceable{name: name, scope: scope, graph_format: :property_graph}
+    }
+  end
+
+  defp graph_data(id) do
+    %{nodes: [%{id: id, labels: ["System"], properties: %{name: id}}], relationships: []}
   end
 end
