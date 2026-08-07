@@ -140,6 +140,27 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
         assert spec.llm.reasoning == "none"
         GenServer.stop(pid)
       end
+
+      configure("openai:gpt-5.6-luna", "openai:text-embedding-3-small")
+
+      {:ok, pid} =
+        GraphitiPool.start_link(
+          name: nil,
+          table: :"provider_reasoning_#{System.unique_integer([:positive])}",
+          falkordb_spec: {:embedded, System.tmp_dir!()},
+          llm_model: Config.llm_model(),
+          embedder_model: Config.embedder_model(),
+          construct_falkor_db: fn _ -> :stub_falkor_db end,
+          construct_instance: fn _, _, group -> {:stub_graphiti, group} end,
+          initialise_instance: fn _ -> :ok end,
+          install_loop_fn: fn -> :ok end,
+          warmup: false
+        )
+
+      client = :sys.get_state(pid).shared.llm_client
+      {reasoning, _} = Pythonx.eval("client.reasoning", %{"client" => client})
+      assert Pythonx.decode(reasoning) == "none"
+      GenServer.stop(pid)
     end
   end
 
