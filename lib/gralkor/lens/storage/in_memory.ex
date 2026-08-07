@@ -6,6 +6,7 @@ defmodule Gralkor.Lens.Storage.InMemory do
   @behaviour Gralkor.Lens.Storage
 
   alias Gralkor.Lens
+  alias Gralkor.Lens.Replaceable
   alias Gralkor.Lens.Store
 
   @type episode :: %{
@@ -26,9 +27,17 @@ defmodule Gralkor.Lens.Storage.InMemory do
   @spec episodes(key()) :: [episode()]
   def episodes(key), do: GenServer.call(__MODULE__, {:episodes, key})
 
+  @spec graph(key()) :: map()
+  def graph(key), do: GenServer.call(__MODULE__, {:graph, key})
+
   @impl Gralkor.Lens.Storage
   def add_episode(%Store{} = store, content, _source_description) do
     GenServer.call(__MODULE__, {:add, key(store), episode(content, store.lens)})
+  end
+
+  @impl Gralkor.Lens.Storage
+  def replace_graph(%Store{} = store, %Gralkor.Graph{data: graph}) do
+    GenServer.call(__MODULE__, {:replace_graph, key(store), graph})
   end
 
   @impl Gralkor.Lens.Storage
@@ -58,8 +67,16 @@ defmodule Gralkor.Lens.Storage.InMemory do
     {:reply, {:ok, contents}, state}
   end
 
+  def handle_call({:replace_graph, key, graph}, _from, state) do
+    {:reply, :ok, Map.put(state, {:graph, key}, graph)}
+  end
+
   def handle_call({:episodes, key}, _from, state) do
     {:reply, Map.get(state, key, []), state}
+  end
+
+  def handle_call({:graph, key}, _from, state) do
+    {:reply, Map.get(state, {:graph, key}, %{nodes: [], relationships: []}), state}
   end
 
   @spec episode(String.t(), Lens.t()) :: episode()
@@ -69,4 +86,12 @@ defmodule Gralkor.Lens.Storage.InMemory do
     do: {operator_id, lens_name}
 
   defp key(%Store{lens: %Lens{scope: :global}}), do: :global
+
+  defp key(%Store{
+         operator_id: operator_id,
+         lens: %Replaceable{name: lens_name, scope: :operator}
+       }),
+    do: {operator_id, lens_name}
+
+  defp key(%Store{lens: %Replaceable{scope: :global}}), do: :global
 end
