@@ -103,7 +103,22 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     search_fn.(group_id(operator_id, lens.name), query, max_results)
   end
 
+  def search(
+        %Store{operator_id: operator_id, lens: %Replaceable{scope: :operator} = lens},
+        query,
+        max_results,
+        opts
+      ) do
+    search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
+    search_fn.(group_id(operator_id, lens.name), query, max_results)
+  end
+
   def search(%Store{lens: %Lens{scope: :global}}, query, max_results, opts) do
+    search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
+    search_fn.("global", query, max_results)
+  end
+
+  def search(%Store{lens: %Replaceable{scope: :global}}, query, max_results, opts) do
     search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
     search_fn.("global", query, max_results)
   end

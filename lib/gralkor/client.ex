@@ -247,13 +247,13 @@ defmodule Gralkor.Client do
 
   defp search_target!(operator_id, name) when is_binary(name) do
     case lens!(name) do
-      %Lens{scope: :global} ->
+      %{scope: :global} ->
         search_target!(operator_id, "global")
 
-      %Lens{} = lens ->
+      %{name: lens_name, scope: :operator} = lens ->
         %{
-          destination: {:operator, operator_id, lens.name},
-          lens: lens.name,
+          destination: {:operator, operator_id, lens_name},
+          lens: lens_name,
           store: %Store{operator_id: operator_id, lens: lens}
         }
     end

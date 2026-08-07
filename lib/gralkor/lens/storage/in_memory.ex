@@ -57,7 +57,19 @@ defmodule Gralkor.Lens.Storage.InMemory do
     GenServer.call(__MODULE__, {:search, {operator_id, lens_name}, max_results})
   end
 
+  def search(
+        %Store{operator_id: operator_id, lens: %Replaceable{name: lens_name, scope: :operator}},
+        _query,
+        max_results
+      ) do
+    GenServer.call(__MODULE__, {:search, {operator_id, lens_name}, max_results})
+  end
+
   def search(%Store{lens: %Lens{scope: :global}}, _query, max_results) do
+    GenServer.call(__MODULE__, {:search, :global, max_results})
+  end
+
+  def search(%Store{lens: %Replaceable{scope: :global}}, _query, max_results) do
     GenServer.call(__MODULE__, {:search, :global, max_results})
   end
 
