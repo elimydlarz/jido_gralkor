@@ -19,7 +19,7 @@ when a Lens graph is replaced more than once
 if replacement selects an invalid Lens
   then replacement fails before graph content is removed or inserted
 
-if replacement selects an append-oriented Lens
+if replacement selects an episode-ingesting Lens
   then replacement fails with an error identifying that the Lens accepts only episode ingestion
   and no existing graph content is removed or inserted
 
