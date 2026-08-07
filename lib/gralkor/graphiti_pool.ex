@@ -30,9 +30,41 @@ defmodule Gralkor.GraphitiPool do
 
   # ── Public API ──────────────────────────────────────────────
 
-  @spec replace_graph(String.t(), String.t(), atom(), term()) :: :ok | {:error, term()}
-  def replace_graph(_group_id, _lens_name, _format, _data) do
-    raise "NotImplemented"
+  @spec replace_graph(GenServer.server(), String.t(), String.t(), :property_graph, map()) ::
+          :ok | {:error, term()}
+  def replace_graph(
+        server \\ __MODULE__,
+        group_id,
+        lens_name,
+        :property_graph,
+        %{nodes: _nodes, relationships: _relationships}
+      ) do
+    instance = __MODULE__.for(server, group_id)
+
+    Pythonx.eval(
+      """
+      import asyncio
+      owner = lens.decode('utf-8') if isinstance(lens, (bytes, bytearray)) else lens
+      asyncio._gralkor_run(g.driver.execute_query(
+          'MATCH ()-[relationship]-() '
+          'WHERE relationship._gralkor_lens = $lens '
+          'DELETE relationship',
+          lens=owner,
+      ))
+      asyncio._gralkor_run(g.driver.execute_query(
+          'MATCH (node) '
+          'WHERE node._gralkor_lens = $lens '
+          'DETACH DELETE node',
+          lens=owner,
+      ))
+      None
+      """,
+      %{"g" => instance, "lens" => lens_name}
+    )
+
+    :ok
+  rescue
+    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
   end
 
   def start_link(opts \\ []) do
