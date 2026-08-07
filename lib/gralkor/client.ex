@@ -247,6 +247,10 @@ defmodule Gralkor.Client do
 
   defp search_target!(operator_id, name) when is_binary(name) do
     case lens!(name) do
+      %ReplaceableLens{} ->
+        raise ArgumentError,
+              "Lens #{inspect(name)} cannot be searched because it accepts only whole-graph replacement"
+
       %{scope: :global} ->
         search_target!(operator_id, "global")
 
