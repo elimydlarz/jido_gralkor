@@ -120,9 +120,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                       "launch", 10}
     end
 
-    test "and every fact in the joined result identifies the searched Lens that contributed it", %{
-      result: result
-    } do
+    test "and every fact in the joined result identifies the searched Lens that contributed it",
+         %{
+           result: result
+         } do
       assert Jason.decode!(result) == [
                %{"lens" => "default", "fact" => "selected local memory"},
                %{"lens" => "observations", "fact" => "selected local memory"}
