@@ -212,6 +212,8 @@ defmodule Gralkor.Client do
         lenses: lenses,
         max_results: max_results
       }) do
+    validate_max_results!(max_results)
+
     targets =
       ["default" | lenses]
       |> Enum.uniq()
@@ -258,6 +260,15 @@ defmodule Gralkor.Client do
   end
 
   defp search_target!(_operator_id, name), do: raise(ArgumentError, "invalid Lens #{inspect(name)}")
+
+  @spec validate_max_results!(term()) :: :ok
+  defp validate_max_results!(max_results) when is_integer(max_results) and max_results > 0,
+    do: :ok
+
+  defp validate_max_results!(max_results) do
+    raise ArgumentError,
+          "max_results must be a positive integer, got #{inspect(max_results)}"
+  end
 
   @spec lens!(String.t()) :: Lens.t() | ReplaceableLens.t()
   def lens!(name) do
