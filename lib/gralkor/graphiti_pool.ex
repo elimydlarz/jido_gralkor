@@ -53,6 +53,15 @@ defmodule Gralkor.GraphitiPool do
       def text(value):
           return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else str(value)
 
+      def native(value):
+          if isinstance(value, (bytes, bytearray)):
+              return value.decode('utf-8')
+          if isinstance(value, dict):
+              return {text(key): native(item) for key, item in value.items()}
+          if isinstance(value, (list, tuple)):
+              return [native(item) for item in value]
+          return value
+
       def get(mapping, key):
           return mapping.get(key, mapping.get(key.encode('utf-8')))
 
@@ -76,7 +85,7 @@ defmodule Gralkor.GraphitiPool do
           node_id = text(get(supplied_node, 'id'))
           labels = ''.join(':' + identifier(label) for label in get(supplied_node, 'labels'))
           supplied_properties = get(supplied_node, 'properties')
-          properties = {text(key): value for key, value in supplied_properties.items()}
+          properties = native(supplied_properties)
           properties['id'] = node_id
           properties['_gralkor_lens'] = owner
           asyncio._gralkor_run(g.driver.execute_query(
@@ -88,7 +97,7 @@ defmodule Gralkor.GraphitiPool do
           destination_id = text(get(supplied_relationship, 'to'))
           relationship_type = identifier(get(supplied_relationship, 'type'))
           supplied_properties = get(supplied_relationship, 'properties')
-          properties = {text(key): value for key, value in supplied_properties.items()}
+          properties = native(supplied_properties)
           properties['_gralkor_lens'] = owner
           asyncio._gralkor_run(g.driver.execute_query(
               'MATCH (source), (destination) '
