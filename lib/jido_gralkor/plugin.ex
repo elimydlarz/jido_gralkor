@@ -69,29 +69,29 @@ defmodule JidoGralkor.Plugin do
             "JidoGralkor.Plugin requires :agent_name (non-blank string), got #{inspect(agent_name)}"
     end
 
-    case fetch_opt(opts, :default_lens) do
+    case fetch_opt(opts, :ingestion_lens) do
       nil ->
         if fetch_opt(opts, :search_lenses) != nil or fetch_opt(opts, :generalise_lens) != nil do
-          raise ArgumentError, ":default_lens is required when Lens options are configured"
+          raise ArgumentError, ":ingestion_lens is required when Lens options are configured"
         end
 
         {:ok, %{agent_name: agent_name}}
 
-      default_lens ->
-        lens = Client.lens!(default_lens)
+      ingestion_lens ->
+        lens = Client.lens!(ingestion_lens)
         search_lenses = validate_search_lenses!(fetch_opt(opts, :search_lenses))
         generalise_lens = fetch_opt(opts, :generalise_lens)
 
         if generalise_lens, do: Client.lens!(generalise_lens)
 
-        if generalise_lens == default_lens do
-          raise ArgumentError, ":generalise_lens must differ from :default_lens"
+        if generalise_lens == ingestion_lens do
+          raise ArgumentError, ":generalise_lens must differ from :ingestion_lens"
         end
 
         {:ok,
          %{
            agent_name: agent_name,
-           default_lens: default_lens,
+           ingestion_lens: ingestion_lens,
            search_lenses: search_lenses,
            lens: lens,
            generalise_lens: generalise_lens
@@ -268,7 +268,7 @@ defmodule JidoGralkor.Plugin do
 
   defp lens_context(agent) do
     case plugin_state(agent) do
-      %{default_lens: lens, search_lenses: lenses} -> %{lens: lens, search_lenses: lenses}
+      %{ingestion_lens: lens, search_lenses: lenses} -> %{lens: lens, search_lenses: lenses}
       _ -> %{}
     end
   end
@@ -276,7 +276,7 @@ defmodule JidoGralkor.Plugin do
   defp selected_lens(agent, request_id) do
     request_lens(agent, request_id) ||
       case plugin_state(agent) do
-        %{default_lens: lens} -> lens
+        %{ingestion_lens: lens} -> lens
         _ -> nil
       end
   end
