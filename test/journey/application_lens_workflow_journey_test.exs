@@ -115,7 +115,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
-                 lens: "default",
+                 lens: "operator",
                  content: "The default launch memory.",
                  source_description: "legacy memory"
                })

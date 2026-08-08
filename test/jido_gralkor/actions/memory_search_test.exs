@@ -119,8 +119,8 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       assert [] = InMemory.recalls()
     end
 
-    test "and the operator's reserved `default` Lens is searched alongside every selected Lens" do
-      assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "default"}},
+    test "and the operator's reserved `operator` Lens is searched alongside every selected Lens" do
+      assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "operator"}},
                       "launch", 20}
 
       assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "observations"}},
@@ -132,7 +132,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
            result: result
          } do
       assert Jason.decode!(result) == [
-               %{"lens" => "default", "fact" => "selected local memory"},
+               %{"lens" => "operator", "fact" => "selected local memory"},
                %{"lens" => "observations", "fact" => "selected local memory"}
              ]
     end

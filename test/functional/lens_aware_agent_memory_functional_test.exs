@@ -73,8 +73,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     :ok
   end
 
-  describe "when a mounted memory plugin has a configured default ingestion Lens and optional additional Lenses to search" do
-    test "then automatic capture and memory addition use the registered default ingestion Lens" do
+  describe "when a mounted memory plugin has a configured ingestion Lens and optional additional Lenses to search" do
+    test "then automatic capture and memory addition use the registered ingestion Lens" do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
@@ -106,11 +106,11 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert [[_, _, _, _, _, "observations"]] = InMemory.captures()
     end
 
-    test "and memory search always includes the requesting operator's reserved `default` Lens" do
+    test "and memory search always includes the requesting operator's reserved `operator` Lens" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
-                 lens: "default",
+                 lens: "operator",
                  content: "baseline memory",
                  source_description: "legacy"
                })
@@ -132,7 +132,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert Jason.decode!(result) == [
-               %{"lens" => "default", "fact" => "baseline memory"}
+               %{"lens" => "operator", "fact" => "baseline memory"}
              ]
     end
 
@@ -213,9 +213,9 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   end
 
   describe "where a mounted memory plugin has no additional Lenses to search" do
-    test "then memory search uses only the requesting operator's reserved `default` Lens" do
+    test "then memory search uses only the requesting operator's reserved `operator` Lens" do
       for {lens, content} <- [
-            {"default", "baseline memory"},
+            {"operator", "baseline memory"},
             {"observations", "unselected local memory"},
             {"generalisations", "unselected global memory"}
           ] do
@@ -256,15 +256,15 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert Jason.decode!(result) == [
-               %{"lens" => "default", "fact" => "baseline memory"}
+               %{"lens" => "operator", "fact" => "baseline memory"}
              ]
     end
 
-    test "and every returned fact identifies the reserved `default` Lens" do
+    test "and every returned fact identifies the reserved `operator` Lens" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
-                 lens: "default",
+                 lens: "operator",
                  content: "attributed baseline",
                  source_description: "functional"
                })
@@ -282,7 +282,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert Jason.decode!(result) == [
-               %{"lens" => "default", "fact" => "attributed baseline"}
+               %{"lens" => "operator", "fact" => "attributed baseline"}
              ]
     end
   end
@@ -532,7 +532,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "and an unknown default Lens is identified" do
+    test "and an unknown ingestion Lens is identified" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "missing")
       end
@@ -558,7 +558,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "and a generalising Lens that duplicates the default is identified" do
+    test "and a generalising Lens that duplicates the ingestion Lens is identified" do
       assert_raise ArgumentError, ~r/must differ/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
@@ -568,14 +568,20 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "and Lens options without a default Lens identify the required default" do
+    test "and Lens options without an ingestion Lens identify the required ingestion Lens" do
       for lens_options <- [
             [search_lenses: ["observations"]],
             [generalise_lens: "generalisations"]
           ] do
-        assert_raise ArgumentError, ~r/default_lens is required/, fn ->
+        assert_raise ArgumentError, ~r/ingestion_lens is required/, fn ->
           Plugin.mount(%{}, Keyword.merge([agent_name: "Susu"], lens_options))
         end
+      end
+    end
+
+    test "and the removed `:default_lens` option identifies `:ingestion_lens` as its replacement" do
+      assert_raise ArgumentError, ~r/default_lens.*ingestion_lens/, fn ->
+        Plugin.mount(%{}, agent_name: "Susu", default_lens: "observations")
       end
     end
 
