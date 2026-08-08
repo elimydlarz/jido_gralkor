@@ -106,6 +106,7 @@ when a complete property graph replaces content owned by a Lens in a group
   and every node carrying that Lens's reserved ownership field is removed
   and each supplied node is inserted with its identifier, labels, properties, and reserved Lens ownership field
   and each supplied relationship is inserted between its identified endpoints with its type, properties, and reserved Lens ownership field
+  and every supplied string property crosses the native graph boundary as text without changing its value
   and nodes and relationships owned by another Lens remain unchanged
   and nodes and relationships without the reserved Lens ownership field remain unchanged
   and success is returned after every supplied node and relationship is inserted

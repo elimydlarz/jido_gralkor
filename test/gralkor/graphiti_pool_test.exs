@@ -573,6 +573,43 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
+    test "and every supplied string property crosses the native graph boundary as text without changing its value" do
+      {g, _} = replacement_graphiti(nil, reject_bytes: true)
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok =
+               GraphitiPool.replace_graph(
+                 pid,
+                 "g1",
+                 "systems",
+                 :property_graph,
+                 %{
+                   nodes: [
+                     %{
+                       id: "payments",
+                       labels: ["System"],
+                       properties: %{name: "Payments", details: %{protocol: "events"}}
+                     }
+                   ],
+                   relationships: []
+                 }
+               )
+
+      {recorded, _} = Pythonx.eval("g.driver.recorded", %{"g" => g})
+      [_, _, node_insert] = Pythonx.decode(recorded)
+
+      assert node_insert["params"]["properties"]["name"] == "Payments"
+      assert node_insert["params"]["properties"]["details"] == %{"protocol" => "events"}
+
+      GenServer.stop(pid)
+    end
+
     test "and nodes and relationships owned by another Lens remain unchanged" do
       {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
 
@@ -2444,27 +2481,39 @@ defmodule Gralkor.GraphitiPoolTest do
   defp restore_env(name, nil), do: System.delete_env(name)
   defp restore_env(name, value), do: System.put_env(name, value)
 
-  defp replacement_graphiti(fail_at \\ nil) do
+  defp replacement_graphiti(fail_at \\ nil, opts \\ []) do
     Pythonx.eval(
       """
+      def _contains_bytes(value):
+          if isinstance(value, (bytes, bytearray)):
+              return True
+          if isinstance(value, dict):
+              return any(_contains_bytes(key) or _contains_bytes(item) for key, item in value.items())
+          if isinstance(value, (list, tuple)):
+              return any(_contains_bytes(item) for item in value)
+          return False
+
       class _ReplacementDriver:
-          def __init__(self, fail_at):
+          def __init__(self, fail_at, reject_bytes):
               self.recorded = []
               self.fail_at = fail_at
+              self.reject_bytes = reject_bytes
 
           async def execute_query(self, query, **params):
               self.recorded.append({"query": query, "params": params})
+              if self.reject_bytes and _contains_bytes(params):
+                  raise RuntimeError("native graph parameters contain bytes")
               if self.fail_at == len(self.recorded):
                   raise RuntimeError(f"replacement query {self.fail_at} failed")
               return []
 
       class _ReplacementGraphiti:
-          def __init__(self, fail_at):
-              self.driver = _ReplacementDriver(fail_at)
+          def __init__(self, fail_at, reject_bytes):
+              self.driver = _ReplacementDriver(fail_at, reject_bytes)
 
-      _ReplacementGraphiti(fail_at)
+      _ReplacementGraphiti(fail_at, reject_bytes)
       """,
-      %{"fail_at" => fail_at}
+      %{"fail_at" => fail_at, "reject_bytes" => Keyword.get(opts, :reject_bytes, false)}
     )
   end
 
