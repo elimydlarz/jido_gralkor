@@ -134,7 +134,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"operator"` Lens only — the channel used by mounts with no `:default_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises whenever the implicit operator Lens is resolved, including for search. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
-| `:generalise_on_flush` | boolean | `false` | Fires the legacy `Gralkor.Generalise` pipeline after each successful implicit-default capture flush. Lens mounts use `generalise_lens` instead. |
+| `:generalise_on_flush` | boolean | `false` | Fires the legacy `Gralkor.Generalise` pipeline after each successful implicit-operator capture flush. Lens mounts use `generalise_lens` instead. |
 | `:generalise_min_confidence` | float | `0.3` | Minimum confidence a `Gralkor.Lens.Ingestion.Generalise` hypothesis must reach to be persisted. The retained legacy generalisation callback uses its own `0.3` default. |
 | `:interpret_max_output_tokens` | positive integer | `2000` | Output ceiling for the per-recall interpret LLM call. Raise it if recall surfaces many candidate facts and you see `Gralkor.InterpretParseFailed` (the parser refuses truncated responses). Lower it to cap latency and cost. A non-positive value raises. |
 | `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall (search + interpret). On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. The auxiliary generalisation and learning searches share one fixed 5 s yield window inside this budget and degrade to no extra facts on timeout. |
@@ -565,7 +565,7 @@ The configured adapter's older `generalise/2` and `search_generalisations/3` cal
 
 ## Experiential learning (legacy default pipeline)
 
-When the implicit `"default"` Lens uses the legacy capture pipeline, every captured turn is also distilled into a flat `Gralkor.AgentLearning` record (`problem_kind`, `approach`, `success`, `lesson`) and written to the same operator group. A custom Lens ingestion process owns any equivalent learning behavior it needs.
+When the implicit `"operator"` Lens uses the legacy capture pipeline, every captured turn is also distilled into a flat `Gralkor.AgentLearning` record (`problem_kind`, `approach`, `success`, `lesson`) and written to the same operator group. A custom Lens ingestion process owns any equivalent learning behavior it needs.
 
 ### Unconditional learning search on every recall
 
