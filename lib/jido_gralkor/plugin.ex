@@ -69,6 +69,10 @@ defmodule JidoGralkor.Plugin do
             "JidoGralkor.Plugin requires :agent_name (non-blank string), got #{inspect(agent_name)}"
     end
 
+    if fetch_opt(opts, :default_lens) != nil do
+      raise ArgumentError, ":default_lens was removed; use :ingestion_lens instead"
+    end
+
     case fetch_opt(opts, :ingestion_lens) do
       nil ->
         if fetch_opt(opts, :search_lenses) != nil or fetch_opt(opts, :generalise_lens) != nil do
