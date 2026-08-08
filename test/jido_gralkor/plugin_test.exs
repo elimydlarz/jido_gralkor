@@ -124,10 +124,10 @@ defmodule JidoGralkor.PluginTest do
              }
     end
 
-    test "if Lens options are supplied without a default Lens then mounting raises an ArgumentError identifying that the default Lens is required" do
+    test "if Lens options are supplied without an ingestion Lens then mounting raises an ArgumentError identifying that the ingestion Lens is required" do
       configure_lenses()
 
-      assert_raise ArgumentError, ~r/default_lens is required/, fn ->
+      assert_raise ArgumentError, ~r/ingestion_lens is required/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
           agent_name: "Susu",
           search_lenses: ["observations"]
@@ -135,13 +135,13 @@ defmodule JidoGralkor.PluginTest do
       end
     end
 
-    test "if the default Lens is unknown then mounting raises an ArgumentError identifying the unknown Lens" do
+    test "if the ingestion Lens is unknown then mounting raises an ArgumentError identifying the unknown Lens" do
       configure_lenses()
 
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
           agent_name: "Susu",
-          default_lens: "missing"
+          ingestion_lens: "missing"
         )
       end
     end
@@ -152,7 +152,7 @@ defmodule JidoGralkor.PluginTest do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
           agent_name: "Susu",
-          default_lens: "observations",
+          ingestion_lens: "observations",
           search_lenses: ["missing"]
         )
       end
@@ -164,19 +164,19 @@ defmodule JidoGralkor.PluginTest do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
           agent_name: "Susu",
-          default_lens: "observations",
+          ingestion_lens: "observations",
           generalise_lens: "missing"
         )
       end
     end
 
-    test "if the generalising Lens duplicates the default Lens then mounting raises an ArgumentError identifying that the Lenses must differ" do
+    test "if the generalising Lens duplicates the ingestion Lens then mounting raises an ArgumentError identifying that the Lenses must differ" do
       configure_lenses()
 
       assert_raise ArgumentError, ~r/generalise_lens must differ/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
           agent_name: "Susu",
-          default_lens: "observations",
+          ingestion_lens: "observations",
           generalise_lens: "observations"
         )
       end
@@ -188,8 +188,19 @@ defmodule JidoGralkor.PluginTest do
       assert_raise ArgumentError, ~r/search_lenses must be a list/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
           agent_name: "Susu",
-          default_lens: "observations",
+          ingestion_lens: "observations",
           search_lenses: "observations"
+        )
+      end
+    end
+
+    test "if the removed `:default_lens` option is supplied then mounting raises an ArgumentError identifying `:ingestion_lens` as its replacement" do
+      configure_lenses()
+
+      assert_raise ArgumentError, ~r/default_lens.*ingestion_lens/, fn ->
+        Plugin.mount(%{id: "operator-one", state: %{}},
+          agent_name: "Susu",
+          default_lens: "observations"
         )
       end
     end
@@ -742,7 +753,7 @@ defmodule JidoGralkor.PluginTest do
     {:ok, plugin_state} =
       Plugin.mount(%{id: "operator-one", state: %{}},
         agent_name: "Susu",
-        default_lens: "observations",
+        ingestion_lens: "observations",
         search_lenses: ["observations", "global"],
         generalise_lens: "generalisations"
       )
