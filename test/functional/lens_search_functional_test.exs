@@ -588,6 +588,30 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
+  describe "if search supplies the retired `default` Lens name" do
+    test "then search fails before any memory query is started" do
+      Application.put_env(:jido_gralkor, :lens_storage, UnexpectedSearchStorage)
+
+      assert_raise ArgumentError, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "memory",
+          lenses: ["default"]
+        })
+      end
+    end
+
+    test "and the error identifies the reserved `operator` Lens as its replacement" do
+      assert_raise ArgumentError, ~r/default.*operator/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "memory",
+          lenses: ["default"]
+        })
+      end
+    end
+  end
+
   defp publish_global_episodes do
     for {lens, content} <- [
           {"published-observations", "published observation"},
