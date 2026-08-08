@@ -156,7 +156,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
                })
     end
 
-    test "and another operator's default memory cannot contribute a result" do
+    test "and another operator's reserved operator memory cannot contribute a result" do
       for {operator, content} <- [
             {"operator-one", "first operator memory"},
             {"operator-two", "second operator memory"}
@@ -164,13 +164,13 @@ defmodule Gralkor.LensSearchFunctionalTest do
         assert :ok =
                  Client.ingest(%Ingest{
                    operator_id: operator,
-                   lens: "default",
+                   lens: "operator",
                    content: content,
                    source_description: "legacy"
                  })
       end
 
-      assert {:ok, [%{lens: "default", fact: "first operator memory"}]} =
+      assert {:ok, [%{lens: "operator", fact: "first operator memory"}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory"
