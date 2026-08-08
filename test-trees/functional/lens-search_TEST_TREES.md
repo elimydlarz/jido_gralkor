@@ -44,3 +44,7 @@ if search supplies an additional Lens that is neither registered nor reserved
   then search fails before any memory query is started
   and no valid subset is searched
   and the error identifies the unknown Lens
+
+if search supplies the retired `default` Lens name
+  then search fails before any memory query is started
+  and the error identifies the reserved `operator` Lens as its replacement

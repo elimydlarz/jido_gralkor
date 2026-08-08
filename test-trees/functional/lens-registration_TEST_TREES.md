@@ -15,6 +15,7 @@ if an application registers an invalid Lens
   and a blank Lens name is identified
   and a duplicate Lens name is identified
   and a reserved `operator` or `global` Lens name is identified
+  and the retired `default` Lens name identifies `operator` as its replacement
   and an invalid Lens definition shape is identified
   and an invalid Lens ontology is identified with its Lens
   and an invalid Lens scope is identified with its Lens

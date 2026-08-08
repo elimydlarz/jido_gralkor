@@ -15,19 +15,21 @@ if mount is given no agent name
 if mount is given a blank agent name
   then it raises ArgumentError
 
-when mount selects a default Lens, Lenses to search, and an optional generalising Lens
+when mount selects an ingestion Lens, Lenses to search, and an optional generalising Lens
   then those selections are resolved against the application Lens registry and stored on the plugin state
   and the resolved Lens keeps the ontology, scope, and ingestion the registry declared for it, redefining none of them
-  if Lens options are supplied without a default Lens
-    then mounting raises an ArgumentError identifying that the default Lens is required
-  if the default Lens is unknown
+  if Lens options are supplied without an ingestion Lens
+    then mounting raises an ArgumentError identifying that the ingestion Lens is required
+  if the ingestion Lens is unknown
     then mounting raises an ArgumentError identifying the unknown Lens
   if a search Lens is unknown
     then mounting raises an ArgumentError identifying the unknown Lens
   if a generalising Lens is unknown
     then mounting raises an ArgumentError identifying the unknown Lens
-  if the generalising Lens duplicates the default Lens
+  if the generalising Lens duplicates the ingestion Lens
     then mounting raises an ArgumentError identifying that the Lenses must differ
+  if the removed `:default_lens` option is supplied
+    then mounting raises an ArgumentError identifying `:ingestion_lens` as its replacement
   if the search Lens selection is not a list
     then mounting raises an ArgumentError identifying the invalid selection
 
