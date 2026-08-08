@@ -1,4 +1,4 @@
-defmodule Gralkor.DefaultLensCompatibilityFunctionalTest do
+defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
   use ExUnit.Case, async: false
 
   @moduletag :functional
@@ -29,18 +29,18 @@ defmodule Gralkor.DefaultLensCompatibilityFunctionalTest do
   end
 
   describe "where an application has not registered or selected a named Lens" do
-    test "then the implicit `default` Lens preserves access to the operator's existing group" do
+    test "then the implicit `operator` Lens preserves access to the operator's existing group" do
       Application.put_env(:jido_gralkor, :ontology, MemoryOntology)
 
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
-                 lens: "default",
+                 lens: "operator",
                  content: "compatible memory",
                  source_description: "legacy"
                })
 
-      assert {:ok, [%{lens: "default", fact: "compatible memory"}]} =
+      assert {:ok, [%{lens: "operator", fact: "compatible memory"}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
                  query: "compatible"
@@ -50,19 +50,19 @@ defmodule Gralkor.DefaultLensCompatibilityFunctionalTest do
     test "and the `:jido_gralkor, :ontology` value remains its ontology" do
       Application.put_env(:jido_gralkor, :ontology, MemoryOntology)
 
-      assert %Gralkor.Lens{name: "default", ontology: MemoryOntology} =
-               Client.lens!("default")
+      assert %Gralkor.Lens{name: "operator", ontology: MemoryOntology} =
+               Client.lens!("operator")
     end
 
     test "and an unset `:jido_gralkor, :ontology` preserves generic extraction" do
       Application.delete_env(:jido_gralkor, :ontology)
 
       assert %Gralkor.Lens{
-               name: "default",
+               name: "operator",
                ontology: nil,
                scope: :operator,
                ingestion: Gralkor.Lens.Ingestion.Store
-             } = Client.lens!("default")
+             } = Client.lens!("operator")
     end
 
     test "and existing capture, memory addition, and recall preserve legacy behaviour" do
