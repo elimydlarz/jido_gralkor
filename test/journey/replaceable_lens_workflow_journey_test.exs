@@ -68,7 +68,11 @@ defmodule Gralkor.ReplaceableLensWorkflowJourneyTest do
     test "when the application later replaces it with another complete graph then Lens search no longer returns the previous graph" do
       assert :ok = Client.replace(replacement("old", "Payments settles through Ledger."))
       assert {:ok, previous_results} = search("settlement ledger")
-      assert Enum.any?(previous_results, &String.contains?(&1.fact, "Payments settles through Ledger."))
+
+      assert Enum.any?(
+               previous_results,
+               &String.contains?(&1.fact, "Payments settles through Ledger.")
+             )
 
       assert :ok = Client.replace(replacement("new", "Payments settles through Clearing."))
 
@@ -79,7 +83,11 @@ defmodule Gralkor.ReplaceableLensWorkflowJourneyTest do
     test "when the application later replaces it with another complete graph and Lens search returns the current graph" do
       assert :ok = Client.replace(replacement("old", "Payments settles through Ledger."))
       assert {:ok, previous_results} = search("settlement ledger")
-      assert Enum.any?(previous_results, &String.contains?(&1.fact, "Payments settles through Ledger."))
+
+      assert Enum.any?(
+               previous_results,
+               &String.contains?(&1.fact, "Payments settles through Ledger.")
+             )
 
       assert :ok = Client.replace(replacement("new", "Payments settles through Clearing."))
 
