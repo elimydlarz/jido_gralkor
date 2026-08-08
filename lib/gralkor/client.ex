@@ -217,7 +217,7 @@ defmodule Gralkor.Client do
     validate_max_results!(max_results)
 
     targets =
-      ["default" | lenses]
+      ["operator" | lenses]
       |> Enum.uniq()
       |> Enum.map(&search_target!(operator_id, &1))
       |> Enum.uniq_by(& &1.destination)
@@ -279,9 +279,9 @@ defmodule Gralkor.Client do
     lenses = registered_lenses!()
 
     case Enum.find(lenses, fn definition -> Keyword.get(definition, :name) == name end) do
-      nil when name == "default" ->
+      nil when name == "operator" ->
         %Lens{
-          name: "default",
+          name: "operator",
           ontology: Gralkor.Config.ontology(),
           scope: :operator,
           ingestion: StoreIngestion
@@ -338,7 +338,7 @@ defmodule Gralkor.Client do
       raise ArgumentError, "invalid Lens name #{inspect(name)}"
     end
 
-    if name in ["default", "global"] do
+    if name in ["operator", "global"] do
       raise ArgumentError, "invalid Lens #{inspect(name)}: name is reserved"
     end
 

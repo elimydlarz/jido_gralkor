@@ -130,7 +130,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   end
 
   @spec group_id(String.t(), String.t()) :: String.t()
-  defp group_id(operator_id, "default"), do: String.replace(operator_id, "-", "_")
+  defp group_id(operator_id, "operator"), do: String.replace(operator_id, "-", "_")
 
   defp group_id(operator_id, lens_name) do
     "lens_" <> encode(operator_id) <> "_" <> encode(lens_name)
