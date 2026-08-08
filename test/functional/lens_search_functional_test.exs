@@ -127,12 +127,12 @@ defmodule Gralkor.LensSearchFunctionalTest do
   end
 
   describe "when a caller searches memory" do
-    test "then results from the requesting operator's reserved `default` Lens precede additional-Lens results" do
+    test "then results from the requesting operator's reserved `operator` Lens precede additional-Lens results" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
-                 lens: "default",
-                 content: "default memory",
+                 lens: "operator",
+                 content: "operator memory",
                  source_description: "legacy"
                })
 
@@ -146,7 +146,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
 
       assert {:ok,
               [
-                %{lens: "default", fact: "default memory"},
+                %{lens: "operator", fact: "operator memory"},
                 %{lens: "observations", fact: "observation memory"}
               ]} =
                Client.search(%Search{
