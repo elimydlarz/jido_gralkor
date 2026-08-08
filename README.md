@@ -130,8 +130,8 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
-| `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:scope`, `:ontology`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:scope`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"default"`, `"global"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
-| `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"default"` Lens only — the channel used by mounts with no `:default_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises whenever the implicit default Lens is resolved, including for search. |
+| `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:scope`, `:ontology`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:scope`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"operator"`, `"global"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
+| `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"operator"` Lens only — the channel used by mounts with no `:default_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises whenever the implicit operator Lens is resolved, including for search. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
 | `:generalise_on_flush` | boolean | `false` | Fires the legacy `Gralkor.Generalise` pipeline after each successful implicit-default capture flush. Lens mounts use `generalise_lens` instead. |
@@ -149,7 +149,7 @@ config :jido_gralkor,
   recall_deadline_ms: 12_000
 ```
 
-`:ontology` and `:generalise_on_flush` are omitted above on purpose: both belong to the implicit-default compatibility path, not to a Lens deployment. See [A complete configuration](#a-complete-configuration) for all of it wired together.
+`:ontology` and `:generalise_on_flush` are omitted above on purpose: both belong to the implicit-operator compatibility path, not to a registered-Lens deployment. See [A complete configuration](#a-complete-configuration) for all of it wired together.
 
 ### Environment variables
 
@@ -169,8 +169,8 @@ config :jido_gralkor,
 | Option | Required | Default | What it does |
 | --- | --- | --- | --- |
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
-| `:default_lens` | no | unset (implicit-default mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. |
-| `:search_lenses` | no | `[]` | Additional registered Lens names and/or the reserved `"global"` Lens. The operator's reserved `"default"` Lens is always included and its results are returned first; naming it explicitly doesn't search it twice. |
+| `:default_lens` | no | unset (implicit-operator mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. |
+| `:search_lenses` | no | `[]` | Additional registered Lens names and/or the reserved `"global"` Lens. The reserved `"operator"` Lens is always included and its results are returned first; naming it explicitly doesn't search it twice. |
 | `:generalise_lens` | no | unset | Second registered Lens that independently receives each flushed transcript. Must differ from `:default_lens`. |
 
 Per-turn, `tool_context[:lens]` overrides `:default_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
@@ -263,7 +263,7 @@ config :jido_gralkor,
   recall_deadline_ms: 12_000
 
 # NOT set here: `:ontology`. That key binds an ontology to the implicit
-# "default" Lens used by mounts that configure no Lenses at all. A
+# "operator" Lens used by mounts that configure no Lenses at all. A
 # deployment that registers Lenses leaves it unset — see below.
 ```
 
@@ -280,9 +280,9 @@ plugins: [
 ]
 ```
 
-That mount writes captured turns and `memory_add` calls to `"observations"`, submits each flushed transcript independently to `"generalisations"`, and concurrently searches the operator's reserved `"default"` Lens, `"decisions"`, and the shared `"global"` group. Results remain ordered as `"default"`, `"decisions"`, then `"global"`.
+That mount writes captured turns and `memory_add` calls to `"observations"`, submits each flushed transcript independently to `"generalisations"`, and concurrently searches the reserved `"operator"` Lens, `"decisions"`, and the shared `"global"` group. Results remain ordered as `"operator"`, `"decisions"`, then `"global"`.
 
-**On `:ontology` vs. Lens `ontology:`.** They are not a declaration and a reference to it; they are two different channels, each with its own binding. `:ontology` configures exactly one channel — the implicit `"default"` Lens, which cannot be registered in `:lenses` because the name is reserved. Set `:ontology` only if you run mounts without `:default_lens` (implicit-default mode), or call the legacy `memory_add/3` and `capture/5` surface directly. It has no effect on writes through a registered Lens or on search filtering and results, though resolving the implicit default Lens during search still validates the configured module.
+**On `:ontology` vs. Lens `ontology:`.** They are not a declaration and a reference to it; they are two different channels, each with its own binding. `:ontology` configures exactly one channel — the implicit `"operator"` Lens, which cannot be registered in `:lenses` because the name is reserved. Set `:ontology` only if you run mounts without `:default_lens` (implicit-operator mode), or call the legacy `memory_add/3` and `capture/5` surface directly. It has no effect on writes through a registered Lens or on search filtering and results, though resolving the implicit operator Lens during search still validates the configured module.
 
 ## Wire it on your agent
 
@@ -472,7 +472,7 @@ The plugin mount chooses how an agent uses the registered Lenses:
 ```
 
 - `default_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
-- `search_lenses` is an optional list of additional registered Lens names and/or the reserved `"global"` Lens. Every Lens-aware search always includes the requesting operator's reserved `"default"` Lens; configured Lenses are additive and all resolved destinations are searched concurrently. Omitting the option or using `[]` therefore searches only `"default"`. Naming `"default"` explicitly does not search it twice. Naming one or more global Lenses searches the shared `"global"` group once.
+- `search_lenses` is an optional list of additional registered Lens names and/or the reserved `"global"` Lens. Every Lens-aware search always includes the reserved `"operator"` Lens; configured Lenses are additive and all resolved destinations are searched concurrently. Omitting the option or using `[]` therefore searches only `"operator"`. Naming `"operator"` explicitly does not search it twice. Naming one or more global Lenses searches the shared `"global"` group once.
 - `generalise_lens` is optional. It submits each flushed transcript to a second Lens independently of the primary capture Lens.
 
 Consumers that ingest, replace, or search outside an agent call the same public boundary directly:
@@ -518,7 +518,7 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   })
 ```
 
-`Gralkor.Search.lenses` has the same additive meaning as the plugin option. The reserved `"default"` Lens is private to the requesting operator and preserves the original operator memory group. The reserved `"global"` Lens is the one shared group used by every global Lens and every operator; it is searched only when selected directly or through a registered global Lens. Distinct names resolving to that shared group cause one physical search.
+`Gralkor.Search.lenses` has the same additive meaning as the plugin option. The reserved `"operator"` Lens is private to the requesting operator and preserves the original operator memory group. The reserved `"global"` Lens is the one shared group used by every global Lens and every operator; it is searched only when selected directly or through a registered global Lens. Distinct names resolving to that shared group cause one physical search.
 
 Searches run concurrently while results retain configured Lens order. `max_results` defaults to `20`, must be a positive integer, and applies independently to every resolved destination. Each returned item has `%{lens: searched_lens, fact: fact}`; global results use `lens: "global"` because global search is unfiltered by originating Lens. Repeated facts from distinct local Lens groups remain separate results. The Lens-aware `memory_search` action returns this attributed list as JSON.
 
@@ -528,7 +528,7 @@ Replacement is scoped through the Lens exactly like other Lens operations: an op
 
 Invalid Lens names, write modes, formats, and graph data raise `ArgumentError`; graph data is fully validated before storage mutation begins. Once a valid replacement starts, deletion and insertion are not transactional: an import error is returned, and content already removed or inserted is not rolled back.
 
-Registry and plugin configuration fail fast for blank, duplicate, reserved, or malformed Lens definitions and for unknown Lens names. If no Lens configuration is used, the implicit `"default"` Lens preserves the existing operator group and deployment-wide `:ontology` behavior.
+Registry and plugin configuration fail fast for blank, duplicate, reserved, or malformed Lens definitions and for unknown Lens names. If no Lens configuration is used, the implicit `"operator"` Lens preserves the existing operator group and deployment-wide `:ontology` behavior.
 
 ### Ontology DSL
 
