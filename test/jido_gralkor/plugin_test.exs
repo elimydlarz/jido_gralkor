@@ -88,14 +88,14 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  describe "when mount selects a default Lens, Lenses to search, and an optional generalising Lens" do
+  describe "when mount selects an ingestion Lens, Lenses to search, and an optional generalising Lens" do
     test "then those selections are resolved against the application Lens registry and stored on the plugin state" do
       configure_lenses()
 
       assert {:ok,
               %{
                 agent_name: "Susu",
-                default_lens: "observations",
+                ingestion_lens: "observations",
                 search_lenses: ["observations", "global"],
                 generalise_lens: "generalisations",
                 lens: %Gralkor.Lens{
@@ -107,7 +107,7 @@ defmodule JidoGralkor.PluginTest do
               }} =
                Plugin.mount(%{id: "operator-one", state: %{}},
                  agent_name: "Susu",
-                 default_lens: "observations",
+                 ingestion_lens: "observations",
                  search_lenses: ["observations", "global"],
                  generalise_lens: "generalisations"
                )
