@@ -153,12 +153,18 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-    test "and a reserved `default` or `global` Lens name is identified" do
-      for name <- ["default", "global"] do
+    test "and a reserved `operator` or `global` Lens name is identified" do
+      for name <- ["operator", "global"] do
         Application.put_env(:jido_gralkor, :lenses, [valid_lens(name)])
 
         assert_raise ArgumentError, ~r/#{name}.*reserved/, fn -> Client.lens!(name) end
       end
+    end
+
+    test "and the retired `default` Lens name identifies `operator` as its replacement" do
+      Application.put_env(:jido_gralkor, :lenses, [valid_lens("default")])
+
+      assert_raise ArgumentError, ~r/default.*operator/, fn -> Client.lens!("default") end
     end
 
     test "and an invalid Lens definition shape is identified" do
