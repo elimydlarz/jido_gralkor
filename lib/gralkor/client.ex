@@ -342,6 +342,11 @@ defmodule Gralkor.Client do
       raise ArgumentError, "invalid Lens name #{inspect(name)}"
     end
 
+    if name == "default" do
+      raise ArgumentError,
+            "invalid Lens \"default\": name was retired; use \"operator\" instead"
+    end
+
     if name in ["operator", "global"] do
       raise ArgumentError, "invalid Lens #{inspect(name)}: name is reserved"
     end
