@@ -8,7 +8,7 @@ when the memory search tool runs with a query and a committed session
     then the failure reason is returned to the caller unchanged
   where the tool context selects Lenses to search
     then the Lens search is used in place of the legacy recall
-    and the operator's reserved `default` Lens is searched alongside every selected Lens
+    and the operator's reserved `operator` Lens is searched alongside every selected Lens
     and the action result is JSON identifying the searched Lens that contributed every fact
     if a Lens backend fails
       then the failure reason is returned to the caller unchanged

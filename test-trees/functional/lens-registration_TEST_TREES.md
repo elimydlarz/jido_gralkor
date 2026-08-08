@@ -14,7 +14,7 @@ if an application registers an invalid Lens
   then configuration resolution raises `ArgumentError` before ingestion or search begins
   and a blank Lens name is identified
   and a duplicate Lens name is identified
-  and a reserved `default` or `global` Lens name is identified
+  and a reserved `operator` or `global` Lens name is identified
   and an invalid Lens definition shape is identified
   and an invalid Lens ontology is identified with its Lens
   and an invalid Lens scope is identified with its Lens
