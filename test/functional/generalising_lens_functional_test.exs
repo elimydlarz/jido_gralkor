@@ -198,7 +198,7 @@ defmodule Gralkor.GeneralisingLensFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations",
+                 ingestion_lens: "observations",
                  generalise_lens: "generalisations"
                )
 

@@ -78,7 +78,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations",
+                 ingestion_lens: "observations",
                  search_lenses: []
                )
 
@@ -118,7 +118,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations",
+                 ingestion_lens: "observations",
                  search_lenses: ["observations"]
                )
 
@@ -148,7 +148,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations",
+                 ingestion_lens: "observations",
                  search_lenses: ["observations"]
                )
 
@@ -178,7 +178,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations",
+                 ingestion_lens: "observations",
                  search_lenses: ["observations"]
                )
 
@@ -200,7 +200,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, %{lens: lens}} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations"
+                 ingestion_lens: "observations"
                )
 
       assert %Gralkor.Lens{
@@ -231,7 +231,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations"
+                 ingestion_lens: "observations"
                )
 
       query_signal = %Jido.Signal{
@@ -270,7 +270,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                })
 
       assert {:ok, plugin_state} =
-               Plugin.mount(%{}, agent_name: "Susu", default_lens: "observations")
+               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
 
       agent = agent(plugin_state)
       assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(agent)
@@ -292,7 +292,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations"
+                 ingestion_lens: "observations"
                )
 
       agent = agent(plugin_state)
@@ -315,7 +315,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations"
+                 ingestion_lens: "observations"
                )
 
       assert {:ok,
@@ -333,7 +333,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations",
+                 ingestion_lens: "observations",
                  search_lenses: ["observations"]
                )
 
@@ -393,7 +393,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations"
+                 ingestion_lens: "observations"
                )
 
       request_id = "failed-decision-request"
@@ -421,7 +421,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations"
+                 ingestion_lens: "observations"
                )
 
       for {request_id, lens, result} <- [
@@ -458,7 +458,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations"
+                 ingestion_lens: "observations"
                )
 
       for {request_id, lens} <- [
@@ -498,7 +498,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations"
+                 ingestion_lens: "observations"
                )
 
       for request_id <- ["first-request", "second-request"] do
@@ -528,13 +528,13 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   describe "if a mounted plugin receives invalid Lens configuration" do
     test "then mounting fails before the plugin handles an agent signal" do
       assert_raise ArgumentError, fn ->
-        Plugin.mount(%{}, agent_name: "Susu", default_lens: "missing")
+        Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "missing")
       end
     end
 
     test "and an unknown default Lens is identified" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
-        Plugin.mount(%{}, agent_name: "Susu", default_lens: "missing")
+        Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "missing")
       end
     end
 
@@ -542,7 +542,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
-          default_lens: "observations",
+          ingestion_lens: "observations",
           search_lenses: ["missing"]
         )
       end
@@ -552,7 +552,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
-          default_lens: "observations",
+          ingestion_lens: "observations",
           generalise_lens: "missing"
         )
       end
@@ -562,7 +562,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert_raise ArgumentError, ~r/must differ/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
-          default_lens: "observations",
+          ingestion_lens: "observations",
           generalise_lens: "observations"
         )
       end
@@ -583,7 +583,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert_raise ArgumentError, ~r/search_lenses must be a list/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
-          default_lens: "observations",
+          ingestion_lens: "observations",
           search_lenses: "observations"
         )
       end

@@ -91,7 +91,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations",
+                 ingestion_lens: "observations",
                  search_lenses: ["observations", "decisions", "global"],
                  generalise_lens: "generalisations"
                )
@@ -257,7 +257,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
-          default_lens: "observations",
+          ingestion_lens: "observations",
           search_lenses: ["missing"]
         )
       end

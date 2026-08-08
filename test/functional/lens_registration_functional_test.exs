@@ -54,18 +54,18 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     test "then direct callers and mounted memory plugins can select that Lens by name" do
       assert %Gralkor.Lens{name: "observations"} = Client.lens!("observations")
 
-      assert {:ok, %{default_lens: "observations"}} =
+      assert {:ok, %{ingestion_lens: "observations"}} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations"
+                 ingestion_lens: "observations"
                )
 
       Application.put_env(:jido_gralkor, :lenses, [valid_replaceable_lens("systems")])
 
       assert %Gralkor.Lens.Replaceable{name: "systems"} = Client.lens!("systems")
 
-      assert {:ok, %{default_lens: "systems"}} =
-               Plugin.mount(%{}, agent_name: "Susu", default_lens: "systems")
+      assert {:ok, %{ingestion_lens: "systems"}} =
+               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "systems")
     end
 
     test "and every consumer observes the same application-owned Lens definition" do
@@ -79,7 +79,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       assert {:ok, %{lens: plugin_lens}} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 default_lens: "observations"
+                 ingestion_lens: "observations"
                )
 
       assert plugin_lens == Client.lens!("observations")
@@ -87,7 +87,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       Application.put_env(:jido_gralkor, :lenses, [valid_replaceable_lens("systems")])
 
       assert {:ok, %{lens: replaceable_plugin_lens}} =
-               Plugin.mount(%{}, agent_name: "Susu", default_lens: "systems")
+               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "systems")
 
       assert replaceable_plugin_lens == Client.lens!("systems")
     end
