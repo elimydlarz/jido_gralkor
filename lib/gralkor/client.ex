@@ -287,6 +287,10 @@ defmodule Gralkor.Client do
           ingestion: StoreIngestion
         }
 
+      nil when name == "default" ->
+        raise ArgumentError,
+              "Lens \"default\" was retired; use the reserved \"operator\" Lens instead"
+
       nil ->
         raise ArgumentError, "unknown Lens #{inspect(name)}"
 
