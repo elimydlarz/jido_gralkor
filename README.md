@@ -131,7 +131,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
 | `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:scope`, `:ontology`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:scope`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"operator"`, `"global"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
-| `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"operator"` Lens only — the channel used by mounts with no `:default_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises whenever the implicit operator Lens is resolved, including for search. |
+| `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"operator"` Lens only — the channel used by mounts with no `:ingestion_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises whenever the implicit operator Lens is resolved, including for search. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
 | `:generalise_on_flush` | boolean | `false` | Fires the legacy `Gralkor.Generalise` pipeline after each successful implicit-operator capture flush. Lens mounts use `generalise_lens` instead. |
@@ -163,17 +163,17 @@ config :jido_gralkor,
 ### Plugin mount options
 
 ```elixir
-{JidoGralkor.Plugin, %{agent_name: "Susu", default_lens: "observations", …}}
+{JidoGralkor.Plugin, %{agent_name: "Susu", ingestion_lens: "observations", …}}
 ```
 
 | Option | Required | Default | What it does |
 | --- | --- | --- | --- |
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
-| `:default_lens` | no | unset (implicit-operator mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. |
+| `:ingestion_lens` | no | unset (implicit-operator mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. The removed `:default_lens` option raises and identifies this replacement. |
 | `:search_lenses` | no | `[]` | Additional registered Lens names and/or the reserved `"global"` Lens. The reserved `"operator"` Lens is always included and its results are returned first; naming it explicitly doesn't search it twice. |
-| `:generalise_lens` | no | unset | Second registered Lens that independently receives each flushed transcript. Must differ from `:default_lens`. |
+| `:generalise_lens` | no | unset | Second registered Lens that independently receives each flushed transcript. Must differ from `:ingestion_lens`. |
 
-Per-turn, `tool_context[:lens]` overrides `:default_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
+Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
 
 ### `JidoGralkor.ContextRotator.rotate_now/2`
 
@@ -273,7 +273,7 @@ plugins: [
   {JidoGralkor.Plugin,
    %{
      agent_name: "Susu",
-     default_lens: "observations",
+     ingestion_lens: "observations",
      search_lenses: ["decisions", "global"],
      generalise_lens: "generalisations"
    }}
@@ -282,7 +282,7 @@ plugins: [
 
 That mount writes captured turns and `memory_add` calls to `"observations"`, submits each flushed transcript independently to `"generalisations"`, and concurrently searches the reserved `"operator"` Lens, `"decisions"`, and the shared `"global"` group. Results remain ordered as `"operator"`, `"decisions"`, then `"global"`.
 
-**On `:ontology` vs. Lens `ontology:`.** They are not a declaration and a reference to it; they are two different channels, each with its own binding. `:ontology` configures exactly one channel — the implicit `"operator"` Lens, which cannot be registered in `:lenses` because the name is reserved. Set `:ontology` only if you run mounts without `:default_lens` (implicit-operator mode), or call the legacy `memory_add/3` and `capture/5` surface directly. It has no effect on writes through a registered Lens or on search filtering and results, though resolving the implicit operator Lens during search still validates the configured module.
+**On `:ontology` vs. Lens `ontology:`.** They are not a declaration and a reference to it; they are two different channels, each with its own binding. `:ontology` configures exactly one channel — the implicit `"operator"` Lens, which cannot be registered in `:lenses` because the name is reserved. Set `:ontology` only if you run mounts without `:ingestion_lens` (implicit-operator mode), or call the legacy `memory_add/3` and `capture/5` surface directly. It has no effect on writes through a registered Lens or on search filtering and results, though resolving the implicit operator Lens during search still validates the configured module.
 
 ## Wire it on your agent
 
@@ -311,7 +311,7 @@ defmodule MyApp.ChatAgent do
       {JidoGralkor.Plugin,
        %{
          agent_name: "Susu",
-         default_lens: "observations",
+         ingestion_lens: "observations",
          search_lenses: ["observations", "global"],
          generalise_lens: "generalisations"
        }}
@@ -332,7 +332,7 @@ end
 
 The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed), `:agent_name`, the selected `:lens`, and `:search_lenses` on the signal's `tool_context`. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
 
-Set `tool_context[:lens]` on an individual query to override `default_lens` for that turn. The plugin retains the selection on the request's Jido thread entry, making it authoritative for both `memory_add` and later completion or failure capture after ReAct has released its transient tool context. If `generalise_lens` is configured, the same captured turn is also submitted to that Lens without duplicating it in session context.
+Set `tool_context[:lens]` on an individual query to override `ingestion_lens` for that turn. The plugin retains the selection on the request's Jido thread entry, making it authoritative for both `memory_add` and later completion or failure capture after ReAct has released its transient tool context. If `generalise_lens` is configured, the same captured turn is also submitted to that Lens without duplicating it in session context.
 
 The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate it before each request (for example, via `on_before_cmd/2` from the signal's `tool_context`) so distill renders user lines under the correct human identity. Missing and blank names raise; there is no generic fallback.
 
@@ -465,13 +465,13 @@ The plugin mount chooses how an agent uses the registered Lenses:
 {JidoGralkor.Plugin,
  %{
    agent_name: "Susu",
-   default_lens: "observations",
+   ingestion_lens: "observations",
    search_lenses: ["observations", "global"],
    generalise_lens: "generalisations"
  }}
 ```
 
-- `default_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
+- `ingestion_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
 - `search_lenses` is an optional list of additional registered Lens names and/or the reserved `"global"` Lens. Every Lens-aware search always includes the reserved `"operator"` Lens; configured Lenses are additive and all resolved destinations are searched concurrently. Omitting the option or using `[]` therefore searches only `"operator"`. Naming `"operator"` explicitly does not search it twice. Naming one or more global Lenses searches the shared `"global"` group once.
 - `generalise_lens` is optional. It submits each flushed transcript to a second Lens independently of the primary capture Lens.
 
