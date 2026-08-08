@@ -18,7 +18,7 @@ defmodule JidoGralkor.Plugin do
 
   The plugin does **not** search memory on its own. Search is the LLM's job,
   invoked through `MemorySearch`: Lens-aware mounts call
-  `Gralkor.Client.search/1`; implicit-default mounts call the configured
+  `Gralkor.Client.search/1`; implicit-operator mounts call the configured
   client's legacy `recall/4`.
   Consumers force it on the first ReAct iteration via
   `JidoGralkor.ReAct.maybe_force_memory_search/2` from their
@@ -28,7 +28,7 @@ defmodule JidoGralkor.Plugin do
   full request trace and assistant answer are normalised via
   `JidoGralkor.Canonical.to_messages/3` into Gralkor's canonical
   `[%Gralkor.Message{role, content}]` shape and submitted to the configured
-  client. Implicit-default capture uses `capture/5`; Lens-aware capture uses
+  client. Implicit-operator capture uses `capture/5`; Lens-aware capture uses
   `capture/6`, or `/7` when an additional generalising Lens is configured.
   The capture buffer keeps turn order by `session_id` and flushes Lens batches
   independently.

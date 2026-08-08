@@ -10,7 +10,7 @@ defmodule Gralkor.Message do
       activity into a single role; Gralkor does not branch on interior shape
       beyond role.
     * `:content` — a string. Adapters choose how to render their events;
-      In implicit-default mode Gralkor renders user and assistant content into
+      In implicit-operator mode Gralkor renders user and assistant content into
       the captured transcript and uses role labels in recall context. A
       selected Lens's ingestion process decides how its captured messages are
       persisted.

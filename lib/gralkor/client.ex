@@ -6,7 +6,7 @@ defmodule Gralkor.Client do
   resolves an appending Lens and invokes its ingestion process with a
   Lens-bound store. Replacement validates and stores the complete graph for a
   replaceable Lens. Search always includes the requesting operator's reserved
-  `"default"` Lens and searches every distinct selected destination
+  `"operator"` Lens and searches every distinct selected destination
   concurrently. Every Lens resolves to the group its content lives in, so all
   selected global Lens names collapse to one shared `"global"` search. Results
   retain Lens order and attribute each fact to its searched Lens.

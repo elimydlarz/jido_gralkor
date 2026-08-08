@@ -130,7 +130,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
-| `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:scope`, `:ontology`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:scope`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"operator"`, `"global"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
+| `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:scope`, `:ontology`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:scope`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"operator"`, `"global"`), retired (`"default"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
 | `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"operator"` Lens only — the channel used by mounts with no `:ingestion_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises whenever the implicit operator Lens is resolved, including for search. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
@@ -528,7 +528,7 @@ Replacement is scoped through the Lens exactly like other Lens operations: an op
 
 Invalid Lens names, write modes, formats, and graph data raise `ArgumentError`; graph data is fully validated before storage mutation begins. Once a valid replacement starts, deletion and insertion are not transactional: an import error is returned, and content already removed or inserted is not rolled back.
 
-Registry and plugin configuration fail fast for blank, duplicate, reserved, or malformed Lens definitions and for unknown Lens names. If no Lens configuration is used, the implicit `"operator"` Lens preserves the existing operator group and deployment-wide `:ontology` behavior.
+Registry and plugin configuration fail fast for blank, duplicate, reserved, retired, or malformed Lens definitions and for unknown Lens names. The retired `"default"` Lens name raises with guidance to use `"operator"`; it is not an alias. If no Lens configuration is used, the implicit `"operator"` Lens preserves the existing operator group and deployment-wide `:ontology` behavior.
 
 ### Ontology DSL
 

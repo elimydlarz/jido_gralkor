@@ -1,8 +1,8 @@
 defmodule Gralkor.Search do
   @moduledoc """
-  A search across the operator's reserved `"default"` Lens and additional Lenses.
+  A search across the reserved `"operator"` Lens and additional Lenses.
 
-  The requesting operator's reserved `"default"` Lens is always included. Each
+  The requesting operator's reserved `"operator"` Lens is always included. Each
   entry in `lenses` is another registered Lens name or the reserved `"global"`
   Lens. Distinct names resolving to the shared global group cause one physical
   search. Resolved destinations are searched concurrently, and attributed
