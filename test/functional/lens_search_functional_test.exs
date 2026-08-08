@@ -28,7 +28,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
     def search(%Gralkor.Lens.Store{lens: %{name: "observations"}}, _query, _max_results),
       do: {:error, :unavailable}
 
-    def search(_store, _query, _max_results), do: {:ok, ["default memory"]}
+    def search(_store, _query, _max_results), do: {:ok, ["operator memory"]}
   end
 
   defmodule UnexpectedSearchStorage do
@@ -178,36 +178,36 @@ defmodule Gralkor.LensSearchFunctionalTest do
     end
   end
 
-  describe "where a caller includes the reserved `default` Lens explicitly" do
-    test "then the requesting operator's default group is searched only once" do
+  describe "where a caller includes the reserved `operator` Lens explicitly" do
+    test "then the requesting operator's existing group is searched only once" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
-                 lens: "default",
-                 content: "default memory",
+                 lens: "operator",
+                 content: "operator memory",
                  source_description: "legacy"
                })
 
-      assert {:ok, [%{lens: "default", fact: "default memory"}]} =
+      assert {:ok, [%{lens: "operator", fact: "operator memory"}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory",
-                 lenses: ["default"]
+                 lenses: ["operator"]
                })
     end
   end
 
   describe "where a caller supplies no additional Lenses to search" do
-    test "then only the requesting operator's reserved `default` Lens is searched" do
+    test "then only the requesting operator's reserved `operator` Lens is searched" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
-                 lens: "default",
-                 content: "default memory",
+                 lens: "operator",
+                 content: "operator memory",
                  source_description: "legacy"
                })
 
-      assert {:ok, [%{lens: "default", fact: "default memory"}]} =
+      assert {:ok, [%{lens: "operator", fact: "operator memory"}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "memory"
@@ -227,13 +227,13 @@ defmodule Gralkor.LensSearchFunctionalTest do
                  lenses: ["observations"]
                })
 
-      assert_receive {:search_limit, "default", 20}
+      assert_receive {:search_limit, "operator", 20}
       assert_receive {:search_limit, "observations", 20}
     end
   end
 
   describe "where a caller supplies additional Lenses to search" do
-    test "then the requesting operator's reserved `default` Lens and every additional Lens are searched concurrently" do
+    test "then the requesting operator's reserved `operator` Lens and every additional Lens are searched concurrently" do
       Process.register(self(), :lens_search_parallel_test)
       Application.put_env(:jido_gralkor, :lens_storage, ParallelSearchStorage)
 
@@ -253,13 +253,13 @@ defmodule Gralkor.LensSearchFunctionalTest do
         end
 
       assert started |> Enum.map(&elem(&1, 0)) |> MapSet.new() ==
-               MapSet.new(["default", "observations"])
+               MapSet.new(["operator", "observations"])
 
       Enum.each(started, fn {_lens, search_process} -> send(search_process, :finish_search) end)
 
       assert {:ok,
               [
-                %{lens: "default", fact: "default memory"},
+                %{lens: "operator", fact: "operator memory"},
                 %{lens: "observations", fact: "observations memory"}
               ]} = Task.await(search)
     end
@@ -292,7 +292,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
 
     test "and every result identifies the searched Lens that contributed it" do
       for {lens, content} <- [
-            {"default", "default memory"},
+            {"operator", "operator memory"},
             {"observations", "observation memory"}
           ] do
         assert :ok =
@@ -306,7 +306,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
 
       assert {:ok,
               [
-                %{lens: "default", fact: "default memory"},
+                %{lens: "operator", fact: "operator memory"},
                 %{lens: "observations", fact: "observation memory"}
               ]} =
                Client.search(%Search{
@@ -339,10 +339,10 @@ defmodule Gralkor.LensSearchFunctionalTest do
                })
     end
 
-    test "and the same maximum result count applies independently to the default and every additional Lens" do
+    test "and the same maximum result count applies independently to the operator Lens and every additional Lens" do
       for {lens, content} <- [
-            {"default", "default one"},
-            {"default", "default two"},
+            {"operator", "operator one"},
+            {"operator", "operator two"},
             {"observations", "observation one"},
             {"observations", "observation two"}
           ] do
@@ -357,7 +357,7 @@ defmodule Gralkor.LensSearchFunctionalTest do
 
       assert {:ok,
               [
-                %{lens: "default", fact: "default one"},
+                %{lens: "operator", fact: "operator one"},
                 %{lens: "observations", fact: "observation one"}
               ]} =
                Client.search(%Search{
