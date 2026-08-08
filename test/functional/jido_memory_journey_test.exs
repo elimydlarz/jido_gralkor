@@ -237,7 +237,8 @@ defmodule Gralkor.JidoMemoryJourneyTest do
     end
 
     test "then Lens search returns the supplied graph", %{operator_id: operator_id} do
-      assert :ok = Client.replace(replacement(operator_id, "old", "Payments settles through Ledger."))
+      assert :ok =
+               Client.replace(replacement(operator_id, "old", "Payments settles through Ledger."))
 
       assert {:ok, results} = replacement_search(operator_id, "settlement ledger")
       assert Enum.any?(results, &String.contains?(&1.fact, "Payments settles through Ledger."))
@@ -245,7 +246,9 @@ defmodule Gralkor.JidoMemoryJourneyTest do
 
     test "when the application later replaces it with another complete graph then Lens search no longer returns the previous graph",
          %{operator_id: operator_id} do
-      assert :ok = Client.replace(replacement(operator_id, "old", "Payments settles through Ledger."))
+      assert :ok =
+               Client.replace(replacement(operator_id, "old", "Payments settles through Ledger."))
+
       assert {:ok, previous_results} = replacement_search(operator_id, "settlement ledger")
 
       assert Enum.any?(
@@ -264,7 +267,9 @@ defmodule Gralkor.JidoMemoryJourneyTest do
 
     test "when the application later replaces it with another complete graph and Lens search returns the current graph",
          %{operator_id: operator_id} do
-      assert :ok = Client.replace(replacement(operator_id, "old", "Payments settles through Ledger."))
+      assert :ok =
+               Client.replace(replacement(operator_id, "old", "Payments settles through Ledger."))
+
       assert {:ok, previous_results} = replacement_search(operator_id, "settlement ledger")
 
       assert Enum.any?(
