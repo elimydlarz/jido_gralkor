@@ -184,7 +184,7 @@ Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the 
 
 Everything above, in one deployment. Three files.
 
-**Ontologies are modules, not config.** Each one is defined once as ordinary compiled Elixir in your own `lib/`, and a Lens definition points at it by module atom — the same way that definition's `ingestion:` key points at an ingestion module you wrote. So an ontology exists in two places, playing two different roles: *defined* in `lib/` as code, *referenced* in `config/runtime.exs` from the Lens that should extract with it. There is no third thing — no ontology list in the application env to register it with first. Two Lenses may point at the same module, as `"observations"` and `"decisions"` do below; a Lens needing a different extraction schema points at a different module, as `"generalisations"` does.
+**Ontologies are modules, not config.** Each one is defined once as ordinary compiled Elixir in your own `lib/`, and a Lens definition points at it by module atom — the same way that definition's `ingestion:` key points at an ingestion module you wrote. So an ontology exists in two places, playing two different roles: *defined* in `lib/` as code, *referenced* in `config/runtime.exs` from the Lens that should extract with it. There is no third thing — no ontology list in the application env to register it with first. Two Lenses may point at the same module, as `"observations"` and `"decisions"` do below.
 
 ```elixir
 # lib/my_app/ontologies.ex — compiled code. Named by Lens definitions below.
@@ -204,15 +204,6 @@ defmodule MyApp.Ontology do
     prefers WorkingPreference do
       field :since, :string, doc: "date first observed"
     end
-  end
-end
-
-defmodule MyApp.PatternOntology do
-  use Gralkor.Ontology, entities: :strict, relationships: :open
-
-  entity Pattern, "A durable pattern distilled from many conversations." do
-    field :statement,  :string, required: true, doc: "the durable generalisation"
-    field :confidence, :float,                  doc: "0.0–1.0 as scored at distillation"
   end
 end
 ```
@@ -246,17 +237,25 @@ config :jido_gralkor,
       ontology: MyApp.Ontology,
       scope: :operator,
       ingestion: MyApp.DecisionIngestion
-    ],
-    [
-      name: "generalisations",
-      ontology: MyApp.PatternOntology,
-      scope: :global,
-      ingestion: Gralkor.Lens.Ingestion.Generalise
     ]
   ],
 
-  # Tuning — all optional, shown at their defaults.
-  generalise_min_confidence: 0.3,
+  # Optional custom Reflection declarations. Omit this key to use the two
+  # packaged declarations shown here.
+  reflections: [
+    [
+      name: "generalisations",
+      scope: :global,
+      chain_of_thought: "priv/reflections/generalisations.yaml"
+    ],
+    [
+      name: "erl",
+      scope: :operator,
+      chain_of_thought: "priv/reflections/erl.yaml"
+    ]
+  ],
+
+  # Tuning — optional, shown at its default.
   interpret_max_output_tokens: 2000,
   recall_deadline_ms: 12_000
 
@@ -272,13 +271,12 @@ plugins: [
    %{
      agent_name: "Susu",
      ingestion_lens: "observations",
-     search_lenses: ["decisions", "global"],
-     generalise_lens: "generalisations"
+     search_lenses: ["decisions", "global"]
    }}
 ]
 ```
 
-That mount writes captured turns and `memory_add` calls to `"observations"`, submits each flushed transcript independently to `"generalisations"`, and concurrently searches the reserved `"operator"` Lens, `"decisions"`, and the shared `"global"` group. Results remain ordered as `"operator"`, `"decisions"`, then `"global"`.
+That mount writes captured turns and `memory_add` calls to `"observations"`, and concurrently searches the reserved `"operator"` Lens, `"decisions"`, and the shared `"global"` group. After a flushed ingestion has completed across its intended Lenses, each declared Reflection is scheduled independently over the completed lensed representations.
 
 **On `:ontology` vs. Lens `ontology:`.** They are not a declaration and a reference to it; they are two different channels, each with its own binding. `:ontology` configures exactly one channel — the implicit `"operator"` Lens, which cannot be registered in `:lenses` because the name is reserved. Set `:ontology` only if you run mounts without `:ingestion_lens` (implicit-operator mode), or call the legacy `memory_add/3` and `capture/5` surface directly. It has no effect on writes through a registered Lens or on search filtering and results, though resolving the implicit operator Lens during search still validates the configured module.
 
