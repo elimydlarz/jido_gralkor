@@ -14,6 +14,7 @@ defmodule Gralkor.OntologyExtractionTest do
   alias Gralkor.Client
   alias Gralkor.Client.Native
   alias Gralkor.GraphitiPool
+  alias Gralkor.Ingest
 
   @moduletag :functional
   @moduletag timeout: 600_000
@@ -51,14 +52,6 @@ defmodule Gralkor.OntologyExtractionTest do
 
     from User do
       prefers(Preference)
-    end
-  end
-
-  defmodule UnrelatedOntology do
-    use Gralkor.Ontology, entities: :strict, relationships: :scoped
-
-    entity Project do
-      field(:name, :string, required: true)
     end
   end
 
@@ -106,22 +99,20 @@ defmodule Gralkor.OntologyExtractionTest do
   end
 
   setup do
-    previous_ontology = Application.get_env(:jido_gralkor, :ontology)
+    previous_lenses = Application.get_env(:jido_gralkor, :lenses)
 
     on_exit(fn ->
-      if previous_ontology,
-        do: Application.put_env(:jido_gralkor, :ontology, previous_ontology),
-        else: Application.delete_env(:jido_gralkor, :ontology)
+      if previous_lenses,
+        do: Application.put_env(:jido_gralkor, :lenses, previous_lenses),
+        else: Application.delete_env(:jido_gralkor, :lenses)
     end)
 
     :ok
   end
 
-  describe "when an episode is ingested under a strict ontology" do
+  describe "when an episode is ingested through a named Lens with a strict ontology" do
     test "then extraction conforms every node and relationship to the declared ontology" do
-      group_id = "ontology_strict_#{System.unique_integer([:positive])}"
-
-      :ok = Client.impl().memory_add(group_id, @fixture, "fixture", StrictOntology)
+      group_id = ingest_through_named_lens("strict", StrictOntology)
 
       node_labels = node_labels(group_id)
       edge_types = edge_types(group_id)
@@ -140,11 +131,9 @@ defmodule Gralkor.OntologyExtractionTest do
     end
   end
 
-  describe "when an episode is ingested under an open ontology" do
+  describe "when an episode is ingested through a named Lens with an open ontology" do
     test "then extraction includes the declared entity types without excluding generic entities" do
-      group_id = "ontology_open_#{System.unique_integer([:positive])}"
-
-      :ok = Client.impl().memory_add(group_id, @fixture, "fixture", OpenOntology)
+      group_id = ingest_through_named_lens("open", OpenOntology)
 
       node_labels = node_labels(group_id)
 
@@ -156,9 +145,8 @@ defmodule Gralkor.OntologyExtractionTest do
     end
   end
 
-  describe "when an episode is ingested while no ontology is configured" do
+  describe "when an episode is added through implicit-default memory" do
     test "then extraction preserves generic entities without undeclared custom labels" do
-      Application.delete_env(:jido_gralkor, :ontology)
       group_id = "ontology_none_#{System.unique_integer([:positive])}"
 
       :ok = Client.impl().memory_add(group_id, @fixture, "fixture")
@@ -176,19 +164,40 @@ defmodule Gralkor.OntologyExtractionTest do
     end
   end
 
-  describe "where a memory write supplies an ontology that differs from application configuration" do
-    test "then that write's extraction is governed by the supplied ontology alone" do
-      Application.put_env(:jido_gralkor, :ontology, UnrelatedOntology)
-      group_id = "ontology_override_#{System.unique_integer([:positive])}"
-
-      :ok = Client.impl().memory_add(group_id, @fixture, "fixture", StrictOntology)
+  describe "where a named Lens supplies an application-owned ontology that differs from jido_gralkor's built-in ontology" do
+    test "then that Lens's extraction is governed by its application-owned ontology alone" do
+      group_id = ingest_through_named_lens("application-owned", StrictOntology)
 
       node_labels = node_labels(group_id)
       assert Enum.any?(node_labels, fn labels -> "User" in labels end)
       assert Enum.any?(node_labels, fn labels -> "Preference" in labels end)
-      refute Enum.any?(node_labels, fn labels -> "Project" in labels end)
     end
   end
+
+  defp ingest_through_named_lens(lens, ontology) do
+    operator_id = "ontology-operator-#{System.unique_integer([:positive])}"
+
+    Application.put_env(:jido_gralkor, :lenses, [
+      [
+        name: lens,
+        scope: :operator,
+        ontology: ontology,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ]
+    ])
+
+    assert :ok =
+             Client.ingest(%Ingest{
+               operator_id: operator_id,
+               lens: lens,
+               content: @fixture,
+               source_description: "fixture"
+             })
+
+    "lens_" <> encode(operator_id) <> "_" <> encode(lens)
+  end
+
+  defp encode(value), do: Base.encode16(value, case: :lower)
 
   defp node_labels(group_id) do
     instance = GraphitiPool.for(group_id)
