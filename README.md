@@ -86,7 +86,8 @@ Remote wins when both are set. `:ssl` defaults to `false`; set `true` for Falkor
 # config/test.exs
 config :jido_gralkor,
   client: Gralkor.Client.InMemory,
-  lens_storage: Gralkor.Lens.Storage.InMemory
+  lens_storage: Gralkor.Lens.Storage.InMemory,
+  reflection_storage: Gralkor.Reflection.Storage.InMemory
 ```
 
 Start the legacy client twin once in `test/test_helper.exs`:
@@ -101,11 +102,12 @@ Lens tests should also start a fresh storage process in setup so state is isolat
 ```elixir
 setup do
   start_supervised!(Gralkor.Lens.Storage.InMemory)
+  start_supervised!(Gralkor.Reflection.Storage.InMemory)
   :ok
 end
 ```
 
-When the client and Lens storage use these in-memory adapters, the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer) does not start and Lens calls do not reach Graphiti. No FalkorDB backend is required.
+When the client and storage layers use these in-memory adapters, the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer) does not start and Lens or Reflection storage calls do not reach Graphiti. No FalkorDB backend is required.
 
 **3. `Jido.Thread.Plugin` on your `use Jido` supervisor.** The plugin reads `session_id` from `agent.state[:__thread__].id`, so the thread plugin must be active:
 
