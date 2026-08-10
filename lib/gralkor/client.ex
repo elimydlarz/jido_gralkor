@@ -353,7 +353,7 @@ defmodule Gralkor.Client do
       nil when name == "operator" ->
         %Lens{
           name: "operator",
-          ontology: Gralkor.Config.ontology(),
+          ontology: Gralkor.DefaultOntology,
           scope: :operator,
           ingestion: StoreIngestion
         }
