@@ -214,20 +214,6 @@ defmodule Gralkor.Client.NativeTest do
   describe "when a grouped session captures messages with agent and user names" do
     setup :start_capture_buffer
 
-    setup do
-      original = Application.get_env(:jido_gralkor, :ontology)
-
-      on_exit(fn ->
-        case original do
-          nil -> Application.delete_env(:jido_gralkor, :ontology)
-          value -> Application.put_env(:jido_gralkor, :ontology, value)
-        end
-      end)
-
-      Application.delete_env(:jido_gralkor, :ontology)
-      :ok
-    end
-
     test "then the group is sanitised before it is buffered" do
       msgs = [Message.new("user", "hi")]
 
@@ -235,20 +221,19 @@ defmodule Gralkor.Client.NativeTest do
       assert [^msgs] = CaptureBuffer.turns_for("s1")
 
       :ok = CaptureBuffer.flush("s1")
-      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", nil, [^msgs]}
+      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", Gralkor.DefaultOntology, [^msgs]}
     end
 
-    test "and the deployment-wide ontology is selected, the caller being given no ontology argument of its own" do
+    test "and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush("s1")
-      assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
-    test "and that resolved ontology is buffered alongside the turn" do
-      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+    test "and that built-in ontology is buffered alongside the turn" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush("s1")
-      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.TestOntologies.Strict, _turns}
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
     test "and the buffer receives the session, sanitised group, names, ontology and messages" do
@@ -256,7 +241,7 @@ defmodule Gralkor.Client.NativeTest do
       assert :ok = Native.capture("s1", "with-hyphens", "Susu", "Eli", msgs)
       assert [^msgs] = CaptureBuffer.turns_for("s1")
       assert :ok = CaptureBuffer.flush("s1")
-      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", nil, [^msgs]}
+      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", Gralkor.DefaultOntology, [^msgs]}
     end
 
     test "and success is returned immediately, no distillation running before the call returns" do
@@ -276,19 +261,6 @@ defmodule Gralkor.Client.NativeTest do
 
   describe "where a turn is captured through a named Lens" do
     setup :start_capture_buffer
-
-    setup do
-      original = Application.get_env(:jido_gralkor, :ontology)
-
-      on_exit(fn ->
-        case original do
-          nil -> Application.delete_env(:jido_gralkor, :ontology)
-          value -> Application.put_env(:jido_gralkor, :ontology, value)
-        end
-      end)
-
-      :ok
-    end
 
     test "then the operator id is buffered unsanitised, so the Lens keeps the operator's original identity" do
       msgs = [Message.new("user", "hi")]
@@ -321,7 +293,6 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "and the built-in ontology is not selected, a named Lens owning its own ontology" do
-      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
       msgs = [Message.new("user", "hi")]
 
       assert :ok =
@@ -395,13 +366,13 @@ defmodule Gralkor.Client.NativeTest do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert :ok = Native.flush("s1")
-      assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
     test "and success is returned before that flush completes" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush("s1")
-      assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
   end
 
@@ -425,14 +396,15 @@ defmodule Gralkor.Client.NativeTest do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert :ok = Native.flush_and_await("s1", 1_000)
-      assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
     test "and immediate recall for the bound group surfaces the flushed turns" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush_and_await("s1", 1_000)
 
-      assert_receive {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "x"}]]}
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology,
+                      [[%Message{content: "x"}]]}
     end
   end
 
@@ -454,17 +426,17 @@ defmodule Gralkor.Client.NativeTest do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, :timeout} = Native.flush_and_await("s1", 50)
-      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
+      assert_receive {:flush_started, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
     test "and the buffered turns remain available to flush on a later call" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, :timeout} = Native.flush_and_await("s1", 50)
-      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
+      assert_receive {:flush_started, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
 
       assert :ok = Native.flush("s1")
-      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
+      assert_receive {:flush_started, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
   end
 
@@ -611,11 +583,11 @@ defmodule Gralkor.Client.NativeTest do
       assert [%{"body" => "content"}] = episodes(g)
     end
 
-    test "then the deployment-wide ontology is applied while a caller may override it",
+    test "then jido_gralkor's built-in ontology is applied, so a caller neither supplies nor configures one",
          %{g: g} do
       Code.ensure_loaded!(Native)
       assert function_exported?(Native, :memory_add, 3)
-      assert function_exported?(Native, :memory_add, 4)
+      refute function_exported?(Native, :memory_add, 4)
       assert :ok = Native.memory_add("g1", "content", "manual")
       assert [episode] = episodes(g)
       refute "entity_types" in episode["kwargs"]
