@@ -720,12 +720,53 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   test "if any intended Lens ingestion fails then no Reflection is scheduled for the incomplete ingestion operation",
        context do
-    runner = notifying_runner(self())
+    parent = self()
 
-    assert {:error, {:incomplete_ingestion, "ingestion-1"}} =
-             Scheduler.schedule([reflection(context)], failed_ingestion(), runner: runner)
+    lens_flush = fn _operator_id, _agent_name, _user_name, lens, _turns ->
+      send(parent, {:attempted_lens, lens})
 
-    refute_receive {:ran, _}
+      if lens == "observations" do
+        {:error, :store_failed}
+      else
+        {:ok,
+         [
+           %{
+             id: "representation-decisions",
+             evidence_id: "evidence-shared",
+             lens: lens,
+             content: "stored decision"
+           }
+         ]}
+      end
+    end
+
+    start_supervised!(
+      {CaptureBuffer,
+       flush_callback: fn _, _, _, _, _ -> :ok end,
+       lens_flush_callback: lens_flush,
+       reflection_callback: fn _reflections, ingestion ->
+         send(parent, {:scheduled_incomplete, ingestion})
+         :ok
+       end,
+       reflections: [reflection(context)],
+       retries: []}
+    )
+
+    :ok =
+      CaptureBuffer.append_lenses(
+        "session-failure",
+        "operator-one",
+        "Susu",
+        "Eli",
+        ["observations", "decisions"],
+        [Message.new("user", "remember")]
+      )
+
+    assert {:error, :exhausted} = CaptureBuffer.flush_and_await("session-failure", 1_000)
+    assert_receive {:attempted_lens, "observations"}
+    assert_receive {:attempted_lens, "decisions"}
+
+    refute_receive {:scheduled_incomplete, _}
   end
 
   describe "if a Reflection's Chain of Thought completes without a valid final structured output" do
