@@ -10,6 +10,7 @@ defmodule Gralkor.ConfigTest do
     original_llm = System.get_env("GRALKOR_LLM_MODEL")
     original_embedder = System.get_env("GRALKOR_EMBEDDER_MODEL")
     original_falkordb = Application.get_env(:jido_gralkor, :falkordb)
+    original_ontology = Application.get_env(:jido_gralkor, :ontology)
 
     on_exit(fn ->
       restore_env("GRALKOR_DATA_DIR", original_data_dir)
@@ -21,12 +22,17 @@ defmodule Gralkor.ConfigTest do
         v -> Application.put_env(:jido_gralkor, :falkordb, v)
       end
 
+      case original_ontology do
+        nil -> Application.delete_env(:jido_gralkor, :ontology)
+        v -> Application.put_env(:jido_gralkor, :ontology, v)
+      end
     end)
 
     System.delete_env("GRALKOR_DATA_DIR")
     System.delete_env("GRALKOR_LLM_MODEL")
     System.delete_env("GRALKOR_EMBEDDER_MODEL")
     Application.delete_env(:jido_gralkor, :falkordb)
+    Application.delete_env(:jido_gralkor, :ontology)
     :ok
   end
 
