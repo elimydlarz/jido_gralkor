@@ -44,14 +44,6 @@ defmodule Gralkor.Client.InMemory do
   def set_build_communities(response),
     do: GenServer.call(__MODULE__, {:set, :build_communities, response})
 
-  @doc "Set the response for the next (and all subsequent) `generalise/2` calls."
-  def set_generalise(response),
-    do: GenServer.call(__MODULE__, {:set, :generalise, response})
-
-  @doc "Set the response for the next (and all subsequent) `search_generalisations/3` calls."
-  def set_search_generalisations(response),
-    do: GenServer.call(__MODULE__, {:set, :search_generalisations, response})
-
   def recalls, do: GenServer.call(__MODULE__, {:calls, :recall})
   def captures, do: GenServer.call(__MODULE__, {:calls, :capture})
   def adds, do: GenServer.call(__MODULE__, {:calls, :memory_add})
@@ -59,11 +51,6 @@ defmodule Gralkor.Client.InMemory do
   def flush_and_awaits, do: GenServer.call(__MODULE__, {:calls, :flush_and_await})
   def indices_builds, do: GenServer.call(__MODULE__, {:calls, :build_indices})
   def communities_builds, do: GenServer.call(__MODULE__, {:calls, :build_communities})
-  def generalises, do: GenServer.call(__MODULE__, {:calls, :generalise})
-
-  def search_generalisations_calls,
-    do: GenServer.call(__MODULE__, {:calls, :search_generalisations})
-
   # ── Client behaviour ────────────────────────────────────────
 
   @impl Gralkor.Client
@@ -143,15 +130,6 @@ defmodule Gralkor.Client.InMemory do
   @impl Gralkor.Client
   def build_communities(group_id),
     do: GenServer.call(__MODULE__, {:call, :build_communities, [group_id]})
-
-  @impl Gralkor.Client
-  def generalise(group_id, transcript),
-    do: GenServer.call(__MODULE__, {:call, :generalise, [group_id, transcript]})
-
-  @impl Gralkor.Client
-  def search_generalisations(group_id, query, max_results),
-    do:
-      GenServer.call(__MODULE__, {:call, :search_generalisations, [group_id, query, max_results]})
 
   # ── GenServer ──────────────────────────────────────────────
 

@@ -10,12 +10,13 @@ defmodule Gralkor.Ingest do
   """
 
   @enforce_keys [:operator_id, :lens, :content, :source_description]
-  defstruct [:operator_id, :lens, :content, :source_description]
+  defstruct [:operator_id, :lens, :content, :source_description, :evidence_id]
 
   @type t :: %__MODULE__{
           operator_id: String.t(),
           lens: String.t(),
           content: String.t(),
-          source_description: String.t()
+          source_description: String.t(),
+          evidence_id: String.t() | nil
         }
 end

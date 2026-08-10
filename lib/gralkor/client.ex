@@ -39,6 +39,7 @@ defmodule Gralkor.Client do
   @type user_name :: String.t()
   @type ontology :: module() | nil
   @type search_result :: %{lens: String.t(), fact: String.t()}
+  @type reflection_search_result :: Gralkor.Reflection.Artefact.t()
   @type search_target :: %{
           destination: :global | {:operator, String.t(), String.t()},
           lens: String.t(),
@@ -46,11 +47,15 @@ defmodule Gralkor.Client do
         }
 
   alias Gralkor.Ingest
+  alias Gralkor.IngestedRepresentation
   alias Gralkor.Lens
   alias Gralkor.Lens.Ingestion.Store, as: StoreIngestion
   alias Gralkor.Lens.Replaceable, as: ReplaceableLens
   alias Gralkor.Lens.Store
   alias Gralkor.Replace
+  alias Gralkor.Reflection
+  alias Gralkor.Reflection.Registry, as: ReflectionRegistry
+  alias Gralkor.Reflection.Store, as: ReflectionStore
   alias Gralkor.Search
 
   @callback recall(group_id(), agent_name(), session_id() | nil, query :: String.t()) ::
@@ -102,19 +107,29 @@ defmodule Gralkor.Client do
   @callback build_communities(group_id()) ::
               {:ok, %{communities: non_neg_integer(), edges: non_neg_integer()}}
               | {:error, term()}
-  @callback generalise(group_id(), transcript :: String.t()) :: :ok | {:error, term()}
-  @callback search_generalisations(group_id(), query :: String.t(), max_results :: pos_integer()) ::
-              {:ok, [Gralkor.Generalisation.t()]} | {:error, term()}
-
   @spec impl() :: module()
   def impl, do: Application.get_env(:jido_gralkor, :client, Gralkor.Client.Native)
 
   @spec ingest(Ingest.t()) :: :ok | {:error, term()}
-  def ingest(%Ingest{lens: lens_name} = request) do
+  def ingest(%Ingest{} = request) do
+    case ingest_with_representation(request) do
+      {:ok, %IngestedRepresentation{}} -> :ok
+      {:error, _} = error -> error
+    end
+  end
+
+  @doc false
+  @spec ingest_with_representation(Ingest.t()) ::
+          {:ok, IngestedRepresentation.t()} | {:error, term()}
+  def ingest_with_representation(%Ingest{lens: lens_name} = request) do
     case lens!(lens_name) do
       %Lens{} = lens ->
         store = %Store{operator_id: request.operator_id, lens: lens}
-        lens.ingestion.ingest(request, store)
+
+        case lens.ingestion.ingest(request, store) do
+          :ok -> {:ok, IngestedRepresentation.new(request)}
+          {:error, _} = error -> error
+        end
 
       %ReplaceableLens{} ->
         raise ArgumentError,
@@ -207,7 +222,30 @@ defmodule Gralkor.Client do
     raise ArgumentError, "invalid property_graph data: #{reason}; got #{inspect(data)}"
   end
 
-  @spec search(Search.t()) :: {:ok, [search_result()]} | {:error, term()}
+  @spec search(Search.t()) ::
+          {:ok, [search_result() | reflection_search_result()]} | {:error, term()}
+  def search(%Search{reflections: [_ | _]} = request) do
+    validate_max_results!(request.max_results)
+    reflections = registered_reflections!()
+
+    selected = Enum.map(request.reflections, &reflection!(&1, reflections))
+
+    Enum.reduce_while(selected, {:ok, []}, fn reflection, {:ok, results} ->
+      opts = [max_results: request.max_results, artefact_id: request.artefact_id]
+
+      case ReflectionStore.search(
+             reflections,
+             request.operator_id,
+             reflection.name,
+             request.query,
+             opts
+           ) do
+        {:ok, artefacts} -> {:cont, {:ok, results ++ artefacts}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+  end
+
   def search(%Search{
         operator_id: operator_id,
         query: query,
@@ -405,6 +443,27 @@ defmodule Gralkor.Client do
       {name, _definitions} -> raise ArgumentError, "duplicate Lens #{inspect(name)}"
     end
   end
+
+  defp registered_reflections! do
+    definitions = Application.get_env(:jido_gralkor, :reflections, [])
+
+    if Enum.all?(definitions, &match?(%Reflection{}, &1)) do
+      definitions
+    else
+      root = Application.get_env(:jido_gralkor, :reflection_root, File.cwd!())
+      ReflectionRegistry.load!(definitions, root: root)
+    end
+  end
+
+  defp reflection!(name, reflections) when is_binary(name) do
+    case Enum.find(reflections, &(&1.name == name)) do
+      nil -> raise ArgumentError, "unknown Reflection #{inspect(name)}"
+      reflection -> reflection
+    end
+  end
+
+  defp reflection!(name, _reflections),
+    do: raise(ArgumentError, "invalid Reflection #{inspect(name)}")
 
   @spec sanitize_group_id(String.t()) :: String.t()
   def sanitize_group_id(id) when is_binary(id), do: String.replace(id, "-", "_")
