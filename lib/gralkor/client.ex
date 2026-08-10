@@ -55,7 +55,6 @@ defmodule Gralkor.Client do
   alias Gralkor.Lens.Replaceable, as: ReplaceableLens
   alias Gralkor.Lens.Store
   alias Gralkor.Replace
-  alias Gralkor.Reflection
   alias Gralkor.Reflection.Registry, as: ReflectionRegistry
   alias Gralkor.Reflection.Store, as: ReflectionStore
   alias Gralkor.Search
@@ -447,14 +446,7 @@ defmodule Gralkor.Client do
   end
 
   defp registered_reflections! do
-    definitions = Application.get_env(:jido_gralkor, :reflections, [])
-
-    if Enum.all?(definitions, &match?(%Reflection{}, &1)) do
-      definitions
-    else
-      root = Application.get_env(:jido_gralkor, :reflection_root, File.cwd!())
-      ReflectionRegistry.load!(definitions, root: root)
-    end
+    ReflectionRegistry.configured!()
   end
 
   defp reflection!(name, reflections) when is_binary(name) do
