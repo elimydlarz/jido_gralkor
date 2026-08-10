@@ -189,7 +189,7 @@ defmodule Gralkor.ClientContract do
           unquote(setup_block).()
           configure_capture(:ok)
 
-          for lens_args <- [["observations"], ["observations", ["generalisations"]]] do
+          for lens_args <- [["observations"], ["observations", ["decisions"]]] do
             assert :ok =
                      apply(client(), :capture, [
                        "session-1",
@@ -208,7 +208,7 @@ defmodule Gralkor.ClientContract do
           unquote(setup_block).()
           configure_capture({:error, :write_failed})
 
-          for lens_args <- [["observations"], ["observations", ["generalisations"]]] do
+          for lens_args <- [["observations"], ["observations", ["decisions"]]] do
             assert {:error, :write_failed} =
                      apply(client(), :capture, [
                        "session-1",
@@ -228,7 +228,7 @@ defmodule Gralkor.ClientContract do
           configure_capture(:ok)
 
           for user_name <- ["", nil],
-              lens_args <- [[], ["observations"], ["observations", ["generalisations"]]] do
+              lens_args <- [[], ["observations"], ["observations", ["decisions"]]] do
             assert_raise ArgumentError, ~r/user_name/, fn ->
               apply(client(), :capture, [
                 "session-1",
@@ -262,7 +262,7 @@ defmodule Gralkor.ClientContract do
           configure_capture(:ok)
 
           for session_id <- ["", nil],
-              lens_args <- [[], ["observations"], ["observations", ["generalisations"]]] do
+              lens_args <- [[], ["observations"], ["observations", ["decisions"]]] do
             assert_raise ArgumentError, ~r/session_id/, fn ->
               apply(client(), :capture, [
                 session_id,
