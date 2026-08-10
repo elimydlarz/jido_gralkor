@@ -288,7 +288,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       start_supervised!(
         {CaptureBuffer,
          flush_callback: fn _, _, _, _, _ -> :ok end,
-         lens_flush_callback: variable_representation_callback(parent),
+         lens_flush_callback: representation_callback(parent),
          reflection_callback: fn _reflections, ingestion ->
            send(parent, {:reflection_started, ingestion})
            Process.sleep(150)
@@ -322,7 +322,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       start_supervised!(
         {CaptureBuffer,
          flush_callback: fn _, _, _, _, _ -> :ok end,
-         lens_flush_callback: representation_callback(parent),
+         lens_flush_callback: variable_representation_callback(parent),
          reflection_callback: fn _reflections, ingestion ->
            send(parent, {:scheduled, Enum.map(reflections, & &1.name), ingestion})
            :ok
