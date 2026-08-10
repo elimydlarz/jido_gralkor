@@ -26,12 +26,13 @@ defmodule JidoGralkor.PluginTest do
     thread_id = Keyword.get(opts, :thread_id, "thr-default")
     request_traces = Keyword.get(opts, :request_traces, %{})
     requests = Keyword.get(opts, :requests, %{})
+    strategy_config = Keyword.get(opts, :strategy_config, %{})
     agent_name = Keyword.get(opts, :agent_name, "TestAgent")
     user_name = Keyword.get(opts, :user_name, "Eli")
 
     state =
       %{
-        __strategy__: %{request_traces: request_traces},
+        __strategy__: %{request_traces: request_traces, config: strategy_config},
         requests: requests,
         __memory__: %{agent_name: agent_name},
         user_name: user_name
@@ -480,6 +481,10 @@ defmodule JidoGralkor.PluginTest do
         agent("operator-one",
           agent_name: "Susu",
           thread_id: "thread-one",
+          strategy_config: %{
+            tools: [JidoGralkor.Actions.MemorySearch, JidoGralkor.Actions.MemoryAdd],
+            tool_context: %{tenant: "tenant-one"}
+          },
           request_traces: %{
             request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
           },
@@ -505,9 +510,22 @@ defmodule JidoGralkor.PluginTest do
                  _messages,
                  "observations",
                  [],
-                 _reflection_context
+                 reflection_context
                ]
              ] = InMemory.captures()
+
+      assert reflection_context.tools == [
+               JidoGralkor.Actions.MemorySearch,
+               JidoGralkor.Actions.MemoryAdd
+             ]
+
+      assert reflection_context.tool_context == %{
+               tenant: "tenant-one",
+               operator_id: "operator-one",
+               agent_name: "Susu",
+               lens: "observations",
+               session_id: "thread-one"
+             }
     end
   end
 
