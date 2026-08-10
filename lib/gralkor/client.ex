@@ -35,6 +35,8 @@ defmodule Gralkor.Client do
   `Application.start/2` returns; runtime failures surface from the next call.
   """
 
+  require Logger
+
   @type group_id :: String.t()
   @type session_id :: String.t()
   @type agent_name :: String.t()
@@ -57,6 +59,7 @@ defmodule Gralkor.Client do
   alias Gralkor.Lens.Store
   alias Gralkor.Replace
   alias Gralkor.Reflection.Registry, as: ReflectionRegistry
+  alias Gralkor.Reflection.Scheduler, as: ReflectionScheduler
   alias Gralkor.Reflection.Store, as: ReflectionStore
   alias Gralkor.Search
 
@@ -126,7 +129,10 @@ defmodule Gralkor.Client do
   @spec ingest(Ingest.t()) :: :ok | {:error, term()}
   def ingest(%Ingest{} = request) do
     case ingest_with_representation(request) do
-      {:ok, representations} when is_list(representations) -> :ok
+      {:ok, representations} when is_list(representations) ->
+        schedule_direct_reflections(request, representations)
+        :ok
+
       {:error, _} = error -> error
     end
   end
@@ -168,6 +174,39 @@ defmodule Gralkor.Client do
     after
       0 -> Enum.reverse(representations)
     end
+  end
+
+  defp schedule_direct_reflections(_request, []), do: :ok
+
+  defp schedule_direct_reflections(request, representations) do
+    if Process.whereis(ReflectionScheduler) do
+      evidence_id = hd(representations).evidence_id
+
+      ingestion = %{
+        id: "direct:#{evidence_id}:#{System.unique_integer([:positive, :monotonic])}",
+        operator_id: request.operator_id,
+        intended_lenses: [request.lens],
+        completed_lenses: [request.lens],
+        representations: representations
+      }
+
+      case ReflectionScheduler.schedule(ReflectionRegistry.configured!(), ingestion) do
+        {:ok, _} -> :ok
+
+        {:error, reason} ->
+          Logger.warning(
+            "[gralkor] direct-ingestion Reflection scheduling failed — #{inspect(reason)}"
+          )
+      end
+    end
+  rescue
+    exception ->
+      Logger.warning(
+        "[gralkor] direct-ingestion Reflection scheduling raised — " <>
+          Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      :ok
   end
 
   @spec replace(Replace.t()) :: :ok | {:error, term()}
