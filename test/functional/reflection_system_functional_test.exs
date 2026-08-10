@@ -48,13 +48,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     use Jido.Action,
       name: "reflection_live_probe",
       description:
-        "Return the fixed verification token for the supplied seed. Call exactly when instructed.",
+        "Return the fixed verification marker for the supplied seed. Call when instructed.",
       schema: [seed: [type: :string, required: true]]
 
     @impl true
     def run(%{seed: seed}, context) do
       send(Map.fetch!(context, :probe_pid), {:reflection_live_probe, seed})
-      {:ok, %{token: "TOOL-RESULT-29", received_seed: seed}}
+      {:ok, %{marker: "BLUE-PINE-29", received_seed: seed}}
     end
   end
 
@@ -1175,7 +1175,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
           The previous step produced the exact seed {{seed}}.
           You MUST call reflection_live_probe with seed {{seed}} before answering.
           After receiving its result, return exactly one JSON object whose combined value is
-          the seed, a vertical bar, and the token returned by the tool.
+          the seed, a vertical bar, and the marker returned by the tool.
         output:
           combined: string
       - label: produce-artefact
@@ -1226,7 +1226,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     assert artefact.reflection == "live-proof"
 
     assert artefact.payload == %{
-             "final_value" => "ALPHA-17|TOOL-RESULT-29",
+             "final_value" => "ALPHA-17|BLUE-PINE-29",
              "evidence_ids" => ["ev-live-1"]
            }
 
