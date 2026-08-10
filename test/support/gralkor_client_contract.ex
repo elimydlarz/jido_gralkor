@@ -524,7 +524,6 @@ defmodule Gralkor.ClientContract do
           assert {:error, :upstream} = client().build_communities("group-1")
         end
       end
-
     end
   end
 end
