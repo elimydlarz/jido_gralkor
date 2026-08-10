@@ -1,0 +1,156 @@
+defmodule Gralkor.Reflection.Runner do
+  @moduledoc "Runs a repository-defined Chain of Thought as an ordered, tool-capable inference sequence."
+
+  alias Gralkor.Reflection
+  alias Gralkor.Reflection.Artefact
+  alias Gralkor.Reflection.ChainOfThought
+
+  def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
+    inference = Keyword.get(opts, :inference, &default_inference/1)
+    tool_executor = Keyword.get(opts, :tool_executor, &default_tool_executor/2)
+    tools = Keyword.get(opts, :tools, [])
+
+    result =
+      Enum.reduce_while(reflection.chain_of_thought.steps, {:ok, %{}}, fn step, {:ok, outputs} ->
+        directions = interpolate(step.directions, outputs)
+
+        request = %{
+          reflection: reflection.name,
+          operator_id: Map.get(ingestion, :operator_id) || Map.get(ingestion, "operator_id"),
+          representations: representations(ingestion),
+          step: %{label: step.label, directions: directions},
+          directions: directions,
+          output_schema: step.output,
+          tools: tools,
+          tool_results: []
+        }
+
+        case infer_step(request, inference, tool_executor) do
+          {:ok, output} ->
+            case validate_output(output, step.output) do
+              {:ok, normalized} -> {:cont, {:ok, Map.merge(outputs, normalized)}}
+              {:error, reason} -> {:halt, failure(reflection, step, reason)}
+            end
+
+          {:error, reason} ->
+            {:halt, failure(reflection, step, reason)}
+        end
+      end)
+
+    case result do
+      {:ok, outputs} ->
+        final = List.last(reflection.chain_of_thought.steps)
+        keys = Map.keys(final.output)
+        payload = Map.take(outputs, keys)
+
+        if map_size(payload) == 0 do
+          {:error, %{reflection: reflection.name, reason: :missing_artefact}}
+        else
+          evidence_ids = Enum.map(representations(ingestion), &field(&1, :evidence_id))
+          {:ok, Artefact.new(reflection.name, payload, evidence_ids)}
+        end
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp infer_step(request, inference, tool_executor) do
+    case inference.(request) do
+      {:ok, %{tool_calls: calls}} when is_list(calls) and calls != [] ->
+        results = Enum.map(calls, &execute_tool(&1, request, tool_executor))
+        infer_step(%{request | tool_results: request.tool_results ++ results}, inference, tool_executor)
+
+      {:tool_calls, calls} when is_list(calls) and calls != [] ->
+        results = Enum.map(calls, &execute_tool(&1, request, tool_executor))
+        infer_step(%{request | tool_results: request.tool_results ++ results}, inference, tool_executor)
+
+      {:ok, %{output: output}} when is_map(output) -> {:ok, output}
+      {:ok, output} when is_map(output) -> {:ok, output}
+      {:error, reason} -> {:error, reason}
+      other -> {:error, {:invalid_inference_response, other}}
+    end
+  end
+
+  defp execute_tool(call, request, executor) do
+    result = executor.(call, %{reflection: request.reflection, operator_id: request.operator_id})
+    %{call: call, result: result}
+  end
+
+  defp failure(reflection, step, reason),
+    do: {:error, %{reflection: reflection.name, step: step.label, reason: reason}}
+
+  defp interpolate(directions, outputs) do
+    Regex.replace(~r/\{\{\s*([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}/, directions, fn _, name ->
+      outputs |> Map.fetch!(name) |> render_value()
+    end)
+  end
+
+  defp render_value(value) when is_binary(value), do: value
+  defp render_value(value), do: Jason.encode!(value)
+
+  defp validate_output(output, schema) do
+    normalized = Map.new(output, fn {key, value} -> {to_string(key), value} end)
+    expected = Map.keys(schema) |> MapSet.new()
+    actual = Map.keys(normalized) |> MapSet.new()
+
+    cond do
+      missing = expected |> MapSet.difference(actual) |> Enum.at(0) -> {:error, {:missing_output, missing}}
+      extra = actual |> MapSet.difference(expected) |> Enum.at(0) -> {:error, {:unexpected_output, extra}}
+      mismatch = Enum.find(schema, fn {key, type} -> not ChainOfThought.matches_type?(normalized[key], type) end) ->
+        {key, type} = mismatch
+        {:error, {:output_type_mismatch, key, type}}
+      true -> {:ok, normalized}
+    end
+  end
+
+  defp representations(ingestion),
+    do: Map.get(ingestion, :representations) || Map.get(ingestion, "representations") || []
+
+  defp field(map, key), do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
+
+  # Jido.AI's standalone tool action owns the provider conversation and executes
+  # every configured action until a final answer is produced. The final answer
+  # is JSON because the step prompt includes its exact declared contract.
+  def default_inference(request) do
+    prompt = """
+    #{request.directions}
+
+    Return only one JSON object satisfying this exact output contract:
+    #{Jason.encode!(request.output_schema)}
+    """
+
+    context = %{tools: request.tools, tool_context: %{operator_id: request.operator_id}}
+
+    case Jido.Exec.run(
+           Jido.AI.Actions.ToolCalling.CallWithTools,
+           %{prompt: prompt, auto_execute: true},
+           context
+         ) do
+      {:ok, %{type: :error, reason: reason}} -> {:error, reason}
+      {:ok, result} -> decode_final_output(result)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp decode_final_output(result) do
+    text = Map.get(result, :text) || Map.get(result, :content) || Map.get(result, "text")
+
+    case Jason.decode(text || "") do
+      {:ok, output} when is_map(output) -> {:ok, %{output: output}}
+      {:ok, other} -> {:error, {:invalid_structured_output, other}}
+      {:error, reason} -> {:error, {:invalid_structured_output, reason}}
+    end
+  end
+
+  defp default_tool_executor(call, context) do
+    name = field(call, :name)
+    args = field(call, :arguments) || %{}
+    tools = Map.get(context, :tools, %{})
+
+    case Map.get(tools, name) do
+      nil -> {:error, {:unknown_tool, name}}
+      module -> Jido.Exec.run(module, args, context)
+    end
+  end
+end
