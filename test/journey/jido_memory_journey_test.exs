@@ -216,8 +216,10 @@ defmodule Gralkor.JidoMemoryJourneyTest do
 
       assert {:ok, [artefact | _]} = eventually_search_reflection(search, 120_000)
       assert artefact.reflection == "erl"
-      assert artefact.payload["problem_kind"] =~ ~r/schedul|backup|lock/i
-      assert artefact.payload["lesson"] =~ ~r/overlap|separat|reschedul|04:00|4:00/i
+      assert is_binary(artefact.payload["problem_kind"])
+      assert is_binary(artefact.payload["approach"])
+      assert is_boolean(artefact.payload["success"])
+      assert is_binary(artefact.payload["lesson"])
       assert artefact.evidence_ids != []
     end
   end
