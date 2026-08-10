@@ -308,8 +308,7 @@ defmodule MyApp.ChatAgent do
        %{
          agent_name: "Susu",
          ingestion_lens: "observations",
-         search_lenses: ["observations", "global"],
-         generalise_lens: "generalisations"
+         search_lenses: ["observations", "global"]
        }}
     ]
 
@@ -542,30 +541,52 @@ Each Lens ontology is a module declared with `Gralkor.Ontology`:
 
 On each store write, graphiti receives the selected Lens ontology's `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types`, translated from the module's compile-time payload.
 
-## Generalisation
+## Configure Reflections
 
-`Gralkor.Lens.Ingestion.Generalise` is a built-in ingestion process for an ordinary Lens. It distils zero or more durable, confidence-scored generalisations from the submitted transcript and submits each survivor through the Lens-bound store. Graphiti's normal `add_episode` pipeline owns entity/edge extraction and reconciliation of repeated or contradicted facts while retaining source episodes as provenance; the Lens process does not duplicate that graph logic or replace/remove source episodes itself. The Lens definition determines both ontology and scope; generalisation has no special partitioning rule.
+A Reflection is an asynchronous post-ingestion process over completed lensed representations. It is declared by name, destination scope, and a repository YAML Chain of Thought. Reflections are not Lenses: Lens definitions remain independent views for absorbing information, while Reflections operate over the successful results after every intended Lens has finished.
 
-To run it automatically after capture, register a Lens with `ingestion: Gralkor.Lens.Ingestion.Generalise` and select its name as the plugin's `generalise_lens`. To invoke it without the plugin, submit a normal `%Gralkor.Ingest{lens: "generalisations", ...}` request. This is independent of the agent replying: any consumer surface can ingest through the same request.
+The package supplies two declarations by default:
 
-### Optional: confidence threshold
+- `generalisations` uses `priv/reflections/generalisations.yaml` and stores durable patterns in a global Reflection destination.
+- `erl` uses `priv/reflections/erl.yaml` and stores experiential-learning artefacts in an operator-local Reflection destination.
 
-Generalise persists the strongest hypotheses above a configurable confidence threshold (default `0.3`). Raise it to be more conservative, lower to capture more:
+Set `:reflections` to replace those defaults with application declarations, and set `:reflection_root` when their YAML paths resolve from somewhere other than the installed application root:
 
 ```elixir
-# config/runtime.exs
-config :jido_gralkor, generalise_min_confidence: 0.5
+config :jido_gralkor,
+  reflection_root: File.cwd!(),
+  reflections: [
+    [
+      name: "release-review",
+      scope: :operator,
+      chain_of_thought: "priv/reflections/release-review.yaml"
+    ]
+  ]
 ```
 
-The configured adapter's older `generalise/2` and `search_generalisations/3` callbacks remain available through `Gralkor.Client.impl()` for compatibility. Lens-based consumers should prefer the unified ingest/search boundary above.
+Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the completed ingestion's lensed representations, the host agent's tools, and its full tool context. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one stored `%Gralkor.Reflection.Artefact{}` with its supporting evidence identifiers.
 
-## Experiential learning (legacy default pipeline)
+Every Reflection has its own storage destination named after the Reflection. Operator-scoped destinations additionally include the operator id; global destinations are shared while remaining distinct by Reflection name. Search uses the Reflection namespace explicitly:
 
-When the implicit `"operator"` Lens uses the legacy capture pipeline, every captured turn is also distilled into a flat `Gralkor.AgentLearning` record (`problem_kind`, `approach`, `success`, `lesson`) and written to the same operator group. A custom Lens ingestion process owns any equivalent learning behavior it needs.
+```elixir
+{:ok, artefacts} =
+  Gralkor.Client.search(%Gralkor.Search{
+    operator_id: "operator-42",
+    query: "What release approaches have worked?",
+    reflections: ["erl"],
+    max_results: 20
+  })
 
-### Unconditional learning search on every recall
+{:ok, [artefact]} =
+  Gralkor.Client.search(%Gralkor.Search{
+    operator_id: "operator-42",
+    query: "",
+    reflections: ["erl"],
+    artefact_id: "reflection-123"
+  })
+```
 
-There is no opt-in flag. Every recall runs a parallel learning search alongside the main search, seeded with the raw user query and scoped to only `Learning` nodes via a graphiti **node search** (`Gralkor.GraphitiPool.search_nodes/5` → `g.search_` with `SearchFilters(node_labels: ["Learning"])`) — so the interpreter surfaces the learnings that came from the same kind of problem, biased toward approaches that succeeded (the bias lives in the learning node's summary/attributes, not a query primitive). Node search, not edge search: a `Learning` is a custom-entity node, and edge search's node-label filter matches edges by endpoint and would miss it. The learning search shares a 5s yield deadline with the generalisation search and degrades to the regular facts if it fails or times out. No LLM classification, no `TaskKind`: the previous `:erl_recall` opt-in flag and its query classifier have been removed — the unconditional path is what ERL now means.
+When `reflections` is non-empty, `Gralkor.Search` searches only those Reflection destinations and returns artefacts rather than Lens facts. `artefact_id` optionally narrows the lookup to one exact artefact. This namespace separation lets an application search lensed memory by Lens and derived artefacts by the Reflection that produced them without making either system refer to the other.
 
 ## Testing against the in-memory twin
 
