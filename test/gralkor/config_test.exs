@@ -10,7 +10,6 @@ defmodule Gralkor.ConfigTest do
     original_llm = System.get_env("GRALKOR_LLM_MODEL")
     original_embedder = System.get_env("GRALKOR_EMBEDDER_MODEL")
     original_falkordb = Application.get_env(:jido_gralkor, :falkordb)
-    original_ontology = Application.get_env(:jido_gralkor, :ontology)
 
     on_exit(fn ->
       restore_env("GRALKOR_DATA_DIR", original_data_dir)
@@ -22,17 +21,12 @@ defmodule Gralkor.ConfigTest do
         v -> Application.put_env(:jido_gralkor, :falkordb, v)
       end
 
-      case original_ontology do
-        nil -> Application.delete_env(:jido_gralkor, :ontology)
-        v -> Application.put_env(:jido_gralkor, :ontology, v)
-      end
     end)
 
     System.delete_env("GRALKOR_DATA_DIR")
     System.delete_env("GRALKOR_LLM_MODEL")
     System.delete_env("GRALKOR_EMBEDDER_MODEL")
     Application.delete_env(:jido_gralkor, :falkordb)
-    Application.delete_env(:jido_gralkor, :ontology)
     :ok
   end
 
@@ -207,32 +201,4 @@ defmodule Gralkor.ConfigTest do
     end
   end
 
-  describe "when the deployment-wide ontology is resolved > while no ontology is configured" do
-    test "then nothing is returned, so every write behaves as it does with no ontology declared" do
-      assert Config.ontology() == nil
-    end
-  end
-
-  describe "when the deployment-wide ontology is resolved > while a module declared as an ontology is configured" do
-    test "then that module is returned" do
-      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
-      assert Config.ontology() == Gralkor.TestOntologies.Strict
-    end
-  end
-
-  describe "if the configured deployment-wide ontology is a module that is not declared as an ontology" do
-    test "then resolving it raises at the write boundary, naming the offending value" do
-      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
-
-      assert_raise ArgumentError, ~r/NotAnOntology/, fn -> Config.ontology() end
-    end
-  end
-
-  describe "if the configured deployment-wide ontology is not a module" do
-    test "then resolving it raises at the write boundary, naming the offending value" do
-      Application.put_env(:jido_gralkor, :ontology, "MyApp.Ontology")
-
-      assert_raise ArgumentError, ~r/MyApp\.Ontology/, fn -> Config.ontology() end
-    end
-  end
 end
