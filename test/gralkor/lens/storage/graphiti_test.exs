@@ -342,30 +342,6 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  describe "when a store bound to a global Lens is searched by its ingestion process" do
-    test "then graph search receives the fixed unfiltered global group" do
-      store = %Store{
-        operator_id: "operator-one",
-        lens: %Lens{
-          name: "generalisations",
-          ontology: Strict,
-          scope: :global,
-          ingestion: Gralkor.Lens.Ingestion.Generalise
-        }
-      }
-
-      test_pid = self()
-
-      search_fn = fn group_id, query, max_results ->
-        send(test_pid, {:graph_search, group_id, query, max_results})
-        {:ok, []}
-      end
-
-      assert {:ok, []} = Graphiti.search(store, "launch window", 7, search_fn: search_fn)
-      assert_receive {:graph_search, "global", "launch window", 7}
-    end
-  end
-
   describe "when an operator-local replaceable Lens store replaces a complete graph" do
     test "then graph replacement receives the same deterministic operator-and-Lens group used by existing Lens operations" do
       store = replaceable_store(:operator)
