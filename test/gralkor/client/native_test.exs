@@ -394,13 +394,13 @@ defmodule Gralkor.Client.NativeTest do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert :ok = Native.flush("s1")
-      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
     end
 
     test "and success is returned before that flush completes" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush("s1")
-      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
     end
   end
 
@@ -424,14 +424,14 @@ defmodule Gralkor.Client.NativeTest do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert :ok = Native.flush_and_await("s1", 1_000)
-      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
     end
 
     test "and immediate recall for the bound group surfaces the flushed turns" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush_and_await("s1", 1_000)
 
-      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology,
+      assert_receive {:flushed, "g", "Susu", "Eli", nil,
                       [[%Message{content: "x"}]]}
     end
   end
@@ -454,17 +454,17 @@ defmodule Gralkor.Client.NativeTest do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, :timeout} = Native.flush_and_await("s1", 50)
-      assert_receive {:flush_started, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
+      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
     end
 
     test "and the buffered turns remain available to flush on a later call" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, :timeout} = Native.flush_and_await("s1", 50)
-      assert_receive {:flush_started, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
+      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
 
       assert :ok = Native.flush("s1")
-      assert_receive {:flush_started, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
+      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
     end
   end
 
