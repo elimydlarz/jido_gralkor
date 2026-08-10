@@ -1,12 +1,12 @@
 defmodule Gralkor.Search do
   @moduledoc """
-  A search across the reserved `"operator"` Lens and additional Lenses.
+  A search in either the Lens namespace or the Reflection namespace.
 
-  The requesting operator's reserved `"operator"` Lens is always included. Each
-  entry in `lenses` is another registered Lens name or the reserved `"global"`
-  Lens. Distinct names resolving to the shared global group cause one physical
-  search. Resolved destinations are searched concurrently, and attributed
-  results retain Lens order.
+  With no named Reflections, the requesting operator's reserved `"operator"`
+  Lens is included alongside entries in `lenses`. With entries in
+  `reflections`, only those Reflection destinations are searched and results
+  are Reflection artefacts rather than Lens-attributed facts. `artefact_id`
+  optionally narrows that Reflection search to one exact artefact.
   """
 
   @enforce_keys [:operator_id, :query]
