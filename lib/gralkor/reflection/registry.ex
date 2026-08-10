@@ -25,7 +25,7 @@ defmodule Gralkor.Reflection.Registry do
     case reflections do
       reflections when is_list(reflections) ->
         if Enum.all?(reflections, &match?(%Reflection{}, &1)) do
-          reflections
+          Enum.map(reflections, &%{&1 | ontology: Gralkor.DefaultOntology})
         else
           root =
             Application.get_env(

@@ -1,4 +1,4 @@
-Functional: reflection-system (src: lib/gralkor/reflection.ex, lib/gralkor/reflection/registry.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/store.ex, lib/gralkor/reflection/storage/in_memory.ex, lib/gralkor/reflection/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex; functional: test/functional/reflection_system_functional_test.exs)
+Functional: reflection-system (src: lib/gralkor/reflection.ex, lib/gralkor/reflection/registry.ex, lib/gralkor/reflection/erl_ontology.ex, lib/gralkor/default_ontology.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/store.ex, lib/gralkor/reflection/storage/in_memory.ex, lib/gralkor/reflection/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex; functional: test/functional/reflection_system_functional_test.exs)
 
 when Reflection declarations are validated
   while every Reflection has a non-blank name
@@ -55,9 +55,12 @@ where the packaged default Reflections are used
   then ERL is declared as an operator-scoped default Reflection
   and ERL owns jido_gralkor's built-in experiential-learning ontology
 
+where application-defined Reflections are used
+  then their extraction remains generic through jido_gralkor's built-in default ontology
+
 when the default ERL Reflection stores its final artefact
   then extraction receives ERL's built-in `Learning` entity type
-  and the extracted `Learning` carries the problem kind, approach, success, and reusable lesson produced by ERL
+  and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields
 
 when an ingestion operation successfully stores information through one or more Lenses
   while Reflections are declared

@@ -270,6 +270,19 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "where application-defined Reflections are used" do
+    test "then their extraction remains generic through jido_gralkor's built-in default ontology",
+         %{root: root} do
+      reflection = Registry.load!([valid_definition(root)], root: root) |> List.first()
+
+      Application.put_env(:jido_gralkor, :reflections, [
+        %{reflection | ontology: Gralkor.Reflection.ERLOntology}
+      ])
+
+      assert [%Gralkor.Reflection{ontology: Gralkor.DefaultOntology}] = Registry.configured!()
+    end
+  end
+
   describe "when the default ERL Reflection stores its final artefact" do
     test "then extraction receives ERL's built-in `Learning` entity type" do
       Application.delete_env(:jido_gralkor, :reflections)
@@ -294,7 +307,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                       Gralkor.Reflection.ERLOntology}
     end
 
-    test "and the extracted `Learning` carries the problem kind, approach, success, and reusable lesson produced by ERL" do
+    test "and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields" do
       [learning] = Gralkor.Reflection.ERLOntology.__ontology__().entity_types
 
       assert learning.name == "Learning"
