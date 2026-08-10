@@ -147,7 +147,6 @@ defmodule Gralkor.ClientContract do
           assert [["session-1", "group-1", "TestAgent", "Eli", _turn]] =
                    Gralkor.Client.InMemory.captures()
         end
-
       end
 
       describe "where a turn is captured through a named Lens, alone or together with additional Lenses > while the backend acknowledges the capture" do
