@@ -1094,6 +1094,15 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     }
   end
 
+  defp erl_payload do
+    %{
+      "problem_kind" => "overlapping schedules",
+      "approach" => "move one job",
+      "success" => true,
+      "lesson" => "separate recurring jobs"
+    }
+  end
+
   defp output_for(%{step: %{label: "gather"}}), do: {:ok, %{output: %{"facts" => ["fact one"]}}}
 
   defp output_for(%{step: %{label: "synthesise"}}),
