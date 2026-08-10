@@ -223,7 +223,9 @@ defmodule JidoGralkor.PluginTest do
       plugin_state = lens_plugin_state()
 
       signal =
-        Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: "observations"}},
+        Signal.new!(
+          "ai.react.query",
+          %{query: "hi", tool_context: %{lens: "observations", request_token: "retained"}},
           source: "/test"
         )
 
@@ -272,7 +274,9 @@ defmodule JidoGralkor.PluginTest do
         )
 
       assert {:ok, :continue} = Plugin.handle_signal(completed, context(completion_agent))
-      assert [[_, _, _, _, _, "observations", [], _reflection_context]] = InMemory.captures()
+
+      assert [[_, _, _, _, _, "observations", [], reflection_context]] = InMemory.captures()
+      assert reflection_context.tool_context.request_token == "retained"
 
       InMemory.reset()
       InMemory.set_capture(:ok)
