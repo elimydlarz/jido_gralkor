@@ -254,6 +254,22 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "where the packaged default Reflections are used" do
+    test "then ERL is declared as an operator-scoped default Reflection" do
+      Application.delete_env(:jido_gralkor, :reflections)
+
+      assert %Gralkor.Reflection{name: "erl", scope: :operator} =
+               Enum.find(Registry.configured!(), &(&1.name == "erl"))
+    end
+
+    test "and ERL owns jido_gralkor's built-in experiential-learning ontology" do
+      Application.delete_env(:jido_gralkor, :reflections)
+      erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
+
+      assert Map.fetch!(erl, :ontology) == Gralkor.Reflection.ERLOntology
+    end
+  end
+
   describe "when an ingestion operation successfully stores information through one or more Lenses" do
     test "while Reflections are declared then every stored representation retains its evidence identifier and Lens identity" do
       Application.put_env(:jido_gralkor, :lenses, [
