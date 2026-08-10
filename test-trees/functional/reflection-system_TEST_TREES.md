@@ -1,4 +1,4 @@
-Functional: reflection-system (functional: none)
+Functional: reflection-system (src: lib/gralkor/reflection.ex, lib/gralkor/reflection/registry.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/store.ex; functional: test/functional/reflection_system_functional_test.exs)
 
 when Reflection declarations are validated
   while every Reflection has a non-blank name
