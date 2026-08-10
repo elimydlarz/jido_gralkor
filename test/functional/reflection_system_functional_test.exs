@@ -266,7 +266,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       reflection = reflection(context)
       assert {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
       assert :ok = Store.put(reflection, "operator-one", artefact, storage: Gralkor.Reflection.Storage.InMemory)
-      assert {:ok, [^artefact]} = Store.search([reflection], "operator-one", "durable", storage: Gralkor.Reflection.Storage.InMemory)
+      assert {:ok, [^artefact]} = Store.search([reflection], "operator-one", reflection.name, "durable", storage: Gralkor.Reflection.Storage.InMemory)
     end
 
     test "and the artefact identifies its declaring Reflection", context do
@@ -281,15 +281,15 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       reflection = reflection(context)
       {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
       :ok = Store.put(reflection, "operator-one", artefact, storage: Gralkor.Reflection.Storage.InMemory)
-      assert {:ok, [_]} = Store.search([reflection], "operator-one", "durable", storage: Gralkor.Reflection.Storage.InMemory)
-      assert {:ok, []} = Store.search([reflection], "operator-two", "durable", storage: Gralkor.Reflection.Storage.InMemory)
+      assert {:ok, [_]} = Store.search([reflection], "operator-one", reflection.name, "durable", storage: Gralkor.Reflection.Storage.InMemory)
+      assert {:ok, []} = Store.search([reflection], "operator-two", reflection.name, "durable", storage: Gralkor.Reflection.Storage.InMemory)
     end
 
     test "where the declared destination is global then the artefact is available through the shared global destination", context do
       reflection = reflection(context, "generalisation", :global)
       {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
       :ok = Store.put(reflection, "operator-one", artefact, storage: Gralkor.Reflection.Storage.InMemory)
-      assert {:ok, [^artefact]} = Store.search([reflection], "operator-two", "durable", storage: Gralkor.Reflection.Storage.InMemory)
+      assert {:ok, [^artefact]} = Store.search([reflection], "operator-two", reflection.name, "durable", storage: Gralkor.Reflection.Storage.InMemory)
     end
   end
 
@@ -371,7 +371,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "when memory is searched naming a Reflection" do
     test "then that Reflection's destination is searched", context do
       {reflection, artefact} = stored_artefact(context)
-      assert {:ok, [^artefact]} = Store.search([reflection], "operator-one", "durable", storage: Gralkor.Reflection.Storage.InMemory)
+      assert {:ok, [^artefact]} = Store.search([reflection], "operator-one", reflection.name, "durable", storage: Gralkor.Reflection.Storage.InMemory)
     end
 
     test "and only artefacts produced by that Reflection are returned", context do
@@ -386,20 +386,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "and every result identifies the named Reflection rather than a Lens", context do
       {reflection, _} = stored_artefact(context)
-      assert {:ok, [%{reflection: "generalisation"} = result]} = Store.search([reflection], "operator-one", "durable", storage: Gralkor.Reflection.Storage.InMemory)
+      assert {:ok, [%{reflection: "generalisation"} = result]} = Store.search([reflection], "operator-one", reflection.name, "durable", storage: Gralkor.Reflection.Storage.InMemory)
       refute Map.has_key?(Map.from_struct(result), :lens)
     end
 
     test "and every result retains its supporting evidence identifiers", context do
       {reflection, _} = stored_artefact(context)
-      assert {:ok, [%{evidence_ids: ["ev-1", "ev-2"]}]} = Store.search([reflection], "operator-one", "durable", storage: Gralkor.Reflection.Storage.InMemory)
+      assert {:ok, [%{evidence_ids: ["ev-1", "ev-2"]}]} = Store.search([reflection], "operator-one", reflection.name, "durable", storage: Gralkor.Reflection.Storage.InMemory)
     end
 
     test "where the search also identifies one artefact then only that artefact is returned from the named Reflection's destination", context do
       {reflection, artefact} = stored_artefact(context)
       {:ok, other} = Runner.run(reflection, ingestion(), inference: &output_for/1)
       :ok = Store.put(reflection, "operator-one", other, storage: Gralkor.Reflection.Storage.InMemory)
-      assert {:ok, [^artefact]} = Store.search([reflection], "operator-one", "durable", artefact_id: artefact.id, storage: Gralkor.Reflection.Storage.InMemory)
+      assert {:ok, [^artefact]} = Store.search([reflection], "operator-one", reflection.name, "durable", artefact_id: artefact.id, storage: Gralkor.Reflection.Storage.InMemory)
     end
   end
 

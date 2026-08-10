@@ -25,10 +25,14 @@ defmodule Gralkor.Reflection.Runner do
           tool_results: []
         }
 
+        final_step? = step == List.last(reflection.chain_of_thought.steps)
+
         case infer_step(request, inference, tool_executor) do
           {:ok, output} ->
             case validate_output(output, step.output) do
               {:ok, normalized} -> {:cont, {:ok, Map.merge(outputs, normalized)}}
+              {:error, {:missing_output, _}} when final_step? ->
+                {:halt, {:error, %{reflection: reflection.name, reason: :missing_artefact}}}
               {:error, reason} -> {:halt, failure(reflection, step, reason)}
             end
 
