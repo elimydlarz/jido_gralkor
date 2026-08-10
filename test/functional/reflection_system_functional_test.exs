@@ -992,18 +992,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     }
   end
 
-  defp incomplete_ingestion do
-    ingestion()
-    |> Map.put(:representations, [%{evidence_id: "ev-1", lens: "observations", result: :ok}])
-  end
-
-  defp failed_ingestion do
-    ingestion()
-    |> Map.update!(:representations, fn [first, second] ->
-      [first, %{second | result: {:error, :failed}}]
-    end)
-  end
-
   defp output_for(%{step: %{label: "gather"}}), do: {:ok, %{output: %{"facts" => ["fact one"]}}}
 
   defp output_for(%{step: %{label: "synthesise"}}),
@@ -1054,12 +1042,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       end
     end
   end
-
-  defp notifying_runner(parent),
-    do: fn reflection, _, _ ->
-      send(parent, {:ran, reflection.name})
-      {:error, :done}
-    end
 
   defp representation_callback(parent) do
     fn _operator_id, _agent_name, _user_name, lens, _turns ->
