@@ -508,6 +508,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       refute second.directions =~ "{{facts}}"
     end
 
+    @tag timeout: 120_000
     test "where inference directs a tool call then the requested tool is called with the model-produced arguments",
          context do
       parent = self()
@@ -525,6 +526,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
 
       assert_receive {:executed, %{name: "memory_search", arguments: %{"query" => "pattern"}}}
+      assert_live_reflection_tool_sequence(context)
     end
 
     test "and the tool result is returned to inference within the same step", context do
