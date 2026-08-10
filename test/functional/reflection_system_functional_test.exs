@@ -175,7 +175,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert first.output_schema == %{"facts" => "Array<string>"}
     end
 
-    test "and receives the complete tool set available to the host agent", context do
+    test "and receives the complete tool set available to the host agent", _context do
       tools = [JidoGralkor.Actions.MemorySearch, JidoGralkor.Actions.MemoryAdd]
       tool_context = %{session_id: "session-one", custom: "kept"}
 
