@@ -132,14 +132,19 @@ defmodule Gralkor.Reflection.Runner do
     prompt = """
     #{request.directions}
 
+    Lensed representations available to this Reflection step:
+    #{Jason.encode!(Map.get(request, :representations, []))}
+
     Return only one JSON object satisfying this exact output contract:
     #{Jason.encode!(request.output_schema)}
     """
 
     model = Gralkor.Config.llm_model()
     model_spec = "#{model.provider}:#{model.id}"
-    tool_context = Map.put_new(request.tool_context, :operator_id, request.operator_id)
-    context = %{tools: request.tools, tool_context: tool_context}
+    context =
+      request.tool_context
+      |> Map.put_new(:operator_id, request.operator_id)
+      |> Map.put(:tools, request.tools)
 
     case call_with_tools.(
            Jido.AI.Actions.ToolCalling.CallWithTools,
