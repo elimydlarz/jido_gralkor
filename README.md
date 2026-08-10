@@ -2,7 +2,7 @@
 
 Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded Gralkor memory adapter — Graphiti driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), with no separate Gralkor service to deploy. Storage uses either an embedded FalkorDB child or a remote FalkorDB deployment.
 
-You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, and **Lenses**: named, scoped search channels whose write unit is either an episode handled by a consumer-defined ingestion process or a complete replacement graph.
+You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Lenses** for ingesting information through independent named views, and **Reflections** for asynchronous post-ingestion synthesis over the resulting lensed representations.
 
 This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 6.0"}` for the whole memory stack.
 
@@ -134,22 +134,21 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"operator"` Lens only — the channel used by mounts with no `:ingestion_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises whenever the implicit operator Lens is resolved, including for search. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
-| `:generalise_on_flush` | boolean | `false` | Fires the legacy `Gralkor.Generalise` pipeline after each successful implicit-operator capture flush. Lens mounts use `generalise_lens` instead. |
-| `:generalise_min_confidence` | float | `0.3` | Minimum confidence a `Gralkor.Lens.Ingestion.Generalise` hypothesis must reach to be persisted. The retained legacy generalisation callback uses its own `0.3` default. |
+| `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, an `:operator` or `:global` destination `:scope`, and a repository-relative YAML `:chain_of_thought` path. Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
+| `:reflection_root` | path | application package root | Root used to resolve Reflection YAML paths. The default makes the packaged `priv/reflections/*.yaml` files work after installation; set it when an application keeps custom CoTs under another repository directory. |
+| `:reflection_storage` | module | `Gralkor.Reflection.Storage.Graphiti` | Physical storage behind `Gralkor.Reflection.Store`. Tests can use `Gralkor.Reflection.Storage.InMemory`. Reflection destinations remain separate from Lens destinations with either adapter. |
 | `:interpret_max_output_tokens` | positive integer | `2000` | Output ceiling for the per-recall interpret LLM call. Raise it if recall surfaces many candidate facts and you see `Gralkor.InterpretParseFailed` (the parser refuses truncated responses). Lower it to cap latency and cost. A non-positive value raises. |
-| `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall (search + interpret). On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. The auxiliary generalisation and learning searches share one fixed 5 s yield window inside this budget and degrade to no extra facts on timeout. |
+| `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall (search + interpret). On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. |
 | `:test` | boolean | `false` | Verbose diagnostic logging: recall queries, returned facts, and flushed capture bodies are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
-| `:generalise_hypothesise_fn` | 1-arity fun | live ReqLLM call | Test seam: replaces the LLM call `Gralkor.Lens.Ingestion.Generalise` makes, so Lens generalisation can be exercised deterministically. |
 
 ```elixir
 # config/runtime.exs — everything optional, shown with its default
 config :jido_gralkor,
-  generalise_min_confidence: 0.3,
   interpret_max_output_tokens: 2000,
   recall_deadline_ms: 12_000
 ```
 
-`:ontology` and `:generalise_on_flush` are omitted above on purpose: both belong to the implicit-operator compatibility path, not to a registered-Lens deployment. See [A complete configuration](#a-complete-configuration) for all of it wired together.
+`:ontology` is omitted above because it belongs only to the implicit-operator compatibility path, not to a registered-Lens deployment. See [A complete configuration](#a-complete-configuration) for the registered-Lens path.
 
 ### Environment variables
 
@@ -171,7 +170,6 @@ config :jido_gralkor,
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
 | `:ingestion_lens` | no | unset (implicit-operator mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. The removed `:default_lens` option raises and identifies this replacement. |
 | `:search_lenses` | no | `[]` | Additional registered Lens names and/or the reserved `"global"` Lens. The reserved `"operator"` Lens is always included and its results are returned first; naming it explicitly doesn't search it twice. |
-| `:generalise_lens` | no | unset | Second registered Lens that independently receives each flushed transcript. Must differ from `:ingestion_lens`. |
 
 Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
 
