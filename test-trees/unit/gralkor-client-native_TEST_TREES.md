@@ -1,4 +1,4 @@
-Unit: gralkor-client-native (src: lib/gralkor/client.ex, lib/gralkor/client/native.ex; unit: test/gralkor/client/native_test.exs; integration: test/gralkor/client/native_test.exs)
+Unit: gralkor-client-native (src: lib/gralkor/client.ex, lib/gralkor/client/native.ex, lib/gralkor/default_ontology.ex; unit: test/gralkor/client/native_test.exs; integration: test/gralkor/client/native_test.exs)
 
 when any adapter operation is called
   then the work runs in the calling node's own processes, no HTTP request or other network transport being involved
@@ -24,8 +24,8 @@ if a recall is requested with a missing or blank agent name
 
 when a grouped session captures messages with agent and user names
   then the group is sanitised before it is buffered
-  and the deployment-wide ontology is selected, the caller being given no ontology argument of its own
-  and that resolved ontology is buffered alongside the turn
+  and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own
+  and that built-in ontology is buffered alongside the turn
   and the buffer receives the session, sanitised group, names, ontology and messages
   and success is returned immediately, no distillation running before the call returns
   and nothing is logged for the turn itself, captured content becoming observable only at flush
@@ -33,7 +33,7 @@ when a grouped session captures messages with agent and user names
 where a turn is captured through a named Lens
   then the operator id is buffered unsanitised, so the Lens keeps the operator's original identity
   and the agent name, the user name, the Lens name and the messages are appended to the capture buffer under that session
-  and the deployment-wide ontology is not selected, a named Lens owning its own ontology
+  and the built-in ontology is not selected, a named Lens owning its own ontology
   and success is returned immediately
 
 where a turn is captured through a primary Lens together with additional Lenses
@@ -89,17 +89,12 @@ when memory is added with a group and content
   and success is returned once the graph accepts the write
   if the graph fails
     then that failure is returned unchanged
-  then the deployment-wide ontology is applied
-  where a caller supplies an ontology override
-    then the override is applied without consulting the deployment configuration
+  then jido_gralkor's built-in ontology is applied, so a caller neither supplies nor configures one
   where a source description is supplied
     then it is the source recorded on the episode
   where no source description is supplied
     then the source recorded on the episode is "manual"
-  where the ontology resolves to nothing
-    then generic entity and relationship extraction remains enabled without an application-owned schema
-  while the ontology declares a schema
-    then all four ontology collections are forwarded
+  and generic entity and relationship extraction remains enabled without an application-owned schema
 
 when an index and constraint rebuild is requested
   then the rebuild is applied to the whole graph rather than to a single group

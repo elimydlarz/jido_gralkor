@@ -69,9 +69,7 @@ when a flush is requested for a session and awaited with a timeout
     then that failure is returned unchanged
 
 when memory is added with a group, content and a source description
-  then the write uses the deployment-wide ontology
-  where a caller supplies an ontology override
-    then the override is recorded without consulting deployment configuration
+  then the write uses implicit-default memory, so a caller neither supplies nor configures an ontology
   while the backend acknowledges the add
     then success is returned
   if the backend fails

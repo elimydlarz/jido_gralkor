@@ -28,18 +28,6 @@ if the remote FalkorDB host is blank
 if the remote FalkorDB port is not a positive integer
   then resolving the connection raises, naming the offending value
 
-when the deployment-wide ontology is resolved
-  while no ontology is configured
-    then nothing is returned, so compatibility writes use generic extraction
-  while a module declared as an ontology is configured
-    then that module is returned
-
-if the configured deployment-wide ontology is a module that is not declared as an ontology
-  then resolving it raises at the write boundary, naming the offending value
-
-if the configured deployment-wide ontology is not a module
-  then resolving it raises at the write boundary, naming the offending value
-
 when a role's model override is configured as a provider and a model id joined by a colon
   then a spec carrying that provider as an atom and that model id as a string is returned
   and the returned spec is not narrowed to any particular provider, so provider support is decided where the inference clients are built
