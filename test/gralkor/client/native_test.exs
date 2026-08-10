@@ -645,6 +645,18 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
+  describe "when memory is added with a group and content > where a caller supplies an ontology override" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the override is applied without consulting the deployment configuration", %{g: g} do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
+      assert :ok = Native.memory_add("g1", "content", "manual", nil)
+      assert [episode] = episodes(g)
+      refute "entity_types" in episode["kwargs"]
+    end
+  end
+
   describe "when memory is added with a group and content > where no source description is supplied" do
     @describetag :integration
     setup :start_recording_pool

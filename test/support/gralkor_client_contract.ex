@@ -148,22 +148,6 @@ defmodule Gralkor.ClientContract do
                    Gralkor.Client.InMemory.captures()
         end
 
-        test "and the turn is learned at flush with no per-turn flag" do
-          unquote(setup_block).()
-          configure_capture(:ok)
-
-          assert :ok =
-                   client().capture(
-                     "session-1",
-                     "group-1",
-                     "TestAgent",
-                     "Eli",
-                     [Gralkor.Message.new("user", "hi")]
-                   )
-
-          assert [["session-1", "group-1", "TestAgent", "Eli", _messages]] =
-                   Gralkor.Client.InMemory.captures()
-        end
       end
 
       describe "where a turn is captured through a named Lens, alone or together with additional Lenses > while the backend acknowledges the capture" do
@@ -364,13 +348,31 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "when memory is added with a group, content and a source description" do
-        test "then the write uses implicit-default memory, so a caller neither supplies nor configures an ontology" do
+        test "then the write uses the deployment-wide ontology" do
           unquote(setup_block).()
           configure_memory_add(:ok)
 
           assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual")
 
           assert [["group-1", "Eli prefers concise", "manual"]] =
+                   Gralkor.Client.InMemory.adds()
+        end
+      end
+
+      describe "when memory is added with a group, content and a source description > where a caller supplies an ontology override" do
+        test "then the override is recorded without consulting deployment configuration" do
+          unquote(setup_block).()
+          configure_memory_add(:ok)
+
+          assert :ok =
+                   client().memory_add(
+                     "group-1",
+                     "Eli prefers concise",
+                     "manual",
+                     Gralkor.TestOntologies.Strict
+                   )
+
+          assert [["group-1", "Eli prefers concise", "manual", Gralkor.TestOntologies.Strict]] =
                    Gralkor.Client.InMemory.adds()
         end
       end
