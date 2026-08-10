@@ -22,7 +22,18 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     @impl true
     def ingest(request, store) do
-      Gralkor.Lens.Store.add(store, request.content, request.source_description)
+      with :ok <-
+             Gralkor.Lens.Store.add(
+               store,
+               "first lensed: #{request.content}",
+               request.source_description
+             ) do
+        Gralkor.Lens.Store.add(
+          store,
+          "second lensed: #{request.content}",
+          request.source_description
+        )
+      end
     end
   end
 
@@ -247,12 +258,25 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       }
 
       assert {:ok,
-              %Gralkor.IngestedRepresentation{
-                evidence_id: "ev-1",
-                lens: "observations",
-                content: "fact one",
-                result: :ok
-              }} = Client.ingest_with_representation(request)
+              [
+                %Gralkor.IngestedRepresentation{
+                  evidence_id: "ev-1",
+                  lens: "observations",
+                  content: "first lensed: fact one",
+                  result: :ok
+                },
+                %Gralkor.IngestedRepresentation{
+                  evidence_id: "ev-1",
+                  lens: "observations",
+                  content: "second lensed: fact one",
+                  result: :ok
+                }
+              ]} = Client.ingest_with_representation(request)
+
+      assert Enum.map(
+               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "observations"}),
+               & &1.content
+             ) == ["first lensed: fact one", "second lensed: fact one"]
     end
 
     test "and the ingestion caller receives success without waiting for Reflection", context do
