@@ -196,9 +196,36 @@ defmodule Gralkor.ConfigTest do
 
         assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL/, fn ->
           Config.llm_model()
-        end
-      end
     end
+  end
+
+  describe "when the deployment-wide ontology is resolved > while no ontology is configured" do
+    test "then nothing is returned, so every compatibility write behaves as it does with no ontology declared" do
+      assert Config.ontology() == nil
+    end
+  end
+
+  describe "when the deployment-wide ontology is resolved > while a module declared as an ontology is configured" do
+    test "then that module is returned" do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+      assert Config.ontology() == Gralkor.TestOntologies.Strict
+    end
+  end
+
+  describe "if the configured deployment-wide ontology is a module that is not declared as an ontology" do
+    test "then resolving it raises at the write boundary, naming the offending value" do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
+      assert_raise ArgumentError, ~r/NotAnOntology/, fn -> Config.ontology() end
+    end
+  end
+
+  describe "if the configured deployment-wide ontology is not a module" do
+    test "then resolving it raises at the write boundary, naming the offending value" do
+      Application.put_env(:jido_gralkor, :ontology, "MyApp.Ontology")
+      assert_raise ArgumentError, ~r/MyApp\.Ontology/, fn -> Config.ontology() end
+    end
+  end
+end
   end
 
 end

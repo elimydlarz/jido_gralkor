@@ -89,6 +89,34 @@ defmodule Gralkor.Config do
     kw
   end
 
+  @doc """
+  Resolve the optional deployment-wide ontology from the `:jido_gralkor,
+  :ontology` application env.
+
+  This is the compatibility-path source of truth for ontology. Registered
+  Lenses own their ontology independently. Returns the module declared with
+  `use Gralkor.Ontology`, or `nil` when unset, and raises on invalid config.
+  """
+  @spec ontology() :: module() | nil
+  def ontology do
+    case Application.get_env(:jido_gralkor, :ontology) do
+      nil ->
+        nil
+
+      module when is_atom(module) ->
+        if Code.ensure_loaded?(module) and function_exported?(module, :__ontology__, 0) do
+          module
+        else
+          raise ArgumentError,
+                ":jido_gralkor, :ontology must be a module declared via `use Gralkor.Ontology`, got #{inspect(module)}"
+        end
+
+      other ->
+        raise ArgumentError,
+              ":jido_gralkor, :ontology must be a module declared via `use Gralkor.Ontology` (or nil), got #{inspect(other)}"
+    end
+  end
+
   @spec llm_model() :: model_spec()
   def llm_model, do: resolve_model_env("GRALKOR_LLM_MODEL", @default_llm_model)
 
