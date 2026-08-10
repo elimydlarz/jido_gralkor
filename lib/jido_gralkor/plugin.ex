@@ -286,7 +286,8 @@ defmodule JidoGralkor.Plugin do
   defp reflection_context(agent, lens) do
     strategy = Map.get(agent.state, :__strategy__, %{})
     config = Map.get(strategy, :config, %{})
-    configured_tool_context = Map.get(config, :tool_context, %{})
+    configured_tool_context = config_value(config, :tool_context, %{})
+    configured_tool_context = if is_map(configured_tool_context), do: configured_tool_context, else: %{}
 
     tool_context =
       configured_tool_context
@@ -298,10 +299,14 @@ defmodule JidoGralkor.Plugin do
       |> maybe_put_context(:session_id, thread_id(agent))
 
     %{
-      tools: Map.get(config, :tools, []),
+      tools: config_value(config, :tools, []),
       tool_context: tool_context
     }
   end
+
+  defp config_value(config, key, default) when is_map(config), do: Map.get(config, key, default)
+  defp config_value(config, key, default) when is_list(config), do: Keyword.get(config, key, default)
+  defp config_value(_config, _key, default), do: default
 
   defp maybe_put_context(context, _key, nil), do: context
   defp maybe_put_context(context, key, value), do: Map.put(context, key, value)
