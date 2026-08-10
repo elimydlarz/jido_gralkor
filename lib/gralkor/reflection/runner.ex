@@ -163,7 +163,7 @@ defmodule Gralkor.Reflection.Runner do
     #{request.directions}
 
     Lensed representations available to this Reflection step:
-    #{Jason.encode!(Map.get(request, :representations, []))}
+    #{Jason.encode!(serializable_representations(request))}
 
     Return only one JSON object satisfying this exact output contract:
     #{Jason.encode!(request.output_schema)}
@@ -186,6 +186,14 @@ defmodule Gralkor.Reflection.Runner do
       {:ok, result} -> decode_final_output(result)
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  defp serializable_representations(request) do
+    request
+    |> Map.get(:representations, [])
+    |> Enum.map(fn representation ->
+      Map.take(representation, [:id, :evidence_id, :lens, :content, :result])
+    end)
   end
 
   defp decode_final_output(result) do
