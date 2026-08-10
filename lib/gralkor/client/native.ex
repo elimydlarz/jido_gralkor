@@ -12,6 +12,7 @@ defmodule Gralkor.Client.Native do
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Config
+  alias Gralkor.DefaultOntology
   alias Gralkor.Format
   alias Gralkor.GraphitiPool
   alias Gralkor.Interpret
@@ -65,7 +66,7 @@ defmodule Gralkor.Client.Native do
       group_id,
       agent_name,
       user_name,
-      Config.ontology(),
+      DefaultOntology,
       msgs
     )
   end
