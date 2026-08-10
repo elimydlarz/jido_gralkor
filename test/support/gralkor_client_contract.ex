@@ -369,6 +369,7 @@ defmodule Gralkor.ClientContract do
           configure_memory_add(:ok)
 
           assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual")
+
           assert [["group-1", "Eli prefers concise", "manual"]] =
                    Gralkor.Client.InMemory.adds()
         end

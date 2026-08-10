@@ -62,36 +62,36 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
   end
 
   defp assert_legacy_memory_works do
-      Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
-      Gralkor.Client.InMemory.reset()
-      Gralkor.Client.InMemory.set_capture(:ok)
-      Gralkor.Client.InMemory.set_memory_add(:ok)
-      Gralkor.Client.InMemory.set_recall({:ok, "legacy memory"})
+    Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
+    Gralkor.Client.InMemory.reset()
+    Gralkor.Client.InMemory.set_capture(:ok)
+    Gralkor.Client.InMemory.set_memory_add(:ok)
+    Gralkor.Client.InMemory.set_recall({:ok, "legacy memory"})
 
-      messages = [%Gralkor.Message{role: "user", content: "Remember this."}]
+    messages = [%Gralkor.Message{role: "user", content: "Remember this."}]
 
-      assert :ok =
-               Client.impl().capture(
-                 "session-one",
-                 "operator_one",
-                 "Susu",
-                 "Eli",
-                 messages
-               )
+    assert :ok =
+             Client.impl().capture(
+               "session-one",
+               "operator_one",
+               "Susu",
+               "Eli",
+               messages
+             )
 
-      assert :ok = Client.impl().memory_add("operator_one", "Legacy fact.", "manual")
+    assert :ok = Client.impl().memory_add("operator_one", "Legacy fact.", "manual")
 
-      assert {:ok, "legacy memory"} =
-               Client.impl().recall("operator_one", "Susu", "session-one", "fact")
+    assert {:ok, "legacy memory"} =
+             Client.impl().recall("operator_one", "Susu", "session-one", "fact")
 
-      assert [["session-one", "operator_one", "Susu", "Eli", ^messages]] =
-               Gralkor.Client.InMemory.captures()
+    assert [["session-one", "operator_one", "Susu", "Eli", ^messages]] =
+             Gralkor.Client.InMemory.captures()
 
-      assert [["operator_one", "Legacy fact.", "manual"]] =
-               Gralkor.Client.InMemory.adds()
+    assert [["operator_one", "Legacy fact.", "manual"]] =
+             Gralkor.Client.InMemory.adds()
 
-      assert [["operator_one", "Susu", "session-one", "fact"]] =
-               Gralkor.Client.InMemory.recalls()
+    assert [["operator_one", "Susu", "session-one", "fact"]] =
+             Gralkor.Client.InMemory.recalls()
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)

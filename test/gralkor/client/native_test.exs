@@ -234,8 +234,7 @@ defmodule Gralkor.Client.NativeTest do
       assert [^msgs] = CaptureBuffer.turns_for("s1")
 
       :ok = CaptureBuffer.flush("s1")
-      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", Gralkor.DefaultOntology,
-                      [^msgs]}
+      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", Gralkor.DefaultOntology, [^msgs]}
     end
 
     test "and the deployment-wide ontology is selected, the caller being given no ontology argument of its own" do
@@ -255,8 +254,7 @@ defmodule Gralkor.Client.NativeTest do
       assert :ok = Native.capture("s1", "with-hyphens", "Susu", "Eli", msgs)
       assert [^msgs] = CaptureBuffer.turns_for("s1")
       assert :ok = CaptureBuffer.flush("s1")
-      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", Gralkor.DefaultOntology,
-                      [^msgs]}
+      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", Gralkor.DefaultOntology, [^msgs]}
     end
 
     test "and success is returned immediately, no distillation running before the call returns" do
@@ -431,6 +429,7 @@ defmodule Gralkor.Client.NativeTest do
     test "and immediate recall for the bound group surfaces the flushed turns" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush_and_await("s1", 1_000)
+
       assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology,
                       [[%Message{content: "x"}]]}
     end
