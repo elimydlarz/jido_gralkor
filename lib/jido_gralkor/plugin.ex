@@ -287,7 +287,10 @@ defmodule JidoGralkor.Plugin do
     strategy = Map.get(agent.state, :__strategy__, %{})
     config = Map.get(strategy, :config, %{})
     configured_tool_context = config_value(config, :tool_context, %{})
-    configured_tool_context = if is_map(configured_tool_context), do: configured_tool_context, else: %{}
+
+    configured_tool_context =
+      if is_map(configured_tool_context), do: configured_tool_context, else: %{}
+
     retained_tool_context = request_tool_context(agent, request_id)
 
     tool_context =
@@ -307,7 +310,10 @@ defmodule JidoGralkor.Plugin do
   end
 
   defp config_value(config, key, default) when is_map(config), do: Map.get(config, key, default)
-  defp config_value(config, key, default) when is_list(config), do: Keyword.get(config, key, default)
+
+  defp config_value(config, key, default) when is_list(config),
+    do: Keyword.get(config, key, default)
+
   defp config_value(_config, _key, default), do: default
 
   defp maybe_put_context(context, _key, nil), do: context
