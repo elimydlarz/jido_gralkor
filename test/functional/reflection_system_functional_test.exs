@@ -263,7 +263,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         {CaptureBuffer,
          flush_callback: fn _, _, _, _, _ -> :ok end,
          lens_flush_callback: representation_callback(parent),
-         reflection_callback: fn ingestion ->
+         reflection_callback: fn _reflections, ingestion ->
            send(parent, {:reflection_started, ingestion})
            Process.sleep(150)
            :ok
@@ -297,7 +297,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         {CaptureBuffer,
          flush_callback: fn _, _, _, _, _ -> :ok end,
          lens_flush_callback: representation_callback(parent),
-         reflection_callback: fn ingestion ->
+         reflection_callback: fn _reflections, ingestion ->
            send(parent, {:scheduled, Enum.map(reflections, & &1.name), ingestion})
            :ok
          end,
@@ -331,7 +331,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         {CaptureBuffer,
          flush_callback: fn _, _, _, _, _ -> :ok end,
          lens_flush_callback: representation_callback(parent),
-         reflection_callback: fn ingestion -> send(parent, {:scheduled_after_all, ingestion}); :ok end,
+         reflection_callback: fn _reflections, ingestion ->
+           send(parent, {:scheduled_after_all, ingestion})
+           :ok
+         end,
          reflections: [reflection(context)],
          retries: []}
       )
