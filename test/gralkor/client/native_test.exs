@@ -237,10 +237,10 @@ defmodule Gralkor.Client.NativeTest do
       assert_receive {:flushed, "with_hyphens", "Susu", "Eli", Gralkor.DefaultOntology, [^msgs]}
     end
 
-    test "and the deployment-wide ontology is selected, the caller being given no ontology argument of its own" do
+    test "and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush("s1")
-      assert_receive {:flushed, "g", "Susu", "Eli", nil, _turns}
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
     test "and that built-in ontology is buffered alongside the turn" do
@@ -453,17 +453,17 @@ defmodule Gralkor.Client.NativeTest do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, :timeout} = Native.flush_and_await("s1", 50)
-      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
+      assert_receive {:flush_started, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
     test "and the buffered turns remain available to flush on a later call" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, :timeout} = Native.flush_and_await("s1", 50)
-      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
+      assert_receive {:flush_started, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
 
       assert :ok = Native.flush("s1")
-      assert_receive {:flush_started, "g", "Susu", "Eli", nil, _turns}
+      assert_receive {:flush_started, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
   end
 
@@ -621,12 +621,12 @@ defmodule Gralkor.Client.NativeTest do
       assert [%{"body" => "content"}] = episodes(g)
     end
 
-    test "then the deployment-wide ontology is applied while a caller may override it",
+    test "then jido_gralkor's built-in ontology is applied, so a caller neither supplies nor configures one",
          %{g: g} do
       Code.ensure_loaded!(Native)
       assert function_exported?(Native, :memory_add, 3)
-      assert function_exported?(Native, :memory_add, 4)
-      Application.put_env(:jido_gralkor, :ontology, nil)
+      refute function_exported?(Native, :memory_add, 4)
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
       assert :ok = Native.memory_add("g1", "content", "manual")
       assert [episode] = episodes(g)
       refute "entity_types" in episode["kwargs"]
