@@ -16,9 +16,10 @@ defmodule Gralkor.Client do
   The compatibility surface remains `recall/4`, `capture/5`, `flush/1`,
   `flush_and_await/2`, and `memory_add/3` or `/4`. Lens-aware capture uses
   `capture/6`, or `capture/7` when the same turn is also routed through
-  additional Lenses. Legacy group IDs are sanitised at their graph boundary
-  (`sanitize_group_id/1`); Lens storage binds the original operator id to its
-  selected Lens instead.
+  additional Lenses. The internal `capture/8` form also carries the host tools
+  and tool context made available to subsequent Reflections. Legacy group IDs
+  are sanitised at their graph boundary (`sanitize_group_id/1`); Lens storage
+  binds the original operator id to its selected Lens instead.
 
   `flush/1` returns `:ok` before the buffered turns have landed
   (fire-and-forget — appropriate for shutdown paths that cannot block).
