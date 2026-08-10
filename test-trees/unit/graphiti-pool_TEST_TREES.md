@@ -84,9 +84,6 @@ when an episode is added
     and the forwarded dictionary uses the graph library's key names outside and the ontology's declared type names inside
   while an episode identifier is supplied
     then that identifier is forwarded to the graph library, so re-adding under it updates the episode by re-extraction
-  while the write asks for the built-in Learning entity type
-    then Learning is merged into the effective entity types even without a supplied ontology
-    and the merged translation is cached separately from the same ontology's unmerged translation
 
 if adding an episode raises inside the graph library
   then an error carrying only the raised exception's class and message is returned

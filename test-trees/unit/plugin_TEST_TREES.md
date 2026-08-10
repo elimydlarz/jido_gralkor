@@ -15,7 +15,7 @@ if mount is given no agent name
 if mount is given a blank agent name
   then it raises ArgumentError
 
-when mount selects an ingestion Lens, Lenses to search, and an optional generalising Lens
+when mount selects an ingestion Lens and Lenses to search
   then those selections are resolved against the application Lens registry and stored on the plugin state
   and the resolved Lens keeps the ontology, scope, and ingestion the registry declared for it, redefining none of them
   if Lens options are supplied without an ingestion Lens
@@ -24,10 +24,6 @@ when mount selects an ingestion Lens, Lenses to search, and an optional generali
     then mounting raises an ArgumentError identifying the unknown Lens
   if a search Lens is unknown
     then mounting raises an ArgumentError identifying the unknown Lens
-  if a generalising Lens is unknown
-    then mounting raises an ArgumentError identifying the unknown Lens
-  if the generalising Lens duplicates the ingestion Lens
-    then mounting raises an ArgumentError identifying that the Lenses must differ
   if the removed `:default_lens` option is supplied
     then mounting raises an ArgumentError identifying `:ingestion_lens` as its replacement
   if the search Lens selection is not a list
@@ -60,7 +56,7 @@ when an agent turn completes
     while the completed turn's request trace holds no events
       then no capture is sent at all
     where the plugin was mounted with Lens selections
-      then the capture also carries the selected Lens and the optional generalising Lens
+      then the capture carries the selected Lens
     if agent state holds no user name
       then the callback raises ArgumentError naming the missing user name
     if agent state holds a blank user name

@@ -60,49 +60,6 @@ where test mode is enabled
   then the raw query is logged
   and a returned-facts memory block is logged
   and an empty-result memory block is not logged
-  and each auxiliary result count and result body is logged
 
 where test mode is disabled
   then neither the raw query nor memory block is logged
-
-where a generalisation search is supplied
-  then it runs alongside the main search and receives at least one third of the main limit
-  and successful generalisation facts reach interpretation with regular facts
-  if it fails
-    then it contributes no facts while regular facts remain eligible
-    where a learning search is supplied
-      then successful learning-search facts remain eligible
-  while it returns no facts
-    then recall proceeds normally
-
-where no generalisation search is supplied
-  then no generalisation search is issued
-  where a learning search is supplied
-    then its successful facts still reach interpretation
-
-where a learning search is supplied
-  then it runs on every recall over the same group with the raw query and at least one third of the main limit
-  and successful learning facts reach interpretation with regular facts
-  if it fails
-    then it contributes no facts while regular facts remain eligible
-    where a generalisation search is supplied
-      then successful generalisation-search facts remain eligible
-  while it returns no facts
-    then recall proceeds normally
-
-where no learning search is supplied
-  then no learning search is issued
-  where a generalisation search is supplied
-    then its successful facts still reach interpretation
-
-where neither auxiliary search is supplied
-  then the main search is the only search issued
-
-where both auxiliary searches outlast their yield
-  then both are abandoned within one shared five-second window
-
-where both auxiliary searches outlast the outer deadline
-  then the outer deadline ends recall before the five-second auxiliary window elapses
-
-when the main result limit is smaller than three
-  then each supplied auxiliary search still receives a limit of one

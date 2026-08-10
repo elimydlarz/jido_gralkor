@@ -30,7 +30,6 @@ where a recall is requested with no session id
 when a canonical turn is captured for a named session, group, agent and user
   while its messages have user, assistant or behaviour roles
     then the write uses the deployment ontology without a caller ontology argument
-    and the turn is learned at flush with no per-turn flag
   while the backend acknowledges the capture
     then success is returned
   if the backend fails
@@ -93,18 +92,5 @@ when an index rebuild is requested
 when community building is requested for a group
   while the backend returns counts
     then the number of communities and the number of edges are returned as a success
-  if the backend fails
-    then that failure is returned unchanged
-
-when generalisation is requested for a group and a transcript
-  then success is returned once the pipeline completes
-  if the pipeline's upstream inference fails
-    then success is still returned, generalisation being fire-and-forget and its failures only logged
-
-when generalisations are searched for a group with a query and a result ceiling
-  while the backend returns generalisations
-    then they are returned as a success carrying their decoded content, level and confidence
-  while the backend returns none
-    then an empty list is returned as a success rather than an error
   if the backend fails
     then that failure is returned unchanged

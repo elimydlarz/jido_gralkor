@@ -5,13 +5,6 @@ when any adapter operation is called
 
 when recall is requested for a group, agent and query
   then a fact search scoped to the group is supplied to the recall pipeline
-  and a generalisation search scoped to the `_gen` group derived from it is supplied to the recall pipeline
-  and that generalisation search asks the graph for nodes rather than for edges, so a generalisation naming a single subject is returned instead of nothing
-  and each generalisation node found is rendered from its summary, or from its name when it has no summary
-  and a learning search is supplied on every recall, with no enabling flag and no inference-based classification of the query
-  and that learning search is seeded with the caller's raw query rather than a derived one
-  and that learning search asks the graph for nodes labelled `Learning` rather than for edges, so standalone learning nodes are returned instead of nothing
-  and each learning node found is rendered from its name, its summary, and its lesson, approach and problem-kind attributes
   while a session id is given
     then it is handed to the recall pipeline, so the turns buffered for that session become the conversation context
   where no session id is given
@@ -125,21 +118,6 @@ when community building is requested for a group
   and community building is scoped to the sanitised group
   and the number of communities and the number of edges built are returned
   if the graph fails
-    then that failure is returned unchanged
-
-when generalisations are searched for a group
-  then the group is sanitised before use
-  and the search is scoped to the `_gen` group derived from it
-  and episode search reads written bodies rather than extracted facts
-  and every result that decodes as a generalisation is returned carrying its decoded content, level and confidence
-  but a result that does not decode as a generalisation is left out rather than surfaced raw
-  if the search fails
-    then that failure is returned unchanged
-
-when the legacy generalisation pipeline searches for existing generalisations
-  then episode search reads written bodies from the supplied generalisation group
-  and every written body is returned unchanged to the generalisation pipeline
-  if the episode search fails
     then that failure is returned unchanged
 
 when a group id holding hyphens is sanitised
