@@ -142,7 +142,14 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   @spec graph_add(String.t(), String.t(), String.t(), module() | nil, keyword()) ::
           :ok | {:error, term()}
   defp graph_add(group_id, content, source_description, ontology, graph_opts) do
-    GraphitiPool.add_episode(group_id, content, source_description, ontology, graph_opts)
+    GraphitiPool.add_episode(
+      GraphitiPool,
+      group_id,
+      content,
+      source_description,
+      ontology,
+      graph_opts
+    )
   end
 
   defp graph_replace(group_id, lens_name, format, data) do
