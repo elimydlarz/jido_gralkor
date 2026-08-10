@@ -1112,30 +1112,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  defp variable_representation_callback(parent) do
-    fn _operator_id, _agent_name, _user_name, lens, _turns ->
-      send(parent, {:lens_stored, lens})
-
-      representations =
-        case lens do
-          "observations" ->
-            for suffix <- ["one", "two"] do
-              %{
-                id: "representation-#{suffix}",
-                evidence_id: "evidence-shared",
-                lens: lens,
-                content: "stored output #{suffix}"
-              }
-            end
-
-          "decisions" ->
-            []
-        end
-
-      {:ok, representations}
-    end
-  end
-
   defp stored_artefact(context) do
     reflection = reflection(context)
     {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
