@@ -61,7 +61,7 @@ defmodule Gralkor.Reflection.ChainOfThought do
     cond do
       duplicate -> {:error, {:duplicate_output, duplicate, label}}
       reference -> {:error, {:unknown_interpolation, reference, label}}
-      Enum.any?(output, fn {name, type} -> not non_blank?(name) or not valid_type_declaration?(type) end) ->
+      Enum.any?(output, fn {name, type} -> not non_blank?(name) or match?({:error, _}, parse_type(type)) end) ->
         {:error, {:invalid_output_type, label}}
       true ->
         step = %Step{label: label, directions: directions, output: output}
@@ -75,6 +75,99 @@ defmodule Gralkor.Reflection.ChainOfThought do
     |> List.flatten()
   end
 
-  defp valid_type_declaration?(type), do: non_blank?(type)
+  def matches_type?(value, declaration) do
+    case parse_type(declaration) do
+      {:ok, type} -> matches?(value, type)
+      {:error, _} -> false
+    end
+  end
+
+  def parse_type(declaration) when is_binary(declaration) do
+    declaration = String.trim(declaration)
+
+    cond do
+      declaration in ["string", "boolean", "integer", "float", "number", "map", "object"] ->
+        {:ok, String.to_atom(declaration)}
+
+      String.starts_with?(declaration, "Array<") and String.ends_with?(declaration, ">") ->
+        declaration |> String.slice(6, String.length(declaration) - 7) |> parse_type() |> wrap(:array)
+
+      String.starts_with?(declaration, "{") and String.ends_with?(declaration, "}") ->
+        declaration |> String.slice(1, String.length(declaration) - 2) |> parse_object()
+
+      String.contains?(declaration, "|") or quoted_literal?(declaration) ->
+        literals = declaration |> split_top_level("|") |> Enum.map(&parse_literal/1)
+        if Enum.all?(literals, &match?({:ok, _}, &1)), do: {:ok, {:literal, Enum.map(literals, &elem(&1, 1))}}, else: {:error, declaration}
+
+      true ->
+        {:error, declaration}
+    end
+  end
+
+  def parse_type(other), do: {:error, other}
+
+  defp parse_object(body) do
+    fields = split_top_level(body, ";") |> Enum.reject(&(String.trim(&1) == ""))
+
+    Enum.reduce_while(fields, {:ok, %{}}, fn field, {:ok, acc} ->
+      case String.split(field, ":", parts: 2) do
+        [name, type] ->
+          name = String.trim(name)
+          case parse_type(type) do
+            {:ok, parsed} when name != "" -> {:cont, {:ok, Map.put(acc, name, parsed)}}
+            _ -> {:halt, {:error, field}}
+          end
+        _ -> {:halt, {:error, field}}
+      end
+    end)
+    |> case do
+      {:ok, fields} -> {:ok, {:object, fields}}
+      error -> error
+    end
+  end
+
+  defp split_top_level(value, separator) do
+    {parts, current, _depth, _quote} =
+      value
+      |> String.graphemes()
+      |> Enum.reduce({[], "", 0, nil}, fn char, {parts, current, depth, quote} ->
+        cond do
+          char in ["\"", "'"] and is_nil(quote) -> {parts, current <> char, depth, char}
+          char == quote -> {parts, current <> char, depth, nil}
+          not is_nil(quote) -> {parts, current <> char, depth, quote}
+          char in ["<", "{"] -> {parts, current <> char, depth + 1, quote}
+          char in [">", "}"] -> {parts, current <> char, depth - 1, quote}
+          char == separator and depth == 0 -> {parts ++ [current], "", depth, quote}
+          true -> {parts, current <> char, depth, quote}
+        end
+      end)
+
+    parts ++ [current]
+  end
+
+  defp quoted_literal?(value), do: (String.starts_with?(value, "\"") and String.ends_with?(value, "\"")) or (String.starts_with?(value, "'") and String.ends_with?(value, "'"))
+
+  defp parse_literal(value) do
+    value = String.trim(value)
+    if quoted_literal?(value), do: {:ok, String.slice(value, 1, String.length(value) - 2)}, else: {:error, value}
+  end
+
+  defp wrap({:ok, value}, tag), do: {:ok, {tag, value}}
+  defp wrap(error, _tag), do: error
+
+  defp matches?(value, :string), do: is_binary(value)
+  defp matches?(value, :boolean), do: is_boolean(value)
+  defp matches?(value, :integer), do: is_integer(value)
+  defp matches?(value, :float), do: is_float(value)
+  defp matches?(value, :number), do: is_number(value)
+  defp matches?(value, type) when type in [:map, :object], do: is_map(value)
+  defp matches?(value, {:array, type}), do: is_list(value) and Enum.all?(value, &matches?(&1, type))
+  defp matches?(value, {:literal, values}), do: value in values
+  defp matches?(value, {:object, fields}) when is_map(value) do
+    normalized = Map.new(value, fn {key, item} -> {to_string(key), item} end)
+    MapSet.new(Map.keys(normalized)) == MapSet.new(Map.keys(fields)) and Enum.all?(fields, fn {key, type} -> matches?(normalized[key], type) end)
+  end
+  defp matches?(_, _), do: false
+
   defp non_blank?(value), do: is_binary(value) and String.trim(value) != ""
 end

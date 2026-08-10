@@ -4,7 +4,9 @@ defmodule Gralkor.Reflection.Registry do
   alias Gralkor.Reflection
   alias Gralkor.Reflection.ChainOfThought
 
-  def load(definitions, opts \\ []) when is_list(definitions) do
+  def load(definitions, opts \\ [])
+
+  def load(definitions, opts) when is_list(definitions) do
     root = opts |> Keyword.get(:root, File.cwd!()) |> Path.expand()
 
     with :ok <- validate_names(definitions),
