@@ -133,7 +133,6 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
 | `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:scope`, `:ontology`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:scope`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"operator"`, `"global"`), retired (`"default"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
-| `:ontology` | module using `Gralkor.Ontology` | unset | Binds an ontology to the implicit `"operator"` Lens only — the channel used by mounts with no `:ingestion_lens`, and by legacy `capture/5` / `memory_add/3`. **Not** a registry that `:lenses` entries reference: a deployment that registers Lenses leaves this unset. A non-ontology module raises whenever the implicit operator Lens is resolved, including for search. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
 | `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, an `:operator` or `:global` destination `:scope`, and a repository-relative YAML `:chain_of_thought` path. Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
@@ -150,7 +149,7 @@ config :jido_gralkor,
   recall_deadline_ms: 12_000
 ```
 
-`:ontology` is omitted above because it belongs only to the implicit-operator compatibility path, not to a registered-Lens deployment. See [A complete configuration](#a-complete-configuration) for the registered-Lens path.
+The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `recall/4` need no ontology configuration. They use the library-owned `Gralkor.DefaultOntology`, whose open contract preserves generic entity and relationship extraction. An application-specific extraction schema belongs on an explicitly registered named Lens.
 
 ### Environment variables
 
@@ -261,9 +260,6 @@ config :jido_gralkor,
   interpret_max_output_tokens: 2000,
   recall_deadline_ms: 12_000
 
-# NOT set here: `:ontology`. That key binds an ontology to the implicit
-# "operator" Lens used by mounts that configure no Lenses at all. A
-# deployment that registers Lenses leaves it unset — see below.
 ```
 
 ```elixir
@@ -280,7 +276,7 @@ plugins: [
 
 That mount writes captured turns and `memory_add` calls to `"observations"`, and concurrently searches the reserved `"operator"` Lens, `"decisions"`, and the shared `"global"` group. After a flushed ingestion has completed across its intended Lenses, each declared Reflection is scheduled independently over the completed lensed representations.
 
-**On `:ontology` vs. Lens `ontology:`.** They are not a declaration and a reference to it; they are two different channels, each with its own binding. `:ontology` configures exactly one channel — the implicit `"operator"` Lens, which cannot be registered in `:lenses` because the name is reserved. Set `:ontology` only if you run mounts without `:ingestion_lens` (implicit-operator mode), or call the legacy `memory_add/3` and `capture/5` surface directly. It has no effect on writes through a registered Lens or on search filtering and results, though resolving the implicit operator Lens during search still validates the configured module.
+**Ontology ownership.** The implicit `"operator"` Lens cannot be registered because its name is reserved; Jido Gralkor owns its open `Gralkor.DefaultOntology`. Applications attach custom ontology modules only to explicitly registered named Lenses. If an older deployment set `config :jido_gralkor, :ontology`, remove it. If it depended on that custom schema, move the schema to a named Lens and select that Lens for ingestion.
 
 ## Wire it on your agent
 
@@ -519,7 +515,7 @@ Replacement is scoped through the Lens exactly like other Lens operations: an op
 
 Invalid Lens names, write modes, formats, and graph data raise `ArgumentError`; graph data is fully validated before storage mutation begins. Once a valid replacement starts, deletion and insertion are not transactional: an import error is returned, and content already removed or inserted is not rolled back.
 
-Registry and plugin configuration fail fast for blank, duplicate, reserved, retired, or malformed Lens definitions and for unknown Lens names. The retired `"default"` Lens name raises with guidance to use `"operator"`; it is not an alias. If no Lens configuration is used, the implicit `"operator"` Lens preserves the existing operator group and deployment-wide `:ontology` behavior.
+Registry and plugin configuration fail fast for blank, duplicate, reserved, retired, or malformed Lens definitions and for unknown Lens names. The retired `"default"` Lens name raises with guidance to use `"operator"`; it is not an alias. If no Lens configuration is used, the implicit `"operator"` Lens preserves the existing operator group and uses Jido Gralkor's built-in generic extraction contract.
 
 ### Ontology DSL
 
@@ -544,9 +540,9 @@ A Reflection is an asynchronous post-ingestion process over completed lensed rep
 The package supplies two declarations by default:
 
 - `generalisations` uses `priv/reflections/generalisations.yaml` and stores durable patterns in a global Reflection destination.
-- `erl` uses `priv/reflections/erl.yaml` and stores experiential-learning artefacts in an operator-local Reflection destination.
+- `erl` uses `priv/reflections/erl.yaml` and stores experiential-learning artefacts in an operator-local Reflection destination. This packaged default owns `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
 
-Set `:reflections` to replace those defaults with application declarations, and set `:reflection_root` when their YAML paths resolve from somewhere other than the installed application root:
+Set `:reflections` to replace those defaults with application declarations, and set `:reflection_root` when their YAML paths resolve from somewhere other than the installed application root. Application-defined Reflections use `Gralkor.DefaultOntology` for generic extraction; custom application extraction schemas remain a named-Lens concern.
 
 ```elixir
 config :jido_gralkor,
