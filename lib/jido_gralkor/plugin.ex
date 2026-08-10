@@ -29,7 +29,8 @@ defmodule JidoGralkor.Plugin do
   `JidoGralkor.Canonical.to_messages/3` into Gralkor's canonical
   `[%Gralkor.Message{role, content}]` shape and submitted to the configured
   client. Implicit-operator capture uses `capture/5`; Lens-aware capture uses
-  `capture/6`, or `/7` when an additional generalising Lens is configured.
+  the selected ordinary Lens and carries the host agent's tools and tool context
+  for asynchronous Reflection processing after ingestion.
   The capture buffer keeps turn order by `session_id` and flushes Lens batches
   independently.
   Capture is skipped if the thread isn't present (first-turn failure
@@ -75,7 +76,7 @@ defmodule JidoGralkor.Plugin do
 
     case fetch_opt(opts, :ingestion_lens) do
       nil ->
-        if fetch_opt(opts, :search_lenses) != nil or fetch_opt(opts, :generalise_lens) != nil do
+        if fetch_opt(opts, :search_lenses) != nil do
           raise ArgumentError, ":ingestion_lens is required when Lens options are configured"
         end
 
@@ -84,21 +85,13 @@ defmodule JidoGralkor.Plugin do
       ingestion_lens ->
         lens = Client.lens!(ingestion_lens)
         search_lenses = validate_search_lenses!(fetch_opt(opts, :search_lenses))
-        generalise_lens = fetch_opt(opts, :generalise_lens)
-
-        if generalise_lens, do: Client.lens!(generalise_lens)
-
-        if generalise_lens == ingestion_lens do
-          raise ArgumentError, ":generalise_lens must differ from :ingestion_lens"
-        end
 
         {:ok,
          %{
            agent_name: agent_name,
            ingestion_lens: ingestion_lens,
            search_lenses: search_lenses,
-           lens: lens,
-           generalise_lens: generalise_lens
+           lens: lens
          }}
     end
   end
@@ -213,30 +206,17 @@ defmodule JidoGralkor.Plugin do
 
                 lens_name ->
                   Client.lens!(lens_name)
-                  additional_lenses = additional_lenses(agent, lens_name)
 
-                  case additional_lenses do
-                    [] ->
-                      Client.impl().capture(
-                        session_id,
-                        agent.id,
-                        agent_name(agent),
-                        user_name,
-                        messages,
-                        lens_name
-                      )
-
-                    lenses ->
-                      Client.impl().capture(
-                        session_id,
-                        agent.id,
-                        agent_name(agent),
-                        user_name,
-                        messages,
-                        lens_name,
-                        lenses
-                      )
-                  end
+                  Client.impl().capture(
+                    session_id,
+                    agent.id,
+                    agent_name(agent),
+                    user_name,
+                    messages,
+                    lens_name,
+                    [],
+                    reflection_context(agent, lens_name)
+                  )
               end
 
             case result do
@@ -301,14 +281,30 @@ defmodule JidoGralkor.Plugin do
 
   defp ref_value(refs, key), do: Map.get(refs, key) || Map.get(refs, Atom.to_string(key))
 
-  defp additional_lenses(agent, selected_lens) do
-    case plugin_state(agent) do
-      %{generalise_lens: lens} when is_binary(lens) and lens != selected_lens -> [lens]
-      _ -> []
-    end
+  defp plugin_state(agent), do: Map.get(agent.state, :__memory__)
+
+  defp reflection_context(agent, lens) do
+    strategy = Map.get(agent.state, :__strategy__, %{})
+    config = Map.get(strategy, :config, %{})
+    configured_tool_context = Map.get(config, :tool_context, %{})
+
+    tool_context =
+      configured_tool_context
+      |> Map.merge(%{
+        operator_id: agent.id,
+        agent_name: agent_name(agent),
+        lens: lens
+      })
+      |> maybe_put_context(:session_id, thread_id(agent))
+
+    %{
+      tools: Map.get(config, :tools, []),
+      tool_context: tool_context
+    }
   end
 
-  defp plugin_state(agent), do: Map.get(agent.state, :__memory__)
+  defp maybe_put_context(context, _key, nil), do: context
+  defp maybe_put_context(context, key, value), do: Map.put(context, key, value)
 
   defp thread_id(agent) do
     case Map.get(agent.state, :__thread__) do
