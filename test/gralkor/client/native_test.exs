@@ -644,7 +644,8 @@ defmodule Gralkor.Client.NativeTest do
       Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
       assert :ok = Native.memory_add("g1", "content", "manual")
       assert [episode] = episodes(g)
-      assert "entity_types" in episode["kwargs"]
+      refute "entity_types" in episode["kwargs"]
+      refute "excluded_entity_types" in episode["kwargs"]
     end
   end
 

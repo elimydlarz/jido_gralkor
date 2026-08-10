@@ -94,7 +94,7 @@ when memory is added with a group and content
     then it is the source recorded on the episode
   where no source description is supplied
     then the source recorded on the episode is "manual"
-  and the write forwards all four built-in ontology collections
+  and generic entity and relationship extraction remains enabled without an application-owned schema
 
 when an index and constraint rebuild is requested
   then the rebuild is applied to the whole graph rather than to a single group
