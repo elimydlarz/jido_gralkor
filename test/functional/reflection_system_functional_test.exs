@@ -546,7 +546,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         directions: "Use memory.",
         output_schema: %{"artefact" => "string"},
         representations: [
-          %{evidence_id: "ev-1", lens: "observations", content: "first representation"}
+          Gralkor.IngestedRepresentation.new(
+            "ev-1",
+            "observations",
+            "first representation"
+          )
         ],
         tools: tools,
         tool_context: tool_context,
