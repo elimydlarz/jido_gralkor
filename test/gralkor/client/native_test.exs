@@ -253,11 +253,10 @@ defmodule Gralkor.Client.NativeTest do
       assert_receive {:flushed, "with_hyphens", "Susu", "Eli", nil, [^msgs]}
     end
 
-    test "and the deployment-configured ontology is resolved, the caller being given no ontology argument of its own" do
-      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+    test "and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own" do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush("s1")
-      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.TestOntologies.Strict, _turns}
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
     test "and that resolved ontology is buffered alongside the turn" do
