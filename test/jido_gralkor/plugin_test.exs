@@ -247,7 +247,9 @@ defmodule JidoGralkor.PluginTest do
       request_id = "request-retained-lens"
 
       signal =
-        Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: "observations"}},
+        Signal.new!(
+          "ai.react.query",
+          %{query: "hi", tool_context: %{lens: "observations", request_token: "retained"}},
           source: "/test"
         )
 
