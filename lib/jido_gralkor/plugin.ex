@@ -127,7 +127,7 @@ defmodule JidoGralkor.Plugin do
       end
       |> Map.merge(lens_context(agent))
 
-    {:ok, {:continue, signal |> merge_tool_context(extras) |> retain_request_lens()}}
+    {:ok, {:continue, signal |> merge_tool_context(extras) |> retain_request_context()}}
   end
 
   def handle_signal(
@@ -215,7 +215,7 @@ defmodule JidoGralkor.Plugin do
                     messages,
                     lens_name,
                     [],
-                    reflection_context(agent, lens_name)
+                    reflection_context(agent, lens_name, request_id)
                   )
               end
 
@@ -283,14 +283,16 @@ defmodule JidoGralkor.Plugin do
 
   defp plugin_state(agent), do: Map.get(agent.state, :__memory__)
 
-  defp reflection_context(agent, lens) do
+  defp reflection_context(agent, lens, request_id) do
     strategy = Map.get(agent.state, :__strategy__, %{})
     config = Map.get(strategy, :config, %{})
     configured_tool_context = config_value(config, :tool_context, %{})
     configured_tool_context = if is_map(configured_tool_context), do: configured_tool_context, else: %{}
+    retained_tool_context = request_tool_context(agent, request_id)
 
     tool_context =
       configured_tool_context
+      |> Map.merge(retained_tool_context)
       |> Map.merge(%{
         operator_id: agent.id,
         agent_name: agent_name(agent),
@@ -310,6 +312,21 @@ defmodule JidoGralkor.Plugin do
 
   defp maybe_put_context(context, _key, nil), do: context
   defp maybe_put_context(context, key, value), do: Map.put(context, key, value)
+
+  defp request_tool_context(agent, request_id) do
+    agent.state
+    |> Map.get(:__thread__, %{})
+    |> Map.get(:entries, [])
+    |> Enum.find_value(%{}, fn
+      %{refs: refs} when is_map(refs) ->
+        if ref_value(refs, :request_id) == request_id,
+          do: ref_value(refs, :jido_gralkor_tool_context)
+
+      _entry ->
+        nil
+    end)
+    |> then(fn context -> if is_map(context), do: context, else: %{} end)
+  end
 
   defp thread_id(agent) do
     case Map.get(agent.state, :__thread__) do
@@ -334,11 +351,21 @@ defmodule JidoGralkor.Plugin do
     %{signal | data: Map.put(data, :tool_context, new_context)}
   end
 
-  defp retain_request_lens(%Signal{data: %{tool_context: %{lens: lens}} = data} = signal)
-       when is_binary(lens) do
-    refs = data |> Map.get(:extra_refs, %{}) |> Map.put(:jido_gralkor_lens, lens)
+  defp retain_request_context(%Signal{data: %{tool_context: tool_context} = data} = signal)
+       when is_map(tool_context) do
+    refs =
+      data
+      |> Map.get(:extra_refs, %{})
+      |> Map.put(:jido_gralkor_tool_context, tool_context)
+      |> maybe_put_lens_ref(Map.get(tool_context, :lens))
+
     %{signal | data: Map.put(data, :extra_refs, refs)}
   end
 
-  defp retain_request_lens(signal), do: signal
+  defp retain_request_context(signal), do: signal
+
+  defp maybe_put_lens_ref(refs, lens) when is_binary(lens),
+    do: Map.put(refs, :jido_gralkor_lens, lens)
+
+  defp maybe_put_lens_ref(refs, _lens), do: refs
 end
