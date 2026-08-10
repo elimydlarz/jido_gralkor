@@ -182,6 +182,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       request = %{
         directions: "Use memory.",
         output_schema: %{"artefact" => "string"},
+        representations: [
+          %{evidence_id: "ev-1", lens: "observations", content: "first representation"}
+        ],
         tools: tools,
         tool_context: tool_context,
         operator_id: "operator-one"
@@ -193,10 +196,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       end
 
       assert {:ok, %{output: %{"artefact" => "done"}}} = Runner.default_inference(request, call)
-      assert_receive {:default_inference, %{auto_execute: true, model: model}, %{tools: ^tools, tool_context: received_context}}
+      assert_receive {:default_inference, %{auto_execute: true, model: model, prompt: prompt}, received_context}
       configured = Gralkor.Config.llm_model()
       assert model == "#{configured.provider}:#{configured.id}"
-      assert received_context == Map.put(tool_context, :operator_id, "operator-one")
+      assert prompt =~ ~s("evidence_id":"ev-1")
+      assert prompt =~ ~s("lens":"observations")
+      assert received_context.tools == tools
+      assert Map.drop(received_context, [:tools]) == Map.merge(tool_context, %{operator_id: "operator-one"})
     end
 
     test "and the current step is the only step exposed to inference", context do
