@@ -2,7 +2,7 @@ defmodule Gralkor.JidoMemoryJourneyTest do
   @moduledoc """
   End-to-end journey test: real PythonX runtime, real graphiti-core, real
   embedded falkordblite. Both sides follow the configured inference roles —
-  the Elixir side (distill, interpret, learn) through `Gralkor.Config.llm_model/0`
+  the Elixir side (distill, interpret, reflect) through `Gralkor.Config.llm_model/0`
   and the Python-side graphiti clients (entity/edge extraction, embeddings,
   reranker) through the same `GRALKOR_LLM_MODEL` / `GRALKOR_EMBEDDER_MODEL`
   specs — so the credential this suite needs is whichever provider those
@@ -65,6 +65,7 @@ defmodule Gralkor.JidoMemoryJourneyTest do
     data_dir =
       Path.join(System.tmp_dir!(), "gralkor_journey_#{System.unique_integer([:positive])}")
 
+    original_data_dir = System.get_env("GRALKOR_DATA_DIR")
     File.mkdir_p!(data_dir)
     System.put_env("GRALKOR_DATA_DIR", data_dir)
 
@@ -94,7 +95,14 @@ defmodule Gralkor.JidoMemoryJourneyTest do
          ]}
       )
 
-    on_exit(fn -> File.rm_rf!(data_dir) end)
+    on_exit(fn ->
+      File.rm_rf!(data_dir)
+
+      case original_data_dir do
+        nil -> System.delete_env("GRALKOR_DATA_DIR")
+        value -> System.put_env("GRALKOR_DATA_DIR", value)
+      end
+    end)
 
     %{group_id: "journey_#{System.unique_integer([:positive])}"}
   end
