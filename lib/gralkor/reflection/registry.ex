@@ -4,6 +4,37 @@ defmodule Gralkor.Reflection.Registry do
   alias Gralkor.Reflection
   alias Gralkor.Reflection.ChainOfThought
 
+  @built_in_definitions [
+    [
+      name: "generalisations",
+      chain_of_thought: "priv/reflections/generalisations.yaml",
+      scope: :global
+    ],
+    [name: "erl", chain_of_thought: "priv/reflections/erl.yaml", scope: :operator]
+  ]
+
+  @doc "Returns the application's validated Reflection declarations."
+  def configured! do
+    case Application.get_env(:jido_gralkor, :reflections, @built_in_definitions) do
+      reflections when is_list(reflections) ->
+        if Enum.all?(reflections, &match?(%Reflection{}, &1)) do
+          reflections
+        else
+          root =
+            Application.get_env(
+              :jido_gralkor,
+              :reflection_root,
+              Application.app_dir(:jido_gralkor)
+            )
+
+          load!(reflections, root: root)
+        end
+
+      invalid ->
+        raise ArgumentError, "invalid Reflection declarations: #{inspect(invalid)}"
+    end
+  end
+
   def load(definitions, opts \\ [])
 
   def load(definitions, opts) when is_list(definitions) do
