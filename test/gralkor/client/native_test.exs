@@ -214,6 +214,20 @@ defmodule Gralkor.Client.NativeTest do
   describe "when a grouped session captures messages with agent and user names" do
     setup :start_capture_buffer
 
+    setup do
+      original = Application.get_env(:jido_gralkor, :ontology)
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :ontology)
+          value -> Application.put_env(:jido_gralkor, :ontology, value)
+        end
+      end)
+
+      Application.delete_env(:jido_gralkor, :ontology)
+      :ok
+    end
+
     test "then the group is sanitised before it is buffered" do
       msgs = [Message.new("user", "hi")]
 
