@@ -237,5 +237,4 @@ defmodule Gralkor.Client.Native do
     raise ArgumentError,
           "Gralkor.Client.Native: ontology must be a module or nil, got #{inspect(other)}"
   end
-
 end

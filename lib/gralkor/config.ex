@@ -96,8 +96,12 @@ defmodule Gralkor.Config do
   @spec ontology() :: module() | nil
   def ontology do
     case Application.get_env(:jido_gralkor, :ontology) do
-      nil -> nil
-      module when is_atom(module) -> validate_ontology_module!(module)
+      nil ->
+        nil
+
+      module when is_atom(module) ->
+        validate_ontology_module!(module)
+
       other ->
         raise ArgumentError,
               ":jido_gralkor, :ontology must be a module declared via `use Gralkor.Ontology` (or nil), got #{inspect(other)}"
