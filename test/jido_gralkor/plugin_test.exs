@@ -88,7 +88,7 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  describe "when mount selects an ingestion Lens, Lenses to search, and an optional generalising Lens" do
+  describe "when mount selects an ingestion Lens and Lenses to search" do
     test "then those selections are resolved against the application Lens registry and stored on the plugin state" do
       configure_lenses()
 
@@ -97,7 +97,6 @@ defmodule JidoGralkor.PluginTest do
                 agent_name: "Susu",
                 ingestion_lens: "observations",
                 search_lenses: ["observations", "global"],
-                generalise_lens: "generalisations",
                 lens: %Gralkor.Lens{
                   name: "observations",
                   ontology: LensOntology,
@@ -108,8 +107,7 @@ defmodule JidoGralkor.PluginTest do
                Plugin.mount(%{id: "operator-one", state: %{}},
                  agent_name: "Susu",
                  ingestion_lens: "observations",
-                 search_lenses: ["observations", "global"],
-                 generalise_lens: "generalisations"
+                 search_lenses: ["observations", "global"]
                )
     end
 
@@ -154,30 +152,6 @@ defmodule JidoGralkor.PluginTest do
           agent_name: "Susu",
           ingestion_lens: "observations",
           search_lenses: ["missing"]
-        )
-      end
-    end
-
-    test "if a generalising Lens is unknown then mounting raises an ArgumentError identifying the unknown Lens" do
-      configure_lenses()
-
-      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
-        Plugin.mount(%{id: "operator-one", state: %{}},
-          agent_name: "Susu",
-          ingestion_lens: "observations",
-          generalise_lens: "missing"
-        )
-      end
-    end
-
-    test "if the generalising Lens duplicates the ingestion Lens then mounting raises an ArgumentError identifying that the Lenses must differ" do
-      configure_lenses()
-
-      assert_raise ArgumentError, ~r/generalise_lens must differ/, fn ->
-        Plugin.mount(%{id: "operator-one", state: %{}},
-          agent_name: "Susu",
-          ingestion_lens: "observations",
-          generalise_lens: "observations"
         )
       end
     end
@@ -297,7 +271,7 @@ defmodule JidoGralkor.PluginTest do
         )
 
       assert {:ok, :continue} = Plugin.handle_signal(completed, context(completion_agent))
-      assert [[_, _, _, _, _, "observations", ["generalisations"]]] = InMemory.captures()
+      assert [[_, _, _, _, _, "observations", [], _reflection_context]] = InMemory.captures()
 
       InMemory.reset()
       InMemory.set_capture(:ok)
@@ -306,7 +280,7 @@ defmodule JidoGralkor.PluginTest do
         Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
 
       assert {:ok, :continue} = Plugin.handle_signal(failed, context(completion_agent))
-      assert [[_, _, _, _, _, "observations", ["generalisations"]]] = InMemory.captures()
+      assert [[_, _, _, _, _, "observations", [], _reflection_context]] = InMemory.captures()
     end
   end
 
@@ -497,7 +471,7 @@ defmodule JidoGralkor.PluginTest do
   end
 
   describe "when an agent turn completes > while a thread has committed to agent state > where the plugin was mounted with Lens selections" do
-    test "then the capture also carries the selected Lens and the optional generalising Lens" do
+    test "then the capture carries the selected Lens" do
       InMemory.set_capture(:ok)
       plugin_state = lens_plugin_state()
       request_id = "request-lens-capture"
@@ -530,7 +504,8 @@ defmodule JidoGralkor.PluginTest do
                  "Eli",
                  _messages,
                  "observations",
-                 ["generalisations"]
+                 [],
+                 _reflection_context
                ]
              ] = InMemory.captures()
     end
@@ -754,8 +729,7 @@ defmodule JidoGralkor.PluginTest do
       Plugin.mount(%{id: "operator-one", state: %{}},
         agent_name: "Susu",
         ingestion_lens: "observations",
-        search_lenses: ["observations", "global"],
-        generalise_lens: "generalisations"
+        search_lenses: ["observations", "global"]
       )
 
     plugin_state
@@ -776,12 +750,6 @@ defmodule JidoGralkor.PluginTest do
         ontology: LensOntology,
         scope: :operator,
         ingestion: Gralkor.Lens.Ingestion.Store
-      ],
-      [
-        name: "generalisations",
-        ontology: LensOntology,
-        scope: :global,
-        ingestion: Gralkor.Lens.Ingestion.Generalise
       ]
     ])
   end
