@@ -96,7 +96,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test(
       "and every Reflection destination is named by its Reflection and has operator or global scope then validation succeeds",
-      context, do: assert_valid(context))
+      context,
+      do: assert_valid(context)
+    )
 
     test "if a Reflection name is blank then validation fails identifying the blank name", %{
       root: root
@@ -679,7 +681,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert {:ok, :scheduled} =
                Scheduler.schedule(
                  [reflection(context, "one"), reflection(context, "two")],
-                 ingestion(), runner: runner, notify: self())
+                 ingestion(),
+                 runner: runner,
+                 notify: self()
+               )
 
       assert_receive {:reflection_completed, "one", {:error, :failure}}
       assert_receive {:reflection_completed, "two", {:error, :failure}}
