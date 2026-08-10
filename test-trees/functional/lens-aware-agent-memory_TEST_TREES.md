@@ -26,8 +26,6 @@ if a mounted plugin receives invalid Lens configuration
   then mounting fails before the plugin handles an agent signal
   and an unknown ingestion Lens is identified
   and an unknown Lens to search is identified
-  and an unknown generalising Lens is identified
-  and a generalising Lens that duplicates the ingestion Lens is identified
   and Lens options without an ingestion Lens identify the required ingestion Lens
   and the removed `:default_lens` option identifies `:ingestion_lens` as its replacement
   and a non-list Lens search selection is identified
