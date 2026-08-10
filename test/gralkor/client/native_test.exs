@@ -638,6 +638,7 @@ defmodule Gralkor.Client.NativeTest do
 
     test "then jido_gralkor's built-in ontology is applied, so a caller neither supplies nor configures one",
          %{g: g} do
+      Code.ensure_loaded!(Native)
       assert function_exported?(Native, :memory_add, 3)
       refute function_exported?(Native, :memory_add, 4)
       Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
