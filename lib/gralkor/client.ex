@@ -133,7 +133,8 @@ defmodule Gralkor.Client do
         schedule_direct_reflections(request, representations)
         :ok
 
-      {:error, _} = error -> error
+      {:error, _} = error ->
+        error
     end
   end
 
@@ -154,7 +155,8 @@ defmodule Gralkor.Client do
         }
 
         case lens.ingestion.ingest(request, store) do
-          :ok -> {:ok, collect_representations(collection_ref, [])}
+          :ok ->
+            {:ok, collect_representations(collection_ref, [])}
 
           {:error, _} = error ->
             _discarded = collect_representations(collection_ref, [])
@@ -191,7 +193,8 @@ defmodule Gralkor.Client do
       }
 
       case ReflectionScheduler.schedule(ReflectionRegistry.configured!(), ingestion) do
-        {:ok, _} -> :ok
+        {:ok, _} ->
+          :ok
 
         {:error, reason} ->
           Logger.warning(
