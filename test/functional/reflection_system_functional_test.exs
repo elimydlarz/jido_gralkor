@@ -982,6 +982,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       {:error, :done}
     end
 
+  defp representation_callback(parent) do
+    fn _operator_id, _agent_name, _user_name, lens, _turns ->
+      send(parent, {:lens_stored, lens})
+
+      {:ok,
+       %{
+         id: "representation-#{lens}",
+         evidence_id: "evidence-shared",
+         lens: lens,
+         content: "stored through #{lens}"
+       }}
+    end
+  end
+
   defp stored_artefact(context) do
     reflection = reflection(context)
     {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
