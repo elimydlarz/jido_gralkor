@@ -32,8 +32,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
       :client,
       :lenses,
       :lens_storage,
-      :generalise_hypothesise_fn,
-      :generalise_min_confidence
+      :reflections
     ]
 
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
@@ -48,6 +47,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
     start_supervised!(Gralkor.Lens.Storage.InMemory)
     Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+    Application.put_env(:jido_gralkor, :reflections, [])
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
@@ -61,20 +61,8 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
         ontology: MemoryOntology,
         scope: :operator,
         ingestion: StoreIngestion
-      ],
-      [
-        name: "generalisations",
-        ontology: MemoryOntology,
-        scope: :global,
-        ingestion: Gralkor.Lens.Ingestion.Generalise
       ]
     ])
-
-    Application.put_env(:jido_gralkor, :generalise_hypothesise_fn, fn _prompt ->
-      {:ok, [%{content: "Eli consistently prefers Friday launches.", confidence: 0.9}]}
-    end)
-
-    Application.put_env(:jido_gralkor, :generalise_min_confidence, 0.3)
 
     start_supervised!(
       {Gralkor.CaptureBuffer,
@@ -92,8 +80,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  ingestion_lens: "observations",
-                 search_lenses: ["observations", "decisions", "global"],
-                 generalise_lens: "generalisations"
+                 search_lenses: ["observations", "decisions", "global"]
                )
 
       assert plugin_state.lens == Client.lens!("observations")
@@ -197,12 +184,6 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
 
       assert :ok = Gralkor.Client.Native.flush_and_await("session-one", 1_000)
 
-      assert Enum.any?(
-               Gralkor.Lens.Storage.InMemory.episodes(:global),
-               &(&1.lens == "generalisations" and
-                   String.contains?(&1.content, "Friday launches"))
-             )
-
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-two",
@@ -231,7 +212,6 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
       assert result =~ "The default launch memory."
       assert result =~ "The launch window moved to Friday."
       assert result =~ "We chose Friday."
-      assert result =~ "Eli consistently prefers Friday launches."
       refute result =~ "Another operator's local launch memory."
 
       assert {:ok, operator_one_results} =
