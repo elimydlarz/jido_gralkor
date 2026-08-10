@@ -44,6 +44,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get(_, _, _), do: {:error, :destination_unavailable}
   end
 
+  defmodule ReflectionLiveProbe do
+    use Jido.Action,
+      name: "reflection_live_probe",
+      description:
+        "Return the fixed verification token for the supplied seed. Call exactly when instructed.",
+      schema: [seed: [type: :string, required: true]]
+
+    @impl true
+    def run(%{seed: seed}, context) do
+      send(Map.fetch!(context, :probe_pid), {:reflection_live_probe, seed})
+      {:ok, %{token: "TOOL-RESULT-29", received_seed: seed}}
+    end
+  end
+
   setup do
     root =
       Path.join(System.tmp_dir!(), "gralkor-reflection-#{System.unique_integer([:positive])}")
