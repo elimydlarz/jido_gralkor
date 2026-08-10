@@ -288,7 +288,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       start_supervised!(
         {CaptureBuffer,
          flush_callback: fn _, _, _, _, _ -> :ok end,
-         lens_flush_callback: representation_callback(parent),
+         lens_flush_callback: variable_representation_callback(parent),
          reflection_callback: fn _reflections, ingestion ->
            send(parent, {:reflection_started, ingestion})
            Process.sleep(150)
@@ -346,7 +346,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_receive {:scheduled, ["one", "two"],
                       %{intended_lenses: ["observations", "decisions"], representations: reps}}
 
-      assert Enum.map(reps, & &1.lens) == ["observations", "decisions"]
+      assert Enum.map(reps, & &1.lens) == ["observations", "observations"]
       refute_receive {:scheduled, _, _}
     end
 
@@ -1027,6 +1027,30 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
            content: "stored through #{lens}"
          }
        ]}
+    end
+  end
+
+  defp variable_representation_callback(parent) do
+    fn _operator_id, _agent_name, _user_name, lens, _turns ->
+      send(parent, {:lens_stored, lens})
+
+      representations =
+        case lens do
+          "observations" ->
+            for suffix <- ["one", "two"] do
+              %{
+                id: "representation-#{suffix}",
+                evidence_id: "evidence-shared",
+                lens: lens,
+                content: "stored output #{suffix}"
+              }
+            end
+
+          "decisions" ->
+            []
+        end
+
+      {:ok, representations}
     end
   end
 
