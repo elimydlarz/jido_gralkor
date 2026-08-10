@@ -174,60 +174,6 @@ defmodule Gralkor.Client.Native do
     end
   end
 
-  @doc """
-  Turn one turn into a `Gralkor.AgentLearning` via the configured LLM. Wired
-  into the CaptureBuffer flush callback as the `learn_fn` dep — the flush path
-  calls it for every captured turn (learning is unconditional).
-  """
-  def learn(turn, agent_name, user_name) do
-    Learn.learn(turn, learn_llm_fn(), agent_name, user_name)
-  end
-
-  defp learn_llm_fn do
-    model = Config.llm_model()
-    schema = Learn.learn_schema()
-
-    fn prompt ->
-      case ReqLLM.generate_object(model, prompt, schema) do
-        {:ok, response} -> {:ok, ReqLLM.Response.object(response)}
-        {:error, _} = err -> err
-      end
-    end
-  end
-
-  # ERL recall (§1): the learning search uses graphiti NODE search filtered to
-  # the plugin's Learning custom-entity nodes (node_labels: ["Learning"]), seeded
-  # with the raw user query. Node search — not edge search — because a Learning is
-  # a custom-entity NODE; edge search's node_labels filter matches edges by
-  # endpoint and misses standalone Learning nodes. Unconditional on every recall
-  # (see ex-recall > orchestration > learning search). Degrades to [] on failure;
-  # Recall.await_aux owns the 5s yield + the [:ok, facts] shape.
-  defp learning_search_fn do
-    fn group_id, query, max_results ->
-      case GraphitiPool.search_nodes(GraphitiPool, group_id, query, max_results,
-             node_labels: ["Learning"]
-           ) do
-        {:ok, nodes} -> {:ok, Enum.map(nodes, &format_learning_node/1)}
-        {:error, _} = err -> err
-      end
-    end
-  end
-
-  defp format_learning_node(%{name: name, summary: summary, attributes: attrs}) do
-    detail =
-      ["lesson", "approach", "problem_kind"]
-      |> Enum.map(fn k -> {k, Map.get(attrs, k)} end)
-      |> Enum.reject(fn {_k, v} -> v in [nil, "", "None"] end)
-      |> Enum.map_join("; ", fn {k, v} -> "#{k}: #{v}" end)
-
-    body = if summary in [nil, ""], do: name, else: summary
-
-    case detail do
-      "" -> "- learning — #{body}"
-      _ -> "- learning — #{body} (#{detail})"
-    end
-  end
-
   @doc false
   def interpret_callback, do: interpret_fn()
 
@@ -245,78 +191,6 @@ defmodule Gralkor.Client.Native do
     do: [max_tokens: output_token_budget]
 
   defp turns_fn, do: &CaptureBuffer.turns_for/1
-
-  defp hypothesise_gen_fn do
-    model = Config.llm_model()
-    schema = Generalise.hypothesise_schema()
-
-    fn prompt ->
-      case ReqLLM.generate_object(model, prompt, schema) do
-        {:ok, response} ->
-          object = ReqLLM.Response.object(response)
-
-          candidates =
-            Map.get(object, :generalisations) || Map.get(object, "generalisations") || []
-
-          {:ok, candidates}
-
-        {:error, _} = err ->
-          err
-      end
-    end
-  end
-
-  @doc false
-  def generalise_hypothesise_callback, do: hypothesise_gen_fn()
-
-  defp evaluate_gen_fn do
-    model = Config.llm_model()
-    schema = Generalise.evaluate_schema()
-
-    fn prompt ->
-      case ReqLLM.generate_object(model, prompt, schema) do
-        {:ok, response} ->
-          object = ReqLLM.Response.object(response)
-          decisions = Map.get(object, :decisions) || Map.get(object, "decisions") || []
-          {:ok, decisions}
-
-        {:error, _} = err ->
-          err
-      end
-    end
-  end
-
-  defp search_gen_fn do
-    fn gen_group_id, query, max_results ->
-      case GraphitiPool.search_episodes(GraphitiPool, gen_group_id, query, max_results) do
-        {:ok, episodes} -> {:ok, Enum.map(episodes, &Map.fetch!(&1, :content))}
-        {:error, _} = err -> err
-      end
-    end
-  end
-
-  @doc false
-  def generalisation_search_callback, do: search_gen_fn()
-
-  defp gen_recall_search_fn do
-    fn group_id, query, max_results ->
-      sanitized = Client.sanitize_group_id(group_id)
-      gen_group_id = "#{sanitized}_gen"
-
-      case GraphitiPool.search_nodes(GraphitiPool, gen_group_id, query, max_results) do
-        {:ok, nodes} ->
-          {:ok, Enum.map(nodes, &format_generalisation_node/1)}
-
-        {:error, _} = err ->
-          err
-      end
-    end
-  end
-
-  defp format_generalisation_node(%{name: name, summary: summary}) do
-    body = if summary in [nil, ""], do: name, else: summary
-    "<generalisation> #{body}"
-  end
 
   defp raise_if_blank!(field, value) when is_binary(value) do
     if String.trim(value) == "" do
