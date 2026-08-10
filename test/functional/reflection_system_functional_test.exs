@@ -262,18 +262,24 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert {:ok,
               [
                 %Gralkor.IngestedRepresentation{
+                  id: first_id,
                   evidence_id: "ev-1",
                   lens: "observations",
                   content: "first lensed: fact one",
                   result: :ok
                 },
                 %Gralkor.IngestedRepresentation{
+                  id: second_id,
                   evidence_id: "ev-1",
                   lens: "observations",
                   content: "second lensed: fact one",
                   result: :ok
                 }
               ]} = Client.ingest_with_representation(request)
+
+      assert is_binary(first_id) and first_id != ""
+      assert is_binary(second_id) and second_id != ""
+      refute first_id == second_id
 
       assert Enum.map(
                Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "observations"}),
