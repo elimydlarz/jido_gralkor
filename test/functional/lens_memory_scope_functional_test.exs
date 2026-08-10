@@ -29,12 +29,10 @@ defmodule Gralkor.LensMemoryScopeFunctionalTest do
 
   setup do
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
-    previous_ontology = Application.get_env(:jido_gralkor, :ontology)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
 
     start_supervised!(Gralkor.Lens.Storage.InMemory)
 
-    Application.put_env(:jido_gralkor, :ontology, MemoryOntology)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
 
     Application.put_env(:jido_gralkor, :lenses, [
@@ -46,7 +44,6 @@ defmodule Gralkor.LensMemoryScopeFunctionalTest do
 
     on_exit(fn ->
       restore_env(:lenses, previous_lenses)
-      restore_env(:ontology, previous_ontology)
       restore_env(:lens_storage, previous_storage)
     end)
 

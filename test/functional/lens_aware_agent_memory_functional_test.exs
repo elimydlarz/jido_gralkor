@@ -31,13 +31,11 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     previous_client = Application.get_env(:jido_gralkor, :client)
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
-    previous_ontology = Application.get_env(:jido_gralkor, :ontology)
 
     start_supervised!(Gralkor.Lens.Storage.InMemory)
 
     Application.put_env(:jido_gralkor, :client, InMemory)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-    Application.put_env(:jido_gralkor, :ontology, MemoryOntology)
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
@@ -61,7 +59,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       restore_env(:client, previous_client)
       restore_env(:lenses, previous_lenses)
       restore_env(:lens_storage, previous_storage)
-      restore_env(:ontology, previous_ontology)
     end)
 
     :ok
