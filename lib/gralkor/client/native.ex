@@ -215,5 +215,4 @@ defmodule Gralkor.Client.Native do
     raise ArgumentError,
           "Gralkor.Client.Native: #{field} must be a non-blank string, got #{inspect(value)}"
   end
-
 end
