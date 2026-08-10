@@ -79,7 +79,14 @@ defmodule Gralkor.Reflection.Runner do
   end
 
   defp execute_tool(call, request, executor) do
-    result = executor.(call, %{reflection: request.reflection, operator_id: request.operator_id})
+    result =
+      executor.(call, %{
+        reflection: request.reflection,
+        operator_id: request.operator_id,
+        tools: request.tools,
+        tool_context: request.tool_context
+      })
+
     %{call: call, result: result}
   end
 
@@ -118,7 +125,10 @@ defmodule Gralkor.Reflection.Runner do
   # Jido.AI's standalone tool action owns the provider conversation and executes
   # every configured action until a final answer is produced. The final answer
   # is JSON because the step prompt includes its exact declared contract.
-  def default_inference(request) do
+  def default_inference(request), do: default_inference(request, &Jido.Exec.run/3)
+
+  @doc false
+  def default_inference(request, call_with_tools) when is_function(call_with_tools, 3) do
     prompt = """
     #{request.directions}
 
@@ -131,7 +141,7 @@ defmodule Gralkor.Reflection.Runner do
     tool_context = Map.put_new(request.tool_context, :operator_id, request.operator_id)
     context = %{tools: request.tools, tool_context: tool_context}
 
-    case Jido.Exec.run(
+    case call_with_tools.(
            Jido.AI.Actions.ToolCalling.CallWithTools,
            %{prompt: prompt, auto_execute: true, model: model_spec},
            context
@@ -155,11 +165,11 @@ defmodule Gralkor.Reflection.Runner do
   defp default_tool_executor(call, context) do
     name = field(call, :name)
     args = field(call, :arguments) || %{}
-    tools = Map.get(context, :tools, %{})
+    tools = context |> Map.get(:tools, %{}) |> Jido.AI.ToolAdapter.to_action_map()
 
     case Map.get(tools, name) do
       nil -> {:error, {:unknown_tool, name}}
-      module -> Jido.Exec.run(module, args, context)
+      module -> Jido.Exec.run(module, args, Map.get(context, :tool_context, %{}))
     end
   end
 end

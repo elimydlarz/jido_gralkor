@@ -176,11 +176,27 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
 
     test "and receives the complete tool set available to the host agent", context do
-      parent = self()
       tools = [JidoGralkor.Actions.MemorySearch, JidoGralkor.Actions.MemoryAdd]
-      inference = fn request -> send(parent, {:tools, request.tools}); output_for(request) end
-      assert {:ok, _} = Runner.run(reflection(context), ingestion(), inference: inference, tools: tools)
-      assert_receive {:tools, ^tools}
+      tool_context = %{session_id: "session-one", custom: "kept"}
+
+      request = %{
+        directions: "Use memory.",
+        output_schema: %{"artefact" => "string"},
+        tools: tools,
+        tool_context: tool_context,
+        operator_id: "operator-one"
+      }
+
+      call = fn Jido.AI.Actions.ToolCalling.CallWithTools, params, received ->
+        send(self(), {:default_inference, params, received})
+        {:ok, %{text: ~s({"artefact":"done"})}}
+      end
+
+      assert {:ok, %{output: %{"artefact" => "done"}}} = Runner.default_inference(request, call)
+      assert_receive {:default_inference, %{auto_execute: true, model: model}, %{tools: ^tools, tool_context: received_context}}
+      configured = Gralkor.Config.llm_model()
+      assert model == "#{configured.provider}:#{configured.id}"
+      assert received_context == Map.put(tool_context, :operator_id, "operator-one")
     end
 
     test "and the current step is the only step exposed to inference", context do
