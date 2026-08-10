@@ -26,4 +26,10 @@ defmodule Gralkor.Reflection.Storage.InMemory do
 
     {:ok, results}
   end
+
+  @impl true
+  def get(reflection, operator_id, artefact_id) do
+    destination = Store.destination(reflection, operator_id)
+    {:ok, Agent.get(__MODULE__, &Enum.find(Map.get(&1, destination, []), fn artefact -> artefact.id == artefact_id end))}
+  end
 end

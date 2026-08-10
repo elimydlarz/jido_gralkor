@@ -12,6 +12,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     @behaviour Gralkor.Reflection.Store
     def put(_, _, _), do: {:error, :destination_unavailable}
     def search(_, _, _, _), do: {:error, :destination_unavailable}
+    def get(_, _, _), do: {:error, :destination_unavailable}
   end
 
   setup do

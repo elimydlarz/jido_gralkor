@@ -19,6 +19,14 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
     end
   end
 
+  @impl true
+  def get(reflection, operator_id, artefact_id) do
+    case search(reflection, operator_id, artefact_id, 20) do
+      {:ok, artefacts} -> {:ok, Enum.find(artefacts, &(&1.id == artefact_id))}
+      {:error, _} = error -> error
+    end
+  end
+
   defp group_id(reflection, operator_id) do
     Store.destination(reflection, operator_id)
     |> :erlang.term_to_binary()

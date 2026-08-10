@@ -7,6 +7,8 @@ defmodule Gralkor.Reflection.Store do
   @callback put(Reflection.t(), String.t(), Artefact.t()) :: :ok | {:error, term()}
   @callback search(Reflection.t(), String.t(), String.t(), pos_integer()) ::
               {:ok, [Artefact.t()]} | {:error, term()}
+  @callback get(Reflection.t(), String.t(), String.t()) ::
+              {:ok, Artefact.t() | nil} | {:error, term()}
 
   def put(%Reflection{} = reflection, operator_id, %Artefact{} = artefact, opts \\ []) do
     storage(opts).put(reflection, operator_id, artefact)
@@ -19,8 +21,14 @@ defmodule Gralkor.Reflection.Store do
         max_results = Keyword.get(opts, :max_results, 20)
         artefact_id = Keyword.get(opts, :artefact_id)
 
-        with {:ok, results} <- storage(opts).search(reflection, operator_id, query, max_results) do
-          {:ok, if(artefact_id, do: Enum.filter(results, &(&1.id == artefact_id)), else: results)}
+        if artefact_id do
+          case storage(opts).get(reflection, operator_id, artefact_id) do
+            {:ok, nil} -> {:ok, []}
+            {:ok, artefact} -> {:ok, [artefact]}
+            {:error, _} = error -> error
+          end
+        else
+          storage(opts).search(reflection, operator_id, query, max_results)
         end
     end
   end

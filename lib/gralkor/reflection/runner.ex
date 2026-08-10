@@ -9,6 +9,7 @@ defmodule Gralkor.Reflection.Runner do
     inference = Keyword.get(opts, :inference, &default_inference/1)
     tool_executor = Keyword.get(opts, :tool_executor, &default_tool_executor/2)
     tools = Keyword.get(opts, :tools, [])
+    tool_context = Keyword.get(opts, :tool_context, %{})
 
     result =
       Enum.reduce_while(reflection.chain_of_thought.steps, {:ok, %{}}, fn step, {:ok, outputs} ->
@@ -22,6 +23,7 @@ defmodule Gralkor.Reflection.Runner do
           directions: directions,
           output_schema: step.output,
           tools: tools,
+          tool_context: tool_context,
           tool_results: []
         }
 
@@ -124,11 +126,14 @@ defmodule Gralkor.Reflection.Runner do
     #{Jason.encode!(request.output_schema)}
     """
 
-    context = %{tools: request.tools, tool_context: %{operator_id: request.operator_id}}
+    model = Gralkor.Config.llm_model()
+    model_spec = "#{model.provider}:#{model.id}"
+    tool_context = Map.put_new(request.tool_context, :operator_id, request.operator_id)
+    context = %{tools: request.tools, tool_context: tool_context}
 
     case Jido.Exec.run(
            Jido.AI.Actions.ToolCalling.CallWithTools,
-           %{prompt: prompt, auto_execute: true},
+           %{prompt: prompt, auto_execute: true, model: model_spec},
            context
          ) do
       {:ok, %{type: :error, reason: reason}} -> {:error, reason}

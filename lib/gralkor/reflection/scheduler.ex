@@ -14,28 +14,31 @@ defmodule Gralkor.Reflection.Scheduler do
   end
 
   @impl true
-  def init(_opts), do: {:ok, MapSet.new()}
+  def init(_opts) do
+    {:ok, supervisor} = Task.Supervisor.start_link()
+    {:ok, %{scheduled: MapSet.new(), task_supervisor: supervisor}}
+  end
 
   @impl true
-  def handle_call({:schedule, reflections, ingestion, opts}, _from, scheduled) do
+  def handle_call({:schedule, reflections, ingestion, opts}, _from, state) do
     id = field(ingestion, :id)
 
     cond do
-      not completed?(ingestion) -> {:reply, {:error, {:incomplete_ingestion, id}}, scheduled}
-      MapSet.member?(scheduled, id) -> {:reply, {:ok, :already_scheduled}, scheduled}
+      not completed?(ingestion) -> {:reply, {:error, {:incomplete_ingestion, id}}, state}
+      MapSet.member?(state.scheduled, id) -> {:reply, {:ok, :already_scheduled}, state}
       true ->
-        Enum.each(reflections, &start_reflection(&1, ingestion, opts))
-        {:reply, {:ok, :scheduled}, MapSet.put(scheduled, id)}
+        Enum.each(reflections, &start_reflection(state.task_supervisor, &1, ingestion, opts))
+        {:reply, {:ok, :scheduled}, %{state | scheduled: MapSet.put(state.scheduled, id)}}
     end
   end
 
-  defp start_reflection(reflection, ingestion, opts) do
+  defp start_reflection(task_supervisor, reflection, ingestion, opts) do
     runner = Keyword.get(opts, :runner, &Runner.run/3)
     runner_opts = Keyword.get(opts, :runner_opts, [])
     store_opts = Keyword.get(opts, :store_opts, [])
     notify = Keyword.get(opts, :notify)
 
-    Task.start(fn ->
+    Task.Supervisor.start_child(task_supervisor, fn ->
       outcome =
         case runner.(reflection, ingestion, runner_opts) do
           {:ok, artefact} ->
