@@ -131,19 +131,8 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "when a canonical turn is captured for a named session, group, agent and user > while its messages have user, assistant or behaviour roles" do
-        test "then the write uses the deployment ontology without a caller ontology argument" do
+        test "then the write uses implicit-default memory without a caller ontology argument" do
           unquote(setup_block).()
-
-          original_ontology = Application.get_env(:jido_gralkor, :ontology)
-
-          on_exit(fn ->
-            case original_ontology do
-              nil -> Application.delete_env(:jido_gralkor, :ontology)
-              value -> Application.put_env(:jido_gralkor, :ontology, value)
-            end
-          end)
-
-          Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
           configure_capture(:ok)
 
           assert :ok =
@@ -155,15 +144,8 @@ defmodule Gralkor.ClientContract do
                      [Gralkor.Message.new("user", "hi")]
                    )
 
-          # capture/5 gives the caller no way to pass an ontology — the
-          # recorded call carries only the five arguments the caller supplied.
           assert [["session-1", "group-1", "TestAgent", "Eli", _turn]] =
                    Gralkor.Client.InMemory.captures()
-
-          # which is exactly why the write must be the one reaching for the
-          # deployment-configured ontology — the single source of truth every
-          # write path resolves it from.
-          assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
         end
 
         test "and the turn is learned at flush with no per-turn flag" do
@@ -382,110 +364,13 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "when memory is added with a group, content and a source description" do
-        test "then the write applies the deployment-configured ontology, so a caller is never required to supply one" do
+        test "then the write uses implicit-default memory, so a caller neither supplies nor configures an ontology" do
           unquote(setup_block).()
-
-          original_ontology = Application.get_env(:jido_gralkor, :ontology)
-
-          on_exit(fn ->
-            case original_ontology do
-              nil -> Application.delete_env(:jido_gralkor, :ontology)
-              value -> Application.put_env(:jido_gralkor, :ontology, value)
-            end
-          end)
-
-          Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
           configure_memory_add(:ok)
 
           assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual")
-
-          # memory_add/3 gives the caller no way to pass an ontology — the
-          # recorded call carries only the three arguments the caller supplied.
           assert [["group-1", "Eli prefers concise", "manual"]] =
                    Gralkor.Client.InMemory.adds()
-
-          # which is exactly why the write must be the one reaching for the
-          # deployment-configured ontology — the single source of truth every
-          # write path resolves it from.
-          assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
-        end
-      end
-
-      describe "when memory is added with a group, content and a source description > where an ontology override is supplied > while the backend acknowledges the add" do
-        test "then success is returned" do
-          unquote(setup_block).()
-          configure_memory_add(:ok)
-
-          assert :ok =
-                   client().memory_add(
-                     "group-1",
-                     "Eli prefers concise",
-                     "manual",
-                     Gralkor.TestOntologies.Strict
-                   )
-        end
-      end
-
-      describe "when memory is added with a group, content and a source description > where an ontology override is supplied > if the backend fails" do
-        test "then that failure is returned unchanged" do
-          unquote(setup_block).()
-          configure_memory_add({:error, :extract_failed})
-
-          assert {:error, :extract_failed} =
-                   client().memory_add("group-1", "x", nil, Gralkor.TestOntologies.Strict)
-        end
-      end
-
-      describe "when memory is added with a group, content and a source description > where an ontology override is supplied" do
-        test "then the override is applied to the write" do
-          unquote(setup_block).()
-
-          original_ontology = Application.get_env(:jido_gralkor, :ontology)
-
-          on_exit(fn ->
-            case original_ontology do
-              nil -> Application.delete_env(:jido_gralkor, :ontology)
-              value -> Application.put_env(:jido_gralkor, :ontology, value)
-            end
-          end)
-
-          # The deployment default is configured to Strict; the caller
-          # overrides to nil ("no ontology") for this one write.
-          Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
-          configure_memory_add(:ok)
-
-          assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual", nil)
-
-          # the write receives exactly the override, not the deployment default …
-          assert [["group-1", "Eli prefers concise", "manual", nil]] =
-                   Gralkor.Client.InMemory.adds()
-
-          assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
-        end
-
-        test "and the deployment-configured ontology is not consulted" do
-          unquote(setup_block).()
-          original_ontology = Application.get_env(:jido_gralkor, :ontology)
-
-          on_exit(fn ->
-            case original_ontology do
-              nil -> Application.delete_env(:jido_gralkor, :ontology)
-              value -> Application.put_env(:jido_gralkor, :ontology, value)
-            end
-          end)
-
-          Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
-          configure_memory_add(:ok)
-
-          assert :ok = client().memory_add("group-1", "content", "manual", nil)
-          assert [["group-1", "content", "manual", nil]] = Gralkor.Client.InMemory.adds()
-          assert Gralkor.Config.ontology() == Gralkor.TestOntologies.Strict
-        end
-
-        test "and this override is the only per-call ontology surface the client exposes" do
-          assert Gralkor.Client.behaviour_info(:callbacks)
-                 |> Enum.filter(fn {name, _arity} -> name == :memory_add end)
-                 |> Enum.sort() == [memory_add: 3, memory_add: 4]
         end
       end
 
