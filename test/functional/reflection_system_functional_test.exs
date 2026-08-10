@@ -289,35 +289,43 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "and the ingestion caller receives success without waiting for Reflection", context do
       reflection = reflection(context)
-      parent = self()
+      configure_reflections([reflection])
 
-      start_supervised!(
-        {CaptureBuffer,
-         flush_callback: fn _, _, _, _, _ -> :ok end,
-         lens_flush_callback: representation_callback(parent),
-         reflection_callback: fn _reflections, ingestion ->
-           send(parent, {:reflection_started, ingestion})
-           Process.sleep(150)
-           :ok
-         end,
-         reflections: [reflection],
-         retries: []}
-      )
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ReflectionEvidenceOntology,
+          scope: :operator,
+          ingestion: EvidenceIngestion
+        ]
+      ])
 
-      :ok =
-        CaptureBuffer.append_lens(
-          "session-async",
-          "operator-one",
-          "Susu",
-          "Eli",
-          "observations",
-          [Message.new("user", "remember")]
-        )
+      scheduled_before =
+        Scheduler
+        |> :sys.get_state()
+        |> Map.fetch!(:scheduled)
+        |> MapSet.size()
 
       started = System.monotonic_time(:millisecond)
-      assert :ok = CaptureBuffer.flush("session-async")
+
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "observations",
+                 content: "direct fact",
+                 source_description: "functional",
+                 evidence_id: "ev-direct"
+               })
+
       assert System.monotonic_time(:millisecond) - started < 100
-      assert_receive {:reflection_started, %{representations: [%{lens: "observations"}]}}
+
+      scheduled_after =
+        Scheduler
+        |> :sys.get_state()
+        |> Map.fetch!(:scheduled)
+        |> MapSet.size()
+
+      assert scheduled_after == scheduled_before + 1
     end
 
     test "and every declared Reflection is scheduled once for the completed ingestion operation",
