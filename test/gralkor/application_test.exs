@@ -7,7 +7,6 @@ defmodule Gralkor.ApplicationTest do
     original_env = System.get_env("GRALKOR_DATA_DIR")
     original_client = Application.get_env(:jido_gralkor, :client)
     original_falkordb = Application.get_env(:jido_gralkor, :falkordb)
-    original_gen_on_flush = Application.get_env(:jido_gralkor, :generalise_on_flush)
 
     on_exit(fn ->
       case original_env do
@@ -25,15 +24,10 @@ defmodule Gralkor.ApplicationTest do
         v -> Application.put_env(:jido_gralkor, :falkordb, v)
       end
 
-      case original_gen_on_flush do
-        nil -> Application.delete_env(:jido_gralkor, :generalise_on_flush)
-        v -> Application.put_env(:jido_gralkor, :generalise_on_flush, v)
-      end
     end)
 
     Application.delete_env(:jido_gralkor, :client)
     Application.delete_env(:jido_gralkor, :falkordb)
-    Application.delete_env(:jido_gralkor, :generalise_on_flush)
 
     test_pid = self()
 
@@ -42,20 +36,13 @@ defmodule Gralkor.ApplicationTest do
       :ok
     end
 
-    learning = %Gralkor.AgentLearning{
-      problem_kind: "deploy timeout",
-      approach: "warm cache at boot",
-      success: true,
-      lesson: "cold caches fail the first health check"
-    }
-
     turn = [
       Gralkor.Message.new("user", "Q"),
       Gralkor.Message.new("behaviour", "thinking"),
       Gralkor.Message.new("assistant", "A")
     ]
 
-    %{recording_add: recording_add, learning: learning, turn: turn}
+    %{recording_add: recording_add, turn: turn}
   end
 
   describe "when the application starts > while neither a remote connection nor a data directory is configured" do
@@ -263,26 +250,6 @@ defmodule Gralkor.ApplicationTest do
       assert :ok = cb.("g", "TestAgent", "Eli", nil, [])
     end
 
-    test "and every captured turn is still learned from in the order it was appended", %{
-      recording_add: add,
-      learning: learning
-    } do
-      learn_fn = fn [%{content: first_content} | _], _agent, _user ->
-        {:ok, %{learning | problem_kind: "learned from #{first_content}"}}
-      end
-
-      cb = App.build_flush_callback(nil, add_episode_fn: add, learn_fn: learn_fn)
-
-      behaviour_only = [Gralkor.Message.new("behaviour", "just thinking")]
-      behaviour_only2 = [Gralkor.Message.new("behaviour", "still thinking")]
-
-      assert :ok = cb.("g1", "Susu", "Eli", nil, [behaviour_only, behaviour_only2])
-      refute_receive {:add, _, _, "captured", _}, 100
-      assert_receive {:add, "g1", body1, "learning", _}
-      assert_receive {:add, "g1", body2, "learning", _}
-      assert body1 =~ "learned from just thinking"
-      assert body2 =~ "learned from still thinking"
-    end
   end
 
   describe "when a capture flush runs" do
