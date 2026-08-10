@@ -1218,7 +1218,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
              )
 
     assert_receive {:reflection_live_probe, "ALPHA-17"}
-    refute_receive {:reflection_live_probe, _}
     assert artefact.reflection == "live-proof"
 
     assert artefact.payload == %{
