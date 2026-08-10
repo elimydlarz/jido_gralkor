@@ -12,7 +12,6 @@ defmodule Gralkor.Client.Native do
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Config
-  alias Gralkor.DefaultOntology
   alias Gralkor.Format
   alias Gralkor.GraphitiPool
   alias Gralkor.Interpret
@@ -66,7 +65,7 @@ defmodule Gralkor.Client.Native do
       group_id,
       agent_name,
       user_name,
-      DefaultOntology,
+      Config.ontology(),
       msgs
     )
   end
@@ -138,9 +137,15 @@ defmodule Gralkor.Client.Native do
 
   @impl Gralkor.Client
   def memory_add(group_id, content, source_description) do
+    memory_add(group_id, content, source_description, Config.ontology())
+  end
+
+  @impl Gralkor.Client
+  def memory_add(group_id, content, source_description, ontology) do
+    raise_unless_ontology_or_nil!(ontology)
     source = source_description || "manual"
 
-    case GraphitiPool.add_episode(group_id, content, source, DefaultOntology) do
+    case GraphitiPool.add_episode(group_id, content, source, ontology) do
       :ok -> :ok
       {:error, _} = err -> err
     end
@@ -214,6 +219,23 @@ defmodule Gralkor.Client.Native do
   defp raise_if_blank!(field, value) do
     raise ArgumentError,
           "Gralkor.Client.Native: #{field} must be a non-blank string, got #{inspect(value)}"
+  end
+
+  defp raise_unless_ontology_or_nil!(nil), do: :ok
+
+  defp raise_unless_ontology_or_nil!(module) when is_atom(module) do
+    if function_exported?(module, :__ontology__, 0) or
+         (Code.ensure_loaded?(module) and function_exported?(module, :__ontology__, 0)) do
+      :ok
+    else
+      raise ArgumentError,
+            "Gralkor.Client.Native: ontology must be a module declared via `use Gralkor.Ontology`, got #{inspect(module)}"
+    end
+  end
+
+  defp raise_unless_ontology_or_nil!(other) do
+    raise ArgumentError,
+          "Gralkor.Client.Native: ontology must be a module or nil, got #{inspect(other)}"
   end
 
 end
