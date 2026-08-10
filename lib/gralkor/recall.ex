@@ -35,8 +35,6 @@ defmodule Gralkor.Recall do
 
   @type opts :: [
           search_fn: search_fn(),
-          gen_search_fn: search_fn(),
-          learning_search_fn: search_fn(),
           interpret_fn: interpret_fn(),
           turns_fn: turns_fn(),
           max_results: pos_integer(),
@@ -93,54 +91,23 @@ defmodule Gralkor.Recall do
 
   defp do_recall(sanitized_group, agent_name, session_id, query, max_results, opts) do
     search_fn = Keyword.fetch!(opts, :search_fn)
-    gen_search_fn = Keyword.get(opts, :gen_search_fn)
-    learning_search_fn = Keyword.get(opts, :learning_search_fn)
     interpret_fn = Keyword.fetch!(opts, :interpret_fn)
     turns_fn = Keyword.fetch!(opts, :turns_fn)
 
     t0 = System.monotonic_time(:millisecond)
     conversation = load_conversation(session_id, turns_fn)
 
-    aux_max = max(div(max_results, 3), 1)
-
-    # The main search is required; gen search and the learning search are
-    # optional auxiliaries — each runs in parallel and degrades to [] on
-    # failure or timeout, so recall always proceeds on the regular facts.
-    # The learning search is seeded with the RAW user query (no LLM
-    # classification) and is expected to bake in the
-    # SearchFilters(node_labels: ["Learning"]) filter at the client wiring
-    # boundary (Gralkor.Client.Native), so only Learning-typed episodes are
-    # returned.
     main_task = Task.async(fn -> search_fn.(sanitized_group, query, max_results) end)
-
-    gen_task =
-      if gen_search_fn do
-        Task.async(fn -> gen_search_fn.(sanitized_group, query, aux_max) end)
-      end
-
-    learning_task =
-      if learning_search_fn do
-        Task.async(fn -> learning_search_fn.(sanitized_group, query, aux_max) end)
-      end
 
     {search_result, search_ms} = time(fn -> Task.await(main_task, :infinity) end)
 
     case search_result do
       {:error, reason} ->
-        shutdown_aux(gen_task)
-        shutdown_aux(learning_task)
         {:error, reason}
 
       {:ok, facts} when is_list(facts) ->
-        combined =
-          facts ++
-            await_auxiliary_searches([
-              {gen_task, "gen search"},
-              {learning_task, "learning search"}
-            ])
-
         {body, n_facts, interpret_ms} =
-          interpret_combined(combined, conversation, query, interpret_fn, agent_name, opts)
+          interpret_combined(facts, conversation, query, interpret_fn, agent_name, opts)
 
         %{
           block: wrap(body),
@@ -149,36 +116,6 @@ defmodule Gralkor.Recall do
           interpret_ms: interpret_ms,
           total_ms: System.monotonic_time(:millisecond) - t0
         }
-    end
-  end
-
-  defp shutdown_aux(nil), do: :ok
-  defp shutdown_aux(task), do: Task.shutdown(task, :brutal_kill)
-
-  defp await_auxiliary_searches(tasks) do
-    labelled_tasks = Enum.reject(tasks, fn {task, _label} -> is_nil(task) end)
-    labels = Map.new(labelled_tasks)
-
-    labelled_tasks
-    |> Enum.map(&elem(&1, 0))
-    |> Task.yield_many(5_000)
-    |> Enum.flat_map(fn {task, result} -> auxiliary_search_facts(task, result, labels[task]) end)
-  end
-
-  defp auxiliary_search_facts(task, result, label) do
-    case result || Task.shutdown(task, :brutal_kill) do
-      {:ok, {:ok, facts}} when is_list(facts) ->
-        if test_mode?(),
-          do:
-            Logger.info(
-              "[gralkor] [test] recall #{label} — #{length(facts)} result(s): #{inspect(facts)}"
-            )
-
-        facts
-
-      other ->
-        Logger.warning("[gralkor] recall #{label} failed: #{inspect(other)}")
-        []
     end
   end
 
