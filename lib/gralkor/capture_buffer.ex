@@ -17,6 +17,7 @@ defmodule Gralkor.CaptureBuffer do
   require Logger
 
   alias Gralkor.Client
+  alias Gralkor.Reflection.Scheduler
 
   @default_retries [1_000, 2_000, 4_000]
 
@@ -79,12 +80,40 @@ defmodule Gralkor.CaptureBuffer do
 
   def append_lens(session_id, operator_id, agent_name, user_name, lens, msgs)
       when is_binary(session_id) and is_binary(operator_id) and is_list(msgs) do
-    append_lenses(session_id, operator_id, agent_name, user_name, [lens], msgs)
+    append_lenses(session_id, operator_id, agent_name, user_name, [lens], msgs, %{})
+  end
+
+  def append_lens(session_id, operator_id, agent_name, user_name, lens, msgs, reflection_context)
+      when is_binary(session_id) and is_binary(operator_id) and is_list(msgs) and
+             is_map(reflection_context) do
+    append_lenses(
+      session_id,
+      operator_id,
+      agent_name,
+      user_name,
+      [lens],
+      msgs,
+      reflection_context
+    )
   end
 
   def append_lenses(session_id, operator_id, agent_name, user_name, lenses, msgs)
       when is_binary(session_id) and is_binary(operator_id) and is_list(lenses) and
              is_list(msgs) do
+    append_lenses(session_id, operator_id, agent_name, user_name, lenses, msgs, %{})
+  end
+
+  def append_lenses(
+        session_id,
+        operator_id,
+        agent_name,
+        user_name,
+        lenses,
+        msgs,
+        reflection_context
+      )
+      when is_binary(session_id) and is_binary(operator_id) and is_list(lenses) and
+             is_list(msgs) and is_map(reflection_context) do
     raise_if_blank!(:agent_name, agent_name)
     raise_if_blank!(:user_name, user_name)
 
@@ -93,7 +122,8 @@ defmodule Gralkor.CaptureBuffer do
 
     case GenServer.call(
            __MODULE__,
-           {:append_lenses, session_id, operator_id, agent_name, user_name, lenses, msgs}
+           {:append_lenses, session_id, operator_id, agent_name, user_name, lenses, msgs,
+            reflection_context}
          ) do
       :ok ->
         :ok
@@ -155,12 +185,19 @@ defmodule Gralkor.CaptureBuffer do
   def init(opts) do
     Process.flag(:trap_exit, true)
 
+    reflections = Keyword.get(opts, :reflections, [])
+    reflection_callback = Keyword.get(opts, :reflection_callback)
+    scheduler = maybe_start_reflection_scheduler(reflections, reflection_callback)
+
     {:ok,
      %{
        entries: %{},
        lens_entries: %{},
        flush_callback: Keyword.fetch!(opts, :flush_callback),
        lens_flush_callback: Keyword.get(opts, :lens_flush_callback),
+       reflections: reflections,
+       reflection_callback: reflection_callback || &schedule_reflections/2,
+       reflection_scheduler: scheduler,
        retries: Keyword.get(opts, :retries, @default_retries)
      }}
   end
@@ -215,7 +252,8 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   def handle_call(
-        {:append_lenses, session_id, operator_id, agent_name, user_name, lenses, msgs},
+        {:append_lenses, session_id, operator_id, agent_name, user_name, lenses, msgs,
+         reflection_context},
         _from,
         state
       ) do
@@ -230,7 +268,9 @@ defmodule Gralkor.CaptureBuffer do
           user_name: user_name,
           turns: [msgs],
           lens_order: Enum.uniq(lenses),
-          batches: Map.new(Enum.uniq(lenses), &{&1, [msgs]})
+          batches: Map.new(Enum.uniq(lenses), &{&1, [msgs]}),
+          ingestion_id: ingestion_id(session_id),
+          reflection_context: reflection_context
         }
 
         {:reply, :ok, %{state | lens_entries: Map.put(state.lens_entries, session_id, entry)}}
@@ -248,7 +288,8 @@ defmodule Gralkor.CaptureBuffer do
           entry
           | turns: entry.turns ++ [msgs],
             lens_order: entry.lens_order ++ new_lenses,
-            batches: batches
+            batches: batches,
+            reflection_context: merge_reflection_context(entry.reflection_context, reflection_context)
         }
 
         {:reply, :ok, %{state | lens_entries: Map.put(state.lens_entries, session_id, entry)}}
@@ -291,7 +332,13 @@ defmodule Gralkor.CaptureBuffer do
         )
 
         Task.start(fn ->
-          do_flush_lenses(entry, state.lens_flush_callback, state.retries)
+          do_flush_lenses(
+            entry,
+            state.lens_flush_callback,
+            state.reflections,
+            state.reflection_callback,
+            state.retries
+          )
         end)
 
         {:reply, :ok, %{state | lens_entries: lens_entries}}
@@ -310,7 +357,13 @@ defmodule Gralkor.CaptureBuffer do
 
         task =
           Task.async(fn ->
-            do_flush_lenses(entry, state.lens_flush_callback, state.retries)
+            do_flush_lenses(
+              entry,
+              state.lens_flush_callback,
+              state.reflections,
+              state.reflection_callback,
+              state.retries
+            )
           end)
 
         case Task.yield(task, timeout_ms) || Task.shutdown(task, :brutal_kill) do
@@ -343,7 +396,13 @@ defmodule Gralkor.CaptureBuffer do
     lens_tasks =
       for {_session_id, entry} <- state.lens_entries do
         Task.async(fn ->
-          do_flush_lenses(entry, state.lens_flush_callback, state.retries)
+          do_flush_lenses(
+            entry,
+            state.lens_flush_callback,
+            state.reflections,
+            state.reflection_callback,
+            state.retries
+          )
         end)
       end
 
@@ -366,8 +425,16 @@ defmodule Gralkor.CaptureBuffer do
     end
 
     for {_session_id, entry} <- state.lens_entries do
-      do_flush_lenses(entry, state.lens_flush_callback, state.retries)
+      do_flush_lenses(
+        entry,
+        state.lens_flush_callback,
+        state.reflections,
+        state.reflection_callback,
+        state.retries
+      )
     end
+
+    stop_owned_scheduler(state.reflection_scheduler)
 
     :ok
   end
@@ -444,8 +511,10 @@ defmodule Gralkor.CaptureBuffer do
     )
   end
 
-  defp do_flush_lenses(entry, callback, retries) when is_function(callback, 5) do
-    Enum.reduce(entry.lens_order, :ok, fn lens, first_result ->
+  defp do_flush_lenses(entry, callback, reflections, reflection_callback, retries)
+       when is_function(callback, 5) do
+    {first_error, representations} =
+      Enum.reduce(entry.lens_order, {nil, []}, fn lens, {first_error, representations} ->
       turns = Map.fetch!(entry.batches, lens)
 
       case do_flush(
@@ -457,11 +526,31 @@ defmodule Gralkor.CaptureBuffer do
              callback,
              retries
            ) do
-        :ok -> first_result
-        {:error, _reason} = error when first_result == :ok -> error
-        {:error, _reason} -> first_result
+          {:ok, representation} ->
+            case validate_representation(representation, lens) do
+              :ok -> {first_error, representations ++ [representation]}
+              {:error, _} = error -> {first_error || error, representations}
+            end
+
+          :ok when reflections == [] ->
+            {first_error, representations}
+
+          :ok ->
+            {first_error || {:error, {:missing_ingested_representation, lens}}, representations}
+
+          {:error, _reason} = error ->
+            {first_error || error, representations}
       end
     end)
+
+    case first_error do
+      nil ->
+        schedule_after_ingestion(entry, representations, reflections, reflection_callback)
+        :ok
+
+      {:error, _} = error ->
+        error
+    end
   end
 
   defp do_flush(group, agent, user, ontology, turns, cb, retries, t0) do
@@ -470,6 +559,11 @@ defmodule Gralkor.CaptureBuffer do
         elapsed = System.monotonic_time(:millisecond) - t0
         Logger.info("[gralkor] capture flushed — turns:#{length(turns)} elapsed:#{elapsed}ms")
         :ok
+
+      {:ok, result} ->
+        elapsed = System.monotonic_time(:millisecond) - t0
+        Logger.info("[gralkor] capture flushed — turns:#{length(turns)} elapsed:#{elapsed}ms")
+        {:ok, result}
 
       {:error, :capture_client_4xx} = err ->
         Logger.warning("[gralkor] capture dropped (4xx)")
@@ -496,6 +590,7 @@ defmodule Gralkor.CaptureBuffer do
     try do
       case cb.(group, agent, user, ontology, turns) do
         :ok -> :ok
+        {:ok, _result} = ok -> ok
         {:error, _reason} = error -> error
         other -> {:error, {:unexpected_callback_result, other}}
       end
@@ -526,5 +621,89 @@ defmodule Gralkor.CaptureBuffer do
 
   defp raise_if_blank!(field, other) do
     raise ArgumentError, "#{field} must be a non-blank string, got #{inspect(other)}"
+  end
+
+  defp schedule_after_ingestion(_entry, _representations, [], _callback), do: :ok
+
+  defp schedule_after_ingestion(entry, representations, reflections, callback)
+       when is_function(callback, 2) do
+    ingestion = %{
+      id: entry.ingestion_id,
+      operator_id: entry.operator_id,
+      intended_lenses: entry.lens_order,
+      representations: representations,
+      tools: Map.get(entry.reflection_context, :tools, []),
+      tool_context: Map.get(entry.reflection_context, :tool_context, %{})
+    }
+
+    case callback.(reflections, ingestion) do
+      {:error, reason} ->
+        Logger.warning("[gralkor] Reflection scheduling failed — #{inspect(reason)}")
+
+      _ ->
+        :ok
+    end
+  rescue
+    exception ->
+      Logger.warning(
+        "[gralkor] Reflection scheduling raised — " <>
+          Exception.format(:error, exception, __STACKTRACE__)
+      )
+  end
+
+  defp schedule_reflections(reflections, ingestion) do
+    runner_opts = [
+      tools: ingestion.tools,
+      tool_context: ingestion.tool_context
+    ]
+
+    Scheduler.schedule(reflections, ingestion, runner_opts: runner_opts)
+  end
+
+  defp maybe_start_reflection_scheduler([], _callback), do: nil
+  defp maybe_start_reflection_scheduler(_reflections, callback) when is_function(callback, 2), do: nil
+
+  defp maybe_start_reflection_scheduler(_reflections, nil) do
+    case Process.whereis(Scheduler) do
+      nil ->
+        case Scheduler.start_link() do
+          {:ok, pid} -> {:owned, pid}
+          {:error, {:already_started, pid}} -> {:shared, pid}
+        end
+
+      pid ->
+        {:shared, pid}
+    end
+  end
+
+  defp stop_owned_scheduler({:owned, pid}) when is_pid(pid) do
+    if Process.alive?(pid), do: GenServer.stop(pid, :normal)
+  end
+
+  defp stop_owned_scheduler(_), do: :ok
+
+  defp validate_representation(representation, lens) when is_map(representation) do
+    representation_lens = Map.get(representation, :lens) || Map.get(representation, "lens")
+    evidence_id = Map.get(representation, :evidence_id) || Map.get(representation, "evidence_id")
+
+    cond do
+      representation_lens != lens -> {:error, {:representation_lens_mismatch, lens, representation_lens}}
+      not (is_binary(evidence_id) and String.trim(evidence_id) != "") -> {:error, {:missing_evidence_id, lens}}
+      true -> :ok
+    end
+  end
+
+  defp validate_representation(_representation, lens),
+    do: {:error, {:invalid_ingested_representation, lens}}
+
+  defp merge_reflection_context(existing, incoming) do
+    Map.merge(existing, incoming, fn
+      :tool_context, left, right when is_map(left) and is_map(right) -> Map.merge(left, right)
+      _key, _left, right -> right
+    end)
+  end
+
+  defp ingestion_id(session_id) do
+    "#{session_id}:#{System.unique_integer([:positive, :monotonic])}"
   end
 end
