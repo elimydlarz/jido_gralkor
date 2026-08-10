@@ -499,7 +499,6 @@ defmodule Gralkor.RecallTest do
 
       refute logs =~ "[gralkor] [test] recall block:"
     end
-
   end
 
   describe "where test mode is disabled" do

@@ -980,7 +980,6 @@ defmodule Gralkor.Client.NativeTest do
                group == "operator_group"
              end)
     end
-
   end
 
   describe "when recall is requested for a group, agent and query > while a session id is given" do
@@ -1064,5 +1063,4 @@ defmodule Gralkor.Client.NativeTest do
       assert block =~ "<gralkor-memory"
     end
   end
-
 end

@@ -379,6 +379,7 @@ defmodule Gralkor.GraphitiPool do
       "manual-add-#{System.system_time(:millisecond)}-#{System.unique_integer([:positive, :monotonic])}"
 
     sanitized = Client.sanitize_group_id(group_id)
+
     ontology_dicts =
       case ontology do
         nil -> nil
@@ -766,8 +767,7 @@ defmodule Gralkor.GraphitiPool do
         payload = module.__ontology__()
         dicts = build_ontology_dicts(payload)
 
-        {:reply, dicts,
-         %{state | ontology_cache: Map.put(state.ontology_cache, module, dicts)}}
+        {:reply, dicts, %{state | ontology_cache: Map.put(state.ontology_cache, module, dicts)}}
     end
   end
 
