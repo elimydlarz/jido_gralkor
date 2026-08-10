@@ -52,12 +52,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         scope: :operator,
         ingestion: StoreIngestion
       ],
-      [
-        name: "generalisations",
-        ontology: MemoryOntology,
-        scope: :global,
-        ingestion: StoreIngestion
-      ]
     ])
 
     InMemory.reset()
@@ -103,7 +97,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  %{agent: completion}
                )
 
-      assert [[_, _, _, _, _, "observations"]] = InMemory.captures()
+      assert [[_, _, _, _, _, "observations", [], _reflection_context]] = InMemory.captures()
     end
 
     test "and memory search always includes the requesting operator's reserved `operator` Lens" do
@@ -217,7 +211,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       for {lens, content} <- [
             {"operator", "baseline memory"},
             {"observations", "unselected local memory"},
-            {"generalisations", "unselected global memory"}
+            {"decisions", "unselected decision memory"}
           ] do
         assert :ok =
                  Client.ingest(%Ingest{
@@ -385,7 +379,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, :continue} =
                Plugin.handle_signal(completion_signal, %{agent: completion_agent})
 
-      assert [["session-one", "operator-one", "Susu", "Eli", _messages, "decisions"]] =
+      assert [["session-one", "operator-one", "Susu", "Eli", _messages, "decisions", [], _]] =
                InMemory.captures()
     end
 
@@ -412,7 +406,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       }
 
       assert {:ok, :continue} = Plugin.handle_signal(failure_signal, %{agent: failed_agent})
-      assert [[_, _, _, _, _, "decisions"]] = InMemory.captures()
+      assert [[_, _, _, _, _, "decisions", [], _]] = InMemory.captures()
     end
   end
 
@@ -443,8 +437,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
 
       assert [
-               [_, _, _, _, observation_messages, "observations"],
-               [_, _, _, _, decision_messages, "decisions"]
+               [_, _, _, _, observation_messages, "observations", [], _],
+               [_, _, _, _, decision_messages, "decisions", [], _]
              ] = InMemory.captures()
 
       assert Enum.any?(observation_messages, &(&1.content == "Observed."))
@@ -548,34 +542,9 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "and an unknown generalising Lens is identified" do
-      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
-        Plugin.mount(%{},
-          agent_name: "Susu",
-          ingestion_lens: "observations",
-          generalise_lens: "missing"
-        )
-      end
-    end
-
-    test "and a generalising Lens that duplicates the ingestion Lens is identified" do
-      assert_raise ArgumentError, ~r/must differ/, fn ->
-        Plugin.mount(%{},
-          agent_name: "Susu",
-          ingestion_lens: "observations",
-          generalise_lens: "observations"
-        )
-      end
-    end
-
     test "and Lens options without an ingestion Lens identify the required ingestion Lens" do
-      for lens_options <- [
-            [search_lenses: ["observations"]],
-            [generalise_lens: "generalisations"]
-          ] do
-        assert_raise ArgumentError, ~r/ingestion_lens is required/, fn ->
-          Plugin.mount(%{}, Keyword.merge([agent_name: "Susu"], lens_options))
-        end
+      assert_raise ArgumentError, ~r/ingestion_lens is required/, fn ->
+        Plugin.mount(%{}, agent_name: "Susu", search_lenses: ["observations"])
       end
     end
 
