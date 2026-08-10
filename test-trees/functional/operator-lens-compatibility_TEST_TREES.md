@@ -2,6 +2,9 @@ Functional: operator-lens-compatibility (functional: test/functional/operator_le
 
 where an application has not registered or selected a named Lens
   then the implicit `operator` Lens preserves access to the operator's existing group
-  and the `:jido_gralkor, :ontology` value remains its ontology
-  and an unset `:jido_gralkor, :ontology` preserves generic extraction
-  and existing capture, memory addition, and recall preserve legacy behaviour
+  and jido_gralkor's built-in ontology governs implicit-default extraction
+  and legacy capture, explicit memory addition, and recall use that built-in ontology consistently
+  and implicit-default capture, explicit memory addition, and recall work without a consumer ontology module
+
+if an application retains the removed deployment-wide `:jido_gralkor, :ontology` setting
+  then the implicit `operator` Lens still uses jido_gralkor's built-in ontology
