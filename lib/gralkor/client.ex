@@ -149,7 +149,10 @@ defmodule Gralkor.Client do
 
         case lens.ingestion.ingest(request, store) do
           :ok -> {:ok, collect_representations(collection_ref, [])}
-          {:error, _} = error -> error
+
+          {:error, _} = error ->
+            _discarded = collect_representations(collection_ref, [])
+            error
         end
 
       %ReplaceableLens{} ->
@@ -161,9 +164,9 @@ defmodule Gralkor.Client do
   defp collect_representations(collection_ref, representations) do
     receive do
       {^collection_ref, %IngestedRepresentation{} = representation} ->
-        collect_representations(collection_ref, representations ++ [representation])
+        collect_representations(collection_ref, [representation | representations])
     after
-      0 -> representations
+      0 -> Enum.reverse(representations)
     end
   end
 
