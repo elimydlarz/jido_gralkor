@@ -540,13 +540,17 @@ defmodule Gralkor.CaptureBuffer do
              retries
            ) do
           {:ok, lens_representations} when is_list(lens_representations) ->
-            case validate_representations(lens_representations, lens, entry.evidence_id) do
+            expected_evidence_id = if is_function(callback, 6), do: entry.evidence_id
+
+            case validate_representations(lens_representations, lens, expected_evidence_id) do
               :ok -> {first_error, representations ++ lens_representations}
               {:error, _} = error -> {first_error || error, representations}
             end
 
           {:ok, representation} ->
-            case validate_representations([representation], lens, entry.evidence_id) do
+            expected_evidence_id = if is_function(callback, 6), do: entry.evidence_id
+
+            case validate_representations([representation], lens, expected_evidence_id) do
               :ok -> {first_error, representations ++ [representation]}
               {:error, _} = error -> {first_error || error, representations}
             end
@@ -723,7 +727,7 @@ defmodule Gralkor.CaptureBuffer do
       not (is_binary(representation_evidence_id) and String.trim(representation_evidence_id) != "") ->
         {:error, {:missing_evidence_id, lens}}
 
-      representation_evidence_id != evidence_id ->
+      not is_nil(evidence_id) and representation_evidence_id != evidence_id ->
         {:error, {:representation_evidence_mismatch, lens, representation_evidence_id}}
 
       true -> :ok
