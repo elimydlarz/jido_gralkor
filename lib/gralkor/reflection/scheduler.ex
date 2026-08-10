@@ -56,11 +56,12 @@ defmodule Gralkor.Reflection.Scheduler do
   defp completed?(ingestion) do
     representations = field(ingestion, :representations) || []
     intended = field(ingestion, :intended_lenses) || Enum.map(representations, &field(&1, :lens))
-    successful = Enum.filter(representations, &(field(&1, :result) in [nil, :ok]))
-    successful_lenses = MapSet.new(successful, &field(&1, :lens))
+    completed =
+      field(ingestion, :completed_lenses) || Enum.map(representations, &field(&1, :lens))
 
-    representations != [] and length(successful) == length(representations) and
-      Enum.all?(intended, &MapSet.member?(successful_lenses, &1))
+    representations != [] and
+      Enum.all?(representations, &(field(&1, :result) in [nil, :ok])) and
+      Enum.all?(intended, &(&1 in completed))
   end
 
   defp field(map, key), do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
