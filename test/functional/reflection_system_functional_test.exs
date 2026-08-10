@@ -270,6 +270,39 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when the default ERL Reflection stores its final artefact" do
+    test "then extraction receives ERL's built-in `Learning` entity type" do
+      Application.delete_env(:jido_gralkor, :reflections)
+      erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
+      artefact = Gralkor.Reflection.Artefact.new("erl", erl_payload(), ["evidence-one"])
+      caller = self()
+
+      add_episode = fn group_id, content, source, ontology ->
+        send(caller, {:reflection_episode, group_id, content, source, ontology})
+        :ok
+      end
+
+      assert :ok =
+               Gralkor.Reflection.Storage.Graphiti.put(
+                 erl,
+                 "operator-one",
+                 artefact,
+                 add_episode
+               )
+
+      assert_receive {:reflection_episode, _group_id, _content, "reflection:erl",
+                      Gralkor.Reflection.ERLOntology}
+    end
+
+    test "and the extracted `Learning` carries the problem kind, approach, success, and reusable lesson produced by ERL" do
+      [learning] = Gralkor.Reflection.ERLOntology.__ontology__().entity_types
+
+      assert learning.name == "Learning"
+      assert Enum.map(learning.fields, & &1.name) == [:problem_kind, :approach, :success, :lesson]
+      assert Enum.all?(learning.fields, &(&1.required == false))
+    end
+  end
+
   describe "when an ingestion operation successfully stores information through one or more Lenses" do
     test "while Reflections are declared then every stored representation retains its evidence identifier and Lens identity" do
       Application.put_env(:jido_gralkor, :lenses, [
