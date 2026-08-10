@@ -29,7 +29,7 @@ where a recall is requested with no session id
 
 when a canonical turn is captured for a named session, group, agent and user
   while its messages have user, assistant or behaviour roles
-    then the write uses the deployment ontology without a caller ontology argument
+    then the write uses implicit-default memory without a caller ontology argument
   while the backend acknowledges the capture
     then success is returned
   if the backend fails
@@ -69,19 +69,11 @@ when a flush is requested for a session and awaited with a timeout
     then that failure is returned unchanged
 
 when memory is added with a group, content and a source description
-  then the write applies the deployment-configured ontology, so a caller is never required to supply one
+  then the write uses implicit-default memory, so a caller neither supplies nor configures an ontology
   while the backend acknowledges the add
     then success is returned
   if the backend fails
     then that failure is returned unchanged
-  where an ontology override is supplied
-    then the override is applied to the write
-    and the deployment-configured ontology is not consulted
-    and this override is the only per-call ontology surface the client exposes
-    while the backend acknowledges the add
-      then success is returned
-    if the backend fails
-      then that failure is returned unchanged
 
 when an index rebuild is requested
   while the backend acknowledges the rebuild

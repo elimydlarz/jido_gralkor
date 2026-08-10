@@ -24,8 +24,8 @@ if a recall is requested with a missing or blank agent name
 
 when a grouped session captures messages with agent and user names
   then the group is sanitised before it is buffered
-  and the deployment-configured ontology is resolved, the caller being given no ontology argument of its own
-  and that resolved ontology is buffered alongside the turn
+  and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own
+  and that built-in ontology is buffered alongside the turn
   and the buffer receives the session, sanitised group, names, ontology and messages
   and success is returned immediately, no distillation running before the call returns
   and nothing is logged for the turn itself, captured content becoming observable only at flush
@@ -33,7 +33,7 @@ when a grouped session captures messages with agent and user names
 where a turn is captured through a named Lens
   then the operator id is buffered unsanitised, so the Lens keeps the operator's original identity
   and the agent name, the user name, the Lens name and the messages are appended to the capture buffer under that session
-  and the deployment-configured ontology is not consulted, a Lens owning its own ontology
+  and the built-in ontology is not selected, a named Lens owning its own ontology
   and success is returned immediately
 
 where a turn is captured through a primary Lens together with additional Lenses
@@ -89,23 +89,12 @@ when memory is added with a group and content
   and success is returned once the graph accepts the write
   if the graph fails
     then that failure is returned unchanged
-  while no ontology override is supplied
-    then the deployment-configured ontology is the one applied, so a caller is never required to supply one
-  where an ontology override is supplied
-    then the override is the ontology applied
-    and the deployment-configured ontology is not consulted
+  then jido_gralkor's built-in ontology is applied, so a caller neither supplies nor configures one
   where a source description is supplied
     then it is the source recorded on the episode
   where no source description is supplied
     then the source recorded on the episode is "manual"
-  while the ontology that applies resolves to nothing
-    then the write omits all four ontology collections, preserving generic extraction
-  while the ontology that applies is a module declaring an ontology
-    then the write forwards all four declared ontology collections
-  if the ontology supplied is a module that declares no ontology
-    then an argument error naming that module is raised before any write is attempted
-  if the ontology supplied is not a module
-    then an argument error naming that value is raised before any write is attempted
+  and the write forwards all four built-in ontology collections
 
 when an index and constraint rebuild is requested
   then the rebuild is applied to the whole graph rather than to a single group

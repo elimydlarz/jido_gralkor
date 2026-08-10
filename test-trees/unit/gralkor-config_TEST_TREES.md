@@ -46,15 +46,3 @@ if a role's model override omits the colon separator
 
 if a role's model override leaves the provider or the model id blank after surrounding whitespace is removed
   then resolving that role's model raises, naming the environment variable and the offending value
-
-when the deployment-wide ontology is resolved
-  while no ontology is configured
-    then nothing is returned, so every write behaves as it does with no ontology declared
-  while a module declared as an ontology is configured
-    then that module is returned
-
-if the configured deployment-wide ontology is a module that is not declared as an ontology
-  then resolving it raises at the write boundary, naming the offending value
-
-if the configured deployment-wide ontology is not a module
-  then resolving it raises at the write boundary, naming the offending value
