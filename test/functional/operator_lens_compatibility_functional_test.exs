@@ -6,14 +6,6 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
   alias Gralkor.Client
   alias Gralkor.Ingest
 
-  defmodule MemoryOntology do
-    use Gralkor.Ontology, entities: :open, relationships: :open
-
-    entity Memory do
-      field(:content, :string, required: true)
-    end
-  end
-
   setup do
     keys = [:client, :lenses, :lens_storage, :ontology]
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
@@ -30,8 +22,6 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
 
   describe "where an application has not registered or selected a named Lens" do
     test "then the implicit `operator` Lens preserves access to the operator's existing group" do
-      Application.put_env(:jido_gralkor, :ontology, MemoryOntology)
-
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
@@ -47,22 +37,9 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
                })
     end
 
-    test "and the `:jido_gralkor, :ontology` value remains its ontology" do
-      Application.put_env(:jido_gralkor, :ontology, MemoryOntology)
-
-      assert %Gralkor.Lens{name: "operator", ontology: MemoryOntology} =
+    test "and jido_gralkor's built-in ontology governs implicit-default extraction" do
+      assert %Gralkor.Lens{name: "operator", ontology: Gralkor.DefaultOntology} =
                Client.lens!("operator")
-    end
-
-    test "and an unset `:jido_gralkor, :ontology` preserves generic extraction" do
-      Application.delete_env(:jido_gralkor, :ontology)
-
-      assert %Gralkor.Lens{
-               name: "operator",
-               ontology: nil,
-               scope: :operator,
-               ingestion: Gralkor.Lens.Ingestion.Store
-             } = Client.lens!("operator")
     end
 
     test "and existing capture, memory addition, and recall preserve legacy behaviour" do
