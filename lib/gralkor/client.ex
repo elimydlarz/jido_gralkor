@@ -108,13 +108,6 @@ defmodule Gralkor.Client do
               source_description :: String.t() | nil
             ) ::
               :ok | {:error, term()}
-  @callback memory_add(
-              group_id(),
-              content :: String.t(),
-              source_description :: String.t() | nil,
-              ontology :: module() | nil
-            ) ::
-              :ok | {:error, term()}
   @callback flush(session_id()) :: :ok | {:error, term()}
   @callback flush_and_await(session_id(), timeout_ms :: pos_integer()) ::
               :ok | {:error, :timeout} | {:error, term()}
