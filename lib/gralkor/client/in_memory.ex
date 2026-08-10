@@ -51,6 +51,7 @@ defmodule Gralkor.Client.InMemory do
   def flush_and_awaits, do: GenServer.call(__MODULE__, {:calls, :flush_and_await})
   def indices_builds, do: GenServer.call(__MODULE__, {:calls, :build_indices})
   def communities_builds, do: GenServer.call(__MODULE__, {:calls, :build_communities})
+
   # ── Client behaviour ────────────────────────────────────────
 
   @impl Gralkor.Client
