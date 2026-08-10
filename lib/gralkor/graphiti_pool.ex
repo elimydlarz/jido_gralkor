@@ -152,9 +152,8 @@ defmodule Gralkor.GraphitiPool do
   `{:ok, [%{fact:, created_at:, valid_at:, invalid_at:, expired_at:}]}`
   ready for `Gralkor.Format.format_facts/1`.
 
-  For retrieving custom-entity *nodes* (e.g. `Learning` for ERL recall) use
-  `search_nodes/5` — edge search's node-label filtering matches edges by
-  endpoint and misses standalone nodes.
+  For retrieving custom-entity *nodes*, use `search_nodes/5` — edge search's
+  node-label filtering matches edges by endpoint and misses standalone nodes.
   """
   @spec search(GenServer.server(), String.t(), String.t(), pos_integer()) ::
           {:ok, [map()]} | {:error, term()}
@@ -198,13 +197,11 @@ defmodule Gralkor.GraphitiPool do
   episode-only config. Returns `{:ok, [%{content:, source_description:}]}` —
   the episode bodies as they were written.
 
-  This is the primitive for content Gralkor wrote in a format it must read back
-  verbatim (a generalisation's `GEN|v1|` envelope). Edge and node search both
-  return what an extractor *derived* from an episode, which is a different text
-  and may be nothing at all: an episode naming one subject yields a node and no
-  edge, and neither carries the wire envelope. graphiti searches episodes by
-  BM25 over their content, so retrieval here depends on the stored words rather
-  than on an extraction.
+  This is the primitive for content Gralkor must read back verbatim. Edge and
+  node search both return what an extractor *derived* from an episode, which is
+  a different text and may be nothing at all: an episode naming one subject
+  yields a node and no edge. Graphiti searches episodes by BM25 over their
+  content, so retrieval here depends on the stored words rather than extraction.
   """
   @spec search_episodes(GenServer.server(), String.t(), String.t(), pos_integer()) ::
           {:ok, [map()]} | {:error, term()}
@@ -263,9 +260,8 @@ defmodule Gralkor.GraphitiPool do
   @doc """
   Node search against `group_id` via graphiti's `search_` with the
   `NODE_HYBRID_SEARCH_RRF` recipe. Unlike `search/4` (which returns *edges* and
-  whose `node_labels` filter matches edges by endpoint), this returns *nodes* —
-  the right primitive for retrieving custom-entity nodes like `Learning`, which
-  are not reliably reachable through edge search.
+  whose `node_labels` filter matches edges by endpoint), this returns *nodes*
+  that are not reliably reachable through edge search.
 
   Returns `{:ok, [%{name:, summary:, attributes:}]}` ordered by relevance.
 
@@ -273,8 +269,7 @@ defmodule Gralkor.GraphitiPool do
 
     * `:node_labels` — optional `[String.t()]`. When present, a
       `SearchFilters(node_labels: …)` restricts results to nodes carrying one of
-      those labels (e.g. `["Learning"]` for ERL recall). When absent, all nodes
-      are eligible.
+      those labels. When absent, all nodes are eligible.
   """
   @spec search_nodes(GenServer.server(), String.t(), String.t(), pos_integer(), keyword()) ::
           {:ok, [map()]} | {:error, term()}
