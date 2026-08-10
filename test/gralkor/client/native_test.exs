@@ -896,16 +896,6 @@ defmodule Gralkor.Client.NativeTest do
         """
         import asyncio
 
-        class _Episode:
-            def __init__(self, content):
-                self.content = content
-                self.source_description = "generalisation"
-
-        class _Results:
-            def __init__(self, episodes=None):
-                self.nodes = []
-                self.episodes = episodes or []
-
         class _FakeGraphiti:
             def __init__(self):
                 self.recorded = {}
@@ -915,29 +905,6 @@ defmodule Gralkor.Client.NativeTest do
                 if query.startswith('slow:'):
                     await asyncio.sleep(0.3)
                 return []
-
-            async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                self.recorded.setdefault('queries', []).append(query)
-                self.recorded.setdefault('group_ids', []).append(group_ids or [])
-                if query.startswith('slow:'):
-                    await asyncio.sleep(0.3)
-                if config is not None and config.episode_config is not None:
-                    if query.startswith('fail:'):
-                        raise RuntimeError('generalisation search refused')
-                    self.recorded.setdefault('episode_calls', []).append(
-                        [m.value for m in config.episode_config.search_methods]
-                    )
-                    return _Results(episodes=[
-                        _Episode('GEN|v1|{"id":"gen-1","level":0,"confidence":0.8,"generalises":[]}\\nEli prefers dark mode'),
-                        _Episode('not a generalisation'),
-                    ])
-
-                self.recorded.setdefault('node_label_calls', []).append(
-                    list(search_filter.node_labels)
-                    if search_filter is not None and search_filter.node_labels
-                    else []
-                )
-                return _Results()
 
         _FakeGraphiti()
         """,
