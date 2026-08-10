@@ -3,10 +3,26 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   @moduletag :functional
 
+  alias Gralkor.Client
+  alias Gralkor.Ingest
   alias Gralkor.Reflection.Registry
   alias Gralkor.Reflection.Runner
   alias Gralkor.Reflection.Scheduler
   alias Gralkor.Reflection.Store
+  alias Gralkor.Search
+
+  defmodule ReflectionEvidenceOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+  end
+
+  defmodule EvidenceIngestion do
+    @behaviour Gralkor.Lens.Ingestion
+
+    @impl true
+    def ingest(request, store) do
+      Gralkor.Lens.Store.add(store, request.content, request.source_description)
+    end
+  end
 
   defmodule FailingReflectionStorage do
     @behaviour Gralkor.Reflection.Store
@@ -20,7 +36,18 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     File.mkdir_p!(root)
     on_exit(fn -> File.rm_rf!(root) end)
     start_supervised!(Gralkor.Reflection.Storage.InMemory)
+    start_supervised!(Gralkor.Lens.Storage.InMemory)
     start_supervised!(Scheduler)
+
+    previous =
+      for key <- [:lenses, :lens_storage, :reflections, :reflection_storage], into: %{} do
+        {key, Application.get_env(:jido_gralkor, key)}
+      end
+
+    Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+    Application.put_env(:jido_gralkor, :reflection_storage, Gralkor.Reflection.Storage.InMemory)
+
+    on_exit(fn -> Enum.each(previous, fn {key, value} -> restore_env(key, value) end) end)
     %{root: root}
   end
 
@@ -109,12 +136,31 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "when an ingestion operation successfully stores information through one or more Lenses" do
-    test "while Reflections are declared then every stored representation retains its evidence identifier and Lens identity", context do
-      reflection = reflection(context)
-      parent = self()
-      inference = fn request -> send(parent, {:representations, request.representations}); output_for(request) end
-      assert {:ok, _} = Runner.run(reflection, ingestion(), inference: inference)
-      assert_receive {:representations, [%{evidence_id: "ev-1", lens: "observations"}, %{evidence_id: "ev-2", lens: "decisions"}]}
+    test "while Reflections are declared then every stored representation retains its evidence identifier and Lens identity" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ReflectionEvidenceOntology,
+          scope: :operator,
+          ingestion: EvidenceIngestion
+        ]
+      ])
+
+      request = %Ingest{
+        operator_id: "operator-one",
+        lens: "observations",
+        content: "fact one",
+        source_description: "functional",
+        evidence_id: "ev-1"
+      }
+
+      assert {:ok,
+              %Gralkor.IngestedRepresentation{
+                evidence_id: "ev-1",
+                lens: "observations",
+                content: "fact one",
+                result: :ok
+              }} = Client.ingest_with_representation(request)
     end
 
     test "and the ingestion caller receives success without waiting for Reflection", context do
@@ -394,7 +440,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "when memory is searched naming a Reflection" do
     test "then that Reflection's destination is searched", context do
       {reflection, artefact} = stored_artefact(context)
-      assert {:ok, [^artefact]} = Store.search([reflection], "operator-one", reflection.name, "durable", storage: Gralkor.Reflection.Storage.InMemory)
+      configure_reflections([reflection])
+
+      assert {:ok, [^artefact]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "durable",
+                 reflections: [reflection.name]
+               })
     end
 
     test "and only artefacts produced by that Reflection are returned", context do
@@ -404,30 +457,69 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       {:ok, a2} = Runner.run(two, ingestion(), inference: &output_for/1)
       :ok = Store.put(one, "operator-one", a1, storage: Gralkor.Reflection.Storage.InMemory)
       :ok = Store.put(two, "operator-one", a2, storage: Gralkor.Reflection.Storage.InMemory)
-      assert {:ok, [^a1]} = Store.search([one, two], "operator-one", "one", "", storage: Gralkor.Reflection.Storage.InMemory)
+      configure_reflections([one, two])
+
+      assert {:ok, [^a1]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "",
+                 reflections: ["one"]
+               })
     end
 
     test "and every result identifies the named Reflection rather than a Lens", context do
       {reflection, _} = stored_artefact(context)
-      assert {:ok, [%{reflection: "generalisation"} = result]} = Store.search([reflection], "operator-one", reflection.name, "durable", storage: Gralkor.Reflection.Storage.InMemory)
+      configure_reflections([reflection])
+
+      assert {:ok, [%{reflection: "generalisation"} = result]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "durable",
+                 reflections: [reflection.name]
+               })
+
       refute Map.has_key?(Map.from_struct(result), :lens)
     end
 
     test "and every result retains its supporting evidence identifiers", context do
       {reflection, _} = stored_artefact(context)
-      assert {:ok, [%{evidence_ids: ["ev-1", "ev-2"]}]} = Store.search([reflection], "operator-one", reflection.name, "durable", storage: Gralkor.Reflection.Storage.InMemory)
+      configure_reflections([reflection])
+
+      assert {:ok, [%{evidence_ids: ["ev-1", "ev-2"]}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "durable",
+                 reflections: [reflection.name]
+               })
     end
 
     test "where the search also identifies one artefact then only that artefact is returned from the named Reflection's destination", context do
       {reflection, artefact} = stored_artefact(context)
       {:ok, other} = Runner.run(reflection, ingestion(), inference: &output_for/1)
       :ok = Store.put(reflection, "operator-one", other, storage: Gralkor.Reflection.Storage.InMemory)
-      assert {:ok, [^artefact]} = Store.search([reflection], "operator-one", reflection.name, "durable", artefact_id: artefact.id, storage: Gralkor.Reflection.Storage.InMemory)
+      configure_reflections([reflection])
+
+      assert {:ok, [^artefact]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "durable",
+                 reflections: [reflection.name],
+                 artefact_id: artefact.id
+               })
     end
   end
 
   test "if memory is searched naming an unknown Reflection then the search fails identifying the unknown Reflection before any destination is searched" do
-    assert {:error, {:unknown_reflection, "missing"}} = Store.search([], "operator-one", "missing", "query", storage: FailingReflectionStorage)
+    Application.put_env(:jido_gralkor, :reflections, [])
+    Application.put_env(:jido_gralkor, :reflection_storage, FailingReflectionStorage)
+
+    assert_raise ArgumentError, ~r/unknown Reflection "missing"/, fn ->
+      Client.search(%Search{
+        operator_id: "operator-one",
+        query: "query",
+        reflections: ["missing"]
+      })
+    end
   end
 
   defp assert_valid(%{root: root}) do
@@ -535,4 +627,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     File.write!(path, body)
     path
   end
+
+  defp configure_reflections(reflections) do
+    Application.put_env(:jido_gralkor, :reflections, reflections)
+  end
+
+  defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
+  defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
 end
