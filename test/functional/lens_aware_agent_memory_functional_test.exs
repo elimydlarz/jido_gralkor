@@ -51,7 +51,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         ontology: MemoryOntology,
         scope: :operator,
         ingestion: StoreIngestion
-      ],
+      ]
     ])
 
     InMemory.reset()

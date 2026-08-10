@@ -196,7 +196,7 @@ defmodule Gralkor.CaptureBuffer do
        flush_callback: Keyword.fetch!(opts, :flush_callback),
        lens_flush_callback: Keyword.get(opts, :lens_flush_callback),
        reflections: reflections,
-       reflection_callback: reflection_callback || &schedule_reflections/2,
+       reflection_callback: reflection_callback || (&schedule_reflections/2),
        reflection_scheduler: scheduler,
        retries: Keyword.get(opts, :retries, @default_retries)
      }}
@@ -290,7 +290,8 @@ defmodule Gralkor.CaptureBuffer do
           | turns: entry.turns ++ [msgs],
             lens_order: entry.lens_order ++ new_lenses,
             batches: batches,
-            reflection_context: merge_reflection_context(entry.reflection_context, reflection_context)
+            reflection_context:
+              merge_reflection_context(entry.reflection_context, reflection_context)
         }
 
         {:reply, :ok, %{state | lens_entries: Map.put(state.lens_entries, session_id, entry)}}
@@ -516,29 +517,29 @@ defmodule Gralkor.CaptureBuffer do
        when is_function(callback) do
     {first_error, representations} =
       Enum.reduce(entry.lens_order, {nil, []}, fn lens, {first_error, representations} ->
-      turns = Map.fetch!(entry.batches, lens)
+        turns = Map.fetch!(entry.batches, lens)
 
-      invoke = fn operator_id, agent_name, user_name, lens_name, lens_turns ->
-        invoke_lens_callback(
-          callback,
-          operator_id,
-          agent_name,
-          user_name,
-          lens_name,
-          lens_turns,
-          entry.evidence_id
-        )
-      end
+        invoke = fn operator_id, agent_name, user_name, lens_name, lens_turns ->
+          invoke_lens_callback(
+            callback,
+            operator_id,
+            agent_name,
+            user_name,
+            lens_name,
+            lens_turns,
+            entry.evidence_id
+          )
+        end
 
-      case do_flush(
-             entry.operator_id,
-             entry.agent_name,
-             entry.user_name,
-             lens,
-             turns,
-             invoke,
-             retries
-           ) do
+        case do_flush(
+               entry.operator_id,
+               entry.agent_name,
+               entry.user_name,
+               lens,
+               turns,
+               invoke,
+               retries
+             ) do
           {:ok, lens_representations} when is_list(lens_representations) ->
             expected_evidence_id = if is_function(callback, 6), do: entry.evidence_id
 
@@ -563,8 +564,8 @@ defmodule Gralkor.CaptureBuffer do
 
           {:error, _reason} = error ->
             {first_error || error, representations}
-      end
-    end)
+        end
+      end)
 
     case first_error do
       nil ->
@@ -686,7 +687,9 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   defp maybe_start_reflection_scheduler([], _callback), do: nil
-  defp maybe_start_reflection_scheduler(_reflections, callback) when is_function(callback, 2), do: nil
+
+  defp maybe_start_reflection_scheduler(_reflections, callback) when is_function(callback, 2),
+    do: nil
 
   defp maybe_start_reflection_scheduler(_reflections, nil) do
     case Process.whereis(Scheduler) do
@@ -719,25 +722,37 @@ defmodule Gralkor.CaptureBuffer do
   defp validate_representation(representation, lens, evidence_id)
        when is_map(representation) do
     representation_lens = Map.get(representation, :lens) || Map.get(representation, "lens")
+
     representation_evidence_id =
       Map.get(representation, :evidence_id) || Map.get(representation, "evidence_id")
 
     cond do
-      representation_lens != lens -> {:error, {:representation_lens_mismatch, lens, representation_lens}}
+      representation_lens != lens ->
+        {:error, {:representation_lens_mismatch, lens, representation_lens}}
+
       not (is_binary(representation_evidence_id) and String.trim(representation_evidence_id) != "") ->
         {:error, {:missing_evidence_id, lens}}
 
       not is_nil(evidence_id) and representation_evidence_id != evidence_id ->
         {:error, {:representation_evidence_mismatch, lens, representation_evidence_id}}
 
-      true -> :ok
+      true ->
+        :ok
     end
   end
 
   defp validate_representation(_representation, lens, _evidence_id),
     do: {:error, {:invalid_ingested_representation, lens}}
 
-  defp invoke_lens_callback(callback, operator_id, agent_name, user_name, lens, turns, evidence_id) do
+  defp invoke_lens_callback(
+         callback,
+         operator_id,
+         agent_name,
+         user_name,
+         lens,
+         turns,
+         evidence_id
+       ) do
     cond do
       is_function(callback, 6) ->
         callback.(operator_id, agent_name, user_name, lens, turns, evidence_id)

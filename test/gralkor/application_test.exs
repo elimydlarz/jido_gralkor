@@ -23,7 +23,6 @@ defmodule Gralkor.ApplicationTest do
         nil -> Application.delete_env(:jido_gralkor, :falkordb)
         v -> Application.put_env(:jido_gralkor, :falkordb, v)
       end
-
     end)
 
     Application.delete_env(:jido_gralkor, :client)
@@ -252,7 +251,6 @@ defmodule Gralkor.ApplicationTest do
 
       assert :ok = cb.("g", "TestAgent", "Eli", nil, [])
     end
-
   end
 
   describe "when a capture flush runs" do
@@ -315,7 +313,6 @@ defmodule Gralkor.ApplicationTest do
       assert logs =~ "group:g1"
       refute logs =~ "capture flush failed"
     end
-
   end
 
   describe "when a capture flush writes its captured episode successfully > where test mode is enabled" do
@@ -423,7 +420,6 @@ defmodule Gralkor.ApplicationTest do
       assert {:error, {:python, "ConnectionError: reset by peer"}} =
                cb.("g1", "TestAgent", "Eli", nil, turns)
     end
-
   end
 
   describe "when a capture flush is retried after its captured episode has already been written" do
