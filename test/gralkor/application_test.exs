@@ -171,14 +171,15 @@ defmodule Gralkor.ApplicationTest do
       ]
 
       assert :ok =
-               callback.("operator-one", "Susu", "Eli", "observations", turns)
+               callback.("operator-one", "Susu", "Eli", "observations", turns, "evidence-one")
 
       assert_receive {:ingested,
                       %Gralkor.Ingest{
                         operator_id: "operator-one",
                         lens: "observations",
                         content: "Eli: Remember this\nSusu: I will",
-                        source_description: "captured"
+                        source_description: "captured",
+                        evidence_id: "evidence-one"
                       }}
     end
 
@@ -198,14 +199,16 @@ defmodule Gralkor.ApplicationTest do
         [Gralkor.Message.new("assistant", "I will")]
       ]
 
-      assert :ok = callback.("operator-one", "Susu", "Eli", "observations", turns)
+      assert :ok =
+               callback.("operator-one", "Susu", "Eli", "observations", turns, "evidence-one")
 
       assert_receive {:ingested,
                       %Gralkor.Ingest{
                         operator_id: "operator-one",
                         lens: "observations",
                         content: "Eli: Remember this\nSusu: I will",
-                        source_description: "captured"
+                        source_description: "captured",
+                        evidence_id: "evidence-one"
                       }}
     end
   end
