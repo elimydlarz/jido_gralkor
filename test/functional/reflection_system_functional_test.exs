@@ -4,7 +4,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   @moduletag :functional
 
   alias Gralkor.Client
+  alias Gralkor.CaptureBuffer
   alias Gralkor.Ingest
+  alias Gralkor.Message
   alias Gralkor.Reflection.Registry
   alias Gralkor.Reflection.Runner
   alias Gralkor.Reflection.Scheduler
@@ -255,38 +257,99 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "and the ingestion caller receives success without waiting for Reflection", context do
       reflection = reflection(context)
+      parent = self()
 
-      slow = fn _, _, _ ->
-        Process.sleep(150)
-        {:error, :finished}
-      end
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: representation_callback(parent),
+         reflection_callback: fn ingestion ->
+           send(parent, {:reflection_started, ingestion})
+           Process.sleep(150)
+           :ok
+         end,
+         reflections: [reflection],
+         retries: []}
+      )
+
+      :ok =
+        CaptureBuffer.append_lens(
+          "session-async",
+          "operator-one",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "remember")]
+        )
 
       started = System.monotonic_time(:millisecond)
-      assert {:ok, :scheduled} = Scheduler.schedule([reflection], ingestion(), runner: slow)
+      assert :ok = CaptureBuffer.flush("session-async")
       assert System.monotonic_time(:millisecond) - started < 100
+      assert_receive {:reflection_started, %{representations: [%{lens: "observations"}]}}
     end
 
     test "and every declared Reflection is scheduled once for the completed ingestion operation",
          context do
       reflections = [reflection(context, "one"), reflection(context, "two")]
-      runner = notifying_runner(self())
-      assert {:ok, :scheduled} = Scheduler.schedule(reflections, ingestion(), runner: runner)
+      parent = self()
 
-      assert {:ok, :already_scheduled} =
-               Scheduler.schedule(reflections, ingestion(), runner: runner)
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: representation_callback(parent),
+         reflection_callback: fn ingestion ->
+           send(parent, {:scheduled, Enum.map(reflections, & &1.name), ingestion})
+           :ok
+         end,
+         reflections: reflections,
+         retries: []}
+      )
 
-      assert_receive {:ran, "one"}
-      assert_receive {:ran, "two"}
-      refute_receive {:ran, _}
+      :ok =
+        CaptureBuffer.append_lenses(
+          "session-once",
+          "operator-one",
+          "Susu",
+          "Eli",
+          ["observations", "decisions"],
+          [Message.new("user", "remember")]
+        )
+
+      assert :ok = CaptureBuffer.flush_and_await("session-once", 1_000)
+
+      assert_receive {:scheduled, ["one", "two"],
+                      %{intended_lenses: ["observations", "decisions"], representations: reps}}
+
+      assert Enum.map(reps, & &1.lens) == ["observations", "decisions"]
+      refute_receive {:scheduled, _, _}
     end
 
     test "and no Reflection begins before every intended Lens ingestion has completed", context do
-      runner = notifying_runner(self())
+      parent = self()
 
-      assert {:error, {:incomplete_ingestion, "ingestion-1"}} =
-               Scheduler.schedule([reflection(context)], incomplete_ingestion(), runner: runner)
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: representation_callback(parent),
+         reflection_callback: fn ingestion -> send(parent, {:scheduled_after_all, ingestion}); :ok end,
+         reflections: [reflection(context)],
+         retries: []}
+      )
 
-      refute_receive {:ran, _}
+      :ok =
+        CaptureBuffer.append_lenses(
+          "session-barrier",
+          "operator-one",
+          "Susu",
+          "Eli",
+          ["observations", "decisions"],
+          [Message.new("user", "remember")]
+        )
+
+      assert :ok = CaptureBuffer.flush_and_await("session-barrier", 1_000)
+      assert_receive {:lens_stored, "observations"}
+      assert_receive {:lens_stored, "decisions"}
+      assert_receive {:scheduled_after_all, %{representations: [_, _]}}
     end
   end
 
