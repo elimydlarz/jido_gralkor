@@ -4,10 +4,8 @@ defmodule Gralkor.Distill do
   into the knowledge graph.
 
   The transcript keeps **only** user/assistant text. Behaviour (the agent's
-  reasoning, tool calls, tool results) is never woven in: a turn marked for
-  experiential learning routes its reasoning into a separate
-  `Gralkor.AgentLearning` episode (see `Gralkor.Learn`), and non-ERL turns drop
-  it. Rendering is pure — there is no LLM call.
+  reasoning, tool calls, and tool results) is never woven into this rendered
+  episode. Rendering is pure — there is no LLM call.
 
   See `test-trees/unit/format-transcript_TEST_TREES.md`.
   """

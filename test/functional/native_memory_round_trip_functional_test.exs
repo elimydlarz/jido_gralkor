@@ -7,8 +7,7 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   buffer, the flush callback the application builds, the recall pipeline. Only
   the two things outside the system boundary are substituted: the graph, by a
   fake that records what it was asked to write and returns what the test tells
-  it to, and the learning step, by a deterministic function. Interpretation
-  still runs against the configured model, so the leaves that depend on it are
+  it to. Interpretation still runs against the configured model, so the leaves that depend on it are
   the ones that need a credential.
 
   Reifies the `native-memory-round-trip` tree.
@@ -37,22 +36,10 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
                 self.invalid_at = None
                 self.expired_at = None
 
-        class _Node:
-            def __init__(self, name, summary):
-                self.name = name
-                self.summary = summary
-                self.attributes = {}
-
-        class _Results:
-            def __init__(self, nodes):
-                self.nodes = nodes
-                self.episodes = []
-
         class _FakeGraphiti:
             def __init__(self):
                 self.recorded = {"episodes": []}
                 self.facts = []
-                self.learning_nodes = []
                 self.search_fails = False
                 self.add_delay = 0
 
@@ -74,12 +61,6 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
                 if self.search_fails:
                     raise RuntimeError("graph refused the search")
                 return [_Edge(f) for f in self.facts]
-
-            async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                labels = list(search_filter.node_labels) if search_filter is not None and search_filter.node_labels else []
-                if labels == ["Learning"]:
-                    return _Results([_Node(n[0], n[1]) for n in self.learning_nodes])
-                return _Results([])
 
         _FakeGraphiti()
         """,
@@ -112,19 +93,9 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
     on_exit(fn -> if Process.alive?(pool), do: GenServer.stop(pool) end)
 
-    learning = %Gralkor.AgentLearning{
-      problem_kind: "scheduling conflict",
-      approach: "moved the vacuum job",
-      success: true,
-      lesson: "separate overlapping jobs"
-    }
-
     start_supervised!(
       {CaptureBuffer,
-       [
-         flush_callback:
-           App.build_flush_callback(nil, learn_fn: fn _t, _a, _u -> {:ok, learning} end)
-       ]}
+       [flush_callback: App.build_flush_callback(nil)]}
     )
 
     %{g: g}
@@ -136,14 +107,6 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   end
 
   defp put_facts(g, facts), do: Pythonx.eval("g.facts = facts", %{"g" => g, "facts" => facts})
-
-  defp put_learning(g, name, summary),
-    do:
-      Pythonx.eval("g.learning_nodes = [(name, summary)]", %{
-        "g" => g,
-        "name" => name,
-        "summary" => summary
-      })
 
   defp fail_search(g), do: Pythonx.eval("g.search_fails = True", %{"g" => g})
 
@@ -235,46 +198,6 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       Process.sleep(200)
 
       assert Enum.count(episodes(g), &(&1["source_description"] == "captured")) == 1
-    end
-  end
-
-  describe "when learning is enabled for a captured turn" do
-    test "then flush stores the turn's learning with the built-in Learning entity type",
-         %{g: g} do
-      :ok =
-        Native.capture("session-2", "operator_one", "Susu", "Eli", [
-          Message.new("user", "the backup keeps failing"),
-          Message.new("assistant", "I moved the vacuum job.")
-        ])
-
-      :ok = Native.flush("session-2")
-
-      episode = await_episode(g, "learning")
-      assert episode, "expected a learning episode to reach the graph"
-      assert episode["body"] =~ "separate overlapping jobs"
-      assert "Learning" in episode["entity_types"]
-    end
-
-    test "and recall combines relevant learning with relevant regular facts before interpretation",
-         %{g: g} do
-      put_facts(g, ["- Two overlapping jobs can cause a scheduling conflict."])
-      put_learning(g, "scheduling conflict", "Move one of two overlapping jobs to a later hour.")
-
-      assert {:ok, block} =
-               Native.recall(
-                 "operator_one",
-                 "Susu",
-                 "fresh-session",
-                 "how do I resolve two jobs that overlap?"
-               )
-
-      lower = String.downcase(block)
-
-      assert lower =~ "overlapping" or lower =~ "later hour",
-             "expected the learning search's result to reach interpretation; got: #{block}"
-
-      assert lower =~ "scheduling conflict",
-             "expected the regular search's result to reach interpretation; got: #{block}"
     end
   end
 
