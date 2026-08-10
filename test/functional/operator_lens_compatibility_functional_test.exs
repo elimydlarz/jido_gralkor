@@ -42,7 +42,26 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
                Client.lens!("operator")
     end
 
-    test "and existing capture, memory addition, and recall preserve legacy behaviour" do
+    test "and legacy capture, explicit memory addition, and recall use that built-in ontology consistently" do
+      assert Client.lens!("operator").ontology == Gralkor.DefaultOntology
+      assert_legacy_memory_works()
+    end
+
+    test "and implicit-default capture, explicit memory addition, and recall work without a consumer ontology module" do
+      Application.delete_env(:jido_gralkor, :ontology)
+      assert_legacy_memory_works()
+    end
+  end
+
+  describe "if an application retains the removed deployment-wide `:jido_gralkor, :ontology` setting" do
+    test "then the implicit `operator` Lens still uses jido_gralkor's built-in ontology" do
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+
+      assert Client.lens!("operator").ontology == Gralkor.DefaultOntology
+    end
+  end
+
+  defp assert_legacy_memory_works do
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
       Gralkor.Client.InMemory.reset()
       Gralkor.Client.InMemory.set_capture(:ok)
@@ -73,7 +92,6 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
 
       assert [["operator_one", "Susu", "session-one", "fact"]] =
                Gralkor.Client.InMemory.recalls()
-    end
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
