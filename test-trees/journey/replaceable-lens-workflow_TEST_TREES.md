@@ -1,4 +1,4 @@
-Journey: replaceable-lens-workflow (journey: test/functional/jido_memory_journey_test.exs)
+Journey: replaceable-lens-workflow (journey: test/journey/replaceable_lens_workflow_journey_test.exs)
 
 when an application writes a complete graph through a replaceable Lens
   then Lens search returns the supplied graph

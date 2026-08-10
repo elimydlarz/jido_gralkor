@@ -1,4 +1,4 @@
-Journey: jido-memory-journey (journey: test/functional/jido_memory_journey_test.exs)
+Journey: jido-memory-journey (journey: test/journey/jido_memory_journey_test.exs)
 
 when a fact is written before a fresh-session recall
   then the untrusted memory response semantically references the written fact
