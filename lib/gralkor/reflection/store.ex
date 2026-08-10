@@ -16,7 +16,9 @@ defmodule Gralkor.Reflection.Store do
 
   def search(reflections, operator_id, name, query, opts \\ []) when is_list(reflections) do
     case Enum.find(reflections, &(&1.name == name)) do
-      nil -> {:error, {:unknown_reflection, name}}
+      nil ->
+        {:error, {:unknown_reflection, name}}
+
       reflection ->
         max_results = Keyword.get(opts, :max_results, 20)
         artefact_id = Keyword.get(opts, :artefact_id)

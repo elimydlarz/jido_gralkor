@@ -22,7 +22,10 @@ defmodule Gralkor.ReplaceableLensWorkflowJourneyTest do
     Application.put_env(:jido_gralkor, :client, Native)
 
     data_dir =
-      Path.join(System.tmp_dir!(), "gralkor_replace_journey_#{System.unique_integer([:positive])}")
+      Path.join(
+        System.tmp_dir!(),
+        "gralkor_replace_journey_#{System.unique_integer([:positive])}"
+      )
 
     File.mkdir_p!(data_dir)
     {:ok, _python} = start_supervised(Gralkor.Python)
@@ -90,10 +93,14 @@ defmodule Gralkor.ReplaceableLensWorkflowJourneyTest do
   end
 
   defp replace_twice(operator_id) do
-    assert :ok = Client.replace(replacement(operator_id, "old", "Payments settles through Ledger."))
+    assert :ok =
+             Client.replace(replacement(operator_id, "old", "Payments settles through Ledger."))
+
     assert {:ok, previous} = replacement_search(operator_id, "settlement ledger")
     assert Enum.any?(previous, &String.contains?(&1.fact, "Payments settles through Ledger."))
-    assert :ok = Client.replace(replacement(operator_id, "new", "Payments settles through Clearing."))
+
+    assert :ok =
+             Client.replace(replacement(operator_id, "new", "Payments settles through Clearing."))
   end
 
   defp replacement(operator_id, suffix, fact) do

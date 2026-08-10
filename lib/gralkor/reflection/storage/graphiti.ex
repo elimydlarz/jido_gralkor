@@ -8,12 +8,22 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
 
   @impl true
   def put(reflection, operator_id, %Artefact{} = artefact) do
-    GraphitiPool.add_episode(group_id(reflection, operator_id), Jason.encode!(Map.from_struct(artefact)), "reflection:#{reflection.name}", nil)
+    GraphitiPool.add_episode(
+      group_id(reflection, operator_id),
+      Jason.encode!(Map.from_struct(artefact)),
+      "reflection:#{reflection.name}",
+      nil
+    )
   end
 
   @impl true
   def search(reflection, operator_id, query, max_results) do
-    case GraphitiPool.search_episodes(GraphitiPool, group_id(reflection, operator_id), query, max_results) do
+    case GraphitiPool.search_episodes(
+           GraphitiPool,
+           group_id(reflection, operator_id),
+           query,
+           max_results
+         ) do
       {:ok, episodes} -> {:ok, Enum.flat_map(episodes, &decode/1)}
       {:error, _} = error -> error
     end
@@ -39,9 +49,17 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
 
   defp decode(content) when is_binary(content) do
     case Jason.decode(content) do
-      {:ok, %{"id" => id, "reflection" => reflection, "payload" => payload, "evidence_ids" => evidence_ids}} ->
+      {:ok,
+       %{
+         "id" => id,
+         "reflection" => reflection,
+         "payload" => payload,
+         "evidence_ids" => evidence_ids
+       }} ->
         [%Artefact{id: id, reflection: reflection, payload: payload, evidence_ids: evidence_ids}]
-      _ -> []
+
+      _ ->
+        []
     end
   end
 

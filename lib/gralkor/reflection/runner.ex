@@ -32,10 +32,14 @@ defmodule Gralkor.Reflection.Runner do
         case infer_step(request, inference, tool_executor) do
           {:ok, output} ->
             case validate_output(output, step.output) do
-              {:ok, normalized} -> {:cont, {:ok, Map.merge(outputs, normalized)}}
+              {:ok, normalized} ->
+                {:cont, {:ok, Map.merge(outputs, normalized)}}
+
               {:error, {:missing_output, _}} when final_step? ->
                 {:halt, {:error, %{reflection: reflection.name, reason: :missing_artefact}}}
-              {:error, reason} -> {:halt, failure(reflection, step, reason)}
+
+              {:error, reason} ->
+                {:halt, failure(reflection, step, reason)}
             end
 
           {:error, reason} ->
@@ -65,16 +69,33 @@ defmodule Gralkor.Reflection.Runner do
     case inference.(request) do
       {:ok, %{tool_calls: calls}} when is_list(calls) and calls != [] ->
         results = Enum.map(calls, &execute_tool(&1, request, tool_executor))
-        infer_step(%{request | tool_results: request.tool_results ++ results}, inference, tool_executor)
+
+        infer_step(
+          %{request | tool_results: request.tool_results ++ results},
+          inference,
+          tool_executor
+        )
 
       {:tool_calls, calls} when is_list(calls) and calls != [] ->
         results = Enum.map(calls, &execute_tool(&1, request, tool_executor))
-        infer_step(%{request | tool_results: request.tool_results ++ results}, inference, tool_executor)
 
-      {:ok, %{output: output}} when is_map(output) -> {:ok, output}
-      {:ok, output} when is_map(output) -> {:ok, output}
-      {:error, reason} -> {:error, reason}
-      other -> {:error, {:invalid_inference_response, other}}
+        infer_step(
+          %{request | tool_results: request.tool_results ++ results},
+          inference,
+          tool_executor
+        )
+
+      {:ok, %{output: output}} when is_map(output) ->
+        {:ok, output}
+
+      {:ok, output} when is_map(output) ->
+        {:ok, output}
+
+      {:error, reason} ->
+        {:error, reason}
+
+      other ->
+        {:error, {:invalid_inference_response, other}}
     end
   end
 
@@ -108,12 +129,21 @@ defmodule Gralkor.Reflection.Runner do
     actual = Map.keys(normalized) |> MapSet.new()
 
     cond do
-      missing = expected |> MapSet.difference(actual) |> Enum.at(0) -> {:error, {:missing_output, missing}}
-      extra = actual |> MapSet.difference(expected) |> Enum.at(0) -> {:error, {:unexpected_output, extra}}
-      mismatch = Enum.find(schema, fn {key, type} -> not ChainOfThought.matches_type?(normalized[key], type) end) ->
+      missing = expected |> MapSet.difference(actual) |> Enum.at(0) ->
+        {:error, {:missing_output, missing}}
+
+      extra = actual |> MapSet.difference(expected) |> Enum.at(0) ->
+        {:error, {:unexpected_output, extra}}
+
+      mismatch =
+          Enum.find(schema, fn {key, type} ->
+            not ChainOfThought.matches_type?(normalized[key], type)
+          end) ->
         {key, type} = mismatch
         {:error, {:output_type_mismatch, key, type}}
-      true -> {:ok, normalized}
+
+      true ->
+        {:ok, normalized}
     end
   end
 
@@ -141,6 +171,7 @@ defmodule Gralkor.Reflection.Runner do
 
     model = Gralkor.Config.llm_model()
     model_spec = "#{model.provider}:#{model.id}"
+
     context =
       request.tool_context
       |> Map.put_new(:operator_id, request.operator_id)

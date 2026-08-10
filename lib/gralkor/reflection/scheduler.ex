@@ -6,7 +6,8 @@ defmodule Gralkor.Reflection.Scheduler do
   alias Gralkor.Reflection.Runner
   alias Gralkor.Reflection.Store
 
-  def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
+  def start_link(opts \\ []),
+    do: GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
 
   def schedule(reflections, ingestion, opts \\ []) do
     server = Keyword.get(opts, :server, __MODULE__)
@@ -24,8 +25,12 @@ defmodule Gralkor.Reflection.Scheduler do
     id = field(ingestion, :id)
 
     cond do
-      not completed?(ingestion) -> {:reply, {:error, {:incomplete_ingestion, id}}, state}
-      MapSet.member?(state.scheduled, id) -> {:reply, {:ok, :already_scheduled}, state}
+      not completed?(ingestion) ->
+        {:reply, {:error, {:incomplete_ingestion, id}}, state}
+
+      MapSet.member?(state.scheduled, id) ->
+        {:reply, {:ok, :already_scheduled}, state}
+
       true ->
         Enum.each(reflections, &start_reflection(state.task_supervisor, &1, ingestion, opts))
         {:reply, {:ok, :scheduled}, %{state | scheduled: MapSet.put(state.scheduled, id)}}
@@ -43,10 +48,16 @@ defmodule Gralkor.Reflection.Scheduler do
         case runner.(reflection, ingestion, runner_opts) do
           {:ok, artefact} ->
             case Store.put(reflection, field(ingestion, :operator_id), artefact, store_opts) do
-              :ok -> {:ok, artefact}
-              {:error, reason} -> {:error, %{reflection: reflection.name, destination: reflection.name, reason: reason}}
+              :ok ->
+                {:ok, artefact}
+
+              {:error, reason} ->
+                {:error,
+                 %{reflection: reflection.name, destination: reflection.name, reason: reason}}
             end
-          {:error, _} = error -> error
+
+          {:error, _} = error ->
+            error
         end
 
       if is_pid(notify), do: send(notify, {:reflection_completed, reflection.name, outcome})
@@ -56,6 +67,7 @@ defmodule Gralkor.Reflection.Scheduler do
   defp completed?(ingestion) do
     representations = field(ingestion, :representations) || []
     intended = field(ingestion, :intended_lenses) || Enum.map(representations, &field(&1, :lens))
+
     completed =
       field(ingestion, :completed_lenses) || Enum.map(representations, &field(&1, :lens))
 

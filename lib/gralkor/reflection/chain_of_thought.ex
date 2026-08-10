@@ -59,10 +59,17 @@ defmodule Gralkor.Reflection.ChainOfThought do
     reference = Enum.find(interpolations(directions), &(not MapSet.member?(prior_outputs, &1)))
 
     cond do
-      duplicate -> {:error, {:duplicate_output, duplicate, label}}
-      reference -> {:error, {:unknown_interpolation, reference, label}}
-      Enum.any?(output, fn {name, type} -> not non_blank?(name) or match?({:error, _}, parse_type(type)) end) ->
+      duplicate ->
+        {:error, {:duplicate_output, duplicate, label}}
+
+      reference ->
+        {:error, {:unknown_interpolation, reference, label}}
+
+      Enum.any?(output, fn {name, type} ->
+        not non_blank?(name) or match?({:error, _}, parse_type(type))
+      end) ->
         {:error, {:invalid_output_type, label}}
+
       true ->
         step = %Step{label: label, directions: directions, output: output}
         {:ok, step, Enum.reduce(names, prior_outputs, &MapSet.put(&2, &1))}
@@ -90,14 +97,20 @@ defmodule Gralkor.Reflection.ChainOfThought do
         {:ok, String.to_atom(declaration)}
 
       String.starts_with?(declaration, "Array<") and String.ends_with?(declaration, ">") ->
-        declaration |> String.slice(6, String.length(declaration) - 7) |> parse_type() |> wrap(:array)
+        declaration
+        |> String.slice(6, String.length(declaration) - 7)
+        |> parse_type()
+        |> wrap(:array)
 
       String.starts_with?(declaration, "{") and String.ends_with?(declaration, "}") ->
         declaration |> String.slice(1, String.length(declaration) - 2) |> parse_object()
 
       String.contains?(declaration, "|") or quoted_literal?(declaration) ->
         literals = declaration |> split_top_level("|") |> Enum.map(&parse_literal/1)
-        if Enum.all?(literals, &match?({:ok, _}, &1)), do: {:ok, {:literal, Enum.map(literals, &elem(&1, 1))}}, else: {:error, declaration}
+
+        if Enum.all?(literals, &match?({:ok, _}, &1)),
+          do: {:ok, {:literal, Enum.map(literals, &elem(&1, 1))}},
+          else: {:error, declaration}
 
       true ->
         {:error, declaration}
@@ -113,11 +126,14 @@ defmodule Gralkor.Reflection.ChainOfThought do
       case String.split(field, ":", parts: 2) do
         [name, type] ->
           name = String.trim(name)
+
           case parse_type(type) do
             {:ok, parsed} when name != "" -> {:cont, {:ok, Map.put(acc, name, parsed)}}
             _ -> {:halt, {:error, field}}
           end
-        _ -> {:halt, {:error, field}}
+
+        _ ->
+          {:halt, {:error, field}}
       end
     end)
     |> case do
@@ -145,11 +161,17 @@ defmodule Gralkor.Reflection.ChainOfThought do
     parts ++ [current]
   end
 
-  defp quoted_literal?(value), do: (String.starts_with?(value, "\"") and String.ends_with?(value, "\"")) or (String.starts_with?(value, "'") and String.ends_with?(value, "'"))
+  defp quoted_literal?(value),
+    do:
+      (String.starts_with?(value, "\"") and String.ends_with?(value, "\"")) or
+        (String.starts_with?(value, "'") and String.ends_with?(value, "'"))
 
   defp parse_literal(value) do
     value = String.trim(value)
-    if quoted_literal?(value), do: {:ok, String.slice(value, 1, String.length(value) - 2)}, else: {:error, value}
+
+    if quoted_literal?(value),
+      do: {:ok, String.slice(value, 1, String.length(value) - 2)},
+      else: {:error, value}
   end
 
   defp wrap({:ok, value}, tag), do: {:ok, {tag, value}}
@@ -161,12 +183,19 @@ defmodule Gralkor.Reflection.ChainOfThought do
   defp matches?(value, :float), do: is_float(value)
   defp matches?(value, :number), do: is_number(value)
   defp matches?(value, type) when type in [:map, :object], do: is_map(value)
-  defp matches?(value, {:array, type}), do: is_list(value) and Enum.all?(value, &matches?(&1, type))
+
+  defp matches?(value, {:array, type}),
+    do: is_list(value) and Enum.all?(value, &matches?(&1, type))
+
   defp matches?(value, {:literal, values}), do: value in values
+
   defp matches?(value, {:object, fields}) when is_map(value) do
     normalized = Map.new(value, fn {key, item} -> {to_string(key), item} end)
-    MapSet.new(Map.keys(normalized)) == MapSet.new(Map.keys(fields)) and Enum.all?(fields, fn {key, type} -> matches?(normalized[key], type) end)
+
+    MapSet.new(Map.keys(normalized)) == MapSet.new(Map.keys(fields)) and
+      Enum.all?(fields, fn {key, type} -> matches?(normalized[key], type) end)
   end
+
   defp matches?(_, _), do: false
 
   defp non_blank?(value), do: is_binary(value) and String.trim(value) != ""

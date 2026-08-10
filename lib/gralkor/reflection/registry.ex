@@ -50,8 +50,11 @@ defmodule Gralkor.Reflection.Registry do
 
   def load!(definitions, opts \\ []) do
     case load(definitions, opts) do
-      {:ok, reflections} -> reflections
-      {:error, reason} -> raise ArgumentError, "invalid Reflection declaration: #{inspect(reason)}"
+      {:ok, reflections} ->
+        reflections
+
+      {:error, reason} ->
+        raise ArgumentError, "invalid Reflection declaration: #{inspect(reason)}"
     end
   end
 
@@ -80,10 +83,17 @@ defmodule Gralkor.Reflection.Registry do
     relative = field(definition, :chain_of_thought)
 
     cond do
-      is_nil(relative) -> {:error, {:missing_chain_of_thought, name}}
-      not non_blank?(relative) -> {:error, {:invalid_chain_of_thought_file, name, relative}}
-      scope not in [:operator, :global, "operator", "global"] -> {:error, {:invalid_destination_scope, name, scope}}
-      true -> load_cot(name, scope, relative, root)
+      is_nil(relative) ->
+        {:error, {:missing_chain_of_thought, name}}
+
+      not non_blank?(relative) ->
+        {:error, {:invalid_chain_of_thought_file, name, relative}}
+
+      scope not in [:operator, :global, "operator", "global"] ->
+        {:error, {:invalid_destination_scope, name, scope}}
+
+      true ->
+        load_cot(name, scope, relative, root)
     end
   end
 
@@ -96,8 +106,11 @@ defmodule Gralkor.Reflection.Registry do
 
       true ->
         case ChainOfThought.load(path) do
-          {:ok, cot} -> {:ok, %Reflection{name: name, scope: normalize_scope(scope), chain_of_thought: cot}}
-          {:error, reason} -> {:error, {:invalid_chain_of_thought, name, relative, reason}}
+          {:ok, cot} ->
+            {:ok, %Reflection{name: name, scope: normalize_scope(scope), chain_of_thought: cot}}
+
+          {:error, reason} ->
+            {:error, {:invalid_chain_of_thought, name, relative, reason}}
         end
     end
   end
@@ -107,12 +120,16 @@ defmodule Gralkor.Reflection.Registry do
   defp normalize_scope("global"), do: :global
   defp normalize_scope(scope), do: scope
 
-  defp field(map, key) when is_map(map), do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
+  defp field(map, key) when is_map(map),
+    do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
+
   defp field(keyword, key) when is_list(keyword), do: Keyword.get(keyword, key)
   defp field(_, _), do: nil
 
   defp duplicate(values) do
-    values |> Enum.frequencies() |> Enum.find_value(fn {value, count} -> if count > 1, do: value end)
+    values
+    |> Enum.frequencies()
+    |> Enum.find_value(fn {value, count} -> if count > 1, do: value end)
   end
 
   defp non_blank?(value), do: is_binary(value) and String.trim(value) != ""

@@ -227,5 +227,4 @@ defmodule Gralkor.JidoMemoryJourneyTest do
         result
     end
   end
-
 end
