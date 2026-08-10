@@ -635,6 +635,16 @@ defmodule Gralkor.Client.NativeTest do
       assert :ok = Native.memory_add("g1", "content", "manual")
       assert [%{"body" => "content"}] = episodes(g)
     end
+
+    test "then jido_gralkor's built-in ontology is applied, so a caller neither supplies nor configures one",
+         %{g: g} do
+      assert function_exported?(Native, :memory_add, 3)
+      refute function_exported?(Native, :memory_add, 4)
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
+      assert :ok = Native.memory_add("g1", "content", "manual")
+      assert [episode] = episodes(g)
+      assert "entity_types" in episode["kwargs"]
+    end
   end
 
   describe "when memory is added with a group and content > where a source description is supplied" do
@@ -665,21 +675,6 @@ defmodule Gralkor.Client.NativeTest do
       assert {:error, {:python, reason}} = Native.memory_add("g1", "boom", "manual")
       assert reason =~ "graph refused the write"
       assert episodes(g) == []
-    end
-  end
-
-  describe "when memory is added with a group and content" do
-    @describetag :integration
-    setup :start_recording_pool
-
-    test "then jido_gralkor's built-in ontology is applied, so a caller neither supplies nor configures one",
-         %{g: g} do
-      assert function_exported?(Native, :memory_add, 3)
-      refute function_exported?(Native, :memory_add, 4)
-      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
-      assert :ok = Native.memory_add("g1", "content", "manual")
-      assert [episode] = episodes(g)
-      assert "entity_types" in episode["kwargs"]
     end
   end
 
