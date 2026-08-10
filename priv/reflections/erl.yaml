@@ -1,0 +1,35 @@
+steps:
+  - label: inspect-reasoning
+    directions: |-
+      Inspect the completed reasoning evidence supplied for this ingestion
+      operation, including the problem, attempted approach, tool interactions,
+      and outcome. Use any available tools when their results would materially
+      improve the assessment. Preserve the identifiers of evidence used.
+    output:
+      reasoning_assessment: "{ problem_kind: string; approach: string; outcome: string; evidence_ids: Array<string> }"
+
+  - label: derive-lesson
+    directions: |-
+      Derive an experiential learning candidate from this reasoning assessment:
+
+      {{reasoning_assessment}}
+
+      Determine whether the approach succeeded and state the reusable lesson
+      supported by the evidence.
+    output:
+      learning_candidate: "{ problem_kind: string; approach: string; success: boolean; lesson: string; evidence_ids: Array<string> }"
+
+  - label: synthesise-artefact
+    directions: |-
+      Produce the final experiential-learning artefact from this candidate:
+
+      {{learning_candidate}}
+
+      Preserve the assessed problem kind, approach, success, lesson, and every
+      supporting evidence identifier exactly as structured fields.
+    output:
+      problem_kind: "string"
+      approach: "string"
+      success: "boolean"
+      lesson: "string"
+      evidence_ids: "Array<string>"

@@ -1,0 +1,34 @@
+steps:
+  - label: inspect-evidence
+    directions: |-
+      Inspect every lensed representation supplied for this completed ingestion
+      operation. Identify candidate patterns that are supported across the
+      evidence rather than merely repeating one observation. Use memory_search
+      when earlier memory would help establish whether a pattern recurs; do not
+      call it when the supplied evidence is sufficient. Preserve the evidence
+      identifiers supporting every candidate.
+    output:
+      candidates: "Array<{ statement: string; evidence_ids: Array<string>; rationale: string }>"
+
+  - label: evaluate-durability
+    directions: |-
+      Evaluate these candidate patterns for durability and usefulness:
+
+      {{candidates}}
+
+      Select only patterns that are sufficiently supported to remain useful
+      beyond the ingestion operation that produced them. Preserve the evidence
+      identifiers for each assessment and explain the selection decision.
+    output:
+      assessments: "Array<{ statement: string; evidence_ids: Array<string>; durable: boolean; reasoning: string }>"
+
+  - label: synthesise-artefact
+    directions: |-
+      Synthesize the final generalisation artefact from these assessments:
+
+      {{assessments}}
+
+      Include every selected durable generalisation and its supporting evidence
+      identifiers. Do not include rejected candidates.
+    output:
+      generalisations: "Array<{ statement: string; evidence_ids: Array<string> }>"
