@@ -15,7 +15,14 @@ defmodule Gralkor.Reflection.Registry do
 
   @doc "Returns the application's validated Reflection declarations."
   def configured! do
-    case Application.get_env(:jido_gralkor, :reflections, @built_in_definitions) do
+    case Application.fetch_env(:jido_gralkor, :reflections) do
+      :error -> configured!(@built_in_definitions, true)
+      {:ok, reflections} -> configured!(reflections, false)
+    end
+  end
+
+  defp configured!(reflections, packaged_defaults?) do
+    case reflections do
       reflections when is_list(reflections) ->
         if Enum.all?(reflections, &match?(%Reflection{}, &1)) do
           reflections
@@ -27,7 +34,19 @@ defmodule Gralkor.Reflection.Registry do
               Application.app_dir(:jido_gralkor)
             )
 
-          load!(reflections, root: root)
+          reflections = load!(reflections, root: root)
+
+          if packaged_defaults? do
+            Enum.map(reflections, fn
+              %Reflection{name: "erl"} = reflection ->
+                %{reflection | ontology: Gralkor.Reflection.ERLOntology}
+
+              reflection ->
+                reflection
+            end)
+          else
+            reflections
+          end
         end
 
       invalid ->
@@ -107,7 +126,13 @@ defmodule Gralkor.Reflection.Registry do
       true ->
         case ChainOfThought.load(path) do
           {:ok, cot} ->
-            {:ok, %Reflection{name: name, scope: normalize_scope(scope), chain_of_thought: cot}}
+            {:ok,
+             %Reflection{
+               name: name,
+               scope: normalize_scope(scope),
+               chain_of_thought: cot,
+               ontology: Gralkor.DefaultOntology
+             }}
 
           {:error, reason} ->
             {:error, {:invalid_chain_of_thought, name, relative, reason}}
