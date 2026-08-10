@@ -20,7 +20,6 @@ defmodule Gralkor.ConfigTest do
         nil -> Application.delete_env(:jido_gralkor, :falkordb)
         v -> Application.put_env(:jido_gralkor, :falkordb, v)
       end
-
     end)
 
     System.delete_env("GRALKOR_DATA_DIR")
@@ -200,5 +199,4 @@ defmodule Gralkor.ConfigTest do
       end
     end
   end
-
 end
