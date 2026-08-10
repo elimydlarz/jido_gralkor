@@ -303,7 +303,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "and the ingestion caller receives success without waiting for Reflection", context do
       reflection = reflection(context)
-      configure_reflections([reflection])
+
+      non_inferencing_reflection = %{
+        reflection
+        | chain_of_thought: %{reflection.chain_of_thought | steps: []}
+      }
+
+      configure_reflections([non_inferencing_reflection])
 
       Application.put_env(:jido_gralkor, :lenses, [
         [
