@@ -76,6 +76,17 @@ defmodule Gralkor.Client do
               user_name(),
               messages(),
               lens :: String.t(),
+              additional_lenses :: [String.t()],
+              reflection_context :: map()
+            ) ::
+              :ok | {:error, term()}
+  @callback capture(
+              session_id(),
+              group_id(),
+              agent_name(),
+              user_name(),
+              messages(),
+              lens :: String.t(),
               additional_lenses :: [String.t()]
             ) ::
               :ok | {:error, term()}
