@@ -1173,7 +1173,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       - label: enrich-with-tool
         directions: |-
           The previous step produced the exact seed {{seed}}.
-          You MUST call reflection_live_probe exactly once with seed {{seed}} before answering.
+          You MUST call reflection_live_probe with seed {{seed}} before answering.
           After receiving its result, return exactly one JSON object whose combined value is
           the seed, a vertical bar, and the token returned by the tool.
         output:
