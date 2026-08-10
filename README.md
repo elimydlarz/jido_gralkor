@@ -408,12 +408,6 @@ config :jido_gralkor,
       ontology: MyApp.Ontology,
       scope: :operator,
       ingestion: MyApp.DecisionIngestion
-    ],
-    [
-      name: "generalisations",
-      ontology: MyApp.Ontology,
-      scope: :global,
-      ingestion: Gralkor.Lens.Ingestion.Generalise
     ]
   ]
 ```
@@ -627,16 +621,16 @@ The Jido glue:
 
 The embedded Gralkor adapter (under `lib/gralkor/`):
 
-- `Gralkor.Client` — legacy adapter behaviour plus the public `ingest/1`, `replace/1`, and `search/1` Lens boundary.
-- `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, `GraphitiPool`, `Generalise`, and `req_llm`.
+- `Gralkor.Client` — adapter behaviour plus the public `ingest/1`, `replace/1`, and `search/1` Lens/Reflection boundary.
+- `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, `GraphitiPool`, and `req_llm`.
 - `Gralkor.Client.InMemory` — test twin.
-- `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, `Gralkor.Ingest`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Search` — the resolved Lens models and consumer request values.
+- `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, `Gralkor.Ingest`, `Gralkor.IngestedRepresentation`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Search` — the resolved Lens models, completed-ingestion representation, and consumer request values.
 - `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — append, replacement, and search capabilities with collision-safe local/shared-global Graphiti placement.
-- `Gralkor.Lens.Ingestion.Store` / `Generalise` — built-in straight-through and generalising ingestion processes.
+- `Gralkor.Lens.Ingestion.Store` — the built-in straight-through ingestion process.
+- `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, `Gralkor.Reflection.Runner`, and `Gralkor.Reflection.Scheduler` — validated YAML declarations and asynchronous ordered execution after completed Lens ingestion.
+- `Gralkor.Reflection.Artefact`, `Gralkor.Reflection.Store`, and the Graphiti/InMemory Reflection storage modules — exactly-one-artefact persistence and search in Reflection-owned destinations.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
-- `Gralkor.Generalise` — the retained legacy `_gen` hypothesise → evaluate → persist pipeline.
-- `Gralkor.Generalisation` — struct and wire format (`GEN|v1|{json}\ncontent`) for storing generalisations as graphiti episodes, carrying each generalisation's own id and the ids it generalises inside the episode body.
-- `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Message`, `Gralkor.InterpretParseFailed`, `Gralkor.GeneralisationParseFailed` — the embedded pipelines (capture buffer, distill, interpret, recall, generalise) that drive Graphiti.
+- `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Message`, and `Gralkor.InterpretParseFailed` — the embedded capture, recall, interpretation, and Graphiti pipelines.
 
 The behavioural contract lives in [`test-trees/`](https://github.com/elimydlarz/jido_gralkor/tree/main/test-trees). Functional trees describe each application-visible feature, and the Journey tree describes the broad whole-application workflow. [`CLAUDE.md`](https://github.com/elimydlarz/jido_gralkor/blob/main/CLAUDE.md) carries the maintainer-facing mental model and project guidance.
 
