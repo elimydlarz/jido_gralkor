@@ -51,6 +51,14 @@ when Reflection declarations are validated
   if a Reflection's destination scope is neither operator nor global
     then validation fails identifying that Reflection and destination scope
 
+where the packaged default Reflections are used
+  then ERL is declared as an operator-scoped default Reflection
+  and ERL owns jido_gralkor's built-in experiential-learning ontology
+
+when the default ERL Reflection stores its final artefact
+  then extraction receives ERL's built-in `Learning` entity type
+  and the extracted `Learning` carries the problem kind, approach, success, and reusable lesson produced by ERL
+
 when an ingestion operation successfully stores information through one or more Lenses
   while Reflections are declared
     then every stored representation retains its evidence identifier and Lens identity
