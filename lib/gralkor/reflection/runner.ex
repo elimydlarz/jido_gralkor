@@ -175,6 +175,11 @@ defmodule Gralkor.Reflection.Runner do
 
     Return only one JSON object satisfying this exact output contract:
     #{Jason.encode!(request.output_schema)}
+
+    The quoted contract values are type declarations, not literal output
+    values. Emit actual JSON values of those types. In particular, an object
+    declaration such as "{ field: string }" requires a nested JSON object,
+    and an Array<...> declaration requires a JSON array; do not quote either.
     """
 
     model = Gralkor.Config.llm_model()
