@@ -353,10 +353,25 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       reflections = [reflection(context, "one"), reflection(context, "two")]
       parent = self()
 
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          ontology: ReflectionEvidenceOntology,
+          scope: :operator,
+          ingestion: EvidenceIngestion
+        ],
+        [
+          name: "decisions",
+          ontology: ReflectionEvidenceOntology,
+          scope: :operator,
+          ingestion: EvidenceIngestion
+        ]
+      ])
+
       start_supervised!(
         {CaptureBuffer,
          flush_callback: fn _, _, _, _, _ -> :ok end,
-         lens_flush_callback: variable_representation_callback(parent),
+         lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
          reflection_callback: fn _reflections, ingestion ->
            send(parent, {:scheduled, Enum.map(reflections, & &1.name), ingestion})
            :ok
@@ -380,7 +395,15 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_receive {:scheduled, ["one", "two"],
                       %{intended_lenses: ["observations", "decisions"], representations: reps}}
 
-      assert Enum.map(reps, & &1.lens) == ["observations", "observations"]
+      assert Enum.map(reps, & &1.lens) == [
+               "observations",
+               "observations",
+               "decisions",
+               "decisions"
+             ]
+
+      assert reps |> Enum.map(& &1.evidence_id) |> Enum.uniq() |> length() == 1
+      assert reps |> Enum.map(& &1.id) |> Enum.uniq() |> length() == 4
       refute_receive {:scheduled, _, _}
     end
 
