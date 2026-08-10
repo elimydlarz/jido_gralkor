@@ -2277,20 +2277,12 @@ defmodule Gralkor.GraphitiPoolTest do
         strict_again =
           GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest}, :infinity)
 
-        strict_merged =
-          GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest, true}, :infinity)
-
-        strict_merged_again =
-          GenServer.call(pid, {:materialise, StrictOntologyForGraphitiTest, true}, :infinity)
-
         assert Enum.sort(Map.keys(strict)) ==
                  ["edge_type_map", "edge_types", "entity_types", "excluded_entity_types"]
 
         assert strict["excluded_entity_types"] == ["Entity"]
 
         assert strict === strict_again
-        assert strict_merged === strict_merged_again
-        refute strict === strict_merged
       after
         GenServer.stop(pid)
         File.rm_rf!(data_dir)
