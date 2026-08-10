@@ -66,7 +66,7 @@ defmodule Gralkor.Reflection.Runner do
     payload = Map.take(outputs, Map.keys(final.output))
 
     if map_size(payload) == 0 do
-          {:error, %{reflection: reflection.name, reason: :missing_artefact}}
+      {:error, %{reflection: reflection.name, reason: :missing_artefact}}
     else
       evidence_ids = Enum.map(representations(ingestion), &field(&1, :evidence_id))
       {:ok, Artefact.new(reflection.name, payload, evidence_ids)}
