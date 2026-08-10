@@ -42,7 +42,6 @@ defmodule Gralkor.Client do
   @type agent_name :: String.t()
   @type messages :: [Gralkor.Message.t()]
   @type user_name :: String.t()
-  @type ontology :: module() | nil
   @type search_result :: %{lens: String.t(), fact: String.t()}
   @type reflection_search_result :: Gralkor.Reflection.Artefact.t()
   @type search_target :: %{
@@ -107,13 +106,6 @@ defmodule Gralkor.Client do
               group_id(),
               content :: String.t(),
               source_description :: String.t() | nil
-            ) ::
-              :ok | {:error, term()}
-  @callback memory_add(
-              group_id(),
-              content :: String.t(),
-              source_description :: String.t() | nil,
-              ontology()
             ) ::
               :ok | {:error, term()}
   @callback flush(session_id()) :: :ok | {:error, term()}
