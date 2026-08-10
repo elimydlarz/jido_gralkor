@@ -422,7 +422,7 @@ defmodule Gralkor.CaptureBufferTest do
                  "operator-one",
                  "Susu",
                  "Eli",
-                 ["observations", "generalisations"],
+                 ["observations", "decisions"],
                  turn
                )
 
@@ -430,7 +430,7 @@ defmodule Gralkor.CaptureBufferTest do
 
       assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "observations", [^turn]}
 
-      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "generalisations", [^turn]}
+      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "decisions", [^turn]}
     end
 
     test "but the session's buffered turns contain that turn only once" do
@@ -442,7 +442,7 @@ defmodule Gralkor.CaptureBufferTest do
                  "operator-one",
                  "Susu",
                  "Eli",
-                 ["observations", "generalisations"],
+                 ["observations", "decisions"],
                  turn
                )
 
@@ -461,13 +461,13 @@ defmodule Gralkor.CaptureBufferTest do
                  "operator-one",
                  "Susu",
                  "Eli",
-                 ["observations", "generalisations"],
+                 ["observations", "decisions"],
                  turn
                )
 
       assert :ok = CaptureBuffer.flush("session")
       assert_receive {:lens_attempted, "observations", [^turn]}
-      assert_receive {:lens_attempted, "generalisations", [^turn]}
+      assert_receive {:lens_attempted, "decisions", [^turn]}
     end
 
     test "and an awaited flush reports the first failure only after every Lens has been attempted" do
@@ -480,7 +480,7 @@ defmodule Gralkor.CaptureBufferTest do
                  "operator-one",
                  "Susu",
                  "Eli",
-                 ["observations", "generalisations"],
+                 ["observations", "decisions"],
                  turn
                )
 
@@ -490,7 +490,7 @@ defmodule Gralkor.CaptureBufferTest do
         end)
 
       assert_receive {:lens_attempted, "observations", [^turn]}
-      assert_receive {:lens_attempted, "generalisations", [^turn]}
+      assert_receive {:lens_attempted, "decisions", [^turn]}
       assert log =~ "outcome:error reason::exhausted"
     end
   end
