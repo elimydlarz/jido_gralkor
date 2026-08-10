@@ -19,7 +19,6 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client.Native
-  alias Gralkor.Application, as: GralkorApplication
   alias Gralkor.GraphitiPool
   alias Gralkor.Interpret
   alias Gralkor.InterpretParseFailed
