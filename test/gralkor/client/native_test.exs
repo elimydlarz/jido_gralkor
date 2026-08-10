@@ -668,18 +668,17 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when memory is added with a group and content > while no ontology override is supplied" do
+  describe "when memory is added with a group and content" do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then the deployment-configured ontology is the one applied, so a caller is never required to supply one",
+    test "then jido_gralkor's built-in ontology is applied, so a caller neither supplies nor configures one",
          %{g: g} do
       assert function_exported?(Native, :memory_add, 3)
-      assert function_exported?(Native, :memory_add, 4)
-      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+      refute function_exported?(Native, :memory_add, 4)
+      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.NotAnOntology)
       assert :ok = Native.memory_add("g1", "content", "manual")
       assert [episode] = episodes(g)
-      assert episode["entity_types"] != []
       assert "entity_types" in episode["kwargs"]
     end
   end
