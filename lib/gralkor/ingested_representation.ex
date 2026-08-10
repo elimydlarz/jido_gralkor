@@ -18,18 +18,19 @@ defmodule Gralkor.IngestedRepresentation do
           result: :ok
         }
 
-  @spec new(Gralkor.Ingest.t()) :: t()
-  def new(%Gralkor.Ingest{} = request) do
-    evidence_id = request.evidence_id || unique_id("evidence")
-
+  @spec new(String.t(), String.t(), String.t()) :: t()
+  def new(evidence_id, lens, content) do
     %__MODULE__{
       id: unique_id("representation"),
       evidence_id: evidence_id,
-      lens: request.lens,
-      content: request.content,
+      lens: lens,
+      content: content,
       result: :ok
     }
   end
+
+  @spec new_evidence_id() :: String.t()
+  def new_evidence_id, do: unique_id("evidence")
 
   defp unique_id(kind) do
     "#{kind}-#{System.system_time(:microsecond)}-#{System.unique_integer([:positive, :monotonic])}"

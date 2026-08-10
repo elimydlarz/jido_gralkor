@@ -126,27 +126,44 @@ defmodule Gralkor.Client do
   @spec ingest(Ingest.t()) :: :ok | {:error, term()}
   def ingest(%Ingest{} = request) do
     case ingest_with_representation(request) do
-      {:ok, %IngestedRepresentation{}} -> :ok
+      {:ok, representations} when is_list(representations) -> :ok
       {:error, _} = error -> error
     end
   end
 
   @doc false
   @spec ingest_with_representation(Ingest.t()) ::
-          {:ok, IngestedRepresentation.t()} | {:error, term()}
+          {:ok, [IngestedRepresentation.t()]} | {:error, term()}
   def ingest_with_representation(%Ingest{lens: lens_name} = request) do
     case lens!(lens_name) do
       %Lens{} = lens ->
-        store = %Store{operator_id: request.operator_id, lens: lens}
+        collection_ref = make_ref()
+        caller = self()
+
+        store = %Store{
+          operator_id: request.operator_id,
+          lens: lens,
+          evidence_id: request.evidence_id || IngestedRepresentation.new_evidence_id(),
+          representation_collector: &send(caller, {collection_ref, &1})
+        }
 
         case lens.ingestion.ingest(request, store) do
-          :ok -> {:ok, IngestedRepresentation.new(request)}
+          :ok -> {:ok, collect_representations(collection_ref, [])}
           {:error, _} = error -> error
         end
 
       %ReplaceableLens{} ->
         raise ArgumentError,
               "Lens #{inspect(lens_name)} accepts only whole-graph replacement"
+    end
+  end
+
+  defp collect_representations(collection_ref, representations) do
+    receive do
+      {^collection_ref, %IngestedRepresentation{} = representation} ->
+        collect_representations(collection_ref, representations ++ [representation])
+    after
+      0 -> representations
     end
   end
 

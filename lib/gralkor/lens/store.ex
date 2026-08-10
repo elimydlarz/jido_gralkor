@@ -14,19 +14,29 @@ defmodule Gralkor.Lens.Store do
 
   alias Gralkor.Lens
   alias Gralkor.Lens.Replaceable
+  alias Gralkor.IngestedRepresentation
 
   @enforce_keys [:operator_id, :lens]
-  defstruct [:operator_id, :lens]
+  defstruct [:operator_id, :lens, :evidence_id, :representation_collector]
 
   @type t :: %__MODULE__{
           operator_id: String.t(),
-          lens: Lens.t() | Replaceable.t() | :global
+          lens: Lens.t() | Replaceable.t() | :global,
+          evidence_id: String.t() | nil,
+          representation_collector: (IngestedRepresentation.t() -> any()) | nil
         }
 
   @spec add(t(), String.t(), String.t()) :: :ok | {:error, term()}
   @doc "Adds an episode through the bound Lens."
   def add(%__MODULE__{} = store, content, source_description) do
-    storage().add_episode(store, content, source_description)
+    case storage().add_episode(store, content, source_description) do
+      :ok ->
+        collect_representation(store, content)
+        :ok
+
+      {:error, _} = error ->
+        error
+    end
   end
 
   @spec replace_graph(t(), Gralkor.Graph.t()) :: :ok | {:error, term()}
@@ -40,6 +50,20 @@ defmodule Gralkor.Lens.Store do
   def search(%__MODULE__{} = store, query, max_results) do
     storage().search(store, query, max_results)
   end
+
+  defp collect_representation(
+         %__MODULE__{
+           lens: %Lens{name: lens},
+           evidence_id: evidence_id,
+           representation_collector: collector
+         },
+         content
+       )
+       when is_binary(evidence_id) and is_function(collector, 1) do
+    collector.(IngestedRepresentation.new(evidence_id, lens, content))
+  end
+
+  defp collect_representation(_store, _content), do: :ok
 
   @spec storage() :: module()
   defp storage do
