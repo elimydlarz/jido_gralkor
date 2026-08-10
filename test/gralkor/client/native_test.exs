@@ -431,8 +431,7 @@ defmodule Gralkor.Client.NativeTest do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush_and_await("s1", 1_000)
 
-      assert_receive {:flushed, "g", "Susu", "Eli", nil,
-                      [[%Message{content: "x"}]]}
+      assert_receive {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "x"}]]}
     end
   end
 
