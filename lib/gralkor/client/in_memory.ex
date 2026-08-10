@@ -127,10 +127,6 @@ defmodule Gralkor.Client.InMemory do
     do: GenServer.call(__MODULE__, {:call, :memory_add, [group_id, content, source]})
 
   @impl Gralkor.Client
-  def memory_add(group_id, content, source, ontology),
-    do: GenServer.call(__MODULE__, {:call, :memory_add, [group_id, content, source, ontology]})
-
-  @impl Gralkor.Client
   def flush(session_id) do
     raise_if_blank!(:session_id, session_id)
     GenServer.call(__MODULE__, {:call, :flush, [session_id]})
