@@ -1019,12 +1019,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       send(parent, {:lens_stored, lens})
 
       {:ok,
-       %{
-         id: "representation-#{lens}",
-         evidence_id: "evidence-shared",
-         lens: lens,
-         content: "stored through #{lens}"
-       }}
+       [
+         %{
+           id: "representation-#{lens}",
+           evidence_id: "evidence-shared",
+           lens: lens,
+           content: "stored through #{lens}"
+         }
+       ]}
     end
   end
 

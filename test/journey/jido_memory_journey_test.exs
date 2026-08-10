@@ -19,21 +19,46 @@ defmodule Gralkor.JidoMemoryJourneyTest do
   alias Gralkor.Client.Native
   alias Gralkor.GraphitiPool
   alias Gralkor.Message
+  alias Gralkor.Reflection.Registry
+  alias Gralkor.Search
 
   @moduletag :journey
   @moduletag timeout: 300_000
+
+  defmodule JourneyOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity Memory do
+      field(:content, :string, required: true)
+    end
+  end
 
   setup_all do
     Application.put_env(:jido_gralkor, :recall_deadline_ms, 60_000)
     on_exit(fn -> Application.delete_env(:jido_gralkor, :recall_deadline_ms) end)
 
     original_client = Application.get_env(:jido_gralkor, :client)
+    original_lenses = Application.get_env(:jido_gralkor, :lenses)
     Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+
+    Application.put_env(:jido_gralkor, :lenses, [
+      [
+        name: "observations",
+        scope: :operator,
+        ontology: JourneyOntology,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ]
+    ])
 
     on_exit(fn ->
       case original_client do
         nil -> Application.delete_env(:jido_gralkor, :client)
         mod -> Application.put_env(:jido_gralkor, :client, mod)
+      end
+
+      case original_lenses do
+        nil -> Application.delete_env(:jido_gralkor, :lenses)
+        lenses -> Application.put_env(:jido_gralkor, :lenses, lenses)
       end
     end)
 
@@ -57,10 +82,17 @@ defmodule Gralkor.JidoMemoryJourneyTest do
          ]}
       )
 
-    flush_callback =
-      App.build_flush_callback({:embedded, data_dir}, learn_fn: &Native.learn/3)
+    flush_callback = App.build_flush_callback({:embedded, data_dir})
 
-    {:ok, _buffer} = start_supervised({CaptureBuffer, [flush_callback: flush_callback]})
+    {:ok, _buffer} =
+      start_supervised(
+        {CaptureBuffer,
+         [
+           flush_callback: flush_callback,
+           lens_flush_callback: App.build_lens_flush_callback(),
+           reflections: Registry.configured!()
+         ]}
+      )
 
     on_exit(fn -> File.rm_rf!(data_dir) end)
 
@@ -134,11 +166,11 @@ defmodule Gralkor.JidoMemoryJourneyTest do
     end
   end
 
-  describe "when a solved turn is flushed with learning enabled" do
-    test "then its lesson survives Learning-node retrieval and full recall", %{
+  describe "when information is ingested before a declared Reflection runs" do
+    test "then the Reflection artefact survives destination storage and full recall", %{
       group_id: group_id
     } do
-      session_id = "erl_#{System.unique_integer([:positive])}"
+      session_id = "reflection_#{System.unique_integer([:positive])}"
 
       :ok =
         Client.impl().capture(
@@ -160,52 +192,39 @@ defmodule Gralkor.JidoMemoryJourneyTest do
               "assistant",
               "I moved the vacuum job to 04:00 so it no longer overlaps the backup; the nightly backups now succeed."
             )
-          ]
+          ],
+          "observations",
+          [],
+          %{tools: [], tool_context: %{session_id: session_id}}
         )
 
-      :ok = Client.impl().flush(session_id)
+      :ok = Client.impl().flush_and_await(session_id, 60_000)
 
-      # Give the buffer flush + ex-learn LLM call + graphiti add_episode (entity
-      # extraction populates the Learning node) time to land.
-      Process.sleep(60_000)
+      search = %Search{
+        operator_id: group_id,
+        query: "backup vacuum scheduling conflict",
+        reflections: ["erl"],
+        max_results: 10
+      }
 
-      query = "how do I resolve a scheduling conflict between two jobs that causes lock timeouts?"
+      assert {:ok, [artefact | _]} = eventually_search_reflection(search, 120_000)
+      assert artefact.reflection == "erl"
+      assert artefact.payload["problem_kind"] =~ ~r/schedul|backup|lock/i
+      assert artefact.payload["lesson"] =~ ~r/overlap|separat|reschedul|04:00|4:00/i
+      assert artefact.evidence_ids != []
+    end
+  end
 
-      lesson_terms = ["vacuum", "schedul", "overlap", "backup", "04:00", "4:00"]
+  defp eventually_search_reflection(_search, budget_ms) when budget_ms <= 0, do: {:ok, []}
 
-      # The ERL-specific contract: the learning was extracted into a Learning
-      # custom-entity NODE (add_episode + Gralkor.LearningEntity), and NODE search
-      # filtered to node_labels: ["Learning"] retrieves it. This is the path the
-      # client's learning_search_fn uses — isolated from the unfiltered main
-      # search, which would surface the episode regardless.
-      {:ok, learning_nodes} =
-        GraphitiPool.search_nodes(GraphitiPool, group_id, query, 5, node_labels: ["Learning"])
+  defp eventually_search_reflection(search, budget_ms) do
+    case Client.search(search) do
+      {:ok, []} ->
+        Process.sleep(1_000)
+        eventually_search_reflection(search, budget_ms - 1_000)
 
-      require Logger
-      Logger.info("[erl] learning nodes (#{length(learning_nodes)}): #{inspect(learning_nodes)}")
-
-      assert learning_nodes != [],
-             "node search filtered to ['Learning'] returned no nodes — the Learning entity was not extracted"
-
-      node_text =
-        learning_nodes
-        |> Enum.map(fn n -> "#{n.name} #{n.summary} #{inspect(n.attributes)}" end)
-        |> Enum.join("\n")
-        |> String.downcase()
-
-      assert Enum.any?(lesson_terms, &String.contains?(node_text, &1)),
-             "the Learning node did not carry the lesson; got: #{inspect(learning_nodes)}"
-
-      # End-to-end: full recall surfaces the lesson (the learning search feeds the
-      # combined facts into interpretation).
-      lookup = "erl_lookup_#{System.unique_integer([:positive])}"
-
-      assert {:ok, block} = Client.impl().recall(group_id, "Susu", lookup, query)
-
-      lower = String.downcase(block)
-
-      assert Enum.any?(lesson_terms, &String.contains?(lower, &1)),
-             "expected recall to surface the ERL lesson about rescheduling the conflicting job; got: #{block}"
+      result ->
+        result
     end
   end
 
