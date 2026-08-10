@@ -13,11 +13,8 @@ defmodule Gralkor.Client.Native do
   alias Gralkor.Client
   alias Gralkor.Config
   alias Gralkor.Format
-  alias Gralkor.Generalise
-  alias Gralkor.Generalisation
   alias Gralkor.GraphitiPool
   alias Gralkor.Interpret
-  alias Gralkor.Learn
   alias Gralkor.Recall
 
   # ── Client behaviour ────────────────────────────────────────
@@ -28,12 +25,6 @@ defmodule Gralkor.Client.Native do
 
     opts = [
       search_fn: search_fn(),
-      gen_search_fn: gen_recall_search_fn(),
-      # ERL recall (§1) runs unconditionally on every recall — no flag, no LLM
-      # classification. The learning search is seeded with the raw user query
-      # and bakes in SearchFilters(node_labels: ["Learning"]) so only the
-      # plugin's Learning custom-entity episodes are returned (ex-learning-entity).
-      learning_search_fn: learning_search_fn(),
       interpret_fn: interpret_fn(),
       turns_fn: turns_fn()
     ]
