@@ -226,20 +226,22 @@ config :jido_gralkor,
     ssl: System.get_env("FALKORDB_SSL") == "true"
   ],
 
-  # The Lens registry. Each entry binds a name to an ontology module,
-  # a scope, and an ingestion process. This is the only place an
-  # ontology needs to be mentioned in config.
+  destinations: [
+    [name: "observations", address: "operator/observations", ontology: MyApp.Ontology],
+    [name: "decisions", address: "operator/decisions", ontology: MyApp.Ontology],
+    [name: "release-knowledge", address: "global/release-knowledge"]
+  ],
+
+  # The Lens registry selects ingestion behavior and a Destination.
   lenses: [
     [
       name: "observations",
-      ontology: MyApp.Ontology,
-      scope: :operator,
+      destination: "observations",
       ingestion: Gralkor.Lens.Ingestion.Store
     ],
     [
       name: "decisions",
-      ontology: MyApp.Ontology,
-      scope: :operator,
+      destination: "decisions",
       ingestion: MyApp.DecisionIngestion
     ]
   ],
@@ -249,12 +251,12 @@ config :jido_gralkor,
   reflections: [
     [
       name: "generalisations",
-      scope: :global,
+      destination: "generalisations",
       chain_of_thought: "priv/reflections/generalisations.yaml"
     ],
     [
       name: "erl",
-      scope: :operator,
+      destination: "experiential-learning",
       chain_of_thought: "priv/reflections/erl.yaml"
     ]
   ],
@@ -272,14 +274,14 @@ plugins: [
    %{
      agent_name: "Susu",
      ingestion_lens: "observations",
-     search_lenses: ["decisions", "global"]
+     search_destinations: ["decisions", "generalisations"]
    }}
 ]
 ```
 
-That mount writes captured turns and `memory_add` calls to `"observations"`, and concurrently searches the reserved `"operator"` Lens, `"decisions"`, and the shared `"global"` group. After a flushed ingestion has completed across its intended Lenses, each declared Reflection is scheduled independently over the completed lensed representations.
+That mount writes captured turns and `memory_add` calls through the `"observations"` Lens to its Destination, and concurrently searches the selected `"decisions"` and `"generalisations"` Destinations. After a flushed ingestion has completed across its intended Lenses, each declared Reflection is scheduled independently over the completed lensed representations.
 
-**Ontology ownership.** The implicit `"operator"` Lens cannot be registered because its name is reserved; Jido Gralkor owns its open `Gralkor.DefaultOntology`. Applications attach custom ontology modules only to explicitly registered named Lenses. If an older deployment set `config :jido_gralkor, :ontology`, remove it. If it depended on that custom schema, move the schema to a named Lens and select that Lens for ingestion.
+**Ontology placement.** The packaged operator Destination uses Jido Gralkor's open `Gralkor.DefaultOntology`; packaged experiential learning uses `Gralkor.Reflection.ERLOntology`. Applications attach custom ontology modules to explicitly registered Destinations. If an older deployment set `config :jido_gralkor, :ontology`, remove it and create a named Destination referenced by a Lens or Reflection instead.
 
 ## Wire it on your agent
 
