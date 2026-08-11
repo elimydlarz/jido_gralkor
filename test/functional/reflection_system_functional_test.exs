@@ -350,8 +350,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       Application.put_env(:jido_gralkor, :lenses, [
         [
           name: "observations",
-          ontology: ReflectionEvidenceOntology,
-          scope: :operator,
+          destination: "observations",
           ingestion: EvidenceIngestion
         ]
       ])
@@ -405,8 +404,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       Application.put_env(:jido_gralkor, :lenses, [
         [
           name: "observations",
-          ontology: ReflectionEvidenceOntology,
-          scope: :operator,
+          destination: "observations",
           ingestion: EvidenceIngestion
         ]
       ])
@@ -447,14 +445,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       Application.put_env(:jido_gralkor, :lenses, [
         [
           name: "observations",
-          ontology: ReflectionEvidenceOntology,
-          scope: :operator,
+          destination: "observations",
           ingestion: EvidenceIngestion
         ],
         [
           name: "decisions",
-          ontology: ReflectionEvidenceOntology,
-          scope: :operator,
+          destination: "decisions",
           ingestion: EvidenceIngestion
         ]
       ])
@@ -809,7 +805,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "where the declared destination is global then the artefact is available through the shared global destination",
          context do
-      reflection = reflection(context, "generalisation", :global)
+      reflection = reflection(context, "generalisation", "reflection-test-global")
       {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
 
       :ok =
@@ -1016,63 +1012,66 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when memory is searched naming a Reflection" do
-    test "then that Reflection's destination is searched", context do
+  describe "when a Destination is searched for artefacts" do
+    test "then that Destination is searched", context do
       {reflection, artefact} = stored_artefact(context)
-      configure_reflections([reflection])
 
-      assert {:ok, [^artefact]} =
+      assert {:ok, [%{destination: "reflection-test-operator", artefact: ^artefact}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 reflections: [reflection.name]
+                 destinations: [reflection.destination.name],
+                 result_type: :artefacts
                })
     end
 
-    test "and only artefacts produced by that Reflection are returned", context do
+    test "and relevant artefacts produced by any Reflection using that Destination are returned",
+         context do
       one = reflection(context, "one")
       two = reflection(context, "two")
       {:ok, a1} = Runner.run(one, ingestion(), inference: &output_for/1)
       {:ok, a2} = Runner.run(two, ingestion(), inference: &output_for/1)
       :ok = Store.put(one, "operator-one", a1, storage: Gralkor.Reflection.Storage.InMemory)
       :ok = Store.put(two, "operator-one", a2, storage: Gralkor.Reflection.Storage.InMemory)
-      configure_reflections([one, two])
 
-      assert {:ok, [^a1]} =
+      assert {:ok,
+              [
+                %{destination: "reflection-test-operator", artefact: ^a1},
+                %{destination: "reflection-test-operator", artefact: ^a2}
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "",
-                 reflections: ["one"]
+                 destinations: [one.destination.name],
+                 result_type: :artefacts
                })
     end
 
-    test "and every result identifies the named Reflection rather than a Lens", context do
+    test "and every result identifies its declaring Reflection", context do
       {reflection, _} = stored_artefact(context)
-      configure_reflections([reflection])
 
-      assert {:ok, [%{reflection: "generalisation"} = result]} =
+      assert {:ok, [%{artefact: %{reflection: "generalisation"}}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 reflections: [reflection.name]
+                 destinations: [reflection.destination.name],
+                 result_type: :artefacts
                })
-
-      refute Map.has_key?(Map.from_struct(result), :lens)
     end
 
     test "and every result retains its supporting evidence identifiers", context do
       {reflection, _} = stored_artefact(context)
-      configure_reflections([reflection])
 
-      assert {:ok, [%{evidence_ids: ["ev-1", "ev-2"]}]} =
+      assert {:ok, [%{artefact: %{evidence_ids: ["ev-1", "ev-2"]}}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 reflections: [reflection.name]
+                 destinations: [reflection.destination.name],
+                 result_type: :artefacts
                })
     end
 
-    test "where the search also identifies one artefact then only that artefact is returned from the named Reflection's destination",
+    test "where the search also identifies one artefact then only that artefact is returned from the selected Destination",
          context do
       {reflection, artefact} = stored_artefact(context)
       {:ok, other} = Runner.run(reflection, ingestion(), inference: &output_for/1)
@@ -1080,38 +1079,49 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       :ok =
         Store.put(reflection, "operator-one", other, storage: Gralkor.Reflection.Storage.InMemory)
 
-      configure_reflections([reflection])
-
-      assert {:ok, [^artefact]} =
+      assert {:ok, [%{destination: "reflection-test-operator", artefact: ^artefact}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
-                 query: "durable",
-                 reflections: [reflection.name],
+                  query: "durable",
+                 destinations: [reflection.destination.name],
+                 result_type: :artefacts,
                  artefact_id: artefact.id
                })
     end
   end
 
-  test "if memory is searched naming an unknown Reflection then the search fails identifying the unknown Reflection before any destination is searched" do
-    Application.put_env(:jido_gralkor, :reflections, [])
+  test "if memory is searched naming an unknown Destination then the search fails before any storage is searched" do
     Application.put_env(:jido_gralkor, :reflection_storage, FailingReflectionStorage)
 
-    assert_raise ArgumentError, ~r/unknown Reflection "missing"/, fn ->
+    assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
       Client.search(%Search{
         operator_id: "operator-one",
         query: "query",
-        reflections: ["missing"]
+        destinations: ["missing"],
+        result_type: :artefacts
       })
     end
   end
 
   defp assert_valid(%{root: root}) do
-    assert {:ok, [%Gralkor.Reflection{name: "generalisation", scope: :operator}]} =
+    assert {:ok,
+            [
+              %Gralkor.Reflection{
+                name: "generalisation",
+                destination: %Gralkor.Destination{name: "reflection-test-operator"}
+              }
+            ]} =
              Registry.load([valid_definition(root)], root: root)
   end
 
-  defp reflection(%{root: root}, name \\ "generalisation", scope \\ :operator) do
-    [reflection] = Registry.load!([valid_definition(root, name: name, scope: scope)], root: root)
+  defp reflection(
+         %{root: root},
+         name \\ "generalisation",
+         destination \\ "reflection-test-operator"
+       ) do
+    [reflection] =
+      Registry.load!([valid_definition(root, name: name, destination: destination)], root: root)
+
     reflection
   end
 
@@ -1244,7 +1254,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
 
     Keyword.merge(
-      [name: "generalisation", chain_of_thought: "valid.yaml", scope: :operator],
+      [
+        name: "generalisation",
+        chain_of_thought: "valid.yaml",
+        destination: "reflection-test-operator"
+      ],
       overrides
     )
   end
@@ -1298,7 +1312,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
           [
             name: "live-proof",
             chain_of_thought: "live-tool-sequence.yaml",
-            scope: :operator
+            destination: "reflection-test-operator"
           ]
         ],
         root: root
