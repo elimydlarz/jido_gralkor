@@ -11,7 +11,7 @@ defmodule Gralkor.Destination.Storage.Graphiti do
     graph_id = Destination.graph_id(destination, operator_id)
     search_opts = Keyword.take(opts, [:edge_types])
 
-    case GraphitiPool.search(graph_id, query, max_results, search_opts) do
+    case GraphitiPool.search(GraphitiPool, graph_id, query, max_results, search_opts) do
       {:ok, facts} -> {:ok, Enum.map(facts, &Format.format_fact/1)}
       {:error, _} = error -> error
     end
