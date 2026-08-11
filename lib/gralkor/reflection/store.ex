@@ -35,11 +35,8 @@ defmodule Gralkor.Reflection.Store do
     end
   end
 
-  def destination(%Reflection{name: name, scope: :global}, _operator_id),
-    do: {:global, name}
-
-  def destination(%Reflection{name: name, scope: :operator}, operator_id),
-    do: {:operator, operator_id, name}
+  def destination(%Reflection{destination: destination}, operator_id),
+    do: Gralkor.Destination.graph_id(destination, operator_id)
 
   defp storage(opts) do
     Keyword.get(

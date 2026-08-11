@@ -4,6 +4,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   @behaviour Gralkor.Lens.Storage
 
   alias Gralkor.GraphitiPool
+  alias Gralkor.Destination
   alias Gralkor.Lens
   alias Gralkor.Lens.Replaceable
   alias Gralkor.Lens.Store
@@ -31,30 +32,18 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   @spec replace_graph(Store.t(), Gralkor.Graph.t(), replace_graph_fn: replace_graph_fn()) ::
           :ok | {:error, term()}
   def replace_graph(
-        %Store{
-          operator_id: operator_id,
-          lens: %Replaceable{name: name, scope: :operator, graph_format: format}
-        },
+        %Store{operator_id: operator_id, lens: %Replaceable{} = lens},
         %Gralkor.Graph{data: data},
         opts
       ) do
     replace_graph_fn = replace_graph_option(opts)
-    replace_graph_fn.(group_id(operator_id, name), name, format, data)
-  end
-
-  def replace_graph(
-        %Store{lens: %Replaceable{name: name, scope: :global, graph_format: format}},
-        %Gralkor.Graph{data: data},
-        opts
-      ) do
-    replace_graph_fn = replace_graph_option(opts)
-    replace_graph_fn.("global", name, format, data)
+    replace_graph_fn.(Destination.graph_id(lens.destination, operator_id), lens.name, lens.graph_format, data)
   end
 
   @spec add_episode(Store.t(), String.t(), String.t(), keyword()) ::
           :ok | {:error, term()}
   def add_episode(
-        %Store{operator_id: operator_id, lens: %Lens{scope: :operator} = lens},
+        %Store{operator_id: operator_id, lens: %Lens{} = lens},
         content,
         source_description,
         opts
@@ -62,27 +51,10 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     {add_episode_fn, episode_opts} = add_options(opts)
 
     add_episode_fn.(
-      group_id(operator_id, lens.name),
+      Destination.graph_id(lens.destination, operator_id),
       content,
       source_description,
-      lens.ontology,
-      episode_opts
-    )
-  end
-
-  def add_episode(
-        %Store{lens: %Lens{scope: :global} = lens},
-        content,
-        source_description,
-        opts
-      ) do
-    {add_episode_fn, episode_opts} = add_options(opts)
-
-    add_episode_fn.(
-      "global",
-      content,
-      source_description,
-      lens.ontology,
+      lens.destination.ontology,
       Keyword.delete(episode_opts, :lens) ++ [lens: lens.name]
     )
   end
@@ -94,50 +66,10 @@ defmodule Gralkor.Lens.Storage.Graphiti do
 
   @spec search(Store.t(), String.t(), pos_integer(), search_fn: search_fn()) ::
           {:ok, [String.t()]} | {:error, term()}
-  def search(
-        %Store{operator_id: operator_id, lens: %Lens{scope: :operator} = lens},
-        query,
-        max_results,
-        opts
-      ) do
+  def search(%Store{operator_id: operator_id, lens: %{destination: destination}}, query, max_results, opts) do
     search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
-    search_fn.(group_id(operator_id, lens.name), query, max_results)
+    search_fn.(Destination.graph_id(destination, operator_id), query, max_results)
   end
-
-  def search(
-        %Store{operator_id: operator_id, lens: %Replaceable{scope: :operator} = lens},
-        query,
-        max_results,
-        opts
-      ) do
-    search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
-    search_fn.(group_id(operator_id, lens.name), query, max_results)
-  end
-
-  def search(%Store{lens: %Lens{scope: :global}}, query, max_results, opts) do
-    search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
-    search_fn.("global", query, max_results)
-  end
-
-  def search(%Store{lens: %Replaceable{scope: :global}}, query, max_results, opts) do
-    search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
-    search_fn.("global", query, max_results)
-  end
-
-  def search(%Store{lens: :global}, query, max_results, opts) do
-    search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
-    search_fn.("global", query, max_results)
-  end
-
-  @spec group_id(String.t(), String.t()) :: String.t()
-  defp group_id(operator_id, "operator"), do: String.replace(operator_id, "-", "_")
-
-  defp group_id(operator_id, lens_name) do
-    "lens_" <> encode(operator_id) <> "_" <> encode(lens_name)
-  end
-
-  @spec encode(String.t()) :: String.t()
-  defp encode(value), do: Base.encode16(value, case: :lower)
 
   @spec graph_add(String.t(), String.t(), String.t(), module() | nil, keyword()) ::
           :ok | {:error, term()}

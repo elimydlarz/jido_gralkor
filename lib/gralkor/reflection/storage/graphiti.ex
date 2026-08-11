@@ -17,7 +17,7 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
       group_id(reflection, operator_id),
       Jason.encode!(Map.from_struct(artefact)),
       "reflection:#{reflection.name}",
-      reflection.ontology
+      reflection.destination.ontology
     )
   end
 
@@ -44,9 +44,6 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
 
   defp group_id(reflection, operator_id) do
     Store.destination(reflection, operator_id)
-    |> :erlang.term_to_binary()
-    |> Base.url_encode64(padding: false)
-    |> then(&("reflection_" <> &1))
   end
 
   defp decode(%{content: content}), do: decode(content)

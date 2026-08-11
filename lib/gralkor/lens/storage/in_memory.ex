@@ -6,6 +6,7 @@ defmodule Gralkor.Lens.Storage.InMemory do
   @behaviour Gralkor.Lens.Storage
 
   alias Gralkor.Lens
+  alias Gralkor.Destination
   alias Gralkor.Lens.Replaceable
   alias Gralkor.Lens.Store
 
@@ -13,7 +14,7 @@ defmodule Gralkor.Lens.Storage.InMemory do
           required(:content) => String.t(),
           required(:lens) => String.t()
         }
-  @type key :: {String.t(), String.t()} | :global
+  @type key :: String.t()
   @type state :: %{key() => [episode()]}
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -49,32 +50,8 @@ defmodule Gralkor.Lens.Storage.InMemory do
   end
 
   @impl Gralkor.Lens.Storage
-  def search(
-        %Store{operator_id: operator_id, lens: %Lens{name: lens_name, scope: :operator}},
-        _query,
-        max_results
-      ) do
-    GenServer.call(__MODULE__, {:search, {operator_id, lens_name}, max_results})
-  end
-
-  def search(
-        %Store{operator_id: operator_id, lens: %Replaceable{name: lens_name, scope: :operator}},
-        _query,
-        max_results
-      ) do
-    GenServer.call(__MODULE__, {:search, {operator_id, lens_name}, max_results})
-  end
-
-  def search(%Store{lens: %Lens{scope: :global}}, _query, max_results) do
-    GenServer.call(__MODULE__, {:search, :global, max_results})
-  end
-
-  def search(%Store{lens: %Replaceable{scope: :global}}, _query, max_results) do
-    GenServer.call(__MODULE__, {:search, :global, max_results})
-  end
-
-  def search(%Store{lens: :global}, _query, max_results) do
-    GenServer.call(__MODULE__, {:search, :global, max_results})
+  def search(%Store{} = store, _query, max_results) do
+    GenServer.call(__MODULE__, {:search, key(store), max_results})
   end
 
   @impl true
@@ -112,18 +89,8 @@ defmodule Gralkor.Lens.Storage.InMemory do
   @spec episode(String.t(), Lens.t()) :: episode()
   defp episode(content, lens), do: %{content: content, lens: lens.name}
 
-  defp key(%Store{operator_id: operator_id, lens: %Lens{name: lens_name, scope: :operator}}),
-    do: {operator_id, lens_name}
-
-  defp key(%Store{lens: %Lens{scope: :global}}), do: :global
-
-  defp key(%Store{
-         operator_id: operator_id,
-         lens: %Replaceable{name: lens_name, scope: :operator}
-       }),
-       do: {operator_id, lens_name}
-
-  defp key(%Store{lens: %Replaceable{scope: :global}}), do: :global
+  defp key(%Store{operator_id: operator_id, lens: %{destination: destination}}),
+    do: Destination.graph_id(destination, operator_id)
 
   defp put_owner(entity, lens_name) do
     Map.update!(entity, :properties, &Map.put(&1, :_gralkor_lens, lens_name))
