@@ -129,8 +129,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     :ok
   end
 
-  describe "when two operators complete an adventure through ontology-free implicit memory, named Lenses, ERL, shared-Destination replacement, and fresh-session retrieval" do
-    test "then retrieval returns all retained operator-local and global information but no superseded replacement" do
+  describe "when two operators use implicit memory, Lenses, ERL, and shared-Destination replacement" do
+    test "then fresh retrieval preserves local and global memory but omits the replaced Lens graph" do
       implicit_fact =
         "The private deployment codename is Juniper and the launch city is Muscat."
 
