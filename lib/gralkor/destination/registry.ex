@@ -36,8 +36,14 @@ defmodule Gralkor.Destination.Registry do
   end
 
   defp resolve!(definition) do
+    name = Keyword.get(definition, :name)
+
+    unless is_binary(name) and String.trim(name) != "" do
+      raise ArgumentError, "invalid Destination name #{inspect(name)}"
+    end
+
     %Destination{
-      name: Keyword.fetch!(definition, :name),
+      name: name,
       address: Keyword.fetch!(definition, :address),
       ontology: Keyword.get(definition, :ontology, Gralkor.DefaultOntology)
     }
