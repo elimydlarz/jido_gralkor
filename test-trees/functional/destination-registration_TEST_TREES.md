@@ -11,7 +11,7 @@ where a Destination declares an application ontology
   then extraction for every episode stored in that Destination uses the declared ontology
 
 when multiple Lenses or Reflections reference the same Destination
-  then they write into the same storage channel
+  then their results are saved to the same Destination
 
 where a replaceable Lens references a shared Destination
   then graph replacement changes only the episodes written by that Lens
