@@ -5,7 +5,7 @@ when a caller searches memory naming one or more Destinations
   and results retain the requested Destination order
   and every result identifies its Destination
   and the same maximum result count applies independently to every Destination
-  and no unselected Destination or another operator's local placement can contribute a result
+  and no unselected Destination or another operator's graph can contribute a result
 
 where the same Destination is selected more than once
   then that Destination is searched only once

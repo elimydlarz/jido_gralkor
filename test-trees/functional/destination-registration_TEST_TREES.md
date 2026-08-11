@@ -2,7 +2,16 @@ Functional: destination-registration (src: none; functional: none)
 
 when an application registers a valid Destination
   then Lenses and Reflections can reference that Destination by name
-  and the Destination scope governs operator-local or global placement
+  and the Destination address determines the graph ID where their results are saved
+
+where a Destination uses the `operator` address
+  then its graph ID resolves to the requesting operator
+
+where a Destination uses the `global` address
+  then its graph ID resolves to the shared global graph
+
+where a Destination uses an explicit graph ID as its address
+  then that graph ID is used without treating it as a scope
 
 where a Destination omits an ontology
   then the Destination uses jido_gralkor's built-in default ontology
@@ -24,7 +33,7 @@ if an application registers an invalid Destination
   and a blank Destination name is identified
   and a duplicate Destination name is identified
   and an invalid Destination definition shape is identified
-  and an invalid Destination scope is identified with its Destination
+  and a missing or invalid Destination address is identified with its Destination
   and an invalid Destination ontology is identified with its Destination
 
 if a Lens or Reflection references an unknown Destination
