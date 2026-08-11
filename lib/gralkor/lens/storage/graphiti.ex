@@ -61,7 +61,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
       content,
       source_description,
       lens.destination.ontology,
-      Keyword.delete(episode_opts, :lens) ++ [lens: lens.name]
+      Keyword.delete(episode_opts, :lens)
     )
   end
 
