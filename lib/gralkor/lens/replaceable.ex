@@ -6,12 +6,12 @@ defmodule Gralkor.Lens.Replaceable do
   through `Gralkor.Client` rather than constructing this struct directly.
   """
 
-  @enforce_keys [:name, :scope, :graph_format]
-  defstruct [:name, :scope, :graph_format]
+  @enforce_keys [:name, :destination, :graph_format]
+  defstruct [:name, :destination, :graph_format]
 
   @type t :: %__MODULE__{
           name: String.t(),
-          scope: Gralkor.Lens.scope(),
+          destination: Gralkor.Destination.t(),
           graph_format: :property_graph
         }
 end

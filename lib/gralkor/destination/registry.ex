@@ -3,9 +3,28 @@ defmodule Gralkor.Destination.Registry do
 
   alias Gralkor.Destination
 
+  @packaged [
+    %Destination{
+      name: "operator",
+      address: "operator/memory",
+      ontology: Gralkor.DefaultOntology
+    },
+    %Destination{
+      name: "experiential-learning",
+      address: "operator/experiential-learning",
+      ontology: Gralkor.Reflection.ERLOntology
+    },
+    %Destination{
+      name: "generalisations",
+      address: "global/generalisations",
+      ontology: Gralkor.DefaultOntology
+    }
+  ]
+
   def configured! do
-    Application.get_env(:jido_gralkor, :destinations, [])
-    |> Enum.map(&resolve!/1)
+    @packaged ++
+      (Application.get_env(:jido_gralkor, :destinations, [])
+       |> Enum.map(&resolve!/1))
   end
 
   def fetch!(name) when is_binary(name) do

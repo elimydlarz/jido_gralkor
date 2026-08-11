@@ -9,9 +9,13 @@ defmodule Gralkor.Reflection.Registry do
     [
       name: "generalisations",
       chain_of_thought: "priv/reflections/generalisations.yaml",
-      scope: :global
+      destination: "generalisations"
     ],
-    [name: "erl", chain_of_thought: "priv/reflections/erl.yaml", scope: :operator]
+    [
+      name: "erl",
+      chain_of_thought: "priv/reflections/erl.yaml",
+      destination: "experiential-learning"
+    ]
   ]
 
   @doc "Returns the application's validated Reflection declarations."
@@ -26,7 +30,7 @@ defmodule Gralkor.Reflection.Registry do
     case reflections do
       reflections when is_list(reflections) ->
         if Enum.all?(reflections, &match?(%Reflection{}, &1)) do
-          Enum.map(reflections, &%{&1 | ontology: Gralkor.DefaultOntology})
+          reflections
         else
           root =
             Application.get_env(
@@ -35,19 +39,8 @@ defmodule Gralkor.Reflection.Registry do
               Application.app_dir(:jido_gralkor)
             )
 
-          reflections = load!(reflections, root: root)
-
-          if packaged_defaults? do
-            Enum.map(reflections, fn
-              %Reflection{name: "erl"} = reflection ->
-                %{reflection | ontology: Gralkor.Reflection.ERLOntology}
-
-              reflection ->
-                reflection
-            end)
-          else
-            reflections
-          end
+          _ = packaged_defaults?
+          load!(reflections, root: root)
         end
 
       invalid ->

@@ -416,7 +416,7 @@ defmodule Gralkor.Client do
       :replace_graph ->
         %ReplaceableLens{
           name: Keyword.fetch!(definition, :name),
-          scope: Keyword.fetch!(definition, :scope),
+          destination: DestinationRegistry.fetch!(Keyword.fetch!(definition, :destination)),
           graph_format: Keyword.fetch!(definition, :graph_format)
         }
     end
