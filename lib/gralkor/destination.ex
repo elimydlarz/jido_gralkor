@@ -1,5 +1,5 @@
 defmodule Gralkor.Destination do
-  @moduledoc "A named memory destination with a scoped address and extraction ontology."
+  @moduledoc "A named memory destination with an address and extraction ontology."
 
   @enforce_keys [:name, :address, :ontology]
   defstruct [:name, :address, :ontology]

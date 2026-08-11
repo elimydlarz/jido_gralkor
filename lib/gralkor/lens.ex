@@ -2,17 +2,15 @@ defmodule Gralkor.Lens do
   @moduledoc """
   Application-owned definition of a memory Lens.
 
-  A Lens combines a unique name, a `Gralkor.Ontology`, a storage scope, and a
-  module implementing `Gralkor.Lens.Ingestion`. `:operator` scope isolates
-  storage by operator and Lens name. `:global` scope writes to the shared
-  global group while retaining the Lens name as provenance.
+  A Lens combines a unique name, a registered `Gralkor.Destination`, and a
+  module implementing `Gralkor.Lens.Ingestion`. The Destination supplies the
+  address and extraction ontology. Several Lenses and Reflections may use the
+  same Destination.
 
   Consumers normally register Lens definitions in `:jido_gralkor, :lenses`
   and resolve them through `Gralkor.Client`, rather than constructing this
   struct directly.
   """
-
-  @type scope :: :operator | :global
 
   @enforce_keys [:name, :destination, :ingestion]
   defstruct [:name, :destination, :ingestion]
