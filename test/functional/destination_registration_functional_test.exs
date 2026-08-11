@@ -68,4 +68,16 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       end
     end
   end
+
+  describe "if an application registers an invalid Destination" do
+    test "and a blank Destination name is identified" do
+      Application.put_env(:jido_gralkor, :destinations, [
+        [name: " ", address: "operator/shared", ontology: MemoryOntology]
+      ])
+
+      assert_raise ArgumentError, ~r/invalid Destination name " "/, fn ->
+        Client.lens!("observations")
+      end
+    end
+  end
 end
