@@ -2,7 +2,7 @@
 
 Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded Gralkor memory adapter — Graphiti driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), with no separate Gralkor service to deploy. Storage uses either an embedded FalkorDB child or a remote FalkorDB deployment.
 
-You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Lenses** for ingesting information through independent named views, and **Reflections** for asynchronous post-ingestion synthesis over the resulting lensed representations.
+You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Destinations** for named memory placement and extraction, **Lenses** for ingestion, and **Reflections** for asynchronous post-ingestion synthesis.
 
 This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 6.0"}` for the whole memory stack.
 
@@ -140,7 +140,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | `:destination_storage` | module | `Gralkor.Destination.Storage.Graphiti` | Search storage behind `Client.search/1`. Set to `Gralkor.Destination.Storage.InMemory` in tests. |
 | `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, a registered `:destination`, and a repository-relative YAML `:chain_of_thought` path. Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
 | `:reflection_root` | path | application package root | Root used to resolve Reflection YAML paths. The default makes the packaged `priv/reflections/*.yaml` files work after installation; set it when an application keeps custom CoTs under another repository directory. |
-| `:reflection_storage` | module | `Gralkor.Reflection.Storage.Graphiti` | Physical storage behind `Gralkor.Reflection.Store`. Tests can use `Gralkor.Reflection.Storage.InMemory`. Reflection destinations remain separate from Lens destinations with either adapter. |
+| `:reflection_storage` | module | `Gralkor.Reflection.Storage.Graphiti` | Physical storage behind `Gralkor.Reflection.Store`. Tests can use `Gralkor.Reflection.Storage.InMemory`; Destination search should then use its in-memory adapter too. |
 | `:interpret_max_output_tokens` | positive integer | `2000` | Output ceiling for the per-recall interpret LLM call. Raise it if recall surfaces many candidate facts and you see `Gralkor.InterpretParseFailed` (the parser refuses truncated responses). Lower it to cap latency and cost. A non-positive value raises. |
 | `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall (search + interpret). On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. |
 | `:test` | boolean | `false` | Verbose diagnostic logging: recall queries, returned facts, and flushed capture bodies are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
@@ -368,7 +368,7 @@ A Lens is an application-owned memory channel with `:operator` or `:global` scop
 
 Appending is the default write mode. An appending Lens supplies an ontology and the ingestion process Gralkor invokes when content is sent through it; `write: :append` may be stated explicitly or omitted.
 
-The ontology is a module you compile into your own application — declared once in `lib/`, then named by module in each Lens that should extract with it:
+The ontology is a module you compile into your own application — declared once in `lib/`, then named by each Destination that should extract with it:
 
 ```elixir
 # lib/my_app/ontology.ex
@@ -615,12 +615,12 @@ Maintainers can exercise the interpretation prompt against a real model with `mi
 
 The Jido glue:
 
-- `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (planting session, agent, selected Lens, and Lenses to search) and `ai.request.completed` / `ai.request.failed` (capture).
+- `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (planting session, agent, selected Lens, and Destinations to search) and `ai.request.completed` / `ai.request.failed` (capture).
 - `JidoGralkor.ReAct` — `maybe_force_memory_search/2` helper. Folds `tool_choice: %{type: "function", function: %{name: "memory_search"}}` into ReAct overrides on iteration 1; passes through unchanged on iterations 2+.
 - `JidoGralkor.Canonical` — normalises a Jido/ReAct turn into the canonical `[%Gralkor.Message{role, content}]` shape.
 - `JidoGralkor.Lifecycle` — `Jido.AgentServer.Lifecycle` impl whose sole job is the death-triggered flush.
 - `JidoGralkor.ContextRotator` — synchronous `rotate_now/2` for in-life context consolidation.
-- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls `Gralkor.Client.search/1` for the configured Lenses and falls back to legacy `recall/4` when no Lens search is configured. It short-circuits when no thread is committed or the query is blank.
+- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls `Gralkor.Client.search/1` for configured Destinations and falls back to legacy `recall/4` in implicit-operator plugin mode. It short-circuits when no thread is committed or the query is blank.
 - `JidoGralkor.Actions.MemoryAdd` — fire-and-forget ReAct tool.
 - `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
 - `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's group.
