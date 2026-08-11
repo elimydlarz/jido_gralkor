@@ -141,14 +141,11 @@ if storing a Reflection artefact at its destination fails
   and the successful ingestion result remains unchanged
   and every other declared Reflection remains eligible to complete
 
-when a Destination is searched for artefacts with a Reflection contributor filter
+when a Destination is searched for artefacts
   then that Destination is searched
-  and only artefacts produced by that Reflection are returned
-  and every result identifies the named Reflection rather than a Lens
+  and relevant artefacts produced by any Reflection using that Destination are returned
+  and every result identifies its declaring Reflection
   and every result retains its supporting evidence identifiers
 
   where the search also identifies one artefact
     then only that artefact is returned from the selected Destination
-
-if artefact search filters by an unknown Reflection
-  then the search fails identifying the unknown Reflection before any Destination is searched

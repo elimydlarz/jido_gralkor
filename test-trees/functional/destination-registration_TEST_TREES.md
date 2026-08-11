@@ -11,12 +11,10 @@ where a Destination declares an application ontology
   then extraction for every episode contributed to that Destination uses the declared ontology
 
 when multiple Lenses or Reflections reference the same Destination
-  then every contributor writes into the same storage channel
-  and every contribution retains the identity of the Lens or Reflection that produced it
-  and selecting any contributor resolves storage through that shared Destination
+  then they write into the same storage channel
 
 where a replaceable Lens references a shared Destination
-  then graph replacement changes only that Lens's contribution to the Destination
+  then graph replacement changes only the episodes written by that Lens
 
 if the Destination registry is not a list
   then configuration resolution raises `ArgumentError` naming what it found instead
