@@ -8,7 +8,7 @@ where a Destination omits an ontology
   then the Destination uses jido_gralkor's built-in default ontology
 
 where a Destination declares an application ontology
-  then extraction for every episode contributed to that Destination uses the declared ontology
+  then extraction for every episode stored in that Destination uses the declared ontology
 
 when multiple Lenses or Reflections reference the same Destination
   then they write into the same storage channel
@@ -28,4 +28,4 @@ if an application registers an invalid Destination
   and an invalid Destination ontology is identified with its Destination
 
 if a Lens or Reflection references an unknown Destination
-  then configuration resolution raises `ArgumentError` identifying the contributor and Destination
+  then configuration resolution raises `ArgumentError` identifying the Lens or Reflection and Destination

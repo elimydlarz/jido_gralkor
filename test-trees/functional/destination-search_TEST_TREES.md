@@ -23,7 +23,7 @@ where a caller selects nodes
   then relevant entities extracted in the selected Destinations are returned
 
 where a caller selects episodes
-  then relevant contributed episode bodies from the selected Destinations are returned
+  then relevant episode bodies from the selected Destinations are returned
 
 where a caller selects artefacts
   then relevant Reflection artefacts from the selected Destinations are returned
