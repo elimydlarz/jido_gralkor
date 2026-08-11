@@ -124,7 +124,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
           [Keyword.merge(valid_lens("observations"), legacy_setting)]
         )
 
-        assert_raise ArgumentError, ~r/Destination.*address.*ontology/, fn ->
+        assert_raise ArgumentError, ~r/address.*ontology.*Destination/, fn ->
           Client.lens!("observations")
         end
       end
