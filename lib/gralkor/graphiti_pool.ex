@@ -155,21 +155,31 @@ defmodule Gralkor.GraphitiPool do
   For retrieving custom-entity *nodes*, use `search_nodes/5` — edge search's
   node-label filtering matches edges by endpoint and misses standalone nodes.
   """
-  @spec search(GenServer.server(), String.t(), String.t(), pos_integer()) ::
+  @spec search(GenServer.server(), String.t(), String.t(), pos_integer(), keyword()) ::
           {:ok, [map()]} | {:error, term()}
-  def search(server \\ __MODULE__, group_id, query, max_results)
+  def search(server \\ __MODULE__, group_id, query, max_results, opts \\ [])
 
-  def search(server, group_id, query, max_results)
+  def search(server, group_id, query, max_results, opts)
       when is_binary(group_id) and is_binary(query) and is_integer(max_results) and
-             max_results > 0 do
+             max_results > 0 and is_list(opts) do
     instance = __MODULE__.for(server, group_id)
+    edge_types = Keyword.get(opts, :edge_types)
 
     {raw, _} =
       Pythonx.eval(
         """
         import asyncio
+        from graphiti_core.search.search_filters import SearchFilters
+
         q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
-        edges = asyncio._gralkor_run(g.search(q, num_results=max_results))
+        types = (
+          [t.decode('utf-8') if isinstance(t, (bytes, bytearray)) else t for t in edge_types]
+          if edge_types else None
+        )
+        sf = SearchFilters(edge_types=types) if types else SearchFilters()
+        edges = asyncio._gralkor_run(
+          g.search(q, num_results=max_results, search_filter=sf)
+        )
         [
           {
             "fact": e.fact,
@@ -183,7 +193,8 @@ defmodule Gralkor.GraphitiPool do
         %{
           "g" => instance,
           "query" => query,
-          "max_results" => max_results
+          "max_results" => max_results,
+          "edge_types" => edge_types
         }
       )
 

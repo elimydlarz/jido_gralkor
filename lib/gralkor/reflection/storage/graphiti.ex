@@ -46,10 +46,11 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
     Store.destination(reflection, operator_id)
   end
 
-  defp decode(%{content: content}), do: decode(content)
-  defp decode(%{"content" => content}), do: decode(content)
+  @doc false
+  def decode(%{content: content}), do: decode(content)
+  def decode(%{"content" => content}), do: decode(content)
 
-  defp decode(content) when is_binary(content) do
+  def decode(content) when is_binary(content) do
     case Jason.decode(content) do
       {:ok,
        %{
@@ -65,5 +66,5 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
     end
   end
 
-  defp decode(_), do: []
+  def decode(_), do: []
 end
