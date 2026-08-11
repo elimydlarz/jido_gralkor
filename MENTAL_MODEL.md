@@ -1,6 +1,6 @@
 ## Core Domain Identity
 
-This repository is the canonical development and distribution home for Jido-first Gralkor. The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` layer owns memory-domain behavior. Applications extend ingestion with independent Lens definitions and post-ingestion synthesis with repository YAML Reflection definitions.
+This repository is the canonical development and distribution home for Jido-first Gralkor. The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` layer owns memory-domain behavior. Applications register Destinations for memory placement and extraction, then reference them from Lens ingestion and repository-YAML Reflection definitions.
 
 ## World-to-Code Mapping
 
@@ -10,7 +10,7 @@ This repository is the canonical development and distribution home for Jido-firs
 - **`JidoGralkor.Canonical.to_messages/3`** — normalises a Jido/ReAct turn into Gralkor's `[%Message{role, content}]` shape.
 - **`JidoGralkor.Lifecycle`** — graceful-shutdown flush via the configured Gralkor client adapter's `flush/1`.
 - **`JidoGralkor.ContextRotator`** — synchronous rotate-on-demand: flush, retain recent and in-flight entries, then install a fresh thread.
-- **`Gralkor.Client` / `Gralkor.Ingest` / `Gralkor.Replace` / `Gralkor.Search`** — the callable memory boundary and request values. `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, and `Gralkor.Lens.Store` own independent ingestion views, placement, provenance, and graph ownership; `Gralkor.DefaultOntology` owns implicit generic extraction. `Gralkor.Reflection.Registry`, `ChainOfThought`, `Runner`, `Scheduler`, and `Store` load YAML processes, run them after completed Lens ingestion, and persist/search their artefacts in a separate namespace; `Gralkor.Reflection.ERLOntology` owns packaged ERL's extraction schema.
+- **`Gralkor.Client` / `Gralkor.Ingest` / `Gralkor.Replace` / `Gralkor.Search`** — the callable memory boundary and request values. `Gralkor.Destination` and its registry resolve named addresses and extraction ontologies shared by Lenses and Reflections. `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, and `Gralkor.Lens.Store` own ingestion behavior and Lens-specific graph replacement; Reflection registry, runner, scheduler, and store load YAML processes and persist their artefacts. Packaged operator memory carries `Gralkor.DefaultOntology`; packaged experiential learning carries `Gralkor.Reflection.ERLOntology`.
 
 ## Ubiquitous Language
 
@@ -20,9 +20,10 @@ This repository is the canonical development and distribution home for Jido-firs
 - *user_name* — the human's name per turn; stashed on `agent.state[:user_name]` by the consumer.
 - *forced recall* — the iter-1 `tool_choice` override that pins `memory_search` on the first ReAct iteration.
 - *operator* — the application identity whose local memory is isolated; it is not a Lens and does not determine global visibility.
-- *Lens* — a named, scoped memory channel. An appending Lens has an ontology and ingestion process; a replaceable Lens has a complete graph format. Reserved `operator` is the requesting operator's baseline Lens and reserved `global` names the shared group.
-- *Reflection* — an asynchronous post-ingestion process with its own name, operator-or-global destination, and extraction ontology. Its repository YAML Chain of Thought runs ordered inference turns over the completed operation's lensed representations, interpolates prior structured outputs, may direct any host tool through natural-language steps, and stores exactly one evidence-linked artefact. Application Reflections use generic extraction; packaged ERL owns the `Learning` entity with optional problem-kind, approach, success, and lesson fields. Reflection names form their own search namespace rather than naming Lenses.
-- *group* — where episodes are stored; graphiti's `group_id`, and its own FalkorDB database, so isolation between groups is physical rather than a filter applied at search time. Every Lens resolves to one: an operator Lens to a group derived from the operator id and Lens name, every global Lens to the one shared `global` group, which is searched unfiltered by originating Lens.
+- *Destination* — a registered name, `operator/path` or `global/path` address, and extraction ontology. Lenses and Reflections reference it by name; multiple may save to it. Search names Destinations directly.
+- *Lens* — named ingestion or complete-graph replacement behavior referencing a Destination. The reserved `operator` Lens preserves implicit-default memory; a replaceable Lens changes only graph content marked as owned by that Lens.
+- *Reflection* — an asynchronous post-ingestion process with its own name, referenced Destination, and repository YAML Chain of Thought. It runs ordered inference over completed lensed representations, may call host tools, and stores exactly one evidence-linked artefact carrying its declaring Reflection.
+- *address* — the stable placement value on a Destination. `operator/path` resolves a distinct graph ID per operator; `global/path` resolves the same graph ID for every operator. The resolved Graphiti group ID is an implementation detail.
 - *episode* — the unit written to graphiti; an episode search reads back the body that was written, while node and edge search return what the extractor derived from it.
 - *fact* — the text of one edge an edge search returned; recall interprets facts, it does not adjudicate them.
 - *node* — one entity graphiti extracted; node search returns entities directly, while edge search matches relationships by their endpoints.
