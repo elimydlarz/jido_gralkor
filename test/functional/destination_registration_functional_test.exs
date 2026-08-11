@@ -57,6 +57,48 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       assert [%Gralkor.Reflection{destination: %Gralkor.Destination{name: "shared"}}] =
                ReflectionRegistry.configured!()
     end
+
+    test "and the Destination address determines the graph ID where their results are saved" do
+      destination = Client.lens!("observations").destination
+
+      assert Gralkor.Destination.graph_id(destination, "operator-one") !=
+               Gralkor.Destination.graph_id(destination, "operator-two")
+    end
+  end
+
+  describe "where a Destination address has the form `operator/path`" do
+    test "then its graph ID combines the requesting operator with the address path" do
+      destination = Client.lens!("observations").destination
+
+      assert Gralkor.Destination.graph_id(destination, "operator-one") ==
+               Gralkor.Destination.graph_id(destination, "operator-one")
+
+      refute Gralkor.Destination.graph_id(destination, "operator-one") ==
+               Gralkor.Destination.graph_id(destination, "operator-two")
+    end
+  end
+
+  describe "where a Destination address has the form `global/path`" do
+    test "then every operator using that Destination resolves the same graph ID for the address path" do
+      destination = %Gralkor.Destination{
+        name: "shared-global",
+        address: "global/generalisations",
+        ontology: MemoryOntology
+      }
+
+      assert Gralkor.Destination.graph_id(destination, "operator-one") ==
+               Gralkor.Destination.graph_id(destination, "operator-two")
+    end
+  end
+
+  describe "where a Destination omits an ontology" do
+    test "then the Destination uses jido_gralkor's built-in default ontology" do
+      Application.put_env(:jido_gralkor, :destinations, [
+        [name: "shared", address: "operator/shared"]
+      ])
+
+      assert Client.lens!("observations").destination.ontology == Gralkor.DefaultOntology
+    end
   end
 
   describe "if the Destination registry is not a list" do
@@ -76,6 +118,69 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       ])
 
       assert_raise ArgumentError, ~r/invalid Destination name " "/, fn ->
+        Client.lens!("observations")
+      end
+    end
+
+    test "and a duplicate Destination name is identified" do
+      Application.put_env(:jido_gralkor, :destinations, [
+        [name: "shared", address: "operator/one"],
+        [name: "shared", address: "operator/two"]
+      ])
+
+      assert_raise ArgumentError, ~r/duplicate Destination "shared"/, fn ->
+        Client.lens!("observations")
+      end
+    end
+
+    test "and an invalid Destination definition shape is identified" do
+      Application.put_env(:jido_gralkor, :destinations, [%{name: "shared"}])
+
+      assert_raise ArgumentError, ~r/invalid Destination definition/, fn ->
+        Client.lens!("observations")
+      end
+    end
+
+    test "and a missing or invalid Destination address is identified with its Destination" do
+      for address <- [nil, 42] do
+        Application.put_env(:jido_gralkor, :destinations, [
+          [name: "shared", address: address]
+        ])
+
+        assert_raise ArgumentError, ~r/shared.*address.*#{inspect(address)}/, fn ->
+          Client.lens!("observations")
+        end
+      end
+    end
+
+    test "and an address with neither `operator` nor `global` scope is identified with its Destination" do
+      Application.put_env(:jido_gralkor, :destinations, [
+        [name: "shared", address: "tenant/shared"]
+      ])
+
+      assert_raise ArgumentError, ~r/shared.*address.*tenant\/shared/, fn ->
+        Client.lens!("observations")
+      end
+    end
+
+    test "and an address with a blank path is identified with its Destination" do
+      for address <- ["operator/", "global/ "] do
+        Application.put_env(:jido_gralkor, :destinations, [
+          [name: "shared", address: address]
+        ])
+
+        assert_raise ArgumentError, ~r/shared.*address/, fn ->
+          Client.lens!("observations")
+        end
+      end
+    end
+
+    test "and an invalid Destination ontology is identified with its Destination" do
+      Application.put_env(:jido_gralkor, :destinations, [
+        [name: "shared", address: "operator/shared", ontology: String]
+      ])
+
+      assert_raise ArgumentError, ~r/shared.*ontology.*String/, fn ->
         Client.lens!("observations")
       end
     end
