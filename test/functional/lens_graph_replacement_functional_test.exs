@@ -63,28 +63,51 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
   end
 
+  defmodule DestinationSearchStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(destination, operator_id, query, :facts, max_results, _opts) do
+      send(Process.whereis(:lens_graph_replacement_functional), {
+        :searched_destination,
+        destination,
+        operator_id,
+        query,
+        max_results
+      })
+
+      {:ok, ["replacement-owned fact"]}
+    end
+  end
+
   setup do
     Process.register(self(), :lens_graph_replacement_functional)
 
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
+    previous_destinations = Application.get_env(:jido_gralkor, :destinations)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
+    previous_destination_storage = Application.get_env(:jido_gralkor, :destination_storage)
 
     start_supervised!(InMemory)
 
     Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+    Application.put_env(:jido_gralkor, :destination_storage, DestinationSearchStorage)
+    Application.put_env(:jido_gralkor, :destinations, destinations())
 
     Application.put_env(:jido_gralkor, :lenses, [replaceable_lens("systems", :operator)])
 
     on_exit(fn ->
       restore_env(:lenses, previous_lenses)
+      restore_env(:destinations, previous_destinations)
       restore_env(:lens_storage, previous_storage)
+      restore_env(:destination_storage, previous_destination_storage)
     end)
 
     :ok
   end
 
   describe "when a caller replaces the complete graph through a replaceable Lens" do
-    test "then the Lens scope resolves the same operator-local or shared global destination used by existing Lens operations" do
+    test "then the Lens's Destination address resolves the graph used by existing Lens operations" do
       graph = empty_graph()
 
       assert :ok =
@@ -97,7 +120,10 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       assert_receive {:replaced,
                       %Gralkor.Lens.Store{
                         operator_id: "operator-one",
-                        lens: %Gralkor.Lens.Replaceable{name: "systems", scope: :operator}
+                        lens: %Gralkor.Lens.Replaceable{
+                          name: "systems",
+                          destination: %Gralkor.Destination{address: "operator/systems"}
+                        }
                       }, ^graph}
 
       Application.put_env(:jido_gralkor, :lenses, [replaceable_lens("systems", :global)])
@@ -106,7 +132,10 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
 
       assert_receive {:replaced,
                       %Gralkor.Lens.Store{
-                        lens: %Gralkor.Lens.Replaceable{name: "systems", scope: :global}
+                        lens: %Gralkor.Lens.Replaceable{
+                          name: "systems",
+                          destination: %Gralkor.Destination{address: "global/shared"}
+                        }
                       }, ^graph}
     end
 
@@ -116,7 +145,8 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       assert :ok = Client.replace(request(connected_graph("old")))
       assert :ok = Client.replace(request(graph("current")))
 
-      assert %{nodes: [%{id: "current"}], relationships: []} = InMemory.graph(:global)
+      assert %{nodes: [%{id: "current"}], relationships: []} =
+               InMemory.graph(group(:global, "systems"))
     end
 
     test "and every supplied node and relationship is inserted at the resolved destination with every non-reserved graph value unchanged" do
@@ -126,7 +156,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       assert :ok = Client.replace(request(supplied))
 
       assert %{nodes: [source, target], relationships: [relationship]} =
-               InMemory.graph({"operator-one", "systems"})
+               InMemory.graph(group(:operator, "systems"))
 
       assert Map.drop(source.properties, [:_gralkor_lens]) == %{name: "payments"}
       assert source.labels == ["System"]
@@ -139,7 +169,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       use_in_memory(:operator)
       assert :ok = Client.replace(request(connected_graph("payments")))
 
-      stored = InMemory.graph({"operator-one", "systems"})
+      stored = InMemory.graph(group(:operator, "systems"))
 
       assert Enum.all?(stored.nodes, &(&1.properties._gralkor_lens == "systems"))
       assert Enum.all?(stored.relationships, &(&1.properties._gralkor_lens == "systems"))
@@ -154,7 +184,10 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       assert :ok = Client.replace(request(graph("catalogue"), "catalogue"))
       assert :ok = Client.replace(request(graph("systems")))
 
-      assert Enum.map(InMemory.graph(:global).nodes, & &1.id) == ["catalogue", "systems"]
+      assert Enum.map(InMemory.graph(group(:global, "systems")).nodes, & &1.id) == [
+               "catalogue",
+               "systems"
+             ]
     end
 
     test "and nodes and relationships without the reserved Lens ownership field at the resolved destination remain unchanged" do
@@ -168,7 +201,10 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       :sys.replace_state(InMemory, &Map.put(&1, {:graph, :global}, unowned))
 
       assert :ok = Client.replace(request(graph("systems")))
-      assert Enum.map(InMemory.graph(:global).nodes, & &1.id) == ["manual", "systems"]
+      assert Enum.map(InMemory.graph(group(:global, "systems")).nodes, & &1.id) == [
+               "manual",
+               "systems"
+             ]
     end
 
     test "and the caller observes whether replacement succeeded or failed" do
@@ -203,7 +239,8 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
         end
       end
 
-      assert %{nodes: [%{id: "existing"}]} = InMemory.graph({"operator-one", "systems"})
+      assert %{nodes: [%{id: "existing"}]} =
+               InMemory.graph(group(:operator, "systems"))
     end
 
     test "and the error identifies the invalid graph data" do
@@ -228,13 +265,13 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       use_in_memory(:global)
       assert :ok = Client.replace(request(connected_graph("old")))
       assert :ok = Client.replace(request(empty_graph()))
-      assert InMemory.graph(:global) == %{nodes: [], relationships: []}
+      assert InMemory.graph(group(:global, "systems")) == %{nodes: [], relationships: []}
     end
 
     test "and no replacement node or relationship is inserted" do
       use_in_memory(:global)
       assert :ok = Client.replace(request(empty_graph()))
-      assert InMemory.graph(:global) == %{nodes: [], relationships: []}
+      assert InMemory.graph(group(:global, "systems")) == %{nodes: [], relationships: []}
     end
   end
 
@@ -246,7 +283,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
         assert :ok = Client.replace(request(graph(id)))
       end
 
-      assert %{nodes: [%{id: "current"}]} = InMemory.graph(:global)
+      assert %{nodes: [%{id: "current"}]} = InMemory.graph(group(:global, "systems"))
     end
   end
 
@@ -305,20 +342,18 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
   end
 
-  describe "when a caller searches through a replaceable Lens" do
-    test "then the existing Lens search resolves and searches that Lens's scoped destination" do
-      assert {:ok, [%{lens: "systems", fact: "replacement-owned fact"}]} =
+  describe "when a caller searches the Destination used by a replaceable Lens" do
+    test "then Destination search resolves and searches that Destination's address" do
+      assert {:ok, [%{destination: "systems-operator", fact: "replacement-owned fact"}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
-                 lenses: ["systems"],
+                 destinations: ["systems-operator"],
                  query: "How does settlement work?"
                })
 
-      assert_receive {:searched,
-                      %Gralkor.Lens.Store{
-                        operator_id: "operator-one",
-                        lens: %Gralkor.Lens.Replaceable{name: "systems", scope: :operator}
-                      }, "How does settlement work?", 20}
+      assert_receive {:searched_destination,
+                      %Gralkor.Destination{address: "operator/systems"}, "operator-one",
+                      "How does settlement work?", 20}
     end
   end
 
@@ -332,16 +367,33 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
   end
 
   defp replaceable_lens(name, scope) do
-    [name: name, scope: scope, write: :replace_graph, graph_format: :property_graph]
+    [
+      name: name,
+      destination: "#{name}-#{scope}",
+      write: :replace_graph,
+      graph_format: :property_graph
+    ]
   end
 
   defp appending_lens(name) do
     [
       name: name,
-      ontology: MemoryOntology,
-      scope: :operator,
+      destination: "#{name}-operator",
       ingestion: AppendingIngestion
     ]
+  end
+
+  defp destinations do
+    [
+      [name: "systems-operator", address: "operator/systems", ontology: MemoryOntology],
+      [name: "systems-global", address: "global/shared", ontology: MemoryOntology],
+      [name: "catalogue-global", address: "global/shared", ontology: MemoryOntology]
+    ]
+  end
+
+  defp group(scope, name) do
+    destination = Gralkor.Destination.Registry.fetch!("#{name}-#{scope}")
+    Gralkor.Destination.graph_id(destination, "operator-one")
   end
 
   defp graph(id) do
