@@ -99,9 +99,14 @@ defmodule Gralkor.OntologyExtractionTest do
   end
 
   setup do
+    previous_destinations = Application.get_env(:jido_gralkor, :destinations)
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
 
     on_exit(fn ->
+      if previous_destinations,
+        do: Application.put_env(:jido_gralkor, :destinations, previous_destinations),
+        else: Application.delete_env(:jido_gralkor, :destinations)
+
       if previous_lenses,
         do: Application.put_env(:jido_gralkor, :lenses, previous_lenses),
         else: Application.delete_env(:jido_gralkor, :lenses)
@@ -177,11 +182,14 @@ defmodule Gralkor.OntologyExtractionTest do
   defp ingest_through_named_lens(lens, ontology) do
     operator_id = "ontology-operator-#{System.unique_integer([:positive])}"
 
+    Application.put_env(:jido_gralkor, :destinations, [
+      [name: lens, address: "operator/#{lens}", ontology: ontology]
+    ])
+
     Application.put_env(:jido_gralkor, :lenses, [
       [
         name: lens,
-        scope: :operator,
-        ontology: ontology,
+        destination: lens,
         ingestion: Gralkor.Lens.Ingestion.Store
       ]
     ])
@@ -194,10 +202,10 @@ defmodule Gralkor.OntologyExtractionTest do
                source_description: "fixture"
              })
 
-    "lens_" <> encode(operator_id) <> "_" <> encode(lens)
+    lens
+    |> Gralkor.Destination.Registry.fetch!()
+    |> Gralkor.Destination.graph_id(operator_id)
   end
-
-  defp encode(value), do: Base.encode16(value, case: :lower)
 
   defp node_labels(group_id) do
     instance = GraphitiPool.for(group_id)
