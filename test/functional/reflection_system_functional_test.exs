@@ -391,7 +391,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       refute first_id == second_id
 
       assert Enum.map(
-               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "observations"}),
+               Gralkor.Lens.Storage.InMemory.episodes(
+                 Gralkor.Destination.graph_id(
+                   Gralkor.Destination.Registry.fetch!("observations"),
+                   "operator-one"
+                 )
+               ),
                & &1.content
              ) == ["first lensed: fact one", "second lensed: fact one"]
     end
@@ -787,7 +792,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Runner.run(reflection(context), ingestion(), inference: &output_for/1)
     end
 
-    test "where the declared destination is operator-scoped then the artefact is available only to the operator whose ingestion triggered the Reflection",
+    test "where the referenced Destination uses an `operator/path` address then the artefact is available only to the operator whose ingestion triggered the Reflection",
          context do
       reflection = reflection(context)
       {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
@@ -808,7 +813,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
     end
 
-    test "where the declared destination is global then the artefact is available through the shared global destination",
+    test "where the referenced Destination uses a `global/path` address then the artefact is available to every operator through that Destination",
          context do
       reflection = reflection(context, "generalisation", "reflection-test-global")
       {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
