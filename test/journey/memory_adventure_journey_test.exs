@@ -42,7 +42,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     previous_data_dir = System.get_env("GRALKOR_DATA_DIR")
 
     data_dir =
-      Path.join(System.tmp_dir!(), "gralkor_memory_adventure_#{System.unique_integer([:positive])}")
+      Path.join(
+        System.tmp_dir!(),
+        "gralkor_memory_adventure_#{System.unique_integer([:positive])}"
+      )
 
     File.mkdir_p!(data_dir)
     System.put_env("GRALKOR_DATA_DIR", data_dir)
@@ -248,8 +251,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                         search(@operator_one, ["work"], :facts, "settlement ledger")
 
                       final_memory_view = %{
-                        implicit_memory:
-                          contains_all?(implicit_memory, ["juniper", "muscat"]),
+                        implicit_memory: contains_all?(implicit_memory, ["juniper", "muscat"]),
                         appended_information: contains_episode?(shared_episodes, "backup"),
                         global_information: contains_episode?(global_for_first, "rollback"),
                         erl_learning: learning_artefact?(erl_artefacts),
@@ -349,8 +351,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     results = search(operator_id, destinations, result_type, query)
 
     cond do
-      predicate.(results) -> results
-      attempts <= 1 -> results
+      predicate.(results) ->
+        results
+
+      attempts <= 1 ->
+        results
+
       true ->
         Process.sleep(1_000)
         search_until(operator_id, destinations, result_type, query, predicate, attempts - 1)
