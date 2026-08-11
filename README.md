@@ -454,7 +454,7 @@ defmodule MyApp.DecisionIngestion do
 end
 ```
 
-The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The store, rather than consumer code, owns the group id, selected ontology, and global provenance. `Client.ingest/1` accepts appending Lenses and raises for replaceable Lenses; `Client.replace/1` accepts replaceable Lenses and raises for appending Lenses.
+The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The selected Destination supplies the graph address and ontology. `Client.ingest/1` accepts appending Lenses and raises for replaceable Lenses; `Client.replace/1` accepts replaceable Lenses and raises for appending Lenses.
 
 The plugin mount chooses how an agent uses the registered Lenses:
 
@@ -463,12 +463,12 @@ The plugin mount chooses how an agent uses the registered Lenses:
  %{
    agent_name: "Susu",
    ingestion_lens: "observations",
-   search_lenses: ["observations", "global"]
+   search_destinations: ["observations", "generalisations"]
  }}
 ```
 
 - `ingestion_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
-- `search_lenses` is an optional list of additional registered Lens names and/or the reserved `"global"` Lens. Every Lens-aware search always includes the reserved `"operator"` Lens; configured Lenses are additive and all resolved destinations are searched concurrently. Omitting the option or using `[]` therefore searches only `"operator"`. Naming `"operator"` explicitly does not search it twice. Naming one or more global Lenses searches the shared `"global"` group once.
+- `search_destinations` is an optional list of registered Destination names. An empty list searches the packaged `"operator"` Destination.
 
 Consumers that ingest, replace, or search outside an agent call the same public boundary directly:
 
@@ -485,7 +485,7 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   Gralkor.Client.search(%Gralkor.Search{
     operator_id: "operator-42",
     query: "When should we release?",
-    lenses: ["decisions", "global"],
+    destinations: ["decisions", "generalisations"],
     max_results: 20
   })
 
@@ -513,13 +513,11 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   })
 ```
 
-`Gralkor.Search.lenses` has the same additive meaning as the plugin option. The reserved `"operator"` Lens is private to the requesting operator and preserves the original operator memory group. The reserved `"global"` Lens is the one shared group used by every global Lens and every operator; it is searched only when selected directly or through a registered global Lens. Distinct names resolving to that shared group cause one physical search.
-
-Searches run concurrently while results retain configured Lens order. `max_results` defaults to `20`, must be a positive integer, and applies independently to every resolved destination. Each returned item has `%{lens: searched_lens, fact: fact}`; global results use `lens: "global"` because global search is unfiltered by originating Lens. Repeated facts from distinct local Lens groups remain separate results. The Lens-aware `memory_search` action returns this attributed list as JSON.
+Search names Destinations directly. Searches run concurrently while results retain configured Destination order. `max_results` defaults to `20`, must be a positive integer, and applies independently to every Destination. Result types are `:facts`, `:nodes`, `:episodes`, and `:artefacts`; each returned item identifies its Destination. Node searches accept `entity_types`, fact searches accept `edge_types`, and artefact searches may narrow by `artefact_id`. The `memory_search` action returns the attributed list as JSON.
 
 `:property_graph` is the supported replacement format. Every node requires a unique, non-blank string `:id`, a list of non-blank string `:labels`, and a `:properties` map. Every relationship requires `:from` and `:to` identifiers naming supplied nodes, a non-blank string `:type`, and a `:properties` map. This payload is the whole current graph for the Lens; partial node and relationship operations are not supported.
 
-Replacement is scoped through the Lens exactly like other Lens operations: an operator Lens replaces only that Lens's owned graph content for that operator, while a global Lens replaces that Lens's owned content in the shared global destination. Gralkor overwrites any supplied `_gralkor_lens` property with the selected Lens name on every inserted node and relationship. Content owned by another Lens, or carrying no Lens ownership, remains unchanged. An empty graph removes all graph content owned by the selected Lens. The supplied graph format must match the Lens's configured `:graph_format`.
+Replacement changes only content owned by that Lens at its Destination. Gralkor overwrites any supplied `_gralkor_lens` property with the selected Lens name on every inserted node and relationship. Content saved through another Lens or Reflection, or carrying no Lens ownership, remains unchanged. An empty graph removes all graph content owned by the selected Lens. The supplied graph format must match the Lens's configured `:graph_format`.
 
 Invalid Lens names, write modes, formats, and graph data raise `ArgumentError`; graph data is fully validated before storage mutation begins. Once a valid replacement starts, deletion and insertion are not transactional: an import error is returned, and content already removed or inserted is not rolled back.
 
@@ -527,7 +525,7 @@ Registry and plugin configuration fail fast for blank, duplicate, reserved, reti
 
 ### Ontology DSL
 
-Each Lens ontology is a module declared with `Gralkor.Ontology`:
+Each Destination ontology is a module declared with `Gralkor.Ontology`:
 
 - `entity Foo do field … end` declares an entity. `field :name, :type, opts` supports `:string | :integer | :float | :boolean`, plus `required: true` and `doc:` (rendered as the Pydantic field description).
 - `entity Foo, "when to extract one" do … end` adds a description, rendered as the extracted type's own description. Graphiti's extractor reads it to decide when to mint the entity, so a type whose name alone is ambiguous — `Preference`, `Pattern`, `Learning` — is extracted far more reliably with one. The description must be a literal string.
