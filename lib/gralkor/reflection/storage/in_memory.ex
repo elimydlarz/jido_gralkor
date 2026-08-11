@@ -54,7 +54,10 @@ defmodule Gralkor.Reflection.Storage.InMemory do
       |> Enum.filter(fn artefact ->
         (is_nil(artefact_id) or artefact.id == artefact_id) and
           (query in [nil, ""] or
-             String.contains?(String.downcase(Jason.encode!(artefact.payload)), String.downcase(query)))
+             String.contains?(
+               String.downcase(Jason.encode!(artefact.payload)),
+               String.downcase(query)
+             ))
       end)
       |> Enum.take(max_results)
 

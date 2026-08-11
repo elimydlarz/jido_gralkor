@@ -84,7 +84,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     Application.put_env(:jido_gralkor, :destinations, [
       [name: "reflection-test-operator", address: "operator/reflection-test"],
       [name: "reflection-test-global", address: "global/reflection-test"],
-      [name: "observations", address: "operator/observations", ontology: ReflectionEvidenceOntology],
+      [
+        name: "observations",
+        address: "operator/observations",
+        ontology: ReflectionEvidenceOntology
+      ],
       [name: "decisions", address: "operator/decisions", ontology: ReflectionEvidenceOntology]
     ])
 
@@ -129,7 +133,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       do: assert_valid(context)
     )
 
-    test("and every Reflection references a registered Destination by name then validation succeeds",
+    test(
+      "and every Reflection references a registered Destination by name then validation succeeds",
       context,
       do: assert_valid(context)
     )
@@ -1082,7 +1087,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert {:ok, [%{destination: "reflection-test-operator", artefact: ^artefact}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
-                  query: "durable",
+                 query: "durable",
                  destinations: [reflection.destination.name],
                  result_type: :artefacts,
                  artefact_id: artefact.id
