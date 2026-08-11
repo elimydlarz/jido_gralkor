@@ -39,13 +39,17 @@ defmodule Gralkor.JidoMemoryJourneyTest do
 
     original_client = Application.get_env(:jido_gralkor, :client)
     original_lenses = Application.get_env(:jido_gralkor, :lenses)
+    original_destinations = Application.get_env(:jido_gralkor, :destinations)
     Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+
+    Application.put_env(:jido_gralkor, :destinations, [
+      [name: "observations", address: "operator/observations", ontology: JourneyOntology]
+    ])
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
         name: "observations",
-        scope: :operator,
-        ontology: JourneyOntology,
+        destination: "observations",
         ingestion: Gralkor.Lens.Ingestion.Store
       ]
     ])
@@ -59,6 +63,11 @@ defmodule Gralkor.JidoMemoryJourneyTest do
       case original_lenses do
         nil -> Application.delete_env(:jido_gralkor, :lenses)
         lenses -> Application.put_env(:jido_gralkor, :lenses, lenses)
+      end
+
+      case original_destinations do
+        nil -> Application.delete_env(:jido_gralkor, :destinations)
+        destinations -> Application.put_env(:jido_gralkor, :destinations, destinations)
       end
     end)
 
@@ -210,11 +219,13 @@ defmodule Gralkor.JidoMemoryJourneyTest do
       search = %Search{
         operator_id: group_id,
         query: "backup vacuum scheduling conflict",
-        reflections: ["erl"],
+        destinations: ["experiential-learning"],
+        result_type: :artefacts,
         max_results: 10
       }
 
-      assert {:ok, [artefact | _]} = eventually_search_reflection(search, 120_000)
+      assert {:ok, [%{artefact: artefact} | _]} =
+               eventually_search_reflection(search, 120_000)
       assert artefact.reflection == "erl"
       assert is_binary(artefact.payload["problem_kind"])
       assert is_binary(artefact.payload["approach"])
