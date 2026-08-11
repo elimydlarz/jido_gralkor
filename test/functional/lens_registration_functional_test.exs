@@ -37,13 +37,18 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
 
   setup do
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
+    previous_destinations = Application.get_env(:jido_gralkor, :destinations)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
 
+    Application.put_env(:jido_gralkor, :destinations, [
+      [name: "memory", address: "operator/memory-lens", ontology: MemoryOntology]
+    ])
     Application.put_env(:jido_gralkor, :lenses, [valid_lens("observations")])
     Application.put_env(:jido_gralkor, :lens_storage, UnexpectedStorage)
 
     on_exit(fn ->
       restore_env(:lenses, previous_lenses)
+      restore_env(:destinations, previous_destinations)
       restore_env(:lens_storage, previous_storage)
     end)
 
@@ -71,8 +76,11 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     test "and every consumer observes the same application-owned Lens definition" do
       assert %Gralkor.Lens{
                name: "observations",
-               ontology: MemoryOntology,
-               scope: :operator,
+               destination: %Gralkor.Destination{
+                 name: "memory",
+                 address: "operator/memory-lens",
+                 ontology: MemoryOntology
+               },
                ingestion: StoreIngestion
              } = Client.lens!("observations")
 
@@ -91,16 +99,35 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
 
       assert replaceable_plugin_lens == Client.lens!("systems")
     end
+
+    test "and the Lens uses its referenced registered Destination" do
+      assert Client.lens!("observations").destination.name == "memory"
+    end
   end
 
-  describe "where an existing Lens definition provides an ontology and ingestion process without a write mode" do
+  describe "where an appending Lens definition provides a Destination name and ingestion process without a write mode" do
     test "then the Lens remains appending with its existing ingestion behaviour" do
       assert %Gralkor.Lens{
                name: "observations",
-               ontology: MemoryOntology,
-               scope: :operator,
+               destination: %Gralkor.Destination{name: "memory"},
                ingestion: StoreIngestion
              } = Client.lens!("observations")
+    end
+  end
+
+  describe "if an existing Lens definition retains top-level scope or ontology settings" do
+    test "then configuration resolution raises `ArgumentError` identifying that scoped address and ontology belong on a Destination" do
+      for legacy_setting <- [[scope: :operator], [ontology: MemoryOntology]] do
+        Application.put_env(
+          :jido_gralkor,
+          :lenses,
+          [Keyword.merge(valid_lens("observations"), legacy_setting)]
+        )
+
+        assert_raise ArgumentError, ~r/Destination.*address.*ontology/, fn ->
+          Client.lens!("observations")
+        end
+      end
     end
   end
 
@@ -177,23 +204,15 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-    test "and an invalid Lens ontology is identified with its Lens" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        valid_lens("observations") |> Keyword.put(:ontology, String)
-      ])
+    test "and a missing or unknown Lens Destination is identified with its Lens" do
+      for destination <- [nil, "missing"] do
+        Application.put_env(:jido_gralkor, :lenses, [
+          valid_lens("observations") |> Keyword.put(:destination, destination)
+        ])
 
-      assert_raise ArgumentError, ~r/observations.*ontology.*String/, fn ->
-        Client.lens!("observations")
-      end
-    end
-
-    test "and an invalid Lens scope is identified with its Lens" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        valid_lens("observations") |> Keyword.put(:scope, :tenant)
-      ])
-
-      assert_raise ArgumentError, ~r/observations.*scope.*tenant/, fn ->
-        Client.lens!("observations")
+        assert_raise ArgumentError, ~r/observations.*Destination.*#{inspect(destination)}/, fn ->
+          Client.lens!("observations")
+        end
       end
     end
 
@@ -240,7 +259,6 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     test "and a Lens definition that combines appending and replaceable write settings is identified with its Lens" do
       Application.put_env(:jido_gralkor, :lenses, [
         valid_replaceable_lens("systems")
-        |> Keyword.put(:ontology, MemoryOntology)
         |> Keyword.put(:ingestion, StoreIngestion)
       ])
 
@@ -253,14 +271,13 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
   defp valid_lens(name) do
     [
       name: name,
-      ontology: MemoryOntology,
-      scope: :operator,
+      destination: "memory",
       ingestion: StoreIngestion
     ]
   end
 
   defp valid_replaceable_lens(name) do
-    [name: name, scope: :operator, write: :replace_graph, graph_format: :property_graph]
+    [name: name, destination: "memory", write: :replace_graph, graph_format: :property_graph]
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
