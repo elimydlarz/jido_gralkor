@@ -101,7 +101,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
         [
           name: "observations",
           address: "operator/observations",
-          ontology: LensOntology,
+          ontology: LensOntology
         ]
       ])
 
