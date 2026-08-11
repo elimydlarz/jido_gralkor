@@ -52,6 +52,7 @@ defmodule Gralkor.Client do
 
   alias Gralkor.Ingest
   alias Gralkor.IngestedRepresentation
+  alias Gralkor.Destination.Registry, as: DestinationRegistry
   alias Gralkor.Lens
   alias Gralkor.Lens.Ingestion.Store, as: StoreIngestion
   alias Gralkor.Lens.Replaceable, as: ReplaceableLens
@@ -387,8 +388,7 @@ defmodule Gralkor.Client do
       nil when name == "operator" ->
         %Lens{
           name: "operator",
-          ontology: Gralkor.DefaultOntology,
-          scope: :operator,
+          destination: DestinationRegistry.fetch!("operator"),
           ingestion: StoreIngestion
         }
 
@@ -409,8 +409,7 @@ defmodule Gralkor.Client do
       :append ->
         %Lens{
           name: Keyword.fetch!(definition, :name),
-          ontology: Keyword.fetch!(definition, :ontology),
-          scope: Keyword.fetch!(definition, :scope),
+          destination: DestinationRegistry.fetch!(Keyword.fetch!(definition, :destination)),
           ingestion: Keyword.fetch!(definition, :ingestion)
         }
 
@@ -441,7 +440,6 @@ defmodule Gralkor.Client do
     end
 
     name = Keyword.get(definition, :name)
-    scope = Keyword.get(definition, :scope)
 
     unless is_binary(name) and String.trim(name) != "" do
       raise ArgumentError, "invalid Lens name #{inspect(name)}"
@@ -456,10 +454,6 @@ defmodule Gralkor.Client do
       raise ArgumentError, "invalid Lens #{inspect(name)}: name is reserved"
     end
 
-    unless scope in [:operator, :global] do
-      raise ArgumentError, "invalid Lens #{inspect(name)} scope #{inspect(scope)}"
-    end
-
     validate_lens_write!(name, definition)
   end
 
@@ -470,13 +464,10 @@ defmodule Gralkor.Client do
   defp validate_lens_write!(name, definition) do
     case Keyword.get(definition, :write, :append) do
       :append ->
-        ontology = Keyword.get(definition, :ontology)
+        destination = Keyword.get(definition, :destination)
         ingestion = Keyword.get(definition, :ingestion)
 
-        unless is_atom(ontology) and Code.ensure_loaded?(ontology) and
-                 function_exported?(ontology, :__ontology__, 0) do
-          raise ArgumentError, "invalid Lens #{inspect(name)} ontology #{inspect(ontology)}"
-        end
+        DestinationRegistry.fetch!(destination)
 
         unless is_atom(ingestion) and Code.ensure_loaded?(ingestion) and
                  function_exported?(ingestion, :ingest, 2) do
@@ -485,6 +476,8 @@ defmodule Gralkor.Client do
 
       :replace_graph ->
         graph_format = Keyword.get(definition, :graph_format)
+
+        DestinationRegistry.fetch!(Keyword.get(definition, :destination))
 
         if Keyword.has_key?(definition, :ontology) or Keyword.has_key?(definition, :ingestion) do
           raise ArgumentError,

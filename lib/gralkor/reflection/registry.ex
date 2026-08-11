@@ -3,6 +3,7 @@ defmodule Gralkor.Reflection.Registry do
 
   alias Gralkor.Reflection
   alias Gralkor.Reflection.ChainOfThought
+  alias Gralkor.Destination.Registry, as: DestinationRegistry
 
   @built_in_definitions [
     [
@@ -98,7 +99,7 @@ defmodule Gralkor.Reflection.Registry do
 
   defp load_one(definition, root) do
     name = field(definition, :name)
-    scope = field(definition, :scope)
+    destination = field(definition, :destination)
     relative = field(definition, :chain_of_thought)
 
     cond do
@@ -108,15 +109,15 @@ defmodule Gralkor.Reflection.Registry do
       not non_blank?(relative) ->
         {:error, {:invalid_chain_of_thought_file, name, relative}}
 
-      scope not in [:operator, :global, "operator", "global"] ->
-        {:error, {:invalid_destination_scope, name, scope}}
+      not non_blank?(destination) ->
+        {:error, {:missing_destination, name, destination}}
 
       true ->
-        load_cot(name, scope, relative, root)
+        load_cot(name, destination, relative, root)
     end
   end
 
-  defp load_cot(name, scope, relative, root) do
+  defp load_cot(name, destination_name, relative, root) do
     path = Path.expand(relative, root)
 
     cond do
@@ -129,9 +130,8 @@ defmodule Gralkor.Reflection.Registry do
             {:ok,
              %Reflection{
                name: name,
-               scope: normalize_scope(scope),
-               chain_of_thought: cot,
-               ontology: Gralkor.DefaultOntology
+               destination: DestinationRegistry.fetch!(destination_name),
+               chain_of_thought: cot
              }}
 
           {:error, reason} ->
@@ -141,10 +141,6 @@ defmodule Gralkor.Reflection.Registry do
   end
 
   defp repository_path?(path, root), do: path == root or String.starts_with?(path, root <> "/")
-  defp normalize_scope("operator"), do: :operator
-  defp normalize_scope("global"), do: :global
-  defp normalize_scope(scope), do: scope
-
   defp field(map, key) when is_map(map),
     do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
 

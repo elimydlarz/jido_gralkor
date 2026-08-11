@@ -14,13 +14,12 @@ defmodule Gralkor.Lens do
 
   @type scope :: :operator | :global
 
-  @enforce_keys [:name, :ontology, :scope, :ingestion]
-  defstruct [:name, :ontology, :scope, :ingestion]
+  @enforce_keys [:name, :destination, :ingestion]
+  defstruct [:name, :destination, :ingestion]
 
   @type t :: %__MODULE__{
           name: String.t(),
-          ontology: module() | nil,
-          scope: scope(),
+          destination: Gralkor.Destination.t(),
           ingestion: module()
         }
 end
