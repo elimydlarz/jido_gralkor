@@ -394,42 +394,45 @@ defmodule MyApp.Ontology do
 end
 ```
 
-Register as many Lenses as your application needs. Several Lenses may name the same ontology module — the name, scope, and ingestion process are what distinguish them:
+Register Destinations first, then point as many Lenses as your application needs at them. Several Lenses may use the same Destination:
 
 ```elixir
 # config/runtime.exs
 config :jido_gralkor,
+  destinations: [
+    [name: "observations", address: "operator/observations", ontology: MyApp.Ontology],
+    [name: "decisions", address: "operator/decisions", ontology: MyApp.Ontology],
+    [name: "systems", address: "operator/systems", ontology: MyApp.Ontology]
+  ],
   lenses: [
     [
       name: "observations",
-      ontology: MyApp.Ontology,
-      scope: :operator,
+      destination: "observations",
       ingestion: Gralkor.Lens.Ingestion.Store
     ],
     [
       name: "decisions",
-      ontology: MyApp.Ontology,
-      scope: :operator,
+      destination: "decisions",
       ingestion: MyApp.DecisionIngestion
     ]
   ]
 ```
 
-A replaceable Lens declares `write: :replace_graph` and the graph format it accepts instead of `:ontology` and `:ingestion`:
+A replaceable Lens declares `write: :replace_graph` and the graph format it accepts instead of `:ingestion`:
 
 ```elixir
 config :jido_gralkor,
   lenses: [
     [
       name: "systems",
-      scope: :operator,
+      destination: "systems",
       write: :replace_graph,
       graph_format: :property_graph
     ]
   ]
 ```
 
-`:operator` Lenses are local to the operator and isolated from every other local Lens. `:global` Lenses all write into the same shared global group. Each global episode records the Lens it arrived through, but searches of that group are intentionally unfiltered and return relevant memory from the whole group.
+Destination addresses control visibility: `operator/path` resolves a separate graph for each operator, while `global/path` resolves the same graph for every operator.
 
 `Gralkor.Lens.Ingestion.Store` is the built-in straight-through process. A consumer can define any other ingestion process by implementing one callback:
 
