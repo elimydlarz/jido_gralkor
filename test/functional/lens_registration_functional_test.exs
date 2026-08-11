@@ -158,7 +158,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
         Client.search(%Search{
           operator_id: "operator-one",
           query: "must not run",
-          lenses: ["observations"]
+          destinations: ["memory"]
         })
       end
     end
