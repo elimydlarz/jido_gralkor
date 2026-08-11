@@ -74,13 +74,18 @@ defmodule Gralkor.LensIngestionFunctionalTest do
   setup do
     Process.register(self(), :lens_ingestion_functional)
 
+    previous_destinations = Application.get_env(:jido_gralkor, :destinations)
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
 
     Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+    Application.put_env(:jido_gralkor, :destinations, [
+      [name: "observations", address: "operator/observations", ontology: MemoryOntology]
+    ])
     Application.put_env(:jido_gralkor, :lenses, [lens(RecordingIngestion)])
 
     on_exit(fn ->
+      restore_env(:destinations, previous_destinations)
       restore_env(:lenses, previous_lenses)
       restore_env(:lens_storage, previous_storage)
     end)
@@ -117,10 +122,11 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       refute_receive {:episode_added, _, _, _}
     end
 
-    test "and every submitted episode is governed by the selected Lens's ontology and scope" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        lens(VariableIngestion) |> Keyword.put(:scope, :global)
+    test "and every submitted episode is governed by the selected Lens's Destination ontology and address" do
+      Application.put_env(:jido_gralkor, :destinations, [
+        [name: "observations", address: "global/observations", ontology: MemoryOntology]
       ])
+      Application.put_env(:jido_gralkor, :lenses, [lens(VariableIngestion)])
 
       assert :ok = Client.ingest(request("one"))
 
@@ -128,8 +134,11 @@ defmodule Gralkor.LensIngestionFunctionalTest do
                       %Gralkor.Lens.Store{
                         operator_id: "operator-one",
                         lens: %Gralkor.Lens{
-                          ontology: MemoryOntology,
-                          scope: :global
+                          destination: %Gralkor.Destination{
+                            name: "observations",
+                            address: "global/observations",
+                            ontology: MemoryOntology
+                          }
                         }
                       }, "first", "functional"}
     end
@@ -167,7 +176,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       Application.put_env(:jido_gralkor, :lenses, [
         [
           name: "observations",
-          scope: :operator,
+          destination: "observations",
           write: :replace_graph,
           graph_format: :property_graph
         ]
@@ -182,7 +191,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       Application.put_env(:jido_gralkor, :lenses, [
         [
           name: "observations",
-          scope: :operator,
+          destination: "observations",
           write: :replace_graph,
           graph_format: :property_graph
         ]
@@ -212,8 +221,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
   defp lens(ingestion) do
     [
       name: "observations",
-      ontology: MemoryOntology,
-      scope: :operator,
+      destination: "observations",
       ingestion: ingestion
     ]
   end

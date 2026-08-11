@@ -29,25 +29,36 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
   setup do
     previous_client = Application.get_env(:jido_gralkor, :client)
+    previous_destinations = Application.get_env(:jido_gralkor, :destinations)
+    previous_destination_storage = Application.get_env(:jido_gralkor, :destination_storage)
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
 
     start_supervised!(Gralkor.Lens.Storage.InMemory)
 
     Application.put_env(:jido_gralkor, :client, InMemory)
+    Application.put_env(:jido_gralkor, :destinations, [
+      [name: "observations", address: "operator/observations", ontology: MemoryOntology],
+      [name: "decisions", address: "operator/decisions", ontology: MemoryOntology]
+    ])
+
+    Application.put_env(
+      :jido_gralkor,
+      :destination_storage,
+      Gralkor.Destination.Storage.InMemory
+    )
+
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
         name: "observations",
-        ontology: MemoryOntology,
-        scope: :operator,
+        destination: "observations",
         ingestion: StoreIngestion
       ],
       [
         name: "decisions",
-        ontology: MemoryOntology,
-        scope: :operator,
+        destination: "decisions",
         ingestion: StoreIngestion
       ]
     ])
@@ -57,6 +68,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
     on_exit(fn ->
       restore_env(:client, previous_client)
+      restore_env(:destinations, previous_destinations)
+      restore_env(:destination_storage, previous_destination_storage)
       restore_env(:lenses, previous_lenses)
       restore_env(:lens_storage, previous_storage)
     end)
