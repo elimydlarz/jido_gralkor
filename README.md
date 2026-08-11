@@ -188,10 +188,10 @@ Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the 
 
 Everything above, in one deployment. Three files.
 
-**Ontologies are modules, not config.** Each one is defined once as ordinary compiled Elixir in your own `lib/`, and a Lens definition points at it by module atom — the same way that definition's `ingestion:` key points at an ingestion module you wrote. So an ontology exists in two places, playing two different roles: *defined* in `lib/` as code, *referenced* in `config/runtime.exs` from the Lens that should extract with it. There is no third thing — no ontology list in the application env to register it with first. Two Lenses may point at the same module, as `"observations"` and `"decisions"` do below.
+**Ontologies are modules referenced by Destinations.** Define an ontology as ordinary compiled Elixir in your own `lib/`, then reference its module from each Destination that should extract with it. Lenses and Reflections reference those Destinations by name; neither repeats the ontology or address.
 
 ```elixir
-# lib/my_app/ontologies.ex — compiled code. Named by Lens definitions below.
+# lib/my_app/ontologies.ex — compiled code. Named by Destination definitions below.
 defmodule MyApp.Ontology do
   use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
