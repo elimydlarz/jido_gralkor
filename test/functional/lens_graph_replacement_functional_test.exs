@@ -198,7 +198,10 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
         relationships: []
       }
 
-      :sys.replace_state(InMemory, &Map.put(&1, {:graph, :global}, unowned))
+      :sys.replace_state(
+        InMemory,
+        &Map.put(&1, {:graph, group(:global, "systems")}, unowned)
+      )
 
       assert :ok = Client.replace(request(graph("systems")))
       assert Enum.map(InMemory.graph(group(:global, "systems")).nodes, & &1.id) == [
