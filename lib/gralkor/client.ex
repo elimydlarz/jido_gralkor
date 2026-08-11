@@ -442,7 +442,7 @@ defmodule Gralkor.Client do
 
     if Keyword.has_key?(definition, :scope) or Keyword.has_key?(definition, :ontology) do
       raise ArgumentError,
-            "invalid Lens #{inspect(name)}: scoped address and ontology belong on a Destination"
+            "invalid Lens #{inspect(name)}: address and ontology belong on a Destination"
     end
 
     validate_lens_write!(name, definition)
