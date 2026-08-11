@@ -627,14 +627,15 @@ The Jido glue:
 
 The embedded Gralkor adapter (under `lib/gralkor/`):
 
-- `Gralkor.Client` — adapter behaviour plus the public `ingest/1`, `replace/1`, and `search/1` Lens/Reflection boundary.
+- `Gralkor.Client` — adapter behaviour plus the public `ingest/1`, `replace/1`, and Destination-based `search/1` boundary.
 - `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, `GraphitiPool`, and `req_llm`.
 - `Gralkor.Client.InMemory` — test twin.
-- `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, `Gralkor.Ingest`, `Gralkor.IngestedRepresentation`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Search` — the resolved Lens models, completed-ingestion representation, and consumer request values.
+- `Gralkor.Destination` and `Gralkor.Destination.Registry` — first-class named addresses and extraction ontologies shared by Lenses and Reflections. The full agreed model is in [DESTINATIONS.md](DESTINATIONS.md).
+- `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, `Gralkor.Ingest`, `Gralkor.IngestedRepresentation`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Search` — resolved ingestion models, completed-ingestion representation, and consumer request values.
 - `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — append, replacement, and search capabilities with collision-safe local/shared-global Graphiti placement.
 - `Gralkor.Lens.Ingestion.Store` — the built-in straight-through ingestion process.
 - `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, `Gralkor.Reflection.Runner`, and `Gralkor.Reflection.Scheduler` — validated YAML declarations and asynchronous ordered execution after completed Lens ingestion.
-- `Gralkor.Reflection.Artefact`, `Gralkor.Reflection.Store`, and the Graphiti/InMemory Reflection storage modules — exactly-one-artefact persistence and search in Reflection-owned destinations.
+- `Gralkor.Reflection.Artefact`, `Gralkor.Reflection.Store`, and the Graphiti/InMemory Reflection storage modules — exactly-one-artefact persistence at referenced Destinations.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
 - `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Message`, and `Gralkor.InterpretParseFailed` — the embedded capture, recall, interpretation, and Graphiti pipelines.
 
