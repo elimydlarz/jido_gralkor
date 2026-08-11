@@ -409,14 +409,22 @@ defmodule Gralkor.Client do
       :append ->
         %Lens{
           name: Keyword.fetch!(definition, :name),
-          destination: DestinationRegistry.fetch!(Keyword.fetch!(definition, :destination)),
+          destination:
+            fetch_lens_destination!(
+              Keyword.fetch!(definition, :name),
+              Keyword.get(definition, :destination)
+            ),
           ingestion: Keyword.fetch!(definition, :ingestion)
         }
 
       :replace_graph ->
         %ReplaceableLens{
           name: Keyword.fetch!(definition, :name),
-          destination: DestinationRegistry.fetch!(Keyword.fetch!(definition, :destination)),
+          destination:
+            fetch_lens_destination!(
+              Keyword.fetch!(definition, :name),
+              Keyword.get(definition, :destination)
+            ),
           graph_format: Keyword.fetch!(definition, :graph_format)
         }
     end
@@ -454,6 +462,11 @@ defmodule Gralkor.Client do
       raise ArgumentError, "invalid Lens #{inspect(name)}: name is reserved"
     end
 
+    if Keyword.has_key?(definition, :scope) or Keyword.has_key?(definition, :ontology) do
+      raise ArgumentError,
+            "invalid Lens #{inspect(name)}: scoped address and ontology belong on a Destination"
+    end
+
     validate_lens_write!(name, definition)
   end
 
@@ -467,7 +480,7 @@ defmodule Gralkor.Client do
         destination = Keyword.get(definition, :destination)
         ingestion = Keyword.get(definition, :ingestion)
 
-        DestinationRegistry.fetch!(destination)
+        fetch_lens_destination!(name, destination)
 
         unless is_atom(ingestion) and Code.ensure_loaded?(ingestion) and
                  function_exported?(ingestion, :ingest, 2) do
@@ -477,7 +490,7 @@ defmodule Gralkor.Client do
       :replace_graph ->
         graph_format = Keyword.get(definition, :graph_format)
 
-        DestinationRegistry.fetch!(Keyword.get(definition, :destination))
+        fetch_lens_destination!(name, Keyword.get(definition, :destination))
 
         if Keyword.has_key?(definition, :ontology) or Keyword.has_key?(definition, :ingestion) do
           raise ArgumentError,
@@ -502,6 +515,19 @@ defmodule Gralkor.Client do
       nil -> :ok
       {name, _definitions} -> raise ArgumentError, "duplicate Lens #{inspect(name)}"
     end
+  end
+
+  defp fetch_lens_destination!(lens_name, destination_name) do
+    unless is_binary(destination_name) and String.trim(destination_name) != "" do
+      raise ArgumentError,
+            "invalid Lens #{inspect(lens_name)} Destination #{inspect(destination_name)}"
+    end
+
+    DestinationRegistry.fetch!(destination_name)
+  rescue
+    error in ArgumentError ->
+      raise ArgumentError,
+            "invalid Lens #{inspect(lens_name)} Destination #{inspect(destination_name)}: #{Exception.message(error)}"
   end
 
   defp registered_reflections! do
