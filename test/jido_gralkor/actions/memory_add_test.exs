@@ -20,9 +20,16 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
   setup do
     InMemory.reset()
 
+    previous_destinations = Application.get_env(:jido_gralkor, :destinations)
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
 
     on_exit(fn ->
+      if previous_destinations do
+        Application.put_env(:jido_gralkor, :destinations, previous_destinations)
+      else
+        Application.delete_env(:jido_gralkor, :destinations)
+      end
+
       if previous_lenses do
         Application.put_env(:jido_gralkor, :lenses, previous_lenses)
       else
@@ -65,10 +72,13 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
       Application.put_env(:jido_gralkor, :lenses, [
         [
           name: "decisions",
-          ontology: LensOntology,
-          scope: :operator,
+          destination: "decisions",
           ingestion: RecordingIngestion
         ]
+      ])
+
+      Application.put_env(:jido_gralkor, :destinations, [
+        [name: "decisions", address: "operator/decisions", ontology: LensOntology]
       ])
 
       assert {:ok, %{result: "Ingesting."}} =
