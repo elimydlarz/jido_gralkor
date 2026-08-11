@@ -9,7 +9,7 @@ when Reflection declarations are validated
   and every step declares one or more named structured outputs and their types
   and output names are unique across the Chain of Thought
   and every interpolation references an output from an earlier step
-  and every Reflection defines an inline Destination named by its Reflection with operator or global scope
+  and every Reflection references a registered Destination by name
     then validation succeeds
 
   if a Reflection name is blank
@@ -45,24 +45,25 @@ when Reflection declarations are validated
   if an interpolation references an output not declared by an earlier step
     then validation fails identifying that Reflection, step, and interpolation
 
-  if a Reflection has no Destination
+  if a Reflection has no Destination name
     then validation fails identifying that Reflection and missing Destination
 
-  if a Reflection's Destination scope is neither operator nor global
-    then validation fails identifying that Reflection and Destination scope
+  if a Reflection references an unknown Destination
+    then validation fails identifying that Reflection and Destination
 
 where the packaged default Reflections are used
   then ERL is declared as an operator-scoped default Reflection
-  and ERL's Destination owns jido_gralkor's built-in experiential-learning ontology
+  and ERL references the packaged experiential-learning Destination
+  and that Destination carries jido_gralkor's built-in experiential-learning ontology
 
-where an application-defined Reflection Destination omits its ontology
-  then its extraction remains generic through jido_gralkor's built-in default ontology
+where an application-defined Reflection references a Destination using the built-in default ontology
+  then its final artefact receives generic extraction
 
-where an application-defined Reflection Destination declares an ontology
-  then its final artefact is extracted through that application-owned ontology
+where an application-defined Reflection references a Destination using an application ontology
+  then its final artefact is extracted through that Destination's ontology
 
 when the default ERL Reflection stores its final artefact
-  then extraction receives the built-in `Learning` entity type from ERL's Destination
+  then extraction receives the built-in `Learning` entity type from the referenced Destination
   and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields
 
 when an ingestion operation successfully stores information through one or more Lenses
@@ -110,7 +111,7 @@ when inference returns a structured output for the current step
 
 when the final Chain of Thought step returns valid structured output
   then that structured output becomes the Reflection's single artefact
-  and the artefact is stored at the destination named by the Reflection
+  and the artefact is stored at the Destination referenced by the Reflection
   and the artefact identifies its declaring Reflection
   and the artefact retains its supporting evidence identifiers
 
