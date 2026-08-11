@@ -1,0 +1,4 @@
+interface:
+  display_name: "Run Journey"
+  short_description: "Run the single production-like memory Journey"
+  default_prompt: "Use $run-journey to run and verify the project Journey."
