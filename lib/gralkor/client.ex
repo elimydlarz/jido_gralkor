@@ -42,13 +42,7 @@ defmodule Gralkor.Client do
   @type agent_name :: String.t()
   @type messages :: [Gralkor.Message.t()]
   @type user_name :: String.t()
-  @type search_result :: %{lens: String.t(), fact: String.t()}
-  @type reflection_search_result :: Gralkor.Reflection.Artefact.t()
-  @type search_target :: %{
-          destination: :global | {:operator, String.t(), String.t()},
-          lens: String.t(),
-          store: Store.t()
-        }
+  @type search_result :: map()
 
   alias Gralkor.Ingest
   alias Gralkor.IngestedRepresentation
@@ -60,7 +54,7 @@ defmodule Gralkor.Client do
   alias Gralkor.Replace
   alias Gralkor.Reflection.Registry, as: ReflectionRegistry
   alias Gralkor.Reflection.Scheduler, as: ReflectionScheduler
-  alias Gralkor.Reflection.Store, as: ReflectionStore
+  alias Gralkor.Destination.Storage, as: DestinationStorage
   alias Gralkor.Search
 
   @callback recall(group_id(), agent_name(), session_id() | nil, query :: String.t()) ::
@@ -291,85 +285,65 @@ defmodule Gralkor.Client do
   end
 
   @spec search(Search.t()) ::
-          {:ok, [search_result() | reflection_search_result()]} | {:error, term()}
-  def search(%Search{reflections: [_ | _]} = request) do
+          {:ok, [search_result()]} | {:error, term()}
+  def search(%Search{} = request) do
     validate_max_results!(request.max_results)
-    reflections = registered_reflections!()
+    validate_result_type!(request.result_type)
 
-    selected = Enum.map(request.reflections, &reflection!(&1, reflections))
+    names = if request.destinations == [], do: ["operator"], else: request.destinations
+    destinations = names |> Enum.uniq() |> Enum.map(&DestinationRegistry.fetch!/1)
 
-    Enum.reduce_while(selected, {:ok, []}, fn reflection, {:ok, results} ->
-      opts = [max_results: request.max_results, artefact_id: request.artefact_id]
+    opts =
+      []
+      |> put_search_option(:entity_types, request.entity_types)
+      |> put_search_option(:edge_types, request.edge_types)
+      |> put_search_option(:artefact_id, request.artefact_id)
 
-      case ReflectionStore.search(
-             reflections,
-             request.operator_id,
-             reflection.name,
-             request.query,
-             opts
-           ) do
-        {:ok, artefacts} -> {:cont, {:ok, results ++ artefacts}}
-        {:error, _} = error -> {:halt, error}
-      end
-    end)
-  end
-
-  def search(%Search{
-        operator_id: operator_id,
-        query: query,
-        lenses: lenses,
-        max_results: max_results
-      }) do
-    validate_max_results!(max_results)
-
-    targets =
-      ["operator" | lenses]
-      |> Enum.uniq()
-      |> Enum.map(&search_target!(operator_id, &1))
-      |> Enum.uniq_by(& &1.destination)
-
-    targets
-    |> Enum.map(fn target ->
-      Task.async(fn -> {target.lens, Store.search(target.store, query, max_results)} end)
+    destinations
+    |> Enum.map(fn destination ->
+      Task.async(fn ->
+        {destination.name,
+         DestinationStorage.search(
+           destination,
+           request.operator_id,
+           request.query,
+           request.result_type,
+           request.max_results,
+           opts
+         )}
+      end)
     end)
     |> Task.await_many(:infinity)
     |> Enum.reduce_while({:ok, []}, fn search_result, {:ok, results} ->
       case search_result do
-        {lens_name, {:ok, lens_results}} ->
-          attributed = Enum.map(lens_results, &%{lens: lens_name, fact: &1})
+        {destination_name, {:ok, destination_results}} ->
+          attributed =
+            Enum.map(destination_results, &attribute_result(destination_name, request.result_type, &1))
+
           {:cont, {:ok, results ++ attributed}}
 
-        {_lens_name, {:error, _reason} = error} ->
+        {_destination_name, {:error, _reason} = error} ->
           {:halt, error}
       end
     end)
   end
 
-  @spec search_target!(String.t(), term()) :: search_target()
-  defp search_target!(operator_id, "global") do
-    %{
-      destination: :global,
-      lens: "global",
-      store: %Store{operator_id: operator_id, lens: :global}
-    }
-  end
+  defp attribute_result(destination, :facts, fact), do: %{destination: destination, fact: fact}
+  defp attribute_result(destination, :nodes, node), do: %{destination: destination, node: node}
+  defp attribute_result(destination, :episodes, episode),
+    do: %{destination: destination, episode: episode}
 
-  defp search_target!(operator_id, name) when is_binary(name) do
-    case lens!(name) do
-      %{scope: :global} ->
-        search_target!(operator_id, "global")
+  defp attribute_result(destination, :artefacts, artefact),
+    do: %{destination: destination, artefact: artefact}
 
-      %{name: lens_name, scope: :operator} = lens ->
-        %{
-          destination: {:operator, operator_id, lens_name},
-          lens: lens_name,
-          store: %Store{operator_id: operator_id, lens: lens}
-        }
-    end
-  end
+  defp put_search_option(opts, _key, []), do: opts
+  defp put_search_option(opts, _key, nil), do: opts
+  defp put_search_option(opts, key, value), do: Keyword.put(opts, key, value)
 
-  defp search_target!(_operator_id, name),
-    do: raise(ArgumentError, "invalid Lens #{inspect(name)}")
+  defp validate_result_type!(type) when type in [:facts, :nodes, :episodes, :artefacts], do: :ok
+
+  defp validate_result_type!(type),
+    do: raise(ArgumentError, "unsupported search result type #{inspect(type)}")
 
   @spec validate_max_results!(term()) :: :ok
   defp validate_max_results!(max_results) when is_integer(max_results) and max_results > 0,
@@ -529,20 +503,6 @@ defmodule Gralkor.Client do
       raise ArgumentError,
             "invalid Lens #{inspect(lens_name)} Destination #{inspect(destination_name)}: #{Exception.message(error)}"
   end
-
-  defp registered_reflections! do
-    ReflectionRegistry.configured!()
-  end
-
-  defp reflection!(name, reflections) when is_binary(name) do
-    case Enum.find(reflections, &(&1.name == name)) do
-      nil -> raise ArgumentError, "unknown Reflection #{inspect(name)}"
-      reflection -> reflection
-    end
-  end
-
-  defp reflection!(name, _reflections),
-    do: raise(ArgumentError, "invalid Reflection #{inspect(name)}")
 
   @spec sanitize_group_id(String.t()) :: String.t()
   def sanitize_group_id(id) when is_binary(id), do: String.replace(id, "-", "_")
