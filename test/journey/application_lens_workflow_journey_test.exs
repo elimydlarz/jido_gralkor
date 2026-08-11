@@ -30,6 +30,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
   setup do
     keys = [
       :client,
+      :destinations,
       :lenses,
       :lens_storage,
       :reflections
@@ -49,17 +50,21 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
     Application.put_env(:jido_gralkor, :reflections, [])
 
+    Application.put_env(:jido_gralkor, :destinations, [
+      [name: "observations", address: "operator/observations", ontology: MemoryOntology],
+      [name: "decisions", address: "operator/decisions", ontology: MemoryOntology],
+      [name: "published", address: "global/published", ontology: MemoryOntology]
+    ])
+
     Application.put_env(:jido_gralkor, :lenses, [
       [
         name: "observations",
-        ontology: MemoryOntology,
-        scope: :operator,
+        destination: "observations",
         ingestion: StoreIngestion
       ],
       [
         name: "decisions",
-        ontology: MemoryOntology,
-        scope: :operator,
+        destination: "decisions",
         ingestion: StoreIngestion
       ]
     ])
@@ -80,7 +85,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  ingestion_lens: "observations",
-                 search_lenses: ["observations", "decisions", "global"]
+                 search_destinations: ["observations", "decisions", "published"]
                )
 
       assert plugin_state.lens == Client.lens!("observations")
@@ -238,7 +243,7 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
         Plugin.mount(%{},
           agent_name: "Susu",
           ingestion_lens: "observations",
-          search_lenses: ["missing"]
+          search_destinations: ["missing"]
         )
       end
 
@@ -246,11 +251,11 @@ defmodule Gralkor.ApplicationLensWorkflowJourneyTest do
     end
   end
 
-  defp search(operator_id, lenses) do
+  defp search(operator_id, destinations) do
     Client.search(%Search{
       operator_id: operator_id,
       query: "launch",
-      lenses: lenses
+      destinations: destinations
     })
   end
 
