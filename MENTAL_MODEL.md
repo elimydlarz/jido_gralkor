@@ -32,7 +32,7 @@ This repository is the canonical development and distribution home for Jido-firs
 
 ## Bounded Contexts
 
-Two cooperating contexts live in this package: `Gralkor.*` owns the memory domain, while `JidoGralkor.*` adapts Jido signals, threads, actions, lifecycle, host tools, and tool context into that domain. Within Gralkor, Lenses ingest information without referring to one another; Reflections operate asynchronously over completed lensed representations and own separate destinations. Graphiti, Pythonx, and FalkorDB remain infrastructure inside the Gralkor context.
+Two cooperating contexts live in this package: `Gralkor.*` owns the memory domain, while `JidoGralkor.*` adapts Jido signals, threads, actions, lifecycle, host tools, and tool context into that domain. Within Gralkor, Destinations own placement and extraction, Lenses ingest without referring to one another, and Reflections operate asynchronously over completed lensed representations. Graphiti, Pythonx, and FalkorDB remain infrastructure inside the Gralkor context.
 
 ## Invariants
 
