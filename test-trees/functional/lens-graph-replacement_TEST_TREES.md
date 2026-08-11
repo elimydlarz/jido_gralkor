@@ -1,7 +1,7 @@
 Functional: lens-graph-replacement (functional: test/functional/lens_graph_replacement_functional_test.exs)
 
 when a caller replaces the complete graph through a replaceable Lens
-  then the Lens scope resolves the same operator-local or shared global destination used by existing Lens operations
+  then the Lens's Destination address resolves the graph used by existing Lens operations
   and every node and relationship previously written by that Lens at the resolved destination is removed
   and every supplied node and relationship is inserted at the resolved destination with every non-reserved graph value unchanged
   and every inserted node and relationship carries the reserved Lens ownership field set to the selected Lens name
@@ -39,5 +39,5 @@ if the supplied complete graph cannot be imported
   then the import failure is returned to the caller
   and graph content already removed by the replacement is not restored
 
-when a caller searches through a replaceable Lens
-  then the existing Lens search resolves and searches that Lens's scoped destination
+when a caller searches the Destination used by a replaceable Lens
+  then Destination search resolves and searches that Destination's address

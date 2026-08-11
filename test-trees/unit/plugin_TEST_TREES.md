@@ -15,18 +15,18 @@ if mount is given no agent name
 if mount is given a blank agent name
   then it raises ArgumentError
 
-when mount selects an ingestion Lens and Lenses to search
-  then those selections are resolved against the application Lens registry and stored on the plugin state
-  and the resolved Lens keeps the ontology, scope, and ingestion the registry declared for it, redefining none of them
+when mount selects an ingestion Lens and Destinations to search
+  then those selections are resolved against their application registries and stored on the plugin state
+  and the resolved Lens keeps the Destination and ingestion the registry declared for it, redefining neither
   if Lens options are supplied without an ingestion Lens
     then mounting raises an ArgumentError identifying that the ingestion Lens is required
   if the ingestion Lens is unknown
     then mounting raises an ArgumentError identifying the unknown Lens
-  if a search Lens is unknown
-    then mounting raises an ArgumentError identifying the unknown Lens
+  if a search Destination is unknown
+    then mounting raises an ArgumentError identifying the unknown Destination
   if the removed `:default_lens` option is supplied
     then mounting raises an ArgumentError identifying `:ingestion_lens` as its replacement
-  if the search Lens selection is not a list
+  if the search Destination selection is not a list
     then mounting raises an ArgumentError identifying the invalid selection
 
 when an agent turn begins
@@ -41,11 +41,11 @@ when an agent turn begins
   while no thread has committed to agent state
     then only the mounted agent name is planted on the tool context, with no session id
     and no recall is issued on the plugin's own initiative
-  where the plugin was mounted with Lens selections
+  where the plugin was mounted with Lens and Destination selections
     while a thread has committed to agent state
-      then the Lens selections and committed session id are planted on the tool context beside the agent name
+      then the Lens and Destination selections and committed session id are planted on the tool context beside the agent name
     while no thread has committed to agent state
-      then the Lens selections are planted on the tool context beside the agent name without a session id
+      then the Lens and Destination selections are planted on the tool context beside the agent name without a session id
 
 when an agent turn completes
   while a thread has committed to agent state

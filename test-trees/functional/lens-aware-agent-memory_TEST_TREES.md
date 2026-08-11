@@ -1,15 +1,14 @@
 Functional: lens-aware-agent-memory (functional: test/functional/lens_aware_agent_memory_functional_test.exs)
 
-when a mounted memory plugin has a configured ingestion Lens and optional additional Lenses to search
+when a mounted memory plugin has a configured ingestion Lens and optional Destinations to search
   then automatic capture and memory addition use the registered ingestion Lens
-  and memory search always includes the requesting operator's reserved `operator` Lens
-  and memory search also includes the configured additional Lenses
-  and every returned fact identifies the Lens that contributed it
-  and the plugin does not redefine a selected Lens's ontology, scope, or ingestion process
+  and memory search uses the configured Destinations
+  and every returned fact identifies its Destination
+  and the plugin does not redefine the selected Lens's Destination or ingestion process
 
-where a mounted memory plugin has no additional Lenses to search
-  then memory search uses only the requesting operator's reserved `operator` Lens
-  and every returned fact identifies the reserved `operator` Lens
+where a mounted memory plugin has no Destinations to search
+  then memory search uses the packaged operator-memory Destination
+  and every returned fact identifies that Destination
 
 where an agent turn selects another registered Lens
   then memory addition uses the turn-selected Lens
@@ -25,7 +24,7 @@ when turns in one session select different Lenses
 if a mounted plugin receives invalid Lens configuration
   then mounting fails before the plugin handles an agent signal
   and an unknown ingestion Lens is identified
-  and an unknown Lens to search is identified
+  and an unknown Destination to search is identified
   and Lens options without an ingestion Lens identify the required ingestion Lens
   and the removed `:default_lens` option identifies `:ingestion_lens` as its replacement
-  and a non-list Lens search selection is identified
+  and a non-list Destination search selection is identified
