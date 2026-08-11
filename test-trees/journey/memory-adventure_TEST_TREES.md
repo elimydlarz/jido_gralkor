@@ -1,4 +1,4 @@
-Journey: memory-adventure (journey: none)
+Journey: memory-adventure (journey: test/journey/memory_adventure_journey_test.exs)
 
 when two operators complete one production-like memory adventure
   while implicit operator memory has no consumer ontology configuration
