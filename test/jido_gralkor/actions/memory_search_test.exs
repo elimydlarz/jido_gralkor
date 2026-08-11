@@ -11,37 +11,39 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   end
 
   defmodule RecordingStorage do
-    @behaviour Gralkor.Lens.Storage
+    @behaviour Gralkor.Destination.Storage
 
-    def add_episode(_store, _content, _source), do: :ok
+    def search(destination, operator_id, query, result_type, max_results, opts) do
+      send(
+        Process.whereis(:memory_search_destination_test),
+        {:destination_search, destination, operator_id, query, result_type, max_results, opts}
+      )
 
-    def search(store, query, max_results) do
-      send(Process.whereis(:memory_search_lens_test), {:lens_search, store, query, max_results})
       {:ok, ["selected local memory"]}
     end
   end
 
-  defmodule FailingLensStorage do
-    @behaviour Gralkor.Lens.Storage
+  defmodule FailingDestinationStorage do
+    @behaviour Gralkor.Destination.Storage
 
-    def add_episode(_store, _content, _source), do: :ok
-    def search(_store, _query, _max_results), do: {:error, :boom}
+    def search(_destination, _operator_id, _query, _result_type, _max_results, _opts),
+      do: {:error, :boom}
   end
 
   setup do
     InMemory.reset()
 
-    previous_lenses = Application.get_env(:jido_gralkor, :lenses)
-    previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
+    previous_destinations = Application.get_env(:jido_gralkor, :destinations)
+    previous_storage = Application.get_env(:jido_gralkor, :destination_storage)
 
     on_exit(fn ->
-      if previous_lenses,
-        do: Application.put_env(:jido_gralkor, :lenses, previous_lenses),
-        else: Application.delete_env(:jido_gralkor, :lenses)
+      if previous_destinations,
+        do: Application.put_env(:jido_gralkor, :destinations, previous_destinations),
+        else: Application.delete_env(:jido_gralkor, :destinations)
 
       if previous_storage,
-        do: Application.put_env(:jido_gralkor, :lens_storage, previous_storage),
-        else: Application.delete_env(:jido_gralkor, :lens_storage)
+        do: Application.put_env(:jido_gralkor, :destination_storage, previous_storage),
+        else: Application.delete_env(:jido_gralkor, :destination_storage)
     end)
 
     :ok
@@ -90,17 +92,16 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     end
   end
 
-  describe "when the memory search tool runs with a query and a committed session > where the tool context selects Lenses to search" do
+  describe "when the memory search tool runs with a query and a committed session > where the tool context selects Destinations to search" do
     setup do
-      Process.register(self(), :memory_search_lens_test)
-      Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+      Process.register(self(), :memory_search_destination_test)
+      Application.put_env(:jido_gralkor, :destination_storage, RecordingStorage)
 
-      Application.put_env(:jido_gralkor, :lenses, [
+      Application.put_env(:jido_gralkor, :destinations, [
         [
           name: "observations",
+          address: "operator/observations",
           ontology: LensOntology,
-          scope: :operator,
-          ingestion: Gralkor.Lens.Ingestion.Store
         ]
       ])
 
@@ -109,43 +110,39 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                  agent_id: "operator-one",
                  session_id: "thread-one",
                  agent_name: "Susu",
-                 search_lenses: ["observations"]
+                 search_destinations: ["observations"]
                })
 
       %{result: result}
     end
 
-    test "then the Lens search is used in place of the legacy recall" do
+    test "then Destination search is used in place of the legacy recall" do
       assert [] = InMemory.recalls()
     end
 
-    test "and the operator's reserved `operator` Lens is searched alongside every selected Lens" do
-      assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "operator"}},
-                      "launch", 20}
-
-      assert_receive {:lens_search, %{operator_id: "operator-one", lens: %{name: "observations"}},
-                      "launch", 20}
+    test "and every selected Destination is searched" do
+      assert_receive {:destination_search, %{name: "observations"}, "operator-one", "launch",
+                      :facts, 20, []}
     end
 
-    test "and the action result is JSON identifying the searched Lens that contributed every fact",
+    test "and the action result is JSON identifying every fact's Destination",
          %{
            result: result
          } do
       assert Jason.decode!(result) == [
-               %{"lens" => "operator", "fact" => "selected local memory"},
-               %{"lens" => "observations", "fact" => "selected local memory"}
+               %{"destination" => "observations", "fact" => "selected local memory"}
              ]
     end
 
-    test "if a Lens backend fails, then the failure reason is returned to the caller unchanged" do
-      Application.put_env(:jido_gralkor, :lens_storage, FailingLensStorage)
+    test "if a Destination backend fails, then the failure reason is returned to the caller unchanged" do
+      Application.put_env(:jido_gralkor, :destination_storage, FailingDestinationStorage)
 
       assert {:error, :boom} =
                MemorySearch.run(%{query: "launch"}, %{
                  agent_id: "operator-one",
                  session_id: "thread-one",
                  agent_name: "Susu",
-                 search_lenses: ["observations"]
+                 search_destinations: ["observations"]
                })
     end
   end
