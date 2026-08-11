@@ -204,6 +204,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       )
 
       assert :ok = Client.replace(request(graph("systems")))
+
       assert Enum.map(InMemory.graph(group(:global, "systems")).nodes, & &1.id) == [
                "manual",
                "systems"
@@ -354,9 +355,8 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
                  query: "How does settlement work?"
                })
 
-      assert_receive {:searched_destination,
-                      %Gralkor.Destination{address: "operator/systems"}, "operator-one",
-                      "How does settlement work?", 20}
+      assert_receive {:searched_destination, %Gralkor.Destination{address: "operator/systems"},
+                      "operator-one", "How does settlement work?", 20}
     end
   end
 

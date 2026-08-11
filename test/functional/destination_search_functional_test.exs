@@ -71,11 +71,9 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  result_type: :facts
                })
 
-      assert_receive {:destination_search, "first", "operator-one", "question", :facts, 20,
-                      []}
+      assert_receive {:destination_search, "first", "operator-one", "question", :facts, 20, []}
 
-      assert_receive {:destination_search, "second", "operator-one", "question", :facts, 20,
-                      []}
+      assert_receive {:destination_search, "second", "operator-one", "question", :facts, 20, []}
     end
 
     test "and results retain the requested Destination order" do
@@ -229,8 +227,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  entity_types: ["Learning"]
                })
 
-      assert_receive {:destination_search, "first", _, _, :nodes, _,
-                      [entity_types: ["Learning"]]}
+      assert_receive {:destination_search, "first", _, _, :nodes, _, [entity_types: ["Learning"]]}
     end
   end
 
@@ -302,7 +299,11 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
     test "and the error identifies the unsupported result type" do
       assert_raise ArgumentError, ~r/summary/, fn ->
-        Client.search(%Search{operator_id: "operator-one", query: "question", result_type: :summary})
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "question",
+          result_type: :summary
+        })
       end
     end
   end

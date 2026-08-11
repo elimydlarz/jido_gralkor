@@ -43,6 +43,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     Application.put_env(:jido_gralkor, :destinations, [
       [name: "memory", address: "operator/memory-lens", ontology: MemoryOntology]
     ])
+
     Application.put_env(:jido_gralkor, :lenses, [valid_lens("observations")])
     Application.put_env(:jido_gralkor, :lens_storage, UnexpectedStorage)
 

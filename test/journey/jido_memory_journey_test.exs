@@ -226,6 +226,7 @@ defmodule Gralkor.JidoMemoryJourneyTest do
 
       assert {:ok, [%{artefact: artefact} | _]} =
                eventually_search_reflection(search, 120_000)
+
       assert artefact.reflection == "erl"
       assert is_binary(artefact.payload["problem_kind"])
       assert is_binary(artefact.payload["approach"])

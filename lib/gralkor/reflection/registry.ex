@@ -134,6 +134,7 @@ defmodule Gralkor.Reflection.Registry do
   end
 
   defp repository_path?(path, root), do: path == root or String.starts_with?(path, root <> "/")
+
   defp field(map, key) when is_map(map),
     do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
 

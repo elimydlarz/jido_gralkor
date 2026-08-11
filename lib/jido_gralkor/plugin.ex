@@ -84,6 +84,7 @@ defmodule JidoGralkor.Plugin do
 
       ingestion_lens ->
         lens = Client.lens!(ingestion_lens)
+
         search_destinations =
           validate_search_destinations!(fetch_opt(opts, :search_destinations))
 
@@ -255,7 +256,9 @@ defmodule JidoGralkor.Plugin do
     case plugin_state(agent) do
       %{ingestion_lens: lens, search_destinations: destinations} ->
         %{lens: lens, search_destinations: destinations}
-      _ -> %{}
+
+      _ ->
+        %{}
     end
   end
 

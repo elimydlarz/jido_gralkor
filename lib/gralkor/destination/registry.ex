@@ -28,7 +28,8 @@ defmodule Gralkor.Destination.Registry do
         validate_unique_names!(destinations)
         destinations
 
-      invalid -> raise ArgumentError, "Destination registry must be a list, got #{inspect(invalid)}"
+      invalid ->
+        raise ArgumentError, "Destination registry must be a list, got #{inspect(invalid)}"
     end
   end
 

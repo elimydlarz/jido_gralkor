@@ -80,7 +80,9 @@ defmodule Gralkor.ReplaceableLensWorkflowJourneyTest do
   end
 
   describe "when an application writes a complete graph through a replaceable Lens" do
-    test "then searching the Lens's Destination returns the supplied graph", %{operator_id: operator_id} do
+    test "then searching the Lens's Destination returns the supplied graph", %{
+      operator_id: operator_id
+    } do
       assert :ok =
                Client.replace(replacement(operator_id, "old", "Payments settles through Ledger."))
 

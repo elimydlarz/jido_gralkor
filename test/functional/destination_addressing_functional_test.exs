@@ -36,6 +36,7 @@ defmodule Gralkor.DestinationAddressingFunctionalTest do
     start_supervised!(Gralkor.Lens.Storage.InMemory)
 
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
     Application.put_env(
       :jido_gralkor,
       :destination_storage,
@@ -84,7 +85,6 @@ defmodule Gralkor.DestinationAddressingFunctionalTest do
 
       assert {:ok, []} = search("operator-two", ["observations"])
     end
-
   end
 
   describe "when a Lens saves an episode to a `global/path` Destination" do
