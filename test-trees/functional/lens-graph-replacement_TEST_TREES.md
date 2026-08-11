@@ -6,6 +6,7 @@ when a caller replaces the complete graph through a replaceable Lens
   and every supplied node and relationship is inserted at the resolved destination with every non-reserved graph value unchanged
   and every inserted node and relationship carries the reserved Lens ownership field set to the selected Lens name
   and nodes and relationships owned by another Lens at the resolved destination remain unchanged
+  and information saved through Reflections at the resolved destination remains unchanged
   and nodes and relationships without the reserved Lens ownership field at the resolved destination remain unchanged
   and the caller observes whether replacement succeeded or failed
 

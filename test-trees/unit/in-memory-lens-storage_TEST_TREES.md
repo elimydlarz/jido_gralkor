@@ -14,6 +14,7 @@ when a replaceable Lens store replaces a complete graph
   and every supplied node and relationship records the replacing Lens as its owner
   and graph content previously owned by the replacing Lens at that destination is removed
   and graph content owned by another Lens at that destination remains unchanged
+  and information saved through Reflections at that destination remains unchanged
   and graph content without a Lens owner at that destination remains unchanged
 
 where a replaceable Lens store supplies an empty complete graph
