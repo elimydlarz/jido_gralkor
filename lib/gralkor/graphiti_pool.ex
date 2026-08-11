@@ -176,10 +176,12 @@ defmodule Gralkor.GraphitiPool do
           [t.decode('utf-8') if isinstance(t, (bytes, bytearray)) else t for t in edge_types]
           if edge_types else None
         )
-        sf = SearchFilters(edge_types=types) if types else SearchFilters()
-        edges = asyncio._gralkor_run(
-          g.search(q, num_results=max_results, search_filter=sf)
-        )
+        if types:
+          edges = asyncio._gralkor_run(
+            g.search(q, num_results=max_results, search_filter=SearchFilters(edge_types=types))
+          )
+        else:
+          edges = asyncio._gralkor_run(g.search(q, num_results=max_results))
         [
           {
             "fact": e.fact,
