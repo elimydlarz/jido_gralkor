@@ -268,7 +268,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                                second_operator_global_information: true
                              }
   end
-  end
 
   defp replacement(target, suffix) do
     %Replace{
