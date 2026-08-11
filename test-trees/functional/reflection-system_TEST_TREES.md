@@ -52,8 +52,7 @@ when Reflection declarations are validated
     then validation fails identifying that Reflection and Destination
 
 where the packaged default Reflections are used
-  then ERL is declared as an operator-scoped default Reflection
-  and ERL references the packaged experiential-learning Destination
+  then ERL references the operator-scoped packaged experiential-learning Destination
   and that Destination carries jido_gralkor's built-in experiential-learning ontology
 
 where an application-defined Reflection references a Destination using the built-in default ontology
