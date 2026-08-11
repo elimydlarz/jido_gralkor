@@ -127,6 +127,8 @@ if inserting a supplied relationship fails
 
 when a fact search is run for a group
   then the graph library's edge search is invoked with the requested result count
+  where edge types are supplied
+    then the graph library's edge search is restricted to those ontology relationship types
   and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps
   and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints
 

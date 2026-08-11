@@ -829,6 +829,45 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
+    test "where edge types are supplied then the graph library's edge search is restricted to those ontology relationship types" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded = {}
+
+              async def search(self, query, num_results=10, search_filter=None):
+                  self.recorded['edge_types'] = (
+                      list(search_filter.edge_types)
+                      if search_filter is not None and search_filter.edge_types
+                      else None
+                  )
+                  return []
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:ok, []} =
+               GraphitiPool.search(pid, "g1", "q", 5, edge_types: ["LEARNS_FROM"])
+
+      {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert (recorded |> Pythonx.decode())["edge_types"] == ["LEARNS_FROM"]
+
+      GenServer.stop(pid)
+    end
+
     test "and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps" do
       {g, _} =
         Pythonx.eval(
