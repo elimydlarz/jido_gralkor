@@ -79,9 +79,11 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
 
     Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
     Application.put_env(:jido_gralkor, :destinations, [
       [name: "observations", address: "operator/observations", ontology: MemoryOntology]
     ])
+
     Application.put_env(:jido_gralkor, :lenses, [lens(RecordingIngestion)])
 
     on_exit(fn ->
@@ -126,6 +128,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       Application.put_env(:jido_gralkor, :destinations, [
         [name: "observations", address: "global/observations", ontology: MemoryOntology]
       ])
+
       Application.put_env(:jido_gralkor, :lenses, [lens(VariableIngestion)])
 
       assert :ok = Client.ingest(request("one"))

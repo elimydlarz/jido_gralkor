@@ -37,6 +37,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     start_supervised!(Gralkor.Lens.Storage.InMemory)
 
     Application.put_env(:jido_gralkor, :client, InMemory)
+
     Application.put_env(:jido_gralkor, :destinations, [
       [name: "observations", address: "operator/observations", ontology: MemoryOntology],
       [name: "decisions", address: "operator/decisions", ontology: MemoryOntology]

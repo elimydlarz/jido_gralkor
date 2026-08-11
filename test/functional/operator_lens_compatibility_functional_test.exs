@@ -13,6 +13,7 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
     start_supervised!(Gralkor.Lens.Storage.InMemory)
 
     Application.delete_env(:jido_gralkor, :lenses)
+
     Application.put_env(
       :jido_gralkor,
       :destination_storage,
