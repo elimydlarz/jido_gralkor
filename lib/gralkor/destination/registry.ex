@@ -22,9 +22,10 @@ defmodule Gralkor.Destination.Registry do
   ]
 
   def configured! do
-    @packaged ++
-      (Application.get_env(:jido_gralkor, :destinations, [])
-       |> Enum.map(&resolve!/1))
+    case Application.get_env(:jido_gralkor, :destinations, []) do
+      definitions when is_list(definitions) -> @packaged ++ Enum.map(definitions, &resolve!/1)
+      invalid -> raise ArgumentError, "Destination registry must be a list, got #{inspect(invalid)}"
+    end
   end
 
   def fetch!(name) when is_binary(name) do
