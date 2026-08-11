@@ -58,4 +58,14 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
                ReflectionRegistry.configured!()
     end
   end
+
+  describe "if the Destination registry is not a list" do
+    test "then configuration resolution raises `ArgumentError` naming what it found instead" do
+      Application.put_env(:jido_gralkor, :destinations, %{not: "a list"})
+
+      assert_raise ArgumentError, ~r/Destination registry must be a list.*%{not: "a list"}/, fn ->
+        Client.lens!("observations")
+      end
+    end
+  end
 end
