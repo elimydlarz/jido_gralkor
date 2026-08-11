@@ -86,6 +86,7 @@ Remote wins when both are set. `:ssl` defaults to `false`; set `true` for Falkor
 # config/test.exs
 config :jido_gralkor,
   client: Gralkor.Client.InMemory,
+  destination_storage: Gralkor.Destination.Storage.InMemory,
   lens_storage: Gralkor.Lens.Storage.InMemory,
   reflection_storage: Gralkor.Reflection.Storage.InMemory
 ```
@@ -132,10 +133,12 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
-| `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:scope`, `:ontology`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:scope`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"operator"`, `"global"`), retired (`"default"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
+| `:destinations` | list of keyword definitions | packaged `operator`, `experiential-learning`, and `generalisations` Destinations | The Destination registry. Each application definition has `:name`, an `operator/path` or `global/path` `:address`, and optional `:ontology` (default `Gralkor.DefaultOntology`). See [Destinations](DESTINATIONS.md). |
+| `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:destination`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:destination`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"operator"`, `"global"`), retired (`"default"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
-| `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, an `:operator` or `:global` destination `:scope`, and a repository-relative YAML `:chain_of_thought` path. Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
+| `:destination_storage` | module | `Gralkor.Destination.Storage.Graphiti` | Search storage behind `Client.search/1`. Set to `Gralkor.Destination.Storage.InMemory` in tests. |
+| `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, a registered `:destination`, and a repository-relative YAML `:chain_of_thought` path. Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
 | `:reflection_root` | path | application package root | Root used to resolve Reflection YAML paths. The default makes the packaged `priv/reflections/*.yaml` files work after installation; set it when an application keeps custom CoTs under another repository directory. |
 | `:reflection_storage` | module | `Gralkor.Reflection.Storage.Graphiti` | Physical storage behind `Gralkor.Reflection.Store`. Tests can use `Gralkor.Reflection.Storage.InMemory`. Reflection destinations remain separate from Lens destinations with either adapter. |
 | `:interpret_max_output_tokens` | positive integer | `2000` | Output ceiling for the per-recall interpret LLM call. Raise it if recall surfaces many candidate facts and you see `Gralkor.InterpretParseFailed` (the parser refuses truncated responses). Lower it to cap latency and cost. A non-positive value raises. |
@@ -149,7 +152,7 @@ config :jido_gralkor,
   recall_deadline_ms: 12_000
 ```
 
-The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `recall/4` need no ontology configuration. They use the library-owned `Gralkor.DefaultOntology`, whose open contract preserves generic entity and relationship extraction. An application-specific extraction schema belongs on an explicitly registered named Lens.
+The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `recall/4` need no ontology configuration. They use the packaged operator Destination and its library-owned `Gralkor.DefaultOntology`. Application-specific extraction schemas belong on registered Destinations referenced by named Lenses or Reflections.
 
 ### Environment variables
 
@@ -170,7 +173,7 @@ The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `reca
 | --- | --- | --- | --- |
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
 | `:ingestion_lens` | no | unset (implicit-operator mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. The removed `:default_lens` option raises and identifies this replacement. |
-| `:search_lenses` | no | `[]` | Additional registered Lens names and/or the reserved `"global"` Lens. The reserved `"operator"` Lens is always included and its results are returned first; naming it explicitly doesn't search it twice. |
+| `:search_destinations` | no | `[]` | Registered Destination names searched by `memory_search`. An empty list selects the packaged operator-memory Destination. |
 
 Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
 
