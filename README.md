@@ -537,18 +537,18 @@ Each Destination ontology is a module declared with `Gralkor.Ontology`:
 
 **Protected field names.** Entity and edge *type* names are unrestricted — pick whatever suits your domain. Field names are not: graphiti rejects any custom entity attribute whose name collides with a field on its own `EntityNode`, namely `uuid`, `name`, `group_id`, `labels`, `created_at`, `summary`, `attributes`, and `name_embedding`. The DSL does not currently catch this at compile time, so `field :name, :string` compiles and then raises `EntityTypeValidationError` from Python on the first write through the Lens that selected the ontology. Name fields for what they hold — `handle`, `title`, `statement` — rather than reaching for `name` or `summary`.
 
-On each store write, graphiti receives the selected Lens ontology's `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types`, translated from the module's compile-time payload.
+On each store write, graphiti receives the selected Destination ontology's `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types`, translated from the module's compile-time payload.
 
 ## Configure Reflections
 
-A Reflection is an asynchronous post-ingestion process over completed lensed representations. It is declared by name, destination scope, and a repository YAML Chain of Thought. Reflections are not Lenses: Lens definitions remain independent views for absorbing information, while Reflections operate over the successful results after every intended Lens has finished.
+A Reflection is an asynchronous post-ingestion process over completed lensed representations. It is declared by name, registered Destination, and a repository YAML Chain of Thought. Reflections are not Lenses: Lens definitions remain independent views for absorbing information, while Reflections operate over the successful results after every intended Lens has finished.
 
 The package supplies two declarations by default:
 
-- `generalisations` uses `priv/reflections/generalisations.yaml` and stores durable patterns in a global Reflection destination.
-- `erl` uses `priv/reflections/erl.yaml` and stores experiential-learning artefacts in an operator-local Reflection destination. This packaged default owns `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
+- `generalisations` uses `priv/reflections/generalisations.yaml` and the packaged `generalisations` Destination at `global/generalisations`.
+- `erl` uses `priv/reflections/erl.yaml` and the packaged `experiential-learning` Destination at `operator/experiential-learning`. That Destination carries `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
 
-Set `:reflections` to replace those defaults with application declarations, and set `:reflection_root` when their YAML paths resolve from somewhere other than the installed application root. Application-defined Reflections use `Gralkor.DefaultOntology` for generic extraction; custom application extraction schemas remain a named-Lens concern.
+Set `:reflections` to replace those defaults with application declarations, and set `:reflection_root` when their YAML paths resolve from somewhere other than the installed application root. A Reflection's Destination ontology governs extraction, whether it is the generic default or an application schema.
 
 ```elixir
 config :jido_gralkor,
@@ -556,7 +556,7 @@ config :jido_gralkor,
   reflections: [
     [
       name: "release-review",
-      scope: :operator,
+      destination: "release-knowledge",
       chain_of_thought: "priv/reflections/release-review.yaml"
     ]
   ]
@@ -564,14 +564,15 @@ config :jido_gralkor,
 
 Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the completed ingestion's lensed representations, the host agent's tools, and its full tool context. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one stored `%Gralkor.Reflection.Artefact{}` with its supporting evidence identifiers.
 
-Every Reflection has its own storage destination named after the Reflection. Operator-scoped destinations additionally include the operator id; global destinations are shared while remaining distinct by Reflection name. Search uses the Reflection namespace explicitly:
+Multiple Reflections and Lenses may save to the same Destination. Search selects Destinations directly:
 
 ```elixir
 {:ok, artefacts} =
   Gralkor.Client.search(%Gralkor.Search{
     operator_id: "operator-42",
     query: "What release approaches have worked?",
-    reflections: ["erl"],
+    destinations: ["experiential-learning"],
+    result_type: :artefacts,
     max_results: 20
   })
 
@@ -579,12 +580,13 @@ Every Reflection has its own storage destination named after the Reflection. Ope
   Gralkor.Client.search(%Gralkor.Search{
     operator_id: "operator-42",
     query: "",
-    reflections: ["erl"],
+    destinations: ["experiential-learning"],
+    result_type: :artefacts,
     artefact_id: "reflection-123"
   })
 ```
 
-When `reflections` is non-empty, `Gralkor.Search` searches only those Reflection destinations and returns artefacts rather than Lens facts. `artefact_id` optionally narrows the lookup to one exact artefact. This namespace separation lets an application search lensed memory by Lens and derived artefacts by the Reflection that produced them without making either system refer to the other.
+`result_type: :artefacts` returns final Reflection artefacts from the selected Destinations, and `artefact_id` optionally narrows the lookup to one exact artefact. Each artefact carries its declaring Reflection.
 
 ## Testing against the in-memory twin
 
