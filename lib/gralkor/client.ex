@@ -318,7 +318,10 @@ defmodule Gralkor.Client do
       case search_result do
         {destination_name, {:ok, destination_results}} ->
           attributed =
-            Enum.map(destination_results, &attribute_result(destination_name, request.result_type, &1))
+            Enum.map(
+              destination_results,
+              &attribute_result(destination_name, request.result_type, &1)
+            )
 
           {:cont, {:ok, results ++ attributed}}
 
@@ -330,6 +333,7 @@ defmodule Gralkor.Client do
 
   defp attribute_result(destination, :facts, fact), do: %{destination: destination, fact: fact}
   defp attribute_result(destination, :nodes, node), do: %{destination: destination, node: node}
+
   defp attribute_result(destination, :episodes, episode),
     do: %{destination: destination, episode: episode}
 

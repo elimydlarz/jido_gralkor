@@ -34,8 +34,9 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  add_episode_fn: add_episode_fn
                )
 
-      assert_receive {:graph_add, "destination_o_6f70657261746f722d6f6e65_6f62736572766174696f6e73", _, _,
-                      _, _}
+      assert_receive {:graph_add,
+                      "destination_o_6f70657261746f722d6f6e65_6f62736572766174696f6e73", _, _, _,
+                      _}
     end
 
     test "and changing either the operator or address path produces a distinct group" do
@@ -136,8 +137,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert {:ok, []} =
                Graphiti.search(store, "launch window", 7, search_fn: search_fn)
 
-      assert_receive {:graph_search, "destination_o_6f70657261746f722d6f6e65_6f62736572766174696f6e73", _,
-                      _}
+      assert_receive {:graph_search,
+                      "destination_o_6f70657261746f722d6f6e65_6f62736572766174696f6e73", _, _}
     end
 
     test "and graph search receives the query and result limit" do
@@ -307,7 +308,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  replace_graph_fn: replace_graph_fn
                )
 
-      assert_receive {:graph_replaced, "destination_g_736861726564", "systems", :property_graph, ^data}
+      assert_receive {:graph_replaced, "destination_g_736861726564", "systems", :property_graph,
+                      ^data}
     end
 
     test "and the graph replacement result is returned to the caller" do
@@ -339,8 +341,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert {:ok, []} =
                Graphiti.search(replaceable_store(:global), "settlement", 5, search_fn: search_fn)
 
-      assert_receive {:graph_search, "destination_o_6f70657261746f722d6f6e65_73797374656d73", "settlement",
-                      5}
+      assert_receive {:graph_search, "destination_o_6f70657261746f722d6f6e65_73797374656d73",
+                      "settlement", 5}
 
       assert_receive {:graph_search, "destination_g_736861726564", "settlement", 5}
     end

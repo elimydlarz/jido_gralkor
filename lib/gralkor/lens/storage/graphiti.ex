@@ -37,7 +37,13 @@ defmodule Gralkor.Lens.Storage.Graphiti do
         opts
       ) do
     replace_graph_fn = replace_graph_option(opts)
-    replace_graph_fn.(Destination.graph_id(lens.destination, operator_id), lens.name, lens.graph_format, data)
+
+    replace_graph_fn.(
+      Destination.graph_id(lens.destination, operator_id),
+      lens.name,
+      lens.graph_format,
+      data
+    )
   end
 
   @spec add_episode(Store.t(), String.t(), String.t(), keyword()) ::
@@ -66,7 +72,12 @@ defmodule Gralkor.Lens.Storage.Graphiti do
 
   @spec search(Store.t(), String.t(), pos_integer(), search_fn: search_fn()) ::
           {:ok, [String.t()]} | {:error, term()}
-  def search(%Store{operator_id: operator_id, lens: %{destination: destination}}, query, max_results, opts) do
+  def search(
+        %Store{operator_id: operator_id, lens: %{destination: destination}},
+        query,
+        max_results,
+        opts
+      ) do
     search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
     search_fn.(Destination.graph_id(destination, operator_id), query, max_results)
   end
