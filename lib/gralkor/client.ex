@@ -286,6 +286,7 @@ defmodule Gralkor.Client do
   @spec search(Search.t()) ::
           {:ok, [search_result()]} | {:error, term()}
   def search(%Search{} = request) do
+    _ = registered_lenses!()
     validate_max_results!(request.max_results)
     validate_result_type!(request.result_type)
 
