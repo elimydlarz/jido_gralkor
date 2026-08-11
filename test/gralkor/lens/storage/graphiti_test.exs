@@ -348,13 +348,6 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  defp local_store do
-    %Store{
-      operator_id: "operator-one",
-      lens: lens("observations", "operator/observations")
-    }
-  end
-
   defp replaceable_store(scope) do
     %Store{
       operator_id: "operator-one",
