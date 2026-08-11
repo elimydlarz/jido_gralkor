@@ -129,16 +129,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     :ok
   end
 
-  describe "when two operators complete one production-like memory adventure" do
-    describe "while implicit operator memory has no consumer ontology configuration" do
-      describe "and explicit memory is added through the implicit operator Lens" do
-        describe "and a completed turn is captured through an appending Lens and flushed" do
-          describe "and ERL saves its Learning artefact" do
-            describe "and operator-local and global information are saved through named Lenses" do
-              describe "and an appending Lens and a replaceable Lens save to one shared Destination" do
-                describe "and the replaceable Lens replaces its earlier graph" do
-                  describe "and fresh sessions search and recall from the adventure's Destinations" do
-                    test "then the first operator sees implicit, appended, global, ERL, preserved, and current replacement information without the superseded replacement while the second operator sees only global information" do
+  test "when two operators complete one production-like memory adventure / while implicit operator memory has no consumer ontology configuration / and explicit memory is added through the implicit operator Lens / and a completed turn is captured through an appending Lens and flushed / and ERL saves its Learning artefact / and operator-local and global information are saved through named Lenses / and an appending Lens and a replaceable Lens save to one shared Destination / and the replaceable Lens replaces its earlier graph / and fresh sessions search and recall from the adventure's Destinations / then the first operator sees implicit, appended, global, ERL, preserved, and current replacement information without the superseded replacement while the second operator sees only global information" do
                       implicit_fact =
                         "The private deployment codename is Juniper and the launch city is Muscat."
 
@@ -276,15 +267,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                                second_operator_local_information: false,
                                second_operator_global_information: true
                              }
-                    end
-                  end
-                end
-              end
-            end
-          end
-        end
-      end
-    end
+  end
   end
 
   defp replacement(target, suffix) do
