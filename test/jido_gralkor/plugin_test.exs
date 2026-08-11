@@ -89,36 +89,42 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  describe "when mount selects an ingestion Lens and Lenses to search" do
-    test "then those selections are resolved against the application Lens registry and stored on the plugin state" do
+  describe "when mount selects an ingestion Lens and Destinations to search" do
+    test "then those selections are resolved against their application registries and stored on the plugin state" do
       configure_lenses()
 
       assert {:ok,
               %{
                 agent_name: "Susu",
                 ingestion_lens: "observations",
-                search_lenses: ["observations", "global"],
+                search_destinations: ["memory", "generalisations"],
                 lens: %Gralkor.Lens{
                   name: "observations",
-                  ontology: LensOntology,
-                  scope: :operator,
+                  destination: %Gralkor.Destination{
+                    name: "memory",
+                    address: "operator/observations",
+                    ontology: LensOntology
+                  },
                   ingestion: Gralkor.Lens.Ingestion.Store
                 }
               }} =
                Plugin.mount(%{id: "operator-one", state: %{}},
                  agent_name: "Susu",
                  ingestion_lens: "observations",
-                 search_lenses: ["observations", "global"]
+                 search_destinations: ["memory", "generalisations"]
                )
     end
 
-    test "and the resolved Lens keeps the ontology, scope, and ingestion the registry declared for it, redefining none of them" do
+    test "and the resolved Lens keeps the Destination and ingestion the registry declared for it, redefining neither" do
       state = lens_plugin_state()
 
       assert state.lens == %Gralkor.Lens{
                name: "observations",
-               ontology: LensOntology,
-               scope: :operator,
+               destination: %Gralkor.Destination{
+                 name: "memory",
+                 address: "operator/observations",
+                 ontology: LensOntology
+               },
                ingestion: Gralkor.Lens.Ingestion.Store
              }
     end
@@ -129,7 +135,7 @@ defmodule JidoGralkor.PluginTest do
       assert_raise ArgumentError, ~r/ingestion_lens is required/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
           agent_name: "Susu",
-          search_lenses: ["observations"]
+          search_destinations: ["memory"]
         )
       end
     end
@@ -145,26 +151,26 @@ defmodule JidoGralkor.PluginTest do
       end
     end
 
-    test "if a search Lens is unknown then mounting raises an ArgumentError identifying the unknown Lens" do
+    test "if a search Destination is unknown then mounting raises an ArgumentError identifying the unknown Destination" do
       configure_lenses()
 
-      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
+      assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
           agent_name: "Susu",
           ingestion_lens: "observations",
-          search_lenses: ["missing"]
+          search_destinations: ["missing"]
         )
       end
     end
 
-    test "if the search Lens selection is not a list then mounting raises an ArgumentError identifying the invalid selection" do
+    test "if the search Destination selection is not a list then mounting raises an ArgumentError identifying the invalid selection" do
       configure_lenses()
 
-      assert_raise ArgumentError, ~r/search_lenses must be a list/, fn ->
+      assert_raise ArgumentError, ~r/search_destinations must be a list/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
           agent_name: "Susu",
           ingestion_lens: "observations",
-          search_lenses: "observations"
+          search_destinations: "memory"
         )
       end
     end
@@ -291,8 +297,8 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  describe "when an agent turn begins > where the plugin was mounted with Lens selections > while a thread has committed to agent state" do
-    test "then the Lens selections and committed session id are planted on the tool context beside the agent name" do
+  describe "when an agent turn begins > where the plugin was mounted with Lens and Destination selections > while a thread has committed to agent state" do
+    test "then the Lens and Destination selections and committed session id are planted on the tool context beside the agent name" do
       plugin_state = lens_plugin_state()
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
@@ -306,14 +312,14 @@ defmodule JidoGralkor.PluginTest do
       assert tool_context == %{
                agent_name: "Susu",
                lens: "observations",
-               search_lenses: ["observations", "global"],
+               search_destinations: ["memory", "generalisations"],
                session_id: "thread-one"
              }
     end
   end
 
-  describe "when an agent turn begins > where the plugin was mounted with Lens selections > while no thread has committed to agent state" do
-    test "then the Lens selections are planted on the tool context beside the agent name without a session id" do
+  describe "when an agent turn begins > where the plugin was mounted with Lens and Destination selections > while no thread has committed to agent state" do
+    test "then the Lens and Destination selections are planted on the tool context beside the agent name without a session id" do
       plugin_state = lens_plugin_state()
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
@@ -327,7 +333,7 @@ defmodule JidoGralkor.PluginTest do
       assert tool_context == %{
                agent_name: "Susu",
                lens: "observations",
-               search_lenses: ["observations", "global"]
+               search_destinations: ["memory", "generalisations"]
              }
     end
   end
@@ -753,26 +759,34 @@ defmodule JidoGralkor.PluginTest do
       Plugin.mount(%{id: "operator-one", state: %{}},
         agent_name: "Susu",
         ingestion_lens: "observations",
-        search_lenses: ["observations", "global"]
+        search_destinations: ["memory", "generalisations"]
       )
 
     plugin_state
   end
 
   defp configure_lenses do
-    previous = Application.get_env(:jido_gralkor, :lenses)
+    previous_lenses = Application.get_env(:jido_gralkor, :lenses)
+    previous_destinations = Application.get_env(:jido_gralkor, :destinations)
 
     on_exit(fn ->
-      if previous,
-        do: Application.put_env(:jido_gralkor, :lenses, previous),
+      if previous_lenses,
+        do: Application.put_env(:jido_gralkor, :lenses, previous_lenses),
         else: Application.delete_env(:jido_gralkor, :lenses)
+
+      if previous_destinations,
+        do: Application.put_env(:jido_gralkor, :destinations, previous_destinations),
+        else: Application.delete_env(:jido_gralkor, :destinations)
     end)
+
+    Application.put_env(:jido_gralkor, :destinations, [
+      [name: "memory", address: "operator/observations", ontology: LensOntology]
+    ])
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
         name: "observations",
-        ontology: LensOntology,
-        scope: :operator,
+        destination: "memory",
         ingestion: Gralkor.Lens.Ingestion.Store
       ]
     ])
