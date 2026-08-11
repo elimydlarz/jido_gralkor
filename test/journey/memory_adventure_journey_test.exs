@@ -131,140 +131,140 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
   describe "when two operators complete an adventure through ontology-free implicit memory, named Lenses, ERL, shared-Destination replacement, and fresh-session retrieval" do
     test "then retrieval returns all retained operator-local and global information but no superseded replacement" do
-    implicit_fact =
-      "The private deployment codename is Juniper and the launch city is Muscat."
+      implicit_fact =
+        "The private deployment codename is Juniper and the launch city is Muscat."
 
-    appended_fact =
-      "The backup and vacuum jobs overlapped at 02:00; moving vacuum to 04:00 fixed the backups."
+      appended_fact =
+        "The backup and vacuum jobs overlapped at 02:00; moving vacuum to 04:00 fixed the backups."
 
-    global_fact =
-      "All operators should verify the rollback checkpoint before deployment."
+      global_fact =
+        "All operators should verify the rollback checkpoint before deployment."
 
-    assert :ok = Native.memory_add(@operator_one, implicit_fact, "manual")
+      assert :ok = Native.memory_add(@operator_one, implicit_fact, "manual")
 
-    session_id = "memory_adventure_#{System.unique_integer([:positive])}"
+      session_id = "memory_adventure_#{System.unique_integer([:positive])}"
 
-    assert :ok =
-             Native.capture(
-               session_id,
-               @operator_one,
-               "Susu",
-               "Eli",
-               [
-                 Message.new(
-                   "user",
-                   "The nightly backup keeps failing with a lock timeout."
-                 ),
-                 Message.new(
-                   "behaviour",
-                   "thought: the backup and vacuum jobs overlap at 02:00"
-                 ),
-                 Message.new(
-                   "assistant",
-                   appended_fact
-                 )
-               ],
-               "work-notes",
-               [],
-               %{tools: [], tool_context: %{session_id: session_id}}
-             )
+      assert :ok =
+               Native.capture(
+                 session_id,
+                 @operator_one,
+                 "Susu",
+                 "Eli",
+                 [
+                   Message.new(
+                     "user",
+                     "The nightly backup keeps failing with a lock timeout."
+                   ),
+                   Message.new(
+                     "behaviour",
+                     "thought: the backup and vacuum jobs overlap at 02:00"
+                   ),
+                   Message.new(
+                     "assistant",
+                     appended_fact
+                   )
+                 ],
+                 "work-notes",
+                 [],
+                 %{tools: [], tool_context: %{session_id: session_id}}
+               )
 
-    assert :ok = Native.flush_and_await(session_id, 90_000)
+      assert :ok = Native.flush_and_await(session_id, 90_000)
 
-    assert :ok =
-             Client.ingest(%Ingest{
-               operator_id: @operator_one,
-               lens: "published",
-               content: global_fact,
-               source_description: "deployment policy"
-             })
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: @operator_one,
+                 lens: "published",
+                 content: global_fact,
+                 source_description: "deployment policy"
+               })
 
-    assert :ok = Client.replace(replacement("Ledger", "old"))
-    assert :ok = Client.replace(replacement("Clearing", "current"))
+      assert :ok = Client.replace(replacement("Ledger", "old"))
+      assert :ok = Client.replace(replacement("Clearing", "current"))
 
-    assert {:ok, implicit_memory} =
-             Native.recall(
-               @operator_one,
-               "Susu",
-               "fresh_recall_#{System.unique_integer([:positive])}",
-               "What is the private deployment codename and launch city?"
-             )
+      assert {:ok, implicit_memory} =
+               Native.recall(
+                 @operator_one,
+                 "Susu",
+                 "fresh_recall_#{System.unique_integer([:positive])}",
+                 "What is the private deployment codename and launch city?"
+               )
 
-    shared_episodes =
-      search_until(
-        @operator_one,
-        ["work"],
-        :episodes,
-        "backup vacuum 02:00 04:00",
-        &(&1 != [])
-      )
+      shared_episodes =
+        search_until(
+          @operator_one,
+          ["work"],
+          :episodes,
+          "backup vacuum 02:00 04:00",
+          &(&1 != [])
+        )
 
-    global_for_first =
-      search_until(
-        @operator_one,
-        ["published"],
-        :episodes,
-        "rollback checkpoint deployment",
-        &(&1 != [])
-      )
+      global_for_first =
+        search_until(
+          @operator_one,
+          ["published"],
+          :episodes,
+          "rollback checkpoint deployment",
+          &(&1 != [])
+        )
 
-    global_for_second =
-      search_until(
-        @operator_two,
-        ["published"],
-        :episodes,
-        "rollback checkpoint deployment",
-        &(&1 != [])
-      )
+      global_for_second =
+        search_until(
+          @operator_two,
+          ["published"],
+          :episodes,
+          "rollback checkpoint deployment",
+          &(&1 != [])
+        )
 
-    local_for_second =
-      search(@operator_two, ["work"], :episodes, "backup vacuum")
+      local_for_second =
+        search(@operator_two, ["work"], :episodes, "backup vacuum")
 
-    erl_artefacts =
-      search_until(
-        @operator_one,
-        ["experiential-learning"],
-        :artefacts,
-        "backup vacuum scheduling conflict",
-        &(&1 != []),
-        120
-      )
+      erl_artefacts =
+        search_until(
+          @operator_one,
+          ["experiential-learning"],
+          :artefacts,
+          "backup vacuum scheduling conflict",
+          &(&1 != []),
+          120
+        )
 
-    current_graph =
-      search_until(
-        @operator_one,
-        ["work"],
-        :facts,
-        "settlement clearing",
-        &contains_fact?(&1, "Clearing")
-      )
+      current_graph =
+        search_until(
+          @operator_one,
+          ["work"],
+          :facts,
+          "settlement clearing",
+          &contains_fact?(&1, "Clearing")
+        )
 
-    superseded_graph =
-      search(@operator_one, ["work"], :facts, "settlement ledger")
+      superseded_graph =
+        search(@operator_one, ["work"], :facts, "settlement ledger")
 
-    final_memory_view = %{
-      implicit_memory: contains_all?(implicit_memory, ["juniper", "muscat"]),
-      appended_information: contains_episode?(shared_episodes, "backup"),
-      global_information: contains_episode?(global_for_first, "rollback"),
-      erl_learning: learning_artefact?(erl_artefacts),
-      preserved_shared_information: contains_episode?(shared_episodes, "vacuum"),
-      current_replacement: contains_fact?(current_graph, "Clearing"),
-      superseded_replacement: contains_fact?(superseded_graph, "Ledger"),
-      second_operator_local_information: contains_episode?(local_for_second, "backup"),
-      second_operator_global_information: contains_episode?(global_for_second, "rollback")
-    }
+      final_memory_view = %{
+        implicit_memory: contains_all?(implicit_memory, ["juniper", "muscat"]),
+        appended_information: contains_episode?(shared_episodes, "backup"),
+        global_information: contains_episode?(global_for_first, "rollback"),
+        erl_learning: learning_artefact?(erl_artefacts),
+        preserved_shared_information: contains_episode?(shared_episodes, "vacuum"),
+        current_replacement: contains_fact?(current_graph, "Clearing"),
+        superseded_replacement: contains_fact?(superseded_graph, "Ledger"),
+        second_operator_local_information: contains_episode?(local_for_second, "backup"),
+        second_operator_global_information: contains_episode?(global_for_second, "rollback")
+      }
 
-    assert final_memory_view == %{
-             implicit_memory: true,
-             appended_information: true,
-             global_information: true,
-             erl_learning: true,
-             preserved_shared_information: true,
-             current_replacement: true,
-             superseded_replacement: false,
-             second_operator_local_information: false,
-             second_operator_global_information: true
-           }
+      assert final_memory_view == %{
+               implicit_memory: true,
+               appended_information: true,
+               global_information: true,
+               erl_learning: true,
+               preserved_shared_information: true,
+               current_replacement: true,
+               superseded_replacement: false,
+               second_operator_local_information: false,
+               second_operator_global_information: true
+             }
     end
   end
 
