@@ -7,12 +7,18 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
   alias Gralkor.Ingest
 
   setup do
-    keys = [:client, :lenses, :lens_storage, :ontology]
+    keys = [:client, :destination_storage, :lenses, :lens_storage, :ontology]
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
 
     start_supervised!(Gralkor.Lens.Storage.InMemory)
 
     Application.delete_env(:jido_gralkor, :lenses)
+    Application.put_env(
+      :jido_gralkor,
+      :destination_storage,
+      Gralkor.Destination.Storage.InMemory
+    )
+
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
 
     on_exit(fn -> Enum.each(previous, fn {key, value} -> restore_env(key, value) end) end)

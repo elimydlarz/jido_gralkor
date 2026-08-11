@@ -667,6 +667,13 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
   end
 
+  defp destination_episodes(name) do
+    name
+    |> Gralkor.Destination.Registry.fetch!()
+    |> Gralkor.Destination.graph_id("operator-one")
+    |> Gralkor.Lens.Storage.InMemory.episodes()
+  end
+
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
 end
