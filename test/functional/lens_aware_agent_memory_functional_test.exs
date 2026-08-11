@@ -83,7 +83,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  ingestion_lens: "observations",
-                 search_lenses: []
+                 search_destinations: []
                )
 
       agent = agent(plugin_state)
@@ -96,7 +96,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert eventually(fn ->
-               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "observations"}) != []
+               destination_episodes("observations") != []
              end)
 
       completion = completion_agent(agent, "default-request", tool_context)
@@ -110,7 +110,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert [[_, _, _, _, _, "observations", [], _reflection_context]] = InMemory.captures()
     end
 
-    test "and memory search always includes the requesting operator's reserved `operator` Lens" do
+    test "and memory search uses the configured Destinations" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
@@ -123,7 +123,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  ingestion_lens: "observations",
-                 search_lenses: ["observations"]
+                 search_destinations: ["operator"]
                )
 
       agent = agent(plugin_state)
@@ -136,7 +136,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert Jason.decode!(result) == [
-               %{"lens" => "operator", "fact" => "baseline memory"}
+               %{"destination" => "operator", "fact" => "baseline memory"}
              ]
     end
 
@@ -153,7 +153,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  ingestion_lens: "observations",
-                 search_lenses: ["observations"]
+                 search_destinations: ["observations"]
                )
 
       agent = agent(plugin_state)
@@ -166,11 +166,11 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert Jason.decode!(result) == [
-               %{"lens" => "observations", "fact" => "observation memory"}
+               %{"destination" => "observations", "fact" => "observation memory"}
              ]
     end
 
-    test "and every returned fact identifies the Lens that contributed it" do
+    test "and every returned fact identifies its Destination" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
@@ -183,7 +183,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  ingestion_lens: "observations",
-                 search_lenses: ["observations"]
+                 search_destinations: ["observations"]
                )
 
       agent = agent(plugin_state)
@@ -196,11 +196,11 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert Jason.decode!(result) == [
-               %{"lens" => "observations", "fact" => "attributed observation"}
+               %{"destination" => "observations", "fact" => "attributed observation"}
              ]
     end
 
-    test "and the plugin does not redefine a selected Lens's ontology, scope, or ingestion process" do
+    test "and the plugin does not redefine the selected Lens's Destination or ingestion process" do
       assert {:ok, %{lens: lens}} =
                Plugin.mount(%{},
                  agent_name: "Susu",
@@ -209,15 +209,18 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert %Gralkor.Lens{
                name: "observations",
-               ontology: MemoryOntology,
-               scope: :operator,
+               destination: %Gralkor.Destination{
+                 name: "observations",
+                 address: "operator/observations",
+                 ontology: MemoryOntology
+               },
                ingestion: StoreIngestion
              } = lens
     end
   end
 
-  describe "where a mounted memory plugin has no additional Lenses to search" do
-    test "then memory search uses only the requesting operator's reserved `operator` Lens" do
+  describe "where a mounted memory plugin has no Destinations to search" do
+    test "then memory search uses the packaged operator-memory Destination" do
       for {lens, content} <- [
             {"operator", "baseline memory"},
             {"observations", "unselected local memory"},
@@ -260,11 +263,11 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert Jason.decode!(result) == [
-               %{"lens" => "operator", "fact" => "baseline memory"}
+               %{"destination" => "operator", "fact" => "baseline memory"}
              ]
     end
 
-    test "and every returned fact identifies the reserved `operator` Lens" do
+    test "and every returned fact identifies that Destination" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
@@ -286,7 +289,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert Jason.decode!(result) == [
-               %{"lens" => "operator", "fact" => "attributed baseline"}
+               %{"destination" => "operator", "fact" => "attributed baseline"}
              ]
     end
   end
@@ -311,7 +314,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert eventually(fn ->
-               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "decisions"}) != []
+               destination_episodes("decisions") != []
              end)
     end
 
@@ -338,7 +341,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Plugin.mount(%{},
                  agent_name: "Susu",
                  ingestion_lens: "observations",
-                 search_lenses: ["observations"]
+                 search_destinations: ["observations"]
                )
 
       request_id = "decision-request"
@@ -484,10 +487,10 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert :ok = Gralkor.Client.Native.flush_and_await("session-one", 1_000)
 
       assert [%{content: observation_episode}] =
-               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "observations"})
+               destination_episodes("observations")
 
       assert [%{content: decision_episode}] =
-               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "decisions"})
+               destination_episodes("decisions")
 
       assert observation_episode =~ "observations result"
       refute observation_episode =~ "decisions result"
@@ -521,7 +524,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert :ok = Gralkor.Client.Native.flush_and_await("session-one", 1_000)
 
       assert [%{content: episode}] =
-               Gralkor.Lens.Storage.InMemory.episodes({"operator-one", "observations"})
+               destination_episodes("observations")
 
       {first_position, _first_length} = :binary.match(episode, "first-request")
       {second_position, _second_length} = :binary.match(episode, "second-request")
@@ -542,19 +545,19 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "and an unknown Lens to search is identified" do
-      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
+    test "and an unknown Destination to search is identified" do
+      assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
           ingestion_lens: "observations",
-          search_lenses: ["missing"]
+          search_destinations: ["missing"]
         )
       end
     end
 
     test "and Lens options without an ingestion Lens identify the required ingestion Lens" do
       assert_raise ArgumentError, ~r/ingestion_lens is required/, fn ->
-        Plugin.mount(%{}, agent_name: "Susu", search_lenses: ["observations"])
+        Plugin.mount(%{}, agent_name: "Susu", search_destinations: ["observations"])
       end
     end
 
@@ -564,12 +567,12 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "and a non-list Lens search selection is identified" do
-      assert_raise ArgumentError, ~r/search_lenses must be a list/, fn ->
+    test "and a non-list Destination search selection is identified" do
+      assert_raise ArgumentError, ~r/search_destinations must be a list/, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
           ingestion_lens: "observations",
-          search_lenses: "observations"
+          search_destinations: "observations"
         )
       end
     end
