@@ -16,4 +16,14 @@ defmodule Gralkor.Destination.Storage.InMemory do
 
     {:ok, results}
   end
+
+  def search(destination, operator_id, query, :artefacts, max_results, opts) do
+    Gralkor.Reflection.Storage.InMemory.search_destination(
+      destination,
+      operator_id,
+      query,
+      max_results,
+      Keyword.get(opts, :artefact_id)
+    )
+  end
 end

@@ -69,9 +69,30 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     start_supervised!(Scheduler)
 
     previous =
-      for key <- [:lenses, :lens_storage, :reflections, :reflection_storage], into: %{} do
+      for key <- [
+            :destinations,
+            :destination_storage,
+            :lenses,
+            :lens_storage,
+            :reflections,
+            :reflection_storage
+          ],
+          into: %{} do
         {key, Application.get_env(:jido_gralkor, key)}
       end
+
+    Application.put_env(:jido_gralkor, :destinations, [
+      [name: "reflection-test-operator", address: "operator/reflection-test"],
+      [name: "reflection-test-global", address: "global/reflection-test"],
+      [name: "observations", address: "operator/observations", ontology: ReflectionEvidenceOntology],
+      [name: "decisions", address: "operator/decisions", ontology: ReflectionEvidenceOntology]
+    ])
+
+    Application.put_env(
+      :jido_gralkor,
+      :destination_storage,
+      Gralkor.Destination.Storage.InMemory
+    )
 
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
     Application.put_env(:jido_gralkor, :reflection_storage, Gralkor.Reflection.Storage.InMemory)
@@ -108,8 +129,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       do: assert_valid(context)
     )
 
-    test(
-      "and every Reflection destination is named by its Reflection and has operator or global scope then validation succeeds",
+    test("and every Reflection references a registered Destination by name then validation succeeds",
       context,
       do: assert_valid(context)
     )
@@ -239,47 +259,56 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
     end
 
-    test "if a Reflection has no destination scope then validation fails identifying that Reflection",
+    test "if a Reflection has no Destination name then validation fails identifying that Reflection",
          %{root: root} do
-      definition = valid_definition(root) |> Keyword.delete(:scope)
+      definition = valid_definition(root) |> Keyword.delete(:destination)
 
-      assert {:error, {:invalid_destination_scope, "generalisation", nil}} =
+      assert {:error, {:missing_destination, "generalisation", nil}} =
                Registry.load([definition], root: root)
     end
 
-    test "if a Reflection's destination scope is neither operator nor global then validation fails identifying that Reflection and destination scope",
+    test "if a Reflection references an unknown Destination then validation fails identifying that Reflection and Destination",
          %{root: root} do
-      assert {:error, {:invalid_destination_scope, "generalisation", :private}} =
-               Registry.load([valid_definition(root, scope: :private)], root: root)
+      assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
+        Registry.load([valid_definition(root, destination: "missing")], root: root)
+      end
     end
   end
 
   describe "where the packaged default Reflections are used" do
-    test "then ERL is declared as an operator-scoped default Reflection" do
+    test "then ERL references the packaged experiential-learning Destination" do
       Application.delete_env(:jido_gralkor, :reflections)
 
-      assert %Gralkor.Reflection{name: "erl", scope: :operator} =
-               Enum.find(Registry.configured!(), &(&1.name == "erl"))
+      assert %Gralkor.Reflection{
+               name: "erl",
+               destination: %Gralkor.Destination{
+                 name: "experiential-learning",
+                 address: "operator/experiential-learning"
+               }
+             } = Enum.find(Registry.configured!(), &(&1.name == "erl"))
     end
 
-    test "and ERL owns jido_gralkor's built-in experiential-learning ontology" do
+    test "and that Destination carries jido_gralkor's built-in experiential-learning ontology" do
       Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
 
-      assert Map.fetch!(erl, :ontology) == Gralkor.Reflection.ERLOntology
+      assert erl.destination.ontology == Gralkor.Reflection.ERLOntology
     end
   end
 
   describe "where application-defined Reflections are used" do
-    test "then their extraction remains generic through jido_gralkor's built-in default ontology",
+    test "then a Destination without an explicit ontology uses jido_gralkor's built-in default ontology",
          %{root: root} do
       reflection = Registry.load!([valid_definition(root)], root: root) |> List.first()
+      assert reflection.destination.ontology == Gralkor.DefaultOntology
+    end
 
-      Application.put_env(:jido_gralkor, :reflections, [
-        %{reflection | ontology: Gralkor.Reflection.ERLOntology}
-      ])
+    test "then a Destination may carry an application ontology", %{root: root} do
+      reflection =
+        Registry.load!([valid_definition(root, destination: "observations")], root: root)
+        |> List.first()
 
-      assert [%Gralkor.Reflection{ontology: Gralkor.DefaultOntology}] = Registry.configured!()
+      assert reflection.destination.ontology == ReflectionEvidenceOntology
     end
   end
 

@@ -44,4 +44,20 @@ defmodule Gralkor.Reflection.Storage.InMemory do
        &Enum.find(Map.get(&1, destination, []), fn artefact -> artefact.id == artefact_id end)
      )}
   end
+
+  @doc false
+  def search_destination(destination, operator_id, query, max_results, artefact_id \\ nil) do
+    graph_id = Gralkor.Destination.graph_id(destination, operator_id)
+
+    results =
+      Agent.get(__MODULE__, &Map.get(&1, graph_id, []))
+      |> Enum.filter(fn artefact ->
+        (is_nil(artefact_id) or artefact.id == artefact_id) and
+          (query in [nil, ""] or
+             String.contains?(String.downcase(Jason.encode!(artefact.payload)), String.downcase(query)))
+      end)
+      |> Enum.take(max_results)
+
+    {:ok, results}
+  end
 end
