@@ -52,16 +52,27 @@ defmodule Gralkor.ReplaceableLensWorkflowJourneyTest do
 
   setup do
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
+    previous_destinations = Application.get_env(:jido_gralkor, :destinations)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
 
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
 
+    Application.put_env(:jido_gralkor, :destinations, [
+      [name: "systems", address: "operator/systems"]
+    ])
+
     Application.put_env(:jido_gralkor, :lenses, [
-      [name: "systems", scope: :operator, write: :replace_graph, graph_format: :property_graph]
+      [
+        name: "systems",
+        destination: "systems",
+        write: :replace_graph,
+        graph_format: :property_graph
+      ]
     ])
 
     on_exit(fn ->
       restore_application_env(:lenses, previous_lenses)
+      restore_application_env(:destinations, previous_destinations)
       restore_application_env(:lens_storage, previous_storage)
     end)
 
@@ -69,7 +80,7 @@ defmodule Gralkor.ReplaceableLensWorkflowJourneyTest do
   end
 
   describe "when an application writes a complete graph through a replaceable Lens" do
-    test "then Lens search returns the supplied graph", %{operator_id: operator_id} do
+    test "then searching the Lens's Destination returns the supplied graph", %{operator_id: operator_id} do
       assert :ok =
                Client.replace(replacement(operator_id, "old", "Payments settles through Ledger."))
 
@@ -152,7 +163,7 @@ defmodule Gralkor.ReplaceableLensWorkflowJourneyTest do
     Client.search(%Search{
       operator_id: operator_id,
       query: query,
-      lenses: ["systems"],
+      destinations: ["systems"],
       max_results: 10
     })
   end
