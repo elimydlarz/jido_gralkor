@@ -4,14 +4,14 @@ Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One H
 
 You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Destinations** for named memory placement and extraction, **Lenses** for ingestion, and **Reflections** for asynchronous post-ingestion synthesis.
 
-This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 6.0"}` for the whole memory stack.
+This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 7.0"}` for the whole memory stack.
 
 ## Install
 
 ```elixir
 def deps do
   [
-    {:jido_gralkor, "~> 6.0"}
+    {:jido_gralkor, "~> 7.0"}
   ]
 end
 ```
