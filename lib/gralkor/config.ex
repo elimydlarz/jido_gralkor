@@ -24,6 +24,7 @@ defmodule Gralkor.Config do
   # same model so consumers see identical output.
   @default_llm_model %{provider: :google, id: "gemini-3.1-flash-lite"}
   @default_embedder_model %{provider: :google, id: "gemini-embedding-2-preview"}
+  @default_embedded_falkordb_socket_timeout_ms 60_000
 
   @typedoc """
   Resolved model spec — the inline-map shape `ReqLLM.model/1` accepts directly.
@@ -87,6 +88,30 @@ defmodule Gralkor.Config do
     end
 
     kw
+  end
+
+  @doc """
+  Resolve the embedded FalkorDB socket read timeout in milliseconds.
+  """
+  @spec embedded_falkordb_socket_timeout_ms() :: pos_integer()
+  def embedded_falkordb_socket_timeout_ms do
+    :jido_gralkor
+    |> Application.get_env(
+      :embedded_falkordb_socket_timeout_ms,
+      @default_embedded_falkordb_socket_timeout_ms
+    )
+    |> validate_embedded_falkordb_socket_timeout_ms!()
+  end
+
+  @doc false
+  @spec validate_embedded_falkordb_socket_timeout_ms!(term()) :: pos_integer()
+  def validate_embedded_falkordb_socket_timeout_ms!(value)
+      when is_integer(value) and value > 0,
+      do: value
+
+  def validate_embedded_falkordb_socket_timeout_ms!(value) do
+    raise ArgumentError,
+          ":embedded_falkordb_socket_timeout_ms must be a positive integer, got #{inspect(value)}"
   end
 
   @spec llm_model() :: model_spec()

@@ -707,7 +707,8 @@ defmodule Gralkor.GraphitiPool do
     embedder_model = Keyword.get(opts, :embedder_model, Config.embedder_model())
     validate_native_models!(llm_model, embedder_model)
 
-    construct_falkor_db = Keyword.get(opts, :construct_falkor_db, &default_construct_falkor_db/1)
+    socket_timeout = embedded_falkordb_socket_timeout(falkordb_spec, opts)
+    construct_falkor_db = Keyword.get(opts, :construct_falkor_db, &default_construct_falkor_db/2)
 
     close_falkor_db =
       Keyword.get_lazy(opts, :close_falkor_db, fn ->
@@ -742,7 +743,7 @@ defmodule Gralkor.GraphitiPool do
         :ok
     end
 
-    falkor_db = construct_falkor_db.(falkordb_spec)
+    falkor_db = construct_falkor_db(construct_falkor_db, falkordb_spec, socket_timeout)
 
     state = %{
       table: table,
@@ -1024,22 +1025,25 @@ defmodule Gralkor.GraphitiPool do
 
   # ── Defaults: real Pythonx-backed construction ──────────────
 
-  defp default_construct_falkor_db({:embedded, data_dir}) do
+  defp default_construct_falkor_db({:embedded, data_dir}, socket_timeout) do
     db_path = Path.join(data_dir, "gralkor.db")
 
     {db, _} =
       Pythonx.eval(
         """
         from redislite.async_falkordb_client import AsyncFalkorDB
-        AsyncFalkorDB(db_path.decode('utf-8') if isinstance(db_path, (bytes, bytearray)) else db_path)
+        AsyncFalkorDB(
+          db_path.decode('utf-8') if isinstance(db_path, (bytes, bytearray)) else db_path,
+          socket_timeout=socket_timeout,
+        )
         """,
-        %{"db_path" => db_path}
+        %{"db_path" => db_path, "socket_timeout" => socket_timeout}
       )
 
     db
   end
 
-  defp default_construct_falkor_db({:remote, kw}) do
+  defp default_construct_falkor_db({:remote, kw}, _socket_timeout) do
     host = Keyword.fetch!(kw, :host)
     port = Keyword.fetch!(kw, :port)
     username = Keyword.get(kw, :username)

@@ -34,14 +34,16 @@ defmodule Gralkor.Application do
   defp build_children(spec) do
     remote? = match?({:remote, _}, spec)
 
+    graphiti_opts =
+      [
+        falkordb_spec: spec,
+        llm_model: Config.llm_model(),
+        embedder_model: Config.embedder_model()
+      ] ++ embedded_falkordb_options(spec)
+
     [
       {Gralkor.Python, [reap_orphans: not remote?]},
-      {GraphitiPool,
-       [
-         falkordb_spec: spec,
-         llm_model: Config.llm_model(),
-         embedder_model: Config.embedder_model()
-       ]},
+      {GraphitiPool, graphiti_opts},
       {CaptureBuffer,
        [
          flush_callback: build_flush_callback(spec),
@@ -50,6 +52,12 @@ defmodule Gralkor.Application do
        ]}
     ]
   end
+
+  defp embedded_falkordb_options({:embedded, _data_dir}) do
+    [embedded_falkordb_socket_timeout_ms: Config.embedded_falkordb_socket_timeout_ms()]
+  end
+
+  defp embedded_falkordb_options({:remote, _options}), do: []
 
   @doc false
   def build_flush_callback(_config, deps \\ []) do
