@@ -76,7 +76,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
   end
 
   describe "when the memory add tool runs with content, a source kind, and a source description > where the tool context selects a Lens" do
-    test "then the background write is routed to that Lens's ingestion for the operator, carrying the content, source kind, and source description" do
+    test "then the Lens ingestion receives the operator, content, source kind, and source description" do
       Process.register(self(), :memory_add_lens_test)
 
       Application.put_env(:jido_gralkor, :lenses, [
