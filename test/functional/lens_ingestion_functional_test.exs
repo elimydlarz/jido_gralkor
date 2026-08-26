@@ -175,7 +175,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       assert :ok = Client.ingest(request("one"))
 
       assert_receive {:graph_add, _, "first", "functional", MemoryOntology,
-                      [lens: "observations"]}
+                      [source_kind: :document, lens: "observations"]}
     end
   end
 
