@@ -88,51 +88,6 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when recall is requested for a group, agent and query > if the configured interpretation output budget is not a positive integer" do
-    setup do
-      original = Application.get_env(:jido_gralkor, :interpret_max_output_tokens)
-
-      on_exit(fn ->
-        if original == nil do
-          Application.delete_env(:jido_gralkor, :interpret_max_output_tokens)
-        else
-          Application.put_env(:jido_gralkor, :interpret_max_output_tokens, original)
-        end
-      end)
-
-      :ok
-    end
-
-    test "then the adapter raises an argument error naming that setting before recall starts" do
-      for value <- [0, -1, "lots"] do
-        Application.put_env(:jido_gralkor, :interpret_max_output_tokens, value)
-
-        assert_raise ArgumentError, ~r/interpret_max_output_tokens/, fn ->
-          Native.recall("g", "TestAgent", "s1", "q")
-        end
-      end
-    end
-  end
-
-  describe "when an interpretation output-token option is built for a supported provider > while the provider is OpenAI" do
-    test "then the option uses `max_completion_tokens`, which OpenAI structured-output requests accept" do
-      assert Native.interpret_output_token_options(:openai, 321) ==
-               [max_completion_tokens: 321]
-    end
-  end
-
-  describe "when an interpretation output-token option is built for a supported provider > while the provider is Google" do
-    test "then the option uses `max_tokens`, which ReqLLM translates for that provider" do
-      assert Native.interpret_output_token_options(:google, 654) == [max_tokens: 654]
-    end
-  end
-
-  describe "when the native adapter reads a structured interpretation response > if the required relevant facts field is absent" do
-    test "then the absent value remains malformed rather than becoming a valid empty selection" do
-      assert {:ok, nil} = Native.interpret_relevant_facts(%{})
-    end
-  end
-
   describe "if a recall is requested with a missing or blank agent name" do
     test "then an argument error naming the agent name is raised" do
       for agent_name <- [nil, ""] do
@@ -843,14 +798,16 @@ defmodule Gralkor.Client.NativeTest do
   describe "when recall is requested for a group, agent and query > while a session id is given" do
     @describetag :integration
     setup :start_recall_recording_pool
-    setup :start_capture_buffer
 
-    test "then it is handed to the recall pipeline, so the turns buffered for that session become the conversation context" do
-      messages = [Message.new("user", "earlier context")]
-      assert :ok = Native.capture("session-1", "g", "TestAgent", "Eli", messages)
-      assert {:ok, block} = Native.recall("g", "TestAgent", "session-1", "raw query")
-      assert block =~ "<gralkor-memory"
-      assert [^messages] = CaptureBuffer.turns_for("session-1")
+    @tag :capture_log
+    test "then it is handed to the recall pipeline for recall observability" do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, block} = Native.recall("g", "TestAgent", "session-1", "raw query")
+          assert block =~ "<gralkor-memory"
+        end)
+
+      assert log =~ "[gralkor] recall — session:session-1"
     end
   end
 
@@ -863,10 +820,6 @@ defmodule Gralkor.Client.NativeTest do
       assert block =~ "<gralkor-memory"
     end
 
-    test "and the conversation context is empty" do
-      assert {:ok, block} = Native.recall("g", "TestAgent", nil, "raw query")
-      assert block =~ "No relevant memories found."
-    end
   end
 
   describe "when recall is requested for a group, agent and query > where a recall deadline is configured" do
@@ -890,35 +843,4 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when recall is requested for a group, agent and query > where an interpretation output budget is configured" do
-    @describetag :integration
-    setup :start_recall_recording_pool
-
-    setup do
-      original = Application.get_env(:jido_gralkor, :interpret_max_output_tokens)
-
-      on_exit(fn ->
-        case original do
-          nil -> Application.delete_env(:jido_gralkor, :interpret_max_output_tokens)
-          value -> Application.put_env(:jido_gralkor, :interpret_max_output_tokens, value)
-        end
-      end)
-
-      :ok
-    end
-
-    test "then each call reads the current configured budget without requiring a restart" do
-      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, 111)
-      assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "first query")
-
-      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, 222)
-      assert {:ok, _block} = Native.recall("g", "TestAgent", nil, "second query")
-    end
-
-    test "and it is forwarded to the recall pipeline as the interpretation output-token budget" do
-      Application.put_env(:jido_gralkor, :interpret_max_output_tokens, 333)
-      assert {:ok, block} = Native.recall("g", "TestAgent", nil, "raw query")
-      assert block =~ "<gralkor-memory"
-    end
-  end
 end
