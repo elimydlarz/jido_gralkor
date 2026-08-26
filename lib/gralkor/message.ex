@@ -26,9 +26,6 @@ defmodule Gralkor.Message do
 
   @spec new(role(), String.t()) :: t()
   def new(role, content) when role in @valid_roles and is_binary(content) do
-    %__MODULE__{
-      role: role,
-      content: content
-    }
+    %__MODULE__{role: role, content: content}
   end
 end
