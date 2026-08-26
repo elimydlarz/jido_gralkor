@@ -139,6 +139,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       do: assert_valid(context)
     )
 
+    test "if the configured Reflection registry is not a list then validation fails identifying the configured value" do
+      Application.put_env(:jido_gralkor, :reflections, :invalid_registry)
+
+      assert_raise ArgumentError, ~r/invalid Reflection declarations: :invalid_registry/, fn ->
+        Registry.configured!()
+      end
+    end
+
     test "if a Reflection name is blank then validation fails identifying the blank name", %{
       root: root
     } do
@@ -232,6 +240,34 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
     end
 
+    test "if a Chain of Thought step is not a map then validation fails identifying that Reflection and step",
+         %{root: root} do
+      write_cot(root, "invalid-step.yaml", "steps:\n  - not-a-step\n")
+
+      assert {:error,
+              {:invalid_chain_of_thought, "generalisation", "invalid-step.yaml",
+               {:invalid_step, "not-a-step"}}} =
+               Registry.load([valid_definition(root, chain_of_thought: "invalid-step.yaml")],
+                 root: root
+               )
+    end
+
+    test "if a Chain of Thought step declares an unsupported structured-output type then validation fails identifying that Reflection, step, and type",
+         %{root: root} do
+      write_cot(
+        root,
+        "invalid-type.yaml",
+        "steps:\n  - label: think\n    directions: Think.\n    output: {result: mystery}\n"
+      )
+
+      assert {:error,
+              {:invalid_chain_of_thought, "generalisation", "invalid-type.yaml",
+               {:invalid_output_type, "think", "mystery"}}} =
+               Registry.load([valid_definition(root, chain_of_thought: "invalid-type.yaml")],
+                 root: root
+               )
+    end
+
     test "if an output name is declared by more than one step then validation fails identifying that Reflection, output name, and steps",
          %{root: root} do
       write_cot(
@@ -242,7 +278,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert {:error,
               {:invalid_chain_of_thought, "generalisation", "duplicate-output.yaml",
-               {:duplicate_output, "result", "two"}}} =
+               {:duplicate_output, "result", "one", "two"}}} =
                Registry.load([valid_definition(root, chain_of_thought: "duplicate-output.yaml")],
                  root: root
                )
@@ -274,7 +310,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "if a Reflection references an unknown Destination then validation fails identifying that Reflection and Destination",
          %{root: root} do
-      assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
+      assert_raise ArgumentError,
+                   ~r/Reflection "generalisation" references unknown Destination "missing"/,
+                   fn ->
         Registry.load([valid_definition(root, destination: "missing")], root: root)
       end
     end
@@ -990,7 +1028,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                       {:error,
                        %{
                          reflection: "generalisation",
-                         destination: "generalisation",
+                         destination: "reflection-test-operator",
                          reason: :destination_unavailable
                        }}}
     end
