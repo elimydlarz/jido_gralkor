@@ -40,8 +40,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       end
 
     Application.put_env(:jido_gralkor, :destinations, [
-      [name: "first", address: "operator/first"],
-      [name: "second", address: "global/second"]
+      [name: "first"],
+      [name: "second"]
     ])
 
     Application.put_env(:jido_gralkor, :destination_storage, SearchStorage)
@@ -124,13 +124,13 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert_receive {:destination_search, "operator", "operator-one", _, _, _, _}
     end
 
-    test "and the packaged global-generalisations Destination is searched" do
+    test "and the packaged `global` Destination is searched" do
       assert {:ok, results} =
                Client.search(%Search{operator_id: "operator-one", query: "question"})
 
-      assert Enum.any?(results, &match?(%{destination: "generalisations"}, &1))
+      assert Enum.any?(results, &match?(%{destination: "global"}, &1))
 
-      assert_receive {:destination_search, "generalisations", "operator-one", _, _, _, _}
+      assert_receive {:destination_search, "global", "operator-one", _, _, _, _}
     end
   end
 
@@ -235,7 +235,12 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
       store = %Gralkor.Lens.Store{
         operator_id: "operator-one",
-        lens: %Gralkor.Lens{name: "first", destination: destination, ingestion: String}
+        lens: %Gralkor.Lens{
+          name: "first",
+          destination: destination,
+          ontology: Gralkor.DefaultOntology,
+          ingestion: String
+        }
       }
 
       assert :ok = Gralkor.Lens.Store.add(store, "stored episode", "functional")
