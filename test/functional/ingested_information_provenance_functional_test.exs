@@ -125,6 +125,18 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
+  describe "where the source kind is document" do
+    test "while the supplied content is text then Graphiti receives a document-text episode containing that text" do
+      graphiti = use_native_boundary()
+
+      assert :ok =
+               Client.ingest(request(:document, "Atlas launch proposal", "Q3 Roadmap — Draft"))
+
+      assert [%{"body" => "Atlas launch proposal", "source" => "text"}] =
+               added_episodes(graphiti)
+    end
+  end
+
   defp request(source_kind, content, source_description) do
     %Ingest{
       operator_id: "operator-one",
