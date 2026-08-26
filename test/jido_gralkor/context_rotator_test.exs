@@ -24,7 +24,11 @@ defmodule JidoGralkor.ContextRotatorTest do
 
   setup do
     previous_client = Application.get_env(:jido_gralkor, :client)
-    start_supervised!(InMemory)
+
+    if Process.whereis(InMemory) == nil do
+      start_supervised!(InMemory)
+    end
+
     InMemory.reset()
     Application.put_env(:jido_gralkor, :client, InMemory)
 
