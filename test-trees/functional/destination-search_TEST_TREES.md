@@ -11,7 +11,8 @@ where the same Destination is selected more than once
   then that Destination is searched only once
 
 where no Destination is supplied
-  then the requesting operator's packaged default Destination is searched
+  then the packaged operator-memory Destination is searched
+  and the packaged global-generalisations Destination is searched
 
 where a caller supplies no maximum result count
   then every resolved Destination receives the default maximum result count of twenty

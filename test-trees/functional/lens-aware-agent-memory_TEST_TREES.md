@@ -8,7 +8,8 @@ when a mounted memory plugin has a configured ingestion Lens and optional Destin
 
 where a mounted memory plugin has no Destinations to search
   then memory search uses the packaged operator-memory Destination
-  and every returned fact identifies that Destination
+  and memory search uses the packaged global-generalisations Destination
+  and every returned fact identifies its Destination
 
 where an agent turn selects another registered Lens
   then memory addition uses the turn-selected Lens
