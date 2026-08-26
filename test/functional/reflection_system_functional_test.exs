@@ -1076,7 +1076,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then that Destination is searched", context do
       {reflection, artefact} = stored_artefact(context)
 
-    assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
+      assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
@@ -1096,8 +1096,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert {:ok,
               [
-                %{destination: "reflection-test-operator", artefact: ^a1},
-                %{destination: "reflection-test-operator", artefact: ^a2}
+                %{destination: "operator", artefact: ^a1},
+                %{destination: "operator", artefact: ^a2}
               ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
@@ -1372,7 +1372,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
           [
             name: "live-proof",
             chain_of_thought: "live-tool-sequence.yaml",
-            destination: "reflection-test-operator"
+            destination: "operator"
           ]
         ],
         root: root
