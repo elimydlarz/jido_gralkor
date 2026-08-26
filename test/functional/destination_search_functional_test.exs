@@ -122,6 +122,15 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
       assert_receive {:destination_search, "operator", "operator-one", _, _, _, _}
     end
+
+    test "and the packaged global-generalisations Destination is searched" do
+      assert {:ok, results} =
+               Client.search(%Search{operator_id: "operator-one", query: "question"})
+
+      assert Enum.any?(results, &match?(%{destination: "generalisations"}, &1))
+
+      assert_receive {:destination_search, "generalisations", "operator-one", _, _, _, _}
+    end
   end
 
   describe "where a caller supplies no maximum result count" do
