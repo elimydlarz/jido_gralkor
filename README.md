@@ -63,9 +63,6 @@ provider a spec selects is missing or blank (naming the variable and the role,
 different providers are otherwise compatible — embedding dimensions and the like
 are yours to keep consistent.
 
-Direct ReqLLM calls are provider-portable regardless — for example, the focused
-interpretation functional suite uses OpenAI without starting Graphiti.
-
 ```elixir
 # Remote — point at a managed FalkorDB. config/runtime.exs
 config :jido_gralkor,
@@ -141,26 +138,26 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, a registered `:destination`, and a repository-relative YAML `:chain_of_thought` path. Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
 | `:reflection_root` | path | application package root | Root used to resolve Reflection YAML paths. The default makes the packaged `priv/reflections/*.yaml` files work after installation; set it when an application keeps custom CoTs under another repository directory. |
 | `:reflection_storage` | module | `Gralkor.Reflection.Storage.Graphiti` | Physical storage behind `Gralkor.Reflection.Store`. Tests can use `Gralkor.Reflection.Storage.InMemory`; Destination search should then use its in-memory adapter too. |
-| `:interpret_max_output_tokens` | positive integer | `2000` | Output ceiling for the per-recall interpret LLM call. Raise it if recall surfaces many candidate facts and you see `Gralkor.InterpretParseFailed` (the parser refuses truncated responses). Lower it to cap latency and cost. A non-positive value raises. |
-| `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall (search + interpret). On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. |
+| `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall search and presentation. On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. |
 | `:test` | boolean | `false` | Verbose diagnostic logging: recall queries, returned facts, and flushed capture bodies are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
 
 ```elixir
 # config/runtime.exs — everything optional, shown with its default
 config :jido_gralkor,
-  interpret_max_output_tokens: 2000,
   recall_deadline_ms: 12_000
 ```
 
 The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `recall/4` need no ontology configuration. They use the packaged operator Destination and its library-owned `Gralkor.DefaultOntology`. Application-specific extraction schemas belong on registered Destinations referenced by named Lenses or Reflections.
+
+`recall/4` presents every fact returned by memory search verbatim and in order inside an untrusted memory block, retaining any source wording carried by each fact. Recall makes no second inference call: the consuming agent decides how to interpret the returned memory with its own model.
 
 ### Environment variables
 
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `GRALKOR_DATA_DIR` | unset | Writable directory for the embedded `falkordblite` backend (it spawns a `redis-server` grandchild there). Ignored when `:falkordb` is configured. With neither set, no native runtime starts. |
-| `GOOGLE_API_KEY` / `OPENAI_API_KEY` | — | Provider credentials for Graphiti's Python-side clients and the BEAM-side ReqLLM calls. Which one you need follows from the two model specs: each of `GRALKOR_LLM_MODEL` and `GRALKOR_EMBEDDER_MODEL` selects a provider, and only a provider some role selects needs its key. A provider selected by neither role needs no key at all. When the native runtime starts, a missing or blank key for a selected provider raises `ArgumentError` before any inference client is constructed, naming the variable and the role (`"llm"` or `"embedder"`). |
-| `GRALKOR_LLM_MODEL` | `google:gemini-3.1-flash-lite` | `"provider:model"` spec for the Graphiti LLM. `google:` and `openai:` are supported; another provider raises at native startup, naming both specs and the supported providers. This role's provider also builds the cross-encoder/reranker and serves the BEAM-side ReqLLM calls. GPT-5.5 and GPT-5.6 clients receive `reasoning: "none"` explicitly so Graphiti writes do not inherit an incompatible reasoning tier. |
+| `GOOGLE_API_KEY` / `OPENAI_API_KEY` | — | Provider credentials for Graphiti's Python-side clients. Which one you need follows from the two model specs: each of `GRALKOR_LLM_MODEL` and `GRALKOR_EMBEDDER_MODEL` selects a provider, and only a provider some role selects needs its key. A provider selected by neither role needs no key at all. When the native runtime starts, a missing or blank key for a selected provider raises `ArgumentError` before any inference client is constructed, naming the variable and the role (`"llm"` or `"embedder"`). |
+| `GRALKOR_LLM_MODEL` | `google:gemini-3.1-flash-lite` | `"provider:model"` spec for the Graphiti LLM. `google:` and `openai:` are supported; another provider raises at native startup, naming both specs and the supported providers. This role's provider also builds the cross-encoder/reranker. GPT-5.5 and GPT-5.6 clients receive `reasoning: "none"` explicitly so Graphiti writes do not inherit an incompatible reasoning tier. |
 | `GRALKOR_EMBEDDER_MODEL` | `google:gemini-embedding-2-preview` | Same form and same supported providers, for the embedder — chosen independently of the LLM role, so `openai:` LLM + `google:` embedder is a valid pair (it needs both keys). A Google embedder is constructed with `batch_size: 1`; the OpenAI embedder takes no batch size. |
 
 ### Plugin mount options
@@ -262,7 +259,6 @@ config :jido_gralkor,
   ],
 
   # Tuning — optional, shown at its default.
-  interpret_max_output_tokens: 2000,
   recall_deadline_ms: 12_000
 
 ```
@@ -624,8 +620,6 @@ mix test.all          # Unit, Integration, Functional, Journey, and Node tests
 
 Functional tests require their documented provider credentials and can send test inputs to external model providers. `mix test.fast` is the routine local feedback command; use `mix test.changed` only when the affected Functional boundary is intentionally available.
 
-Maintainers can exercise the interpretation prompt against a real model with `mix test.functional test/functional/interpret_epistemic_humility_test.exs`. The suite loads `OPENAI_API_KEY` from `.env`, uses OpenAI `gpt-5.6-sol` through ReqLLM, and starts no Graphiti or FalkorDB runtime. It verifies source preservation across varied accounts, conflict handling without truth adjudication, restraint when provenance is absent, and relevance filtering.
-
 ## What's in the library
 
 The Jido glue:
@@ -643,7 +637,7 @@ The Jido glue:
 The embedded Gralkor adapter (under `lib/gralkor/`):
 
 - `Gralkor.Client` — adapter behaviour plus the public `ingest/1`, `replace/1`, and Destination-based `search/1` boundary.
-- `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, `GraphitiPool`, and `req_llm`.
+- `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, and `GraphitiPool`.
 - `Gralkor.Client.InMemory` — test twin.
 - `Gralkor.Destination` and `Gralkor.Destination.Registry` — first-class named addresses and extraction ontologies shared by Lenses and Reflections. The full agreed model is in [DESTINATIONS.md](DESTINATIONS.md).
 - `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, `Gralkor.Ingest`, `Gralkor.IngestedRepresentation`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Search` — resolved ingestion models, completed-ingestion representation, and consumer request values.
@@ -652,7 +646,7 @@ The embedded Gralkor adapter (under `lib/gralkor/`):
 - `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, `Gralkor.Reflection.Runner`, and `Gralkor.Reflection.Scheduler` — validated YAML declarations and asynchronous ordered execution after completed Lens ingestion.
 - `Gralkor.Reflection.Artefact`, `Gralkor.Reflection.Store`, and the Graphiti/InMemory Reflection storage modules — exactly-one-artefact persistence at referenced Destinations.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
-- `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Interpret`, `Gralkor.Format`, `Gralkor.Config`, `Gralkor.Message`, and `Gralkor.InterpretParseFailed` — the embedded capture, recall, interpretation, and Graphiti pipelines.
+- `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Format`, `Gralkor.Config`, and `Gralkor.Message` — the embedded capture, recall, and Graphiti pipelines.
 
 The behavioural contract lives in [`test-trees/`](https://github.com/elimydlarz/jido_gralkor/tree/main/test-trees). Functional trees describe each application-visible feature, and the Journey tree describes the broad whole-application workflow. [`CLAUDE.md`](https://github.com/elimydlarz/jido_gralkor/blob/main/CLAUDE.md) carries the maintainer-facing mental model and project guidance.
 
