@@ -180,6 +180,32 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
+  describe "when captured conversation turns are ingested automatically" do
+    test "then Gralkor supplies conversation as their source kind" do
+      test_pid = self()
+
+      callback =
+        Gralkor.Application.build_lens_flush_callback(
+          ingest_fn: fn request ->
+            send(test_pid, {:captured_ingest, request})
+            {:ok, []}
+          end
+        )
+
+      assert {:ok, []} =
+               callback.(
+                 "operator-one",
+                 "Gralkor",
+                 "Mina",
+                 "observations",
+                 [Gralkor.Message.new("user", "Atlas might launch Friday.")],
+                 "evidence-1"
+               )
+
+      assert_receive {:captured_ingest, %Ingest{source_kind: :conversation}}
+    end
+  end
+
   defp request(source_kind, content, source_description) do
     %Ingest{
       operator_id: "operator-one",
