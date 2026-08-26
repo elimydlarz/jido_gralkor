@@ -303,6 +303,7 @@ defmodule Gralkor.GraphitiPoolTest do
       {keys, _} = Pythonx.eval("sorted(g.recorded_kwargs.keys())", %{"g" => g})
 
       assert Pythonx.decode(keys) == [
+               "custom_extraction_instructions",
                "episode_body",
                "group_id",
                "name",
@@ -310,6 +311,124 @@ defmodule Gralkor.GraphitiPoolTest do
                "source",
                "source_description"
              ]
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "when an episode is added > where a supported source kind is supplied" do
+    test "then conversation, document, and structured-record sources reach the graph library as message, text, and JSON episodes respectively" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.sources = []
+
+              async def add_episode(self, **kwargs):
+                  self.sources.append(kwargs['source'].value)
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "conversation", "chat", nil,
+                 source_kind: :conversation
+               )
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "document", "notes", nil,
+                 source_kind: :document
+               )
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", ~s({"status":"ok"}), "record", nil,
+                 source_kind: :structured_record
+               )
+
+      {sources, _} = Pythonx.eval("g.sources", %{"g" => g})
+      assert Pythonx.decode(sources) == ["message", "text", "json"]
+
+      GenServer.stop(pid)
+    end
+
+    test "and the existing episode extraction is instructed to preserve source attribution and epistemic wording" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.calls = []
+
+              async def add_episode(self, **kwargs):
+                  self.calls.append(kwargs)
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "Eli may prefer tea.", "chat", nil,
+                 source_kind: :conversation
+               )
+
+      {instructions, _} =
+        Pythonx.eval("g.calls[0]['custom_extraction_instructions']", %{"g" => g})
+
+      instructions = Pythonx.decode(instructions)
+      assert instructions =~ "source attribution"
+      assert instructions =~ "uncertainty"
+
+      GenServer.stop(pid)
+    end
+
+    test "and no separate presentation-classification operation is invoked" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.add_count = 0
+
+              async def add_episode(self, **kwargs):
+                  self.add_count += 1
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "Eli may prefer tea.", "chat", nil,
+                 source_kind: :conversation
+               )
+
+      {add_count, _} = Pythonx.eval("g.add_count", %{"g" => g})
+      assert Pythonx.decode(add_count) == 1
 
       GenServer.stop(pid)
     end
