@@ -6,3 +6,4 @@ Journey: memory-adventure (journey: test/journey/memory_adventure_journey_test.e
 
 when two operators use implicit memory, Lenses, ERL, and shared-Destination replacement
   then fresh retrieval preserves local and global memory but omits the replaced Lens graph
+  and retrieved facts identify their originating conversation, document, or structured-record episodes
