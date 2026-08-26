@@ -69,7 +69,7 @@ defmodule Gralkor.DestinationAddressingFunctionalTest do
     test "then the resolved graph is named `operator/<operator id>`" do
       assert :ok = ingest("operator-one", "operator", "private observation")
 
-      assert [%{content: "private observation", lens: "observations"}] =
+      assert [%{content: "private observation", lens: "operator"}] =
                Gralkor.Lens.Storage.InMemory.episodes("operator/operator-one")
     end
 
