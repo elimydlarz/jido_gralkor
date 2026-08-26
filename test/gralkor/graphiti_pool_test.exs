@@ -1085,6 +1085,76 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when community building is requested for a group" do
+    test "then the group is sanitised before its graph instance is selected" do
+      test_pid = self()
+      instance = community_graph()
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, group ->
+            send(test_pid, {:constructed_for, group})
+            instance
+          end
+        )
+
+      assert {:ok, _counts} = GraphitiPool.build_communities(pid, "operator-one")
+      assert_receive {:constructed_for, "operator_one"}
+      GenServer.stop(pid)
+    end
+
+    test "and the graph library builds communities for that sanitised group's instance" do
+      instance = community_graph()
+
+      %{pid: pid} =
+        start_pool(construct_instance: fn _db, _shared, _group -> instance end)
+
+      assert {:ok, %{communities: 2, edges: 3}} =
+               GraphitiPool.build_communities(pid, "operator-one")
+
+      {calls, _} = Pythonx.eval("g.calls", %{"g" => instance})
+      assert Pythonx.decode(calls) == 1
+      GenServer.stop(pid)
+    end
+
+    test "and the returned community and edge counts are reported" do
+      instance = community_graph()
+
+      %{pid: pid} =
+        start_pool(construct_instance: fn _db, _shared, _group -> instance end)
+
+      assert {:ok, %{communities: 2, edges: 3}} =
+               GraphitiPool.build_communities(pid, "operator-one")
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "if community building raises inside the graph library" do
+    test "then an error carrying the raised exception is returned" do
+      {instance, _} =
+        Pythonx.eval(
+          """
+          class _FakeGraphiti:
+              async def build_communities(self):
+                  raise RuntimeError("community failure")
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(construct_instance: fn _db, _shared, _group -> instance end)
+
+      assert {:error, {:python, message}} =
+               GraphitiPool.build_communities(pid, "operator-one")
+
+      assert message =~ "community failure"
+      GenServer.stop(pid)
+    end
+  end
+
   describe "when an episode search is run for a group" do
     test "then the graph library is asked for episodes only, with the requested result count" do
       {g, _} =
@@ -1169,6 +1239,26 @@ defmodule Gralkor.GraphitiPoolTest do
       {episode, _recorded} = episode_search_result()
       assert episode.content =~ "Eli consistently prefers dark mode"
     end
+  end
+
+  defp community_graph do
+    {instance, _} =
+      Pythonx.eval(
+        """
+        class _FakeGraphiti:
+            def __init__(self):
+                self.calls = 0
+
+            async def build_communities(self):
+                self.calls += 1
+                return (["one", "two"], ["a", "b", "c"])
+
+        _FakeGraphiti()
+        """,
+        %{}
+      )
+
+    instance
   end
 
   describe "if running an episode search raises inside the graph library" do
