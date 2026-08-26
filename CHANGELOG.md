@@ -4,7 +4,6 @@
 
 ### Fixed
 - **Graphiti writes failed for GPT-5.6 OpenAI models.** `GraphitiPool` left `LLMConfig.reasoning` at graphiti-core 0.29.3's `auto` sentinel, whose unknown-family fallback selected the unsupported `minimal` tier for `gpt-5.6-luna`. GPT-5.5 and GPT-5.6 clients now receive `none` explicitly; other OpenAI models retain graphiti's automatic selection.
-- **Recall returned facts unrelated to the query.** `Gralkor.Interpret` was never told what was asked — it judged relevance against the buffered conversation alone. A recall from a session that never carried the query (a fresh session, or a `memory_search` whose query is not the last user turn) therefore filtered against nothing: for "Where does Eli work?" the graph search ranked "Eli works at Anthropic" first and interpretation dropped it in favour of an unrelated fact from the same group. `Recall` now passes the query to `Interpret.interpret_facts/6`, which renders it as a `Request to answer:` section; the conversation is still trimmed oldest-first to the char budget, the request and the facts never are.
 - **Every legacy generalisation write failed.** `Gralkor.Generalise` passed the new generalisation's id as graphiti's `add_episode(uuid: …)`, which *loads an existing* episode to re-extract against — so each write raised `NodeNotFoundError` inside the flush task and nothing reached the `_gen` group. Generalisations are now written as new episodes with graphiti minting the episode uuid.
 - **Nothing could read a stored generalisation back.** Both the recall generalisation search and `Gralkor.Client.search_generalisations/3` read graphiti *edges* and tried to decode each fact as the `GEN|v1|` wire format, which derived facts never carry — so both returned nothing on every call. Recall's now reads nodes (`GraphitiPool.search_nodes`, the primitive ERL uses) for semantic relevance; `search_generalisations/3` reads episodes, whose stored body is the only place the envelope exists.
 - **A node search never matched a group id containing hyphens.** `GraphitiPool.search_nodes/5` restricted `group_ids` to the caller's raw id while episodes are written under the sanitised one, so ERL recall for any hyphenated operator group returned nothing.
@@ -18,10 +17,8 @@
 - `entity Foo, "when to extract one" do … end` — `Gralkor.Ontology` entities can now declare a description, rendered as the extracted type's own description for graphiti's extractor. Optional; the description must be a literal string.
 - `Gralkor.GraphitiPool.search_episodes/4` — graphiti's BM25-over-content episode search, returning `{:ok, [%{content:, source_description:}]}`. The primitive for content Gralkor wrote in a format it must read back verbatim; unlike edge and node search, it does not depend on what an extractor derived.
 
-### Changed
-- `Gralkor.Interpret.interpret_facts/6` and `build_interpretation_context/5` take the recall query as their second argument. Consumers calling them directly must pass it; `Gralkor.Recall` already does.
-
 ### Removed
+- `Gralkor.Interpret` and recall's second inference pass. Recall now presents every search result verbatim and in search order inside the untrusted memory block, retaining each result's available source wording for the consuming agent to interpret with its own model and conversation context.
 - `Gralkor.GraphitiPool.credential_env/1` and `Gralkor.Client.Native.generalise_evaluate_callback/0` — neither had a caller, a test, or a documented consumer.
 - `Gralkor.Generalise`'s `:remove_episode_fn` option and its contradicts-removal path. It addressed graphiti by a generalisation id that is not an episode uuid, so it could never have deleted anything. A contradicting generalisation is persisted as an ordinary new episode recording its lineage, matching `Gralkor.Lens.Ingestion.Generalise`.
 

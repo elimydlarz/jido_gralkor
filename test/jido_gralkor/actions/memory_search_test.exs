@@ -228,7 +228,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     test "and a warning naming the operator is logged", %{log: log} do
       assert log =~ "[jido_gralkor] memory_search short-circuited"
       assert log =~ "01USER"
-      assert log =~ "JIDO_CHANGE_SUGGESTIONS.md"
+      assert log =~ "jido_ai commits state.thread"
     end
   end
 

@@ -23,7 +23,7 @@ defmodule JidoGralkor.ReAct do
   @memory_search_choice %{type: "function", function: %{name: "memory_search"}}
 
   @doc """
-  Fold the iter-1 `tool_choice: {:tool, "memory_search"}` override into
+  Fold the iter-1 OpenAI-style `memory_search` tool-choice override into
   the consumer's existing transformer overrides map.
 
   On `state.iteration > 1` returns the overrides untouched. Matches on

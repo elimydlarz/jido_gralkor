@@ -11,9 +11,8 @@ defmodule Gralkor.Message do
       beyond role.
     * `:content` — a string. Adapters choose how to render their events;
       In implicit-operator mode Gralkor renders user and assistant content into
-      the captured transcript and uses role labels in recall context. A
-      selected Lens's ingestion process decides how its captured messages are
-      persisted.
+      the captured transcript. A selected Lens's ingestion process decides how
+      its captured messages are persisted.
   """
 
   @enforce_keys [:role, :content]

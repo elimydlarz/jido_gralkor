@@ -149,7 +149,7 @@ defmodule Gralkor.GraphitiPool do
   @doc """
   Run graphiti's hybrid EDGE search against `group_id`. Returns
   `{:ok, [%{fact:, created_at:, valid_at:, invalid_at:, expired_at:}]}`
-  ready for `Gralkor.Format.format_facts/1`.
+  whose individual entries can be rendered by `Gralkor.Format.format_fact/1`.
 
   For retrieving custom-entity *nodes*, use `search_nodes/5` — edge search's
   node-label filtering matches edges by endpoint and misses standalone nodes.

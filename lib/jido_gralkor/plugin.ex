@@ -59,7 +59,7 @@ defmodule JidoGralkor.Plugin do
   alias Jido.AI.Request
   alias Jido.Signal
 
-  @no_thread_warning_hint "jido_ai commits state.thread on :request_completed, not at :ai.react.query — see susu JIDO_CHANGE_SUGGESTIONS.md §2"
+  @no_thread_warning_hint "jido_ai commits state.thread on :request_completed, not at :ai.react.query"
 
   @impl Jido.Plugin
   def mount(_agent, opts) do

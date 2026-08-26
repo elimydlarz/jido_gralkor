@@ -40,7 +40,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
 
   @no_query_result "Memory search did not run: no query was provided. Pick a focused query (a concrete episode, behaviour, or topic) and call memory_search again. This is a NON-RESULT, not an empty result — long-term memory was NOT queried."
 
-  @no_session_warning_hint "jido_ai commits state.thread on :request_completed, not at :ai.react.query — see susu JIDO_CHANGE_SUGGESTIONS.md §2"
+  @no_session_warning_hint "jido_ai commits state.thread on :request_completed, not at :ai.react.query"
 
   @impl true
   def run(params, context) do

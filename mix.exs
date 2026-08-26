@@ -81,7 +81,7 @@ defmodule JidoGralkor.MixProject do
   end
 
   defp description do
-    "Jido plugin and actions that adapt the Gralkor memory server into a Jido agent. Drop in the plugin for recall-on-query and capture-on-completion; add the actions to your ReAct tools list for explicit memory_search / memory_add."
+    "In-process long-term memory for Jido agents, with automatic turn capture and explicit memory search and ingestion tools."
   end
 
   defp package do
