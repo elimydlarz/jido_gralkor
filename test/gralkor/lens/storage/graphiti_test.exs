@@ -167,12 +167,13 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
   end
 
   describe "when the implicit `operator` Lens's packaged Destination is added to or searched" do
-    test "then graph operations use the operator's existing sanitised group id" do
+    test "then graph operations use the group named `operator/<operator id>`" do
       store = %Store{
         operator_id: "operator-one",
         lens: %Lens{
           name: "operator",
-          destination: destination("operator", "operator/memory"),
+          destination: destination("operator"),
+          ontology: Strict,
           ingestion: Gralkor.Lens.Ingestion.Store
         }
       }
@@ -193,16 +194,16 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                Graphiti.add_episode(store, "content", "source", add_episode_fn: add_episode_fn)
 
       assert {:ok, []} = Graphiti.search(store, "content", 5, search_fn: search_fn)
-      assert_receive {:graph_add, "operator_one"}
-      assert_receive {:graph_search, "operator_one"}
+      assert_receive {:graph_add, "operator/operator-one"}
+      assert_receive {:graph_search, "operator/operator-one"}
     end
   end
 
-  describe "when a Lens store adds an episode to a `global/path` Destination" do
-    test "then graph add receives the same address-derived group for every operator" do
+  describe "when a Lens store adds an episode to the `global` Destination" do
+    test "then graph add receives the group named `global` for every operator" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("published-observations", "global/shared")
+        lens: lens("published-observations", "global")
       }
 
       test_pid = self()
@@ -221,11 +222,26 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  add_episode_fn: add_episode_fn
                )
 
-      assert_receive {:graph_add, "destination_g_736861726564", _, _, _, _}
+      assert_receive {:graph_add, "global", _, _, _, _}
     end
   end
 
-  describe "when a replaceable Lens store using an `operator/path` Destination replaces a complete graph" do
+  describe "when a Lens store adds an episode to an application Destination" do
+    test "then graph add receives the group named for that Destination for every operator" do
+      store = %Store{operator_id: "operator-one", lens: lens("observations", "observations")}
+      test_pid = self()
+
+      add_episode_fn = fn group_id, _, _, _, _ ->
+        send(test_pid, {:graph_add, group_id})
+        :ok
+      end
+
+      assert :ok = Graphiti.add_episode(store, "fact", "source", add_episode_fn: add_episode_fn)
+      assert_receive {:graph_add, "observations"}
+    end
+  end
+
+  describe "when a replaceable Lens store using the `operator` Destination replaces a complete graph" do
     test "then graph replacement receives the same resolved group used by existing Lens operations" do
       store = replaceable_store(:operator)
       graph = property_graph()
@@ -238,7 +254,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
       assert :ok = Graphiti.replace_graph(store, graph, replace_graph_fn: replace_graph_fn)
 
-      assert_receive {:graph_replaced, "destination_o_6f70657261746f722d6f6e65_73797374656d73"}
+      assert_receive {:graph_replaced, "operator/operator-one"}
     end
 
     test "and graph replacement receives the selected Lens name, configured graph format, and supplied graph data" do
@@ -269,8 +285,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  describe "when a replaceable Lens store using a `global/path` Destination replaces a complete graph" do
-    test "then graph replacement receives the same address-derived group for every operator" do
+  describe "when a replaceable Lens store using the `global` Destination replaces a complete graph" do
+    test "then graph replacement receives the group named `global` for every operator" do
       test_pid = self()
 
       replace_graph_fn = fn group_id, _lens_name, _format, _data ->
@@ -283,7 +299,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  replace_graph_fn: replace_graph_fn
                )
 
-      assert_receive {:graph_replaced, "destination_g_736861726564"}
+      assert_receive {:graph_replaced, "global"}
     end
 
     test "and graph replacement receives the selected Lens name, configured graph format, and supplied graph data" do
@@ -301,8 +317,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  replace_graph_fn: replace_graph_fn
                )
 
-      assert_receive {:graph_replaced, "destination_g_736861726564", "systems", :property_graph,
-                      ^data}
+      assert_receive {:graph_replaced, "global", "systems", :property_graph, ^data}
     end
 
     test "and the graph replacement result is returned to the caller" do
