@@ -8,11 +8,11 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
   alias Gralkor.Lens.Store
   alias Gralkor.TestOntologies.Strict
 
-  describe "when a Lens store adds an episode to an `operator/path` Destination" do
-    test "then Graphiti receives a deterministic group unique to the operator and address path" do
+  describe "when a Lens store adds an episode to the `operator` Destination" do
+    test "then Graphiti receives the group named `operator/<operator id>`" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator/observations")
+        lens: lens("observations", "operator")
       }
 
       test_pid = self()
@@ -34,12 +34,10 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  add_episode_fn: add_episode_fn
                )
 
-      assert_receive {:graph_add,
-                      "destination_o_6f70657261746f722d6f6e65_6f62736572766174696f6e73", _, _, _,
-                      _}
+      assert_receive {:graph_add, "operator/operator-one", _, _, _, _}
     end
 
-    test "and changing either the operator or address path produces a distinct group" do
+    test "and changing the operator produces a distinct group" do
       test_pid = self()
 
       add_episode_fn = fn group_id, _content, _source_description, _ontology, _opts ->
@@ -50,15 +48,11 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       stores = [
         %Store{
           operator_id: "operator-one",
-          lens: lens("observations", "operator/observations")
+          lens: lens("observations", "operator")
         },
         %Store{
           operator_id: "operator-two",
-          lens: lens("observations", "operator/observations")
-        },
-        %Store{
-          operator_id: "operator-one",
-          lens: lens("decisions", "operator/decisions")
+          lens: lens("observations", "operator")
         }
       ]
 
@@ -73,13 +67,13 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
           group_id
         end)
 
-      assert length(Enum.uniq(group_ids)) == 3
+      assert length(Enum.uniq(group_ids)) == 2
     end
 
-    test "and the graph add receives the episode content, source description, and Destination ontology" do
+    test "and the graph add receives the episode content, source description, and Lens ontology" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator/observations")
+        lens: lens("observations", "operator")
       }
 
       test_pid = self()
@@ -108,7 +102,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "and the graph add result is returned to the ingestion process" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator/observations")
+        lens: lens("observations", "operator")
       }
 
       add_episode_fn = fn _group_id, _content, _source_description, _ontology, _opts ->
@@ -120,11 +114,11 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  describe "when a Lens store using an `operator/path` Destination is searched" do
+  describe "when a Lens store using the `operator` Destination is searched" do
     test "then graph search receives the same resolved group" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator/observations")
+        lens: lens("observations", "operator")
       }
 
       test_pid = self()
@@ -137,14 +131,13 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert {:ok, []} =
                Graphiti.search(store, "launch window", 7, search_fn: search_fn)
 
-      assert_receive {:graph_search,
-                      "destination_o_6f70657261746f722d6f6e65_6f62736572766174696f6e73", _, _}
+      assert_receive {:graph_search, "operator/operator-one", _, _}
     end
 
     test "and graph search receives the query and result limit" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator/observations")
+        lens: lens("observations", "operator")
       }
 
       test_pid = self()
@@ -161,7 +154,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "and the graph search result is returned to the caller" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator/observations")
+        lens: lens("observations", "operator")
       }
 
       search_fn = fn _group_id, _query, _max_results ->
