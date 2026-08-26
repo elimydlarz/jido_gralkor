@@ -35,7 +35,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
       Gralkor.Lens.Storage.Graphiti.add_episode(store, content, source_description,
         add_episode_fn: fn group_id, body, description, ontology, opts ->
           Gralkor.GraphitiPool.add_episode(
-            :provenance_graphiti_pool,
+            Process.whereis(:provenance_graphiti_pool),
             group_id,
             body,
             description,
