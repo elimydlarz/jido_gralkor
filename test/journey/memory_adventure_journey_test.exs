@@ -56,26 +56,23 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Application.put_env(:jido_gralkor, :reflection_storage, Gralkor.Reflection.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :recall_deadline_ms, 90_000)
 
-    Application.put_env(:jido_gralkor, :destinations, [
-      [name: "work", address: "operator/work"],
-      [name: "published", address: "global/published"]
-    ])
+    Application.put_env(:jido_gralkor, :destinations, [])
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
         name: "work-notes",
-        destination: "work",
+        destination: "operator",
         ingestion: Gralkor.Lens.Ingestion.Store
       ],
       [
         name: "systems",
-        destination: "work",
+        destination: "operator",
         write: :replace_graph,
         graph_format: :property_graph
       ],
       [
         name: "published",
-        destination: "published",
+        destination: "global",
         ingestion: Gralkor.Lens.Ingestion.Store
       ]
     ])
@@ -84,7 +81,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       [
         name: "erl",
         chain_of_thought: "priv/reflections/erl.yaml",
-        destination: "experiential-learning"
+        destination: "operator",
+        ontology: Gralkor.Reflection.ERLOntology
       ]
     ])
 
@@ -193,7 +191,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       shared_episodes =
         search_until(
           @operator_one,
-          ["work"],
+          ["operator"],
           :episodes,
           "backup vacuum 02:00 04:00",
           &(&1 != [])
@@ -202,7 +200,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       global_for_first =
         search_until(
           @operator_one,
-          ["published"],
+          ["global"],
           :episodes,
           "rollback checkpoint deployment",
           &(&1 != [])
@@ -211,19 +209,19 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       global_for_second =
         search_until(
           @operator_two,
-          ["published"],
+          ["global"],
           :episodes,
           "rollback checkpoint deployment",
           &(&1 != [])
         )
 
       local_for_second =
-        search(@operator_two, ["work"], :episodes, "backup vacuum")
+        search(@operator_two, ["operator"], :episodes, "backup vacuum")
 
       erl_artefacts =
         search_until(
           @operator_one,
-          ["experiential-learning"],
+          ["operator"],
           :artefacts,
           "backup vacuum scheduling conflict",
           &(&1 != []),
@@ -233,7 +231,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       current_graph =
         search_until(
           @operator_one,
-          ["work"],
+          ["operator"],
           :facts,
           "settlement clearing",
           &contains_fact?(&1, "Clearing")
@@ -242,14 +240,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       attributed_facts =
         search_until(
           @operator_one,
-          ["work"],
+          ["operator"],
           :facts,
           "backup vacuum scheduling",
           &contains_attributed_fact?(&1, "conversation")
         )
 
       superseded_graph =
-        search(@operator_one, ["work"], :facts, "settlement ledger")
+        search(@operator_one, ["operator"], :facts, "settlement ledger")
 
       final_memory_view = %{
         implicit_memory: contains_all?(implicit_memory, ["juniper", "muscat"]),
@@ -297,7 +295,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
               type: "RELATES_TO",
               properties: %{
                 uuid: "memory-adventure-settlement-#{suffix}",
-                group_id: @operator_one,
+                group_id: "operator/#{@operator_one}",
                 name: "SETTLES_THROUGH",
                 fact: "Payments settles through #{target}.",
                 episodes: [],
@@ -316,7 +314,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       labels: ["Entity"],
       properties: %{
         uuid: "memory-adventure-#{id}",
-        group_id: @operator_one,
+        group_id: "operator/#{@operator_one}",
         name: name,
         summary: name,
         created_at: "2026-08-11T00:00:00Z"
