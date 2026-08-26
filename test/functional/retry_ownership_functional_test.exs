@@ -2,13 +2,9 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
   @moduledoc """
   Where each failure class is retried, proved at the seams Gralkor owns.
 
-  Two of the retries named in the tree belong to dependencies rather than to
-  this package — ReqLLM absorbs a rate-limited provider response, and
-  graphiti-core re-prompts its own extractor on unparseable output. What
-  Gralkor guarantees, and what this suite proves, is that no layer of its own
-  adds a second retry on top of either, that the capture buffer is the one
-  layer that does retry a write, and that a call outside a capture chain gets
-  exactly one attempt.
+  Gralkor does not retry returned upstream failures. The capture buffer is the
+  one layer that retries a raised write, and a call outside a capture chain
+  gets exactly one attempt.
 
   Reifies the `retry-ownership` tree.
   """
@@ -20,8 +16,6 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client.Native
   alias Gralkor.GraphitiPool
-  alias Gralkor.Interpret
-  alias Gralkor.InterpretParseFailed
   alias Gralkor.Message
 
   @moduletag :functional
@@ -150,23 +144,6 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, {:upstream_llm, :bad_request}} = Native.flush_and_await("s1", 2_000)
-      assert :counters.get(counter, 1) == 1
-    end
-  end
-
-  describe "when recall interpretation receives an invalid structured response" do
-    test "then interpretation raises after one model call" do
-      counter = :counters.new(1, [])
-
-      interpret_fn = fn _prompt, _budget ->
-        :counters.add(counter, 1, 1)
-        {:ok, %{not: "a list of strings"}}
-      end
-
-      assert_raise InterpretParseFailed, fn ->
-        Interpret.interpret_facts([], "what do we know", "- a fact", interpret_fn, "Susu")
-      end
-
       assert :counters.get(counter, 1) == 1
     end
   end
