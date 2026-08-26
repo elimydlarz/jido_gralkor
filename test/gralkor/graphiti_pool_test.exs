@@ -42,6 +42,27 @@ defmodule Gralkor.GraphitiPoolTest do
     GraphitiPool.start_link(Keyword.merge(defaults, opts))
   end
 
+  defp await_python_value(graph, attribute, expected, attempts \\ 100)
+
+  defp await_python_value(_graph, attribute, expected, 0) do
+    flunk("expected Python graph attribute #{attribute} to become #{inspect(expected)}")
+  end
+
+  defp await_python_value(graph, attribute, expected, attempts) do
+    {value, _} =
+      Pythonx.eval(
+        "getattr(graph, attribute.decode('utf-8') if isinstance(attribute, bytes) else attribute)",
+        %{"graph" => graph, "attribute" => attribute}
+      )
+
+    if Pythonx.decode(value) == expected do
+      :ok
+    else
+      Process.sleep(10)
+      await_python_value(graph, attribute, expected, attempts - 1)
+    end
+  end
+
   describe "if adding an episode raises inside the graph library" do
     test "then an error carrying only the raised exception's class and message is returned" do
       err = %Pythonx.Error{
@@ -194,6 +215,60 @@ defmodule Gralkor.GraphitiPoolTest do
       assert first =~ ~r/^manual-add-\d+-\d+$/
       assert second =~ ~r/^manual-add-\d+-\d+$/
       refute first == second
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "when an episode is added > while an embedded connection is configured > and another episode addition is in progress" do
+    test "then the graph library receives the episode only after the in-progress addition finishes" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.events = []
+                  self.active_writes = 0
+
+              async def add_episode(self, **kwargs):
+                  body = kwargs['episode_body']
+                  self.active_writes += 1
+                  self.events.append(f'start:{body}')
+                  await asyncio.sleep(0.1)
+                  self.events.append(f'finish:{body}')
+                  self.active_writes -= 1
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      GraphitiPool.for(pid, "g1")
+
+      first = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "first", "manual", nil) end)
+      await_python_value(g, "active_writes", 1)
+      second = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "second", "manual", nil) end)
+
+      assert Task.await(first, 2_000) == :ok
+      assert Task.await(second, 2_000) == :ok
+
+      {events, _} = Pythonx.eval("g.events", %{"g" => g})
+
+      assert Pythonx.decode(events) == [
+               "start:first",
+               "finish:first",
+               "start:second",
+               "finish:second"
+             ]
 
       GenServer.stop(pid)
     end
