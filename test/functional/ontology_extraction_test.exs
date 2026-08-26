@@ -12,7 +12,6 @@ defmodule Gralkor.OntologyExtractionTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Client
-  alias Gralkor.Client.Native
   alias Gralkor.GraphitiPool
   alias Gralkor.Ingest
 
