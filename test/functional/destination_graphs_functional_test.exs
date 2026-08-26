@@ -1,4 +1,4 @@
-defmodule Gralkor.DestinationAddressingFunctionalTest do
+defmodule Gralkor.DestinationGraphsFunctionalTest do
   use ExUnit.Case, async: false
 
   @moduletag :functional

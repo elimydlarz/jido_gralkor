@@ -1,4 +1,4 @@
-Functional: destination-graphs (functional: test/functional/destination_addressing_functional_test.exs)
+Functional: destination-graphs (functional: test/functional/destination_graphs_functional_test.exs)
 
 when a Lens saves an episode to the `operator` Destination
   then the resolved graph is named `operator/<operator id>`
