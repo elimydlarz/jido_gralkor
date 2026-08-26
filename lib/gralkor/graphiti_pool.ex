@@ -851,6 +851,25 @@ defmodule Gralkor.GraphitiPool do
 
   defp episode_write_admission({:remote, _options}), do: :unbounded
 
+  defp embedded_falkordb_socket_timeout({:embedded, _data_dir}, opts) do
+    opts
+    |> Keyword.get_lazy(
+      :embedded_falkordb_socket_timeout_ms,
+      &Config.embedded_falkordb_socket_timeout_ms/0
+    )
+    |> Config.validate_embedded_falkordb_socket_timeout_ms!()
+    |> Kernel./(1_000)
+  end
+
+  defp embedded_falkordb_socket_timeout({:remote, _options}, _opts), do: nil
+
+  defp construct_falkor_db(constructor, spec, socket_timeout) do
+    case :erlang.fun_info(constructor, :arity) do
+      {:arity, 1} -> constructor.(spec)
+      {:arity, 2} -> constructor.(spec, socket_timeout)
+    end
+  end
+
   defp admit_next_episode_write(state, admission) do
     case :queue.out(admission.waiting) do
       {:empty, waiting} ->
