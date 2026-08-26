@@ -342,7 +342,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate i
 
 **Session identity.** `session_id` is the current Jido thread id (read from `agent.state[:__thread__].id`, populated by `Jido.Thread.Plugin`). The plugin does not mint its own identifier — Jido's thread lifecycle is the single source of truth.
 
-**Destinations.** Every Lens and Reflection references a registered Destination. Its `operator/path` or `global/path` address resolves the Graphiti graph ID, and its ontology governs extraction. Multiple Lenses and Reflections may save to the same Destination. Replacement writes inject `_gralkor_lens` into supplied nodes and relationships so a replaceable Lens changes only its own content at that Destination.
+**Destinations.** Every Lens and Reflection references a registered Destination, which is one graph. `global` is the single shared graph, `operator` resolves to `operator/<operator id>`, and an application Destination resolves to its exact shared name. Appending Lenses and Reflections govern their own extraction. Multiple writers may save to the same Destination. Replacement writes inject `_gralkor_lens` into supplied nodes and relationships so a replaceable Lens changes only its own content there.
 
 **Post-ingestion Reflections.** A successful flush first completes every intended Lens ingestion and retains the actual zero, one, or many outputs each Lens stored, with a shared evidence identifier linking representations of the same submitted information. When at least one representation was stored, the declared Reflections are then scheduled asynchronously. Each Reflection runs independently, so one failure does not prevent another from completing or storing its artefact.
 
@@ -368,11 +368,11 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate i
 
 ## Configure Lenses
 
-A Lens is an application-owned memory ingestion channel that targets a Destination. The Destination owns the `operator/path` or `global/path` address and ontology. A Lens's write mode is either append, which sends content through an ingestion process, or whole-graph replacement, which replaces the graph content for its Destination.
+A Lens is an application-owned memory ingestion channel that targets a Destination. An appending Lens selects its extraction ontology; its write mode sends content through an ingestion process. A whole-graph replacement Lens replaces its own graph content at the Destination.
 
 Appending is the default write mode. An appending Lens names its Destination and the ingestion process Gralkor invokes when content is sent through it; `write: :append` may be stated explicitly or omitted.
 
-The ontology is a module you compile into your own application — declared once in `lib/`, then named by each Destination that should extract with it:
+The ontology is a module you compile into your own application — declared once in `lib/`, then named by each appending Lens that should extract with it:
 
 ```elixir
 # lib/my_app/ontology.ex
@@ -398,25 +398,22 @@ defmodule MyApp.Ontology do
 end
 ```
 
-Register Destinations first, then point as many Lenses as your application needs at them. Several Lenses may use the same Destination:
+Point as many Lenses as your application needs at `global`, `operator`, or an application Destination. Several Lenses may use the same Destination with different ontologies:
 
 ```elixir
 # config/runtime.exs
 config :jido_gralkor,
-  destinations: [
-    [name: "observations", address: "operator/observations", ontology: MyApp.Ontology],
-    [name: "decisions", address: "operator/decisions", ontology: MyApp.Ontology],
-    [name: "systems", address: "operator/systems", ontology: MyApp.Ontology]
-  ],
   lenses: [
     [
       name: "observations",
-      destination: "observations",
+      destination: "global",
+      ontology: MyApp.Ontology,
       ingestion: Gralkor.Lens.Ingestion.Store
     ],
     [
       name: "decisions",
-      destination: "decisions",
+      destination: "global",
+      ontology: MyApp.Ontology,
       ingestion: MyApp.DecisionIngestion
     ]
   ]
@@ -429,14 +426,14 @@ config :jido_gralkor,
   lenses: [
     [
       name: "systems",
-      destination: "systems",
+      destination: "global",
       write: :replace_graph,
       graph_format: :property_graph
     ]
   ]
 ```
 
-Destination addresses control visibility: `operator/path` resolves a separate graph for each operator, while `global/path` resolves the same graph for every operator.
+Destination names control visibility: `operator` resolves a separate `operator/<operator id>` graph for each operator; `global` and application Destination names resolve to one shared graph each.
 
 `Gralkor.Lens.Ingestion.Store` is the built-in straight-through process. A consumer can define any other ingestion process by implementing one callback:
 
@@ -458,7 +455,7 @@ defmodule MyApp.DecisionIngestion do
 end
 ```
 
-The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The selected Destination supplies the graph address and ontology. `Client.ingest/1` accepts appending Lenses and raises for replaceable Lenses; `Client.replace/1` accepts replaceable Lenses and raises for appending Lenses.
+The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The selected Destination supplies the graph; the Lens supplies the ontology. `Client.ingest/1` accepts appending Lenses and raises for replaceable Lenses; `Client.replace/1` accepts replaceable Lenses and raises for appending Lenses.
 
 The plugin mount chooses how an agent uses the registered Lenses:
 
@@ -467,12 +464,12 @@ The plugin mount chooses how an agent uses the registered Lenses:
  %{
    agent_name: "Susu",
    ingestion_lens: "observations",
-   search_destinations: ["observations", "generalisations"]
+   search_destinations: ["operator", "global"]
  }}
 ```
 
 - `ingestion_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
-- `search_destinations` is an optional list of registered Destination names. An empty list searches the packaged `"operator"` and `"generalisations"` Destinations.
+- `search_destinations` is an optional list of registered Destination names. An empty list searches the packaged `"operator"` and `"global"` Destinations.
 
 Consumers that ingest, replace, or search outside an agent call the same public boundary directly:
 
@@ -490,7 +487,7 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   Gralkor.Client.search(%Gralkor.Search{
     operator_id: "operator-42",
     query: "When should we release?",
-    destinations: ["decisions", "generalisations"],
+    destinations: ["operator", "global"],
     max_results: 20
   })
 
