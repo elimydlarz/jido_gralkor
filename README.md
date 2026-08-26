@@ -315,7 +315,7 @@ defmodule MyApp.ChatAgent do
        %{
          agent_name: "Susu",
          ingestion_lens: "observations",
-         search_destinations: ["observations", "generalisations"]
+         search_destinations: ["operator", "global"]
        }}
     ]
 
