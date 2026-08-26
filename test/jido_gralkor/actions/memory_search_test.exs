@@ -98,11 +98,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       Application.put_env(:jido_gralkor, :destination_storage, RecordingStorage)
 
       Application.put_env(:jido_gralkor, :destinations, [
-        [
-          name: "observations",
-          address: "operator/observations",
-          ontology: LensOntology
-        ]
+        [name: "observations"]
       ])
 
       assert {:ok, %{result: result}} =

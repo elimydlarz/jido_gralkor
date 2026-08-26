@@ -83,12 +83,13 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
         [
           name: "decisions",
           destination: "decisions",
+          ontology: LensOntology,
           ingestion: RecordingIngestion
         ]
       ])
 
       Application.put_env(:jido_gralkor, :destinations, [
-        [name: "decisions", address: "operator/decisions", ontology: LensOntology]
+        [name: "decisions"]
       ])
 
       assert {:ok, %{result: "Ingesting."}} =

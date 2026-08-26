@@ -115,21 +115,18 @@ defmodule JidoGralkor.PluginTest do
               %{
                 agent_name: "Susu",
                 ingestion_lens: "observations",
-                search_destinations: ["memory", "generalisations"],
+                search_destinations: ["memory", "global"],
                 lens: %Gralkor.Lens{
                   name: "observations",
-                  destination: %Gralkor.Destination{
-                    name: "memory",
-                    address: "operator/observations",
-                    ontology: LensOntology
-                  },
+                  destination: %Gralkor.Destination{name: "memory"},
+                  ontology: LensOntology,
                   ingestion: Gralkor.Lens.Ingestion.Store
                 }
               }} =
                Plugin.mount(%{id: "operator-one", state: %{}},
                  agent_name: "Susu",
                  ingestion_lens: "observations",
-                 search_destinations: ["memory", "generalisations"]
+                 search_destinations: ["memory", "global"]
                )
     end
 
@@ -138,11 +135,8 @@ defmodule JidoGralkor.PluginTest do
 
       assert state.lens == %Gralkor.Lens{
                name: "observations",
-               destination: %Gralkor.Destination{
-                 name: "memory",
-                 address: "operator/observations",
-                 ontology: LensOntology
-               },
+               destination: %Gralkor.Destination{name: "memory"},
+               ontology: LensOntology,
                ingestion: Gralkor.Lens.Ingestion.Store
              }
     end
@@ -377,7 +371,7 @@ defmodule JidoGralkor.PluginTest do
       assert tool_context == %{
                agent_name: "Susu",
                lens: "observations",
-               search_destinations: ["memory", "generalisations"],
+               search_destinations: ["memory", "global"],
                session_id: "thread-one"
              }
     end
@@ -398,7 +392,7 @@ defmodule JidoGralkor.PluginTest do
       assert tool_context == %{
                agent_name: "Susu",
                lens: "observations",
-               search_destinations: ["memory", "generalisations"]
+               search_destinations: ["memory", "global"]
              }
     end
   end
@@ -824,7 +818,7 @@ defmodule JidoGralkor.PluginTest do
       Plugin.mount(%{id: "operator-one", state: %{}},
         agent_name: "Susu",
         ingestion_lens: "observations",
-        search_destinations: ["memory", "generalisations"]
+        search_destinations: ["memory", "global"]
       )
 
     plugin_state
@@ -845,13 +839,14 @@ defmodule JidoGralkor.PluginTest do
     end)
 
     Application.put_env(:jido_gralkor, :destinations, [
-      [name: "memory", address: "operator/observations", ontology: LensOntology]
+      [name: "memory"]
     ])
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
         name: "observations",
         destination: "memory",
+        ontology: LensOntology,
         ingestion: Gralkor.Lens.Ingestion.Store
       ]
     ])
