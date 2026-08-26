@@ -12,6 +12,9 @@ when Reflection declarations are validated
   and every Reflection references a registered Destination by name
     then validation succeeds
 
+  if the configured Reflection registry is not a list
+    then validation fails identifying the configured value
+
   if a Reflection name is blank
     then validation fails identifying the blank name
 
@@ -38,6 +41,12 @@ when Reflection declarations are validated
 
   if a Chain of Thought step has no structured-output declaration
     then validation fails identifying that Reflection and step
+
+  if a Chain of Thought step is not a map
+    then validation fails identifying that Reflection and step
+
+  if a Chain of Thought step declares an unsupported structured-output type
+    then validation fails identifying that Reflection, step, and type
 
   if an output name is declared by more than one step
     then validation fails identifying that Reflection, output name, and steps
