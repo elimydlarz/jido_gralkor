@@ -71,6 +71,23 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                       %Gralkor.Lens.Store{source_kind: :conversation},
                       "Mina: Atlas might launch Friday.", "planning conversation"}
     end
+
+    test "and its stored episode retains the reported source description" do
+      assert :ok = Client.ingest(request(:document, "Draft launch plan", "Q3 Roadmap — Draft"))
+
+      assert_receive {:episode_added, %Gralkor.Lens.Store{}, "Draft launch plan",
+                      "Q3 Roadmap — Draft"}
+    end
+  end
+
+  defp request(source_kind, content, source_description) do
+    %Ingest{
+      operator_id: "operator-one",
+      lens: "observations",
+      source_kind: source_kind,
+      content: content,
+      source_description: source_description
+    }
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
