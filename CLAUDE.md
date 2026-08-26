@@ -1,6 +1,6 @@
 # jido_gralkor
 
-Canonical development and distribution home for Jido-first Gralkor. Ships the JidoGralkor.* plugin/lifecycle modules plus the embedded Gralkor.* adapter (Pythonx-driven graphiti, capture buffer, distill, interpret, recall); the legacy `:gralkor` and `:gralkor_ex` packages redirect consumers here.
+Canonical development and distribution home for Jido-first Gralkor. Ships the JidoGralkor.* plugin/lifecycle modules plus the embedded Gralkor.* adapter (Pythonx-driven graphiti, capture buffer, distill, recall); the legacy `:gralkor` and `:gralkor_ex` packages redirect consumers here.
 
 **Test trees live under [`test-trees/`](test-trees/)** — the canonical contract between intent and tests. Functional and Journey trees describe application-visible behaviour; Integration and Unit trees describe the inner subjects revealed through TDD.
 
@@ -25,7 +25,7 @@ Six direct runtime Hex deps (seven with `:ex_doc` for dev docs):
 - `{:jido, "~> 2.2"}` — `Jido.Plugin`, `Jido.Action`, `Jido.Signal` (struct + pattern match).
 - `{:jido_ai, "~> 2.1"}` — `Jido.AI.Request.get_request/2` (used once in the plugin to look up the user query for a completed `request_id`).
 - `{:pythonx, "~> 0.4"}` — embeds CPython in the BEAM so the embedded Gralkor pipelines can drive `graphiti-core` directly. `Gralkor.Python.init/1` materialises the venv and initialises the interpreter at boot via `Pythonx.uv_init/2` from `priv/python/pyproject.toml` (the graphiti-core version requirement), read into `@pyproject_toml` at compile time via `@external_resource` — guarded idempotent against re-init. Consumers configure **nothing** about Python; there is no `:pythonx, :uv_init` block in any consumer config (the dep's own `config/config.exs` does not propagate to a consumer's runtime app env, so owning the manifest in the package — shipped via the `priv` entry in `mix.exs` `files:` — is the only way to keep Python an internal concern). The venv lands in PythonX's uv cache (not `priv/`), built at runtime on first boot. The manifest reads `"graphiti-core[falkordb,google-genai]>=0.29.2"` and covers **both** supported inference providers: graphiti-core requires `openai` unconditionally (`Requires-Dist: openai>=1.91.0`, verified against installed 0.29.3 METADATA) and publishes no `openai` extra, so the OpenAI LLM, embedder, and reranker classes import from this manifest as-is; naming a non-existent extra only makes uv warn on every resolve. `Gralkor.Python.init/1` smoke-imports every provider accepted by `Gralkor.GraphitiPool` before reporting ready; `smoke_import_provider_clients/1` is the per-provider boundary it uses.
-- `{:req_llm, "~> 1.0"}` — LLM client used by the embedded Distill + Interpret pipelines (provider-portable via `response_model`-bearing Pydantic schemas).
+- `{:req_llm, "~> 1.0"}` — the ReqLLM/LLMDB model boundary used by Jido AI and by the configuration compatibility proof; recall itself makes no ReqLLM call.
 - `{:jason, "~> 1.4"}` — JSON parsing for the embedded pipelines.
 - `{:yaml_elixir, "~> 2.12"}` — loads repository CoT declarations. `mix.exs` packages `priv`, including the built-in Reflection YAML files.
 
@@ -63,14 +63,7 @@ config :jido_gralkor,
 
 Remote wins when both are configured. Misconfiguration (non-keyword value, missing host/port, blank host, non-positive port) raises `ArgumentError` at app start before any child is supervised — operator typos surface immediately, not under the first user request.
 
-**Interpret output budget (optional).** Set `:jido_gralkor, :interpret_max_output_tokens` to a positive integer to override the per-recall LLM output ceiling used by the interpret pipeline. Default is `2000`; raise it if your agent's recall queries surface many candidate facts and you observe `Gralkor.InterpretParseFailed` (the parser refuses truncated responses rather than passing through half-JSON). Lower it to cap latency and cost on narrower workloads.
-
-```elixir
-# config/runtime.exs
-config :jido_gralkor, interpret_max_output_tokens: 2000
-```
-
-**Recall interpretation is query-aware.** `Gralkor.Recall` hands the recall query to `Gralkor.Interpret.interpret_facts/6`, which renders it as a `Request to answer:` section between the conversation context and the facts. Before that the model judged relevance against the buffered conversation alone, so any recall from a session that never carried the query — a fresh session, or a `memory_search` whose query is not the last thing the user said — filtered against nothing and returned arbitrary facts even though the search had ranked the right ones first. The conversation is still dropped oldest-first to fit the char budget; the request and the facts never are.
+**Recall presentation is model-free.** `Gralkor.Recall` wraps every fact returned by graph search verbatim and in order inside an untrusted memory block, retaining available source wording. It does not load buffered turns, filter or rewrite results, or make a second inference call; the consuming agent interprets the memory with its own model and conversation context.
 
 **Implicit-default ontology.** Jido Gralkor's packaged operator Destination carries `Gralkor.DefaultOntology`, the open generic extraction contract used by legacy capture, `memory_add/3`, recall, and the implicit `"operator"` Lens. There is no deployment-wide `:ontology` setting and no `memory_add/4` override. Custom schemas belong on registered Destinations.
 
@@ -82,7 +75,7 @@ config :jido_gralkor, interpret_max_output_tokens: 2000
 - `default_construct_shared_clients/2` dispatches on that spec to `GeminiClient`/`GeminiEmbedder`/`GeminiRerankerClient` or `OpenAIClient`/`OpenAIEmbedder`/`OpenAIRerankerClient` per role. Mixing roles is supported: an OpenAI LLM with a Google embedder builds an OpenAI LLM, an OpenAI reranker, and a Google embedder, and needs both `OPENAI_API_KEY` and `GOOGLE_API_KEY`. Nothing checks cross-provider embedding-dimension compatibility — there is no such check.
 - A deployment that never opted into the native runtime (neither `:falkordb` nor `GRALKOR_DATA_DIR`, or `Gralkor.Client.InMemory` pinned) starts no pool, so no provider validation happens at all.
 
-BEAM-side ReqLLM calls in `Gralkor.Client.Native` use `Config.llm_model()`, so they follow the llm role's provider and remain provider-portable; the focused interpretation functional suite deliberately calls OpenAI without starting Graphiti. Deterministic Lens tests pin both `client: Gralkor.Client.InMemory` and `lens_storage: Gralkor.Lens.Storage.InMemory`.
+Deterministic Lens tests pin both `client: Gralkor.Client.InMemory` and `lens_storage: Gralkor.Lens.Storage.InMemory`.
 
 ## Testing
 
@@ -92,7 +85,7 @@ Any test that starts a `Gralkor.GraphitiPool` needs a credential present for eac
 
 ```bash
 mix test            # default run: unit + integration, excluding :functional and :journey — no real LLM/graphiti calls
-mix test.unit       # only :unit (excludes integration, functional, journey)
+mix test.unit       # Unit/default tests (excludes integration, functional, journey)
 mix test.integration
 mix test.functional # application-visible feature behaviour; some suites use real LLM/graphiti boundaries
 mix test.journey    # broad whole-application Functional workflows; some require external services
@@ -110,8 +103,6 @@ Functional tests describe application-visible behaviour and may use deterministi
 `gpt-4.1-mini` is too weak for the ontology-extraction assertions — it produced `User` but no `Preference` node from the fixture, failing the strict and open cases every time, which is why `gpt-4.1` is pinned. The suite used to be flaky on `gpt-4.1` as well (1–2 of its 3 tests failing per run) for a reason that turned out not to be plain LLM variance: its entity types carried **no description**, and graphiti's extractor reads a custom entity type's description to decide when to mint it. `Gralkor.Ontology` now accepts `entity Foo, "…" do … end`; with `User` and `Preference` each saying when to extract them, the three tests pass run after run. Whether the assertions were stabler on the Google defaults remains unmeasured.
 
 **A whole-suite `mix test.journey` is meaningful again.** Journey modules used to have to be judged one at a time, because each module's `start_supervised(Gralkor.Python)` SIGKILLed every `redislite/bin/redis-server` it could find — including the live server an earlier module still owned, which then lost its database mid-test on a refused unix socket. The sweep is now once per VM (`Gralkor.Python.sweep_orphans_once/2`): only the first boot runs it, the one moment when every matching server predates this VM. The remaining constraint is across VMs — do not run two test VMs against the embedded backend at the same time, because the sweep still cannot tell another VM's live server from an orphan.
-
-`test/functional/interpret_epistemic_humility_test.exs` is the focused real-model proof for interpretation behaviour. It loads `OPENAI_API_KEY` from `.env`, calls OpenAI `gpt-5.6-sol` through ReqLLM, and covers varied source types, adversarial conflicting accounts, ordinary memories without provenance, and relevance filtering. It starts no Graphiti or FalkorDB runtime, and missing credentials fail fast rather than skip. **The instrument has to be at least as capable as the model a consumer's agent runs on**, or a failure says nothing about the instruction under test: the thing being measured is production English — `Gralkor.Interpret.epistemic_instruction/0` — whose behaviour only a model can reveal. `gpt-4.1-mini` collapsed the adversarial conflicting-accounts case into one asserted fact about one run in four even after the instruction was sharpened, and `gpt-4.1` passed but sits well below what deployments actually use. `gpt-5.6-sol` is a reasoning model, so it drops sampling parameters; the suite passes no temperature and relies on the instruction rather than on decoding settings. A green run still says only that a capable model complies — no other model has been measured, and consumers recall on whatever they configure.
 
 ### Mutation testing
 
