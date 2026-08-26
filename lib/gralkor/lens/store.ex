@@ -30,7 +30,7 @@ defmodule Gralkor.Lens.Store do
   @spec add(t(), String.t(), String.t()) :: :ok | {:error, term()}
   @doc "Adds an episode through the bound Lens."
   def add(%__MODULE__{} = store, content, source_description) do
-    content = encode_content(store.source_kind, content)
+    content = Gralkor.Ingest.encode_content!(store.source_kind, content)
 
     case storage().add_episode(store, content, source_description) do
       :ok ->
@@ -67,11 +67,6 @@ defmodule Gralkor.Lens.Store do
   end
 
   defp collect_representation(_store, _content), do: :ok
-
-  defp encode_content(:structured_record, content) when is_map(content) or is_list(content),
-    do: Jason.encode!(content)
-
-  defp encode_content(_source_kind, content), do: content
 
   @spec storage() :: module()
   defp storage do
