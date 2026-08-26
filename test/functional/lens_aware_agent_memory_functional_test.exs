@@ -83,7 +83,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     :ok
   end
 
-  describe "when a mounted memory plugin has a configured ingestion Lens and optional additional Lenses to search" do
+  describe "when a mounted memory plugin has a configured ingestion Lens and optional Destinations to search" do
     test "then automatic capture and memory addition use the registered ingestion Lens" do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
@@ -143,36 +143,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert Jason.decode!(result) == [
                %{"destination" => "operator", "fact" => "baseline memory"}
-             ]
-    end
-
-    test "and memory search also includes the configured additional Lenses" do
-      assert :ok =
-               Client.ingest(%Ingest{
-                 operator_id: "operator-one",
-                 lens: "observations",
-                 content: "observation memory",
-                 source_description: "functional"
-               })
-
-      assert {:ok, plugin_state} =
-               Plugin.mount(%{},
-                 agent_name: "Susu",
-                 ingestion_lens: "observations",
-                 search_destinations: ["observations"]
-               )
-
-      agent = agent(plugin_state)
-      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(agent)
-
-      assert {:ok, %{result: result}} =
-               MemorySearch.run(
-                 %{query: "memory"},
-                 Map.put(tool_context, :agent_id, agent.id)
-               )
-
-      assert Jason.decode!(result) == [
-               %{"destination" => "observations", "fact" => "observation memory"}
              ]
     end
 
@@ -455,6 +425,60 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
   end
 
+  describe "if an agent turn selects an unknown or non-binary Lens" do
+    test "then handling the turn fails before memory addition or capture and identifies the invalid Lens" do
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+
+      for invalid <- ["missing", 42] do
+        signal = %Jido.Signal{
+          id: "invalid-lens",
+          source: "/functional",
+          type: "ai.react.query",
+          data: %{query: "Remember this", tool_context: %{lens: invalid}}
+        }
+
+        assert_raise ArgumentError, ~r/unknown Lens|invalid Lens/, fn ->
+          Plugin.handle_signal(signal, %{agent: agent(plugin_state)})
+        end
+      end
+
+      assert InMemory.adds() == []
+      assert InMemory.captures() == []
+    end
+  end
+
+  describe "when a mounted memory plugin captures through a Lens for an agent request" do
+    test "then the host agent's configured tools reach every scheduled Reflection" do
+      context = reflection_capture_context([:host_tool], %{}, %{})
+      assert context.tools == [:host_tool]
+    end
+
+    test "and the retained request tool context reaches every scheduled Reflection" do
+      context = reflection_capture_context([], %{}, %{tenant: "retained"})
+      assert context.tool_context.tenant == "retained"
+    end
+
+    test "and current identity fields override conflicting configured or retained context" do
+      conflicts = %{
+        operator_id: "wrong",
+        agent_name: "Wrong",
+        lens: "observations",
+        session_id: "wrong",
+        precedence: "retained"
+      }
+
+      context =
+        reflection_capture_context([], Map.put(conflicts, :precedence, "configured"), conflicts)
+
+      assert context.tool_context.operator_id == "operator-one"
+      assert context.tool_context.agent_name == "Susu"
+      assert context.tool_context.lens == "decisions"
+      assert context.tool_context.session_id == "session-one"
+      assert context.tool_context.precedence == "retained"
+    end
+  end
+
   describe "when turns in one session select different Lenses" do
     test "then each Lens retains only the turns selected for it" do
       assert {:ok, plugin_state} =
@@ -608,6 +632,16 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         )
       end
     end
+
+    test "and a non-binary Destination entry is identified" do
+      assert_raise ArgumentError, ~r/invalid Destination 42/, fn ->
+        Plugin.mount(%{},
+          agent_name: "Susu",
+          ingestion_lens: "observations",
+          search_destinations: [42]
+        )
+      end
+    end
   end
 
   defp agent(plugin_state) do
@@ -676,6 +710,45 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       type: "ai.request.completed",
       data: %{request_id: request_id, result: result}
     }
+  end
+
+  defp reflection_capture_context(tools, configured_tool_context, retained_tool_context) do
+    assert {:ok, plugin_state} =
+             Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+
+    request_id = "reflection-context"
+    query_agent = agent(plugin_state)
+
+    signal = %Jido.Signal{
+      id: "query-reflection-context",
+      source: "/functional",
+      type: "ai.react.query",
+      data: %{
+        request_id: request_id,
+        query: "Remember this",
+        tool_context: Map.put(retained_tool_context, :lens, "decisions")
+      }
+    }
+
+    assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
+             Plugin.handle_signal(signal, %{agent: query_agent})
+
+    completed_agent = completion_agent(query_agent, request_id, retained_refs)
+
+    completed_agent =
+      put_in(
+        completed_agent,
+        [:state, :__strategy__, :config],
+        %{tools: tools, tool_context: configured_tool_context}
+      )
+
+    assert {:ok, :continue} =
+             Plugin.handle_signal(completion_signal(request_id, "remembered"), %{
+               agent: completed_agent
+             })
+
+    assert [[_, _, _, _, _, "decisions", [], context]] = InMemory.captures()
+    context
   end
 
   defp start_lens_capture_buffer do
