@@ -239,6 +239,31 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         end
       end
     end
+
+    test "and no Lens ingestion process or Graphiti operation begins" do
+      assert_raise ArgumentError, fn ->
+        Client.ingest(request(:rumour, "Atlas launches Friday.", "planning notes"))
+      end
+
+      refute_receive {:episode_added, _, _, _}
+    end
+  end
+
+  describe "if public ingestion supplies content whose shape does not correspond to its source kind" do
+    test "then ingestion raises an argument error identifying the rejected source content" do
+      invalid_sources = [
+        {:conversation, %{"speaker" => "Mina"}},
+        {:document, ["draft"]},
+        {:structured_record, "already encoded JSON"},
+        {:structured_record, %{"pid" => self()}}
+      ]
+
+      for {source_kind, content} <- invalid_sources do
+        assert_raise ArgumentError, ~r/source content.*#{source_kind}/i, fn ->
+          Client.ingest(request(source_kind, content, "invalid fixture"))
+        end
+      end
+    end
   end
 
   defp request(source_kind, content, source_description) do
