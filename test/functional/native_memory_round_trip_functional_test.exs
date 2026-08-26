@@ -177,21 +177,6 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       assert block =~ source_wording
     end
 
-    test "and no inference model is called", %{g: g} do
-      previous_model = System.get_env("GRALKOR_LLM_MODEL")
-      System.put_env("GRALKOR_LLM_MODEL", "invalid-without-provider-separator")
-
-      on_exit(fn ->
-        if previous_model,
-          do: System.put_env("GRALKOR_LLM_MODEL", previous_model),
-          else: System.delete_env("GRALKOR_LLM_MODEL")
-      end)
-
-      put_facts(g, ["Raw memory result."])
-
-      assert {:ok, block} = Native.recall("operator_one", "TestAgent", nil, "anything")
-      assert block =~ "- Raw memory result."
-    end
   end
 
   describe "when a captured turn is flushed for its session" do

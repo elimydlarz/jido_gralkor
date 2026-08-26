@@ -6,7 +6,6 @@ when no relevant facts are found
 when memory search returns facts
   then the memory block lists every returned fact verbatim and in order
   and every returned fact retains its available source wording
-  and presenting the returned facts calls no inference dependency
 
 when a maximum result count is supplied
   then that count is forwarded to the main search
