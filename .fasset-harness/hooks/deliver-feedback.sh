@@ -10,6 +10,7 @@ report=''
 claims=''
 delivery_committed=0
 restore_index=0
+maximum_inline_report_bytes=8192
 
 if [ ! -d "$failures" ]; then
   exit 0
@@ -150,6 +151,25 @@ for failure in "$failures"/*.failure; do
 done
 
 if [ "$reported" -eq 1 ]; then
+  report_bytes=$(wc -c < "$report" | tr -d ' ')
+  if [ "$report_bytes" -gt "$maximum_inline_report_bytes" ]; then
+    diagnostics="$state/diagnostics"
+    mkdir -p "$diagnostics"
+    diagnostic=$(mktemp "$diagnostics/feedback.XXXXXX")
+    mv "$report" "$diagnostic"
+    report=$(mktemp "$state/delivery.notice.XXXXXX")
+    printf '%s\n%s\n' \
+      "OPTIMISTIC FEEDBACK: combined failure report exceeded $maximum_inline_report_bytes bytes; saved outside the session to prevent unbounded output." \
+      "Complete diagnostic: $diagnostic" > "$report"
+
+    delivery_committed=1
+    rm -f "$claims"/*.failure
+    if ! cat "$report" >&2; then
+      exit 1
+    fi
+    exit 2
+  fi
+
   if ! cat "$report" >&2; then
     exit 1
   fi
