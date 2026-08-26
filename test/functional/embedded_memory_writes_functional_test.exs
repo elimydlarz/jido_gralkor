@@ -126,6 +126,32 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
     end
   end
 
+  describe "when an episode relationship has no existing edge candidates" do
+    test "then no vector edge search carrying an empty candidate filter is executed" do
+      %{graph: graph, pool: pool} = start_pool(:embedded, exercise_empty_edge_candidates: true)
+      GraphitiPool.for(pool, "owner")
+
+      assert Native.memory_add("owner", "episode", "manual") == :ok
+      assert graph_value(graph, "edge_vector_searches") == 0
+    end
+
+    test "and no full-text edge search carrying an empty candidate filter is executed" do
+      %{graph: graph, pool: pool} = start_pool(:embedded, exercise_empty_edge_candidates: true)
+      GraphitiPool.for(pool, "owner")
+
+      assert Native.memory_add("owner", "episode", "manual") == :ok
+      assert graph_value(graph, "edge_fulltext_searches") == 0
+    end
+
+    test "and episode addition continues" do
+      %{graph: graph, pool: pool} = start_pool(:embedded, exercise_empty_edge_candidates: true)
+      GraphitiPool.for(pool, "owner")
+
+      assert Native.memory_add("owner", "episode", "manual") == :ok
+      assert graph_value(graph, "episode_continued")
+    end
+  end
+
   defp start_pool(backend, opts \\ []) do
     {graph, _} =
       Pythonx.eval(
@@ -137,10 +163,26 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
                 self.active_writes = 0
                 self.max_active_writes = 0
                 self.searches_during_write = 0
+                self.edge_vector_searches = 0
+                self.edge_fulltext_searches = 0
+                self.resolve_empty_candidates = False
+                self.episode_continued = False
 
             async def add_episode(self, **kwargs):
                 self.active_writes += 1
                 self.max_active_writes = max(self.max_active_writes, self.active_writes)
+                if self.resolve_empty_candidates:
+                    from graphiti_core.search.search_config_recipes import EDGE_HYBRID_SEARCH_RRF
+                    from graphiti_core.search.search_filters import SearchFilters
+                    from graphiti_core.utils.maintenance import edge_operations
+                    result = await edge_operations.search(
+                        None,
+                        'candidate fact',
+                        group_ids=['owner'],
+                        config=EDGE_HYBRID_SEARCH_RRF,
+                        search_filter=SearchFilters(edge_uuids=[]),
+                    )
+                    self.episode_continued = result.edges == []
                 await asyncio.sleep(0.1)
                 self.active_writes -= 1
 
@@ -163,6 +205,10 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
         %{}
       )
 
+    if Keyword.get(opts, :exercise_empty_edge_candidates, false) do
+      install_recording_edge_search(graph)
+    end
+
     pool_opts =
       [
         name: Gralkor.GraphitiPool,
@@ -177,6 +223,7 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
         warmup: false,
         install_loop_fn: &Gralkor.Python.install_async_runtime/0
       ]
+      |> Keyword.delete(:exercise_empty_edge_candidates)
       |> Keyword.merge(opts)
 
     {:ok, pool} = GraphitiPool.start_link(pool_opts)
@@ -234,6 +281,47 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
 
   defp restore_env(key, :missing), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
+
+  defp install_recording_edge_search(graph) do
+    {original_search, _} =
+      Pythonx.eval(
+        """
+        from graphiti_core.utils.maintenance import edge_operations
+        edge_operations.search
+        """,
+        %{}
+      )
+
+    Pythonx.eval(
+      """
+      from graphiti_core.search.search_config import SearchResults
+      from graphiti_core.utils.maintenance import edge_operations
+
+      async def recording_search(*args, **kwargs):
+          methods = kwargs['config'].edge_config.search_methods
+          names = [str(method).lower() for method in methods]
+          if any('cosine' in name for name in names):
+              graph.edge_vector_searches += 1
+          if any('bm25' in name for name in names):
+              graph.edge_fulltext_searches += 1
+          return SearchResults()
+
+      edge_operations.search = recording_search
+      graph.resolve_empty_candidates = True
+      """,
+      %{"graph" => graph}
+    )
+
+    on_exit(fn ->
+      Pythonx.eval(
+        """
+        from graphiti_core.utils.maintenance import edge_operations
+        edge_operations.search = original_search
+        """,
+        %{"original_search" => original_search}
+      )
+    end)
+  end
 
   defp graph_value(graph, key) do
     {value, _} =
