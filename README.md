@@ -22,7 +22,7 @@ Then fetch:
 mix deps.get
 ```
 
-The package requires Elixir `~> 1.18` and directly depends on `:jido`, `:jido_ai`, `:pythonx`, `:req_llm`, `:jason`, and `:yaml_elixir`. On the first native-runtime boot, Pythonx materialises a managed Python 3.12 environment with `graphiti-core` and `falkordblite`; consumers do not install Python themselves, but the boot needs package-download access and a writable cache.
+The package requires Elixir `~> 1.18` and has runtime dependencies on `:jido`, `:jido_ai`, `:pythonx`, `:req_llm`, `:jason`, and `:yaml_elixir`. On the first native-runtime boot, Pythonx materialises a managed Python 3.12 environment with `graphiti-core` and `falkordblite`; consumers do not install Python themselves, but the boot needs package-download access and a writable cache.
 
 ## Required configuration
 
@@ -364,9 +364,9 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate i
 
 ## Configure Lenses
 
-A Lens is an application-owned memory channel with `:operator` or `:global` scope. Its write mode is either append, which sends content through an ingestion process, or whole-graph replacement, which replaces the graph content owned by that Lens.
+A Lens is an application-owned memory ingestion channel that targets a Destination. The Destination owns the `operator/path` or `global/path` address and ontology. A Lens's write mode is either append, which sends content through an ingestion process, or whole-graph replacement, which replaces the graph content for its Destination.
 
-Appending is the default write mode. An appending Lens supplies an ontology and the ingestion process Gralkor invokes when content is sent through it; `write: :append` may be stated explicitly or omitted.
+Appending is the default write mode. An appending Lens names its Destination and the ingestion process Gralkor invokes when content is sent through it; `write: :append` may be stated explicitly or omitted.
 
 The ontology is a module you compile into your own application — declared once in `lib/`, then named by each Destination that should extract with it:
 
@@ -592,7 +592,7 @@ Multiple Reflections and Lenses may save to the same Destination. Search selects
 
 `Gralkor.Client.InMemory` is a real implementation of `Gralkor.Client` (not a mock) that stores canned responses and records every call. Your agent's integration tests can hit it without any network:
 
-For Lens-aware calls, pair it with `Gralkor.Lens.Storage.InMemory` as shown in Required configuration; `Client.ingest/1` and `search/1` use the Lens storage boundary directly.
+For Lens-aware ingest and replacement calls, pair it with `Gralkor.Lens.Storage.InMemory` as shown in Required configuration. Destination search uses `Gralkor.Destination.Storage.InMemory` instead.
 
 ```elixir
 setup do
@@ -607,7 +607,22 @@ test "agent recalls stored context" do
 end
 ```
 
-The same `Gralkor.ClientContract` macro suite is run against both the in-memory twin and the production `Gralkor.Client.Native` adapter, so both satisfy an identical contract.
+The shared `Gralkor.ClientContract` macro suite exercises the in-memory twin. The production `Gralkor.Client.Native` adapter proves the same public port separately in its adapter tests.
+
+Maintainers can use the project test aliases according to the feedback speed and runtime boundary they need:
+
+```bash
+mix test              # Unit and Integration; excludes Functional and Journey
+mix test.unit         # Unit
+mix test.integration  # Integration
+mix test.functional   # Functional; may call real model providers
+mix test.journey      # Journey
+mix test.fast         # stale/affected Unit and Integration
+mix test.changed      # stale/affected Unit, Integration, and Functional; excludes Journey
+mix test.all          # Unit, Integration, Functional, Journey, and Node tests
+```
+
+Functional tests require their documented provider credentials and can send test inputs to external model providers. `mix test.fast` is the routine local feedback command; use `mix test.changed` only when the affected Functional boundary is intentionally available.
 
 Maintainers can exercise the interpretation prompt against a real model with `mix test.functional test/functional/interpret_epistemic_humility_test.exs`. The suite loads `OPENAI_API_KEY` from `.env`, uses OpenAI `gpt-5.6-sol` through ReqLLM, and starts no Graphiti or FalkorDB runtime. It verifies source preservation across varied accounts, conflict handling without truth adjudication, restraint when provenance is absent, and relevance filtering.
 
