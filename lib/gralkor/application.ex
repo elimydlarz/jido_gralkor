@@ -73,7 +73,7 @@ defmodule Gralkor.Application do
         :ok
       else
         t0 = System.monotonic_time(:millisecond)
-        result = add_episode_fn.(group_id, body, "captured", ontology, [])
+        result = add_episode_fn.(group_id, body, "captured", ontology, source_kind: :conversation)
         ms = System.monotonic_time(:millisecond) - t0
 
         case result do
