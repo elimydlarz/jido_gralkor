@@ -22,7 +22,7 @@ Then fetch:
 mix deps.get
 ```
 
-The package requires Elixir `~> 1.18` and has runtime dependencies on `:jido`, `:jido_ai`, `:pythonx`, `:req_llm`, `:jason`, and `:yaml_elixir`. On the first native-runtime boot, Pythonx materialises a managed Python 3.12 environment with `graphiti-core` and `falkordblite`; consumers do not install Python themselves, but the boot needs package-download access and a writable cache.
+The package requires Elixir `~> 1.18` and has runtime dependencies on `:jido`, `:jido_ai`, `:pythonx`, `:jason`, and `:yaml_elixir`. On the first native-runtime boot, Pythonx materialises a managed Python 3.12 environment with `graphiti-core` and `falkordblite`; consumers do not install Python themselves, but the boot needs package-download access and a writable cache.
 
 ## Required configuration
 
