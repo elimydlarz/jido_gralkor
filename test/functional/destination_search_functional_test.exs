@@ -100,6 +100,34 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
+  describe "where a caller selects the `operator` Destination" do
+    test "then another operator's graph cannot contribute a result" do
+      use_in_memory_storage()
+      assert :ok = add_episode("operator", "operator-one", "private memory")
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-two",
+                 query: "private",
+                 destinations: ["operator"]
+               })
+    end
+  end
+
+  describe "where a caller selects any other Destination" do
+    test "then results saved by every operator to that Destination's one graph can contribute" do
+      use_in_memory_storage()
+      assert :ok = add_episode("first", "operator-one", "shared memory")
+
+      assert {:ok, [%{destination: "first", fact: "shared memory"}]} =
+               Client.search(%Search{
+                 operator_id: "operator-two",
+                 query: "shared",
+                 destinations: ["first"]
+               })
+    end
+  end
+
   describe "where the same Destination is selected more than once" do
     test "then that Destination is searched only once" do
       assert {:ok, [%{destination: "first"}]} =
@@ -425,5 +453,32 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         })
       end
     end
+  end
+
+  defp use_in_memory_storage do
+    start_supervised!(Gralkor.Lens.Storage.InMemory)
+    Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+    Application.put_env(
+      :jido_gralkor,
+      :destination_storage,
+      Gralkor.Destination.Storage.InMemory
+    )
+  end
+
+  defp add_episode(destination_name, operator_id, content) do
+    destination = Gralkor.Destination.Registry.fetch!(destination_name)
+
+    store = %Gralkor.Lens.Store{
+      operator_id: operator_id,
+      lens: %Gralkor.Lens{
+        name: "writer",
+        destination: destination,
+        ontology: Gralkor.DefaultOntology,
+        ingestion: String
+      }
+    }
+
+    Gralkor.Lens.Store.add(store, content, "functional")
   end
 end
