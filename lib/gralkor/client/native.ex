@@ -1,8 +1,7 @@
 defmodule Gralkor.Client.Native do
   @moduledoc """
   Production `Gralkor.Client` implementation. In-process — no HTTP — talks
-  to graphiti via `Gralkor.GraphitiPool` (Pythonx-backed) and to the LLM via
-  `req_llm` (Elixir-side, used by `Gralkor.Distill` and `Gralkor.Interpret`).
+  to graphiti via `Gralkor.GraphitiPool` (Pythonx-backed).
 
   See `test-trees/unit/gralkor-client-native_TEST_TREES.md`.
   """
@@ -11,11 +10,9 @@ defmodule Gralkor.Client.Native do
 
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
-  alias Gralkor.Config
   alias Gralkor.DefaultOntology
   alias Gralkor.Format
   alias Gralkor.GraphitiPool
-  alias Gralkor.Interpret
   alias Gralkor.Recall
 
   # ── Client behaviour ────────────────────────────────────────
@@ -24,29 +21,12 @@ defmodule Gralkor.Client.Native do
   def recall(group_id, agent_name, session_id, query) do
     raise_if_blank!(:agent_name, agent_name)
 
-    opts = [
-      search_fn: search_fn(),
-      interpret_fn: interpret_fn(),
-      turns_fn: turns_fn()
-    ]
+    opts = [search_fn: search_fn()]
 
     opts =
       case Application.get_env(:jido_gralkor, :recall_deadline_ms) do
         nil -> opts
         ms when is_integer(ms) -> Keyword.put(opts, :deadline_ms, ms)
-      end
-
-    opts =
-      case Application.get_env(:jido_gralkor, :interpret_max_output_tokens) do
-        nil ->
-          opts
-
-        budget when is_integer(budget) and budget > 0 ->
-          Keyword.put(opts, :output_token_budget, budget)
-
-        other ->
-          raise ArgumentError,
-                "Gralkor.Client.Native: :jido_gralkor, :interpret_max_output_tokens must be a positive integer, got #{inspect(other)}"
       end
 
     Recall.recall(group_id, agent_name, session_id, query, opts)
@@ -165,42 +145,6 @@ defmodule Gralkor.Client.Native do
       end
     end
   end
-
-  defp interpret_fn do
-    model = Config.llm_model()
-    schema = Interpret.interpret_schema()
-
-    fn prompt, output_token_budget ->
-      options = interpret_output_token_options(model.provider, output_token_budget)
-
-      case ReqLLM.generate_object(model, prompt, schema, options) do
-        {:ok, response} ->
-          object = ReqLLM.Response.object(response)
-          interpret_relevant_facts(object)
-
-        {:error, _} = err ->
-          err
-      end
-    end
-  end
-
-  @doc false
-  def interpret_callback, do: interpret_fn()
-
-  @doc false
-  def interpret_relevant_facts(object) when is_map(object) do
-    {:ok, Map.get(object, :relevantFacts) || Map.get(object, "relevantFacts")}
-  end
-
-  @doc false
-  @spec interpret_output_token_options(:openai | :google, pos_integer()) :: keyword()
-  def interpret_output_token_options(:openai, output_token_budget),
-    do: [max_completion_tokens: output_token_budget]
-
-  def interpret_output_token_options(:google, output_token_budget),
-    do: [max_tokens: output_token_budget]
-
-  defp turns_fn, do: &CaptureBuffer.turns_for/1
 
   defp raise_if_blank!(field, value) when is_binary(value) do
     if String.trim(value) == "" do
