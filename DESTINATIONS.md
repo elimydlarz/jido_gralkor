@@ -96,7 +96,7 @@ Gralkor.Client.search(%Gralkor.Search{
 
 Each distinct Destination is searched once. Multiple Destinations are searched concurrently, and their results retain requested Destination order. Every result identifies its Destination.
 
-When no Destination is supplied, search uses the packaged operator-memory Destination.
+When no Destination is supplied, search uses the packaged operator-memory and global-generalisations Destinations.
 
 Search supports these result types:
 

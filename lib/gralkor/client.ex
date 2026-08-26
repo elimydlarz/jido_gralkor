@@ -9,8 +9,9 @@ defmodule Gralkor.Client do
   replaceable Lens. Lenses and Reflections reference first-class Destinations,
   whose addresses resolve graph placement and whose ontologies govern
   extraction. Destination search runs every distinct selection concurrently,
-  defaults an empty selection to packaged operator memory, and can return
-  facts, nodes, episodes, or Reflection artefacts.
+  defaults an empty selection to packaged operator memory and global
+  generalisations, and can return facts, nodes, episodes, or Reflection
+  artefacts.
 
   The compatibility surface remains `recall/4`, `capture/5`, `flush/1`,
   `flush_and_await/2`, and `memory_add/3` or `/4`. Lens-aware capture uses

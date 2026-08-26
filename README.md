@@ -170,7 +170,7 @@ The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `reca
 | --- | --- | --- | --- |
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
 | `:ingestion_lens` | no | unset (implicit-operator mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. The removed `:default_lens` option raises and identifies this replacement. |
-| `:search_destinations` | no | `[]` | Registered Destination names searched by `memory_search`. An empty list selects the packaged operator-memory Destination. |
+| `:search_destinations` | no | `[]` | Registered Destination names searched by `memory_search`. An empty list selects the packaged operator-memory and global-generalisations Destinations. |
 
 Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
 
@@ -464,7 +464,7 @@ The plugin mount chooses how an agent uses the registered Lenses:
 ```
 
 - `ingestion_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
-- `search_destinations` is an optional list of registered Destination names. An empty list searches the packaged `"operator"` Destination.
+- `search_destinations` is an optional list of registered Destination names. An empty list searches the packaged `"operator"` and `"generalisations"` Destinations.
 
 Consumers that ingest, replace, or search outside an agent call the same public boundary directly:
 

@@ -19,9 +19,9 @@ defmodule JidoGralkor.Actions.MemorySearch do
       (`tool_choice: memory_search`) where the LLM is required to
       invoke the tool but has nothing meaningful to search for.
 
-  Lens results are returned as JSON carrying the searched Lens and fact for
-  every match; legacy recall returns its memory block unchanged. Errors
-  propagate.
+  Destination results are returned as JSON carrying the searched Destination
+  and fact for every match; legacy recall returns its memory block unchanged.
+  Errors propagate.
   """
 
   use Jido.Action,
