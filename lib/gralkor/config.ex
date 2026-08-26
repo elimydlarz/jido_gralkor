@@ -2,13 +2,16 @@ defmodule Gralkor.Config do
   @moduledoc """
   Configuration for the embedded Gralkor runtime.
 
-  Two operator-facing knobs decide what `:jido_gralkor` does at boot:
+  Three operator-facing knobs decide what `:jido_gralkor` does at boot:
 
     * The FalkorDB connection — either embedded (`falkordblite` spawns a local
       `redis-server` child under a directory chosen by `GRALKOR_DATA_DIR`) or
       remote (network `host:port` plus optional credentials, set via the
       `:jido_gralkor, :falkordb` application env). Remote wins when both are
       configured. See `falkordb_spec/0`.
+    * The embedded FalkorDB socket read timeout — configured in milliseconds as
+      `:embedded_falkordb_socket_timeout_ms`, defaulting to 60 seconds. It is
+      validated only when the embedded backend starts.
     * The LLM and embedder models — set via the `GRALKOR_LLM_MODEL` and
       `GRALKOR_EMBEDDER_MODEL` env vars in `"provider:model"` form (operator
       contract). `llm_model/0` and `embedder_model/0` return them as

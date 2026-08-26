@@ -9,10 +9,10 @@ defmodule Gralkor.GraphitiPool do
   thousands of callers can read the instance simultaneously without going
   through the GenServer.
 
-  This is intentional. The spike (`pythonx-spike/LEARNINGS.md`) showed that
-  Pythonx releases the GIL during graphiti's awaited I/O, so concurrent
-  Elixir callers parallelise naturally. Serialising calls through a single
-  GenServer would throw that away.
+  Pythonx releases the GIL during graphiti's awaited I/O, so searches and
+  remote operations parallelise naturally. Embedded `add_episode` calls alone
+  use monitored admission through the GenServer because every group shares one
+  locally owned Redis connection; searches do not enter that queue.
 
   See `test-trees/unit/graphiti-pool_TEST_TREES.md`.
   """
