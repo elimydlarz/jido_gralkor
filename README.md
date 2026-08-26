@@ -535,7 +535,7 @@ Registry and plugin configuration fail fast for blank, duplicate, reserved, reti
 
 ### Ontology DSL
 
-Each Destination ontology is a module declared with `Gralkor.Ontology`:
+Each writer ontology is a module declared with `Gralkor.Ontology`:
 
 - `entity Foo do field … end` declares an entity. `field :name, :type, opts` supports `:string | :integer | :float | :boolean`, plus `required: true` and `doc:` (rendered as the Pydantic field description).
 - `entity Foo, "when to extract one" do … end` adds a description, rendered as the extracted type's own description. Graphiti's extractor reads it to decide when to mint the entity, so a type whose name alone is ambiguous — `Preference`, `Pattern`, `Learning` — is extracted far more reliably with one. The description must be a literal string.
@@ -547,18 +547,18 @@ Each Destination ontology is a module declared with `Gralkor.Ontology`:
 
 **Protected field names.** Entity and edge *type* names are unrestricted — pick whatever suits your domain. Field names are not: graphiti rejects any custom entity attribute whose name collides with a field on its own `EntityNode`, namely `uuid`, `name`, `group_id`, `labels`, `created_at`, `summary`, `attributes`, and `name_embedding`. The DSL does not currently catch this at compile time, so `field :name, :string` compiles and then raises `EntityTypeValidationError` from Python on the first write through the Lens that selected the ontology. Name fields for what they hold — `handle`, `title`, `statement` — rather than reaching for `name` or `summary`.
 
-On each store write, graphiti receives the selected Destination ontology's `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types`, translated from the module's compile-time payload.
+On each store write, graphiti receives the selected Lens or Reflection ontology's `entity_types`, `edge_types`, `edge_type_map`, and `excluded_entity_types`, translated from the module's compile-time payload.
 
 ## Configure Reflections
 
-A Reflection is an asynchronous post-ingestion process over completed lensed representations. It is declared by name, registered Destination, and a repository YAML Chain of Thought. Reflections are not Lenses: Lens definitions remain independent views for absorbing information, while Reflections operate over the successful results after every intended Lens has finished.
+A Reflection is an asynchronous post-ingestion process over completed lensed representations. It is declared by name, registered Destination, extraction ontology, and a repository YAML Chain of Thought. Reflections are not Lenses: Lens definitions remain independent views for absorbing information, while Reflections operate over the successful results after every intended Lens has finished.
 
 The package supplies two declarations by default:
 
-- `generalisations` uses `priv/reflections/generalisations.yaml` and the packaged `generalisations` Destination at `global/generalisations`.
-- `erl` uses `priv/reflections/erl.yaml` and the packaged `experiential-learning` Destination at `operator/experiential-learning`. That Destination carries `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
+- `generalisations` uses `priv/reflections/generalisations.yaml`, writes to `global`, and uses `Gralkor.DefaultOntology`.
+- `erl` uses `priv/reflections/erl.yaml`, writes to `operator`, and uses `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
 
-Set `:reflections` to replace those defaults with application declarations, and set `:reflection_root` when their YAML paths resolve from somewhere other than the installed application root. A Reflection's Destination ontology governs extraction, whether it is the generic default or an application schema.
+Set `:reflections` to replace those defaults with application declarations, and set `:reflection_root` when their YAML paths resolve from somewhere other than the installed application root. A Reflection's optional `:ontology` governs its extraction and defaults to `Gralkor.DefaultOntology`.
 
 ```elixir
 config :jido_gralkor,
@@ -566,7 +566,8 @@ config :jido_gralkor,
   reflections: [
     [
       name: "release-review",
-      destination: "release-knowledge",
+      destination: "global",
+      ontology: MyApp.ReleaseOntology,
       chain_of_thought: "priv/reflections/release-review.yaml"
     ]
   ]
@@ -581,7 +582,7 @@ Multiple Reflections and Lenses may save to the same Destination. Search selects
   Gralkor.Client.search(%Gralkor.Search{
     operator_id: "operator-42",
     query: "What release approaches have worked?",
-    destinations: ["experiential-learning"],
+    destinations: ["operator"],
     result_type: :artefacts,
     max_results: 20
   })
@@ -590,7 +591,7 @@ Multiple Reflections and Lenses may save to the same Destination. Search selects
   Gralkor.Client.search(%Gralkor.Search{
     operator_id: "operator-42",
     query: "",
-    destinations: ["experiential-learning"],
+    destinations: ["operator"],
     result_type: :artefacts,
     artefact_id: "reflection-123"
   })
@@ -653,9 +654,9 @@ The embedded Gralkor adapter (under `lib/gralkor/`):
 - `Gralkor.Client` — adapter behaviour plus the public `ingest/1`, `replace/1`, and Destination-based `search/1` boundary.
 - `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, and `GraphitiPool`.
 - `Gralkor.Client.InMemory` — test twin.
-- `Gralkor.Destination` and `Gralkor.Destination.Registry` — first-class named addresses and extraction ontologies shared by Lenses and Reflections. The full agreed model is in [DESTINATIONS.md](DESTINATIONS.md).
+- `Gralkor.Destination` and `Gralkor.Destination.Registry` — first-class named graphs shared by Lenses and Reflections. The full agreed model is in [DESTINATIONS.md](DESTINATIONS.md).
 - `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, `Gralkor.Ingest`, `Gralkor.IngestedRepresentation`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Search` — resolved ingestion models, completed-ingestion representation, and consumer request values.
-- `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — append, replacement, and search capabilities with collision-safe local/shared-global Graphiti placement.
+- `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — append, replacement, and search capabilities for exact Destination graph identities.
 - `Gralkor.Lens.Ingestion.Store` — the built-in straight-through ingestion process.
 - `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, `Gralkor.Reflection.Runner`, and `Gralkor.Reflection.Scheduler` — validated YAML declarations and asynchronous ordered execution after completed Lens ingestion.
 - `Gralkor.Reflection.Artefact`, `Gralkor.Reflection.Store`, and the Graphiti/InMemory Reflection storage modules — exactly-one-artefact persistence at referenced Destinations.
