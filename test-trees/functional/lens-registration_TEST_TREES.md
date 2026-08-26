@@ -5,7 +5,7 @@ when an application registers a valid appending or replaceable Lens
   and every consumer observes the same application-owned Lens definition
   and the Lens uses its referenced registered Destination
 
-where an appending Lens definition provides a Destination name, ontology, and ingestion process without a write mode
+where an appending Lens definition provides a Destination name and ingestion process without a write mode
   then the Lens remains appending with its existing ingestion behaviour
 
 where an appending Lens omits its ontology
