@@ -23,7 +23,6 @@ defmodule Gralkor.GraphitiPool do
 
   alias Gralkor.Client
   alias Gralkor.Config
-  alias Gralkor.Interpret
 
   @default_table :gralkor_graphiti_instances
 
@@ -691,8 +690,6 @@ defmodule Gralkor.GraphitiPool do
     falkordb_spec = Keyword.fetch!(opts, :falkordb_spec)
     llm_model = Keyword.get(opts, :llm_model, Config.llm_model())
     embedder_model = Keyword.get(opts, :embedder_model, Config.embedder_model())
-    interpret_fn = Keyword.get(opts, :interpret_fn)
-
     validate_native_models!(llm_model, embedder_model)
 
     construct_falkor_db = Keyword.get(opts, :construct_falkor_db, &default_construct_falkor_db/1)
@@ -740,7 +737,6 @@ defmodule Gralkor.GraphitiPool do
       shared: shared,
       construct_instance: construct_instance,
       initialise_instance: initialise_instance,
-      interpret_fn: interpret_fn,
       ontology_cache: %{}
     }
 
@@ -1199,16 +1195,14 @@ defmodule Gralkor.GraphitiPool do
     instance = ensure_warmup_instance(state)
 
     {search_result, search_ms} = time(fn -> warmup_search(instance) end)
-    {interpret_result, interpret_ms} = time_warmup_interpret(state)
 
     Logger.info(
-      "[gralkor] warmup — search:#{search_ms} interpret:#{interpret_ms} #{System.monotonic_time(:millisecond) - t0}ms"
+      "[gralkor] warmup — search:#{search_ms} #{System.monotonic_time(:millisecond) - t0}ms"
     )
 
-    case {search_result, interpret_result} do
-      {:ok, :ok} -> :ok
-      {{:error, reason}, _} -> log_warmup_failure(:search, reason)
-      {_, {:error, reason}} -> log_warmup_failure(:interpret, reason)
+    case search_result do
+      :ok -> :ok
+      {:error, reason} -> log_warmup_failure(:search, reason)
     end
   end
 
@@ -1263,25 +1257,6 @@ defmodule Gralkor.GraphitiPool do
     :ok
   rescue
     e in Pythonx.Error -> {:error, Exception.message(e)}
-  end
-
-  defp time_warmup_interpret(%{interpret_fn: nil}), do: {:ok, 0}
-
-  defp time_warmup_interpret(%{interpret_fn: interpret_fn}) when is_function(interpret_fn, 2) do
-    time(fn ->
-      try do
-        prompt = Interpret.build_interpretation_context([], "warmup", "- warmup", "warmup")
-
-        case interpret_fn.(prompt, 2_000) do
-          :ok -> :ok
-          {:ok, _result} -> :ok
-          {:error, _reason} = error -> error
-          other -> {:error, {:unexpected_result, other}}
-        end
-      rescue
-        e -> {:error, Exception.message(e)}
-      end
-    end)
   end
 
   defp time(fun) do
