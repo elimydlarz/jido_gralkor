@@ -1,6 +1,6 @@
 Unit: in-memory-lens-storage (src: lib/gralkor/lens/storage/in_memory.ex; unit: test/gralkor/lens/storage/in_memory_test.exs)
 
-when a Lens store adds episodes to an operator's Destination or the `global` Destination
+when a Lens store adds episodes to the `operator`, `global`, or an application Destination
   then each episode remains in insertion order within only its Destination
   and every stored episode retains its originating Lens
 

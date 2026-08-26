@@ -7,11 +7,11 @@ when a caller searches memory naming one or more Destinations
   and the same maximum result count applies independently to every Destination
   and no unselected Destination can contribute a result
 
-where a caller selects a Destination other than `global`
+where a caller selects the `operator` Destination
   then another operator's graph cannot contribute a result
 
-where a caller selects the `global` Destination
-  then results saved by every operator to the one global graph can contribute
+where a caller selects any other Destination
+  then results saved by every operator to that Destination's one graph can contribute
 
 where the same Destination is selected more than once
   then that Destination is searched only once

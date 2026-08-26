@@ -61,15 +61,15 @@ when Reflection declarations are validated
     then validation fails identifying that Reflection and Destination
 
 where the packaged default Reflections are used
-  then ERL references the packaged `experiential-learning` Destination
-  and that Destination carries jido_gralkor's built-in experiential-learning ontology
+  then ERL references the packaged `operator` Destination
+  and ERL carries jido_gralkor's built-in experiential-learning ontology
   and generalisation references the packaged `global` Destination
 
-where an application-defined Reflection references a Destination using the built-in default ontology
+where an application-defined Reflection omits its ontology
   then its final artefact receives generic extraction
 
-where an application-defined Reflection references a Destination using an application ontology
-  then its final artefact is extracted through that Destination's ontology
+where an application-defined Reflection declares an application ontology
+  then its final artefact is extracted through that Reflection's ontology
 
 when the default ERL Reflection stores its final artefact
   then extraction receives the built-in `Learning` entity type from the referenced Destination
@@ -124,11 +124,11 @@ when the final Chain of Thought step returns valid structured output
   and the artefact identifies its declaring Reflection
   and the artefact retains its supporting evidence identifiers
 
-  where the referenced Destination is not `global`
+  where the referenced Destination is `operator`
     then the artefact is available only to the operator whose ingestion triggered the Reflection
 
-  where the referenced Destination is `global`
-    then the artefact is available to every operator through the one global graph
+  where the referenced Destination is not `operator`
+    then the artefact is available to every operator through that Destination's one graph
 
 when multiple declared Reflections process one completed ingestion operation
   then every Reflection runs independently
