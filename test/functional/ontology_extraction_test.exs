@@ -181,13 +181,14 @@ defmodule Gralkor.OntologyExtractionTest do
     operator_id = "ontology-operator-#{System.unique_integer([:positive])}"
 
     Application.put_env(:jido_gralkor, :destinations, [
-      [name: lens, address: "operator/#{lens}", ontology: ontology]
+      [name: lens]
     ])
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
         name: lens,
         destination: lens,
+        ontology: ontology,
         ingestion: Gralkor.Lens.Ingestion.Store
       ]
     ])

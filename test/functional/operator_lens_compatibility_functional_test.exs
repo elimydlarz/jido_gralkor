@@ -48,13 +48,14 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
     test "and jido_gralkor's built-in ontology governs implicit-default extraction" do
       assert %Gralkor.Lens{
                name: "operator",
-               destination: %Gralkor.Destination{ontology: Gralkor.DefaultOntology}
+               destination: %Gralkor.Destination{name: "operator"},
+               ontology: Gralkor.DefaultOntology
              } =
                Client.lens!("operator")
     end
 
     test "and legacy capture, explicit memory addition, and recall use that built-in ontology consistently" do
-      assert Client.lens!("operator").destination.ontology == Gralkor.DefaultOntology
+      assert Client.lens!("operator").ontology == Gralkor.DefaultOntology
       assert_legacy_memory_works()
     end
 
@@ -68,7 +69,7 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
     test "then the implicit `operator` Lens still uses jido_gralkor's built-in ontology" do
       Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
 
-      assert Client.lens!("operator").destination.ontology == Gralkor.DefaultOntology
+      assert Client.lens!("operator").ontology == Gralkor.DefaultOntology
     end
   end
 

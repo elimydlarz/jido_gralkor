@@ -39,8 +39,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     Application.put_env(:jido_gralkor, :client, InMemory)
 
     Application.put_env(:jido_gralkor, :destinations, [
-      [name: "observations", address: "operator/observations", ontology: MemoryOntology],
-      [name: "decisions", address: "operator/decisions", ontology: MemoryOntology]
+      [name: "observations"],
+      [name: "decisions"]
     ])
 
     Application.put_env(
@@ -55,16 +55,18 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       [
         name: "observations",
         destination: "observations",
+        ontology: MemoryOntology,
         ingestion: StoreIngestion
       ],
       [
         name: "decisions",
         destination: "decisions",
+        ontology: MemoryOntology,
         ingestion: StoreIngestion
       ],
       [
         name: "shared-generalisations",
-        destination: "generalisations",
+        destination: "global",
         ingestion: StoreIngestion
       ]
     ])
@@ -191,11 +193,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert %Gralkor.Lens{
                name: "observations",
-               destination: %Gralkor.Destination{
-                 name: "observations",
-                 address: "operator/observations",
-                 ontology: MemoryOntology
-               },
+               destination: %Gralkor.Destination{name: "observations"},
+               ontology: MemoryOntology,
                ingestion: StoreIngestion
              } = lens
     end
@@ -250,7 +249,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
              ]
     end
 
-    test "and memory search uses the packaged global-generalisations Destination" do
+    test "and memory search uses the packaged `global` Destination" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-two",
@@ -273,7 +272,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert Jason.decode!(result) == [
-               %{"destination" => "generalisations", "fact" => "shared generalisation"}
+               %{"destination" => "global", "fact" => "shared generalisation"}
              ]
     end
 

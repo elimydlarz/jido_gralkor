@@ -63,7 +63,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     previous_destination_storage = Application.get_env(:jido_gralkor, :destination_storage)
 
     Application.put_env(:jido_gralkor, :destinations, [
-      [name: "observations", address: "operator/observations"]
+      [name: "observations"]
     ])
 
     Application.put_env(:jido_gralkor, :lenses, [
@@ -162,7 +162,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
       assert {:ok, memory} =
                Gralkor.Client.Native.recall(
-                 "destination_operator-one_observations",
+                 "observations",
                  "Gralkor",
                  "session-one",
                  "Atlas launch"
