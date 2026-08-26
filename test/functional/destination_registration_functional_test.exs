@@ -72,6 +72,12 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
     end
   end
 
+  describe "where the packaged Destinations are used" do
+    test "then operator memory references the Destination named `operator`" do
+      assert Client.lens!("operator").destination.name == "operator"
+    end
+  end
+
   describe "if the Destination registry is not a list" do
     test "then configuration resolution raises `ArgumentError` naming what it found instead" do
       Application.put_env(:jido_gralkor, :destinations, %{not: "a list"})
