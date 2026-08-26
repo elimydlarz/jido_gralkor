@@ -356,7 +356,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then its final artefact is extracted through that Reflection's ontology", %{root: root} do
       reflection =
         Registry.load!(
-          [valid_definition(root, destination: "observations", ontology: ReflectionEvidenceOntology)],
+          [
+            valid_definition(root,
+              destination: "observations",
+              ontology: ReflectionEvidenceOntology
+            )
+          ],
           root: root
         )
         |> List.first()
@@ -1139,7 +1144,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       :ok =
         Store.put(reflection, "operator-one", other, storage: Gralkor.Reflection.Storage.InMemory)
 
-    assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
+      assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
