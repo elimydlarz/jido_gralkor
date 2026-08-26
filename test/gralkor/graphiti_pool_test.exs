@@ -988,6 +988,7 @@ defmodule Gralkor.GraphitiPoolTest do
                   self.valid_at = None
                   self.invalid_at = None
                   self.expired_at = None
+                  self.episodes = []
 
           class _FakeGraphiti:
               def __init__(self):
@@ -1076,6 +1077,7 @@ defmodule Gralkor.GraphitiPoolTest do
                   self.valid_at = datetime(2024, 1, 2, tzinfo=timezone.utc)
                   self.invalid_at = datetime(2024, 1, 3, tzinfo=timezone.utc)
                   self.expired_at = datetime(2024, 1, 4, tzinfo=timezone.utc)
+                  self.episodes = []
 
           class _FakeGraphiti:
               async def search(self, query, num_results=10):
@@ -1100,6 +1102,88 @@ defmodule Gralkor.GraphitiPoolTest do
       assert fact.valid_at == "2024-01-02 00:00:00+00:00"
       assert fact.invalid_at == "2024-01-03 00:00:00+00:00"
       assert fact.expired_at == "2024-01-04 00:00:00+00:00"
+
+      GenServer.stop(pid)
+    end
+
+    test "and each returned edge identifies its originating episodes by identifier, source kind, and source description" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          from graphiti_core.nodes import EpisodeType
+
+          class _Episode:
+              def __init__(self, uuid, source, source_description):
+                  self.uuid = uuid
+                  self.source = source
+                  self.source_description = source_description
+
+          class _GraphOperations:
+              async def episodic_node_get_by_uuids(self, cls, driver, uuids):
+                  return [driver.episodes[uuid] for uuid in uuids]
+
+          class _Driver:
+              def __init__(self):
+                  self.graph_operations_interface = _GraphOperations()
+                  self.episodes = {
+                      "episode-1": _Episode(
+                          "episode-1",
+                          EpisodeType.message,
+                          "conversation with Eli",
+                      ),
+                      "episode-2": _Episode(
+                          "episode-2",
+                          EpisodeType.text,
+                          "project notes",
+                      ),
+                  }
+
+          class _Edge:
+              def __init__(self):
+                  self.fact = "Eli may prefer tea"
+                  self.created_at = None
+                  self.valid_at = None
+                  self.invalid_at = None
+                  self.expired_at = None
+                  self.episodes = ["episode-1", "episode-2"]
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.driver = _Driver()
+
+              async def search(self, query, num_results=10):
+                  return [_Edge()]
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:ok,
+              [
+                %{
+                  fact: "Eli may prefer tea",
+                  sources: [
+                    %{
+                      id: "episode-1",
+                      source_kind: "conversation",
+                      source_description: "conversation with Eli"
+                    },
+                    %{
+                      id: "episode-2",
+                      source_kind: "document",
+                      source_description: "project notes"
+                    }
+                  ]
+                }
+              ]} = GraphitiPool.search(pid, "g1", "tea", 5)
 
       GenServer.stop(pid)
     end
@@ -2720,6 +2804,7 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.valid_at = None
                 self.invalid_at = None
                 self.expired_at = None
+                self.episodes = []
 
         class _FakeGraphiti:
             async def search(self, query, num_results=10):
