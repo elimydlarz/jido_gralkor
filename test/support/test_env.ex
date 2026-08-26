@@ -4,10 +4,8 @@ defmodule Gralkor.TestEnv do
   environment, without overwriting variables already set.
 
   Graphiti-backed functional tests and GraphitiPool/Python integration tests need
-  `GOOGLE_API_KEY` to call Gemini via req_llm and graphiti's bundled clients. The
-  interpretation-only epistemic-humility functional suite needs `OPENAI_API_KEY`
-  for its real gpt-4.1-mini calls through ReqLLM. Keys live in `.env` (gitignored)
-  — see `.env.example`.
+  provider credentials for graphiti's bundled clients. Keys live in `.env`
+  (gitignored) — see `.env.example`.
   """
 
   def load(path) do
@@ -50,9 +48,8 @@ defmodule Gralkor.TestEnv do
     end)
   end
 
-  # The user keeps the Gemini credential in `GEMINI_API_KEY`; req_llm and
-  # graphiti's bundled clients both want `GOOGLE_API_KEY`. Bridge if only the
-  # former is set.
+  # The user keeps the Gemini credential in `GEMINI_API_KEY`; graphiti's bundled
+  # clients want `GOOGLE_API_KEY`. Bridge if only the former is set.
   defp bridge_gemini_to_google_api_key do
     case {System.get_env("GOOGLE_API_KEY"), System.get_env("GEMINI_API_KEY")} do
       {google, _} when google not in [nil, ""] -> :ok
