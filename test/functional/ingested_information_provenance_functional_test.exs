@@ -105,6 +105,20 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
       assert_receive {:episode_added, %Gralkor.Lens.Store{}, "Draft launch plan",
                       "Q3 Roadmap — Draft"}
     end
+
+    test "then Graphiti's existing episode extraction is instructed to preserve source attribution and epistemic wording in extracted facts" do
+      graphiti = use_native_boundary()
+
+      assert :ok =
+               Client.ingest(
+                 request(:document, "Atlas might launch Friday.", "Q3 Roadmap — Draft")
+               )
+
+      assert [%{"custom_extraction_instructions" => instructions}] = added_episodes(graphiti)
+      assert instructions =~ "source attribution"
+      assert instructions =~ "uncertainty"
+      assert instructions =~ "speculation"
+    end
   end
 
   describe "where the source kind is conversation" do
@@ -152,22 +166,6 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
       assert [%{"body" => body, "source" => "json"}] = added_episodes(graphiti)
       assert Jason.decode!(body) == %{"project" => "Atlas", "status" => "proposed"}
-    end
-  end
-
-  describe "when information is submitted through public ingestion with a supported source kind" do
-    test "then Graphiti's existing episode extraction is instructed to preserve source attribution and epistemic wording in extracted facts" do
-      graphiti = use_native_boundary()
-
-      assert :ok =
-               Client.ingest(
-                 request(:document, "Atlas might launch Friday.", "Q3 Roadmap — Draft")
-               )
-
-      assert [%{"custom_extraction_instructions" => instructions}] = added_episodes(graphiti)
-      assert instructions =~ "source attribution"
-      assert instructions =~ "uncertainty"
-      assert instructions =~ "speculation"
     end
   end
 
