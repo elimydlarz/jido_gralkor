@@ -4,13 +4,25 @@
     "fasset-harness@fasset-harness": true
   },
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.fasset-harness/hooks/optimistic-feedback.sh\" edit",
+            "statusMessage": "Starting optimistic feedback"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "bash \"$(git rev-parse --show-toplevel)/.fasset-harness/hooks/stop-feedback.sh\"",
-            "statusMessage": "Running Stop feedback"
+            "statusMessage": "Running checks registered for Stop"
           }
         ]
       }

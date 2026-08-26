@@ -96,8 +96,12 @@ mix test.unit       # only :unit (excludes integration, functional, journey)
 mix test.integration
 mix test.functional # application-visible feature behaviour; some suites use real LLM/graphiti boundaries
 mix test.journey    # broad whole-application Functional workflows; some require external services
+mix test.changed    # changed or related Unit, Integration, and Functional tests; excludes Journey
+mix test.fast       # changed or related Unit and Integration tests; excludes Functional and Journey
 mix test.all        # all Unit, Integration, Functional, Journey, and Node tests
 ```
+
+Do not manually run Unit or Integration tests during ordinary development; saved-file feedback owns impacted tests and Stop owns their complete suite. Do not manually run `mix test.fast`, `mix test`, or `mix test.all` during ordinary development. Run only the current focused Functional test during Functional RED and GREEN. Run `mix test.functional` when implementation appears finished. Run `mix test.journey` after a Journey tree or test change or a substantive production change.
 
 Functional tests describe application-visible behaviour and may use deterministic substitutes or focused live boundaries. Journey tests are the broad workflow form of Functional coverage. `mix test.all` runs Unit, Integration, Functional, and Journey tests through ExUnit, then runs every Node test; both runners finish and print their normal output when either reports failures. Real LLM and graphiti-core extraction calls remain confined to these opt-in suites; a default `mix test` is deterministic. The boundary contract those tiers used to be the sole proof of — which graphiti `add_episode` kwargs an ontology populates — is now pinned deterministically by [`test-trees/unit/ontology-graphiti-spec_TEST_TREES.md`](test-trees/unit/ontology-graphiti-spec_TEST_TREES.md) (`Gralkor.GraphitiPool.graphiti_boundary_spec/1`, pure, no Pythonx). The functional `ontology-extraction` suite remains the proof that a real LLM honours the declared schema.
 

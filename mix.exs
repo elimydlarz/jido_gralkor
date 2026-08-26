@@ -29,6 +29,8 @@ defmodule JidoGralkor.MixProject do
         "test.integration": :test,
         "test.functional": :test,
         "test.journey": :test,
+        "test.changed": :test,
+        "test.fast": :test,
         "test.all": :test
       ]
     ]
@@ -63,6 +65,8 @@ defmodule JidoGralkor.MixProject do
       "test.integration": ["test --only integration"],
       "test.functional": ["test --only functional"],
       "test.journey": ["test --only journey"],
+      "test.changed": ["test --stale --include functional --exclude journey"],
+      "test.fast": ["test --stale --exclude functional --exclude journey"],
       "test.all": [&test_all/1]
     ]
   end
