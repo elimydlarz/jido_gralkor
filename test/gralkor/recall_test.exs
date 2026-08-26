@@ -23,8 +23,8 @@ defmodule Gralkor.RecallTest do
   describe "when memory search returns facts" do
     test "then the memory block lists every returned fact verbatim and in order" do
       returned_facts = [
-        "X is a thing (created 2020; source: project notes)",
-        "Y was deprecated (invalid since 2022; source: release history)"
+        "X is a thing (created 2020)",
+        "Y was deprecated (invalid since 2022)"
       ]
 
       assert {:ok, block} =
@@ -41,6 +41,22 @@ defmodule Gralkor.RecallTest do
 
       assert :binary.match(block, Enum.at(returned_facts, 0)) <
                :binary.match(block, Enum.at(returned_facts, 1))
+    end
+
+    test "and every returned fact retains its available source wording" do
+      source_wording = "according to the migration report filed by Mina"
+      fact = "Y was deprecated, #{source_wording}."
+
+      assert {:ok, block} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "q",
+                 default_opts(search_fn: ok_search([fact]))
+               )
+
+      assert block =~ fact
     end
   end
 
