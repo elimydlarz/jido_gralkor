@@ -23,29 +23,29 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     :ok
   end
 
-  describe "when a Lens store adds episodes to an operator or global Destination address" do
+  describe "when a Lens store adds episodes to the `operator`, `global`, or an application Destination" do
     test "then each episode remains in insertion order within only its Destination" do
-      observations = local_store("operator-one", "observations")
-      decisions = local_store("operator-one", "decisions")
+      operator = operator_store("operator-one")
+      decisions = application_store("operator-one", "decisions")
       global = global_store("published-observations")
 
-      assert :ok = Store.add(observations, "first observation", "test")
+      assert :ok = Store.add(operator, "first observation", "test")
       assert :ok = Store.add(decisions, "one decision", "test")
-      assert :ok = Store.add(observations, "second observation", "test")
+      assert :ok = Store.add(operator, "second observation", "test")
       assert :ok = Store.add(global, "public observation", "test")
 
-      assert Enum.map(InMemory.episodes(key(observations)), & &1.content) ==
+      assert Enum.map(InMemory.episodes(key(operator)), & &1.content) ==
                ["first observation", "second observation"]
 
       assert Enum.map(InMemory.episodes(key(decisions)), & &1.content) ==
                ["one decision"]
 
       assert Enum.map(InMemory.episodes(key(global)), & &1.content) == ["public observation"]
-      assert InMemory.episodes(key(local_store("operator-two", "observations"))) == []
+      assert InMemory.episodes(key(operator_store("operator-two"))) == []
     end
 
     test "and every stored episode retains its originating Lens" do
-      observations = local_store("operator-one", "observations")
+      observations = application_store("operator-one", "observations")
       published = global_store("published-observations")
       generalisations = global_store("generalisations")
 
@@ -63,7 +63,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
 
   describe "when a Lens store is searched with a maximum result count" do
     test "then no more than that count is returned from the selected Destination" do
-      observations = local_store("operator-one", "observations")
+      observations = application_store("operator-one", "observations")
 
       Enum.each(["first", "second", "third"], fn content ->
         assert :ok = Store.add(observations, content, "test")
@@ -325,12 +325,25 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     end
   end
 
-  defp local_store(operator_id, name) do
+  defp operator_store(operator_id) do
+    %Store{
+      operator_id: operator_id,
+      lens: %Lens{
+        name: "operator",
+        destination: destination("operator"),
+        ontology: Gralkor.DefaultOntology,
+        ingestion: String
+      }
+    }
+  end
+
+  defp application_store(operator_id, name) do
     %Store{
       operator_id: operator_id,
       lens: %Lens{
         name: name,
-        destination: destination(name, "operator/#{name}"),
+        destination: destination(name),
+        ontology: Gralkor.DefaultOntology,
         ingestion: String
       }
     }
@@ -341,7 +354,8 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       operator_id: "operator-one",
       lens: %Lens{
         name: name,
-        destination: destination("shared", "global/shared"),
+        destination: destination("global"),
+        ontology: Gralkor.DefaultOntology,
         ingestion: String
       }
     }
@@ -352,19 +366,13 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       operator_id: operator_id,
       lens: %Replaceable{
         name: name,
-        destination:
-          destination(
-            if(scope == :global, do: "shared", else: name),
-            if(scope == :global, do: "global/shared", else: "operator/#{name}")
-          ),
+        destination: destination(Atom.to_string(scope)),
         graph_format: :property_graph
       }
     }
   end
 
-  defp destination(name, address) do
-    %Destination{name: name, address: address, ontology: Gralkor.DefaultOntology}
-  end
+  defp destination(name), do: %Destination{name: name}
 
   defp key(%Store{operator_id: operator_id, lens: %{destination: destination}}),
     do: Destination.graph_id(destination, operator_id)
