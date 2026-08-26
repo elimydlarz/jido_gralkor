@@ -77,6 +77,15 @@ config :jido_gralkor,
 
 Remote wins when both are set. `:ssl` defaults to `false`; set `true` for FalkorDB Cloud or any TLS-fronted endpoint. Misconfigured `:falkordb` (non-keyword, missing host/port, blank host, non-positive port) raises `ArgumentError` at app start.
 
+Embedded runtimes admit one `add_episode` mutation at a time through their shared local connection while searches remain concurrent. The remote backend retains concurrent writes. To allow a long embedded query more than the 60-second default read timeout, configure the timeout in milliseconds:
+
+```elixir
+config :jido_gralkor,
+  embedded_falkordb_socket_timeout_ms: 120_000
+```
+
+The setting is passed to the embedded Redis client as `socket_timeout`; it is ignored by remote FalkorDB. A zero, negative, or non-integer value raises `ArgumentError` when the embedded runtime starts.
+
 **2. In-memory client in tests.** Swap the adapter for the in-memory twin:
 
 ```elixir
@@ -130,6 +139,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
+| `:embedded_falkordb_socket_timeout_ms` | positive integer | `60_000` | Socket read timeout for the embedded FalkorDB connection, converted to seconds for `AsyncFalkorDB`. Ignored by remote FalkorDB. Invalid values raise `ArgumentError` when the embedded runtime starts. |
 | `:destinations` | list of keyword definitions | packaged `operator`, `experiential-learning`, and `generalisations` Destinations | The Destination registry. Each application definition has `:name`, an `operator/path` or `global/path` `:address`, and optional `:ontology` (default `Gralkor.DefaultOntology`). See [Destinations](DESTINATIONS.md). |
 | `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:destination`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:destination`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"operator"`, `"global"`), retired (`"default"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
@@ -144,6 +154,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 ```elixir
 # config/runtime.exs — everything optional, shown with its default
 config :jido_gralkor,
+  embedded_falkordb_socket_timeout_ms: 60_000,
   recall_deadline_ms: 12_000
 ```
 
