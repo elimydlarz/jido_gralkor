@@ -382,6 +382,7 @@ defmodule Gralkor.Client do
         %Lens{
           name: "operator",
           destination: DestinationRegistry.fetch!("operator"),
+          ontology: Gralkor.DefaultOntology,
           ingestion: StoreIngestion
         }
 
@@ -407,6 +408,7 @@ defmodule Gralkor.Client do
               Keyword.fetch!(definition, :name),
               Keyword.get(definition, :destination)
             ),
+          ontology: Keyword.get(definition, :ontology, Gralkor.DefaultOntology),
           ingestion: Keyword.fetch!(definition, :ingestion)
         }
 
@@ -455,9 +457,8 @@ defmodule Gralkor.Client do
       raise ArgumentError, "invalid Lens #{inspect(name)}: name is reserved"
     end
 
-    if Keyword.has_key?(definition, :scope) or Keyword.has_key?(definition, :ontology) do
-      raise ArgumentError,
-            "invalid Lens #{inspect(name)}: address and ontology belong on a Destination"
+    if Keyword.has_key?(definition, :scope) or Keyword.has_key?(definition, :address) do
+      raise ArgumentError, "invalid Lens #{inspect(name)}: scope and address are unsupported"
     end
 
     validate_lens_write!(name, definition)
@@ -471,9 +472,11 @@ defmodule Gralkor.Client do
     case Keyword.get(definition, :write, :append) do
       :append ->
         destination = Keyword.get(definition, :destination)
+        ontology = Keyword.get(definition, :ontology, Gralkor.DefaultOntology)
         ingestion = Keyword.get(definition, :ingestion)
 
         fetch_lens_destination!(name, destination)
+        validate_lens_ontology!(name, ontology)
 
         unless is_atom(ingestion) and Code.ensure_loaded?(ingestion) and
                  function_exported?(ingestion, :ingest, 2) do
@@ -521,6 +524,13 @@ defmodule Gralkor.Client do
     error in ArgumentError ->
       raise ArgumentError,
             "invalid Lens #{inspect(lens_name)} Destination #{inspect(destination_name)}: #{Exception.message(error)}"
+  end
+
+  defp validate_lens_ontology!(name, ontology) do
+    unless is_atom(ontology) and Code.ensure_loaded?(ontology) and
+             function_exported?(ontology, :__ontology__, 0) do
+      raise ArgumentError, "invalid Lens #{inspect(name)} ontology #{inspect(ontology)}"
+    end
   end
 
   @spec sanitize_group_id(String.t()) :: String.t()

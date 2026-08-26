@@ -9,12 +9,14 @@ defmodule Gralkor.Reflection.Registry do
     [
       name: "generalisations",
       chain_of_thought: "priv/reflections/generalisations.yaml",
-      destination: "generalisations"
+      destination: "global",
+      ontology: Gralkor.DefaultOntology
     ],
     [
       name: "erl",
       chain_of_thought: "priv/reflections/erl.yaml",
-      destination: "experiential-learning"
+      destination: "operator",
+      ontology: Gralkor.Reflection.ERLOntology
     ]
   ]
 
@@ -93,6 +95,7 @@ defmodule Gralkor.Reflection.Registry do
   defp load_one(definition, root) do
     name = field(definition, :name)
     destination = field(definition, :destination)
+    ontology = field(definition, :ontology) || Gralkor.DefaultOntology
     relative = field(definition, :chain_of_thought)
 
     cond do
@@ -105,12 +108,15 @@ defmodule Gralkor.Reflection.Registry do
       not non_blank?(destination) ->
         {:error, {:missing_destination, name, destination}}
 
+      not valid_ontology?(ontology) ->
+        {:error, {:invalid_ontology, name, ontology}}
+
       true ->
-        load_cot(name, destination, relative, root)
+        load_cot(name, destination, ontology, relative, root)
     end
   end
 
-  defp load_cot(name, destination_name, relative, root) do
+  defp load_cot(name, destination_name, ontology, relative, root) do
     path = Path.expand(relative, root)
 
     cond do
@@ -124,6 +130,7 @@ defmodule Gralkor.Reflection.Registry do
              %Reflection{
                name: name,
                destination: fetch_destination!(name, destination_name),
+               ontology: ontology,
                chain_of_thought: cot
              }}
 
@@ -160,4 +167,9 @@ defmodule Gralkor.Reflection.Registry do
   end
 
   defp non_blank?(value), do: is_binary(value) and String.trim(value) != ""
+
+  defp valid_ontology?(ontology) do
+    is_atom(ontology) and Code.ensure_loaded?(ontology) and
+      function_exported?(ontology, :__ontology__, 0)
+  end
 end

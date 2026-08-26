@@ -4,21 +4,8 @@ defmodule Gralkor.Destination.Registry do
   alias Gralkor.Destination
 
   @packaged [
-    %Destination{
-      name: "operator",
-      address: "operator/memory",
-      ontology: Gralkor.DefaultOntology
-    },
-    %Destination{
-      name: "experiential-learning",
-      address: "operator/experiential-learning",
-      ontology: Gralkor.Reflection.ERLOntology
-    },
-    %Destination{
-      name: "generalisations",
-      address: "global/generalisations",
-      ontology: Gralkor.DefaultOntology
-    }
+    %Destination{name: "operator"},
+    %Destination{name: "global"}
   ]
 
   def configured! do
@@ -51,44 +38,17 @@ defmodule Gralkor.Destination.Registry do
       raise ArgumentError, "invalid Destination name #{inspect(name)}"
     end
 
-    address = Keyword.get(definition, :address)
-    validate_address!(name, address)
-
-    ontology = Keyword.get(definition, :ontology, Gralkor.DefaultOntology)
-    validate_ontology!(name, ontology)
-
-    %Destination{
-      name: name,
-      address: address,
-      ontology: ontology
-    }
+    validate_fields!(name, definition)
+    %Destination{name: name}
   end
 
   defp resolve!(definition),
     do: raise(ArgumentError, "invalid Destination definition #{inspect(definition)}")
 
-  defp validate_address!(name, address) when is_binary(address) do
-    case String.split(address, "/", parts: 2) do
-      [scope, path] when scope in ["operator", "global"] ->
-        if String.trim(path) == "" do
-          raise ArgumentError,
-                "invalid Destination #{inspect(name)} address #{inspect(address)}: path must be non-blank"
-        end
-
-      _ ->
-        raise ArgumentError,
-              "invalid Destination #{inspect(name)} address #{inspect(address)}: expected operator/path or global/path"
-    end
-  end
-
-  defp validate_address!(name, address) do
-    raise ArgumentError, "invalid Destination #{inspect(name)} address #{inspect(address)}"
-  end
-
-  defp validate_ontology!(name, ontology) do
-    unless is_atom(ontology) and Code.ensure_loaded?(ontology) and
-             function_exported?(ontology, :__ontology__, 0) do
-      raise ArgumentError, "invalid Destination #{inspect(name)} ontology #{inspect(ontology)}"
+  defp validate_fields!(name, definition) do
+    case Keyword.keys(definition) -- [:name] do
+      [] -> :ok
+      [field | _] -> raise ArgumentError, "invalid Destination #{inspect(name)} #{field} setting"
     end
   end
 

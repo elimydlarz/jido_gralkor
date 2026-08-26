@@ -17,7 +17,7 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
       group_id(reflection, operator_id),
       Jason.encode!(Map.from_struct(artefact)),
       "reflection:#{reflection.name}",
-      reflection.destination.ontology
+      reflection.ontology
     )
   end
 

@@ -65,7 +65,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
       Destination.graph_id(lens.destination, operator_id),
       content,
       source_description,
-      lens.destination.ontology,
+      lens.ontology,
       episode_opts
     )
   end
