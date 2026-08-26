@@ -61,8 +61,9 @@ when Reflection declarations are validated
     then validation fails identifying that Reflection and Destination
 
 where the packaged default Reflections are used
-  then ERL references the packaged experiential-learning Destination at `operator/experiential-learning`
+  then ERL references the packaged `experiential-learning` Destination
   and that Destination carries jido_gralkor's built-in experiential-learning ontology
+  and generalisation references the packaged `global` Destination
 
 where an application-defined Reflection references a Destination using the built-in default ontology
   then its final artefact receives generic extraction
@@ -123,11 +124,11 @@ when the final Chain of Thought step returns valid structured output
   and the artefact identifies its declaring Reflection
   and the artefact retains its supporting evidence identifiers
 
-  where the referenced Destination uses an `operator/path` address
+  where the referenced Destination is not `global`
     then the artefact is available only to the operator whose ingestion triggered the Reflection
 
-  where the referenced Destination uses a `global/path` address
-    then the artefact is available to every operator through that Destination
+  where the referenced Destination is `global`
+    then the artefact is available to every operator through the one global graph
 
 when multiple declared Reflections process one completed ingestion operation
   then every Reflection runs independently

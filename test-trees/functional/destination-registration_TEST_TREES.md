@@ -2,14 +2,12 @@ Functional: destination-registration (src: lib/gralkor/destination.ex, lib/gralk
 
 when an application registers a valid Destination
   then Lenses and Reflections can reference that Destination by name
-  and the Destination address determines the graph ID where their results are saved
+  and the Destination name identifies the graph where their results are saved
 
-where a Destination address has the form `operator/path`
-  then its graph ID combines the requesting operator with the address path
-  and another operator using the same Destination resolves a different graph ID
-
-where a Destination address has the form `global/path`
-  then every operator using that Destination resolves the same graph ID for the address path
+where the packaged Destinations are used
+  then operator memory references the Destination named `operator`
+  and experiential learning references the Destination named `experiential-learning`
+  and globally shared memory references the Destination named `global`
 
 where a Destination omits an ontology
   then the Destination uses jido_gralkor's built-in default ontology
@@ -32,9 +30,7 @@ if an application registers an invalid Destination
   and a blank Destination name is identified
   and a duplicate Destination name is identified
   and an invalid Destination definition shape is identified
-  and a missing or invalid Destination address is identified with its Destination
-  and an address with neither `operator` nor `global` scope is identified with its Destination
-  and an address with a blank path is identified with its Destination
+  and an address setting is identified as unsupported with its Destination
   and an invalid Destination ontology is identified with its Destination
 
 if a Lens or Reflection references an unknown Destination

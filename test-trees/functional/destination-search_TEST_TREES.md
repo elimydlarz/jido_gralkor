@@ -5,14 +5,20 @@ when a caller searches memory naming one or more Destinations
   and results retain the requested Destination order
   and every result identifies its Destination
   and the same maximum result count applies independently to every Destination
-  and no unselected Destination or another operator's graph can contribute a result
+  and no unselected Destination can contribute a result
+
+where a caller selects a Destination other than `global`
+  then another operator's graph cannot contribute a result
+
+where a caller selects the `global` Destination
+  then results saved by every operator to the one global graph can contribute
 
 where the same Destination is selected more than once
   then that Destination is searched only once
 
 where no Destination is supplied
   then the packaged operator-memory Destination is searched
-  and the packaged global-generalisations Destination is searched
+  and the packaged `global` Destination is searched
 
 where a caller supplies no maximum result count
   then every resolved Destination receives the default maximum result count of twenty

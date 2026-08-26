@@ -9,7 +9,7 @@ where an appending Lens definition provides a Destination name and ingestion pro
   then the Lens remains appending with its existing ingestion behaviour
 
 if an existing Lens definition retains top-level scope or ontology settings
-  then configuration resolution raises `ArgumentError` identifying that scoped address and ontology belong on a Destination
+  then configuration resolution raises `ArgumentError` identifying the unsupported Lens settings
 
 if an application's Lens registry is not a list
   then configuration resolution raises `ArgumentError` naming what it found instead

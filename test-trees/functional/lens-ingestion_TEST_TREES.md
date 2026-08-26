@@ -3,7 +3,7 @@ Functional: lens-ingestion (functional: test/functional/lens_ingestion_functiona
 when information is submitted through a registered Lens
   then the Lens's ingestion process receives the original information and a store bound to that Lens
   and the process may submit no episodes, one episode, or multiple episodes
-  and every submitted episode is governed by the selected Lens's Destination ontology and address
+  and every submitted episode is governed by the selected Lens's Destination name and ontology
   and every directly submitted episode retains the selected Lens identity as source provenance
 
 where information is submitted directly without a mounted plugin or conversational turn
