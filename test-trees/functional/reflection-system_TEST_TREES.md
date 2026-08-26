@@ -60,6 +60,9 @@ when Reflection declarations are validated
   if a Reflection references an unknown Destination
     then validation fails identifying that Reflection and Destination
 
+  if a Reflection declares an invalid ontology
+    then validation fails identifying that Reflection and ontology
+
 where the packaged default Reflections are used
   then ERL references the packaged `operator` Destination
   and ERL carries jido_gralkor's built-in experiential-learning ontology
@@ -72,7 +75,7 @@ where an application-defined Reflection declares an application ontology
   then its final artefact is extracted through that Reflection's ontology
 
 when the default ERL Reflection stores its final artefact
-  then extraction receives the built-in `Learning` entity type from the referenced Destination
+  then extraction receives the built-in `Learning` entity type from ERL's ontology
   and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields
 
 when an ingestion operation successfully stores information through one or more Lenses
