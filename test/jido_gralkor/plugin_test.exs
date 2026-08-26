@@ -58,6 +58,24 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
+  describe "when a consumer reads the plugin's advertised identity and ownership" do
+    test "then it is named `gralkor`" do
+      assert Plugin.name() == "gralkor"
+    end
+
+    test "and it advertises the memory capability" do
+      assert Plugin.capabilities() == [:memory]
+    end
+
+    test "and it owns the `:__memory__` plugin-state slot" do
+      assert Plugin.state_key() == :__memory__
+    end
+
+    test "and it is singleton" do
+      assert Plugin.singleton?()
+    end
+  end
+
   describe "when a consumer agent mounts the plugin" do
     test "then the expanded routes resolve with no conflicts against the host agent" do
       instance = Jido.Plugin.Instance.new({Plugin, %{agent_name: "Test"}})
@@ -175,6 +193,18 @@ defmodule JidoGralkor.PluginTest do
       end
     end
 
+    test "if a search Destination entry is not binary then mounting raises an ArgumentError identifying the invalid Destination" do
+      configure_lenses()
+
+      assert_raise ArgumentError, ~r/invalid Destination 42/, fn ->
+        Plugin.mount(%{id: "operator-one", state: %{}},
+          agent_name: "Susu",
+          ingestion_lens: "observations",
+          search_destinations: [42]
+        )
+      end
+    end
+
     test "if the removed `:default_lens` option is supplied then mounting raises an ArgumentError identifying `:ingestion_lens` as its replacement" do
       configure_lenses()
 
@@ -221,6 +251,22 @@ defmodule JidoGralkor.PluginTest do
                Plugin.handle_signal(signal, context(agent("user-abc", thread_id: "thr-xyz")))
 
       assert data.query == "hello"
+    end
+
+    test "and unrelated incoming tool-context fields remain alongside fields planted by the plugin" do
+      signal =
+        Signal.new!(
+          "ai.react.query",
+          %{query: "hello", tool_context: %{tenant: "tenant-one"}},
+          source: "/test"
+        )
+
+      assert {:ok, {:continue, %Signal{data: %{tool_context: tool_context}}}} =
+               Plugin.handle_signal(signal, context(agent("user-abc", thread_id: "thr-xyz")))
+
+      assert tool_context.tenant == "tenant-one"
+      assert tool_context.session_id == "thr-xyz"
+      assert tool_context.agent_name == "TestAgent"
     end
   end
 
@@ -294,6 +340,27 @@ defmodule JidoGralkor.PluginTest do
 
       assert {:ok, :continue} = Plugin.handle_signal(failed, context(completion_agent))
       assert [[_, _, _, _, _, "observations", [], _reflection_context]] = InMemory.captures()
+    end
+
+    describe "if the selected Lens is unknown or non-binary" do
+      test "then the callback raises identifying the invalid Lens" do
+        plugin_state = lens_plugin_state()
+
+        lens_agent =
+          agent("operator-one", thread_id: "thread-one")
+          |> put_in([:state, :__memory__], plugin_state)
+
+        for invalid <- ["missing", 42] do
+          signal =
+            Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: invalid}},
+              source: "/test"
+            )
+
+          assert_raise ArgumentError, ~r/invalid Lens|unknown Lens/, fn ->
+            Plugin.handle_signal(signal, context(lens_agent))
+          end
+        end
+      end
     end
   end
 
