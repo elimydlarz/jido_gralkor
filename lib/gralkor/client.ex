@@ -290,7 +290,10 @@ defmodule Gralkor.Client do
     validate_max_results!(request.max_results)
     validate_result_type!(request.result_type)
 
-    names = if request.destinations == [], do: ["operator"], else: request.destinations
+    names =
+      if request.destinations == [],
+        do: ["operator", "generalisations"],
+        else: request.destinations
     destinations = names |> Enum.uniq() |> Enum.map(&DestinationRegistry.fetch!/1)
 
     opts =
