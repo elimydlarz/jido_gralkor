@@ -7,8 +7,7 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   buffer, the flush callback the application builds, the recall pipeline. Only
   the two things outside the system boundary are substituted: the graph, by a
   fake that records what it was asked to write and returns what the test tells
-  it to. Interpretation still runs against the configured model, so the leaves that depend on it are
-  the ones that need a credential.
+  it to.
 
   Reifies the `native-memory-round-trip` tree.
   """
@@ -143,26 +142,54 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       assert episode["source_description"] == "manual"
     end
 
-    test "and a fresh recall returns query-relevant facts inside an untrusted memory block",
-         %{g: g} do
-      :ok = Native.memory_add("operator_one", "Eli works at Anthropic in Sydney.", "manual")
+  end
 
-      put_facts(g, [
-        "- Eli works at Anthropic.",
-        "- The office plant is a monstera."
-      ])
+  describe "when memory search returns facts for recall" do
+    test "then every returned fact is presented verbatim and in order inside an untrusted memory block",
+         %{g: g} do
+      facts = [
+        "- Eli works at Anthropic. (source: onboarding notes)",
+        "- The office plant is a monstera. (source: facilities inventory)"
+      ]
+
+      put_facts(g, facts)
 
       assert {:ok, block} =
                Native.recall("operator_one", "TestAgent", "fresh-session", "Where does Eli work?")
 
       assert block =~ ~r/<gralkor-memory trust="untrusted">/
       assert block =~ "</gralkor-memory>"
+      assert block =~ Enum.at(facts, 0)
+      assert block =~ Enum.at(facts, 1)
 
-      lower = String.downcase(block)
-      assert lower =~ "anthropic"
+      assert :binary.match(block, Enum.at(facts, 0)) <
+               :binary.match(block, Enum.at(facts, 1))
+    end
 
-      refute lower =~ "monstera",
-             "expected relevance to be judged against the query that was asked; got: #{block}"
+    test "and every returned fact retains its available source wording", %{g: g} do
+      source_wording = "according to the incident report filed by Mina"
+      put_facts(g, ["- The Atlas launch moved to Friday, #{source_wording}."])
+
+      assert {:ok, block} =
+               Native.recall("operator_one", "TestAgent", nil, "When is Atlas launching?")
+
+      assert block =~ source_wording
+    end
+
+    test "and no inference model is called", %{g: g} do
+      previous_model = System.get_env("GRALKOR_LLM_MODEL")
+      System.put_env("GRALKOR_LLM_MODEL", "invalid-without-provider-separator")
+
+      on_exit(fn ->
+        if previous_model,
+          do: System.put_env("GRALKOR_LLM_MODEL", previous_model),
+          else: System.delete_env("GRALKOR_LLM_MODEL")
+      end)
+
+      put_facts(g, ["- Raw memory result."])
+
+      assert {:ok, block} = Native.recall("operator_one", "TestAgent", nil, "anything")
+      assert block =~ "- Raw memory result."
     end
   end
 
