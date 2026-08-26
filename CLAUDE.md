@@ -40,7 +40,7 @@ Five direct runtime Hex deps (six with `:ex_doc` for dev docs, seven with the te
 
 Pick **one** of the two backends:
 
-**Embedded FalkorDB (development / local).** Set `GRALKOR_DATA_DIR` to a directory the BEAM can write to. The adapter constructs an in-process `falkordblite` instance, which spawns a `redis-server` grandchild under that directory.
+**Embedded FalkorDB (development / local).** Set `GRALKOR_DATA_DIR` to a directory the BEAM can write to. The adapter constructs an in-process `falkordblite` instance, which spawns a `redis-server` grandchild under that directory. `GraphitiPool` admits one embedded `add_episode` at a time through the shared connection while searches bypass admission; remote writes remain concurrent. `:embedded_falkordb_socket_timeout_ms` defaults to `60_000`, is validated as a positive integer at embedded startup, and reaches `AsyncFalkorDB` as seconds. The embedded add boundary also suppresses graphiti-core 0.29.3's vector/full-text duplicate search when its edge UUID candidate list is empty.
 
 ```bash
 GRALKOR_DATA_DIR=/var/lib/gralkor mix start
