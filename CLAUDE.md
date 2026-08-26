@@ -20,12 +20,11 @@ Canonical development and distribution home for Jido-first Gralkor. Ships the Ji
 
 ## Dependencies
 
-Six direct runtime Hex deps (seven with `:ex_doc` for dev docs):
+Five direct runtime Hex deps (six with `:ex_doc` for dev docs, seven with the test-only `:muzak` dependency):
 
 - `{:jido, "~> 2.2"}` — `Jido.Plugin`, `Jido.Action`, `Jido.Signal` (struct + pattern match).
-- `{:jido_ai, "~> 2.1"}` — `Jido.AI.Request.get_request/2` (used once in the plugin to look up the user query for a completed `request_id`).
+- `{:jido_ai, "~> 2.3"}` — `Jido.AI.Request.get_request/2` (used once in the plugin to look up the user query for a completed `request_id`).
 - `{:pythonx, "~> 0.4"}` — embeds CPython in the BEAM so the embedded Gralkor pipelines can drive `graphiti-core` directly. `Gralkor.Python.init/1` materialises the venv and initialises the interpreter at boot via `Pythonx.uv_init/2` from `priv/python/pyproject.toml` (the graphiti-core version requirement), read into `@pyproject_toml` at compile time via `@external_resource` — guarded idempotent against re-init. Consumers configure **nothing** about Python; there is no `:pythonx, :uv_init` block in any consumer config (the dep's own `config/config.exs` does not propagate to a consumer's runtime app env, so owning the manifest in the package — shipped via the `priv` entry in `mix.exs` `files:` — is the only way to keep Python an internal concern). The venv lands in PythonX's uv cache (not `priv/`), built at runtime on first boot. The manifest reads `"graphiti-core[falkordb,google-genai]>=0.29.2"` and covers **both** supported inference providers: graphiti-core requires `openai` unconditionally (`Requires-Dist: openai>=1.91.0`, verified against installed 0.29.3 METADATA) and publishes no `openai` extra, so the OpenAI LLM, embedder, and reranker classes import from this manifest as-is; naming a non-existent extra only makes uv warn on every resolve. `Gralkor.Python.init/1` smoke-imports every provider accepted by `Gralkor.GraphitiPool` before reporting ready; `smoke_import_provider_clients/1` is the per-provider boundary it uses.
-- `{:req_llm, "~> 1.0"}` — the ReqLLM/LLMDB model boundary used by Jido AI and by the configuration compatibility proof; recall itself makes no ReqLLM call.
 - `{:jason, "~> 1.4"}` — JSON parsing for the embedded pipelines.
 - `{:yaml_elixir, "~> 2.12"}` — loads repository CoT declarations. `mix.exs` packages `priv`, including the built-in Reflection YAML files.
 
