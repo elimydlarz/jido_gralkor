@@ -514,6 +514,7 @@ defmodule Gralkor.GraphitiPoolTest do
         inspection = Pythonx.decode(inspection)
 
         assert inspection["keys"] == [
+                 "custom_extraction_instructions",
                  "edge_type_map",
                  "edge_types",
                  "entity_types",
