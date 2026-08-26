@@ -3,8 +3,8 @@ defmodule Gralkor.Lens.Store do
   Storage capability passed to a `Gralkor.Lens.Ingestion` process.
 
   The Store is already bound to an operator and resolved Lens. Additions use
-  an appending Lens's ontology and scope; complete replacements use a
-  replaceable Lens's graph format and ownership; searches use its destination.
+  an appending Lens's ontology and Destination; complete replacements use a
+  replaceable Lens's graph format and ownership; searches use its Destination.
   Ingestion processes should use this capability rather than choose Graphiti
   group IDs themselves.
 

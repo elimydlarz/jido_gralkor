@@ -7,11 +7,11 @@ defmodule Gralkor.Client do
   resolves an appending Lens and invokes its ingestion process with a
   Lens-bound store. Replacement validates and stores the complete graph for a
   replaceable Lens. Lenses and Reflections reference first-class Destinations,
-  whose addresses resolve graph placement and whose ontologies govern
-  extraction. Destination search runs every distinct selection concurrently,
-  defaults an empty selection to packaged operator memory and global
-  generalisations, and can return facts, nodes, episodes, or Reflection
-  artefacts.
+  each of which names one graph. Appending Lenses and Reflections select the
+  ontology for their own writes. Destination search runs every distinct
+  selection concurrently, defaults an empty selection to the packaged
+  `operator` and `global` graphs, and can return facts, nodes, episodes, or
+  Reflection artefacts.
 
   The compatibility surface remains `recall/4`, `capture/5`, `flush/1`,
   `flush_and_await/2`, and `memory_add/3` or `/4`. Lens-aware capture uses
@@ -19,7 +19,8 @@ defmodule Gralkor.Client do
   additional Lenses. The internal `capture/8` form also carries the host tools
   and tool context made available to subsequent Reflections. Legacy group IDs
   are sanitised at their graph boundary (`sanitize_group_id/1`); Lens storage
-  binds the original operator id to its selected Lens instead.
+  resolves `operator` to `operator/<operator id>` and every other Destination
+  to its exact name.
 
   `flush/1` returns `:ok` before the buffered turns have landed
   (fire-and-forget — appropriate for shutdown paths that cannot block).
