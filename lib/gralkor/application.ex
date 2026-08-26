@@ -109,6 +109,7 @@ defmodule Gralkor.Application do
         ingest_fn.(%Ingest{
           operator_id: operator_id,
           lens: lens,
+          source_kind: :conversation,
           content: transcript,
           source_description: "captured",
           evidence_id: evidence_id
