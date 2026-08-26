@@ -18,7 +18,6 @@ defmodule Gralkor.RecallTest do
       assert block =~ ~r/<gralkor-memory trust="untrusted">/
       assert block =~ "</gralkor-memory>"
     end
-
   end
 
   describe "when memory search returns facts" do

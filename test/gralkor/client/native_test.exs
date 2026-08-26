@@ -819,7 +819,6 @@ defmodule Gralkor.Client.NativeTest do
       assert {:ok, block} = Native.recall("g", "TestAgent", nil, "raw query")
       assert block =~ "<gralkor-memory"
     end
-
   end
 
   describe "when recall is requested for a group, agent and query > where a recall deadline is configured" do
@@ -842,5 +841,4 @@ defmodule Gralkor.Client.NativeTest do
                Native.recall("g", "TestAgent", nil, "slow: raw query")
     end
   end
-
 end

@@ -141,7 +141,6 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       assert episode["body"] == "Eli works at Anthropic in Sydney."
       assert episode["source_description"] == "manual"
     end
-
   end
 
   describe "when memory search returns facts for recall" do
@@ -151,6 +150,7 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
         "Eli works at Anthropic. (source: onboarding notes)",
         "The office plant is a monstera. (source: facilities inventory)"
       ]
+
       returned_facts = Enum.map(graph_facts, &("- " <> &1))
 
       put_facts(g, graph_facts)
