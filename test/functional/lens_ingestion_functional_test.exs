@@ -71,6 +71,28 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     end
   end
 
+  defmodule RecordingGraphitiStorage do
+    @behaviour Gralkor.Lens.Storage
+
+    @impl true
+    def add_episode(store, content, source_description) do
+      test_pid = Process.whereis(:lens_ingestion_functional)
+
+      Gralkor.Lens.Storage.Graphiti.add_episode(store, content, source_description,
+        add_episode_fn: fn group_id, episode, source, ontology, opts ->
+          send(test_pid, {:graph_add, group_id, episode, source, ontology, opts})
+          :ok
+        end
+      )
+    end
+
+    @impl true
+    def search(_store, _query, _max_results), do: {:ok, []}
+
+    @impl true
+    def replace_graph(_store, _graph), do: :ok
+  end
+
   setup do
     Process.register(self(), :lens_ingestion_functional)
 
@@ -144,6 +166,16 @@ defmodule Gralkor.LensIngestionFunctionalTest do
                           }
                         }
                       }, "first", "functional"}
+    end
+
+    test "and every directly submitted episode retains the selected Lens identity as source provenance" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingGraphitiStorage)
+      Application.put_env(:jido_gralkor, :lenses, [lens(VariableIngestion)])
+
+      assert :ok = Client.ingest(request("one"))
+
+      assert_receive {:graph_add, _, "first", "functional", MemoryOntology,
+                      [lens: "observations"]}
     end
   end
 
