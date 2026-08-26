@@ -395,11 +395,12 @@ defmodule Gralkor.GraphitiPool do
 
     uuid = Keyword.get(opts, :uuid)
 
-    with_episode_write_admission(server, fn ->
+    with_episode_write_admission(server, fn skip_empty_edge_candidates ->
       Pythonx.eval(
         """
         import asyncio
         from datetime import datetime, timezone
+        from graphiti_core.utils.maintenance import edge_operations
         from graphiti_core.nodes import EpisodeType
         c = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
         s = source.decode('utf-8') if isinstance(source, (bytes, bytearray)) else source
@@ -422,8 +423,17 @@ defmodule Gralkor.GraphitiPool do
             uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
             kwargs['uuid'] = uid
         import sys
+        async def add_episode():
+            if not skip_empty_edge_candidates:
+                return await g.add_episode(**kwargs)
+            guard = edge_operations._gralkor_skip_empty_edge_candidates
+            token = guard.set(True)
+            try:
+                return await g.add_episode(**kwargs)
+            finally:
+                guard.reset(token)
         try:
-            asyncio._gralkor_run(g.add_episode(**kwargs))
+            asyncio._gralkor_run(add_episode())
         except BaseException as e:
             print(f"[gralkor] add_episode failed: {type(e).__name__}: {e}", file=sys.stderr)
             raise
@@ -436,7 +446,8 @@ defmodule Gralkor.GraphitiPool do
           "name" => name,
           "group" => sanitized,
           "ontology_dicts" => ontology_dicts,
-          "uuid" => uuid
+          "uuid" => uuid,
+          "skip_empty_edge_candidates" => skip_empty_edge_candidates
         }
       )
 
@@ -449,11 +460,11 @@ defmodule Gralkor.GraphitiPool do
   defp with_episode_write_admission(server, operation) do
     case GenServer.call(server, :acquire_episode_write, :infinity) do
       :unbounded ->
-        operation.()
+        operation.(false)
 
       :acquired ->
         try do
-          operation.()
+          operation.(true)
         after
           GenServer.cast(server, {:release_episode_write, self()})
         end
@@ -731,6 +742,7 @@ defmodule Gralkor.GraphitiPool do
     register_table(self(), table)
 
     :ok = install_loop_fn.()
+    :ok = install_empty_edge_candidate_guard(falkordb_spec)
 
     shared = construct_shared_clients.(llm_model, embedder_model)
 
@@ -850,6 +862,42 @@ defmodule Gralkor.GraphitiPool do
   end
 
   defp episode_write_admission({:remote, _options}), do: :unbounded
+
+  defp install_empty_edge_candidate_guard({:remote, _options}), do: :ok
+
+  defp install_empty_edge_candidate_guard({:embedded, _data_dir}) do
+    Pythonx.eval(
+      """
+      from contextvars import ContextVar
+      from graphiti_core.search.search_config import SearchResults
+      from graphiti_core.utils.maintenance import edge_operations
+
+      guard = getattr(edge_operations, '_gralkor_skip_empty_edge_candidates', None)
+      if guard is None:
+          guard = ContextVar('_gralkor_skip_empty_edge_candidates', default=False)
+          edge_operations._gralkor_skip_empty_edge_candidates = guard
+
+      current_search = edge_operations.search
+      if not getattr(current_search, '_gralkor_empty_edge_candidate_guard', False):
+          async def guarded_search(*args, **kwargs):
+              search_filter = kwargs.get('search_filter')
+              if (
+                  guard.get()
+                  and search_filter is not None
+                  and search_filter.edge_uuids == []
+              ):
+                  return SearchResults()
+              return await current_search(*args, **kwargs)
+
+          guarded_search._gralkor_empty_edge_candidate_guard = True
+          edge_operations.search = guarded_search
+      None
+      """,
+      %{}
+    )
+
+    :ok
+  end
 
   defp embedded_falkordb_socket_timeout({:embedded, _data_dir}, opts) do
     opts
