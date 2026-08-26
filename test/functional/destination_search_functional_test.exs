@@ -168,6 +168,38 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  destinations: ["first"],
                  result_type: :nodes
                })
+
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.InMemory)
+
+      destination = Gralkor.Destination.Registry.fetch!("first")
+
+      store = %Gralkor.Lens.Store{
+        operator_id: "operator-one",
+        lens: %Gralkor.Lens.Replaceable{
+          name: "first-graph",
+          destination: destination,
+          graph_format: :property_graph
+        }
+      }
+
+      graph = %Gralkor.Graph{
+        format: :property_graph,
+        data: %{
+          nodes: [%{id: "atlas", labels: ["Project"], properties: %{title: "Atlas"}}],
+          relationships: []
+        }
+      }
+
+      assert :ok = Gralkor.Lens.Store.replace_graph(store, graph)
+
+      assert {:ok, [%{destination: "first", node: %{id: "atlas"}}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "Atlas",
+                 destinations: ["first"],
+                 result_type: :nodes
+               })
     end
   end
 
@@ -177,6 +209,26 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "question",
+                 destinations: ["first"],
+                 result_type: :episodes
+               })
+
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.InMemory)
+
+      destination = Gralkor.Destination.Registry.fetch!("first")
+
+      store = %Gralkor.Lens.Store{
+        operator_id: "operator-one",
+        lens: %Gralkor.Lens{name: "first", destination: destination, ingestion: String}
+      }
+
+      assert :ok = Gralkor.Lens.Store.add(store, "stored episode", "functional")
+
+      assert {:ok, [%{destination: "first", episode: "stored episode"}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "stored",
                  destinations: ["first"],
                  result_type: :episodes
                })
