@@ -44,16 +44,15 @@ defmodule Gralkor.DestinationAddressingFunctionalTest do
     )
 
     Application.put_env(:jido_gralkor, :destinations, [
-      destination("observations", "operator/observations"),
-      destination("decisions", "operator/decisions"),
-      destination("published", "global/published")
+      destination("observations"),
+      destination("decisions")
     ])
 
     Application.put_env(:jido_gralkor, :lenses, [
       lens("observations", "observations"),
       lens("decisions", "decisions"),
-      lens("published-observations", "published"),
-      lens("published-decisions", "published")
+      lens("published-observations", "global"),
+      lens("published-decisions", "global")
     ])
 
     on_exit(fn ->
@@ -66,43 +65,75 @@ defmodule Gralkor.DestinationAddressingFunctionalTest do
     :ok
   end
 
-  describe "when a Lens saves an episode to an `operator/path` Destination" do
-    test "then the resolved graph is determined by the operator and address path together" do
-      assert :ok = ingest("operator-one", "observations", "private observation")
+  describe "when a Lens saves an episode to the `operator` Destination" do
+    test "then the resolved graph is named `operator/<operator id>`" do
+      assert :ok = ingest("operator-one", "operator", "private observation")
 
       assert [%{content: "private observation", lens: "observations"}] =
-               Gralkor.Lens.Storage.InMemory.episodes(group("observations", "operator-one"))
-    end
-
-    test "and the episode is unavailable from any unselected Destination" do
-      assert :ok = ingest("operator-one", "observations", "private observation")
-
-      assert {:ok, []} = search("operator-one", ["decisions"])
+               Gralkor.Lens.Storage.InMemory.episodes("operator/operator-one")
     end
 
     test "and the episode is unavailable to another operator using the same Destination" do
-      assert :ok = ingest("operator-one", "observations", "private observation")
+      assert :ok = ingest("operator-one", "operator", "private observation")
 
-      assert {:ok, []} = search("operator-two", ["observations"])
+      assert {:ok, []} = search("operator-two", ["operator"])
+    end
+
+    test "and the episode is unavailable from any unselected Destination" do
+      assert :ok = ingest("operator-one", "operator", "private observation")
+
+      assert {:ok, []} = search("operator-one", ["decisions"])
     end
   end
 
-  describe "when a Lens saves an episode to a `global/path` Destination" do
-    test "then every operator resolves the same graph for that address path" do
+  describe "when a Lens saves an episode to the `global` Destination" do
+    test "then every operator resolves the one graph named `global`" do
+      assert :ok = ingest("operator-one", "published-observations", "public observation")
+      assert :ok = ingest("operator-two", "published-decisions", "public decision")
+
+      assert Enum.map(Gralkor.Lens.Storage.InMemory.episodes("global"), & &1.content) == [
+               "public observation",
+               "public decision"
+             ]
+    end
+
+    test "and every operator can retrieve the episode by searching the `global` Destination" do
       assert :ok = ingest("operator-one", "published-observations", "public observation")
       assert :ok = ingest("operator-two", "published-decisions", "public decision")
 
       assert {:ok,
               [
-                %{destination: "published", fact: "public observation"},
-                %{destination: "published", fact: "public decision"}
+                %{destination: "global", fact: "public observation"},
+                %{destination: "global", fact: "public decision"}
               ]} =
-               search("operator-three", ["published"])
+               search("operator-three", ["global"])
     end
 
     test "and the episode is unavailable from any unselected Destination" do
       assert :ok = ingest("operator-one", "published-observations", "public observation")
       assert {:ok, []} = search("operator-one", ["observations"])
+    end
+  end
+
+  describe "when a Lens saves an episode to an application Destination" do
+    test "then its one graph is named for that Destination" do
+      assert :ok = ingest("operator-one", "observations", "shared observation")
+
+      assert [%{content: "shared observation", lens: "observations"}] =
+               Gralkor.Lens.Storage.InMemory.episodes("observations")
+    end
+
+    test "and every operator can retrieve the episode by searching that Destination" do
+      assert :ok = ingest("operator-one", "observations", "shared observation")
+
+      assert {:ok, [%{destination: "observations", fact: "shared observation"}]} =
+               search("operator-two", ["observations"])
+    end
+
+    test "and the episode is unavailable from any unselected Destination" do
+      assert :ok = ingest("operator-one", "observations", "shared observation")
+
+      assert {:ok, []} = search("operator-two", ["decisions"])
     end
   end
 
@@ -112,14 +143,14 @@ defmodule Gralkor.DestinationAddressingFunctionalTest do
       assert :ok = ingest("operator-one", "published-decisions", "public decision")
 
       assert {:ok, [%{fact: "public observation"}, %{fact: "public decision"}]} =
-               search("operator-one", ["published"])
+               search("operator-one", ["global"])
     end
   end
 
-  describe "where a Lens references an operator or global Destination" do
-    test "then that Destination's address and ontology govern every episode the Lens's ingestion process submits" do
+  describe "where a Lens references a registered Destination" do
+    test "then that Destination governs the graph for every episode the Lens's ingestion process submits" do
       Application.put_env(:jido_gralkor, :destinations, [
-        destination("summaries", "global/summaries")
+        destination("summaries")
       ])
 
       Application.put_env(:jido_gralkor, :lenses, [
@@ -132,9 +163,9 @@ defmodule Gralkor.DestinationAddressingFunctionalTest do
                %{content: "first summary", lens: "summaries"},
                %{content: "second summary", lens: "summaries"}
              ] =
-               Gralkor.Lens.Storage.InMemory.episodes(group("summaries", "operator-one"))
+               Gralkor.Lens.Storage.InMemory.episodes("summaries")
 
-      assert Client.lens!("summaries").destination.ontology == MemoryOntology
+      assert Client.lens!("summaries").destination.name == "summaries"
     end
   end
 
@@ -142,6 +173,7 @@ defmodule Gralkor.DestinationAddressingFunctionalTest do
     [
       name: name,
       destination: destination,
+      ontology: MemoryOntology,
       ingestion: Gralkor.Lens.Ingestion.Store
     ]
   end
@@ -164,13 +196,7 @@ defmodule Gralkor.DestinationAddressingFunctionalTest do
     })
   end
 
-  defp destination(name, address),
-    do: [name: name, address: address, ontology: MemoryOntology]
-
-  defp group(destination_name, operator_id) do
-    destination = Gralkor.Destination.Registry.fetch!(destination_name)
-    Gralkor.Destination.graph_id(destination, operator_id)
-  end
+  defp destination(name), do: [name: name]
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
