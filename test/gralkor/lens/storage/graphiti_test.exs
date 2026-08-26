@@ -332,6 +332,51 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
+  describe "when a replaceable Lens store using an application Destination replaces a complete graph" do
+    test "then graph replacement receives the group named for that Destination for every operator" do
+      test_pid = self()
+
+      replace_graph_fn = fn group_id, _, _, _ ->
+        send(test_pid, {:graph_replaced, group_id})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.replace_graph(replaceable_store(:application), property_graph(),
+                 replace_graph_fn: replace_graph_fn
+               )
+
+      assert_receive {:graph_replaced, "systems"}
+    end
+
+    test "and graph replacement receives the selected Lens name, configured graph format, and supplied graph data" do
+      graph = property_graph()
+      data = graph.data
+      test_pid = self()
+
+      replace_graph_fn = fn group_id, lens_name, format, replacement_data ->
+        send(test_pid, {:graph_replaced, group_id, lens_name, format, replacement_data})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.replace_graph(replaceable_store(:application), graph,
+                 replace_graph_fn: replace_graph_fn
+               )
+
+      assert_receive {:graph_replaced, "systems", "systems", :property_graph, ^data}
+    end
+
+    test "and the graph replacement result is returned to the caller" do
+      replace_graph_fn = fn _, _, _, _ -> {:error, :graph_unavailable} end
+
+      assert {:error, :graph_unavailable} =
+               Graphiti.replace_graph(replaceable_store(:application), property_graph(),
+                 replace_graph_fn: replace_graph_fn
+               )
+    end
+  end
+
   describe "when a replaceable Lens store is searched" do
     test "then graph search receives its resolved Destination group" do
       test_pid = self()
