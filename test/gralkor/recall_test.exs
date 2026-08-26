@@ -75,11 +75,11 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "when interpretation selects relevant facts" do
-    test "then the memory block lists every interpreted line verbatim and in order" do
-      facts_relevant = [
-        "X is a thing (created 2020) — relevant: user asked about X",
-        "Y was deprecated (invalid since 2022) — relevant: timeline context"
+  describe "when memory search returns facts" do
+    test "then the memory block lists every returned fact verbatim and in order" do
+      returned_facts = [
+        "X is a thing (created 2020; source: project notes)",
+        "Y was deprecated (invalid since 2022; source: release history)"
       ]
 
       assert {:ok, block} =
@@ -88,14 +88,14 @@ defmodule Gralkor.RecallTest do
                  "TestAgent",
                  nil,
                  "q",
-                 default_opts(
-                   search_fn: ok_search(["- X is a thing (created 2020)"]),
-                   interpret_fn: ok_interpret(facts_relevant)
-                 )
+                 default_opts(search_fn: ok_search(returned_facts))
                )
 
-      assert block =~ Enum.at(facts_relevant, 0)
-      assert block =~ Enum.at(facts_relevant, 1)
+      assert block =~ Enum.at(returned_facts, 0)
+      assert block =~ Enum.at(returned_facts, 1)
+
+      assert :binary.match(block, Enum.at(returned_facts, 0)) <
+               :binary.match(block, Enum.at(returned_facts, 1))
     end
   end
 
