@@ -234,22 +234,18 @@ config :jido_gralkor,
     ssl: System.get_env("FALKORDB_SSL") == "true"
   ],
 
-  destinations: [
-    [name: "observations", address: "operator/observations", ontology: MyApp.Ontology],
-    [name: "decisions", address: "operator/decisions", ontology: MyApp.Ontology],
-    [name: "release-knowledge", address: "global/release-knowledge"]
-  ],
-
   # The Lens registry selects ingestion behavior and a Destination.
   lenses: [
     [
       name: "observations",
-      destination: "observations",
+      destination: "global",
+      ontology: MyApp.Ontology,
       ingestion: Gralkor.Lens.Ingestion.Store
     ],
     [
       name: "decisions",
-      destination: "decisions",
+      destination: "global",
+      ontology: MyApp.Ontology,
       ingestion: MyApp.DecisionIngestion
     ]
   ],
@@ -259,12 +255,13 @@ config :jido_gralkor,
   reflections: [
     [
       name: "generalisations",
-      destination: "generalisations",
+      destination: "global",
       chain_of_thought: "priv/reflections/generalisations.yaml"
     ],
     [
       name: "erl",
-      destination: "experiential-learning",
+      destination: "operator",
+      ontology: Gralkor.Reflection.ERLOntology,
       chain_of_thought: "priv/reflections/erl.yaml"
     ]
   ],
@@ -281,14 +278,14 @@ plugins: [
    %{
      agent_name: "Susu",
      ingestion_lens: "observations",
-     search_destinations: ["decisions", "generalisations"]
+     search_destinations: ["operator", "global"]
    }}
 ]
 ```
 
-That mount writes captured turns and `memory_add` calls through the `"observations"` Lens to its Destination, and concurrently searches the selected `"decisions"` and `"generalisations"` Destinations. After a flushed ingestion has completed across its intended Lenses, each declared Reflection is scheduled independently over the completed lensed representations.
+That mount writes captured turns and `memory_add` calls through the `"observations"` Lens to `global`, and concurrently searches `operator` and `global`. After a flushed ingestion has completed across its intended Lenses, each declared Reflection is scheduled independently over the completed lensed representations.
 
-**Ontology placement.** The packaged operator Destination uses Jido Gralkor's open `Gralkor.DefaultOntology`; packaged experiential learning uses `Gralkor.Reflection.ERLOntology`. Applications attach custom ontology modules to explicitly registered Destinations. If an older deployment set `config :jido_gralkor, :ontology`, remove it and create a named Destination referenced by a Lens or Reflection instead.
+**Ontology placement.** Appending Lenses and Reflections default to Jido Gralkor's open `Gralkor.DefaultOntology`. Packaged ERL explicitly uses `Gralkor.Reflection.ERLOntology`. Applications attach custom ontology modules to their writers. If an older deployment set `config :jido_gralkor, :ontology`, remove it and select the module on each Lens or Reflection that needs it.
 
 ## Wire it on your agent
 
