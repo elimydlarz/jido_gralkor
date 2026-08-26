@@ -22,6 +22,12 @@ defmodule Gralkor.GraphitiPool do
   require Logger
 
   alias Gralkor.Client
+
+  @provenance_extraction_instructions """
+  Preserve source attribution and epistemic wording in extracted facts. Retain uncertainty,
+  speculation, proposals, opinions, and reported claims instead of rewriting them as categorical
+  facts. Include the speaker or document attribution when it is needed to preserve that distinction.
+  """
   alias Gralkor.Config
 
   @default_table :gralkor_graphiti_instances
@@ -395,6 +401,7 @@ defmodule Gralkor.GraphitiPool do
 
     uuid = Keyword.get(opts, :uuid)
     source_kind = Keyword.get(opts, :source_kind)
+    extraction_instructions = @provenance_extraction_instructions
 
     with_episode_write_admission(server, fn skip_empty_edge_candidates ->
       Pythonx.eval(
@@ -408,6 +415,7 @@ defmodule Gralkor.GraphitiPool do
         n = name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name
         gid = group.decode('utf-8') if isinstance(group, (bytes, bytearray)) else group
         sk = source_kind.decode('utf-8') if isinstance(source_kind, (bytes, bytearray)) else source_kind
+        instructions = extraction_instructions.decode('utf-8') if isinstance(extraction_instructions, (bytes, bytearray)) else extraction_instructions
         episode_type = {
           'conversation': EpisodeType.message,
           'structured_record': EpisodeType.json,
@@ -419,6 +427,7 @@ defmodule Gralkor.GraphitiPool do
           source_description=s,
           group_id=gid,
           reference_time=datetime.now(timezone.utc),
+          custom_extraction_instructions=instructions,
         )
         if ontology_dicts is not None:
             def _dec(x):
@@ -454,6 +463,7 @@ defmodule Gralkor.GraphitiPool do
           "ontology_dicts" => ontology_dicts,
           "uuid" => uuid,
           "source_kind" => source_kind && Atom.to_string(source_kind),
+          "extraction_instructions" => extraction_instructions,
           "skip_empty_edge_candidates" => skip_empty_edge_candidates
         }
       )
