@@ -166,7 +166,6 @@ defmodule Gralkor.Client do
     end
   end
 
-
   defp collect_representations(collection_ref, representations) do
     receive do
       {^collection_ref, %IngestedRepresentation{} = representation} ->

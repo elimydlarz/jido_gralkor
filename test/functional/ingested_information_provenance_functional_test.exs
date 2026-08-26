@@ -75,6 +75,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     ])
 
     Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+
     Application.put_env(
       :jido_gralkor,
       :destination_storage,
@@ -102,8 +103,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                  source_description: "planning conversation"
                })
 
-      assert_receive {:episode_added,
-                      %Gralkor.Lens.Store{source_kind: :conversation},
+      assert_receive {:episode_added, %Gralkor.Lens.Store{source_kind: :conversation},
                       "Mina: Atlas might launch Friday.", "planning conversation"}
     end
 
@@ -169,6 +169,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                )
 
       assert memory =~ fact
+
       assert memory =~
                "source: conversation — planning conversation; episode: episode-conversation-1"
     end
@@ -292,9 +293,8 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                  [[Gralkor.Message.new("user", "Atlas might launch Friday.")]]
                )
 
-      assert_receive {:captured_episode, "operator-one",
-                      "Mina: Atlas might launch Friday.", "captured", nil,
-                      [source_kind: :conversation]}
+      assert_receive {:captured_episode, "operator-one", "Mina: Atlas might launch Friday.",
+                      "captured", nil, [source_kind: :conversation]}
     end
   end
 
@@ -410,19 +410,20 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         %{}
       )
 
-    start_supervised!({GraphitiPool,
-      name: Gralkor.GraphitiPool,
-      table: :gralkor_graphiti_instances,
-      falkordb_spec: {:embedded, "/tmp/never_used"},
-      construct_falkor_db: fn _spec -> :stub_falkor_db end,
-      construct_shared_clients: fn _llm, _embedder ->
-        %{llm_client: nil, embedder: nil, cross_encoder: nil}
-      end,
-      construct_instance: fn _db, _shared, _group_id -> graphiti end,
-      initialise_instance: fn _instance -> :ok end,
-      warmup: false,
-      install_loop_fn: &Gralkor.Python.install_async_runtime/0
-    })
+    start_supervised!(
+      {GraphitiPool,
+       name: Gralkor.GraphitiPool,
+       table: :gralkor_graphiti_instances,
+       falkordb_spec: {:embedded, "/tmp/never_used"},
+       construct_falkor_db: fn _spec -> :stub_falkor_db end,
+       construct_shared_clients: fn _llm, _embedder ->
+         %{llm_client: nil, embedder: nil, cross_encoder: nil}
+       end,
+       construct_instance: fn _db, _shared, _group_id -> graphiti end,
+       initialise_instance: fn _instance -> :ok end,
+       warmup: false,
+       install_loop_fn: &Gralkor.Python.install_async_runtime/0}
+    )
 
     graphiti
   end

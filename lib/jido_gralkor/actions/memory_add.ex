@@ -52,6 +52,7 @@ defmodule JidoGralkor.Actions.MemoryAdd do
 
           _ ->
             group_id = Client.sanitize_group_id(operator_id)
+
             Client.impl().memory_add(
               group_id,
               params.content,
