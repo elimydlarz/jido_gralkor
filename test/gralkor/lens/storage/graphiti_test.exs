@@ -394,10 +394,9 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert {:ok, []} =
                Graphiti.search(replaceable_store(:global), "settlement", 5, search_fn: search_fn)
 
-      assert_receive {:graph_search, "destination_o_6f70657261746f722d6f6e65_73797374656d73",
-                      "settlement", 5}
+      assert_receive {:graph_search, "operator/operator-one", "settlement", 5}
 
-      assert_receive {:graph_search, "destination_g_736861726564", "settlement", 5}
+      assert_receive {:graph_search, "global", "settlement", 5}
     end
   end
 
@@ -406,21 +405,24 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       operator_id: "operator-one",
       lens: %Replaceable{
         name: "systems",
-        destination:
-          destination(
-            "systems",
-            if(scope == :global, do: "global/shared", else: "operator/systems")
-          ),
+        destination: destination(destination_name(scope)),
         graph_format: :property_graph
       }
     }
   end
 
-  defp lens(name, address),
-    do: %Lens{name: name, destination: destination(name, address), ingestion: String}
+  defp lens(name, destination_name),
+    do: %Lens{
+      name: name,
+      destination: destination(destination_name),
+      ontology: Strict,
+      ingestion: String
+    }
 
-  defp destination(name, address),
-    do: %Destination{name: name, address: address, ontology: Strict}
+  defp destination(name), do: %Destination{name: name}
+
+  defp destination_name(:application), do: "systems"
+  defp destination_name(scope), do: Atom.to_string(scope)
 
   defp property_graph do
     %Gralkor.Graph{
