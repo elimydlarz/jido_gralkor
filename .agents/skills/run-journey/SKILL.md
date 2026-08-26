@@ -36,7 +36,7 @@ Run the discovered Journey file through the project alias:
 mix test.journey test/journey/memory_adventure_journey_test.exs --max-failures 1
 ```
 
-The command starts real PythonX, Graphiti, embedded FalkorDB, extraction, recall interpretation, and ERL inference. Allow up to the test's declared timeout. Provide a concise progress update at least once per minute while it runs.
+The command starts real PythonX, Graphiti, embedded FalkorDB, extraction, recall presentation, and ERL inference. Allow up to the test's declared timeout. Provide a concise progress update at least once per minute while it runs.
 
 Warnings about deprecated Req/Finch options do not fail the Journey. Report them only if they obscure or cause the outcome.
 
