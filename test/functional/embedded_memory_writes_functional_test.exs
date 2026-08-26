@@ -72,6 +72,24 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
     end
   end
 
+  describe "when several episode writes overlap through one remote runtime > while the graph accepts every write" do
+    test "then more than one episode write may reach the remote graph concurrently" do
+      %{graph: graph, pool: pool} = start_pool(:remote)
+      GraphitiPool.for(pool, "owner")
+
+      overlapping_writes()
+
+      assert graph_value(graph, "max_active_writes") > 1
+    end
+
+    test "and every caller receives success" do
+      %{pool: pool} = start_pool(:remote)
+      GraphitiPool.for(pool, "owner")
+
+      assert Enum.all?(overlapping_writes(), &(&1 == {:ok, :ok}))
+    end
+  end
+
   defp start_pool(backend) do
     {graph, _} =
       Pythonx.eval(
