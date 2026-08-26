@@ -364,7 +364,10 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
             def __init__(self, graphiti):
                 self.graph_operations_interface = _GraphOperations(graphiti)
 
-        _Graphiti()
+        graphiti = _Graphiti()
+        graphiti.Edge = _Edge
+        graphiti.Episode = _Episode
+        graphiti
         """,
         %{}
       )
@@ -396,17 +399,19 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
       """
       g.facts = []
       g.episodes = {}
+      def _dec(value):
+          return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
       for item in facts:
           episode_ids = []
           for source in item['episodes']:
-              episode = _Episode(
-                  source['id'],
-                  source['source_kind'],
-                  source['source_description'],
+              episode = g.Episode(
+                  _dec(source['id']),
+                  _dec(source['source_kind']),
+                  _dec(source['source_description']),
               )
               g.episodes[episode.uuid] = episode
               episode_ids.append(episode.uuid)
-          g.facts.append(_Edge(item['fact'], episode_ids))
+          g.facts.append(g.Edge(_dec(item['fact']), episode_ids))
       """,
       %{"g" => graphiti, "facts" => facts}
     )
