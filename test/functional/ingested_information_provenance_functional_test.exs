@@ -331,6 +331,14 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         end
       end
     end
+
+    test "and no Lens ingestion process or Graphiti operation begins" do
+      assert_raise ArgumentError, fn ->
+        Client.ingest(request(:document, ["not document text"], "invalid fixture"))
+      end
+
+      refute_receive {:episode_added, _, _, _}
+    end
   end
 
   defp request(source_kind, content, source_description) do
