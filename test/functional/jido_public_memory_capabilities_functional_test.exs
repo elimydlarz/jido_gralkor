@@ -2,11 +2,13 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Client.InMemory
+  alias JidoGralkor.Actions.MemoryAdd
   alias JidoGralkor.Actions.MemoryBuildCommunities
   alias JidoGralkor.Actions.MemoryBuildIndices
   alias JidoGralkor.Actions.MemorySearch
   alias JidoGralkor.LifecycleTestAgent
   alias JidoGralkor.LifecycleTestJido
+  alias JidoGralkor.Plugin
   alias JidoGralkor.ReAct
 
   @moduletag :functional
@@ -77,6 +79,44 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
+  describe "when an agent invokes memory addition and its background write fails" do
+    test "then the background failure is logged and the agent's immediate acknowledgement remains unchanged" do
+      InMemory.set_memory_add({:error, :unavailable})
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %{result: "Ingesting."}} =
+                   MemoryAdd.run(
+                     %{content: "remember this", source_description: "functional"},
+                     %{agent_id: "operator-one"}
+                   )
+
+          assert eventually(fn -> InMemory.adds() != [] end)
+          Process.sleep(20)
+        end)
+
+      assert log =~ "memory_add failed"
+      assert log =~ "unavailable"
+    end
+  end
+
+  describe "when an agent invokes legacy memory search with a usable query and committed session" do
+    test "while the backend returns a memory block then the agent receives that memory block unchanged" do
+      block = "<gralkor-memory>remembered</gralkor-memory>"
+      InMemory.set_recall({:ok, block})
+
+      assert {:ok, %{result: ^block}} =
+               memory_search(%{query: "launch"}, session_id: "thread-one")
+    end
+
+    test "if the backend fails then the backend failure is returned unchanged" do
+      InMemory.set_recall({:error, :unavailable})
+
+      assert {:error, :unavailable} =
+               memory_search(%{query: "launch"}, session_id: "thread-one")
+    end
+  end
+
   describe "if an agent invokes memory search without a usable query" do
     test "then no backend is queried" do
       assert {:ok, _result} = memory_search(%{query: "  "}, session_id: "thread-one")
@@ -104,6 +144,20 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert result =~ "NON-RESULT"
       assert result =~ "long-term memory was NOT queried"
+    end
+  end
+
+  describe "when a mounted plugin completes a memory-worthy turn with a committed thread" do
+    test "if agent state has no non-blank user name then completion raises an ArgumentError naming the missing user name" do
+      assert_raise ArgumentError, ~r/user_name/, fn ->
+        complete_plugin_turn(%{}, :ok)
+      end
+    end
+
+    test "if capture fails then completion raises reporting the capture failure" do
+      assert_raise RuntimeError, ~r/capture failed.*unavailable/, fn ->
+        complete_plugin_turn(%{user_name: "Eli"}, {:error, :unavailable})
+      end
     end
   end
 
@@ -181,5 +235,35 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       |> Map.merge(Map.new(context_options))
 
     MemorySearch.run(params, context)
+  end
+
+  defp complete_plugin_turn(extra_state, capture_result) do
+    request_id = "functional-completion"
+    InMemory.set_capture(capture_result)
+
+    agent = %{
+      id: "operator-one",
+      state:
+        Map.merge(
+          %{
+            __memory__: %{agent_name: "Susu"},
+            __thread__: %{id: "thread-one"},
+            __strategy__: %{
+              request_traces: %{request_id => %{events: [%{kind: :llm_completed, data: %{}}]}}
+            },
+            requests: %{request_id => %{query: "remember this"}}
+          },
+          extra_state
+        )
+    }
+
+    signal =
+      Jido.Signal.new!(
+        "ai.request.completed",
+        %{request_id: request_id, result: "remembered"},
+        source: "/functional"
+      )
+
+    Plugin.handle_signal(signal, %{agent: agent})
   end
 end
