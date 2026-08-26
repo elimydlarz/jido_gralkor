@@ -53,7 +53,11 @@ defmodule Gralkor.Reflection.Scheduler do
 
               {:error, reason} ->
                 {:error,
-                 %{reflection: reflection.name, destination: reflection.name, reason: reason}}
+                 %{
+                   reflection: reflection.name,
+                   destination: reflection.destination.name,
+                   reason: reason
+                 }}
             end
 
           {:error, _} = error ->

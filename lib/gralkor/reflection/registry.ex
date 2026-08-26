@@ -123,7 +123,7 @@ defmodule Gralkor.Reflection.Registry do
             {:ok,
              %Reflection{
                name: name,
-               destination: DestinationRegistry.fetch!(destination_name),
+               destination: fetch_destination!(name, destination_name),
                chain_of_thought: cot
              }}
 
@@ -134,6 +134,18 @@ defmodule Gralkor.Reflection.Registry do
   end
 
   defp repository_path?(path, root), do: path == root or String.starts_with?(path, root <> "/")
+
+  defp fetch_destination!(reflection_name, destination_name) do
+    DestinationRegistry.fetch!(destination_name)
+  rescue
+    error in ArgumentError ->
+      if Exception.message(error) == "unknown Destination #{inspect(destination_name)}" do
+        raise ArgumentError,
+              "Reflection #{inspect(reflection_name)} references unknown Destination #{inspect(destination_name)}"
+      else
+        reraise error, __STACKTRACE__
+      end
+  end
 
   defp field(map, key) when is_map(map),
     do: Map.get(map, key) || Map.get(map, Atom.to_string(key))

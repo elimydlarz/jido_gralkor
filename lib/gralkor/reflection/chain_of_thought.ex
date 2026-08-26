@@ -24,7 +24,7 @@ defmodule Gralkor.Reflection.ChainOfThought do
   end
 
   defp parse_steps(%{"steps" => steps}) when is_list(steps) and steps != [] do
-    Enum.reduce_while(steps, {:ok, {[], MapSet.new()}}, fn raw, {:ok, {parsed, outputs}} ->
+    Enum.reduce_while(steps, {:ok, {[], %{}}}, fn raw, {:ok, {parsed, outputs}} ->
       case parse_step(raw, outputs) do
         {:ok, step, next_outputs} -> {:cont, {:ok, {parsed ++ [step], next_outputs}}}
         {:error, reason} -> {:halt, {:error, reason}}
@@ -55,24 +55,28 @@ defmodule Gralkor.Reflection.ChainOfThought do
 
   defp validate_step(label, directions, output, prior_outputs) do
     names = Map.keys(output)
-    duplicate = Enum.find(names, &MapSet.member?(prior_outputs, &1))
-    reference = Enum.find(interpolations(directions), &(not MapSet.member?(prior_outputs, &1)))
+    duplicate = Enum.find(names, &Map.has_key?(prior_outputs, &1))
+    reference = Enum.find(interpolations(directions), &(not Map.has_key?(prior_outputs, &1)))
+
+    invalid_output =
+      Enum.find(output, fn {name, type} ->
+        not non_blank?(name) or match?({:error, _}, parse_type(type))
+      end)
 
     cond do
       duplicate ->
-        {:error, {:duplicate_output, duplicate, label}}
+        {:error, {:duplicate_output, duplicate, Map.fetch!(prior_outputs, duplicate), label}}
 
       reference ->
         {:error, {:unknown_interpolation, reference, label}}
 
-      Enum.any?(output, fn {name, type} ->
-        not non_blank?(name) or match?({:error, _}, parse_type(type))
-      end) ->
-        {:error, {:invalid_output_type, label}}
+      invalid_output ->
+        {_name, type} = invalid_output
+        {:error, {:invalid_output_type, label, type}}
 
       true ->
         step = %Step{label: label, directions: directions, output: output}
-        {:ok, step, Enum.reduce(names, prior_outputs, &MapSet.put(&2, &1))}
+        {:ok, step, Enum.reduce(names, prior_outputs, &Map.put(&2, &1, label))}
     end
   end
 
