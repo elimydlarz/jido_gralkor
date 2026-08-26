@@ -303,7 +303,7 @@ defmodule Gralkor.Client do
 
     names =
       if request.destinations == [],
-        do: ["operator", "generalisations"],
+        do: ["operator", "global"],
         else: request.destinations
 
     destinations = names |> Enum.uniq() |> Enum.map(&DestinationRegistry.fetch!/1)
