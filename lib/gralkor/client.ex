@@ -295,6 +295,7 @@ defmodule Gralkor.Client do
       if request.destinations == [],
         do: ["operator", "generalisations"],
         else: request.destinations
+
     destinations = names |> Enum.uniq() |> Enum.map(&DestinationRegistry.fetch!/1)
 
     opts =
