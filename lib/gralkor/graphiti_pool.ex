@@ -193,7 +193,7 @@ defmodule Gralkor.GraphitiPool do
             edges = await g.search(q, num_results=max_results)
 
           episode_ids = list(dict.fromkeys(
-            episode_id for edge in edges for episode_id in (edge.episodes or [])
+            episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
           ))
           episodes = await EpisodicNode.get_by_uuids(g.driver, episode_ids) if episode_ids else []
           episodes_by_id = {episode.uuid: episode for episode in episodes}
@@ -203,24 +203,29 @@ defmodule Gralkor.GraphitiPool do
             "json": "structured_record",
           }
 
-          return [
-            {
+          rendered = []
+          for edge in edges:
+            fact = {
               "fact": edge.fact,
               "created_at": str(edge.created_at) if edge.created_at else None,
               "valid_at": str(edge.valid_at) if edge.valid_at else None,
               "invalid_at": str(edge.invalid_at) if edge.invalid_at else None,
               "expired_at": str(edge.expired_at) if edge.expired_at else None,
-              "sources": [
-                {
-                  "id": episode_id,
-                  "source_kind": source_kinds.get(episodes_by_id[episode_id].source.value),
-                  "source_description": episodes_by_id[episode_id].source_description,
-                }
-                for episode_id in (edge.episodes or [])
-                if episode_id in episodes_by_id
-              ],
-            } for edge in edges
-          ]
+            }
+            sources = [
+              {
+                "id": episode_id,
+                "source_kind": source_kinds.get(episodes_by_id[episode_id].source.value),
+                "source_description": episodes_by_id[episode_id].source_description,
+              }
+              for episode_id in (getattr(edge, "episodes", None) or [])
+              if episode_id in episodes_by_id
+            ]
+            if sources:
+              fact["sources"] = sources
+            rendered.append(fact)
+
+          return rendered
 
         asyncio._gralkor_run(search_with_sources())
         """,
