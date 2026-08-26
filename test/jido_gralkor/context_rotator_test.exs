@@ -128,7 +128,8 @@ defmodule JidoGralkor.ContextRotatorTest do
                  end
                )
 
-      assert_receive {:seed, [entry(2, "entry-2"), entry(3, "entry-3"), entry(4, "entry-4"), entry(5, "entry-5")]}
+      expected = Enum.map(2..5, &entry(&1, "entry-#{&1}"))
+      assert_receive {:seed, ^expected}
     end
   end
 
