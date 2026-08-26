@@ -231,6 +231,16 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
+  describe "if public ingestion omits or supplies an unsupported source kind" do
+    test "then ingestion raises an argument error identifying the rejected source kind" do
+      for source_kind <- [nil, :rumour] do
+        assert_raise ArgumentError, ~r/source kind.*#{inspect(source_kind)}/i, fn ->
+          Client.ingest(request(source_kind, "Atlas launches Friday.", "planning notes"))
+        end
+      end
+    end
+  end
+
   defp request(source_kind, content, source_description) do
     %Ingest{
       operator_id: "operator-one",
