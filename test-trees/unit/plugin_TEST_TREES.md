@@ -3,6 +3,11 @@ Unit: plugin (src: lib/jido_gralkor/plugin.ex; unit: test/jido_gralkor/plugin_te
 when a consumer reads the plugin's advertised actions
   then memory search, memory add, build indices, and build communities are exposed in that order for the consumer to pass as agent tools
 
+when a consumer reads the plugin's advertised identity and ownership
+  then it is named `gralkor`
+  and it advertises the memory capability
+  and it exclusively owns the `:__memory__` plugin-state slot
+
 when a consumer agent mounts the plugin
   then the expanded routes resolve with no conflicts against the host agent
 
@@ -28,6 +33,8 @@ when mount selects an ingestion Lens and Destinations to search
     then mounting raises an ArgumentError identifying `:ingestion_lens` as its replacement
   if the search Destination selection is not a list
     then mounting raises an ArgumentError identifying the invalid selection
+  if a search Destination entry is not binary
+    then mounting raises an ArgumentError identifying the invalid Destination
 
 when an agent turn begins
   while a thread has committed to agent state
@@ -35,9 +42,12 @@ when an agent turn begins
     and the mounted agent name is planted on the tool context beside it
     and no recall is issued on the plugin's own initiative
     and the user's query is left untouched on the signal
+    and unrelated incoming tool-context fields remain alongside fields planted by the plugin
     where the incoming tool context selects a Lens
       then the selected Lens is validated and retained on the request-correlated thread entry
       and the selected Lens remains available to completion and failure capture
+      if the selected Lens is unknown or non-binary
+        then the callback raises identifying the invalid Lens
   while no thread has committed to agent state
     then only the mounted agent name is planted on the tool context, with no session id
     and no recall is issued on the plugin's own initiative
@@ -57,6 +67,9 @@ when an agent turn completes
       then no capture is sent at all
     where the plugin was mounted with Lens selections
       then the capture carries the selected Lens
+      and the host agent's configured tools are forwarded for Reflection processing
+      and retained request tool context overrides conflicting configured tool context
+      and the current operator, agent name, Lens, and session id override conflicting configured or retained context
     if agent state holds no user name
       then the callback raises ArgumentError naming the missing user name
     if agent state holds a blank user name

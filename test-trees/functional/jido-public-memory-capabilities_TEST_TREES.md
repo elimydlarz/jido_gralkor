@@ -1,4 +1,4 @@
-Functional: jido-public-memory-capabilities (src: lib/jido_gralkor/lifecycle.ex, lib/jido_gralkor/actions/memory_build_indices.ex, lib/jido_gralkor/actions/memory_build_communities.ex, lib/jido_gralkor/actions/memory_search.ex, lib/jido_gralkor/re_act.ex; functional: test/functional/jido_public_memory_capabilities_functional_test.exs)
+Functional: jido-public-memory-capabilities (src: lib/jido_gralkor/lifecycle.ex, lib/jido_gralkor/plugin.ex, lib/jido_gralkor/actions/memory_add.ex, lib/jido_gralkor/actions/memory_build_indices.ex, lib/jido_gralkor/actions/memory_build_communities.ex, lib/jido_gralkor/actions/memory_search.ex, lib/jido_gralkor/re_act.ex; functional: test/functional/jido_public_memory_capabilities_functional_test.exs)
 
 when an application gracefully stops an agent with a committed thread
   then termination returns without waiting for the memory flush
@@ -14,6 +14,16 @@ when an operator runs the build-communities memory action
   and the backend receives one build for the operator's sanitised group
   and a backend failure is returned unchanged
 
+when an agent invokes memory addition and its background write fails
+  then the background failure is logged
+  and the agent's immediate acknowledgement remains unchanged
+
+when an agent invokes legacy memory search with a usable query and committed session
+  while the backend returns a memory block
+    then the agent receives that memory block unchanged
+  if the backend fails
+    then the backend failure is returned unchanged
+
 if an agent invokes memory search without a usable query
   then no backend is queried
   and the agent receives an explicit non-result
@@ -21,6 +31,12 @@ if an agent invokes memory search without a usable query
 if an agent invokes memory search without a committed session
   then no backend is queried
   and the agent receives an explicit non-result
+
+when a mounted plugin completes a memory-worthy turn with a committed thread
+  if agent state has no non-blank user name
+    then completion raises an ArgumentError naming the missing user name
+  if capture fails
+    then completion raises reporting the capture failure
 
 when a consumer prepares the first ReAct iteration
   then memory search is forced
