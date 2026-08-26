@@ -204,6 +204,31 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
       assert_receive {:captured_ingest, %Ingest{source_kind: :conversation}}
     end
+
+    test "and their rendered speaker-attributed transcript is submitted as a conversational-message episode" do
+      test_pid = self()
+
+      callback =
+        Gralkor.Application.build_flush_callback(nil,
+          add_episode_fn: fn group_id, body, description, ontology, opts ->
+            send(test_pid, {:captured_episode, group_id, body, description, ontology, opts})
+            :ok
+          end
+        )
+
+      assert :ok =
+               callback.(
+                 "operator-one",
+                 "Gralkor",
+                 "Mina",
+                 nil,
+                 [[Gralkor.Message.new("user", "Atlas might launch Friday.")]]
+               )
+
+      assert_receive {:captured_episode, "operator-one",
+                      "Mina: Atlas might launch Friday.", "captured", nil,
+                      [source_kind: :conversation]}
+    end
   end
 
   defp request(source_kind, content, source_description) do
