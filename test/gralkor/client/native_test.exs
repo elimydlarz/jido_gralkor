@@ -821,7 +821,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when recall is requested for a group, agent and query > where a recall deadline is configured" do
+  describe "when recall is requested for a group, agent and query > where a positive-integer recall deadline is configured" do
     @describetag :integration
     setup :start_recall_recording_pool
 
@@ -839,6 +839,27 @@ defmodule Gralkor.Client.NativeTest do
 
       assert {:error, :recall_deadline_expired} =
                Native.recall("g", "TestAgent", nil, "slow: raw query")
+    end
+  end
+
+  describe "when recall is requested for a group, agent and query > if a configured recall deadline is not a positive integer" do
+    test "then an argument error naming the recall deadline is raised before any search is issued" do
+      original = Application.get_env(:jido_gralkor, :recall_deadline_ms)
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :recall_deadline_ms)
+          value -> Application.put_env(:jido_gralkor, :recall_deadline_ms, value)
+        end
+      end)
+
+      for invalid <- [0, -1, "100"] do
+        Application.put_env(:jido_gralkor, :recall_deadline_ms, invalid)
+
+        assert_raise ArgumentError, ~r/recall_deadline_ms/, fn ->
+          Native.recall("g", "TestAgent", nil, "query")
+        end
+      end
     end
   end
 end
