@@ -103,7 +103,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
 
     Application.put_env(:jido_gralkor, :destinations, [
-      [name: "observations", address: "operator/observations", ontology: MemoryOntology]
+      [name: "observations"]
     ])
 
     Application.put_env(:jido_gralkor, :lenses, [lens(RecordingIngestion)])
@@ -146,11 +146,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       refute_receive {:episode_added, _, _, _}
     end
 
-    test "and every submitted episode is governed by the selected Lens's Destination ontology and address" do
-      Application.put_env(:jido_gralkor, :destinations, [
-        [name: "observations", address: "global/observations", ontology: MemoryOntology]
-      ])
-
+    test "and every submitted episode is saved to the selected Lens's Destination" do
       Application.put_env(:jido_gralkor, :lenses, [lens(VariableIngestion)])
 
       assert :ok = Client.ingest(request("one"))
@@ -159,13 +155,18 @@ defmodule Gralkor.LensIngestionFunctionalTest do
                       %Gralkor.Lens.Store{
                         operator_id: "operator-one",
                         lens: %Gralkor.Lens{
-                          destination: %Gralkor.Destination{
-                            name: "observations",
-                            address: "global/observations",
-                            ontology: MemoryOntology
-                          }
+                          destination: %Gralkor.Destination{name: "observations"}
                         }
                       }, "first", "functional"}
+    end
+
+    test "and every submitted episode is extracted through the selected Lens's ontology" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingGraphitiStorage)
+      Application.put_env(:jido_gralkor, :lenses, [lens(VariableIngestion)])
+
+      assert :ok = Client.ingest(request("one"))
+
+      assert_receive {:graph_add, "observations", "first", "functional", MemoryOntology, _}
     end
 
     test "and every directly submitted episode retains the selected Lens identity as source provenance" do
@@ -257,6 +258,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     [
       name: "observations",
       destination: "observations",
+      ontology: MemoryOntology,
       ingestion: ingestion
     ]
   end
