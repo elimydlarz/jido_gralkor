@@ -31,13 +31,6 @@ defmodule Gralkor.Format do
     |> append_ts(m, :expired_at, "expired")
   end
 
-  @spec format_facts([map()]) :: String.t()
-  def format_facts([]), do: ""
-
-  def format_facts(facts) when is_list(facts) do
-    facts |> Enum.map(&format_fact/1) |> Enum.join("\n")
-  end
-
   @spec format_timestamp(String.t()) :: String.t()
   def format_timestamp(ts) when is_binary(ts) do
     ts

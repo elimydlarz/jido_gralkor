@@ -102,7 +102,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                )
 
       assert_receive {:graph_add, _, "The launch window moved to Friday.", "project update",
-                      Strict, []}
+                      Strict, [lens: "observations"]}
     end
 
     test "and the graph add result is returned to the ingestion process" do

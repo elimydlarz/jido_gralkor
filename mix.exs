@@ -46,9 +46,8 @@ defmodule JidoGralkor.MixProject do
   defp deps do
     [
       {:jido, "~> 2.2"},
-      {:jido_ai, "~> 2.1"},
+      {:jido_ai, "~> 2.3"},
       {:pythonx, "~> 0.4"},
-      {:req_llm, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:yaml_elixir, "~> 2.12"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},

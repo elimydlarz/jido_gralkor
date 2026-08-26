@@ -73,25 +73,4 @@ defmodule Gralkor.FormatTest do
     end
   end
 
-  describe "when a list of facts is formatted" do
-    test "then the individually formatted facts are joined with newlines" do
-      result =
-        Format.format_facts([
-          %{fact: "X"},
-          %{fact: "Y", created_at: "2020-01-01T00:00:00Z"}
-        ])
-
-      assert result == "- X\n- Y (created 2020-01-01T00:00:00+0)"
-    end
-
-    test "and no leading \"Facts:\" header is added, leaving the surrounding context to the caller" do
-      refute Format.format_facts([%{fact: "X"}]) =~ "Facts:"
-    end
-  end
-
-  describe "when a list of facts is formatted > where the list is empty" do
-    test "then an empty string is returned" do
-      assert "" = Format.format_facts([])
-    end
-  end
 end
