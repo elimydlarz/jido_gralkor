@@ -394,6 +394,7 @@ defmodule Gralkor.GraphitiPool do
       end
 
     uuid = Keyword.get(opts, :uuid)
+    source_kind = Keyword.get(opts, :source_kind)
 
     with_episode_write_admission(server, fn skip_empty_edge_candidates ->
       Pythonx.eval(
@@ -406,10 +407,11 @@ defmodule Gralkor.GraphitiPool do
         s = source.decode('utf-8') if isinstance(source, (bytes, bytearray)) else source
         n = name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name
         gid = group.decode('utf-8') if isinstance(group, (bytes, bytearray)) else group
+        sk = source_kind.decode('utf-8') if isinstance(source_kind, (bytes, bytearray)) else source_kind
         kwargs = dict(
           name=n,
           episode_body=c,
-          source=EpisodeType.text,
+          source=EpisodeType.message if sk == 'conversation' else EpisodeType.text,
           source_description=s,
           group_id=gid,
           reference_time=datetime.now(timezone.utc),
@@ -447,6 +449,7 @@ defmodule Gralkor.GraphitiPool do
           "group" => sanitized,
           "ontology_dicts" => ontology_dicts,
           "uuid" => uuid,
+          "source_kind" => source_kind && Atom.to_string(source_kind),
           "skip_empty_edge_candidates" => skip_empty_edge_candidates
         }
       )

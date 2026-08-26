@@ -49,7 +49,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   @spec add_episode(Store.t(), String.t(), String.t(), keyword()) ::
           :ok | {:error, term()}
   def add_episode(
-        %Store{operator_id: operator_id, lens: %Lens{} = lens},
+        %Store{operator_id: operator_id, lens: %Lens{} = lens} = store,
         content,
         source_description,
         opts
@@ -61,7 +61,9 @@ defmodule Gralkor.Lens.Storage.Graphiti do
       content,
       source_description,
       lens.destination.ontology,
-      Keyword.put(episode_opts, :lens, lens.name)
+      episode_opts
+      |> Keyword.put(:lens, lens.name)
+      |> Keyword.put(:source_kind, store.source_kind)
     )
   end
 
