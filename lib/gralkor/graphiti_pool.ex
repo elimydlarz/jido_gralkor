@@ -853,7 +853,10 @@ defmodule Gralkor.GraphitiPool do
   defp admit_next_episode_write(state, admission) do
     case :queue.out(admission.waiting) do
       {:empty, waiting} ->
-        %{state | episode_write_admission: %{admission | owner: nil, monitor: nil, waiting: waiting}}
+        %{
+          state
+          | episode_write_admission: %{admission | owner: nil, monitor: nil, waiting: waiting}
+        }
 
       {{:value, from}, waiting} ->
         owner = elem(from, 0)

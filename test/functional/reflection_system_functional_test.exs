@@ -313,8 +313,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_raise ArgumentError,
                    ~r/Reflection "generalisation" references unknown Destination "missing"/,
                    fn ->
-        Registry.load([valid_definition(root, destination: "missing")], root: root)
-      end
+                     Registry.load([valid_definition(root, destination: "missing")], root: root)
+                   end
     end
   end
 

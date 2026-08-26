@@ -171,7 +171,13 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                })
 
       start_supervised!(Gralkor.Lens.Storage.InMemory)
-      Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.InMemory)
+
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        Gralkor.Destination.Storage.InMemory
+      )
+
       Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
 
       destination = Gralkor.Destination.Registry.fetch!("first")
@@ -216,7 +222,13 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                })
 
       start_supervised!(Gralkor.Lens.Storage.InMemory)
-      Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.InMemory)
+
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        Gralkor.Destination.Storage.InMemory
+      )
+
       Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
 
       destination = Gralkor.Destination.Registry.fetch!("first")

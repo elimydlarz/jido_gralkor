@@ -176,7 +176,6 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
       assert block =~ source_wording
     end
-
   end
 
   describe "when a captured turn is flushed for its session" do

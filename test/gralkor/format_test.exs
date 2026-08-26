@@ -72,5 +72,4 @@ defmodule Gralkor.FormatTest do
       assert "2020-01-02T03:04:05-8:45" = Format.format_timestamp("2020-01-02T03:04:05-08:45")
     end
   end
-
 end
