@@ -9,8 +9,8 @@ The test kind identifies the consumer seam. Hook timing does not change a test's
 - Observable outcomes: return values, raised errors, process state exposed through the subject's public API, emitted messages, logs, and requests made to mocked dependencies.
 - Real boundaries: the subject under test only.
 - Substituted boundaries: every dependency outside the subject is replaced by a deterministic test-owned callback, module, process, or configured client; assertions may cover only the subject's request to that substitute.
-- Focused invocation: `mix test.unit path/to/unit_test.exs`.
-- Complete lifecycle command: `mix test` together with Integration tests.
+- Focused invocation: `mix test.unit path/to/unit_test.exs` for ExUnit subjects; `node --test path/to/unit_test.mjs` for Node contract subjects.
+- Complete lifecycle command: `mix test` together with Integration tests, followed by `node --test` for Node contract subjects through the Stop feedback check.
 
 ## Integration
 
@@ -50,8 +50,8 @@ The test kind identifies the consumer seam. Hook timing does not change a test's
 - `mix test.changed` uses ExUnit's stale dependency tracking to select changed or related Unit, Integration, and Functional tests and excludes Journey.
 - `mix test.fast` uses ExUnit's stale dependency tracking to select changed or related Unit and Integration tests and excludes Functional and Journey.
 - `mix test.all` runs Unit, Integration, Functional, Journey, and Node tests and fails when either runner fails.
-- `PostToolUse` after `Edit` or `Write` starts `mix test.fast` optimistically and returns without waiting.
-- `Stop` first delivers saved optimistic failures, waits for active optimistic work, and then runs `mix test` synchronously.
+- `PostToolUse` after `Edit` or `Write` starts `mix test.fast` followed by `node --test` optimistically and returns without waiting.
+- `Stop` first delivers saved optimistic failures, waits for active optimistic work, and then runs `mix test` followed by `node --test` synchronously.
 - During Functional RED and GREEN, the coding agent runs only the current focused Functional test.
 - When implementation appears finished, the coding agent runs `mix test.functional`.
 - After a Journey tree or test change, the coding agent runs `mix test.journey`.
