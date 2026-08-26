@@ -123,7 +123,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
           episodes: [
             %{
               id: "episode-document-1",
-              source_kind: "document",
+              source_kind: "text",
               source_description: "Q3 Roadmap — Draft"
             }
           ]
