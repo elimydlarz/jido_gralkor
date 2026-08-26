@@ -82,14 +82,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       end
 
     Application.put_env(:jido_gralkor, :destinations, [
-      [name: "reflection-test-operator", address: "operator/reflection-test"],
-      [name: "reflection-test-global", address: "global/reflection-test"],
-      [
-        name: "observations",
-        address: "operator/observations",
-        ontology: ReflectionEvidenceOntology
-      ],
-      [name: "decisions", address: "operator/decisions", ontology: ReflectionEvidenceOntology]
+      [name: "reflection-test"],
+      [name: "observations"],
+      [name: "decisions"]
     ])
 
     Application.put_env(
@@ -316,47 +311,62 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                      Registry.load([valid_definition(root, destination: "missing")], root: root)
                    end
     end
+
+    test "if a Reflection declares an invalid ontology then validation fails identifying that Reflection and ontology",
+         %{root: root} do
+      assert {:error, {:invalid_ontology, "generalisation", String}} =
+               Registry.load([valid_definition(root, ontology: String)], root: root)
+    end
   end
 
   describe "where the packaged default Reflections are used" do
-    test "then ERL references the packaged experiential-learning Destination" do
+    test "then ERL references the packaged `operator` Destination" do
       Application.delete_env(:jido_gralkor, :reflections)
 
       assert %Gralkor.Reflection{
                name: "erl",
-               destination: %Gralkor.Destination{
-                 name: "experiential-learning",
-                 address: "operator/experiential-learning"
-               }
+               destination: %Gralkor.Destination{name: "operator"}
              } = Enum.find(Registry.configured!(), &(&1.name == "erl"))
     end
 
-    test "and that Destination carries jido_gralkor's built-in experiential-learning ontology" do
+    test "and ERL carries jido_gralkor's built-in experiential-learning ontology" do
       Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
 
-      assert erl.destination.ontology == Gralkor.Reflection.ERLOntology
+      assert erl.ontology == Gralkor.Reflection.ERLOntology
+    end
+
+    test "and generalisation references the packaged `global` Destination" do
+      Application.delete_env(:jido_gralkor, :reflections)
+      generalisation = Enum.find(Registry.configured!(), &(&1.name == "generalisations"))
+
+      assert generalisation.destination.name == "global"
     end
   end
 
-  describe "where application-defined Reflections are used" do
-    test "then a Destination without an explicit ontology uses jido_gralkor's built-in default ontology",
+  describe "where an application-defined Reflection omits its ontology" do
+    test "then its final artefact receives generic extraction",
          %{root: root} do
       reflection = Registry.load!([valid_definition(root)], root: root) |> List.first()
-      assert reflection.destination.ontology == Gralkor.DefaultOntology
+      assert reflection.ontology == Gralkor.DefaultOntology
     end
+  end
 
-    test "then a Destination may carry an application ontology", %{root: root} do
+  describe "where an application-defined Reflection declares an application ontology" do
+    test "then its final artefact is extracted through that Reflection's ontology", %{root: root} do
       reflection =
-        Registry.load!([valid_definition(root, destination: "observations")], root: root)
+        Registry.load!(
+          [valid_definition(root, destination: "observations", ontology: ReflectionEvidenceOntology)],
+          root: root
+        )
         |> List.first()
 
-      assert reflection.destination.ontology == ReflectionEvidenceOntology
+      assert reflection.ontology == ReflectionEvidenceOntology
     end
   end
 
   describe "when the default ERL Reflection stores its final artefact" do
-    test "then extraction receives ERL's built-in `Learning` entity type" do
+    test "then extraction receives the built-in `Learning` entity type from ERL's ontology" do
       Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
       artefact = Gralkor.Reflection.Artefact.new("erl", erl_payload(), ["evidence-one"])
@@ -832,7 +842,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Runner.run(reflection(context), ingestion(), inference: &output_for/1)
     end
 
-    test "where the referenced Destination uses an `operator/path` address then the artefact is available only to the operator whose ingestion triggered the Reflection",
+    test "where the referenced Destination is `operator` then the artefact is available only to the operator whose ingestion triggered the Reflection",
          context do
       reflection = reflection(context)
       {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
@@ -853,9 +863,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
     end
 
-    test "where the referenced Destination uses a `global/path` address then the artefact is available to every operator through that Destination",
+    test "where the referenced Destination is not `operator` then the artefact is available to every operator through that Destination's one graph",
          context do
-      reflection = reflection(context, "generalisation", "reflection-test-global")
+      reflection = reflection(context, "generalisation", "global")
       {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
 
       :ok =
@@ -1030,7 +1040,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                       {:error,
                        %{
                          reflection: "generalisation",
-                         destination: "reflection-test-operator",
+                         destination: "operator",
                          reason: :destination_unavailable
                        }}}
     end
@@ -1066,7 +1076,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then that Destination is searched", context do
       {reflection, artefact} = stored_artefact(context)
 
-      assert {:ok, [%{destination: "reflection-test-operator", artefact: ^artefact}]} =
+    assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
@@ -1129,7 +1139,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       :ok =
         Store.put(reflection, "operator-one", other, storage: Gralkor.Reflection.Storage.InMemory)
 
-      assert {:ok, [%{destination: "reflection-test-operator", artefact: ^artefact}]} =
+    assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
@@ -1158,7 +1168,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
             [
               %Gralkor.Reflection{
                 name: "generalisation",
-                destination: %Gralkor.Destination{name: "reflection-test-operator"}
+                destination: %Gralkor.Destination{name: "operator"}
               }
             ]} =
              Registry.load([valid_definition(root)], root: root)
@@ -1167,7 +1177,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   defp reflection(
          %{root: root},
          name \\ "generalisation",
-         destination \\ "reflection-test-operator"
+         destination \\ "operator"
        ) do
     [reflection] =
       Registry.load!([valid_definition(root, name: name, destination: destination)], root: root)
@@ -1307,7 +1317,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       [
         name: "generalisation",
         chain_of_thought: "valid.yaml",
-        destination: "reflection-test-operator"
+        destination: "operator"
       ],
       overrides
     )
