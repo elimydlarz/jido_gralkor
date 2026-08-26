@@ -129,6 +129,8 @@ defmodule Gralkor.Client do
   @spec ingest_with_representation(Ingest.t()) ::
           {:ok, [IngestedRepresentation.t()]} | {:error, term()}
   def ingest_with_representation(%Ingest{lens: lens_name} = request) do
+    validate_source_kind!(request.source_kind)
+
     case lens!(lens_name) do
       %Lens{} = lens ->
         collection_ref = make_ref()
@@ -155,6 +157,14 @@ defmodule Gralkor.Client do
         raise ArgumentError,
               "Lens #{inspect(lens_name)} accepts only whole-graph replacement"
     end
+  end
+
+  defp validate_source_kind!(kind) when kind in [:conversation, :document, :structured_record],
+    do: :ok
+
+  defp validate_source_kind!(kind) do
+    raise ArgumentError,
+          "invalid source kind #{inspect(kind)}; expected :conversation, :document, or :structured_record"
   end
 
   defp collect_representations(collection_ref, representations) do
