@@ -4,6 +4,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
   alias Gralkor.Client
   alias Gralkor.GraphitiPool
   alias Gralkor.Ingest
+  alias Gralkor.Search
 
   @moduletag :functional
 
@@ -35,7 +36,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
       Gralkor.Lens.Storage.Graphiti.add_episode(store, content, source_description,
         add_episode_fn: fn group_id, body, description, ontology, opts ->
           Gralkor.GraphitiPool.add_episode(
-            Process.whereis(:provenance_graphiti_pool),
+            Process.whereis(Gralkor.GraphitiPool),
             group_id,
             body,
             description,
@@ -59,6 +60,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     previous_destinations = Application.get_env(:jido_gralkor, :destinations)
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
+    previous_destination_storage = Application.get_env(:jido_gralkor, :destination_storage)
 
     Application.put_env(:jido_gralkor, :destinations, [
       [name: "observations", address: "operator/observations"]
@@ -73,11 +75,17 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     ])
 
     Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
+    Application.put_env(
+      :jido_gralkor,
+      :destination_storage,
+      Gralkor.Destination.Storage.Graphiti
+    )
 
     on_exit(fn ->
       restore_env(:destinations, previous_destinations)
       restore_env(:lenses, previous_lenses)
       restore_env(:lens_storage, previous_storage)
+      restore_env(:destination_storage, previous_destination_storage)
     end)
 
     :ok
@@ -104,6 +112,35 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
       assert_receive {:episode_added, %Gralkor.Lens.Store{}, "Draft launch plan",
                       "Q3 Roadmap — Draft"}
+    end
+
+    test "and every returned fact identifies each originating episode by identifier, source kind, and source description" do
+      graphiti = use_native_boundary()
+
+      set_search_fixture(graphiti, [
+        %{
+          fact: "Mina speculated that Atlas might launch Friday.",
+          episodes: [
+            %{
+              id: "episode-document-1",
+              source_kind: "document",
+              source_description: "Q3 Roadmap — Draft"
+            }
+          ]
+        }
+      ])
+
+      assert {:ok, [%{fact: recalled_fact}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "Atlas launch",
+                 destinations: ["observations"]
+               })
+
+      assert recalled_fact =~ "Mina speculated that Atlas might launch Friday."
+      assert recalled_fact =~ "episode-document-1"
+      assert recalled_fact =~ "document"
+      assert recalled_fact =~ "Q3 Roadmap — Draft"
     end
 
     test "then Graphiti's existing episode extraction is instructed to preserve source attribution and epistemic wording in extracted facts" do
@@ -285,6 +322,9 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         class _Graphiti:
             def __init__(self):
                 self.added = []
+                self.facts = []
+                self.episodes = {}
+                self.driver = _Driver(self)
 
             async def add_episode(self, **kwargs):
                 self.added.append({
@@ -294,16 +334,44 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                     "custom_extraction_instructions": kwargs.get("custom_extraction_instructions"),
                 })
 
+            async def search(self, query, num_results=10, search_filter=None):
+                return self.facts[:num_results]
+
+        class _Edge:
+            def __init__(self, fact, episodes):
+                self.fact = fact
+                self.episodes = episodes
+                self.created_at = None
+                self.valid_at = None
+                self.invalid_at = None
+                self.expired_at = None
+
+        class _Episode:
+            def __init__(self, uuid, source, source_description):
+                from graphiti_core.nodes import EpisodeType
+                self.uuid = uuid
+                self.source = EpisodeType(source)
+                self.source_description = source_description
+
+        class _GraphOperations:
+            def __init__(self, graphiti):
+                self.graphiti = graphiti
+
+            async def episodic_node_get_by_uuids(self, cls, driver, uuids):
+                return [self.graphiti.episodes[uuid] for uuid in uuids]
+
+        class _Driver:
+            def __init__(self, graphiti):
+                self.graph_operations_interface = _GraphOperations(graphiti)
+
         _Graphiti()
         """,
         %{}
       )
 
-    table = :"provenance_functional_#{System.unique_integer([:positive])}"
-
     start_supervised!({GraphitiPool,
-      name: :provenance_graphiti_pool,
-      table: table,
+      name: Gralkor.GraphitiPool,
+      table: :gralkor_graphiti_instances,
       falkordb_spec: {:embedded, "/tmp/never_used"},
       construct_falkor_db: fn _spec -> :stub_falkor_db end,
       construct_shared_clients: fn _llm, _embedder ->
@@ -321,6 +389,27 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
   defp added_episodes(graphiti) do
     {episodes, _} = Pythonx.eval("g.added", %{"g" => graphiti})
     Pythonx.decode(episodes)
+  end
+
+  defp set_search_fixture(graphiti, facts) do
+    Pythonx.eval(
+      """
+      g.facts = []
+      g.episodes = {}
+      for item in facts:
+          episode_ids = []
+          for source in item['episodes']:
+              episode = _Episode(
+                  source['id'],
+                  source['source_kind'],
+                  source['source_description'],
+              )
+              g.episodes[episode.uuid] = episode
+              episode_ids.append(episode.uuid)
+          g.facts.append(_Edge(item['fact'], episode_ids))
+      """,
+      %{"g" => graphiti, "facts" => facts}
+    )
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
