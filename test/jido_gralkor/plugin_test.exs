@@ -342,23 +342,21 @@ defmodule JidoGralkor.PluginTest do
       assert [[_, _, _, _, _, "observations", [], _reflection_context]] = InMemory.captures()
     end
 
-    describe "if the selected Lens is unknown or non-binary" do
-      test "then the callback raises identifying the invalid Lens" do
-        plugin_state = lens_plugin_state()
+    test "if the selected Lens is unknown or non-binary then the callback raises identifying the invalid Lens" do
+      plugin_state = lens_plugin_state()
 
-        lens_agent =
-          agent("operator-one", thread_id: "thread-one")
-          |> put_in([:state, :__memory__], plugin_state)
+      lens_agent =
+        agent("operator-one", thread_id: "thread-one")
+        |> put_in([:state, :__memory__], plugin_state)
 
-        for invalid <- ["missing", 42] do
-          signal =
-            Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: invalid}},
-              source: "/test"
-            )
+      for invalid <- ["missing", 42] do
+        signal =
+          Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: invalid}},
+            source: "/test"
+          )
 
-          assert_raise ArgumentError, ~r/invalid Lens|unknown Lens/, fn ->
-            Plugin.handle_signal(signal, context(lens_agent))
-          end
+        assert_raise ArgumentError, ~r/invalid Lens|unknown Lens/, fn ->
+          Plugin.handle_signal(signal, context(lens_agent))
         end
       end
     end
