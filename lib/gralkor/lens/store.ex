@@ -17,11 +17,12 @@ defmodule Gralkor.Lens.Store do
   alias Gralkor.IngestedRepresentation
 
   @enforce_keys [:operator_id, :lens]
-  defstruct [:operator_id, :lens, :evidence_id, :representation_collector]
+  defstruct [:operator_id, :lens, :source_kind, :evidence_id, :representation_collector]
 
   @type t :: %__MODULE__{
           operator_id: String.t(),
           lens: Lens.t() | Replaceable.t() | :global,
+          source_kind: Gralkor.Ingest.source_kind() | nil,
           evidence_id: String.t() | nil,
           representation_collector: (IngestedRepresentation.t() -> any()) | nil
         }

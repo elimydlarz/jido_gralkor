@@ -137,6 +137,7 @@ defmodule Gralkor.Client do
         store = %Store{
           operator_id: request.operator_id,
           lens: lens,
+          source_kind: request.source_kind,
           evidence_id: request.evidence_id || IngestedRepresentation.new_evidence_id(),
           representation_collector: &send(caller, {collection_ref, &1})
         }

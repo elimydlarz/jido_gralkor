@@ -10,13 +10,33 @@ defmodule Gralkor.Ingest do
   """
 
   @enforce_keys [:operator_id, :lens, :content, :source_description]
-  defstruct [:operator_id, :lens, :content, :source_description, :evidence_id]
+  defstruct [:operator_id, :lens, :source_kind, :content, :source_description, :evidence_id]
 
-  @type t :: %__MODULE__{
-          operator_id: String.t(),
-          lens: String.t(),
-          content: String.t(),
-          source_description: String.t(),
-          evidence_id: String.t() | nil
-        }
+  @type source_kind :: :conversation | :document | :structured_record
+
+  @type t ::
+          %__MODULE__{
+            operator_id: String.t(),
+            lens: String.t(),
+            source_kind: :conversation,
+            content: String.t(),
+            source_description: String.t(),
+            evidence_id: String.t() | nil
+          }
+          | %__MODULE__{
+              operator_id: String.t(),
+              lens: String.t(),
+              source_kind: :document,
+              content: String.t(),
+              source_description: String.t(),
+              evidence_id: String.t() | nil
+            }
+          | %__MODULE__{
+              operator_id: String.t(),
+              lens: String.t(),
+              source_kind: :structured_record,
+              content: map() | list(),
+              source_description: String.t(),
+              evidence_id: String.t() | nil
+            }
 end
