@@ -333,7 +333,13 @@ defmodule Gralkor.ClientContract do
           unquote(setup_block).()
           configure_memory_add(:ok)
 
-          assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual")
+          assert :ok =
+                   client().memory_add(
+                     "group-1",
+                     "Eli prefers concise",
+                     "manual",
+                     :conversation
+                   )
         end
       end
 
@@ -342,7 +348,8 @@ defmodule Gralkor.ClientContract do
           unquote(setup_block).()
           configure_memory_add({:error, :extract_failed})
 
-          assert {:error, :extract_failed} = client().memory_add("group-1", "x", nil)
+          assert {:error, :extract_failed} =
+                   client().memory_add("group-1", "x", nil, :document)
         end
       end
 
@@ -351,10 +358,40 @@ defmodule Gralkor.ClientContract do
           unquote(setup_block).()
           configure_memory_add(:ok)
 
-          assert :ok = client().memory_add("group-1", "Eli prefers concise", "manual")
+          assert :ok =
+                   client().memory_add(
+                     "group-1",
+                     "Eli prefers concise",
+                     "manual",
+                     :conversation
+                   )
 
-          assert [["group-1", "Eli prefers concise", "manual"]] =
+          assert [["group-1", "Eli prefers concise", "manual", :conversation]] =
                    Gralkor.Client.InMemory.adds()
+        end
+      end
+
+      describe "when memory is added with a group, content and a source description > where a source kind is supplied" do
+        test "then the call is recorded with that source kind unchanged" do
+          unquote(setup_block).()
+          configure_memory_add(:ok)
+
+          assert :ok =
+                   client().memory_add(
+                     "group-1",
+                     %{"status" => "approved"},
+                     "project record",
+                     :structured_record
+                   )
+
+          assert [
+                   [
+                     "group-1",
+                     %{"status" => "approved"},
+                     "project record",
+                     :structured_record
+                   ]
+                 ] = Gralkor.Client.InMemory.adds()
         end
       end
 
