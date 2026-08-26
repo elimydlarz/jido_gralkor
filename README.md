@@ -140,12 +140,12 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
 | `:embedded_falkordb_socket_timeout_ms` | positive integer | `60_000` | Socket read timeout for the embedded FalkorDB connection, converted to seconds for `AsyncFalkorDB`. Ignored by remote FalkorDB. Invalid values raise `ArgumentError` when the embedded runtime starts. |
-| `:destinations` | list of keyword definitions | packaged `operator`, `experiential-learning`, and `generalisations` Destinations | The Destination registry. Each application definition has `:name`, an `operator/path` or `global/path` `:address`, and optional `:ontology` (default `Gralkor.DefaultOntology`). See [Destinations](DESTINATIONS.md). |
-| `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:destination`, and `:ingestion`, with optional `write: :append`; replaceable Lenses use `:name`, `:destination`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"operator"`, `"global"`), retired (`"default"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
+| `:destinations` | list of keyword definitions | packaged `operator` and `global` Destinations | The Destination registry. Each application definition has only `:name`; its exact name is a shared graph ID. `global` is the single shared global graph, while `operator` resolves to `operator/<operator id>`. See [Destinations](DESTINATIONS.md). |
+| `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:destination`, and `:ingestion`, with optional `:ontology` (default `Gralkor.DefaultOntology`) and `write: :append`; replaceable Lenses use `:name`, `:destination`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"operator"`, `"global"`), retired (`"default"`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
 | `:destination_storage` | module | `Gralkor.Destination.Storage.Graphiti` | Search storage behind `Client.search/1`. Set to `Gralkor.Destination.Storage.InMemory` in tests. |
-| `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, a registered `:destination`, and a repository-relative YAML `:chain_of_thought` path. Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
+| `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, a registered `:destination`, a repository-relative YAML `:chain_of_thought` path, and optional `:ontology` (default `Gralkor.DefaultOntology`). Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
 | `:reflection_root` | path | application package root | Root used to resolve Reflection YAML paths. The default makes the packaged `priv/reflections/*.yaml` files work after installation; set it when an application keeps custom CoTs under another repository directory. |
 | `:reflection_storage` | module | `Gralkor.Reflection.Storage.Graphiti` | Physical storage behind `Gralkor.Reflection.Store`. Tests can use `Gralkor.Reflection.Storage.InMemory`; Destination search should then use its in-memory adapter too. |
 | `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall search and presentation. On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. |
@@ -158,7 +158,7 @@ config :jido_gralkor,
   recall_deadline_ms: 12_000
 ```
 
-The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `recall/4` need no ontology configuration. They use the packaged operator Destination and its library-owned `Gralkor.DefaultOntology`. Application-specific extraction schemas belong on registered Destinations referenced by named Lenses or Reflections.
+The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `recall/4` need no ontology configuration. The Lens uses the packaged operator Destination and the library-owned `Gralkor.DefaultOntology`. Application-specific extraction schemas belong on appending Lenses or Reflections.
 
 `recall/4` presents every fact returned by memory search verbatim and in order inside an untrusted memory block, retaining any source wording carried by each fact. Recall makes no second inference call: the consuming agent decides how to interpret the returned memory with its own model.
 
@@ -181,7 +181,7 @@ The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `reca
 | --- | --- | --- | --- |
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
 | `:ingestion_lens` | no | unset (implicit-operator mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. The removed `:default_lens` option raises and identifies this replacement. |
-| `:search_destinations` | no | `[]` | Registered Destination names searched by `memory_search`. An empty list selects the packaged operator-memory and global-generalisations Destinations. |
+| `:search_destinations` | no | `[]` | Registered Destination names searched by `memory_search`. An empty list selects the packaged `operator` and `global` Destinations. |
 
 Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
 
@@ -196,7 +196,7 @@ Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the 
 
 Everything above, in one deployment. Three files.
 
-**Ontologies are modules referenced by Destinations.** Define an ontology as ordinary compiled Elixir in your own `lib/`, then reference its module from each Destination that should extract with it. Lenses and Reflections reference those Destinations by name; neither repeats the ontology or address.
+**Ontologies are modules referenced by writers.** Define an ontology as ordinary compiled Elixir in your own `lib/`, then select it on each appending Lens or Reflection that should extract with it. Destinations only name graphs.
 
 ```elixir
 # lib/my_app/ontologies.ex — compiled code. Named by Destination definitions below.
