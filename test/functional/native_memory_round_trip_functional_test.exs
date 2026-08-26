@@ -147,28 +147,29 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   describe "when memory search returns facts for recall" do
     test "then every returned fact is presented verbatim and in order inside an untrusted memory block",
          %{g: g} do
-      facts = [
-        "- Eli works at Anthropic. (source: onboarding notes)",
-        "- The office plant is a monstera. (source: facilities inventory)"
+      graph_facts = [
+        "Eli works at Anthropic. (source: onboarding notes)",
+        "The office plant is a monstera. (source: facilities inventory)"
       ]
+      returned_facts = Enum.map(graph_facts, &("- " <> &1))
 
-      put_facts(g, facts)
+      put_facts(g, graph_facts)
 
       assert {:ok, block} =
                Native.recall("operator_one", "TestAgent", "fresh-session", "Where does Eli work?")
 
       assert block =~ ~r/<gralkor-memory trust="untrusted">/
       assert block =~ "</gralkor-memory>"
-      assert block =~ Enum.at(facts, 0)
-      assert block =~ Enum.at(facts, 1)
+      assert block =~ Enum.at(returned_facts, 0)
+      assert block =~ Enum.at(returned_facts, 1)
 
-      assert :binary.match(block, Enum.at(facts, 0)) <
-               :binary.match(block, Enum.at(facts, 1))
+      assert :binary.match(block, Enum.at(returned_facts, 0)) <
+               :binary.match(block, Enum.at(returned_facts, 1))
     end
 
     test "and every returned fact retains its available source wording", %{g: g} do
       source_wording = "according to the incident report filed by Mina"
-      put_facts(g, ["- The Atlas launch moved to Friday, #{source_wording}."])
+      put_facts(g, ["The Atlas launch moved to Friday, #{source_wording}."])
 
       assert {:ok, block} =
                Native.recall("operator_one", "TestAgent", nil, "When is Atlas launching?")
@@ -186,7 +187,7 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
           else: System.delete_env("GRALKOR_LLM_MODEL")
       end)
 
-      put_facts(g, ["- Raw memory result."])
+      put_facts(g, ["Raw memory result."])
 
       assert {:ok, block} = Native.recall("operator_one", "TestAgent", nil, "anything")
       assert block =~ "- Raw memory result."
