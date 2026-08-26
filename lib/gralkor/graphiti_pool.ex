@@ -408,10 +408,14 @@ defmodule Gralkor.GraphitiPool do
         n = name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name
         gid = group.decode('utf-8') if isinstance(group, (bytes, bytearray)) else group
         sk = source_kind.decode('utf-8') if isinstance(source_kind, (bytes, bytearray)) else source_kind
+        episode_type = {
+          'conversation': EpisodeType.message,
+          'structured_record': EpisodeType.json,
+        }.get(sk, EpisodeType.text)
         kwargs = dict(
           name=n,
           episode_body=c,
-          source=EpisodeType.message if sk == 'conversation' else EpisodeType.text,
+          source=episode_type,
           source_description=s,
           group_id=gid,
           reference_time=datetime.now(timezone.utc),
