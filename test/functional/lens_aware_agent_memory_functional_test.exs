@@ -61,6 +61,11 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         name: "decisions",
         destination: "decisions",
         ingestion: StoreIngestion
+      ],
+      [
+        name: "shared-generalisations",
+        destination: "generalisations",
+        ingestion: StoreIngestion
       ]
     ])
 
@@ -268,7 +273,33 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
              ]
     end
 
-    test "and every returned fact identifies that Destination" do
+    test "and memory search uses the packaged global-generalisations Destination" do
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-two",
+                 lens: "shared-generalisations",
+                 content: "shared generalisation",
+                 source_description: "functional"
+               })
+
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+
+      agent = agent(plugin_state)
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(agent)
+
+      assert {:ok, %{result: result}} =
+               MemorySearch.run(
+                 %{query: "shared"},
+                 Map.put(tool_context, :agent_id, agent.id)
+               )
+
+      assert Jason.decode!(result) == [
+               %{"destination" => "generalisations", "fact" => "shared generalisation"}
+             ]
+    end
+
+    test "and every returned fact identifies its Destination" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
