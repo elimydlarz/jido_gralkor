@@ -29,6 +29,7 @@ defmodule Gralkor.Format do
     |> append_ts(m, :valid_at, "valid from")
     |> append_ts(m, :invalid_at, "invalid since")
     |> append_ts(m, :expired_at, "expired")
+    |> append_sources(m)
   end
 
   @spec format_timestamp(String.t()) :: String.t()
@@ -58,4 +59,15 @@ defmodule Gralkor.Format do
       ts -> acc <> " (#{label} #{format_timestamp(ts)})"
     end
   end
+
+  defp append_sources(acc, %{sources: sources}) when is_list(sources) do
+    Enum.reduce(sources, acc, fn source, rendered ->
+      kind = Map.get(source, "source_kind") || Map.get(source, :source_kind)
+      description = Map.get(source, "source_description") || Map.get(source, :source_description)
+      id = Map.get(source, "id") || Map.get(source, :id)
+      rendered <> " (source: #{kind} — #{description}; episode: #{id})"
+    end)
+  end
+
+  defp append_sources(acc, _fact), do: acc
 end

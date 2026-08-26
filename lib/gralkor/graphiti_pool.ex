@@ -174,6 +174,7 @@ defmodule Gralkor.GraphitiPool do
       Pythonx.eval(
         """
         import asyncio
+        from graphiti_core.nodes import EpisodicNode
         from graphiti_core.search.search_filters import SearchFilters
 
         q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
@@ -181,21 +182,47 @@ defmodule Gralkor.GraphitiPool do
           [t.decode('utf-8') if isinstance(t, (bytes, bytearray)) else t for t in edge_types]
           if edge_types else None
         )
-        if types:
-          edges = asyncio._gralkor_run(
-            g.search(q, num_results=max_results, search_filter=SearchFilters(edge_types=types))
-          )
-        else:
-          edges = asyncio._gralkor_run(g.search(q, num_results=max_results))
-        [
-          {
-            "fact": e.fact,
-            "created_at": str(e.created_at) if e.created_at else None,
-            "valid_at": str(e.valid_at) if e.valid_at else None,
-            "invalid_at": str(e.invalid_at) if e.invalid_at else None,
-            "expired_at": str(e.expired_at) if e.expired_at else None,
-          } for e in edges
-        ]
+        async def search_with_sources():
+          if types:
+            edges = await g.search(
+              q,
+              num_results=max_results,
+              search_filter=SearchFilters(edge_types=types),
+            )
+          else:
+            edges = await g.search(q, num_results=max_results)
+
+          episode_ids = list(dict.fromkeys(
+            episode_id for edge in edges for episode_id in (edge.episodes or [])
+          ))
+          episodes = await EpisodicNode.get_by_uuids(g.driver, episode_ids) if episode_ids else []
+          episodes_by_id = {episode.uuid: episode for episode in episodes}
+          source_kinds = {
+            "message": "conversation",
+            "text": "document",
+            "json": "structured_record",
+          }
+
+          return [
+            {
+              "fact": edge.fact,
+              "created_at": str(edge.created_at) if edge.created_at else None,
+              "valid_at": str(edge.valid_at) if edge.valid_at else None,
+              "invalid_at": str(edge.invalid_at) if edge.invalid_at else None,
+              "expired_at": str(edge.expired_at) if edge.expired_at else None,
+              "sources": [
+                {
+                  "id": episode_id,
+                  "source_kind": source_kinds.get(episodes_by_id[episode_id].source.value),
+                  "source_description": episodes_by_id[episode_id].source_description,
+                }
+                for episode_id in (edge.episodes or [])
+                if episode_id in episodes_by_id
+              ],
+            } for edge in edges
+          ]
+
+        asyncio._gralkor_run(search_with_sources())
         """,
         %{
           "g" => instance,
@@ -715,7 +742,7 @@ defmodule Gralkor.GraphitiPool do
             "set it, or configure a different provider for the #{role} role"
   end
 
-  @fact_keys ~w(fact created_at valid_at invalid_at expired_at)a
+  @fact_keys ~w(fact created_at valid_at invalid_at expired_at sources)a
   @fact_keys_strings Enum.map(@fact_keys, &Atom.to_string/1)
 
   defp atomize_keys(map) when is_map(map) do
