@@ -457,7 +457,9 @@ defmodule Gralkor.Client.NativeTest do
                     "name": kwargs.get("name"),
                     "group_id": kwargs.get("group_id"),
                     "body": kwargs.get("episode_body"),
+                    "source_kind": kwargs.get("source").value,
                     "source_description": kwargs.get("source_description"),
+                    "custom_extraction_instructions": kwargs.get("custom_extraction_instructions"),
                     "entity_types": sorted((kwargs.get("entity_types") or {}).keys()),
                     "edge_types": sorted((kwargs.get("edge_types") or {}).keys()),
                     "excluded_entity_types": kwargs.get("excluded_entity_types"),
@@ -542,11 +544,53 @@ defmodule Gralkor.Client.NativeTest do
          %{g: g} do
       Code.ensure_loaded!(Native)
       assert function_exported?(Native, :memory_add, 3)
-      refute function_exported?(Native, :memory_add, 4)
+      assert function_exported?(Native, :memory_add, 4)
       assert :ok = Native.memory_add("g1", "content", "manual")
       assert [episode] = episodes(g)
       refute "entity_types" in episode["kwargs"]
       refute "excluded_entity_types" in episode["kwargs"]
+    end
+  end
+
+  describe "when memory is added with a group and content > where a source kind is supplied" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the declared source kind is forwarded to the graph write", %{g: g} do
+      assert :ok =
+               Native.memory_add(
+                 "g1",
+                 "Eli may prefer tea.",
+                 "conversation with Eli",
+                 :conversation
+               )
+
+      assert [episode] = episodes(g)
+      assert episode["source_kind"] == "message"
+    end
+  end
+
+  describe "when memory is added with a group and content > where a source kind is supplied > while the source kind is structured record" do
+    @describetag :integration
+    setup :start_recording_pool
+
+    test "then the supplied map or list is forwarded as its JSON encoding", %{g: g} do
+      assert :ok =
+               Native.memory_add(
+                 "g1",
+                 %{"status" => "approved", "votes" => ["yes", "yes"]},
+                 "meeting record",
+                 :structured_record
+               )
+
+      assert [episode] = episodes(g)
+
+      assert Jason.decode!(episode["body"]) == %{
+               "status" => "approved",
+               "votes" => ["yes", "yes"]
+             }
+
+      assert episode["source_kind"] == "json"
     end
   end
 
