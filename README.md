@@ -484,6 +484,7 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   Gralkor.Client.ingest(%Gralkor.Ingest{
     operator_id: "operator-42",
     lens: "decisions",
+    source_kind: :conversation,
     content: "We chose Friday.",
     source_description: "release planning"
   })
@@ -519,6 +520,14 @@ Consumers that ingest, replace, or search outside an agent call the same public 
     }
   })
 ```
+
+Every ingestion declares deterministic provenance through `source_kind`:
+
+- `:conversation` accepts speaker-attributed text and becomes a Graphiti message episode.
+- `:document` accepts text and becomes a Graphiti text episode.
+- `:structured_record` accepts a JSON-compatible map or list, which Gralkor JSON-encodes for a Graphiti JSON episode.
+
+`source_kind` says where the information came from; it is not a credibility, truth, opinion, or speculation rating. Gralkor validates the kind and its content shape before invoking a Lens or Graphiti. Automatic turn capture declares `:conversation`; callers using `Gralkor.Ingest` or `memory_add/4` declare the kind themselves, while legacy `memory_add/3` remains a document-text compatibility call. The same Graphiti extraction call receives static guidance to retain attribution and epistemic wording such as uncertainty or speculation—Gralkor does not run a second presentation-classification inference. Fact results resolve their originating episodes and append the episode identifier, source kind, and source description on recall.
 
 Search names Destinations directly. Searches run concurrently while results retain configured Destination order. `max_results` defaults to `20`, must be a positive integer, and applies independently to every Destination. Result types are `:facts`, `:nodes`, `:episodes`, and `:artefacts`; each returned item identifies its Destination. Node searches accept `entity_types`, fact searches accept `edge_types`, and artefact searches may narrow by `artefact_id`. The `memory_search` action returns the attributed list as JSON.
 
