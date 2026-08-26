@@ -10,5 +10,6 @@ defmodule Gralkor.Destination do
 
   @spec graph_id(t(), String.t()) :: String.t()
   def graph_id(%__MODULE__{name: "operator"}, operator_id), do: "operator/" <> operator_id
+  def graph_id(%__MODULE__{name: "global"}, _operator_id), do: "destination_global"
   def graph_id(%__MODULE__{name: name}, _operator_id), do: name
 end
