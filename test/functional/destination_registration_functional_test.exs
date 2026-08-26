@@ -76,6 +76,19 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
     test "then operator memory references the Destination named `operator`" do
       assert Client.lens!("operator").destination.name == "operator"
     end
+
+    test "and globally shared memory references the Destination named `global`" do
+      assert Gralkor.Destination.Registry.fetch!("global").name == "global"
+    end
+  end
+
+  describe "when multiple Lenses or Reflections reference the same Destination" do
+    test "then their results are saved to the same Destination" do
+      lens_destination = Client.lens!("observations").destination
+      [reflection] = ReflectionRegistry.configured!()
+
+      assert reflection.destination == lens_destination
+    end
   end
 
   describe "if the Destination registry is not a list" do
@@ -135,6 +148,36 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       assert_raise ArgumentError, ~r/shared.*ontology/, fn ->
         Client.lens!("observations")
+      end
+    end
+  end
+
+  describe "if a Lens or Reflection references an unknown Destination" do
+    test "then configuration resolution raises `ArgumentError` identifying the Lens or Reflection and Destination" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          destination: "missing",
+          ontology: MemoryOntology,
+          ingestion: StoreIngestion
+        ]
+      ])
+
+      assert_raise ArgumentError, ~r/observations.*Destination.*missing/, fn ->
+        Client.lens!("observations")
+      end
+
+      Application.put_env(:jido_gralkor, :reflections, [
+        [
+          name: "review",
+          destination: "missing",
+          ontology: MemoryOntology,
+          chain_of_thought: "priv/reflections/erl.yaml"
+        ]
+      ])
+
+      assert_raise ArgumentError, ~r/review.*Destination.*missing/, fn ->
+        ReflectionRegistry.configured!()
       end
     end
   end
