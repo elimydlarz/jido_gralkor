@@ -4,7 +4,7 @@ defmodule Gralkor.Destination.Registry do
   alias Gralkor.Destination
 
   @packaged [
-    %Destination{name: "local"},
+    %Destination{name: "operator"},
     %Destination{name: "global"}
   ]
 
