@@ -143,6 +143,36 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
       assert recalled_fact =~ "Q3 Roadmap — Draft"
     end
 
+    test "and recall presents the extracted fact wording and its source attribution without rewriting either" do
+      graphiti = use_native_boundary()
+      fact = "Mina speculated that Atlas might launch Friday."
+
+      set_search_fixture(graphiti, [
+        %{
+          fact: fact,
+          episodes: [
+            %{
+              id: "episode-conversation-1",
+              source_kind: "message",
+              source_description: "planning conversation"
+            }
+          ]
+        }
+      ])
+
+      assert {:ok, memory} =
+               Gralkor.Client.Native.recall(
+                 "destination_operator-one_observations",
+                 "Gralkor",
+                 "session-one",
+                 "Atlas launch"
+               )
+
+      assert memory =~ fact
+      assert memory =~
+               "source: conversation — planning conversation; episode: episode-conversation-1"
+    end
+
     test "then Graphiti's existing episode extraction is instructed to preserve source attribution and epistemic wording in extracted facts" do
       graphiti = use_native_boundary()
 
