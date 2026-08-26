@@ -28,18 +28,16 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
       %{graph: graph, pool: pool} = start_pool(:embedded)
       GraphitiPool.for(pool, "owner")
 
-      results =
-        1..6
-        |> Task.async_stream(
-          fn index -> Native.memory_add("owner", "episode #{index}", "manual") end,
-          max_concurrency: 6,
-          ordered: false,
-          timeout: 5_000
-        )
-        |> Enum.to_list()
+      overlapping_writes()
 
-      assert Enum.all?(results, &(&1 == {:ok, :ok}))
       assert graph_value(graph, "max_active_writes") == 1
+    end
+
+    test "and every caller receives success" do
+      %{pool: pool} = start_pool(:embedded)
+      GraphitiPool.for(pool, "owner")
+
+      assert Enum.all?(overlapping_writes(), &(&1 == {:ok, :ok}))
     end
   end
 
@@ -90,6 +88,17 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
 
   defp backend_spec(:embedded), do: {:embedded, "/tmp/never_used"}
   defp backend_spec(:remote), do: {:remote, host: "falkor.example", port: 6379}
+
+  defp overlapping_writes do
+    1..6
+    |> Task.async_stream(
+      fn index -> Native.memory_add("owner", "episode #{index}", "manual") end,
+      max_concurrency: 6,
+      ordered: false,
+      timeout: 5_000
+    )
+    |> Enum.to_list()
+  end
 
   defp graph_value(graph, key) do
     {value, _} =

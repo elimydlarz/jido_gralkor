@@ -777,7 +777,7 @@ defmodule Gralkor.GraphitiPool do
     {:reply, instance, state}
   end
 
-  def handle_call(:acquire_episode_write, from, %{episode_write_admission: :unbounded} = state) do
+  def handle_call(:acquire_episode_write, _from, %{episode_write_admission: :unbounded} = state) do
     {:reply, :unbounded, state}
   end
 
