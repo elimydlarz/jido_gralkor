@@ -222,9 +222,9 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
-  describe "when a capture flush renders an empty transcript" do
+  describe "when a legacy or Lens capture flush renders an empty transcript" do
     @tag :capture_log
-    test "then no captured episode is written" do
+    test "then no legacy episode write or Lens ingestion is submitted" do
       add_episode_fn = fn _g, _b, _s, _o, _opts -> flunk("add_episode should not be called") end
 
       cb =
@@ -239,6 +239,13 @@ defmodule Gralkor.ApplicationTest do
 
       refute logs =~ "[gralkor] capture flushed"
       refute logs =~ "[gralkor] [test] capture flush body"
+
+      lens_cb =
+        App.build_lens_flush_callback(
+          ingest_fn: fn _request -> flunk("Lens ingestion should not be called") end
+        )
+
+      assert :ok = lens_cb.("operator", "TestAgent", "Eli", "observations", [], "evidence")
     end
 
     test "and the flush reports success" do
@@ -250,6 +257,13 @@ defmodule Gralkor.ApplicationTest do
         )
 
       assert :ok = cb.("g", "TestAgent", "Eli", nil, [])
+
+      lens_cb =
+        App.build_lens_flush_callback(
+          ingest_fn: fn _request -> flunk("Lens ingestion should not be called") end
+        )
+
+      assert :ok = lens_cb.("operator", "TestAgent", "Eli", "observations", [], "evidence")
     end
   end
 
