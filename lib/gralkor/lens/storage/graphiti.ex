@@ -56,14 +56,17 @@ defmodule Gralkor.Lens.Storage.Graphiti do
       ) do
     {add_episode_fn, episode_opts} = add_options(opts)
 
+    episode_opts =
+      episode_opts
+      |> Keyword.put(:lens, lens.name)
+      |> put_source_kind(store.source_kind)
+
     add_episode_fn.(
       Destination.graph_id(lens.destination, operator_id),
       content,
       source_description,
       lens.destination.ontology,
       episode_opts
-      |> Keyword.put(:lens, lens.name)
-      |> Keyword.put(:source_kind, store.source_kind)
     )
   end
 
@@ -121,6 +124,9 @@ defmodule Gralkor.Lens.Storage.Graphiti do
         raise ArgumentError, "unsupported add options #{inspect(unsupported)}"
     end
   end
+
+  defp put_source_kind(opts, nil), do: opts
+  defp put_source_kind(opts, source_kind), do: Keyword.put(opts, :source_kind, source_kind)
 
   @spec graph_search(String.t(), String.t(), pos_integer()) ::
           {:ok, [String.t()]} | {:error, term()}
