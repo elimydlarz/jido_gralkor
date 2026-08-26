@@ -2,6 +2,7 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Client.Native
+  alias Gralkor.Config
   alias Gralkor.GraphitiPool
 
   @moduletag :functional
@@ -90,7 +91,42 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
     end
   end
 
-  defp start_pool(backend) do
+  describe "when the embedded runtime starts" do
+    test "while no embedded FalkorDB socket read timeout is configured then the embedded connection uses a sixty-second socket read timeout" do
+      delete_env_restored(:embedded_falkordb_socket_timeout_ms)
+
+      assert Config.embedded_falkordb_socket_timeout_ms() == 60_000
+    end
+
+    test "while a positive :embedded_falkordb_socket_timeout_ms is configured then the embedded connection uses that timeout" do
+      put_env_restored(:embedded_falkordb_socket_timeout_ms, 90_000)
+      parent = self()
+
+      start_pool(:embedded,
+        embedded_falkordb_socket_timeout_ms: Config.embedded_falkordb_socket_timeout_ms(),
+        construct_falkor_db: fn spec, socket_timeout ->
+          send(parent, {:constructed_falkordb, spec, socket_timeout})
+          :stub_falkor_db
+        end
+      )
+
+      assert_receive {:constructed_falkordb, {:embedded, "/tmp/never_used"}, 90.0}
+    end
+  end
+
+  describe "if :embedded_falkordb_socket_timeout_ms is not a positive integer" do
+    test "then application startup raises naming the setting and its offending value" do
+      Enum.each([0, -1, "60000"], fn invalid ->
+        put_env_restored(:embedded_falkordb_socket_timeout_ms, invalid)
+
+        assert_raise ArgumentError,
+                     ~r/embedded_falkordb_socket_timeout_ms.*#{Regex.escape(inspect(invalid))}/,
+                     fn -> Config.embedded_falkordb_socket_timeout_ms() end
+      end)
+    end
+  end
+
+  defp start_pool(backend, opts \\ []) do
     {graph, _} =
       Pythonx.eval(
         """
@@ -127,8 +163,8 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
         %{}
       )
 
-    {:ok, pool} =
-      GraphitiPool.start_link(
+    pool_opts =
+      [
         name: Gralkor.GraphitiPool,
         table: :gralkor_graphiti_instances,
         falkordb_spec: backend_spec(backend),
@@ -140,7 +176,10 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
         initialise_instance: fn _instance -> :ok end,
         warmup: false,
         install_loop_fn: &Gralkor.Python.install_async_runtime/0
-      )
+      ]
+      |> Keyword.merge(opts)
+
+    {:ok, pool} = GraphitiPool.start_link(pool_opts)
 
     on_exit(fn -> if Process.alive?(pool), do: GenServer.stop(pool) end)
 
@@ -180,6 +219,21 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
   end
 
   defp assert_eventually(_assertion, 0), do: flunk("condition did not become true")
+
+  defp put_env_restored(key, value) do
+    original = Application.get_env(:jido_gralkor, key, :missing)
+    Application.put_env(:jido_gralkor, key, value)
+    on_exit(fn -> restore_env(key, original) end)
+  end
+
+  defp delete_env_restored(key) do
+    original = Application.get_env(:jido_gralkor, key, :missing)
+    Application.delete_env(:jido_gralkor, key)
+    on_exit(fn -> restore_env(key, original) end)
+  end
+
+  defp restore_env(key, :missing), do: Application.delete_env(:jido_gralkor, key)
+  defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
 
   defp graph_value(graph, key) do
     {value, _} =
