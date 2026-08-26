@@ -3,7 +3,7 @@ defmodule FassetHarnessIntegrationSelectionIntegrationTest do
 
   @moduletag :integration
 
-  test "when the Integration selection probe exists then test fast selects it directly" do
+  test "when the Integration selection probe changes then test fast selects it directly" do
     assert :selected == :selected
   end
 end
