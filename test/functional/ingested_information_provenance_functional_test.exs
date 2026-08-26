@@ -198,7 +198,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                  "Gralkor",
                  "Mina",
                  "observations",
-                 [Gralkor.Message.new("user", "Atlas might launch Friday.")],
+                 [[Gralkor.Message.new("user", "Atlas might launch Friday.")]],
                  "evidence-1"
                )
 
