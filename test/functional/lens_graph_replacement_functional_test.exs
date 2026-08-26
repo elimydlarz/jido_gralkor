@@ -107,7 +107,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
   end
 
   describe "when a caller replaces the complete graph through a replaceable Lens" do
-    test "then the Lens's Destination address resolves the graph used by existing Lens operations" do
+    test "then the Lens's Destination identifies the graph used by existing Lens operations" do
       graph = empty_graph()
 
       assert :ok =
@@ -122,7 +122,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
                         operator_id: "operator-one",
                         lens: %Gralkor.Lens.Replaceable{
                           name: "systems",
-                          destination: %Gralkor.Destination{address: "operator/systems"}
+                          destination: %Gralkor.Destination{name: "operator"}
                         }
                       }, ^graph}
 
@@ -134,7 +134,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
                       %Gralkor.Lens.Store{
                         lens: %Gralkor.Lens.Replaceable{
                           name: "systems",
-                          destination: %Gralkor.Destination{address: "global/shared"}
+                          destination: %Gralkor.Destination{name: "global"}
                         }
                       }, ^graph}
     end
@@ -347,15 +347,15 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
   end
 
   describe "when a caller searches the Destination used by a replaceable Lens" do
-    test "then Destination search resolves and searches that Destination's address" do
-      assert {:ok, [%{destination: "systems-operator", fact: "replacement-owned fact"}]} =
+    test "then Destination search resolves and searches that Destination's graph" do
+      assert {:ok, [%{destination: "operator", fact: "replacement-owned fact"}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
-                 destinations: ["systems-operator"],
+                 destinations: ["operator"],
                  query: "How does settlement work?"
                })
 
-      assert_receive {:searched_destination, %Gralkor.Destination{address: "operator/systems"},
+      assert_receive {:searched_destination, %Gralkor.Destination{name: "operator"},
                       "operator-one", "How does settlement work?", 20}
     end
   end
@@ -372,7 +372,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
   defp replaceable_lens(name, scope) do
     [
       name: name,
-      destination: "#{name}-#{scope}",
+      destination: Atom.to_string(scope),
       write: :replace_graph,
       graph_format: :property_graph
     ]
@@ -381,21 +381,16 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
   defp appending_lens(name) do
     [
       name: name,
-      destination: "#{name}-operator",
+      destination: "operator",
+      ontology: MemoryOntology,
       ingestion: AppendingIngestion
     ]
   end
 
-  defp destinations do
-    [
-      [name: "systems-operator", address: "operator/systems", ontology: MemoryOntology],
-      [name: "systems-global", address: "global/shared", ontology: MemoryOntology],
-      [name: "catalogue-global", address: "global/shared", ontology: MemoryOntology]
-    ]
-  end
+  defp destinations, do: []
 
-  defp group(scope, name) do
-    destination = Gralkor.Destination.Registry.fetch!("#{name}-#{scope}")
+  defp group(scope, _name) do
+    destination = Gralkor.Destination.Registry.fetch!(Atom.to_string(scope))
     Gralkor.Destination.graph_id(destination, "operator-one")
   end
 
