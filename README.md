@@ -2,7 +2,7 @@
 
 Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded Gralkor memory adapter — Graphiti driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), with no separate Gralkor service to deploy. Storage uses either an embedded FalkorDB child or a remote FalkorDB deployment.
 
-You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Destinations** for named memory placement and extraction, **Lenses** for ingestion, and **Reflections** for asynchronous post-ingestion synthesis.
+You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Destinations** for named graphs, **Lenses** for ingestion, and **Reflections** for asynchronous post-ingestion synthesis.
 
 This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 7.0"}` for the whole memory stack.
 
@@ -199,7 +199,7 @@ Everything above, in one deployment. Three files.
 **Ontologies are modules referenced by writers.** Define an ontology as ordinary compiled Elixir in your own `lib/`, then select it on each appending Lens or Reflection that should extract with it. Destinations only name graphs.
 
 ```elixir
-# lib/my_app/ontologies.ex — compiled code. Named by Destination definitions below.
+# lib/my_app/ontologies.ex — compiled code. Named by writer definitions below.
 defmodule MyApp.Ontology do
   use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
