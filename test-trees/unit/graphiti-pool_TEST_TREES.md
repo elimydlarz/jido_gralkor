@@ -81,6 +81,10 @@ when an episode is added
     and the forwarded dictionary uses the graph library's key names outside and the ontology's declared type names inside
   while an episode identifier is supplied
     then that identifier is forwarded to the graph library, so re-adding under it updates the episode by re-extraction
+  where a supported source kind is supplied
+    then conversation, document, and structured-record sources reach the graph library as message, text, and JSON episodes respectively
+    and the existing episode extraction is instructed to preserve source attribution and epistemic wording
+    and no separate presentation-classification operation is invoked
 
 if adding an episode raises inside the graph library
   then an error carrying only the raised exception's class and message is returned
@@ -127,6 +131,7 @@ when a fact search is run for a group
   where edge types are supplied
     then the graph library's edge search is restricted to those ontology relationship types
   and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps
+  and each returned edge identifies its originating episodes by identifier, source kind, and source description
   and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints
 
 if running a fact search raises inside the graph library

@@ -6,6 +6,8 @@ when a fact is formatted
     then each present timestamp is appended in parentheses
     and the timestamps appear in the order created, valid from, invalid since, expired
     and absent timestamps contribute nothing to the rendering
+  where the fact identifies originating episodes
+    then each episode's source kind, source description, and identifier are appended without changing the fact text
 
 when a timestamp is formatted
   then fractional seconds are stripped

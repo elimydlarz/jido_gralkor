@@ -88,6 +88,10 @@ when memory is added with a group and content
   then jido_gralkor's built-in ontology is applied, so a caller neither supplies nor configures one
   where a source description is supplied
     then it is the source recorded on the episode
+  where a source kind is supplied
+    then the declared source kind is forwarded to the graph write
+    while the source kind is structured record
+      then the supplied map or list is forwarded as its JSON encoding
   where no source description is supplied
     then the source recorded on the episode is "manual"
   and generic entity and relationship extraction remains enabled without an application-owned schema

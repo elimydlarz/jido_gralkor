@@ -73,6 +73,8 @@ when memory is added with a group, content and a source description
   then the write uses implicit-default memory, so a caller neither supplies nor configures an ontology
   while the backend acknowledges the add
     then success is returned
+  where a source kind is supplied
+    then the call is recorded with that source kind unchanged
   if the backend fails
     then that failure is returned unchanged
 
