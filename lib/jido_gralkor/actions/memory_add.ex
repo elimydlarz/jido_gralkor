@@ -22,6 +22,11 @@ defmodule JidoGralkor.Actions.MemoryAdd do
         "reasoning and conclusions you want to preserve.",
     schema: [
       content: [type: :string, required: true, doc: "The information to store"],
+      source_kind: [
+        type: {:in, [:conversation, :document, :structured_record]},
+        required: true,
+        doc: "Whether the information came from a conversation, document, or structured record"
+      ],
       source_description: [type: :string, required: true, doc: "Where this came from"]
     ]
 
@@ -40,13 +45,19 @@ defmodule JidoGralkor.Actions.MemoryAdd do
             Client.ingest(%Ingest{
               operator_id: operator_id,
               lens: lens,
+              source_kind: params.source_kind,
               content: params.content,
               source_description: params.source_description
             })
 
           _ ->
             group_id = Client.sanitize_group_id(operator_id)
-            Client.impl().memory_add(group_id, params.content, params.source_description)
+            Client.impl().memory_add(
+              group_id,
+              params.content,
+              params.source_description,
+              params.source_kind
+            )
         end
 
       case result do

@@ -13,6 +13,7 @@ defmodule Gralkor.Client.Native do
   alias Gralkor.DefaultOntology
   alias Gralkor.Format
   alias Gralkor.GraphitiPool
+  alias Gralkor.Ingest
   alias Gralkor.Recall
 
   # ── Client behaviour ────────────────────────────────────────
@@ -125,9 +126,23 @@ defmodule Gralkor.Client.Native do
 
   @impl Gralkor.Client
   def memory_add(group_id, content, source_description) do
-    source = source_description || "manual"
+    memory_add(group_id, content, source_description, :document)
+  end
 
-    case GraphitiPool.add_episode(group_id, content, source, DefaultOntology) do
+  @impl Gralkor.Client
+  def memory_add(group_id, content, source_description, source_kind) do
+    Ingest.validate_source!(source_kind, content)
+    source = source_description || "manual"
+    episode_body = Ingest.encode_content!(source_kind, content)
+
+    case GraphitiPool.add_episode(
+           GraphitiPool,
+           group_id,
+           episode_body,
+           source,
+           DefaultOntology,
+           source_kind: source_kind
+         ) do
       :ok -> :ok
       {:error, _} = err -> err
     end
