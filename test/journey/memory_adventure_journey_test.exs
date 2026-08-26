@@ -239,6 +239,15 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
           &contains_fact?(&1, "Clearing")
         )
 
+      attributed_facts =
+        search_until(
+          @operator_one,
+          ["work"],
+          :facts,
+          "backup vacuum scheduling",
+          &contains_attributed_fact?(&1, "conversation")
+        )
+
       superseded_graph =
         search(@operator_one, ["work"], :facts, "settlement ledger")
 
@@ -248,6 +257,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         global_information: contains_episode?(global_for_first, "rollback"),
         erl_learning: learning_artefact?(erl_artefacts),
         preserved_shared_information: contains_episode?(shared_episodes, "vacuum"),
+        source_attribution: contains_attributed_fact?(attributed_facts, "conversation"),
         current_replacement: contains_fact?(current_graph, "Clearing"),
         superseded_replacement: contains_fact?(superseded_graph, "Ledger"),
         second_operator_local_information: contains_episode?(local_for_second, "backup"),
@@ -260,6 +270,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                global_information: true,
                erl_learning: true,
                preserved_shared_information: true,
+               source_attribution: true,
                current_replacement: true,
                superseded_replacement: false,
                second_operator_local_information: false,
@@ -361,6 +372,13 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
   defp contains_fact?(results, text) do
     Enum.any?(results, fn %{fact: fact} -> String.contains?(fact, text) end)
+  end
+
+  defp contains_attributed_fact?(results, source_kind) do
+    Enum.any?(results, fn %{fact: fact} ->
+      String.contains?(fact, "source: #{source_kind}") and
+        String.contains?(fact, "episode:")
+    end)
   end
 
   defp contains_all?(text, expected) do
