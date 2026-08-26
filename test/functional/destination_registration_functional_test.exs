@@ -24,17 +24,23 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       end
 
     Application.put_env(:jido_gralkor, :destinations, [
-      [name: "shared", address: "operator/shared", ontology: MemoryOntology]
+      [name: "shared"]
     ])
 
     Application.put_env(:jido_gralkor, :lenses, [
-      [name: "observations", destination: "shared", ingestion: StoreIngestion]
+      [
+        name: "observations",
+        destination: "shared",
+        ontology: MemoryOntology,
+        ingestion: StoreIngestion
+      ]
     ])
 
     Application.put_env(:jido_gralkor, :reflections, [
       [
         name: "review",
         destination: "shared",
+        ontology: MemoryOntology,
         chain_of_thought: "priv/reflections/erl.yaml"
       ]
     ])
