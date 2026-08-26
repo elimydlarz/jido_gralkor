@@ -744,11 +744,21 @@ defmodule Gralkor.GraphitiPool do
 
   @fact_keys ~w(fact created_at valid_at invalid_at expired_at sources)a
   @fact_keys_strings Enum.map(@fact_keys, &Atom.to_string/1)
+  @source_keys ~w(id source_kind source_description)a
+  @source_keys_strings Enum.map(@source_keys, &Atom.to_string/1)
 
   defp atomize_keys(map) when is_map(map) do
     Map.new(map, fn {k, v} ->
       key = if k in @fact_keys_strings, do: String.to_atom(k), else: k
+      v = if key == :sources, do: Enum.map(v, &atomize_source_keys/1), else: v
       {key, v}
+    end)
+  end
+
+  defp atomize_source_keys(map) do
+    Map.new(map, fn {key, value} ->
+      key = if key in @source_keys_strings, do: String.to_atom(key), else: key
+      {key, value}
     end)
   end
 
