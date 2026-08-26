@@ -196,6 +196,7 @@ defmodule Gralkor.OntologyExtractionTest do
              Client.ingest(%Ingest{
                operator_id: operator_id,
                lens: lens,
+               source_kind: :document,
                content: @fixture,
                source_description: "fixture"
              })

@@ -401,6 +401,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       request = %Ingest{
         operator_id: "operator-one",
         lens: "observations",
+        source_kind: :document,
         content: "fact one",
         source_description: "functional",
         evidence_id: "ev-1"
@@ -469,6 +470,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
                  lens: "observations",
+                 source_kind: :document,
                  content: "direct fact",
                  source_description: "functional",
                  evidence_id: "ev-direct"

@@ -174,6 +174,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                Client.ingest(%Ingest{
                  operator_id: @operator_one,
                  lens: "published",
+                 source_kind: :document,
                  content: global_fact,
                  source_description: "deployment policy"
                })

@@ -150,6 +150,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
         Client.ingest(%Ingest{
           operator_id: "operator-one",
           lens: "observations",
+          source_kind: :document,
           content: "must not land",
           source_description: "functional"
         })

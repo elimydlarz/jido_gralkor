@@ -33,6 +33,7 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
                  lens: "operator",
+                 source_kind: :document,
                  content: "compatible memory",
                  source_description: "legacy"
                })

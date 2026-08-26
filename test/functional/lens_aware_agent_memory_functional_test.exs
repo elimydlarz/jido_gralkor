@@ -121,6 +121,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
                  lens: "operator",
+                 source_kind: :document,
                  content: "baseline memory",
                  source_description: "legacy"
                })
@@ -151,6 +152,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
                  lens: "observations",
+                 source_kind: :document,
                  content: "attributed observation",
                  source_description: "functional"
                })
@@ -206,6 +208,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  Client.ingest(%Ingest{
                    operator_id: "operator-one",
                    lens: lens,
+                   source_kind: :document,
                    content: content,
                    source_description: "functional"
                  })
@@ -248,6 +251,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Client.ingest(%Ingest{
                  operator_id: "operator-two",
                  lens: "shared-generalisations",
+                 source_kind: :document,
                  content: "shared generalisation",
                  source_description: "functional"
                })
@@ -274,6 +278,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
                  lens: "operator",
+                 source_kind: :document,
                  content: "attributed baseline",
                  source_description: "functional"
                })

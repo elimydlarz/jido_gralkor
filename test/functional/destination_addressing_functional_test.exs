@@ -150,6 +150,7 @@ defmodule Gralkor.DestinationAddressingFunctionalTest do
     Client.ingest(%Ingest{
       operator_id: operator,
       lens: lens,
+      source_kind: :document,
       content: content,
       source_description: "functional"
     })

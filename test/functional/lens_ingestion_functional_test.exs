@@ -265,6 +265,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     %Ingest{
       operator_id: "operator-one",
       lens: "observations",
+      source_kind: :document,
       content: content,
       source_description: "functional"
     }
