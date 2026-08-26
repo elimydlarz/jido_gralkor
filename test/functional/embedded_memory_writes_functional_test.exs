@@ -68,12 +68,10 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
         %{}
       )
 
-    table = :"embedded_memory_writes_#{System.unique_integer([:positive])}"
-
     {:ok, pool} =
       GraphitiPool.start_link(
         name: Gralkor.GraphitiPool,
-        table: table,
+        table: :gralkor_graphiti_instances,
         falkordb_spec: backend_spec(backend),
         construct_falkor_db: fn _spec -> :stub_falkor_db end,
         construct_shared_clients: fn _llm, _embedder ->
