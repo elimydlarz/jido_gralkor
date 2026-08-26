@@ -6,7 +6,6 @@ defmodule Gralkor.Application do
   require Logger
 
   alias Gralkor.CaptureBuffer
-  alias Gralkor.Client.Native
   alias Gralkor.Config
   alias Gralkor.Distill
   alias Gralkor.GraphitiPool
@@ -41,8 +40,7 @@ defmodule Gralkor.Application do
        [
          falkordb_spec: spec,
          llm_model: Config.llm_model(),
-         embedder_model: Config.embedder_model(),
-         interpret_fn: Native.interpret_callback()
+         embedder_model: Config.embedder_model()
        ]},
       {CaptureBuffer,
        [
