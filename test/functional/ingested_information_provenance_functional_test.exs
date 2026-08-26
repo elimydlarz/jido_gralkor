@@ -137,6 +137,24 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
+  describe "where the source kind is structured record" do
+    test "while the supplied content is a JSON-compatible map or list then Graphiti receives a structured-data episode containing its JSON encoding" do
+      graphiti = use_native_boundary()
+
+      assert :ok =
+               Client.ingest(
+                 request(
+                   :structured_record,
+                   %{"project" => "Atlas", "status" => "proposed"},
+                   "project registry"
+                 )
+               )
+
+      assert [%{"body" => body, "source" => "json"}] = added_episodes(graphiti)
+      assert Jason.decode!(body) == %{"project" => "Atlas", "status" => "proposed"}
+    end
+  end
+
   defp request(source_kind, content, source_description) do
     %Ingest{
       operator_id: "operator-one",
