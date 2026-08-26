@@ -26,7 +26,11 @@ defmodule Gralkor.Client.Native do
     opts =
       case Application.get_env(:jido_gralkor, :recall_deadline_ms) do
         nil -> opts
-        ms when is_integer(ms) -> Keyword.put(opts, :deadline_ms, ms)
+        ms when is_integer(ms) and ms > 0 -> Keyword.put(opts, :deadline_ms, ms)
+
+        invalid ->
+          raise ArgumentError,
+                "Gralkor.Client.Native: recall_deadline_ms must be a positive integer, got #{inspect(invalid)}"
       end
 
     Recall.recall(group_id, agent_name, session_id, query, opts)
