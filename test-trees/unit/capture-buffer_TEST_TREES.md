@@ -58,6 +58,23 @@ where captured turns select a Lens
   if one Lens's flush fails
     then every other Lens's batch is still attempted
     and an awaited flush reports the first failure only after every Lens has been attempted
+  when every Lens batch for a completed ingestion succeeds and Reflections are declared
+    then every completed representation retains the Lens and evidence identity supplied by its batch
+    and every declared Reflection is scheduled once with the completed representations and ingestion context
+  if a completed representation does not carry its batch's Lens and evidence identity
+    then the awaited flush reports the representation validation failure
+    and no Reflection is scheduled
+  if Reflection scheduling returns a failure or raises
+    then the scheduling failure is logged
+    and the successfully completed flush still reports success
+
+when Reflection scheduling needs a scheduler
+  while one is already running
+    then that scheduler is reused rather than duplicated
+  while the capture buffer starts the scheduler it needs
+    then stopping the buffer stops that owned scheduler
+  while the scheduler is shared rather than owned by the buffer
+    then stopping the buffer leaves it running
 
 when a session's turns are read back before anything has been appended for it
   then nothing is returned

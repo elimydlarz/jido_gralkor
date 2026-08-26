@@ -11,6 +11,8 @@ when recall is requested for a group, agent and query
     then the recall pipeline is invoked without one
   where a recall deadline is configured
     then it is forwarded to the recall pipeline in place of the default deadline
+    if it is not a positive integer
+      then an argument error naming the recall deadline is raised before any search is issued
 
 if a recall is requested with a missing or blank agent name
   then an argument error naming the agent name is raised

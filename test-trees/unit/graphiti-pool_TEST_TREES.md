@@ -152,3 +152,11 @@ if running a node search raises inside the graph library
 when an index and constraint rebuild is requested for the whole graph
   then every group the pool holds an instance for is rebuilt, each group being its own database
   and a group whose instance has never been created is left alone, its indices being built the moment it is
+
+when community building is requested for a group
+  then the group is sanitised before its graph instance is selected
+  and the graph library builds communities for that sanitised group's instance
+  and the returned community and edge counts are reported
+
+if community building raises inside the graph library
+  then an error carrying the raised exception is returned

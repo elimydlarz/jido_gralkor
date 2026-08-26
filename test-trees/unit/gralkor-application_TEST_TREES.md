@@ -32,8 +32,8 @@ when a capture flush writes its captured episode successfully
   where test mode is enabled
     then the rendered transcript itself is logged, so what actually landed in memory is readable from the logs
 
-when a capture flush renders an empty transcript
-  then no captured episode is written
+when a legacy or Lens capture flush renders an empty transcript
+  then no legacy episode write or Lens ingestion is submitted
   and the flush reports success
 
 if writing the captured episode fails

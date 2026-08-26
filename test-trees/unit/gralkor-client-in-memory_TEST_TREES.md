@@ -1,9 +1,9 @@
 Unit: gralkor-client-in-memory (src: lib/gralkor/client.ex, lib/gralkor/client/in_memory.ex; unit: test/support/gralkor_client_contract.ex and test/gralkor/client/in_memory_test.exs)
 
-when any client operation is called
+when recall, capture, flush-and-await, memory addition, index rebuilding, or community building is called
   then the call is recorded with every argument it was given, so a consumer's exact request can be inspected afterwards
 
-if an operation is called
+if recall, capture, flush-and-await, memory addition, index rebuilding, or community building is called
   while no response is configured for it
     then a not-configured error is returned rather than a fabricated success
 
@@ -54,7 +54,8 @@ if a capture is requested with a missing or blank session id
   and no backend call is made
 
 when a flush is requested for a session
-  then success is returned before the flush completes
+  then the call is recorded with its session id
+  and success is returned before the flush completes
   if the backend fails afterwards
     then that failure is not observable through the return value
 
