@@ -87,7 +87,11 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         ExUnit.CaptureLog.capture_log(fn ->
           assert {:ok, %{result: "Ingesting."}} =
                    MemoryAdd.run(
-                     %{content: "remember this", source_description: "functional"},
+                     %{
+                       content: "remember this",
+                       source_kind: :conversation,
+                       source_description: "functional"
+                     },
                      %{agent_id: "operator-one"}
                    )
 

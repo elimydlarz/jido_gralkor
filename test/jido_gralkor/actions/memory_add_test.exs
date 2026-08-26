@@ -46,7 +46,11 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
       assert {:ok, %{result: "Ingesting."}} =
                MemoryAdd.run(
-                 %{content: "Eli prefers tea", source_description: "user preference"},
+                 %{
+                   content: "Eli prefers tea",
+                   source_kind: :conversation,
+                   source_description: "user preference"
+                 },
                  %{agent_id: "01USER"}
                )
     end
@@ -55,7 +59,11 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
       InMemory.set_memory_add(:ok)
 
       MemoryAdd.run(
-        %{content: "reflection", source_description: "agent thought"},
+        %{
+          content: "reflection",
+          source_kind: :conversation,
+          source_description: "agent thought"
+        },
         %{agent_id: "user-id"}
       )
 
@@ -83,7 +91,11 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
       assert {:ok, %{result: "Ingesting."}} =
                MemoryAdd.run(
-                 %{content: "We chose Friday.", source_description: "agent decision"},
+                 %{
+                   content: "We chose Friday.",
+                   source_kind: :conversation,
+                   source_description: "agent decision"
+                 },
                  %{agent_id: "operator-one", lens: "decisions"}
                )
 
@@ -105,7 +117,11 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
         capture_log(fn ->
           assert {:ok, %{result: "Ingesting."}} =
                    MemoryAdd.run(
-                     %{content: "something", source_description: "agent thought"},
+                     %{
+                       content: "something",
+                       source_kind: :conversation,
+                       source_description: "agent thought"
+                     },
                      %{agent_id: "01USER"}
                    )
 
@@ -125,7 +141,11 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
       assert {:ok, %{result: "Ingesting."}} =
                MemoryAdd.run(
-                 %{content: "something", source_description: "agent thought"},
+                 %{
+                   content: "something",
+                   source_kind: :conversation,
+                   source_description: "agent thought"
+                 },
                  %{agent_id: "01USER"}
                )
     end

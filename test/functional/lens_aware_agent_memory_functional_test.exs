@@ -97,7 +97,11 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert {:ok, %{result: "Ingesting."}} =
                MemoryAdd.run(
-                 %{content: "remembered observation", source_description: "agent"},
+                 %{
+                   content: "remembered observation",
+                   source_kind: :conversation,
+                   source_description: "agent"
+                 },
                  Map.put(tool_context, :agent_id, agent.id)
                )
 
@@ -316,7 +320,11 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert {:ok, %{result: "Ingesting."}} =
                MemoryAdd.run(
-                 %{content: "Friday decision", source_description: "agent"},
+                 %{
+                   content: "Friday decision",
+                   source_kind: :conversation,
+                   source_description: "agent"
+                 },
                  Map.put(tool_context, :agent_id, agent.id)
                )
 
