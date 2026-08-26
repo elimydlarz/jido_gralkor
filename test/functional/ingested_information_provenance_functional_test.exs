@@ -119,6 +119,17 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
       assert instructions =~ "uncertainty"
       assert instructions =~ "speculation"
     end
+
+    test "and Gralkor initiates no separate presentation-classification inference" do
+      graphiti = use_native_boundary()
+
+      assert :ok =
+               Client.ingest(
+                 request(:conversation, "Mina: Atlas might launch Friday.", "planning chat")
+               )
+
+      assert [_single_existing_extraction] = added_episodes(graphiti)
+    end
   end
 
   describe "where the source kind is conversation" do
