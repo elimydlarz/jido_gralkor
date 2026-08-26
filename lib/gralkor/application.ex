@@ -95,13 +95,17 @@ defmodule Gralkor.Application do
     fn operator_id, agent_name, user_name, lens, turns, evidence_id ->
       transcript = Distill.format_transcript(turns, agent_name, user_name)
 
-      ingest_fn.(%Ingest{
-        operator_id: operator_id,
-        lens: lens,
-        content: transcript,
-        source_description: "captured",
-        evidence_id: evidence_id
-      })
+      if transcript == "" do
+        :ok
+      else
+        ingest_fn.(%Ingest{
+          operator_id: operator_id,
+          lens: lens,
+          content: transcript,
+          source_description: "captured",
+          evidence_id: evidence_id
+        })
+      end
     end
   end
 end
