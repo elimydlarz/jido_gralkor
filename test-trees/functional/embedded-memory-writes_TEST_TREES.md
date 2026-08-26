@@ -1,4 +1,4 @@
-Functional: embedded-memory-writes (src: lib/gralkor/application.ex, lib/gralkor/config.ex, lib/gralkor/graphiti_pool.ex, lib/gralkor/client/native.ex; functional: none)
+Functional: embedded-memory-writes (src: lib/gralkor/application.ex, lib/gralkor/config.ex, lib/gralkor/graphiti_pool.ex, lib/gralkor/client/native.ex; functional: test/functional/embedded_memory_writes_functional_test.exs)
 
 when several episode writes overlap through one embedded runtime
   while the graph accepts every write
