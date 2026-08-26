@@ -6,7 +6,8 @@ when a consumer reads the plugin's advertised actions
 when a consumer reads the plugin's advertised identity and ownership
   then it is named `gralkor`
   and it advertises the memory capability
-  and it exclusively owns the `:__memory__` plugin-state slot
+  and it owns the `:__memory__` plugin-state slot
+  and it is singleton
 
 when a consumer agent mounts the plugin
   then the expanded routes resolve with no conflicts against the host agent
