@@ -6,9 +6,6 @@ when a capture callback returns an upstream rate-limit failure
 when a capture callback returns another upstream failure
   then the capture buffer does not retry it and returns it unchanged
 
-when recall interpretation receives an invalid structured response
-  then interpretation raises after one model call
-
 when a graph write raises inside a capture chain
   then the capture buffer retries with its default one-second and two-second backoffs
   and a returned write failure is not retried by a second layer

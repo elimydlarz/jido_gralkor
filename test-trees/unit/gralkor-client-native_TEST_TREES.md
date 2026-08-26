@@ -6,17 +6,11 @@ when any adapter operation is called
 when recall is requested for a group, agent and query
   then a fact search scoped to the group is supplied to the recall pipeline
   while a session id is given
-    then it is handed to the recall pipeline, so the turns buffered for that session become the conversation context
+    then it is handed to the recall pipeline for recall observability
   where no session id is given
     then the recall pipeline is invoked without one
-    and the conversation context is empty
   where a recall deadline is configured
     then it is forwarded to the recall pipeline in place of the default deadline
-  where an interpretation output budget is configured
-    then each call reads the current configured budget without requiring a restart
-    and it is forwarded to the recall pipeline as the interpretation output-token budget
-  if the configured interpretation output budget is not a positive integer
-    then the adapter raises an argument error naming that setting before recall starts
 
 if a recall is requested with a missing or blank agent name
   then an argument error naming the agent name is raised
@@ -128,13 +122,3 @@ when a recall runs
 
 where any adapter operation other than recall runs
   then it carries no deadline of its own, so a memory addition, a capture flush, an index rebuild and a community build each run for as long as the graph takes
-
-when an interpretation output-token option is built for a supported provider
-  while the provider is OpenAI
-    then the option uses `max_completion_tokens`, which OpenAI structured-output requests accept
-  while the provider is Google
-    then the option uses `max_tokens`, which ReqLLM translates for that provider
-
-when the native adapter reads a structured interpretation response
-  if the required relevant facts field is absent
-    then the absent value remains malformed rather than becoming a valid empty selection
