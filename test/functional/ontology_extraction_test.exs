@@ -89,7 +89,6 @@ defmodule Gralkor.OntologyExtractionTest do
            falkordb_spec: {:embedded, data_dir},
            llm_model: Gralkor.Config.llm_model(),
            embedder_model: Gralkor.Config.embedder_model(),
-           interpret_fn: Native.interpret_callback(),
            warmup: false
          ]}
       )
