@@ -395,7 +395,7 @@ defmodule Gralkor.GraphitiPool do
 
     uuid = Keyword.get(opts, :uuid)
 
-    {_, _} =
+    with_episode_write_admission(server, fn ->
       Pythonx.eval(
         """
         import asyncio
@@ -440,9 +440,24 @@ defmodule Gralkor.GraphitiPool do
         }
       )
 
-    :ok
+      :ok
+    end)
   rescue
     e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
+  end
+
+  defp with_episode_write_admission(server, operation) do
+    case GenServer.call(server, :acquire_episode_write, :infinity) do
+      :unbounded ->
+        operation.()
+
+      :acquired ->
+        try do
+          operation.()
+        after
+          GenServer.cast(server, {:release_episode_write, self()})
+        end
+    end
   end
 
   defp lens_source_description(source_description, nil), do: source_description
@@ -737,7 +752,8 @@ defmodule Gralkor.GraphitiPool do
       shared: shared,
       construct_instance: construct_instance,
       initialise_instance: initialise_instance,
-      ontology_cache: %{}
+      ontology_cache: %{},
+      episode_write_admission: episode_write_admission(falkordb_spec)
     }
 
     if warmup?, do: do_warmup(state)
@@ -761,6 +777,30 @@ defmodule Gralkor.GraphitiPool do
     {:reply, instance, state}
   end
 
+  def handle_call(:acquire_episode_write, from, %{episode_write_admission: :unbounded} = state) do
+    {:reply, :unbounded, state}
+  end
+
+  def handle_call(
+        :acquire_episode_write,
+        from,
+        %{episode_write_admission: %{owner: nil} = admission} = state
+      ) do
+    owner = elem(from, 0)
+    monitor = Process.monitor(owner)
+    admission = %{admission | owner: owner, monitor: monitor}
+    {:reply, :acquired, %{state | episode_write_admission: admission}}
+  end
+
+  def handle_call(
+        :acquire_episode_write,
+        from,
+        %{episode_write_admission: admission} = state
+      ) do
+    admission = %{admission | waiting: :queue.in(from, admission.waiting)}
+    {:noreply, %{state | episode_write_admission: admission}}
+  end
+
   @impl true
   def handle_call({:materialise, module}, _from, state) do
     case Map.fetch(state.ontology_cache, module) do
@@ -776,11 +816,61 @@ defmodule Gralkor.GraphitiPool do
   end
 
   @impl true
+  def handle_cast(
+        {:release_episode_write, owner},
+        %{episode_write_admission: %{owner: owner} = admission} = state
+      ) do
+    Process.demonitor(admission.monitor, [:flush])
+    {:noreply, admit_next_episode_write(state, admission)}
+  end
+
+  def handle_cast({:release_episode_write, _owner}, state), do: {:noreply, state}
+
+  @impl true
+  def handle_info(
+        {:DOWN, monitor, :process, owner, _reason},
+        %{episode_write_admission: %{owner: owner, monitor: monitor} = admission} = state
+      ) do
+    {:noreply, admit_next_episode_write(state, admission)}
+  end
+
+  def handle_info({:DOWN, _monitor, :process, _owner, _reason}, state), do: {:noreply, state}
+
+  @impl true
   def terminate(_reason, state) do
     :ok = state.close_falkor_db.(state.falkor_db)
     unregister_table(self())
     :ets.delete(state.table)
     :ok
+  end
+
+  defp episode_write_admission({:embedded, _data_dir}) do
+    %{owner: nil, monitor: nil, waiting: :queue.new()}
+  end
+
+  defp episode_write_admission({:remote, _options}), do: :unbounded
+
+  defp admit_next_episode_write(state, admission) do
+    case :queue.out(admission.waiting) do
+      {:empty, waiting} ->
+        %{state | episode_write_admission: %{admission | owner: nil, monitor: nil, waiting: waiting}}
+
+      {{:value, from}, waiting} ->
+        owner = elem(from, 0)
+        admission = %{admission | waiting: waiting}
+
+        if Process.alive?(owner) do
+          monitor = Process.monitor(owner)
+          GenServer.reply(from, :acquired)
+
+          %{
+            state
+            | episode_write_admission: %{admission | owner: owner, monitor: monitor}
+          }
+        else
+          admit_next_episode_write(state, admission)
+        end
+    end
   end
 
   # ── Ontology materialisation ────────────────────────────────
