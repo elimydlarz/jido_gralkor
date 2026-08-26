@@ -395,6 +395,8 @@ defmodule Gralkor.GraphitiPool do
       UUID.
     * `:lens` — optional originating Lens name. It is appended to the episode's
       source description before the single graphiti `add_episode` call.
+    * `:source_kind` — `:conversation`, `:document`, or `:structured_record`,
+      mapped to graphiti's message, text, or JSON episode type respectively.
   """
   @spec add_episode(
           GenServer.server(),

@@ -6,7 +6,9 @@ defmodule Gralkor.Ingest do
   Lenses ignore it for storage placement. `lens` is the registered Lens name.
   Gralkor resolves that definition before invoking its ingestion process, so
   callers provide content and source context rather than ontology or group
-  details.
+  details. `source_kind` is the deterministic origin enum: conversations and
+  documents carry text, while structured records carry a JSON-compatible map
+  or list. It describes provenance, not credibility or truth.
   """
 
   @enforce_keys [:operator_id, :lens, :source_kind, :content, :source_description]
