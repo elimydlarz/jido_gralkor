@@ -41,6 +41,37 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
     end
   end
 
+  describe "when a memory search overlaps an episode write through one embedded runtime > while the graph accepts the search" do
+    test "then the search reaches the graph without waiting for episode write admission" do
+      %{graph: graph, pool: pool} = start_pool(:embedded)
+      GraphitiPool.for(pool, "owner")
+
+      overlap = overlap_search_with_write(pool, graph)
+
+      assert overlap.write_result == :ok
+      assert graph_value(graph, "searches_during_write") == 1
+    end
+
+    test "and the caller receives the search result" do
+      %{graph: graph, pool: pool} = start_pool(:embedded)
+      GraphitiPool.for(pool, "owner")
+
+      overlap = overlap_search_with_write(pool, graph)
+
+      assert overlap.search_result ==
+               {:ok,
+                [
+                  %{
+                    fact: "search completed",
+                    created_at: nil,
+                    valid_at: nil,
+                    invalid_at: nil,
+                    expired_at: nil
+                  }
+                ]}
+    end
+  end
+
   defp start_pool(backend) do
     {graph, _} =
       Pythonx.eval(
@@ -51,12 +82,24 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
             def __init__(self):
                 self.active_writes = 0
                 self.max_active_writes = 0
+                self.searches_during_write = 0
 
             async def add_episode(self, **kwargs):
                 self.active_writes += 1
                 self.max_active_writes = max(self.max_active_writes, self.active_writes)
                 await asyncio.sleep(0.1)
                 self.active_writes -= 1
+
+            async def search(self, *args, **kwargs):
+                if self.active_writes:
+                    self.searches_during_write += 1
+                edge = type('_Edge', (), {})()
+                edge.fact = 'search completed'
+                edge.created_at = None
+                edge.valid_at = None
+                edge.invalid_at = None
+                edge.expired_at = None
+                return [edge]
 
             async def build_indices_and_constraints(self):
                 pass
@@ -99,6 +142,26 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
     )
     |> Enum.to_list()
   end
+
+  defp overlap_search_with_write(pool, graph) do
+    write = Task.async(fn -> Native.memory_add("owner", "episode", "manual") end)
+    assert_eventually(fn -> graph_value(graph, "active_writes") == 1 end)
+    search_result = GraphitiPool.search(pool, "owner", "query", 10)
+    %{search_result: search_result, write_result: Task.await(write, 5_000)}
+  end
+
+  defp assert_eventually(assertion, attempts \\ 100)
+
+  defp assert_eventually(assertion, attempts) when attempts > 0 do
+    if assertion.() do
+      :ok
+    else
+      Process.sleep(5)
+      assert_eventually(assertion, attempts - 1)
+    end
+  end
+
+  defp assert_eventually(_assertion, 0), do: flunk("condition did not become true")
 
   defp graph_value(graph, key) do
     {value, _} =
