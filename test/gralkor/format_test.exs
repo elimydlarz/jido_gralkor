@@ -53,6 +53,27 @@ defmodule Gralkor.FormatTest do
     end
   end
 
+  describe "when a fact is formatted > where the fact identifies originating episodes" do
+    test "then each episode's source kind, source description, and identifier are appended without changing the fact text" do
+      assert "- Eli may prefer tea (source: conversation — conversation with Eli; episode: episode-1) (source: document — project notes; episode: episode-2)" =
+               Format.format_fact(%{
+                 fact: "Eli may prefer tea",
+                 sources: [
+                   %{
+                     source_kind: "conversation",
+                     source_description: "conversation with Eli",
+                     id: "episode-1"
+                   },
+                   %{
+                     "source_kind" => "document",
+                     "source_description" => "project notes",
+                     "id" => "episode-2"
+                   }
+                 ]
+               })
+    end
+  end
+
   describe "when a timestamp is formatted" do
     test "then fractional seconds are stripped" do
       assert "2020-01-02T03:04:05+0" = Format.format_timestamp("2020-01-02T03:04:05.123456Z")
