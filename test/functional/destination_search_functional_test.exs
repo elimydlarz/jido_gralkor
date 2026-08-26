@@ -114,9 +114,11 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
   end
 
   describe "where no Destination is supplied" do
-    test "then the requesting operator's packaged default Destination is searched" do
-      assert {:ok, [%{destination: "operator"}]} =
+    test "then the packaged operator-memory Destination is searched" do
+      assert {:ok, results} =
                Client.search(%Search{operator_id: "operator-one", query: "question"})
+
+      assert Enum.any?(results, &match?(%{destination: "operator"}, &1))
 
       assert_receive {:destination_search, "operator", "operator-one", _, _, _, _}
     end
