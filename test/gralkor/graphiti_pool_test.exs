@@ -1677,37 +1677,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
   describe "when the pool has constructed its database" do
     test "then a warmup search runs once against a throwaway query and group, paying the cold-start cost before any consumer can recall" do
-      interpret_count = :counters.new(1, [])
-
-      interpret_fn = fn _text, _budget ->
-        :counters.add(interpret_count, 1, 1)
-        :ok
-      end
-
-      log =
-        capture_log(fn ->
-          %{pid: pid} = start_pool(interpret_fn: interpret_fn, warmup: true)
-          assert Process.alive?(pid)
-          GenServer.stop(pid)
-        end)
-
-      assert :counters.get(interpret_count, 1) == 1
-
-      assert log =~ "[gralkor] warmup failed (non-fatal) — search",
-             "search is invoked once (with stubs it fails the rescued Pythonx eval; the warning line proves the invocation)"
-    end
-
-    test "and a single line reporting the search, interpretation, and total warmup durations is logged" do
-      log =
-        capture_log(fn ->
-          %{pid: pid} = start_pool(interpret_fn: fn _, _ -> :ok end, warmup: true)
-          GenServer.stop(pid)
-        end)
-
-      assert log =~ ~r/\[gralkor\] warmup — search:\d+ interpret:\d+ \d+ms/
-    end
-
-    test "and a warmup interpretation runs once against an empty conversation and throwaway facts" do
       test_pid = self()
 
       {g, _} =
@@ -1727,22 +1696,14 @@ defmodule Gralkor.GraphitiPoolTest do
           %{}
         )
 
-      construct_instance = fn _db, _shared, group_id ->
-        send(test_pid, {:construct_instance, group_id})
-        g
-      end
-
-      interpret_fn = fn text, budget ->
-        send(test_pid, {:interpret_fn, text, budget})
-        :ok
-      end
-
       log =
         capture_log(fn ->
           %{pid: pid} =
             start_pool(
-              construct_instance: construct_instance,
-              interpret_fn: interpret_fn,
+              construct_instance: fn _db, _shared, group_id ->
+                send(test_pid, {:construct_instance, group_id})
+                g
+              end,
               warmup: true,
               install_loop_fn: &Gralkor.Python.install_async_runtime/0
             )
@@ -1752,39 +1713,20 @@ defmodule Gralkor.GraphitiPoolTest do
         end)
 
       assert_receive {:construct_instance, "warmup"}
-      assert_receive {:interpret_fn, prompt, 2_000}
 
-      assert prompt ==
-               Gralkor.Interpret.build_interpretation_context([], "warmup", "- warmup", "warmup")
-
-      assert prompt =~ "Memory facts to interpret:\n- warmup"
-
-      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      rec = Pythonx.decode(rec)
-      assert rec["query"] == "warmup"
-      assert rec["num_results"] == 1
-
+      {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert Pythonx.decode(recorded) == %{"query" => "warmup", "num_results" => 1}
       refute log =~ "warmup failed"
     end
-  end
 
-  describe "when the pool has constructed its database > where no warmup interpretation callback is configured" do
-    test "then warmup interpretation is skipped with a numeric zero duration" do
+    test "and a single line reporting the search and total warmup durations is logged" do
       log =
         capture_log(fn ->
           %{pid: pid} = start_pool(successful_warmup_opts())
           GenServer.stop(pid)
         end)
 
-      assert log =~ ~r/\[gralkor\] warmup — search:\d+ interpret:0 \d+ms/
-    end
-
-    test "and startup completes" do
-      capture_log(fn ->
-        %{pid: pid} = start_pool(successful_warmup_opts())
-        assert Process.alive?(pid)
-        GenServer.stop(pid)
-      end)
+      assert log =~ ~r/\[gralkor\] warmup — search:\d+ \d+ms/
     end
   end
 
@@ -2147,7 +2089,7 @@ defmodule Gralkor.GraphitiPoolTest do
     test "then the failure is logged as non-fatal, naming the stage and the reason" do
       log =
         capture_log(fn ->
-          %{pid: pid} = start_pool(interpret_fn: fn _, _ -> :ok end, warmup: true)
+          %{pid: pid} = start_pool(warmup: true)
           assert Process.alive?(pid), "boot proceeded after warmup failure"
           GenServer.stop(pid)
         end)
@@ -2157,24 +2099,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
     test "and startup completes anyway" do
       capture_log(fn ->
-        %{pid: pid} = start_pool(interpret_fn: fn _, _ -> :ok end, warmup: true)
+        %{pid: pid} = start_pool(warmup: true)
         assert Process.alive?(pid)
         GenServer.stop(pid)
       end)
-    end
-  end
-
-  describe "when the pool has constructed its database > if a warmup call raises or returns an error > while warmup interpretation returns an error" do
-    test "then the interpretation failure is logged with its returned reason" do
-      log =
-        capture_log(fn ->
-          opts = successful_warmup_opts(interpret_fn: fn _, _ -> {:error, :warmup_boom} end)
-          %{pid: pid} = start_pool(opts)
-          assert Process.alive?(pid)
-          GenServer.stop(pid)
-        end)
-
-      assert log =~ "[gralkor] warmup failed (non-fatal) — interpret: :warmup_boom"
     end
   end
 
