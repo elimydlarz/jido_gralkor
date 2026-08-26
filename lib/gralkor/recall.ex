@@ -1,11 +1,10 @@
 defmodule Gralkor.Recall do
   @moduledoc """
-  Orchestrate one recall call: search the graph, interpret the hits against
-  the buffered conversation, wrap the result in a `<gralkor-memory>` block.
+  Orchestrate one recall call: search the graph and wrap the returned facts in
+  a `<gralkor-memory>` block.
 
-  Pure orchestration — all dependencies (search, interpret LLM call, turns
-  source) are passed as functions in `opts`. Production wiring lives in
-  `Gralkor.Client.Native`.
+  Pure orchestration — the search dependency is passed as a function in
+  `opts`. Production wiring lives in `Gralkor.Client.Native`.
 
   See `test-trees/unit/recall_TEST_TREES.md`.
   """
@@ -13,9 +12,6 @@ defmodule Gralkor.Recall do
   require Logger
 
   alias Gralkor.Client
-  alias Gralkor.Interpret
-  alias Gralkor.InterpretParseFailed
-  alias Gralkor.Message
 
   @memory_envelope_open ~s(<gralkor-memory trust="untrusted">)
   @memory_envelope_close "</gralkor-memory>"
@@ -29,17 +25,11 @@ defmodule Gralkor.Recall do
   @type search_fn ::
           (group_id(), query :: String.t(), max :: pos_integer() ->
              {:ok, [String.t()]} | {:error, term()})
-  @type interpret_fn ::
-          (String.t(), pos_integer() -> {:ok, [String.t()]} | {:error, term()})
-  @type turns_fn :: (String.t() -> [[Message.t()]])
 
   @type opts :: [
           search_fn: search_fn(),
-          interpret_fn: interpret_fn(),
-          turns_fn: turns_fn(),
           max_results: pos_integer(),
-          deadline_ms: pos_integer(),
-          output_token_budget: pos_integer()
+          deadline_ms: pos_integer()
         ]
 
   @spec recall(group_id(), String.t(), session_id(), String.t(), opts()) ::
@@ -56,17 +46,10 @@ defmodule Gralkor.Recall do
 
     task =
       Task.async(fn ->
-        try do
-          {:result, do_recall(sanitized, agent_name, session_id, query, max_results, opts)}
-        rescue
-          error in InterpretParseFailed -> {:raise, error, __STACKTRACE__}
-        end
+        {:result, do_recall(sanitized, query, max_results, opts)}
       end)
 
     case Task.yield(task, deadline_ms) || Task.shutdown(task, :brutal_kill) do
-      {:ok, {:raise, error, stacktrace}} ->
-        reraise error, stacktrace
-
       {:ok, {:result, {:error, reason}}} ->
         {:error, reason}
 
@@ -89,73 +72,30 @@ defmodule Gralkor.Recall do
 
   # ── internal ────────────────────────────────────────────────
 
-  defp do_recall(sanitized_group, agent_name, session_id, query, max_results, opts) do
+  defp do_recall(sanitized_group, query, max_results, opts) do
     search_fn = Keyword.fetch!(opts, :search_fn)
-    interpret_fn = Keyword.fetch!(opts, :interpret_fn)
-    turns_fn = Keyword.fetch!(opts, :turns_fn)
 
     t0 = System.monotonic_time(:millisecond)
-    conversation = load_conversation(session_id, turns_fn)
-
-    main_task = Task.async(fn -> search_fn.(sanitized_group, query, max_results) end)
-
-    {search_result, search_ms} = time(fn -> Task.await(main_task, :infinity) end)
+    {search_result, search_ms} = time(fn -> search_fn.(sanitized_group, query, max_results) end)
 
     case search_result do
       {:error, reason} ->
         {:error, reason}
 
       {:ok, facts} when is_list(facts) ->
-        {body, n_facts, interpret_ms} =
-          interpret_combined(facts, conversation, query, interpret_fn, agent_name, opts)
+        {body, n_facts} = present(facts)
 
         %{
           block: wrap(body),
           n_facts: n_facts,
           search_ms: search_ms,
-          interpret_ms: interpret_ms,
           total_ms: System.monotonic_time(:millisecond) - t0
         }
     end
   end
 
-  defp interpret_combined([], _conversation, _query, _interpret_fn, _agent_name, _opts),
-    do: {@no_facts_body, 0, 0}
-
-  defp interpret_combined(facts, conversation, query, interpret_fn, agent_name, opts) do
-    facts_text = format_facts(facts)
-
-    interpret_opts =
-      case Keyword.fetch(opts, :output_token_budget) do
-        {:ok, budget} -> [output_token_budget: budget]
-        :error -> []
-      end
-
-    {relevant, ms} =
-      time(fn ->
-        Interpret.interpret_facts(
-          conversation,
-          query,
-          facts_text,
-          interpret_fn,
-          agent_name,
-          interpret_opts
-        )
-      end)
-
-    case relevant do
-      [] -> {@no_facts_body, 0, ms}
-      list -> {Enum.join(list, "\n"), length(list), ms}
-    end
-  end
-
-  defp load_conversation(nil, _turns_fn), do: []
-
-  defp load_conversation(session_id, turns_fn) do
-    session_id |> turns_fn.() |> List.flatten()
-  end
-
-  defp format_facts(facts), do: Enum.join(facts, "\n")
+  defp present([]), do: {@no_facts_body, 0}
+  defp present(facts), do: {Enum.join(facts, "\n"), length(facts)}
 
   defp wrap(body) do
     @memory_envelope_open <>
@@ -181,7 +121,7 @@ defmodule Gralkor.Recall do
 
   defp log_result(result) do
     Logger.info(
-      "[gralkor] recall result — #{result.n_facts} facts blockChars:#{String.length(result.block)} #{result.total_ms}ms (search:#{result.search_ms} interpret:#{result.interpret_ms})"
+      "[gralkor] recall result — #{result.n_facts} facts blockChars:#{String.length(result.block)} #{result.total_ms}ms (search:#{result.search_ms})"
     )
   end
 
