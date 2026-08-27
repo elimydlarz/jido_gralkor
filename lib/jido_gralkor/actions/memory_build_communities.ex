@@ -8,9 +8,8 @@ defmodule JidoGralkor.Actions.MemoryBuildCommunities do
   wastes time. Only useful when the operator (not the agent) has decided
   community detection should run, typically after significant ingestion.
 
-  `group_id` is derived from `context[:agent_id]` via
-  `Gralkor.Client.sanitize_group_id/1` — the community build is scoped to
-  this agent's group.
+  The graph is the packaged `operator` Destination resolved for
+  `context[:agent_id]`.
   """
 
   use Jido.Action,
@@ -25,7 +24,7 @@ defmodule JidoGralkor.Actions.MemoryBuildCommunities do
 
   @impl true
   def run(_params, context) do
-    group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
+    group_id = context |> Map.fetch!(:agent_id) |> Client.operator_graph_id()
 
     case Client.impl().build_communities(group_id) do
       {:ok, %{communities: communities, edges: edges}} ->

@@ -17,10 +17,10 @@ defmodule Gralkor.Client do
   `flush_and_await/2`, and `memory_add/3` or `/4`. Lens-aware capture uses
   `capture/6`, or `capture/7` when the same turn is also routed through
   additional Lenses. The internal `capture/8` form also carries the host tools
-  and tool context made available to subsequent Reflections. Legacy group IDs
-  are sanitised at their graph boundary (`sanitize_group_id/1`); Lens storage
-  resolves `operator` to `operator/<operator id>` and every other Destination
-  to its exact name.
+  and tool context made available to subsequent Reflections. Logical graph IDs
+  are sanitised only at their physical graph boundary (`sanitize_group_id/1`).
+  The `operator` Destination resolves to `operator/<operator id>` and every
+  other Destination resolves to its exact name.
 
   `flush/1` returns `:ok` before the buffered turns have landed
   (fire-and-forget — appropriate for shutdown paths that cannot block).
@@ -532,6 +532,13 @@ defmodule Gralkor.Client do
              function_exported?(ontology, :__ontology__, 0) do
       raise ArgumentError, "invalid Lens #{inspect(name)} ontology #{inspect(ontology)}"
     end
+  end
+
+  @doc false
+  @spec operator_graph_id(String.t()) :: String.t()
+  def operator_graph_id(operator_id) when is_binary(operator_id) do
+    DestinationRegistry.fetch!("operator")
+    |> Gralkor.Destination.graph_id(operator_id)
   end
 
   @spec sanitize_group_id(String.t()) :: String.t()

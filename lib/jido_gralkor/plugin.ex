@@ -196,7 +196,7 @@ defmodule JidoGralkor.Plugin do
             result =
               case lens do
                 nil ->
-                  group_id = Client.sanitize_group_id(agent.id)
+                  group_id = Client.operator_graph_id(agent.id)
 
                   Client.impl().capture(
                     session_id,

@@ -77,7 +77,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
             end
 
           _ ->
-            group_id = context |> Map.fetch!(:agent_id) |> Client.sanitize_group_id()
+            group_id = context |> Map.fetch!(:agent_id) |> Client.operator_graph_id()
             agent_name = Map.fetch!(context, :agent_name)
 
             case Client.impl().recall(group_id, agent_name, session_id, query) do
