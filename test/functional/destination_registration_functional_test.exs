@@ -91,6 +91,26 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
     end
   end
 
+  describe "where a replaceable Lens references a shared Destination" do
+    test "then replacement changes only graph content previously written by that Lens" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lenses, [
+        replaceable_lens("systems"),
+        replaceable_lens("catalogue")
+      ])
+
+      assert :ok = Client.replace(replacement("catalogue", "catalogue"))
+      assert :ok = Client.replace(replacement("systems-old", "systems"))
+      assert :ok = Client.replace(replacement("systems-new", "systems"))
+
+      assert Enum.map(Gralkor.Lens.Storage.InMemory.graph("shared").nodes, & &1.id) == [
+               "catalogue",
+               "systems-new"
+             ]
+    end
+  end
+
   describe "if the Destination registry is not a list" do
     test "then configuration resolution raises `ArgumentError` naming what it found instead" do
       Application.put_env(:jido_gralkor, :destinations, %{not: "a list"})
@@ -102,6 +122,26 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
   end
 
   describe "if an application registers an invalid Destination" do
+    test "then configuration resolution raises `ArgumentError` before ingestion, Reflection, or search begins" do
+      Application.put_env(:jido_gralkor, :destinations, [[name: " "]])
+
+      assert_raise ArgumentError, fn ->
+        Client.ingest(%Gralkor.Ingest{
+          operator_id: "operator-one",
+          lens: "observations",
+          source_kind: :document,
+          content: "must not land",
+          source_description: "functional"
+        })
+      end
+
+      assert_raise ArgumentError, fn -> ReflectionRegistry.configured!() end
+
+      assert_raise ArgumentError, fn ->
+        Client.search(%Gralkor.Search{operator_id: "operator-one", query: "must not run"})
+      end
+    end
+
     test "and a blank Destination name is identified" do
       Application.put_env(:jido_gralkor, :destinations, [
         [name: " "]
@@ -150,6 +190,24 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
         Client.lens!("observations")
       end
     end
+  end
+
+  defp replaceable_lens(name) do
+    [name: name, destination: "shared", write: :replace_graph, graph_format: :property_graph]
+  end
+
+  defp replacement(node_id, lens) do
+    %Gralkor.Replace{
+      operator_id: "operator-one",
+      lens: lens,
+      graph: %Gralkor.Graph{
+        format: :property_graph,
+        data: %{
+          nodes: [%{id: node_id, labels: ["Thing"], properties: %{}}],
+          relationships: []
+        }
+      }
+    }
   end
 
   describe "if a Lens or Reflection references an unknown Destination" do
