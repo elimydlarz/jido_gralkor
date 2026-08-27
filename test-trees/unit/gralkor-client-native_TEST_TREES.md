@@ -113,7 +113,10 @@ when a group id holding hyphens is sanitised
   then every hyphen is replaced with an underscore
   and consecutive hyphens are each replaced independently, so none is collapsed into another
 
-when a group id holding no hyphens is sanitised
+when an `operator/<operator id>` Destination graph is sanitised for Graphiti
+  then the slash is replaced with an underscore
+
+when a group id holding no hyphens or slashes is sanitised
   then it is returned unchanged
 
 when the client implementation is resolved

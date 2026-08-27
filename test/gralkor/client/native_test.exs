@@ -144,7 +144,13 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when a group id holding no hyphens is sanitised" do
+  describe "when an `operator/<operator id>` Destination graph is sanitised for Graphiti" do
+    test "then the slash is replaced with an underscore" do
+      assert Client.sanitize_group_id("operator/operator-one") == "operator_operator_one"
+    end
+  end
+
+  describe "when a group id holding no hyphens or slashes is sanitised" do
     test "then it is returned unchanged" do
       assert Client.sanitize_group_id("abc") == "abc"
     end
