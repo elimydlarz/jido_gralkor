@@ -476,6 +476,11 @@ defmodule Gralkor.Client do
         ontology = Keyword.get(definition, :ontology, Gralkor.DefaultOntology)
         ingestion = Keyword.get(definition, :ingestion)
 
+        if Keyword.has_key?(definition, :graph_format) do
+          raise ArgumentError,
+                "invalid Lens #{inspect(name)} combines appending and replaceable write settings"
+        end
+
         fetch_lens_destination!(name, destination)
         validate_lens_ontology!(name, ontology)
 
