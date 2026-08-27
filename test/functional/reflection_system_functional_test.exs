@@ -52,7 +52,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     on_exit(fn -> File.rm_rf!(root) end)
     start_supervised!(Gralkor.Reflection.Storage.InMemory)
     start_supervised!(Gralkor.Lens.Storage.InMemory)
-    start_supervised!(Scheduler)
+    start_supervised!(
+      {Scheduler,
+       runner: fn reflection, _ingestion, _opts ->
+         {:error, %{reflection: reflection.name, reason: :not_executed_in_functional_setup}}
+       end}
+    )
 
     previous =
       for key <- [
@@ -454,13 +459,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "and the ingestion caller receives success without waiting for Reflection", context do
       reflection = reflection(context)
-
-      non_inferencing_reflection = %{
-        reflection
-        | chain_of_thought: %{reflection.chain_of_thought | steps: []}
-      }
-
-      configure_reflections([non_inferencing_reflection])
+      configure_reflections([reflection])
 
       Application.put_env(:jido_gralkor, :lenses, [
         [
