@@ -211,6 +211,20 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
         refute_received {:constructed, _}
       end
     end
+
+    test "and the failure names the environment variable" do
+      configure("missing-model:", "google:gemini-embedding-2-preview")
+
+      assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL/, fn ->
+        start_memory_runtime(self())
+      end
+
+      configure("google:gemini-3.1-flash-lite", ":missing-provider")
+
+      assert_raise ArgumentError, ~r/GRALKOR_EMBEDDER_MODEL/, fn ->
+        start_memory_runtime(self())
+      end
+    end
   end
 
   describe "if the native memory runtime receives an unsupported provider" do
