@@ -531,7 +531,7 @@ Replacement changes only content owned by that Lens at its Destination. Gralkor 
 
 Invalid Lens names, write modes, formats, and graph data raise `ArgumentError`; graph data is fully validated before storage mutation begins. Once a valid replacement starts, deletion and insertion are not transactional: an import error is returned, and content already removed or inserted is not rolled back.
 
-Registry and plugin configuration fail fast for blank, duplicate, reserved, retired, or malformed Lens definitions and for unknown Lens names. The retired `"default"` Lens name raises with guidance to use `"operator"`; it is not an alias. If no Lens configuration is used, the implicit `"operator"` Lens preserves the existing operator group and uses Jido Gralkor's built-in generic extraction contract.
+Registry and plugin configuration fail fast for blank, duplicate, reserved, retired, or malformed Lens definitions and for unknown Lens names. The retired `"default"` Lens name raises with guidance to use `"operator"`; it is not an alias. If no Lens configuration is used, the implicit `"operator"` Lens writes to `operator/<operator id>` and uses Jido Gralkor's built-in generic extraction contract.
 
 ### Ontology DSL
 
@@ -647,7 +647,7 @@ The Jido glue:
 - `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls `Gralkor.Client.search/1` for configured Destinations and falls back to legacy `recall/4` in implicit-operator plugin mode. It short-circuits when no thread is committed or the query is blank.
 - `JidoGralkor.Actions.MemoryAdd` — fire-and-forget ReAct tool.
 - `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
-- `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's group.
+- `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's `operator/<operator id>` graph.
 
 The embedded Gralkor adapter (under `lib/gralkor/`):
 

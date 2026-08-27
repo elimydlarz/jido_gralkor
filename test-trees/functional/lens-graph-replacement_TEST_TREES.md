@@ -1,4 +1,4 @@
-Functional: lens-graph-replacement (functional: test/functional/lens_graph_replacement_functional_test.exs)
+Functional: lens-graph-replacement (src: lib/gralkor/replace.ex, lib/gralkor/graph.ex, lib/gralkor/lens/storage.ex; functional: test/functional/lens_graph_replacement_functional_test.exs)
 
 when a caller replaces the complete graph through a replaceable Lens
   then the Lens's Destination identifies the graph used by existing Lens operations

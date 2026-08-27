@@ -1,4 +1,4 @@
-Functional: destination-search (src: lib/gralkor/search.ex, lib/gralkor/client.ex, lib/gralkor/destination/storage.ex, lib/gralkor/destination/storage/graphiti.ex; functional: test/functional/destination_search_functional_test.exs)
+Functional: destination-search (src: lib/gralkor/search.ex, lib/gralkor/client.ex, lib/gralkor/destination/storage.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/destination/storage/in_memory.ex; functional: test/functional/destination_search_functional_test.exs)
 
 when a caller searches memory naming one or more Destinations
   then every distinct Destination is searched concurrently

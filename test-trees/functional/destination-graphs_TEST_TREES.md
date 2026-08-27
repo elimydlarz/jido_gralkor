@@ -1,4 +1,4 @@
-Functional: destination-graphs (functional: test/functional/destination_graphs_functional_test.exs)
+Functional: destination-graphs (src: lib/gralkor/destination.ex, lib/gralkor/destination/registry.ex, lib/gralkor/destination/storage/in_memory.ex; functional: test/functional/destination_graphs_functional_test.exs)
 
 when a Lens saves an episode to the `operator` Destination
   then the resolved graph is named `operator/<operator id>`

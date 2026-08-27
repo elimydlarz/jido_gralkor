@@ -1,4 +1,4 @@
-Functional: lens-registration (functional: test/functional/lens_registration_functional_test.exs)
+Functional: lens-registration (src: lib/gralkor/lens.ex, lib/gralkor/lens/replaceable.ex; functional: test/functional/lens_registration_functional_test.exs)
 
 when an application registers a valid appending or replaceable Lens
   then direct callers and mounted memory plugins can select that Lens by name

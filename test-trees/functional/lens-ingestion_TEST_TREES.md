@@ -1,4 +1,4 @@
-Functional: lens-ingestion (functional: test/functional/lens_ingestion_functional_test.exs)
+Functional: lens-ingestion (src: lib/gralkor/lens/ingestion.ex, lib/gralkor/lens/ingestion/store.ex, lib/gralkor/lens/storage.ex; functional: test/functional/lens_ingestion_functional_test.exs)
 
 when information is submitted through a registered Lens
   then the Lens's ingestion process receives the original information and a store bound to that Lens
