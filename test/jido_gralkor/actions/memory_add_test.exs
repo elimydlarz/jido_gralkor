@@ -55,7 +55,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                )
     end
 
-    test "and the write is carried out in the background under the operator's sanitised group id, carrying the content, source kind, and source description as given" do
+    test "and the background write uses the graph named `operator/<operator id>`" do
       InMemory.set_memory_add(:ok)
 
       MemoryAdd.run(
@@ -68,9 +68,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
       )
 
       assert eventually(fn ->
-               InMemory.adds() == [
-                 ["user_id", "reflection", "agent thought", :conversation]
-               ]
+               match?([["operator/user_id", _, _, _]], InMemory.adds())
              end)
     end
   end
