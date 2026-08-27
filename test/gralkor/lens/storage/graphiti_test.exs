@@ -130,9 +130,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       end
 
       assert :ok =
-               Graphiti.add_episode(store, "content", "source",
-                 add_episode_fn: add_episode_fn
-               )
+               Graphiti.add_episode(store, "content", "source", add_episode_fn: add_episode_fn)
 
       assert_receive {:graph_opts, opts}
       assert opts[:source_kind] == :structured_record
