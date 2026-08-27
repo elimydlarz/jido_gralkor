@@ -468,10 +468,22 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Enum.any?(results, fn %{fact: fact} -> String.contains?(fact, text) end)
   end
 
-  defp contains_attributed_fact?(results, source_kind) do
+  defp attributed_facts(operator_id, destination, query, source_kind, source_description) do
+    search_until(
+      operator_id,
+      [destination],
+      :facts,
+      query,
+      &contains_attributed_fact?(&1, source_kind, source_description),
+      90
+    )
+  end
+
+  defp contains_attributed_fact?(results, source_kind, source_description) do
     Enum.any?(results, fn %{fact: fact} ->
-      String.contains?(fact, "source: #{source_kind}") and
-        String.contains?(fact, "episode:")
+      String.contains?(fact, "source: #{source_kind} —") and
+        String.contains?(fact, source_description) and
+        Regex.match?(~r/episode: [^)]+\)/, fact)
     end)
   end
 
