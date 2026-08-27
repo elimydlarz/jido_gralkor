@@ -11,7 +11,9 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
     @impl true
     def search(destination, operator_id, query, result_type, max_results, opts) do
-      send(Application.fetch_env!(:jido_gralkor, :destination_search_test_pid), {
+      test_pid = Application.fetch_env!(:jido_gralkor, :destination_search_test_pid)
+
+      send(test_pid, {
         :destination_search,
         destination.name,
         operator_id,
@@ -20,6 +22,14 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         max_results,
         opts
       })
+
+      if Application.get_env(:jido_gralkor, :destination_search_barrier, false) do
+        send(test_pid, {:destination_search_started, destination.name, self()})
+
+        receive do
+          :continue_destination_search -> :ok
+        end
+      end
 
       responses = Application.get_env(:jido_gralkor, :destination_search_responses, %{})
       Map.get(responses, destination.name, {:ok, ["#{destination.name}:#{query}"]})
@@ -33,7 +43,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
             :destination_storage,
             :lens_storage,
             :destination_search_test_pid,
-            :destination_search_responses
+            :destination_search_responses,
+            :destination_search_barrier
           ],
           into: %{} do
         {key, Application.get_env(:jido_gralkor, key)}
@@ -60,21 +71,24 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
   describe "when a caller searches memory naming one or more Destinations" do
     test "then every distinct Destination is searched concurrently" do
-      assert {:ok,
-              [
-                %{destination: "first", fact: "first:question"},
-                %{destination: "second", fact: "second:question"}
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first", "second"],
-                 result_type: :facts
-               })
+      Application.put_env(:jido_gralkor, :destination_search_barrier, true)
 
-      assert_receive {:destination_search, "first", "operator-one", "question", :facts, 20, []}
+      search =
+        Task.async(fn ->
+          Client.search(%Search{
+            operator_id: "operator-one",
+            query: "question",
+            destinations: ["first", "second"],
+            result_type: :facts
+          })
+        end)
 
-      assert_receive {:destination_search, "second", "operator-one", "question", :facts, 20, []}
+      assert_receive {:destination_search_started, "first", first}
+      assert_receive {:destination_search_started, "second", second}
+      send(first, :continue_destination_search)
+      send(second, :continue_destination_search)
+
+      assert {:ok, _results} = Task.await(search)
     end
 
     test "and results retain the requested Destination order" do
