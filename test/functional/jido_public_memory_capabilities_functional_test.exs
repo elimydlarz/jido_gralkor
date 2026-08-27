@@ -64,13 +64,13 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert result =~ "17"
     end
 
-    test "and the backend receives one build for the operator's sanitised group" do
+    test "and the backend receives one build for the graph named `operator/<operator id>`" do
       InMemory.set_build_communities({:ok, %{communities: 3, edges: 17}})
 
       assert {:ok, _result} =
                MemoryBuildCommunities.run(%{}, %{agent_id: "operator-one"})
 
-      assert InMemory.communities_builds() == [["operator_one"]]
+      assert InMemory.communities_builds() == [["operator/operator-one"]]
     end
 
     test "and a backend failure is returned unchanged" do
