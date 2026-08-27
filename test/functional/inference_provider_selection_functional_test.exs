@@ -225,6 +225,20 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
         start_memory_runtime(self())
       end
     end
+
+    test "and the failure names the rejected value" do
+      configure("missing-model:", "google:gemini-embedding-2-preview")
+
+      assert_raise ArgumentError, ~r/missing-model:/, fn ->
+        start_memory_runtime(self())
+      end
+
+      configure("google:gemini-3.1-flash-lite", ":missing-provider")
+
+      assert_raise ArgumentError, ~r/:missing-provider/, fn ->
+        start_memory_runtime(self())
+      end
+    end
   end
 
   describe "if the native memory runtime receives an unsupported provider" do
