@@ -138,6 +138,22 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
                  end
                )
     end
+
+
+    test "and the active session remains unchanged" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+      seed_thread(pid, "before-rotation")
+
+      ContextRotator.rotate_now(pid,
+        flush_timeout_ms: 1_000,
+        install_thread_fn: fn _pid, _new_id, _entries, _keep_last_n ->
+          {:error, :install_failed}
+        end
+      )
+
+      assert thread_id(pid) == "before-rotation"
+    end
   end
 
   describe "when an application rotates a running agent with no committed thread" do
