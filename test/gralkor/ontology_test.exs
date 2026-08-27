@@ -162,7 +162,7 @@ defmodule Gralkor.OntologyTest do
           """)
         end
 
-      assert Exception.message(error) =~ "entity User do … end"
+      assert Exception.message(error) =~ ~r/entity User(?:, \"…\")? do … end/
     end
   end
 
