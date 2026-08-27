@@ -218,7 +218,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       "The Backup job overlaps the Vacuum job at 02:00. Moving the Vacuum job to 04:00 prevents the Backup job from failing."
 
     global_fact =
-      "A deployment requires its rollback checkpoint to be verified before release."
+      "The Atlas Deployment requires the Rollback Checkpoint before the Atlas release."
 
     structured_fact = %{
       "source_system" => "Payments",
@@ -292,7 +292,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         @operator_one,
         ["global"],
         :episodes,
-        "deployment rollback checkpoint",
+        "Atlas Deployment requires Rollback Checkpoint",
         &(&1 != [])
       )
 
@@ -301,7 +301,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         @operator_two,
         ["global"],
         :episodes,
-        "deployment rollback checkpoint",
+        "Atlas Deployment requires Rollback Checkpoint",
         &(&1 != [])
       )
 
@@ -341,7 +341,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       attributed_facts(
         @operator_two,
         "global",
-        "deployment rollback checkpoint",
+        "Atlas Deployment requires Rollback Checkpoint",
         "document",
         "deployment policy"
       )
@@ -482,7 +482,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       :facts,
       query,
       &contains_attributed_fact?(&1, source_kind, source_description),
-      90
+      10
     )
   end
 
