@@ -19,32 +19,6 @@ defmodule Gralkor.Reflection.Storage.InMemory do
     )
   end
 
-  @impl true
-  def search(reflection, operator_id, query, max_results) do
-    destination = Store.destination(reflection, operator_id)
-    query = String.downcase(query || "")
-
-    results =
-      Agent.get(__MODULE__, &Map.get(&1, destination, []))
-      |> Enum.filter(fn artefact ->
-        query == "" or String.contains?(String.downcase(Jason.encode!(artefact.payload)), query)
-      end)
-      |> Enum.take(max_results)
-
-    {:ok, results}
-  end
-
-  @impl true
-  def get(reflection, operator_id, artefact_id) do
-    destination = Store.destination(reflection, operator_id)
-
-    {:ok,
-     Agent.get(
-       __MODULE__,
-       &Enum.find(Map.get(&1, destination, []), fn artefact -> artefact.id == artefact_id end)
-     )}
-  end
-
   @doc false
   def search_destination(destination, operator_id, query, max_results, artefact_id \\ nil) do
     graph_id = Gralkor.Destination.graph_id(destination, operator_id)

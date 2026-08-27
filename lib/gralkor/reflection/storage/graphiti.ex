@@ -21,27 +21,6 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
     )
   end
 
-  @impl true
-  def search(reflection, operator_id, query, max_results) do
-    case GraphitiPool.search_episodes(
-           GraphitiPool,
-           group_id(reflection, operator_id),
-           query,
-           max_results
-         ) do
-      {:ok, episodes} -> {:ok, Enum.flat_map(episodes, &decode/1)}
-      {:error, _} = error -> error
-    end
-  end
-
-  @impl true
-  def get(reflection, operator_id, artefact_id) do
-    case search(reflection, operator_id, artefact_id, 20) do
-      {:ok, artefacts} -> {:ok, Enum.find(artefacts, &(&1.id == artefact_id))}
-      {:error, _} = error -> error
-    end
-  end
-
   defp group_id(reflection, operator_id) do
     Store.destination(reflection, operator_id)
   end
