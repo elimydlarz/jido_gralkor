@@ -471,7 +471,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert context.tool_context.tenant == "retained"
     end
 
-    test "and current identity fields override conflicting configured or retained context" do
+    test "and the current operator, agent name, Lens, and session id override conflicting configured or retained context" do
       conflicts = %{
         operator_id: "wrong",
         agent_name: "Wrong",
