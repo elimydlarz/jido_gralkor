@@ -478,7 +478,7 @@ defmodule Gralkor.CaptureBufferTest do
   end
 
   describe "where captured turns select a Lens > when every Lens batch for a completed ingestion succeeds and Reflections are declared" do
-    test "then every completed representation retains the Lens and evidence identity supplied by its batch" do
+    test "then every completed representation retains the Lens identity supplied by its batch" do
       restart_with_reflection_capture()
 
       :ok =
@@ -494,16 +494,30 @@ defmodule Gralkor.CaptureBufferTest do
       assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
       assert_receive {:reflections_scheduled, _, ingestion}
 
-      assert Enum.map(ingestion.representations, &{&1.lens, &1.evidence_id}) == [
-               {"observations", ingestion.representations |> Enum.at(0) |> Map.fetch!(:evidence_id)},
-               {"decisions", ingestion.representations |> Enum.at(1) |> Map.fetch!(:evidence_id)}
-             ]
+      assert Enum.map(ingestion.representations, & &1.lens) == ["observations", "decisions"]
+    end
+
+    test "and every completed representation retains the evidence identity supplied by its batch" do
+      restart_with_reflection_capture()
+
+      :ok =
+        CaptureBuffer.append_lenses(
+          "reflection-session",
+          "operator-one",
+          "Susu",
+          "Eli",
+          ["observations", "decisions"],
+          [Message.new("user", "remember this")]
+        )
+
+      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      assert_receive {:reflections_scheduled, _, ingestion}
 
       assert ingestion.representations |> Enum.map(& &1.evidence_id) |> Enum.uniq() |> length() ==
                1
     end
 
-    test "and every declared Reflection is scheduled once with the completed representations and ingestion context" do
+    test "and every declared Reflection is scheduled exactly once" do
       restart_with_reflection_capture()
 
       append_reflection_turn(%{tools: [:lookup], tool_context: %{session_id: "thread-one"}})
@@ -511,10 +525,30 @@ defmodule Gralkor.CaptureBufferTest do
       assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
 
       assert_receive {:reflections_scheduled, [:daily_summary, :erl], ingestion}
-      assert [%{lens: "observations"}] = ingestion.representations
+      refute_receive {:reflections_scheduled, _, _}
+    end
+
+
+    test "and each scheduled Reflection receives the completed representations" do
+      restart_with_reflection_capture()
+
+      append_reflection_turn(%{})
+
+      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      assert_receive {:reflections_scheduled, _, ingestion}
+      assert [%{lens: "observations", evidence_id: evidence_id}] = ingestion.representations
+      assert is_binary(evidence_id)
+    end
+
+    test "and each scheduled Reflection receives the ingestion context" do
+      restart_with_reflection_capture()
+
+      append_reflection_turn(%{tools: [:lookup], tool_context: %{session_id: "thread-one"}})
+
+      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      assert_receive {:reflections_scheduled, _, ingestion}
       assert ingestion.tools == [:lookup]
       assert ingestion.tool_context == %{session_id: "thread-one"}
-      refute_receive {:reflections_scheduled, _, _}
     end
   end
 

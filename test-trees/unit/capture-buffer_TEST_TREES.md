@@ -62,8 +62,11 @@ where captured turns select a Lens
     then every other Lens's batch is still attempted
     and an awaited flush reports the first failure only after every Lens has been attempted
   when every Lens batch for a completed ingestion succeeds and Reflections are declared
-    then every completed representation retains the Lens and evidence identity supplied by its batch
-    and every declared Reflection is scheduled once with the completed representations and ingestion context
+    then every completed representation retains the Lens identity supplied by its batch
+    and every completed representation retains the evidence identity supplied by its batch
+    and every declared Reflection is scheduled exactly once
+    and each scheduled Reflection receives the completed representations
+    and each scheduled Reflection receives the ingestion context
   if a completed representation does not carry its batch's Lens and evidence identity
     then the awaited flush reports the representation validation failure
     and no Reflection is scheduled
