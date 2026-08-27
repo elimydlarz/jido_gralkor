@@ -150,154 +150,227 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   describe "when two operators use implicit memory, Lenses, ERL, and shared-Destination replacement" do
-    test "then fresh retrieval preserves local and global memory but omits the replaced Lens graph" do
-      implicit_fact =
-        "The private deployment codename is Juniper and the launch city is Muscat."
-
-      appended_fact =
-        "The backup and vacuum jobs overlapped at 02:00; moving vacuum to 04:00 fixed the backups."
-
-      global_fact =
-        "All operators should verify the rollback checkpoint before deployment."
-
-      assert :ok = Native.memory_add(@operator_one, implicit_fact, "manual")
-
-      session_id = "memory_adventure_#{System.unique_integer([:positive])}"
-
-      assert :ok =
-               Native.capture(
-                 session_id,
-                 @operator_one,
-                 "Susu",
-                 "Eli",
-                 [
-                   Message.new(
-                     "user",
-                     "The nightly backup keeps failing with a lock timeout."
-                   ),
-                   Message.new(
-                     "behaviour",
-                     "thought: the backup and vacuum jobs overlap at 02:00"
-                   ),
-                   Message.new(
-                     "assistant",
-                     appended_fact
-                   )
-                 ],
-                 "work-notes",
-                 [],
-                 %{tools: [], tool_context: %{session_id: session_id}}
-               )
-
-      assert :ok = Native.flush_and_await(session_id, 90_000)
-
-      assert :ok =
-               Client.ingest(%Ingest{
-                 operator_id: @operator_one,
-                 lens: "published",
-                 source_kind: :document,
-                 content: global_fact,
-                 source_description: "deployment policy"
-               })
-
-      assert :ok = Client.replace(replacement("Ledger", "old"))
-      assert :ok = Client.replace(replacement("Clearing", "current"))
-
-      assert {:ok, implicit_memory} =
-               Native.recall(
-                 @operator_one,
-                 "Susu",
-                 "fresh_recall_#{System.unique_integer([:positive])}",
-                 "What is the private deployment codename and launch city?"
-               )
-
-      shared_episodes =
-        search_until(
-          @operator_one,
-          ["operator"],
-          :episodes,
-          "backup vacuum 02:00 04:00",
-          &(&1 != [])
-        )
-
-      global_for_first =
-        search_until(
-          @operator_one,
-          ["global"],
-          :episodes,
-          "rollback checkpoint deployment",
-          &(&1 != [])
-        )
-
-      global_for_second =
-        search_until(
-          @operator_two,
-          ["global"],
-          :episodes,
-          "rollback checkpoint deployment",
-          &(&1 != [])
-        )
-
-      local_for_second =
-        search(@operator_two, ["operator"], :episodes, "backup vacuum")
-
-      erl_artefacts =
-        search_until(
-          @operator_one,
-          ["operator"],
-          :artefacts,
-          "backup vacuum scheduling conflict",
-          &(&1 != []),
-          120
-        )
-
-      current_graph =
-        search_until(
-          @operator_one,
-          ["operator"],
-          :facts,
-          "settlement clearing",
-          &contains_fact?(&1, "Clearing")
-        )
-
-      attributed_facts =
-        search_until(
-          @operator_one,
-          ["operator"],
-          :facts,
-          "backup vacuum scheduling",
-          &contains_attributed_fact?(&1, "conversation")
-        )
-
-      superseded_graph =
-        search(@operator_one, ["operator"], :facts, "settlement ledger")
-
-      final_memory_view = %{
-        implicit_memory: contains_all?(implicit_memory, ["juniper", "muscat"]),
-        appended_information: contains_episode?(shared_episodes, "backup"),
-        global_information: contains_episode?(global_for_first, "rollback"),
-        erl_learning: learning_artefact?(erl_artefacts),
-        preserved_shared_information: contains_episode?(shared_episodes, "vacuum"),
-        source_attribution: contains_attributed_fact?(attributed_facts, "conversation"),
-        current_replacement: contains_fact?(current_graph, "Clearing"),
-        superseded_replacement: contains_fact?(superseded_graph, "Ledger"),
-        second_operator_local_information: contains_episode?(local_for_second, "backup"),
-        second_operator_global_information: contains_episode?(global_for_second, "rollback")
-      }
-
-      assert final_memory_view == %{
-               implicit_memory: true,
-               appended_information: true,
-               global_information: true,
-               erl_learning: true,
-               preserved_shared_information: true,
-               source_attribution: true,
-               current_replacement: true,
-               superseded_replacement: false,
-               second_operator_local_information: false,
-               second_operator_global_information: true
-             }
+    test "then ontology-free implicit operator memory remains recallable", %{adventure: adventure} do
+      assert adventure.implicit_memory
     end
+
+    test "and captured appending-Lens information remains searchable", %{adventure: adventure} do
+      assert adventure.appended_information
+    end
+
+    test "and ERL stores a structured Learning artefact", %{adventure: adventure} do
+      assert adventure.erl_learning
+    end
+
+    test "and the global graph is visible to both operators", %{adventure: adventure} do
+      assert adventure.global_for_first_operator
+      assert adventure.global_for_second_operator
+    end
+
+    test "and one operator's operator graph is unavailable to another operator", %{
+      adventure: adventure
+    } do
+      refute adventure.second_operator_local_information
+    end
+
+    test "and appending and replaceable Lenses use the same operator graph", %{
+      adventure: adventure
+    } do
+      assert adventure.shared_operator_destination
+    end
+
+    test "and replacing one Lens's graph preserves information written by another Lens", %{
+      adventure: adventure
+    } do
+      assert adventure.preserved_shared_information
+    end
+
+    test "and fresh retrieval returns the current replacement graph", %{adventure: adventure} do
+      assert adventure.current_replacement
+    end
+
+    test "and fresh retrieval omits the superseded replacement graph", %{adventure: adventure} do
+      refute adventure.superseded_replacement
+    end
+  end
+
+  describe "when the Journey ingests conversation, document, and structured-record episodes" do
+    test "then retrieved facts identify every originating episode by identifier, source kind, and source description",
+         %{adventure: adventure} do
+      assert adventure.conversation_provenance
+      assert adventure.document_provenance
+      assert adventure.structured_record_provenance
+    end
+  end
+
+  defp run_adventure do
+    implicit_fact =
+      "The private deployment codename is Juniper and the launch city is Muscat."
+
+    appended_fact =
+      "The Backup job overlaps the Vacuum job at 02:00. Moving the Vacuum job to 04:00 prevents the Backup job from failing."
+
+    global_fact =
+      "A deployment requires its rollback checkpoint to be verified before release."
+
+    structured_fact = %{
+      "source_system" => "Payments",
+      "relationship" => "depends_on",
+      "target_system" => "Ledger",
+      "statement" => "Payments depends on Ledger for settlement records."
+    }
+
+    :ok = Native.memory_add(@operator_one, implicit_fact, "manual")
+
+    session_id = "memory_adventure_#{System.unique_integer([:positive])}"
+
+    :ok =
+      Native.capture(
+        session_id,
+        @operator_one,
+        "Susu",
+        "Eli",
+        [
+          Message.new("user", "The nightly Backup job conflicts with the Vacuum job."),
+          Message.new("behaviour", "thought: both jobs overlap at 02:00"),
+          Message.new("assistant", appended_fact)
+        ],
+        "work-notes",
+        [],
+        %{tools: [], tool_context: %{session_id: session_id}}
+      )
+
+    :ok = Native.flush_and_await(session_id, 90_000)
+
+    :ok =
+      Client.ingest(%Ingest{
+        operator_id: @operator_one,
+        lens: "published",
+        source_kind: :document,
+        content: global_fact,
+        source_description: "deployment policy"
+      })
+
+    :ok =
+      Client.ingest(%Ingest{
+        operator_id: @operator_one,
+        lens: "work-notes",
+        source_kind: :structured_record,
+        content: structured_fact,
+        source_description: "system dependency registry"
+      })
+
+    :ok = Client.replace(replacement("Ledger", "old"))
+    :ok = Client.replace(replacement("Clearing", "current"))
+
+    {:ok, implicit_memory} =
+      Native.recall(
+        @operator_one,
+        "Susu",
+        "fresh_recall_#{System.unique_integer([:positive])}",
+        "What is the private deployment codename and launch city?"
+      )
+
+    shared_episodes =
+      search_until(
+        @operator_one,
+        ["operator"],
+        :episodes,
+        "backup vacuum 02:00 04:00",
+        &(&1 != [])
+      )
+
+    global_for_first =
+      search_until(
+        @operator_one,
+        ["global"],
+        :episodes,
+        "deployment rollback checkpoint",
+        &(&1 != [])
+      )
+
+    global_for_second =
+      search_until(
+        @operator_two,
+        ["global"],
+        :episodes,
+        "deployment rollback checkpoint",
+        &(&1 != [])
+      )
+
+    local_for_second = search(@operator_two, ["operator"], :episodes, "backup vacuum")
+
+    erl_artefacts =
+      search_until(
+        @operator_one,
+        ["operator"],
+        :artefacts,
+        "backup vacuum scheduling conflict",
+        &(&1 != []),
+        120
+      )
+
+    current_graph =
+      search_until(
+        @operator_one,
+        ["operator"],
+        :facts,
+        "settlement clearing",
+        &contains_fact?(&1, "Clearing")
+      )
+
+    superseded_graph = search(@operator_one, ["operator"], :facts, "settlement ledger")
+
+    conversation_facts =
+      attributed_facts(
+        @operator_one,
+        "operator",
+        "backup vacuum overlap",
+        "conversation",
+        "captured"
+      )
+
+    document_facts =
+      attributed_facts(
+        @operator_two,
+        "global",
+        "deployment rollback checkpoint",
+        "document",
+        "deployment policy"
+      )
+
+    structured_record_facts =
+      attributed_facts(
+        @operator_one,
+        "operator",
+        "payments ledger dependency",
+        "structured_record",
+        "system dependency registry"
+      )
+
+    %{
+      implicit_memory: contains_all?(implicit_memory, ["juniper", "muscat"]),
+      appended_information: contains_episode?(shared_episodes, "backup"),
+      erl_learning: learning_artefact?(erl_artefacts),
+      global_for_first_operator: contains_episode?(global_for_first, "rollback"),
+      global_for_second_operator: contains_episode?(global_for_second, "rollback"),
+      second_operator_local_information: contains_episode?(local_for_second, "backup"),
+      shared_operator_destination:
+        Client.lens!("work-notes").destination == Client.lens!("systems").destination,
+      preserved_shared_information: contains_episode?(shared_episodes, "vacuum"),
+      current_replacement: contains_fact?(current_graph, "Clearing"),
+      superseded_replacement: contains_fact?(superseded_graph, "Ledger"),
+      conversation_provenance:
+        contains_attributed_fact?(conversation_facts, "conversation", "captured"),
+      document_provenance:
+        contains_attributed_fact?(document_facts, "document", "deployment policy"),
+      structured_record_provenance:
+        contains_attributed_fact?(
+          structured_record_facts,
+          "structured_record",
+          "system dependency registry"
+        )
+    }
   end
 
   defp replacement(target, suffix) do
