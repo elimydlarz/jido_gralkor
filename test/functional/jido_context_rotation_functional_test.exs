@@ -124,6 +124,22 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
     end
   end
 
+  describe "when an application rotates a running agent whose flush succeeds but fresh-session installation fails" do
+    test "then the application receives the installation failure" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+      seed_thread(pid, "before-rotation")
+
+      assert {:error, :install_failed} =
+               ContextRotator.rotate_now(pid,
+                 flush_timeout_ms: 1_000,
+                 install_thread_fn: fn _pid, _new_id, _entries, _keep_last_n ->
+                   {:error, :install_failed}
+                 end
+               )
+    end
+  end
+
   describe "when an application rotates a running agent with no committed thread" do
     test "then the application receives success" do
       pid = start_agent()
