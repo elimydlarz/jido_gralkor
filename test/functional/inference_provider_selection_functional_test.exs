@@ -198,6 +198,21 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
     end
   end
 
+  describe "if the deployment configures an override without both a provider and model identifier" do
+    test "then startup fails before client construction" do
+      credentials("google-key", "openai-key")
+
+      for {llm, embedder} <- [
+            {"missing-model:", "google:gemini-embedding-2-preview"},
+            {"google:gemini-3.1-flash-lite", ":missing-provider"}
+          ] do
+        configure(llm, embedder)
+        assert_raise ArgumentError, fn -> start_memory_runtime(self()) end
+        refute_received {:constructed, _}
+      end
+    end
+  end
+
   describe "if the native memory runtime receives an unsupported provider" do
     setup do
       previous_trap_exit = Process.flag(:trap_exit, true)
