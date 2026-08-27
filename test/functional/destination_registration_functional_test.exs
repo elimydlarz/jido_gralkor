@@ -19,7 +19,15 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
   setup do
     previous =
-      for key <- [:destinations, :lenses, :reflections], into: %{} do
+      for key <- [
+            :destinations,
+            :lenses,
+            :reflections,
+            :lens_storage,
+            :destination_storage,
+            :reflection_storage
+          ],
+          into: %{} do
         {key, Application.get_env(:jido_gralkor, key)}
       end
 
