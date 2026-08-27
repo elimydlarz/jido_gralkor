@@ -184,6 +184,20 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
     end
   end
 
+  describe "where the deployment configures a blank LLM or embedder override" do
+    test "then that role uses its Google default" do
+      configure("   ", "openai:text-embedding-3-small")
+      assert Config.llm_model() == %{provider: :google, id: "gemini-3.1-flash-lite"}
+
+      configure("openai:gpt-4.1-mini", "   ")
+
+      assert Config.embedder_model() == %{
+               provider: :google,
+               id: "gemini-embedding-2-preview"
+             }
+    end
+  end
+
   describe "if the native memory runtime receives an unsupported provider" do
     setup do
       previous_trap_exit = Process.flag(:trap_exit, true)
