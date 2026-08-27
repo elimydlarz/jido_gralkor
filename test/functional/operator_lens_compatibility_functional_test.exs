@@ -89,6 +89,20 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
                ]
              end)
     end
+
+    test "and the named Lens writes to that same graph" do
+      assert :ok =
+               Client.ingest(%Ingest{
+                 operator_id: "operator-one",
+                 lens: "operator",
+                 source_kind: :document,
+                 content: "named Lens memory",
+                 source_description: "manual"
+               })
+
+      assert [%{content: "named Lens memory", lens: "operator"}] =
+               Gralkor.Lens.Storage.InMemory.episodes("operator/operator-one")
+    end
   end
 
   describe "if an application retains the removed deployment-wide `:jido_gralkor, :ontology` setting" do
