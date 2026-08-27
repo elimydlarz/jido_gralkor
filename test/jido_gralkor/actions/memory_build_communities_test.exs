@@ -21,13 +21,13 @@ defmodule JidoGralkor.Actions.MemoryBuildCommunitiesTest do
   end
 
   describe "when the build-communities tool runs" do
-    test "then the operator's sanitised group id from the tool context is passed to the backend" do
+    test "then the graph named `operator/<operator id>` is passed to the backend" do
       InMemory.set_build_communities({:ok, %{communities: 3, edges: 17}})
 
       assert {:ok, %{result: _result}} =
                MemoryBuildCommunities.run(%{}, %{agent_id: "user-with-hyphens"})
 
-      assert InMemory.communities_builds() == [["user_with_hyphens"]]
+      assert InMemory.communities_builds() == [["operator/user-with-hyphens"]]
     end
   end
 

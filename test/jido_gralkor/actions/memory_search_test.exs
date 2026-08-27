@@ -76,7 +76,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   end
 
   describe "when the memory search tool runs with a query and a committed session" do
-    test "then the operator's sanitised group id, the agent name, and the session id from the tool context are passed to the memory backend with the query" do
+    test "then the graph named `operator/<operator id>` is passed to the memory backend" do
       InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
 
       MemorySearch.run(%{query: "q"}, %{
@@ -85,10 +85,43 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
         agent_name: "Susu"
       })
 
-      assert [[group_id, agent_name, session_id, "q"]] = InMemory.recalls()
-      assert group_id == "user_with_hyphens"
-      assert agent_name == "Susu"
-      assert session_id == "thr-xyz"
+      assert [["operator/user-with-hyphens", _, _, _]] = InMemory.recalls()
+    end
+
+    test "and the agent name is passed to the memory backend" do
+      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
+
+      MemorySearch.run(%{query: "q"}, %{
+        agent_id: "user-with-hyphens",
+        session_id: "thr-xyz",
+        agent_name: "Susu"
+      })
+
+      assert [[_, "Susu", _, _]] = InMemory.recalls()
+    end
+
+    test "and the session id is passed to the memory backend" do
+      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
+
+      MemorySearch.run(%{query: "q"}, %{
+        agent_id: "user-with-hyphens",
+        session_id: "thr-xyz",
+        agent_name: "Susu"
+      })
+
+      assert [[_, _, "thr-xyz", _]] = InMemory.recalls()
+    end
+
+    test "and the query is passed to the memory backend" do
+      InMemory.set_recall({:ok, "<gralkor-memory>x</gralkor-memory>"})
+
+      MemorySearch.run(%{query: "q"}, %{
+        agent_id: "user-with-hyphens",
+        session_id: "thr-xyz",
+        agent_name: "Susu"
+      })
+
+      assert [[_, _, _, "q"]] = InMemory.recalls()
     end
   end
 

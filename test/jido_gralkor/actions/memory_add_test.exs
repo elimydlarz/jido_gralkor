@@ -71,6 +71,57 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                match?([["operator/user-id", _, _, _]], InMemory.adds())
              end)
     end
+
+    test "and the background write receives the content unchanged" do
+      InMemory.set_memory_add(:ok)
+
+      MemoryAdd.run(
+        %{
+          content: "reflection",
+          source_kind: :conversation,
+          source_description: "agent thought"
+        },
+        %{agent_id: "user-id"}
+      )
+
+      assert eventually(fn ->
+               match?([[_, "reflection", _, _]], InMemory.adds())
+             end)
+    end
+
+    test "and the background write receives the source kind unchanged" do
+      InMemory.set_memory_add(:ok)
+
+      MemoryAdd.run(
+        %{
+          content: "reflection",
+          source_kind: :conversation,
+          source_description: "agent thought"
+        },
+        %{agent_id: "user-id"}
+      )
+
+      assert eventually(fn ->
+               match?([[_, _, _, :conversation]], InMemory.adds())
+             end)
+    end
+
+    test "and the background write receives the source description unchanged" do
+      InMemory.set_memory_add(:ok)
+
+      MemoryAdd.run(
+        %{
+          content: "reflection",
+          source_kind: :conversation,
+          source_description: "agent thought"
+        },
+        %{agent_id: "user-id"}
+      )
+
+      assert eventually(fn ->
+               match?([[_, _, "agent thought", _]], InMemory.adds())
+             end)
+    end
   end
 
   describe "when the memory add tool runs with content, a source kind, and a source description > where the tool context selects a Lens" do

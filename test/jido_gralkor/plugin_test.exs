@@ -418,11 +418,15 @@ defmodule JidoGralkor.PluginTest do
   end
 
   describe "when an agent turn completes > while a thread has committed to agent state" do
-    test "then the turn is sent for capture as canonical messages under that thread's session id and the operator's sanitised group id" do
-      [session_id, group_id, _agent_name, _user_name, messages] = completed_capture()
+    test "then the turn is sent for capture as canonical messages under that thread's session id" do
+      [session_id, _group_id, _agent_name, _user_name, messages] = completed_capture()
       assert session_id == "thr-42"
-      assert group_id == "user_42"
       assert Enum.all?(messages, &match?(%Message{}, &1))
+    end
+
+    test "and capture uses the graph named `operator/<operator id>`" do
+      [_session_id, group_id, _agent_name, _user_name, _messages] = completed_capture()
+      assert group_id == "operator/user-42"
     end
 
     test "and the user name held in agent state is forwarded with the capture" do
