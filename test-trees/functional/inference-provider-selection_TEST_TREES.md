@@ -15,7 +15,8 @@ where the deployment configures a blank LLM or embedder override
 
 if the deployment configures an override without both a provider and model identifier
   then startup fails before client construction
-  and the failure names the environment variable and rejected value
+  and the failure names the environment variable
+  and the failure names the rejected value
 
 if the native memory runtime receives an unsupported provider
   then startup fails before client construction and names both model specs and the supported providers

@@ -60,7 +60,8 @@ when an agent turn begins
 
 when an agent turn completes
   while a thread has committed to agent state
-    then the turn is sent for capture as canonical messages under that thread's session id and the operator's sanitised group id
+    then the turn is sent for capture as canonical messages under that thread's session id
+    and capture uses the graph named `operator/<operator id>`
     and the user name held in agent state is forwarded with the capture
     and the user's query opens the captured messages
     and the completed answer closes them

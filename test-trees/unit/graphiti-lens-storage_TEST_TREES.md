@@ -10,7 +10,8 @@ when a Lens store adds an episode carrying a source kind
   then Graphiti receives that source kind unchanged
 
 if a Lens store receives an unsupported addition or replacement option
-  then an `ArgumentError` identifies the unsupported option
+  then an `ArgumentError` is raised
+  and the error identifies the unsupported option
   and no Graphiti operation begins
 
 when a Lens store using the `operator` Destination is searched

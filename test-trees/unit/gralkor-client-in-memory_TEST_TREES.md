@@ -58,7 +58,8 @@ if a flush or flush-and-await is requested with a missing or blank session id
   and no backend call is made
 
 if flush-and-await receives a timeout that is not a positive integer
-  then an argument error identifies the invalid timeout
+  then an argument error is raised
+  and the error identifies the invalid timeout
   and no backend call is made
 
 when a flush is requested for a session

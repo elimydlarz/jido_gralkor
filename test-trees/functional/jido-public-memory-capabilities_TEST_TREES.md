@@ -11,7 +11,7 @@ when an operator runs the build-indices memory action
 
 when an operator runs the build-communities memory action
   then the action reports the backend counts
-  and the backend receives one build for the operator's sanitised group
+  and the backend receives one build for the graph named `operator/<operator id>`
   and a backend failure is returned unchanged
 
 when an agent invokes memory addition and its background write fails

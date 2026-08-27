@@ -1,7 +1,10 @@
 Unit: memory-search-action (src: lib/jido_gralkor/actions/memory_search.ex; unit: test/jido_gralkor/actions/memory_search_test.exs)
 
 when the memory search tool runs with a query and a committed session
-  then the operator's sanitised group id, the agent name, and the session id from the tool context are passed to the memory backend with the query
+  then the graph named `operator/<operator id>` is passed to the memory backend
+  and the agent name is passed to the memory backend
+  and the session id is passed to the memory backend
+  and the query is passed to the memory backend
   while the backend returns a memory block
     then the action result carries that block
   if the backend fails

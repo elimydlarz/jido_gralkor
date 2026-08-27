@@ -4,7 +4,7 @@ when a model reads the build-communities tool's description
   then it is told not to call the tool unless the operator explicitly asks
 
 when the build-communities tool runs
-  then the operator's sanitised group id from the tool context is passed to the backend
+  then the graph named `operator/<operator id>` is passed to the backend
   while the backend reports how many communities and edges it built
     then the action result reports both counts
   if the backend fails

@@ -2,7 +2,10 @@ Unit: memory-add-action (src: lib/jido_gralkor/actions/memory_add.ex; unit: test
 
 when the memory add tool runs with content, a source kind, and a source description
   then it returns an acknowledgement immediately, without waiting on the write
-  and the write is carried out in the background under the operator's sanitised group id, carrying the content, source kind, and source description as given
+  and the background write uses the graph named `operator/<operator id>`
+  and the background write receives the content unchanged
+  and the background write receives the source kind unchanged
+  and the background write receives the source description unchanged
   where the tool context selects a Lens
     then the Lens ingestion receives the operator, content, source kind, and source description
   if the background write fails

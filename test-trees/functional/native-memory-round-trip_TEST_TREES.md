@@ -1,7 +1,8 @@
 Functional: native-memory-round-trip (src: lib/gralkor/client/native.ex, lib/gralkor/recall.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/application.ex; functional: test/functional/native_memory_round_trip_functional_test.exs)
 
 when a fact is written into an operator's memory
-  then the graph stores its plain text under the operator's group
+  then the graph stores its plain text unchanged
+  and the graph named `operator/<operator id>` receives it
 
 when memory search returns facts for recall
   then every returned fact is presented verbatim and in order inside an untrusted memory block

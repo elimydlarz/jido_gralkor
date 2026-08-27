@@ -11,7 +11,8 @@ when a module declares an ontology with `use Gralkor.Ontology`
     then compilation fails with an error naming `:relationships` and the rejected value
 
 if an ontology entity declaration does not name an alias
-  then compilation fails with an error showing the expected entity declaration form
+  then compilation fails
+  and the error shows the expected entity declaration form
 
 when an ontology declares an aliased entity
   then the entity is named with the alias' last segment as a string ("Foo")
@@ -45,7 +46,8 @@ when an ontology declares an aliased entity
     then compilation fails with an error naming the duplicated entity
 
 if an ontology relationship source does not name an alias
-  then compilation fails with an error showing the expected `from Source` form
+  then compilation fails
+  and the error shows the expected `from Source` form
 
 when an ontology declares an aliased relationship source
   where the block calls `verb Target` with no do-block

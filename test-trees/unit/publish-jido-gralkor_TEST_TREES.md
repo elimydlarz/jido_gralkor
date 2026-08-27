@@ -10,7 +10,8 @@ when an operator asks to publish jido_gralkor with a semantic-version change kin
   and the Hex token identifies the personal user `elimydlarz`
   and after the test suite passes, `jido_gralkor` ownership is transferred from the gralkor organization to `elimydlarz` and verified through that user's owned packages before the version changes
   and Hex receives the synchronized version as a personally owned public package
-  and every repository-relative document linked from the published README is included in the Hex package and ExDoc extras
+  and every repository-relative document linked from the published README is included in the Hex package
+  and every repository-relative document linked from the published README is included in the ExDoc extras
   and GitHub receives a new lightweight release tag for the synchronized release commit
   and remote inspection proves the branch and release tag resolve to the release commit
   and completion reports the version, commit, tag, tests, Hex package, and remote branch
