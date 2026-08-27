@@ -365,8 +365,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       shared_operator_destination:
         Client.lens!("work-notes").destination == Client.lens!("systems").destination,
       preserved_shared_information: contains_episode?(shared_episodes, "vacuum"),
-      current_replacement: contains_fact?(current_graph, "Clearing"),
-      superseded_replacement: contains_fact?(superseded_graph, "Ledger"),
+      current_replacement: contains_fact?(current_graph, "Payments settles through Clearing."),
+      superseded_replacement:
+        contains_fact?(superseded_graph, "Payments settles through Ledger."),
       conversation_provenance:
         contains_attributed_fact?(conversation_facts, "conversation", "captured"),
       document_provenance:
