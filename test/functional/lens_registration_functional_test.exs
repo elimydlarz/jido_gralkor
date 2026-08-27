@@ -277,13 +277,15 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     end
 
     test "and a Lens definition that combines appending and replaceable write settings is identified with its Lens" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        valid_replaceable_lens("systems")
-        |> Keyword.put(:ingestion, StoreIngestion)
-      ])
+      for definition <- [
+            valid_replaceable_lens("systems") |> Keyword.put(:ingestion, StoreIngestion),
+            valid_lens("systems") |> Keyword.put(:graph_format, :property_graph)
+          ] do
+        Application.put_env(:jido_gralkor, :lenses, [definition])
 
-      assert_raise ArgumentError, ~r/systems.*combines.*write settings/, fn ->
-        Client.lens!("systems")
+        assert_raise ArgumentError, ~r/systems.*combines.*write settings/, fn ->
+          Client.lens!("systems")
+        end
       end
     end
   end
