@@ -18,4 +18,12 @@ when two operators use implicit memory, Lenses, ERL, and shared-Destination repl
   and fresh retrieval omits the superseded replacement graph
 
 when the Journey ingests conversation, document, and structured-record episodes
-  then retrieved facts identify every originating episode by identifier, source kind, and source description
+  then every retrieved conversation fact identifies every originating episode
+  and every retrieved conversation fact identifies its conversation source kind
+  and every retrieved conversation fact identifies its captured-turn source description
+  and every retrieved document fact identifies every originating episode
+  and every retrieved document fact identifies its document source kind
+  and every retrieved document fact identifies its deployment-policy source description
+  and every retrieved structured-record fact identifies every originating episode
+  and every retrieved structured-record fact identifies its structured-record source kind
+  and every retrieved structured-record fact identifies its dependency-registry source description

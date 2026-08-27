@@ -211,11 +211,68 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   describe "when the Journey ingests conversation, document, and structured-record episodes" do
-    test "then retrieved facts identify every originating episode by identifier, source kind, and source description",
+    test "then every retrieved conversation fact identifies every originating episode", %{
+      adventure: adventure
+    } do
+      assert every_fact_has_episode_id?(adventure.conversation_facts),
+             inspect(adventure.conversation_facts)
+    end
+
+    test "and every retrieved conversation fact identifies its conversation source kind", %{
+      adventure: adventure
+    } do
+      assert every_fact_has_source_kind?(adventure.conversation_facts, "conversation"),
+             inspect(adventure.conversation_facts)
+    end
+
+    test "and every retrieved conversation fact identifies its captured-turn source description", %{
+      adventure: adventure
+    } do
+      assert every_fact_has_source_description?(adventure.conversation_facts, "captured"),
+             inspect(adventure.conversation_facts)
+    end
+
+    test "and every retrieved document fact identifies every originating episode", %{
+      adventure: adventure
+    } do
+      assert every_fact_has_episode_id?(adventure.document_facts),
+             inspect(adventure.document_facts)
+    end
+
+    test "and every retrieved document fact identifies its document source kind", %{
+      adventure: adventure
+    } do
+      assert every_fact_has_source_kind?(adventure.document_facts, "document"),
+             inspect(adventure.document_facts)
+    end
+
+    test "and every retrieved document fact identifies its deployment-policy source description", %{
+      adventure: adventure
+    } do
+      assert every_fact_has_source_description?(adventure.document_facts, "deployment policy"),
+             inspect(adventure.document_facts)
+    end
+
+    test "and every retrieved structured-record fact identifies every originating episode", %{
+      adventure: adventure
+    } do
+      assert every_fact_has_episode_id?(adventure.structured_record_facts),
+             inspect(adventure.structured_record_facts)
+    end
+
+    test "and every retrieved structured-record fact identifies its structured-record source kind", %{
+      adventure: adventure
+    } do
+      assert every_fact_has_source_kind?(adventure.structured_record_facts, "structured_record"),
+             inspect(adventure.structured_record_facts)
+    end
+
+    test "and every retrieved structured-record fact identifies its dependency-registry source description",
          %{adventure: adventure} do
-      assert adventure.conversation_provenance
-      assert adventure.document_provenance
-      assert adventure.structured_record_provenance
+      assert every_fact_has_source_description?(
+               adventure.structured_record_facts,
+               "system dependency registry"
+             ), inspect(adventure.structured_record_facts)
     end
   end
 
@@ -395,16 +452,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       current_replacement: contains_fact?(current_graph, "Payments settles through Clearing."),
       superseded_replacement:
         contains_fact?(superseded_graph, "Payments settles through Ledger."),
-      conversation_provenance:
-        every_fact_attributed?(conversation_facts, "conversation", "captured"),
-      document_provenance:
-        every_fact_attributed?(document_facts, "document", "deployment policy"),
-      structured_record_provenance:
-        every_fact_attributed?(
-          structured_record_facts,
-          "structured_record",
-          "system dependency registry"
-        )
+      conversation_facts: conversation_facts,
+      document_facts: document_facts,
+      structured_record_facts: structured_record_facts
     }
   end
 
@@ -517,11 +567,29 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   defp every_fact_attributed?([], _source_kind, _source_description), do: false
 
   defp every_fact_attributed?(results, source_kind, source_description) do
+    every_fact_has_episode_id?(results) and
+      every_fact_has_source_kind?(results, source_kind) and
+      every_fact_has_source_description?(results, source_description)
+  end
+
+  defp every_fact_has_episode_id?([]), do: false
+
+  defp every_fact_has_episode_id?(results) do
+    Enum.all?(results, fn %{fact: fact} -> Regex.match?(~r/episode: [^)]+\)/, fact) end)
+  end
+
+  defp every_fact_has_source_kind?([], _source_kind), do: false
+
+  defp every_fact_has_source_kind?(results, source_kind) do
     Enum.all?(results, fn %{fact: fact} ->
-      String.contains?(fact, "source: #{source_kind} —") and
-        String.contains?(fact, source_description) and
-        Regex.match?(~r/episode: [^)]+\)/, fact)
+      String.contains?(fact, "source: #{source_kind} —")
     end)
+  end
+
+  defp every_fact_has_source_description?([], _source_description), do: false
+
+  defp every_fact_has_source_description?(results, source_description) do
+    Enum.all?(results, fn %{fact: fact} -> String.contains?(fact, source_description) end)
   end
 
   defp contains_all?(text, expected) do
