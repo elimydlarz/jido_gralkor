@@ -58,6 +58,10 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
 
     @impl true
     def replace_graph(_store, _graph) do
+      if state = Application.get_env(:jido_gralkor, :replacement_graph_state) do
+        Agent.update(state, fn _graph -> %{nodes: [], relationships: []} end)
+      end
+
       send(Process.whereis(:lens_graph_replacement_functional), :removed_without_restore)
       {:error, :import_failed}
     end
@@ -87,6 +91,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     previous_destinations = Application.get_env(:jido_gralkor, :destinations)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
     previous_destination_storage = Application.get_env(:jido_gralkor, :destination_storage)
+    previous_replacement_state = Application.get_env(:jido_gralkor, :replacement_graph_state)
 
     start_supervised!(InMemory)
 
@@ -101,6 +106,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       restore_env(:destinations, previous_destinations)
       restore_env(:lens_storage, previous_storage)
       restore_env(:destination_storage, previous_destination_storage)
+      restore_env(:replacement_graph_state, previous_replacement_state)
     end)
 
     :ok
@@ -380,9 +386,12 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
 
     test "and graph content already removed by the replacement is not restored" do
+      {:ok, graph_state} = Agent.start_link(fn -> graph("existing").data end)
+      Application.put_env(:jido_gralkor, :replacement_graph_state, graph_state)
       Application.put_env(:jido_gralkor, :lens_storage, FailingStorage)
+
       assert {:error, :import_failed} = Client.replace(request(graph("systems")))
-      assert_receive :removed_without_restore
+      assert Agent.get(graph_state, & &1) == %{nodes: [], relationships: []}
     end
   end
 
