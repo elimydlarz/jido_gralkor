@@ -23,6 +23,25 @@ defmodule Gralkor.Reflection.ChainOfThought do
     error -> {:error, Exception.message(error)}
   end
 
+  @doc false
+  def validate(%__MODULE__{steps: steps}) do
+    raw_steps =
+      Enum.map(steps, fn
+        %Step{label: label, directions: directions, output: output} ->
+          %{"label" => label, "directions" => directions, "output" => output}
+
+        invalid ->
+          invalid
+      end)
+
+    case parse_steps(%{"steps" => raw_steps}) do
+      {:ok, _steps} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def validate(invalid), do: {:error, {:invalid_chain_of_thought, invalid}}
+
   defp parse_steps(%{"steps" => steps}) when is_list(steps) and steps != [] do
     Enum.reduce_while(steps, {:ok, {[], %{}}}, fn raw, {:ok, {parsed, outputs}} ->
       case parse_step(raw, outputs) do

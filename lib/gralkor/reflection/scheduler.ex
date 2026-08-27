@@ -15,9 +15,15 @@ defmodule Gralkor.Reflection.Scheduler do
   end
 
   @impl true
-  def init(_opts) do
+  def init(opts) do
     {:ok, supervisor} = Task.Supervisor.start_link()
-    {:ok, %{scheduled: MapSet.new(), task_supervisor: supervisor}}
+
+    {:ok,
+     %{
+       scheduled: MapSet.new(),
+       task_supervisor: supervisor,
+       defaults: Keyword.take(opts, [:runner, :runner_opts, :store_opts, :notify])
+     }}
   end
 
   @impl true
@@ -32,6 +38,7 @@ defmodule Gralkor.Reflection.Scheduler do
         {:reply, {:ok, :already_scheduled}, state}
 
       true ->
+        opts = Keyword.merge(state.defaults, opts)
         Enum.each(reflections, &start_reflection(state.task_supervisor, &1, ingestion, opts))
         {:reply, {:ok, :scheduled}, %{state | scheduled: MapSet.put(state.scheduled, id)}}
     end

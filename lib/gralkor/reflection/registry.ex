@@ -31,14 +31,18 @@ defmodule Gralkor.Reflection.Registry do
   defp configured!(reflections) do
     case reflections do
       reflections when is_list(reflections) ->
-        root =
-          Application.get_env(
-            :jido_gralkor,
-            :reflection_root,
-            Application.app_dir(:jido_gralkor)
-          )
+        if Enum.all?(reflections, &match?(%Reflection{}, &1)) do
+          validate_resolved!(reflections)
+        else
+          root =
+            Application.get_env(
+              :jido_gralkor,
+              :reflection_root,
+              Application.app_dir(:jido_gralkor)
+            )
 
-        load!(reflections, root: root)
+          load!(reflections, root: root)
+        end
 
       invalid ->
         raise ArgumentError, "invalid Reflection declarations: #{inspect(invalid)}"
@@ -65,6 +69,43 @@ defmodule Gralkor.Reflection.Registry do
 
       {:error, reason} ->
         raise ArgumentError, "invalid Reflection declaration: #{inspect(reason)}"
+    end
+  end
+
+  defp validate_resolved!(reflections) do
+    result =
+      with :ok <- validate_names(reflections) do
+        Enum.reduce_while(reflections, :ok, fn reflection, :ok ->
+          case validate_resolved(reflection) do
+            :ok -> {:cont, :ok}
+            {:error, reason} -> {:halt, {:error, reason}}
+          end
+        end)
+      end
+
+    case result do
+      :ok -> reflections
+      {:error, reason} -> raise ArgumentError, "invalid Reflection declaration: #{inspect(reason)}"
+    end
+  end
+
+  defp validate_resolved(%Reflection{} = reflection) do
+    name = reflection.name
+
+    cond do
+      not match?(%Gralkor.Destination{}, reflection.destination) ->
+        {:error, {:missing_destination, name, reflection.destination}}
+
+      not valid_ontology?(reflection.ontology) ->
+        {:error, {:invalid_ontology, name, reflection.ontology}}
+
+      true ->
+        fetch_destination!(name, reflection.destination.name)
+
+        case ChainOfThought.validate(reflection.chain_of_thought) do
+          :ok -> :ok
+          {:error, reason} -> {:error, {:invalid_chain_of_thought, name, reason}}
+        end
     end
   end
 
