@@ -21,7 +21,7 @@ defmodule Gralkor.Lens.Store do
 
   @type t :: %__MODULE__{
           operator_id: String.t(),
-          lens: Lens.t() | Replaceable.t() | :global,
+          lens: Lens.t() | Replaceable.t(),
           source_kind: Gralkor.Ingest.source_kind() | nil,
           evidence_id: String.t() | nil,
           representation_collector: (IngestedRepresentation.t() -> any()) | nil
@@ -49,7 +49,7 @@ defmodule Gralkor.Lens.Store do
   end
 
   @spec search(t(), String.t(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}
-  @doc "Searches the bound Lens's group."
+  @doc "Searches the bound Lens's Destination graph."
   def search(%__MODULE__{} = store, query, max_results) do
     storage().search(store, query, max_results)
   end
