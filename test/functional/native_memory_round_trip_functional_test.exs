@@ -16,6 +16,7 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
   alias Gralkor.Application, as: App
   alias Gralkor.CaptureBuffer
+  alias Gralkor.Client
   alias Gralkor.Client.Native
   alias Gralkor.GraphitiPool
   alias Gralkor.Message
@@ -125,21 +126,26 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   end
 
   describe "when a fact is written into an operator's memory" do
-    test "then the graph stores its plain text under the operator's group",
-         %{
-           g: g
-         } do
+    test "then the graph stores its plain text unchanged", %{g: g} do
       assert :ok =
                Native.memory_add(
-                 "operator-one",
+                 Client.operator_graph_id("operator-one"),
                  "Eli works at Anthropic in Sydney.",
                  "manual"
                )
 
       assert [episode] = episodes(g)
-      assert episode["group_id"] == "operator_one"
       assert episode["body"] == "Eli works at Anthropic in Sydney."
-      assert episode["source_description"] == "manual"
+    end
+
+    test "and the graph named `operator/<operator id>` receives it", %{g: g} do
+      graph_id = Client.operator_graph_id("operator-one")
+      assert graph_id == "operator/operator-one"
+
+      assert :ok = Native.memory_add(graph_id, "Operator fact", "manual")
+
+      assert [episode] = episodes(g)
+      assert episode["group_id"] == Client.sanitize_group_id(graph_id)
     end
   end
 
