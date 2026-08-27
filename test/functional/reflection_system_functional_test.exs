@@ -842,10 +842,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  storage: Gralkor.Reflection.Storage.InMemory
                )
 
-      assert {:ok, [^artefact]} =
-               Store.search([reflection], "operator-one", reflection.name, "durable",
-                 storage: Gralkor.Reflection.Storage.InMemory
-               )
+      assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "durable",
+                 destinations: [reflection.destination.name],
+                 result_type: :artefacts
+               })
     end
 
     test "and the artefact identifies its declaring Reflection", context do
