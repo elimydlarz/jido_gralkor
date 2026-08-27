@@ -1,6 +1,6 @@
 # Changelog
 
-## [8.0.0] - 2026-08-27
+## [8.0.1] - 2026-08-27
 
 ### Changed
 - **BREAKING: memory placement is Destination-based.** Each Destination is one graph. `global` names the single shared global graph, `operator` resolves to `operator/<agent.id>`, and application-defined Destination names resolve literally. The former scope/address configuration shape is removed.
