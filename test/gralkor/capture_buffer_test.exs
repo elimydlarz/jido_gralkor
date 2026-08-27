@@ -524,10 +524,9 @@ defmodule Gralkor.CaptureBufferTest do
 
       assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
 
-      assert_receive {:reflections_scheduled, [:daily_summary, :erl], ingestion}
+      assert_receive {:reflections_scheduled, [:daily_summary, :erl], _ingestion}
       refute_receive {:reflections_scheduled, _, _}
     end
-
 
     test "and each scheduled Reflection receives the completed representations" do
       restart_with_reflection_capture()
