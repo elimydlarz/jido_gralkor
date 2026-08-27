@@ -26,6 +26,27 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   @operator_one "memory_adventure_operator_one"
   @operator_two "memory_adventure_operator_two"
 
+  defmodule JourneyOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+    entity Job, "A scheduled background job such as backup or vacuum."
+    entity Deployment, "A software deployment governed by an operational policy."
+    entity Checkpoint, "A checkpoint that a deployment must verify."
+    entity System, "A software system participating in a dependency."
+
+    from Job do
+      overlaps(Job)
+    end
+
+    from Deployment do
+      requires(Checkpoint)
+    end
+
+    from System do
+      depends_on(System)
+    end
+  end
+
   setup_all do
     keys = [
       :client,
@@ -62,6 +83,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       [
         name: "work-notes",
         destination: "operator",
+        ontology: JourneyOntology,
         ingestion: Gralkor.Lens.Ingestion.Store
       ],
       [
@@ -73,6 +95,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       [
         name: "published",
         destination: "global",
+        ontology: JourneyOntology,
         ingestion: Gralkor.Lens.Ingestion.Store
       ]
     ])
@@ -123,7 +146,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       end
     end)
 
-    :ok
+    {:ok, adventure: run_adventure()}
   end
 
   describe "when two operators use implicit memory, Lenses, ERL, and shared-Destination replacement" do
