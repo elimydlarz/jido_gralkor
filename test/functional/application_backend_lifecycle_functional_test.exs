@@ -62,6 +62,15 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
     end
   end
 
+  describe "if an application starts with invalid remote memory-backend configuration" do
+    test "then startup raises before the native memory runtime starts" do
+      Application.put_env(:jido_gralkor, :falkordb, host: "memory.example")
+
+      assert_raise ArgumentError, fn -> GralkorApplication.children() end
+      refute Process.whereis(Gralkor.Python)
+    end
+  end
+
   describe "when an application starts without a configured memory backend" do
     test "then it starts without the native memory runtime" do
       assert GralkorApplication.children() == []
