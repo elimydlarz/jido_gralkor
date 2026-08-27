@@ -69,6 +69,14 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       assert_raise ArgumentError, fn -> GralkorApplication.children() end
       refute Process.whereis(Gralkor.Python)
     end
+
+    test "and the error identifies the invalid configuration" do
+      Application.put_env(:jido_gralkor, :falkordb, host: "memory.example")
+
+      assert_raise ArgumentError,
+                   ~r/:jido_gralkor, :falkordb requires :port .* got nil/,
+                   fn -> GralkorApplication.children() end
+    end
   end
 
   describe "when an application starts without a configured memory backend" do
