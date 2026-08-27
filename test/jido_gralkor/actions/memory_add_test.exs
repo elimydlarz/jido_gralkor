@@ -129,7 +129,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
           assert eventually(fn ->
                    InMemory.adds() == [
-                     ["01USER", "something", "agent thought", :conversation]
+                     ["operator/01USER", "something", "agent thought", :conversation]
                    ]
                  end)
 
