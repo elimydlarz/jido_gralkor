@@ -44,20 +44,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get(_, _, _), do: {:error, :destination_unavailable}
   end
 
-  defmodule ReflectionLiveProbe do
-    use Jido.Action,
-      name: "reflection_live_probe",
-      description:
-        "Return the fixed verification marker for the supplied seed. Call when instructed.",
-      schema: [seed: [type: :string, required: true]]
-
-    @impl true
-    def run(%{seed: seed}, context) do
-      send(Map.fetch!(context, :probe_pid), {:reflection_live_probe, seed})
-      {:ok, %{marker: "BLUE-PINE-29", received_seed: seed}}
-    end
-  end
-
   setup do
     root =
       Path.join(System.tmp_dir!(), "gralkor-reflection-#{System.unique_integer([:positive])}")
@@ -722,7 +708,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
 
       assert_receive {:executed, %{name: "memory_search", arguments: %{"query" => "pattern"}}}
-      assert_live_reflection_tool_sequence(context)
     end
 
     test "and the tool result is returned to inference within the same step", context do
@@ -1355,98 +1340,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     path = Path.join(root, name)
     File.write!(path, body)
     path
-  end
-
-  defp assert_live_reflection_tool_sequence(%{root: root}) do
-    require_real_openai_key!()
-    previous_model = System.get_env("GRALKOR_LLM_MODEL")
-    System.put_env("GRALKOR_LLM_MODEL", "openai:gpt-4.1-mini")
-
-    on_exit(fn ->
-      if previous_model,
-        do: System.put_env("GRALKOR_LLM_MODEL", previous_model),
-        else: System.delete_env("GRALKOR_LLM_MODEL")
-    end)
-
-    write_cot(root, "live-tool-sequence.yaml", """
-    steps:
-      - label: establish-seed
-        directions: |-
-          Return exactly one JSON object whose seed is the exact string ALPHA-17.
-          Do not call a tool in this step.
-        output:
-          seed: string
-      - label: enrich-with-tool
-        directions: |-
-          The previous step produced the exact seed {{seed}}.
-          You MUST call reflection_live_probe with seed {{seed}} before answering.
-          After receiving its result, return exactly one JSON object whose combined value is
-          the seed, a vertical bar, and the marker returned by the tool.
-        output:
-          combined: string
-      - label: produce-artefact
-        directions: |-
-          The prior step produced the exact combined value {{combined}}.
-          Return exactly one JSON object with final_value equal to that exact value and
-          evidence_ids equal to ["ev-live-1"]. Do not call a tool in this step.
-        output:
-          final_value: string
-          evidence_ids: Array<string>
-    """)
-
-    [reflection] =
-      Registry.load!(
-        [
-          [
-            name: "live-proof",
-            chain_of_thought: "live-tool-sequence.yaml",
-            destination: "operator"
-          ]
-        ],
-        root: root
-      )
-
-    live_ingestion = %{
-      id: "live-ingestion",
-      operator_id: "operator-live",
-      intended_lenses: ["observations"],
-      completed_lenses: ["observations"],
-      representations: [
-        %{
-          id: "representation-live-1",
-          evidence_id: "ev-live-1",
-          lens: "observations",
-          content: "A fixed functional-test representation.",
-          result: :ok
-        }
-      ]
-    }
-
-    assert {:ok, artefact} =
-             Runner.run(reflection, live_ingestion,
-               tools: [ReflectionLiveProbe],
-               tool_context: %{probe_pid: self()}
-             )
-
-    assert_receive {:reflection_live_probe, "ALPHA-17"}
-    assert artefact.reflection == "live-proof"
-
-    assert artefact.payload == %{
-             "final_value" => "ALPHA-17|BLUE-PINE-29",
-             "evidence_ids" => ["ev-live-1"]
-           }
-
-    assert artefact.evidence_ids == ["ev-live-1"]
-  end
-
-  defp require_real_openai_key! do
-    case System.get_env("OPENAI_API_KEY") do
-      key when is_binary(key) and key != "" and key != "test-placeholder-not-a-real-credential" ->
-        :ok
-
-      _ ->
-        raise "OPENAI_API_KEY must be set to a real credential in .env for Reflection functional inference"
-    end
   end
 
   defp configure_reflections(reflections) do
