@@ -5,6 +5,7 @@ defmodule Gralkor.CaptureBufferTest do
 
   alias Gralkor.CaptureBuffer
   alias Gralkor.Message
+  alias Gralkor.Reflection.Scheduler
 
   setup do
     test_pid = self()
@@ -450,6 +451,177 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "where captured turns select a Lens > when later turns contribute Reflection context" do
+    test "then nested tool context is merged key by key" do
+      restart_with_reflection_capture()
+
+      append_reflection_turn(%{tool_context: %{retained: true, replaced: :old}})
+      append_reflection_turn(%{tool_context: %{added: true, replaced: :new}})
+
+      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      assert_receive {:reflections_scheduled, _, ingestion}
+
+      assert ingestion.tool_context == %{retained: true, added: true, replaced: :new}
+    end
+
+    test "and later context outside tool context replaces earlier context" do
+      restart_with_reflection_capture()
+
+      append_reflection_turn(%{tools: [:old_tool]})
+      append_reflection_turn(%{tools: [:new_tool]})
+
+      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      assert_receive {:reflections_scheduled, _, ingestion}
+
+      assert ingestion.tools == [:new_tool]
+    end
+  end
+
+  describe "where captured turns select a Lens > when every Lens batch for a completed ingestion succeeds and Reflections are declared" do
+    test "then every completed representation retains the Lens and evidence identity supplied by its batch" do
+      restart_with_reflection_capture()
+
+      :ok =
+        CaptureBuffer.append_lenses(
+          "reflection-session",
+          "operator-one",
+          "Susu",
+          "Eli",
+          ["observations", "decisions"],
+          [Message.new("user", "remember this")]
+        )
+
+      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      assert_receive {:reflections_scheduled, _, ingestion}
+
+      assert Enum.map(ingestion.representations, &{&1.lens, &1.evidence_id}) == [
+               {"observations", ingestion.representations |> Enum.at(0) |> Map.fetch!(:evidence_id)},
+               {"decisions", ingestion.representations |> Enum.at(1) |> Map.fetch!(:evidence_id)}
+             ]
+
+      assert ingestion.representations |> Enum.map(& &1.evidence_id) |> Enum.uniq() |> length() ==
+               1
+    end
+
+    test "and every declared Reflection is scheduled once with the completed representations and ingestion context" do
+      restart_with_reflection_capture()
+
+      append_reflection_turn(%{tools: [:lookup], tool_context: %{session_id: "thread-one"}})
+
+      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+
+      assert_receive {:reflections_scheduled, [:daily_summary, :erl], ingestion}
+      assert [%{lens: "observations"}] = ingestion.representations
+      assert ingestion.tools == [:lookup]
+      assert ingestion.tool_context == %{session_id: "thread-one"}
+      refute_receive {:reflections_scheduled, _, _}
+    end
+  end
+
+  describe "where captured turns select a Lens > if a completed representation does not carry its batch's Lens and evidence identity" do
+    test "then the awaited flush reports the representation validation failure" do
+      restart_with_invalid_representation()
+      append_reflection_turn(%{})
+
+      assert {:error, {:representation_lens_mismatch, "observations", "wrong-lens"}} =
+               CaptureBuffer.flush_and_await("reflection-session", 1_000)
+    end
+
+    test "and no Reflection is scheduled" do
+      restart_with_invalid_representation()
+      append_reflection_turn(%{})
+
+      assert {:error, _} = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      refute_receive {:reflections_scheduled, _, _}
+    end
+  end
+
+  describe "where captured turns select a Lens > if Reflection scheduling returns a failure or raises" do
+    test "then the scheduling failure is logged" do
+      restart_with_scheduling_callback(fn _reflections, _ingestion ->
+        {:error, :scheduler_unavailable}
+      end)
+
+      append_reflection_turn(%{})
+
+      log =
+        capture_log(fn ->
+          assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+        end)
+
+      assert log =~ "Reflection scheduling failed"
+      assert log =~ ":scheduler_unavailable"
+    end
+
+    test "and the successfully completed flush still reports success" do
+      restart_with_scheduling_callback(fn _reflections, _ingestion ->
+        raise "scheduler unavailable"
+      end)
+
+      append_reflection_turn(%{})
+
+      capture_log(fn ->
+        assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      end)
+    end
+  end
+
+  describe "when Reflection scheduling needs a scheduler > while one is already running" do
+    test "then that scheduler is reused rather than duplicated" do
+      :ok = stop_supervised(CaptureBuffer)
+      shared_scheduler = start_supervised!(Scheduler)
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
+         reflections: [:daily_summary],
+         retries: []}
+      )
+
+      assert :sys.get_state(CaptureBuffer).reflection_scheduler ==
+               {:shared, shared_scheduler}
+    end
+  end
+
+  describe "when Reflection scheduling needs a scheduler > while the capture buffer starts the scheduler it needs" do
+    test "then stopping the buffer stops that owned scheduler" do
+      :ok = stop_supervised(CaptureBuffer)
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
+         reflections: [:daily_summary],
+         retries: []}
+      )
+
+      {:owned, scheduler} = :sys.get_state(CaptureBuffer).reflection_scheduler
+      :ok = stop_supervised(CaptureBuffer)
+
+      refute Process.alive?(scheduler)
+    end
+  end
+
+  describe "when Reflection scheduling needs a scheduler > while the scheduler is shared rather than owned by the buffer" do
+    test "then stopping the buffer leaves it running" do
+      :ok = stop_supervised(CaptureBuffer)
+      shared_scheduler = start_supervised!(Scheduler)
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
+         reflections: [:daily_summary],
+         retries: []}
+      )
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      assert Process.alive?(shared_scheduler)
+    end
+  end
+
   describe "where captured turns select a Lens > if one Lens's flush fails" do
     test "then every other Lens's batch is still attempted" do
       restart_with_failing_primary()
@@ -834,6 +1006,13 @@ defmodule Gralkor.CaptureBufferTest do
 
       assert_receive {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "y"}]]}, 1_000
     end
+
+    test "and the call reports success after every session has been attempted" do
+      :ok = CaptureBuffer.append("failing", "bad", "Susu", "Eli", nil, [Message.new("user", "x")])
+      :ok = CaptureBuffer.append("ok", "g", "Susu", "Eli", nil, [Message.new("user", "y")])
+
+      assert :ok = CaptureBuffer.flush_all()
+    end
   end
 
   describe "if the flush callback raises or fails for any other reason" do
@@ -1084,6 +1263,63 @@ defmodule Gralkor.CaptureBufferTest do
       assert_receive {:attempt, ^outcome, 2}, 200
       assert Process.alive?(pid)
     end
+  end
+
+  defp append_reflection_turn(context) do
+    CaptureBuffer.append_lens(
+      "reflection-session",
+      "operator-one",
+      "Susu",
+      "Eli",
+      "observations",
+      [Message.new("user", "remember this")],
+      context
+    )
+  end
+
+  defp restart_with_reflection_capture do
+    test_pid = self()
+
+    restart_with_scheduling_callback(fn reflections, ingestion ->
+      send(test_pid, {:reflections_scheduled, reflections, ingestion})
+      :ok
+    end)
+  end
+
+  defp restart_with_invalid_representation do
+    test_pid = self()
+
+    lens_flush_callback = fn _, _, _, _lens, _, evidence_id ->
+      {:ok, %{lens: "wrong-lens", evidence_id: evidence_id}}
+    end
+
+    reflection_callback = fn reflections, ingestion ->
+      send(test_pid, {:reflections_scheduled, reflections, ingestion})
+      :ok
+    end
+
+    restart_reflection_buffer(lens_flush_callback, reflection_callback)
+  end
+
+  defp restart_with_scheduling_callback(reflection_callback) do
+    lens_flush_callback = fn _, _, _, lens, _, evidence_id ->
+      {:ok, %{lens: lens, evidence_id: evidence_id, result: :ok}}
+    end
+
+    restart_reflection_buffer(lens_flush_callback, reflection_callback)
+  end
+
+  defp restart_reflection_buffer(lens_flush_callback, reflection_callback) do
+    :ok = stop_supervised(CaptureBuffer)
+
+    start_supervised!(
+      {CaptureBuffer,
+       flush_callback: fn _, _, _, _, _ -> :ok end,
+       lens_flush_callback: lens_flush_callback,
+       reflections: [:daily_summary, :erl],
+       reflection_callback: reflection_callback,
+       retries: []}
+    )
   end
 
   describe "if any other unexpected message arrives, a linked process exiting abnormally included" do
