@@ -100,6 +100,25 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                })
     end
 
+    test "and every result identifies its Destination" do
+      Application.put_env(:jido_gralkor, :destination_search_responses, %{
+        "first" => {:ok, ["one", "two"]},
+        "second" => {:ok, ["three"]}
+      })
+
+      assert {:ok,
+              [
+                %{destination: "first", fact: "one"},
+                %{destination: "first", fact: "two"},
+                %{destination: "second", fact: "three"}
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "question",
+                 destinations: ["first", "second"]
+               })
+    end
+
     test "and the same maximum result count applies independently to every Destination" do
       assert {:ok, _} =
                Client.search(%Search{
