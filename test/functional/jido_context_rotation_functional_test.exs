@@ -67,6 +67,39 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
 
       assert Enum.map(thread_entries(pid), & &1.payload.content) == ["second", "third"]
     end
+
+    test "and every entry arriving during the flush is retained exactly once" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+      seed_thread(pid, "before-rotation", [%{role: :user, content: "flushed"}])
+      test_pid = self()
+
+      install_thread_fn = fn agent_pid, new_session_id, entries, keep_last_n ->
+        send(test_pid, :before_installation)
+
+        receive do
+          :continue_rotation -> :ok
+        end
+
+        ContextRotator.install_thread(agent_pid, new_session_id, entries, keep_last_n)
+      end
+
+      rotation =
+        Task.async(fn ->
+          ContextRotator.rotate_now(pid,
+            flush_timeout_ms: 1_000,
+            keep_last_n: 0,
+            install_thread_fn: install_thread_fn
+          )
+        end)
+
+      assert_receive :before_installation
+      append_thread_entry(pid, %{role: :assistant, content: "in-flight"})
+      send(rotation.pid, :continue_rotation)
+      assert :ok = Task.await(rotation)
+
+      assert Enum.map(thread_entries(pid), & &1.payload.content) == ["in-flight"]
+    end
   end
 
   describe "when an application rotates a running agent whose committed thread fails to flush" do
@@ -146,6 +179,17 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
   defp thread_entries(pid) do
     {:ok, state} = Jido.AgentServer.state(pid)
     state.agent.state[:__thread__].entries
+  end
+
+  defp append_thread_entry(pid, payload) do
+    :sys.replace_state(pid, fn state ->
+      thread =
+        Jido.Thread.append(state.agent.state[:__thread__], [
+          %{kind: :ai_message, payload: payload}
+        ])
+
+      put_in(state.agent.state[:__thread__], thread)
+    end)
   end
 
   defp thread_id(pid) do
