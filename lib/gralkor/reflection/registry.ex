@@ -23,27 +23,22 @@ defmodule Gralkor.Reflection.Registry do
   @doc "Returns the application's validated Reflection declarations."
   def configured! do
     case Application.fetch_env(:jido_gralkor, :reflections) do
-      :error -> configured!(@built_in_definitions, true)
-      {:ok, reflections} -> configured!(reflections, false)
+      :error -> configured!(@built_in_definitions)
+      {:ok, reflections} -> configured!(reflections)
     end
   end
 
-  defp configured!(reflections, packaged_defaults?) do
+  defp configured!(reflections) do
     case reflections do
       reflections when is_list(reflections) ->
-        if Enum.all?(reflections, &match?(%Reflection{}, &1)) do
-          reflections
-        else
-          root =
-            Application.get_env(
-              :jido_gralkor,
-              :reflection_root,
-              Application.app_dir(:jido_gralkor)
-            )
+        root =
+          Application.get_env(
+            :jido_gralkor,
+            :reflection_root,
+            Application.app_dir(:jido_gralkor)
+          )
 
-          _ = packaged_defaults?
-          load!(reflections, root: root)
-        end
+        load!(reflections, root: root)
 
       invalid ->
         raise ArgumentError, "invalid Reflection declarations: #{inspect(invalid)}"
