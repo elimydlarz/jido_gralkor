@@ -109,6 +109,53 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
                "systems-new"
              ]
     end
+
+    test "and information saved through every other Lens or Reflection remains unchanged" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      start_supervised!(Gralkor.Reflection.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        Gralkor.Destination.Storage.InMemory
+      )
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        replaceable_lens("systems"),
+        replaceable_lens("catalogue")
+      ])
+
+      assert :ok = Client.replace(replacement("catalogue", "catalogue"))
+
+      reflection = ReflectionRegistry.configured!() |> List.first()
+
+      artefact = %Gralkor.Reflection.Artefact{
+        id: "review-one",
+        reflection: "review",
+        payload: %{"lesson" => "preserve"},
+        evidence_ids: ["evidence-one"]
+      }
+
+      assert :ok =
+               Gralkor.Reflection.Store.put(reflection, "operator-one", artefact,
+                 storage: Gralkor.Reflection.Storage.InMemory
+               )
+
+      assert :ok = Client.replace(replacement("systems", "systems"))
+
+      assert Enum.any?(Gralkor.Lens.Storage.InMemory.graph("shared").nodes, fn node ->
+               node.id == "catalogue"
+             end)
+
+      assert {:ok, [%{destination: "shared", artefact: ^artefact}]} =
+               Client.search(%Gralkor.Search{
+                 operator_id: "operator-two",
+                 query: "preserve",
+                 destinations: ["shared"],
+                 result_type: :artefacts
+               })
+    end
   end
 
   describe "if the Destination registry is not a list" do
