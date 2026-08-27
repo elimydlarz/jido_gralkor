@@ -1,6 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [8.0.0] - 2026-08-27
+
+### Changed
+- **BREAKING: memory placement is Destination-based.** Each Destination is one graph. `global` names the single shared global graph, `operator` resolves to `operator/<agent.id>`, and application-defined Destination names resolve literally. The former scope/address configuration shape is removed.
+- **BREAKING: Lenses and Reflections reference Destinations.** Appending Lenses and Reflections own extraction ontologies; replaceable Lenses own only graph content carrying their reserved Lens marker. Search selects Destinations directly and returns Destination-attributed facts, nodes, episodes, or Reflection artefacts.
+- Implicit plugin capture, memory addition, recall, and community building now consistently target `operator/<agent.id>`, so implicit and named `operator` Lens writes share one graph.
+- `global` is the normal target for shared application memory. A name such as `global/x` is a separate literal Destination and therefore a separate graph.
 
 ### Fixed
 - **Graphiti writes failed for GPT-5.6 OpenAI models.** `GraphitiPool` left `LLMConfig.reasoning` at graphiti-core 0.29.3's `auto` sentinel, whose unknown-family fallback selected the unsupported `minimal` tier for `gpt-5.6-luna`. GPT-5.5 and GPT-5.6 clients now receive `none` explicitly; other OpenAI models retain graphiti's automatic selection.
