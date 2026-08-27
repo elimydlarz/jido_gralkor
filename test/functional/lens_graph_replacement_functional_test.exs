@@ -190,6 +190,46 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
              ]
     end
 
+    test "and information saved through Reflections at the resolved destination remains unchanged" do
+      use_in_memory(:global)
+      start_supervised!(Gralkor.Reflection.Storage.InMemory)
+
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        Gralkor.Destination.Storage.InMemory
+      )
+
+      reflection = %Gralkor.Reflection{
+        name: "review",
+        destination: Gralkor.Destination.Registry.fetch!("global"),
+        ontology: Gralkor.DefaultOntology,
+        chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "review.yaml", steps: []}
+      }
+
+      artefact = %Gralkor.Reflection.Artefact{
+        id: "review-one",
+        reflection: "review",
+        payload: %{"lesson" => "keep this"},
+        evidence_ids: ["evidence-one"]
+      }
+
+      assert :ok =
+               Gralkor.Reflection.Store.put(reflection, "operator-one", artefact,
+                 storage: Gralkor.Reflection.Storage.InMemory
+               )
+
+      assert :ok = Client.replace(request(graph("systems")))
+
+      assert {:ok, [%{destination: "global", artefact: ^artefact}]} =
+               Client.search(%Gralkor.Search{
+                 operator_id: "operator-two",
+                 query: "keep",
+                 destinations: ["global"],
+                 result_type: :artefacts
+               })
+    end
+
     test "and nodes and relationships without the reserved Lens ownership field at the resolved destination remain unchanged" do
       use_in_memory(:global)
 
