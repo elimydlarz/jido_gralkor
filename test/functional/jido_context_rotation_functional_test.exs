@@ -51,6 +51,22 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
       assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
       refute thread_id(pid) == "before-rotation"
     end
+
+    test "and the fresh session retains only the requested newest committed entries" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+
+      seed_thread(pid, "before-rotation", [
+        %{role: :user, content: "first"},
+        %{role: :assistant, content: "second"},
+        %{role: :user, content: "third"}
+      ])
+
+      assert :ok =
+               ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000, keep_last_n: 2)
+
+      assert Enum.map(thread_entries(pid), & &1.payload.content) == ["second", "third"]
+    end
   end
 
   describe "when an application rotates a running agent whose committed thread fails to flush" do
@@ -119,10 +135,17 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
     pid
   end
 
-  defp seed_thread(pid, id) do
+  defp seed_thread(pid, id, payloads \\ []) do
     :sys.replace_state(pid, fn state ->
-      put_in(state.agent.state[:__thread__], Jido.Thread.new(id: id))
+      entries = Enum.map(payloads, &%{kind: :ai_message, payload: &1})
+      thread = Jido.Thread.append(Jido.Thread.new(id: id), entries)
+      put_in(state.agent.state[:__thread__], thread)
     end)
+  end
+
+  defp thread_entries(pid) do
+    {:ok, state} = Jido.AgentServer.state(pid)
+    state.agent.state[:__thread__].entries
   end
 
   defp thread_id(pid) do
