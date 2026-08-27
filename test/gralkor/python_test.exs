@@ -198,6 +198,8 @@ defmodule Gralkor.PythonTest do
 
   describe "if an initialisation step fails" do
     test "then initialisation stops with that reason" do
+      first_provider = hd(Gralkor.GraphitiPool.supported_providers())
+
       failures = [
         {[uv_init: fn -> {:error, {:uv_init, "boom"}} end], {:uv_init, "boom"}},
         {[smoke_import: fn -> {:error, {:graphiti_import, "boom"}} end],
@@ -206,7 +208,7 @@ defmodule Gralkor.PythonTest do
            smoke_import_provider: fn provider ->
              {:error, {:provider_client_import, provider, "boom"}}
            end
-         ], {:provider_client_import, :google, "boom"}},
+         ], {:provider_client_import, first_provider, "boom"}},
         {[
            install_loop_fn: fn -> {:error, {:install_async_runtime, "boom"}} end
          ], {:install_async_runtime, "boom"}}

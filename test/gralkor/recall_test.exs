@@ -328,7 +328,6 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-
   defp deadline_logs(session_id, deadline_ms) do
     slow_search = fn _g, _q, _max ->
       Process.sleep(500)

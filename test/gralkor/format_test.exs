@@ -55,7 +55,7 @@ defmodule Gralkor.FormatTest do
 
   describe "when a fact is formatted > where the fact identifies originating episodes" do
     test "then the fact text is unchanged" do
-      assert format_sourced_fact() =~ "- Eli may prefer tea "
+      assert String.starts_with?(format_sourced_fact(), "- Eli may prefer tea (")
     end
 
     test "and every episode's source kind is appended" do
