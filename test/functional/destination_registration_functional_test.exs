@@ -103,6 +103,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
     test "then replacement changes only graph content previously written by that Lens" do
       start_supervised!(Gralkor.Lens.Storage.InMemory)
       Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
       Application.put_env(:jido_gralkor, :lenses, [
         replaceable_lens("systems"),
         replaceable_lens("catalogue")

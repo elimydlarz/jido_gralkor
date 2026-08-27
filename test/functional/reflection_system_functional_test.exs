@@ -52,6 +52,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     on_exit(fn -> File.rm_rf!(root) end)
     start_supervised!(Gralkor.Reflection.Storage.InMemory)
     start_supervised!(Gralkor.Lens.Storage.InMemory)
+
     start_supervised!(
       {Scheduler,
        runner: fn reflection, ingestion, opts ->
