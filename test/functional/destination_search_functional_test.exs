@@ -131,6 +131,22 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert_receive {:destination_search, "first", _, _, _, 7, _}
       assert_receive {:destination_search, "second", _, _, _, 7, _}
     end
+
+    test "and no unselected Destination can contribute a result" do
+      Application.put_env(:jido_gralkor, :destination_search_responses, %{
+        "first" => {:ok, ["selected"]},
+        "second" => {:ok, ["unselected"]}
+      })
+
+      assert {:ok, [%{destination: "first", fact: "selected"}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "question",
+                 destinations: ["first"]
+               })
+
+      refute_receive {:destination_search, "second", _, _, _, _, _}
+    end
   end
 
   describe "where a caller selects the `operator` Destination" do
