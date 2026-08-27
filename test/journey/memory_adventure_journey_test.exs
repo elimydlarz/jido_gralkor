@@ -225,9 +225,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              inspect(adventure.conversation_facts)
     end
 
-    test "and every retrieved conversation fact identifies its captured-turn source description", %{
-      adventure: adventure
-    } do
+    test "and every retrieved conversation fact identifies its captured-turn source description",
+         %{
+           adventure: adventure
+         } do
       assert every_fact_has_source_description?(adventure.conversation_facts, "captured"),
              inspect(adventure.conversation_facts)
     end
@@ -246,9 +247,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              inspect(adventure.document_facts)
     end
 
-    test "and every retrieved document fact identifies its deployment-policy source description", %{
-      adventure: adventure
-    } do
+    test "and every retrieved document fact identifies its deployment-policy source description",
+         %{
+           adventure: adventure
+         } do
       assert every_fact_has_source_description?(adventure.document_facts, "deployment policy"),
              inspect(adventure.document_facts)
     end
@@ -260,9 +262,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              inspect(adventure.structured_record_facts)
     end
 
-    test "and every retrieved structured-record fact identifies its structured-record source kind", %{
-      adventure: adventure
-    } do
+    test "and every retrieved structured-record fact identifies its structured-record source kind",
+         %{
+           adventure: adventure
+         } do
       assert every_fact_has_source_kind?(adventure.structured_record_facts, "structured_record"),
              inspect(adventure.structured_record_facts)
     end
@@ -272,7 +275,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert every_fact_has_source_description?(
                adventure.structured_record_facts,
                "system dependency registry"
-             ), inspect(adventure.structured_record_facts)
+             ),
+             inspect(adventure.structured_record_facts)
     end
   end
 
