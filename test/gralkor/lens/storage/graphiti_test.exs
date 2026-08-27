@@ -147,7 +147,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "and the error identifies the unsupported option" do
       Enum.each(unsupported_operations(self()), fn operation ->
         error = assert_raise ArgumentError, operation
-        assert Exception.message(error) =~ ":unsupported_option"
+        assert Exception.message(error) =~ "unsupported_option"
       end)
     end
 

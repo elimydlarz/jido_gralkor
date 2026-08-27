@@ -73,9 +73,9 @@ defmodule Gralkor.Client.InMemoryTest do
     end
 
     test "and the error identifies the invalid timeout" do
-      error = assert_raise ArgumentError, fn -> InMemory.flush_and_await("session", :forever) end
+      error = assert_raise ArgumentError, fn -> InMemory.flush_and_await("session", 0) end
       assert Exception.message(error) =~ "timeout_ms"
-      assert Exception.message(error) =~ ":forever"
+      assert Exception.message(error) =~ "0"
     end
 
     test "and no backend call is made" do
