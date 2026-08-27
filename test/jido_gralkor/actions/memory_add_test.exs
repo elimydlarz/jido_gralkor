@@ -68,7 +68,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
       )
 
       assert eventually(fn ->
-               match?([["operator/user_id", _, _, _]], InMemory.adds())
+               match?([["operator/user-id", _, _, _]], InMemory.adds())
              end)
     end
   end
