@@ -4,7 +4,9 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
   @moduletag :functional
 
   alias Gralkor.Client
+  alias Gralkor.Client.InMemory
   alias Gralkor.Ingest
+  alias JidoGralkor.Actions.MemoryAdd
 
   setup do
     keys = [:client, :destination_storage, :lenses, :lens_storage, :ontology]
@@ -28,7 +30,7 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
   end
 
   describe "where an application has not registered or selected a named Lens" do
-    test "then the implicit `operator` Lens preserves access to the operator's existing group" do
+    test "then implicit-default memory uses the graph named `operator/<operator id>`" do
       assert :ok =
                Client.ingest(%Ingest{
                  operator_id: "operator-one",
@@ -62,6 +64,30 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
     test "and implicit-default capture, explicit memory addition, and recall work without a consumer ontology module" do
       Application.delete_env(:jido_gralkor, :ontology)
       assert_legacy_memory_works()
+    end
+  end
+
+  describe "when implicit-default memory and a named Lens write for the same operator" do
+    test "then implicit-default memory writes to the graph named `operator/<operator id>`" do
+      Application.put_env(:jido_gralkor, :client, InMemory)
+      InMemory.reset()
+      InMemory.set_memory_add(:ok)
+
+      assert {:ok, %{result: "Ingesting."}} =
+               MemoryAdd.run(
+                 %{
+                   content: "implicit memory",
+                   source_kind: :document,
+                   source_description: "manual"
+                 },
+                 %{agent_id: "operator-one"}
+               )
+
+      assert eventually(fn ->
+               InMemory.adds() == [
+                 ["operator/operator-one", "implicit memory", "manual", :document]
+               ]
+             end)
     end
   end
 
@@ -108,4 +134,14 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
+
+  defp eventually(assertion, attempts \\ 100)
+
+  defp eventually(assertion, attempts) do
+    cond do
+      assertion.() -> true
+      attempts == 0 -> false
+      true -> Process.sleep(10) && eventually(assertion, attempts - 1)
+    end
+  end
 end
