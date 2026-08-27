@@ -420,6 +420,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         @operator_one,
         "operator",
         "backup vacuum overlap",
+        &String.contains?(&1.fact, "02:00"),
         "conversation",
         "captured"
       )
@@ -429,6 +430,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         @operator_two,
         "global",
         "Atlas Deployment requires Rollback Checkpoint",
+        &String.contains?(&1.fact, "Rollback Checkpoint"),
         "document",
         "deployment policy"
       )
@@ -438,6 +440,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         @operator_one,
         "operator",
         "payments ledger dependency",
+        &String.contains?(&1.fact, "depends on Ledger"),
         "structured_record",
         "system dependency registry"
       )
@@ -557,15 +560,40 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Enum.any?(results, fn %{fact: fact} -> String.contains?(fact, text) end)
   end
 
-  defp attributed_facts(operator_id, destination, query, source_kind, source_description) do
-    search_until(
-      operator_id,
-      [destination],
-      :facts,
-      query,
-      &every_fact_attributed?(&1, source_kind, source_description),
-      10
-    )
+  defp attributed_facts(
+         operator_id,
+         destination,
+         query,
+         fact_from_episode?,
+         source_kind,
+         source_description,
+         attempts \\ 10
+       ) do
+    facts =
+      operator_id
+      |> search([destination], :facts, query)
+      |> Enum.filter(fact_from_episode?)
+
+    cond do
+      every_fact_attributed?(facts, source_kind, source_description) ->
+        facts
+
+      attempts <= 1 ->
+        facts
+
+      true ->
+        Process.sleep(1_000)
+
+        attributed_facts(
+          operator_id,
+          destination,
+          query,
+          fact_from_episode?,
+          source_kind,
+          source_description,
+          attempts - 1
+        )
+    end
   end
 
   defp every_fact_attributed?([], _source_kind, _source_description), do: false
