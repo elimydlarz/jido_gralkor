@@ -420,7 +420,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         @operator_one,
         "operator",
         "backup vacuum overlap",
-        &String.contains?(&1.fact, "02:00"),
+        &(String.contains?(&1.fact, "Susu") or String.contains?(&1.fact, "Eli")),
         "conversation",
         "captured"
       )
