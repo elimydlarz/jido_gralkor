@@ -19,6 +19,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   alias Gralkor.Reflection.Registry
   alias Gralkor.Replace
   alias Gralkor.Search
+  alias JidoGralkor.Actions.MemoryAdd
 
   @moduletag :journey
   @moduletag timeout: 600_000
@@ -180,10 +181,18 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       refute adventure.second_operator_local_information
     end
 
-    test "and appending and replaceable Lenses use the same operator graph", %{
+    test "and implicit-default memory uses the graph named `operator/<operator id>`", %{
       adventure: adventure
     } do
-      assert adventure.shared_operator_destination
+      assert adventure.implicit_default_operator_graph
+    end
+
+    test "and appending Lenses use that same graph", %{adventure: adventure} do
+      assert adventure.appending_operator_graph
+    end
+
+    test "and replaceable Lenses use that same graph", %{adventure: adventure} do
+      assert adventure.replaceable_operator_graph
     end
 
     test "and replacing one Lens's graph preserves information written by another Lens", %{
@@ -227,7 +236,24 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       "statement" => "Payments depends on Ledger for settlement records."
     }
 
-    :ok = Native.memory_add(@operator_one, implicit_fact, "manual")
+    assert {:ok, %{result: "Ingesting."}} =
+             MemoryAdd.run(
+               %{
+                 content: implicit_fact,
+                 source_kind: :document,
+                 source_description: "manual"
+               },
+               %{agent_id: @operator_one}
+             )
+
+    implicit_episodes =
+      search_until(
+        @operator_one,
+        ["operator"],
+        :episodes,
+        "private deployment codename Juniper Muscat",
+        &contains_episode?(&1, "juniper")
+      )
 
     session_id = "memory_adventure_#{System.unique_integer([:positive])}"
 
@@ -272,7 +298,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     {:ok, implicit_memory} =
       Native.recall(
-        @operator_one,
+        Client.operator_graph_id(@operator_one),
         "Susu",
         "fresh_recall_#{System.unique_integer([:positive])}",
         "What is the private deployment codename and launch city?"
@@ -362,18 +388,19 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       global_for_first_operator: contains_episode?(global_for_first, "rollback"),
       global_for_second_operator: contains_episode?(global_for_second, "rollback"),
       second_operator_local_information: contains_episode?(local_for_second, "backup"),
-      shared_operator_destination:
-        Client.lens!("work-notes").destination == Client.lens!("systems").destination,
+      implicit_default_operator_graph: contains_episode?(implicit_episodes, "juniper"),
+      appending_operator_graph: contains_episode?(shared_episodes, "backup"),
+      replaceable_operator_graph: contains_fact?(current_graph, "Clearing"),
       preserved_shared_information: contains_episode?(shared_episodes, "vacuum"),
       current_replacement: contains_fact?(current_graph, "Payments settles through Clearing."),
       superseded_replacement:
         contains_fact?(superseded_graph, "Payments settles through Ledger."),
       conversation_provenance:
-        contains_attributed_fact?(conversation_facts, "conversation", "captured"),
+        every_fact_attributed?(conversation_facts, "conversation", "captured"),
       document_provenance:
-        contains_attributed_fact?(document_facts, "document", "deployment policy"),
+        every_fact_attributed?(document_facts, "document", "deployment policy"),
       structured_record_provenance:
-        contains_attributed_fact?(
+        every_fact_attributed?(
           structured_record_facts,
           "structured_record",
           "system dependency registry"
@@ -482,13 +509,23 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       [destination],
       :facts,
       query,
-      &contains_attributed_fact?(&1, source_kind, source_description),
+      &every_fact_attributed?(&1, source_kind, source_description),
       10
     )
   end
 
   defp contains_attributed_fact?(results, source_kind, source_description) do
     Enum.any?(results, fn %{fact: fact} ->
+      String.contains?(fact, "source: #{source_kind} —") and
+        String.contains?(fact, source_description) and
+        Regex.match?(~r/episode: [^)]+\)/, fact)
+    end)
+  end
+
+  defp every_fact_attributed?([], _source_kind, _source_description), do: false
+
+  defp every_fact_attributed?(results, source_kind, source_description) do
+    Enum.all?(results, fn %{fact: fact} ->
       String.contains?(fact, "source: #{source_kind} —") and
         String.contains?(fact, source_description) and
         Regex.match?(~r/episode: [^)]+\)/, fact)
