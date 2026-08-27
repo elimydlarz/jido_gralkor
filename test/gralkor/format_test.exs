@@ -54,23 +54,26 @@ defmodule Gralkor.FormatTest do
   end
 
   describe "when a fact is formatted > where the fact identifies originating episodes" do
-    test "then each episode's source kind, source description, and identifier are appended without changing the fact text" do
-      assert "- Eli may prefer tea (source: conversation — conversation with Eli; episode: episode-1) (source: document — project notes; episode: episode-2)" =
-               Format.format_fact(%{
-                 fact: "Eli may prefer tea",
-                 sources: [
-                   %{
-                     source_kind: "conversation",
-                     source_description: "conversation with Eli",
-                     id: "episode-1"
-                   },
-                   %{
-                     "source_kind" => "document",
-                     "source_description" => "project notes",
-                     "id" => "episode-2"
-                   }
-                 ]
-               })
+    test "then the fact text is unchanged" do
+      assert format_sourced_fact() =~ "- Eli may prefer tea "
+    end
+
+    test "and every episode's source kind is appended" do
+      result = format_sourced_fact()
+      assert result =~ "source: conversation"
+      assert result =~ "source: document"
+    end
+
+    test "and every episode's source description is appended" do
+      result = format_sourced_fact()
+      assert result =~ "conversation with Eli"
+      assert result =~ "project notes"
+    end
+
+    test "and every episode's identifier is appended" do
+      result = format_sourced_fact()
+      assert result =~ "episode: episode-1"
+      assert result =~ "episode: episode-2"
     end
   end
 
@@ -92,5 +95,23 @@ defmodule Gralkor.FormatTest do
       assert "2020-01-02T03:04:05+5:30" = Format.format_timestamp("2020-01-02T03:04:05+05:30")
       assert "2020-01-02T03:04:05-8:45" = Format.format_timestamp("2020-01-02T03:04:05-08:45")
     end
+  end
+
+  defp format_sourced_fact do
+    Format.format_fact(%{
+      fact: "Eli may prefer tea",
+      sources: [
+        %{
+          source_kind: "conversation",
+          source_description: "conversation with Eli",
+          id: "episode-1"
+        },
+        %{
+          "source_kind" => "document",
+          "source_description" => "project notes",
+          "id" => "episode-2"
+        }
+      ]
+    })
   end
 end

@@ -165,26 +165,11 @@ defmodule Gralkor.RecallTest do
   end
 
   describe "while a deadline budget governs recall > if the budget expires before recall returns" do
-    test "then a deadline-expired error is returned and a warning names the session and budget" do
+    test "then a deadline-expired error is returned" do
       slow_search = fn _g, _q, _max ->
         Process.sleep(500)
         {:ok, []}
       end
-
-      logs =
-        ExUnit.CaptureLog.capture_log(fn ->
-          assert {:error, :recall_deadline_expired} =
-                   Recall.recall(
-                     "g",
-                     "TestAgent",
-                     "expiring-session",
-                     "q",
-                     default_opts(search_fn: slow_search, deadline_ms: 50)
-                   )
-        end)
-
-      assert logs =~ "recall deadline expired"
-      assert logs =~ "session:expiring-session"
 
       assert {:error, :recall_deadline_expired} =
                Recall.recall(
@@ -194,6 +179,18 @@ defmodule Gralkor.RecallTest do
                  "q",
                  default_opts(search_fn: slow_search, deadline_ms: 50)
                )
+    end
+
+    test "and a warning names the session" do
+      logs = deadline_logs("expiring-session", 50)
+
+      assert logs =~ "session:expiring-session"
+    end
+
+    test "and the warning names the configured budget" do
+      logs = deadline_logs("expiring-session", 37)
+
+      assert logs =~ "after:37ms"
     end
   end
 
@@ -329,5 +326,24 @@ defmodule Gralkor.RecallTest do
 
       refute_receive :search_finished, 300
     end
+  end
+
+
+  defp deadline_logs(session_id, deadline_ms) do
+    slow_search = fn _g, _q, _max ->
+      Process.sleep(500)
+      {:ok, []}
+    end
+
+    ExUnit.CaptureLog.capture_log(fn ->
+      assert {:error, :recall_deadline_expired} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 session_id,
+                 "q",
+                 default_opts(search_fn: slow_search, deadline_ms: deadline_ms)
+               )
+    end)
   end
 end

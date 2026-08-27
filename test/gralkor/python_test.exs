@@ -198,13 +198,36 @@ defmodule Gralkor.PythonTest do
 
   describe "if an initialisation step fails" do
     test "then initialisation stops with that reason" do
-      assert {:stop, {:boot_failed, {:uv_init, "boom"}}} =
-               Python.init(
-                 reap_orphans: false,
-                 uv_init: fn -> {:error, {:uv_init, "boom"}} end,
-                 smoke_import: fn -> :ok end,
-                 install_loop: false
-               )
+      failures = [
+        {[uv_init: fn -> {:error, {:uv_init, "boom"}} end], {:uv_init, "boom"}},
+        {[smoke_import: fn -> {:error, {:graphiti_import, "boom"}} end],
+         {:graphiti_import, "boom"}},
+        {[
+           smoke_import_provider: fn provider ->
+             {:error, {:provider_client_import, provider, "boom"}}
+           end
+         ], {:provider_client_import, :google, "boom"}},
+        {[
+           install_loop_fn: fn -> {:error, {:install_async_runtime, "boom"}} end
+         ], {:install_async_runtime, "boom"}}
+      ]
+
+      Enum.each(failures, fn {override, expected_reason} ->
+        opts =
+          Keyword.merge(
+            [
+              reap_orphans: false,
+              uv_init: fn -> :ok end,
+              smoke_import: fn -> :ok end,
+              smoke_import_provider: fn _provider -> :ok end,
+              install_loop: true,
+              install_loop_fn: fn -> :ok end
+            ],
+            override
+          )
+
+        assert {:stop, {:boot_failed, ^expected_reason}} = Python.init(opts)
+      end)
     end
   end
 

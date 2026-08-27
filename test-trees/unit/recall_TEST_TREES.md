@@ -27,7 +27,9 @@ if the main graph search fails
 
 while a deadline budget governs recall
   if the budget expires before recall returns
-    then a deadline-expired error is returned and a warning names the session and budget
+    then a deadline-expired error is returned
+    and a warning names the session
+    and the warning names the configured budget
     where upstream is ordinary BEAM work
       then that work is stopped
   if recall finishes within the budget

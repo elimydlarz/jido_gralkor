@@ -52,13 +52,14 @@ defmodule Gralkor.Python do
       Keyword.get(opts, :smoke_import_provider, &smoke_import_provider_clients/1)
 
     install_loop? = Keyword.get(opts, :install_loop, true)
+    install_loop_fn = Keyword.get(opts, :install_loop_fn, &install_async_runtime/0)
     reap_orphans? = Keyword.get(opts, :reap_orphans, true)
 
     with :ok <- maybe_reap(reap_orphans?, list_orphans, kill_pid),
          :ok <- uv_init.(),
          :ok <- smoke_import.(),
          :ok <- smoke_import_supported_providers(smoke_import_provider),
-         :ok <- maybe_install_loop(install_loop?) do
+         :ok <- maybe_install_loop(install_loop?, install_loop_fn) do
       {:ok, %{}}
     else
       {:error, reason} -> {:stop, {:boot_failed, reason}}
@@ -106,8 +107,8 @@ defmodule Gralkor.Python do
     e -> {:error, {:uv_init, Exception.message(e)}}
   end
 
-  defp maybe_install_loop(false), do: :ok
-  defp maybe_install_loop(true), do: install_async_runtime()
+  defp maybe_install_loop(false, _install_loop), do: :ok
+  defp maybe_install_loop(true, install_loop), do: install_loop.()
 
   defp smoke_import_supported_providers(smoke_import_provider) do
     Enum.reduce_while(Gralkor.GraphitiPool.supported_providers(), :ok, fn provider, :ok ->
