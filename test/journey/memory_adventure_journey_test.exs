@@ -29,10 +29,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   defmodule JourneyOntology do
     use Gralkor.Ontology, entities: :open, relationships: :scoped
 
-    entity Job, "A scheduled background job such as backup or vacuum."
-    entity Deployment, "A software deployment governed by an operational policy."
-    entity Checkpoint, "A checkpoint that a deployment must verify."
-    entity System, "A software system participating in a dependency."
+    entity(Job, "A scheduled background job such as backup or vacuum.")
+    entity(Deployment, "A software deployment governed by an operational policy.")
+    entity(Checkpoint, "A checkpoint that a deployment must verify.")
+    entity(System, "A software system participating in a dependency.")
 
     from Job do
       overlaps(Job)
