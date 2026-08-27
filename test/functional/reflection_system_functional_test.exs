@@ -54,8 +54,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     start_supervised!(Gralkor.Lens.Storage.InMemory)
     start_supervised!(
       {Scheduler,
-       runner: fn reflection, _ingestion, _opts ->
-         {:error, %{reflection: reflection.name, reason: :not_executed_in_functional_setup}}
+       runner: fn reflection, ingestion, opts ->
+         Runner.run(reflection, ingestion, Keyword.put_new(opts, :inference, &output_for/1))
        end}
     )
 
