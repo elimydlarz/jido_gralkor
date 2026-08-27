@@ -114,6 +114,54 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
+  describe "when a Lens store adds an episode carrying a source kind" do
+    test "then Graphiti receives that source kind unchanged" do
+      store = %Store{
+        operator_id: "operator-one",
+        lens: lens("observations", "operator"),
+        source_kind: :structured_record
+      }
+
+      test_pid = self()
+
+      add_episode_fn = fn _group_id, _content, _source_description, _ontology, opts ->
+        send(test_pid, {:graph_opts, opts})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.add_episode(store, "content", "source",
+                 add_episode_fn: add_episode_fn
+               )
+
+      assert_receive {:graph_opts, opts}
+      assert opts[:source_kind] == :structured_record
+    end
+  end
+
+  describe "if a Lens store receives an unsupported addition or replacement option" do
+    test "then an `ArgumentError` is raised" do
+      Enum.each(unsupported_operations(self()), fn operation ->
+        assert_raise ArgumentError, operation
+      end)
+    end
+
+    test "and the error identifies the unsupported option" do
+      Enum.each(unsupported_operations(self()), fn operation ->
+        error = assert_raise ArgumentError, operation
+        assert Exception.message(error) =~ ":unsupported_option"
+      end)
+    end
+
+    test "and no Graphiti operation begins" do
+      Enum.each(unsupported_operations(self()), fn operation ->
+        assert_raise ArgumentError, operation
+      end)
+
+      refute_receive :graphiti_operation_began
+    end
+  end
+
   describe "when a Lens store using the `operator` Destination is searched" do
     test "then graph search receives the same resolved group" do
       store = %Store{
@@ -432,5 +480,35 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
         relationships: []
       }
     }
+  end
+
+  defp unsupported_operations(test_pid) do
+    add_episode_fn = fn _, _, _, _, _ ->
+      send(test_pid, :graphiti_operation_began)
+      :ok
+    end
+
+    replace_graph_fn = fn _, _, _, _ ->
+      send(test_pid, :graphiti_operation_began)
+      :ok
+    end
+
+    [
+      fn ->
+        Graphiti.add_episode(
+          %Store{operator_id: "operator-one", lens: lens("observations", "operator")},
+          "content",
+          "source",
+          add_episode_fn: add_episode_fn,
+          unsupported_option: true
+        )
+      end,
+      fn ->
+        Graphiti.replace_graph(replaceable_store(:operator), property_graph(),
+          replace_graph_fn: replace_graph_fn,
+          unsupported_option: true
+        )
+      end
+    ]
   end
 end

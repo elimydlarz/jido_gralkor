@@ -137,6 +137,35 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
+  describe "if an ontology entity declaration does not name an alias" do
+    test "then compilation fails" do
+      assert_raise CompileError, fn ->
+        Code.compile_string("""
+        defmodule InvalidEntityNameOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :open
+          entity :user do
+          end
+        end
+        """)
+      end
+    end
+
+    test "and the error shows the expected entity declaration form" do
+      error =
+        assert_raise CompileError, fn ->
+          Code.compile_string("""
+          defmodule InvalidEntityFormOntology do
+            use Gralkor.Ontology, entities: :open, relationships: :open
+            entity :user do
+            end
+          end
+          """)
+        end
+
+      assert Exception.message(error) =~ "entity User do … end"
+    end
+  end
+
   describe "when an ontology declares an aliased entity" do
     test "then the entity is named with the alias' last segment as a string (\"Foo\")" do
       defmodule EntityNameOntology do

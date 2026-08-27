@@ -5,6 +5,7 @@ import test from "node:test";
 const skillUrl = new URL("../.agents/skills/publish/SKILL.md", import.meta.url);
 const openaiYamlUrl = new URL("../.agents/skills/publish/agents/openai.yaml", import.meta.url);
 const envExampleUrl = new URL("../.env.example", import.meta.url);
+const mixUrl = new URL("../mix.exs", import.meta.url);
 
 test("when an operator asks to publish jido_gralkor with a semantic-version change kind or the current version", async (context) => {
   await context.test("then the version selection is the only required operator input", async () => {
@@ -118,6 +119,24 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       assert.doesNotMatch(skill, /mix hex\.publish --organization/);
       assert.match(envExample, /personal Hex user `elimydlarz`/);
       assert.doesNotMatch(envExample, /manage both the gralkor organization package/);
+    },
+  );
+
+  await context.test(
+    "and every repository-relative document linked from the published README is included in the Hex package",
+    async () => {
+      const mix = await readFile(mixUrl, "utf8");
+
+      assert.match(mix, /files:.*README\.md DESTINATIONS\.md CHANGELOG\.md/);
+    },
+  );
+
+  await context.test(
+    "and every repository-relative document linked from the published README is included in the ExDoc extras",
+    async () => {
+      const mix = await readFile(mixUrl, "utf8");
+
+      assert.match(mix, /extras: \["README\.md", "DESTINATIONS\.md"\]/);
     },
   );
 
