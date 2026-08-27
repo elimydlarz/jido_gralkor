@@ -147,6 +147,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     } do
       assert {:error, {:blank_name, " "}} =
                Registry.load([valid_definition(root, name: " ")], root: root)
+
+      Application.put_env(:jido_gralkor, :reflections, [
+        %Gralkor.Reflection{
+          name: " ",
+          destination: %Gralkor.Destination{name: "global"},
+          ontology: Gralkor.DefaultOntology,
+          chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "loaded.yaml", steps: []}
+        }
+      ])
+
+      assert_raise ArgumentError, ~r/blank_name.*" "/, fn -> Registry.configured!() end
     end
 
     test "if Reflection names are duplicated then validation fails identifying the duplicate name",
