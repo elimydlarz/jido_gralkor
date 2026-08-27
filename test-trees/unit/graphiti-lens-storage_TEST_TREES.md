@@ -6,6 +6,13 @@ when a Lens store adds an episode to the `operator` Destination
   and the graph add receives the episode content, source description, and Lens ontology
   and the graph add result is returned to the ingestion process
 
+when a Lens store adds an episode carrying a source kind
+  then Graphiti receives that source kind unchanged
+
+if a Lens store receives an unsupported addition or replacement option
+  then an `ArgumentError` identifies the unsupported option
+  and no Graphiti operation begins
+
 when a Lens store using the `operator` Destination is searched
   then graph search receives the same resolved group
   and graph search receives the query and result limit

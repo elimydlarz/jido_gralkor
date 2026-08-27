@@ -55,6 +55,9 @@ where captured turns select a Lens
   when one captured turn is routed through a primary Lens and an additional Lens
     then every routed Lens receives that turn in its own batch
     but the session's buffered turns contain that turn only once
+  when later turns contribute Reflection context
+    then nested tool context is merged key by key
+    and later context outside tool context replaces earlier context
   if one Lens's flush fails
     then every other Lens's batch is still attempted
     and an awaited flush reports the first failure only after every Lens has been attempted
@@ -141,6 +144,7 @@ when every buffered session is flushed at once
   and the call returns only once every one of those flushes has been awaited
   if one session's flush fails
     then the other sessions' flushes still complete
+    and the call reports success after every session has been attempted
 
 when a flush of every buffered session finds none buffered
   then the call returns immediately without invoking the flush callback

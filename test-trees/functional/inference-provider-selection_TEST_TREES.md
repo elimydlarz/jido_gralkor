@@ -10,6 +10,13 @@ when the deployment configures an inference LLM and an embedder
 where the deployment configures no LLM or embedder override
   then Google configures both roles and its credential alone starts the memory runtime
 
+where the deployment configures a blank LLM or embedder override
+  then that role uses its Google default
+
+if the deployment configures an override without both a provider and model identifier
+  then startup fails before client construction
+  and the failure names the environment variable and rejected value
+
 if the native memory runtime receives an unsupported provider
   then startup fails before client construction and names both model specs and the supported providers
 

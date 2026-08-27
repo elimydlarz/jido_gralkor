@@ -53,6 +53,14 @@ if a capture is requested with a missing or blank session id
   then an argument error is raised at the port boundary
   and no backend call is made
 
+if a flush or flush-and-await is requested with a missing or blank session id
+  then an argument error is raised at the port boundary
+  and no backend call is made
+
+if flush-and-await receives a timeout that is not a positive integer
+  then an argument error identifies the invalid timeout
+  and no backend call is made
+
 when a flush is requested for a session
   then the call is recorded with its session id
   and success is returned before the flush completes

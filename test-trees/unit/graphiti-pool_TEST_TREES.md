@@ -69,8 +69,8 @@ when a graph instance is requested for a group
 when an episode is added
   then its name combines the current millisecond timestamp with a positive monotonic unique integer, so concurrent writes remain distinguishable without claiming an episode UUID
   while an embedded connection is configured
-  and another episode addition is in progress
-    then the graph library receives the episode only after the in-progress addition finishes
+    while another episode addition is in progress
+      then the graph library receives the episode only after the in-progress addition finishes
   while no ontology is supplied
     then the graph library receives no entity types, edge types, edge type map, or excluded entity types
   while an ontology module is supplied

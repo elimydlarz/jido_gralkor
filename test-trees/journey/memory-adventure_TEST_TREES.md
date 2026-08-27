@@ -10,7 +10,7 @@ when two operators use implicit memory, Lenses, ERL, and shared-Destination repl
   and ERL stores a structured Learning artefact
   and the global graph is visible to both operators
   and one operator's operator graph is unavailable to another operator
-  and appending and replaceable Lenses use the same operator graph
+  and implicit-default memory, appending Lenses, and replaceable Lenses use the same `operator/<operator id>` graph
   and replacing one Lens's graph preserves information written by another Lens
   and fresh retrieval returns the current replacement graph
   and fresh retrieval omits the superseded replacement graph
