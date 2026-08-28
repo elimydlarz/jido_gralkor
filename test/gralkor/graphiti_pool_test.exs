@@ -388,9 +388,12 @@ defmodule Gralkor.GraphitiPoolTest do
                   self.lock = asyncio.Lock()
                   self.server_time_ms = 1_000_000
                   self.steal_after_save = set()
+                  self.reject_renewals = set()
+                  self.query_calls = []
 
               async def execute_query(self, query, **params):
                   async with self.lock:
+                      self.query_calls.append({'query': query, 'params': dict(params)})
                       if 'MERGE (c:_GralkorEpisodeClaim' in query:
                           claim = self.claims.setdefault(params['uuid'], {
                               'group_id': params['group_id'],
@@ -429,6 +432,8 @@ defmodule Gralkor.GraphitiPoolTest do
                           return [{'uuid': params['uuid']}], None, None
                       if 'SET c.lease_until_ms' in query:
                           claim = self.claims[params['uuid']]
+                          if params['uuid'] in self.reject_renewals:
+                              return [], None, None
                           if (
                               claim['owner'] == params['owner']
                               and claim['generation'] == params['generation']

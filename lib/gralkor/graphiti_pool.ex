@@ -667,7 +667,7 @@ defmodule Gralkor.GraphitiPool do
                 )
 
             claim_owner = str(uuid4()) if uuid is not None else None
-            claim_lease_ms = 30_000
+            claim_lease_ms = getattr(g.driver, '_gralkor_claim_lease_ms', 30_000)
             claim_state = {'distributed': False, 'generation': None}
 
             async def acquire_claim():
