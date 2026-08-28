@@ -862,6 +862,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                   self.graph_operations_interface = GraphOperations()
                   self.episodes = {}
 
+              @property
+              def _gralkor_episode_count(self):
+                  return len(self.episodes)
+
           class GraphitiContract:
               def __init__(self):
                   self.driver = Driver()
