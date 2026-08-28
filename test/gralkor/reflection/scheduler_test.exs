@@ -803,10 +803,10 @@ defmodule Gralkor.Reflection.SchedulerTest do
                storage: EmptyStore,
                namespace: "admitted",
                tenant: "request-tenant"
-             ]
+      ]
 
       send(replacement_task, :finish)
-      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}, 1_000
     end
   end
 
