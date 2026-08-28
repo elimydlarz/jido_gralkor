@@ -215,7 +215,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
-  describe "if public ingestion omits or supplies a blank stable ingestion identifier" do
+  describe "if public ingestion omits or supplies a blank operator or stable ingestion identifier" do
     test "then a blank ingestion identifier raises before Lens or Reflection side effects" do
       assert_raise ArgumentError, ~r/id must be a non-blank string/, fn ->
         Client.ingest(%{ingestion() | id: " "})
@@ -235,6 +235,30 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     test "then a missing ingestion identifier raises before Lens or Reflection side effects" do
       assert_raise ArgumentError, ~r/id must be a non-blank string/, fn ->
         Client.ingest(%{ingestion() | id: nil})
+      end
+
+      refute_receive {:runner_started, _reflection, _ingestion, _artefact_id, _runner}
+    end
+
+    test "then a blank operator identifier raises before Lens or Reflection side effects" do
+      assert_raise ArgumentError, ~r/operator_id must be a non-blank string/, fn ->
+        Client.ingest(%{ingestion() | operator_id: " "})
+      end
+
+      refute_receive {:runner_started, _reflection, _ingestion, _artefact_id, _runner}
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "",
+                 destinations: ["observations"],
+                 result_type: :episodes
+               })
+    end
+
+    test "then a missing operator identifier raises before Lens or Reflection side effects" do
+      assert_raise ArgumentError, ~r/operator_id must be a non-blank string/, fn ->
+        Client.ingest(%{ingestion() | operator_id: nil})
       end
 
       refute_receive {:runner_started, _reflection, _ingestion, _artefact_id, _runner}
