@@ -1233,7 +1233,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
 
       partial_artefact =
-        Artefact.new(artefact_id, "review", %{"summary" => "stored"}, ["evidence-one"])
+        Artefact.new(artefact_id, "review", %{"summary" => "stored"}, [nil])
 
       content = Jason.encode!(Map.from_struct(partial_artefact))
 
