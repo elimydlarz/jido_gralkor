@@ -1396,5 +1396,55 @@ defmodule Gralkor.CaptureBufferTest do
       assert_received {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "1"}]]}
       assert_received {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "2"}]]}
     end
+
+    test "then an already-started fire-and-forget Lens flush finishes before termination returns" do
+      test_pid = self()
+
+      lens_flush_callback = fn _operator, _agent, _user, lens, _turns, _ingestion_id,
+                               evidence_id ->
+        send(test_pid, {:fire_and_forget_started, self()})
+
+        receive do
+          :finish_flush ->
+            {:ok, %{lens: lens, evidence_id: evidence_id, result: :ok}}
+        end
+      end
+
+      reflection_callback = fn _reflections, _ingestion ->
+        send(test_pid, :reflection_admitted)
+        {:ok, :scheduled}
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      {:ok, pid} =
+        start_supervised(
+          {CaptureBuffer,
+           flush_callback: fn _, _, _, _, _ -> :ok end,
+           lens_flush_callback: lens_flush_callback,
+           reflections: [:review],
+           reflection_callback: reflection_callback,
+           retries: []}
+        )
+
+      :ok =
+        CaptureBuffer.append_lens(
+          "s1",
+          "operator-one",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "remember")]
+        )
+
+      :ok = CaptureBuffer.flush("s1")
+      assert_receive {:fire_and_forget_started, worker}
+
+      stopper = Task.async(fn -> GenServer.stop(pid, :normal, :infinity) end)
+      assert Task.yield(stopper, 25) == nil
+      send(worker, :finish_flush)
+      assert_receive :reflection_admitted
+      assert :ok = Task.await(stopper)
+    end
   end
 end
