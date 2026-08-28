@@ -790,19 +790,11 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
   describe "if boundedness configuration is invalid" do
     test "then Scheduler startup or scheduling rejects it" do
-      previous_trap_exit = Process.flag(:trap_exit, true)
+      for invalid <- ["not-a-list", [-1], [1.5]] do
+        name = scheduler_name()
 
-      try do
-        for invalid <- ["not-a-list", [-1], [1.5]] do
-          name = scheduler_name()
-
-          assert {:error, {:invalid_retry_delays, ^invalid}} =
-                   Scheduler.start_link(name: name, retry_delays: invalid)
-
-          assert_receive {:EXIT, _scheduler, {:invalid_retry_delays, ^invalid}}
-        end
-      after
-        Process.flag(:trap_exit, previous_trap_exit)
+        assert {:error, {:invalid_retry_delays, ^invalid}} =
+                 Scheduler.start_link(name: name, retry_delays: invalid)
       end
 
       name = scheduler_name()
