@@ -503,6 +503,7 @@ defmodule Gralkor.GraphitiPool do
             from uuid import uuid4
             from graphiti_core.driver.driver import GraphProvider
             from graphiti_core.errors import NodeNotFoundError
+            import graphiti_core.graphiti as graphiti_module
             from graphiti_core.utils.maintenance import edge_operations
             from graphiti_core.nodes import EpisodeType, EpisodicNode
             c = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
@@ -622,6 +623,187 @@ defmodule Gralkor.GraphitiPool do
                 EpisodicNode.save = guarded_save
 
             ClaimLostError = EpisodicNode._gralkor_claim_lost_error
+
+            if not hasattr(graphiti_module, '_gralkor_original_add_nodes_and_edges_bulk'):
+                original_add_nodes_and_edges_bulk = graphiti_module.add_nodes_and_edges_bulk
+
+                async def claim_fenced_add_nodes_and_edges_bulk(
+                    driver,
+                    episodic_nodes,
+                    episodic_edges,
+                    entity_nodes,
+                    entity_edges,
+                    embedder,
+                ):
+                    fence = guard.get()
+                    if (
+                        fence is None
+                        or not fence['distributed']
+                        or getattr(driver, 'provider', None) != GraphProvider.FALKORDB
+                    ):
+                        return await original_add_nodes_and_edges_bulk(
+                            driver,
+                            episodic_nodes,
+                            episodic_edges,
+                            entity_nodes,
+                            entity_edges,
+                            embedder,
+                        )
+
+                    episodes = []
+                    for episode in episodic_nodes:
+                        episodes.append(dict(
+                            uuid=episode.uuid,
+                            name=episode.name,
+                            group_id=episode.group_id,
+                            source_description=episode.source_description,
+                            source=episode.source.value,
+                            content=episode.content,
+                            entity_edges=episode.entity_edges,
+                            created_at=episode.created_at,
+                            valid_at=episode.valid_at,
+                        ))
+
+                    nodes = []
+                    for node in entity_nodes:
+                        if node.name_embedding is None:
+                            await node.generate_name_embedding(embedder)
+                        entity_data = dict(
+                            uuid=node.uuid,
+                            name=node.name,
+                            group_id=node.group_id,
+                            summary=node.summary,
+                            created_at=node.created_at,
+                            name_embedding=node.name_embedding,
+                            labels=sorted(set(node.labels + ['Entity'])),
+                        )
+                        for key, value in (node.attributes or {}).items():
+                            if key not in entity_data:
+                                entity_data[key] = value
+                        nodes.append(entity_data)
+
+                    relations = []
+                    for edge in entity_edges:
+                        if edge.fact_embedding is None:
+                            await edge.generate_embedding(embedder)
+                        edge_data = dict(
+                            uuid=edge.uuid,
+                            source_node_uuid=edge.source_node_uuid,
+                            target_node_uuid=edge.target_node_uuid,
+                            name=edge.name,
+                            fact=edge.fact,
+                            group_id=edge.group_id,
+                            episodes=edge.episodes,
+                            created_at=edge.created_at,
+                            expired_at=edge.expired_at,
+                            valid_at=edge.valid_at,
+                            invalid_at=edge.invalid_at,
+                            reference_time=edge.reference_time,
+                            fact_embedding=edge.fact_embedding,
+                        )
+                        for key, value in (edge.attributes or {}).items():
+                            if key not in edge_data:
+                                edge_data[key] = value
+                        relations.append(edge_data)
+
+                    params = dict(
+                        claim_uuid=fence['uuid'],
+                        owner=fence['owner'],
+                        generation=fence['generation'],
+                    )
+                    clauses = [
+                        '''
+                        MATCH (claim:_GralkorEpisodeClaim {uuid: $claim_uuid})
+                        WHERE claim.owner = $owner AND claim.generation = $generation
+                        SET claim._gralkor_fenced_generation = $generation
+                        WITH claim
+                        '''
+                    ]
+
+                    for index, episode in enumerate(episodes):
+                        parameter = f'episode_{index}'
+                        variable = f'episode_{index}'
+                        params[parameter] = episode
+                        clauses.append(f'''
+                            MERGE ({variable}:Episodic {{uuid: ${parameter}.uuid}})
+                            SET {variable} = {{
+                              uuid: ${parameter}.uuid,
+                              name: ${parameter}.name,
+                              group_id: ${parameter}.group_id,
+                              source_description: ${parameter}.source_description,
+                              source: ${parameter}.source,
+                              content: ${parameter}.content,
+                              entity_edges: ${parameter}.entity_edges,
+                              created_at: ${parameter}.created_at,
+                              valid_at: ${parameter}.valid_at,
+                              _gralkor_extraction_complete: true
+                            }}
+                            WITH claim
+                        ''')
+
+                    for index, node in enumerate(nodes):
+                        parameter = f'entity_node_{index}'
+                        variable = f'entity_node_{index}'
+                        labels = ':'.join(node['labels'])
+                        params[parameter] = node
+                        clauses.append(f'''
+                            MERGE ({variable}:Entity {{uuid: ${parameter}.uuid}})
+                            SET {variable}:{labels}
+                            SET {variable} = ${parameter}
+                            SET {variable}.name_embedding = vecf32(${parameter}.name_embedding)
+                            WITH claim
+                        ''')
+
+                    for index, edge in enumerate(episodic_edges):
+                        parameter = f'episodic_edge_{index}'
+                        source = f'episodic_source_{index}'
+                        target = f'episodic_target_{index}'
+                        relation = f'episodic_relation_{index}'
+                        params[parameter] = edge.model_dump()
+                        clauses.append(f'''
+                            MATCH ({source}:Episodic {{uuid: ${parameter}.source_node_uuid}})
+                            MATCH ({target}:Entity {{uuid: ${parameter}.target_node_uuid}})
+                            MERGE ({source})-[{relation}:MENTIONS {{uuid: ${parameter}.uuid}}]->({target})
+                            SET {relation}.group_id = ${parameter}.group_id,
+                                {relation}.created_at = ${parameter}.created_at
+                            WITH claim
+                        ''')
+
+                    for index, edge in enumerate(relations):
+                        parameter = f'entity_edge_{index}'
+                        source = f'entity_source_{index}'
+                        target = f'entity_target_{index}'
+                        relation = f'entity_relation_{index}'
+                        params[parameter] = edge
+                        clauses.append(f'''
+                            MATCH ({source}:Entity {{uuid: ${parameter}.source_node_uuid}})
+                            MATCH ({target}:Entity {{uuid: ${parameter}.target_node_uuid}})
+                            MERGE ({source})-[{relation}:RELATES_TO {{uuid: ${parameter}.uuid}}]->({target})
+                            SET {relation} = ${parameter}
+                            SET {relation}.fact_embedding = vecf32(${parameter}.fact_embedding)
+                            WITH claim
+                        ''')
+
+                    clauses.append(
+                        'RETURN claim.generation AS generation '
+                        '/* gralkor_claim_fenced_graph_effects */'
+                    )
+                    records, _, _ = await driver.execute_query(
+                        '\n'.join(clauses),
+                        **params,
+                    )
+                    if not records:
+                        raise ClaimLostError(
+                            f'episode claim lost before graph effects for '
+                            f'{fence["uuid"]} generation {fence["generation"]}'
+                        )
+
+                graphiti_module._gralkor_original_add_nodes_and_edges_bulk = (
+                    original_add_nodes_and_edges_bulk
+                )
+                graphiti_module.add_nodes_and_edges_bulk = (
+                    claim_fenced_add_nodes_and_edges_bulk
+                )
 
             import sys
 
