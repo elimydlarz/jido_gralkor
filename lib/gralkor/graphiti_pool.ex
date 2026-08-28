@@ -493,6 +493,28 @@ defmodule Gralkor.GraphitiPool do
                 EpisodicNode.get_by_uuid = classmethod(guarded_get_by_uuid)
 
             import sys
+
+            async def extraction_complete():
+                if not hasattr(g.driver, 'execute_query'):
+                    completed = getattr(g.driver, '_gralkor_completed_episode_uuids', set())
+                    return uid in completed
+                records, _, _ = await g.driver.execute_query(
+                    "MATCH (e:Episodic {uuid: $uuid}) RETURN coalesce(e._gralkor_extraction_complete, false) AS complete",
+                    uuid=uid,
+                )
+                return bool(records and records[0]['complete'])
+
+            async def record_extraction_complete():
+                if not hasattr(g.driver, 'execute_query'):
+                    completed = getattr(g.driver, '_gralkor_completed_episode_uuids', set())
+                    completed.add(uid)
+                    g.driver._gralkor_completed_episode_uuids = completed
+                    return
+                await g.driver.execute_query(
+                    "MATCH (e:Episodic {uuid: $uuid}) SET e._gralkor_extraction_complete = true RETURN e.uuid AS uuid",
+                    uuid=uid,
+                )
+
             async def add_episode():
                 if uuid is not None:
                     try:
@@ -507,25 +529,34 @@ defmodule Gralkor.GraphitiPool do
                             and existing.source == episode_type
                             and existing.source_description == s
                         )
-                        return 'existing' if equal else 'conflict'
+                        if not equal:
+                            return 'conflict'
+                        if await extraction_complete():
+                            return 'existing'
 
-                    token = guard.set(dict(
-                        uuid=uid,
-                        name=n,
-                        group_id=gid,
-                        labels=[],
-                        source=episode_type,
-                        content=c,
-                        source_description=s,
-                        created_at=datetime.now(timezone.utc),
-                        valid_at=kwargs['reference_time'],
-                    ))
+                    token = (
+                        guard.set(dict(
+                            uuid=uid,
+                            name=n,
+                            group_id=gid,
+                            labels=[],
+                            source=episode_type,
+                            content=c,
+                            source_description=s,
+                            created_at=datetime.now(timezone.utc),
+                            valid_at=kwargs['reference_time'],
+                        ))
+                        if existing is None
+                        else None
+                    )
                 else:
                     token = None
 
                 if not skip_empty_edge_candidates:
                     try:
                         await g.add_episode(**kwargs)
+                        if uuid is not None:
+                            await record_extraction_complete()
                         return 'created'
                     finally:
                         if token is not None:
@@ -535,6 +566,8 @@ defmodule Gralkor.GraphitiPool do
                 empty_edge_token = empty_edge_guard.set(True)
                 try:
                     await g.add_episode(**kwargs)
+                    if uuid is not None:
+                        await record_extraction_complete()
                     return 'created'
                 finally:
                     empty_edge_guard.reset(empty_edge_token)
