@@ -1509,6 +1509,13 @@ defmodule Gralkor.CaptureBufferTest do
       test_pid = self()
       :ok = stop_supervised(CaptureBuffer)
       attempts = :atomics.new(1, [])
+      journal_path =
+        Path.join(
+          System.tmp_dir!(),
+          "capture-drain-#{System.unique_integer([:positive])}.dets"
+        )
+
+      on_exit(fn -> File.rm(journal_path) end)
 
       runner = fn reflection, _ingestion, opts ->
         attempt = :atomics.add_get(attempts, 1, 1)
@@ -1528,7 +1535,8 @@ defmodule Gralkor.CaptureBufferTest do
          scheduler_opts: [
            runner: runner,
            store_opts: [storage: EmptyReflectionStore],
-           retry_delays: [0]
+           retry_delays: [0],
+           journal_path: journal_path
          ]},
         {CaptureBuffer,
          flush_callback: fn _, _, _, _, _ -> :ok end,
