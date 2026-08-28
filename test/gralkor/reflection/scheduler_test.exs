@@ -265,6 +265,79 @@ defmodule Gralkor.Reflection.SchedulerTest do
     end
   end
 
+  describe "when canonical lookup returns an error, crashes, or exceeds its execution timeout" do
+    test "then lookup follows the bounded storage retry schedule" do
+      for {outcome, expected_reason} <- [
+            {{:error, :lookup_unavailable}, :lookup_unavailable},
+            {:crash, :task_exit},
+            {:hang, :timeout}
+          ] do
+        start_supervised!(
+          {ControlledStore, {self(), [outcome, {:error, :not_found}], [:ok]}}
+        )
+
+        {name, runner} = immediate_runner(self())
+
+        start_scheduler(name,
+          runner: runner,
+          store_opts: [storage: ControlledStore],
+          retry_delays: [0],
+          execution_timeout_ms: 25,
+          notify: self()
+        )
+
+        assert {:ok, :scheduled} =
+                 Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+        assert_receive {:store_get, _artefact_id, _lookup_task}
+
+        assert_receive {:reflection_retrying, "review", %{stage: :storage, reason: reason}}
+
+        case expected_reason do
+          :task_exit -> assert match?({:task_exit, _}, reason)
+          expected -> assert reason == expected
+        end
+
+        assert_receive {:store_get, _artefact_id, _lookup_task}
+        assert_receive {:runner_invoked, artefact_id}
+        assert_receive {:reflection_completed, "review", {:ok, %{id: ^artefact_id}}}
+
+        assert :ok = stop_supervised(name)
+        assert :ok = stop_supervised(ControlledStore)
+      end
+    end
+
+    test "then an immutable-content conflict ends without retry" do
+      start_supervised!(
+        {ControlledStore,
+         {self(), [{:error, {:artefact_conflict, "stable-id"}}], []}}
+      )
+
+      {name, runner} = immediate_runner(self())
+
+      start_scheduler(name,
+        runner: runner,
+        store_opts: [storage: ControlledStore],
+        retry_delays: [0, 0],
+        notify: self()
+      )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:reflection_completed, "review",
+                      {:error,
+                       %{
+                         stage: :storage,
+                         attempts: 1,
+                         reason: {:artefact_conflict, "stable-id"}
+                       }}}
+
+      refute_receive {:reflection_retrying, "review", _failure}
+      refute_receive {:runner_invoked, _artefact_id}
+    end
+  end
+
   describe "when canonical storage fails after a successful Runner" do
     test "then storage retry receives the exact retained artefact without rerunning the Runner" do
       start_supervised!(
@@ -474,6 +547,83 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
       refute_receive {:active_runner, _runner}
     end
+
+    test "then an uncertain final storage attempt is confirmed before retry exhaustion" do
+      artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
+      artefact = Artefact.new(artefact_id, "review", %{"stored" => true}, [])
+
+      start_supervised!(
+        {ControlledStore, {self(), [{:error, :not_found}, {:ok, artefact}], [:hang]}}
+      )
+
+      {name, runner} = immediate_runner(self())
+      path = journal_path()
+      on_exit(fn -> File.rm(path) end)
+
+      scheduler =
+        start_scheduler(name,
+          runner: runner,
+          store_opts: [storage: ControlledStore],
+          retry_delays: [],
+          notify: self(),
+          journal_path: path,
+          journal_name: journal_name()
+        )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:store_put, ^artefact, _storage_task}
+      Process.exit(scheduler, :kill)
+      assert eventually(fn -> Process.whereis(name) not in [nil, scheduler] end)
+      assert_receive {:store_get, ^artefact_id, _confirmation_task}
+      assert_receive {:reflection_completed, "review", {:ok, ^artefact}}
+      refute_receive {:runner_invoked, _artefact_id}
+      refute_receive {:store_put, _artefact, _storage_task}
+    end
+  end
+
+  describe "when the Scheduler stops during a configured retry delay" do
+    test "then the durable deadline prevents an early replacement attempt" do
+      attempts = :atomics.new(1, [])
+      test_pid = self()
+      name = scheduler_name()
+      path = journal_path()
+      on_exit(fn -> File.rm(path) end)
+
+      runner = fn reflection, _ingestion, opts ->
+        attempt = :atomics.add_get(attempts, 1, 1)
+        send(test_pid, {:delayed_runner, attempt, System.monotonic_time(:millisecond)})
+
+        if attempt == 1 do
+          {:error, :temporary}
+        else
+          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{}, [])}
+        end
+      end
+
+      scheduler =
+        start_scheduler(name,
+          runner: runner,
+          store_opts: [storage: EmptyStore],
+          retry_delays: [500],
+          notify: self(),
+          journal_path: path,
+          journal_name: journal_name()
+        )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:delayed_runner, 1, first_at}
+      assert_receive {:reflection_retrying, "review", %{reason: :temporary}}
+      Process.exit(scheduler, :kill)
+      assert eventually(fn -> Process.whereis(name) not in [nil, scheduler] end)
+      refute_receive {:delayed_runner, 2, _second_at}, 250
+      assert_receive {:delayed_runner, 2, second_at}, 500
+      assert second_at - first_at >= 450
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+    end
   end
 
   describe "when the same logical completion is scheduled concurrently" do
@@ -567,9 +717,36 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
       assert_receive {:drain_runner, runner_task}
       drainers = for _ <- 1..2, do: Task.async(fn -> Scheduler.drain(name) end)
+      assert eventually(fn -> :sys.get_state(name).draining end)
+
+      assert {:error, :scheduler_draining} =
+               Scheduler.schedule([reflection("summary")], ingestion(), server: name)
+
       assert Enum.all?(drainers, &(Task.yield(&1, 10) == nil))
       send(runner_task, :finish)
       assert Task.await_many(drainers) == [:ok, :ok]
+    end
+  end
+
+  describe "if boundedness configuration is invalid" do
+    test "then Scheduler startup or scheduling rejects it" do
+      for invalid <- ["not-a-list", [-1], [1.5]] do
+        name = scheduler_name()
+
+        assert {:error, {:invalid_retry_delays, ^invalid}} =
+                 Scheduler.start_link(name: name, retry_delays: invalid)
+      end
+
+      name = scheduler_name()
+      start_scheduler(name, runner: elem(immediate_runner(self()), 1))
+
+      assert {:error, {:invalid_execution_timeout_ms, 0}} =
+               Scheduler.schedule([reflection("review")], ingestion(),
+                 server: name,
+                 execution_timeout_ms: 0
+               )
+
+      refute_receive {:runner_invoked, _artefact_id}
     end
   end
 
