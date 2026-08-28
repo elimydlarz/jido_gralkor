@@ -269,19 +269,13 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       assert {:error, {:python, "RuntimeError: response failed after episode save"}} =
-               GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
-                 uuid: "partial-uuid"
-               )
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "partial-uuid")
 
       assert :ok =
-               GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
-                 uuid: "partial-uuid"
-               )
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "partial-uuid")
 
       assert :ok =
-               GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
-                 uuid: "partial-uuid"
-               )
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "partial-uuid")
 
       {proof, _} =
         Pythonx.eval(

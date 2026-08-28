@@ -55,7 +55,8 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
           [%Artefact{}] ->
             {:error, {:artefact_conflict, artefact_id}}
 
-          [] -> {:error, {:invalid_artefact, artefact_id}}
+          [] ->
+            {:error, {:invalid_artefact, artefact_id}}
         end
 
       {:error, _} = error ->
