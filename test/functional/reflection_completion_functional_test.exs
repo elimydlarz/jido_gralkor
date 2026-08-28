@@ -609,6 +609,72 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert :ok = Task.await(finisher)
       assert :ok = Scheduler.drain()
     end
+
+    test "then an active fire-and-forget capture flush admits and completes its Reflection before shutdown returns",
+         %{reflection: reflection} do
+      test_pid = self()
+      assert :ok = stop_supervised(Scheduler)
+
+      runner = fn current_reflection, _ingestion, opts ->
+        send(test_pid, :shutdown_runner_started)
+        Process.sleep(100)
+
+        {:ok,
+         Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"}, [])}
+      end
+
+      start_supervised!(
+        {Scheduler,
+         runner: runner,
+         store_opts: [storage: Gralkor.Reflection.Storage.InMemory],
+         notify: test_pid,
+         retry_delays: [0]}
+      )
+
+      lens_flush_callback = fn _operator, _agent, _user, lens, _turns, _ingestion_id,
+                               evidence_id ->
+        send(test_pid, {:shutdown_lens_flush_started, self()})
+
+        receive do
+          :finish_lens_flush ->
+            {:ok, %{lens: lens, evidence_id: evidence_id, result: :ok}}
+        end
+      end
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _group, _agent, _user, _ontology, _turns -> :ok end,
+         lens_flush_callback: lens_flush_callback,
+         reflections: [reflection],
+         retries: []}
+      )
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 "shutdown-session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 [%Gralkor.Message{role: "user", content: "remember"}]
+               )
+
+      assert :ok = CaptureBuffer.flush("shutdown-session")
+      assert_receive {:shutdown_lens_flush_started, worker}
+
+      finisher =
+        Task.async(fn ->
+          Process.sleep(50)
+          send(worker, :finish_lens_flush)
+        end)
+
+      started = System.monotonic_time(:millisecond)
+      assert :ok = stop_supervised(CaptureBuffer)
+      assert System.monotonic_time(:millisecond) - started >= 125
+      assert :ok = Task.await(finisher)
+      assert_receive :shutdown_runner_started
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+    end
   end
 
   describe "where Graphiti is the canonical Reflection store" do
