@@ -177,7 +177,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert System.monotonic_time(:millisecond) - started < 100
       assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
     end
+  end
 
+  describe "if public ingestion omits or supplies a blank stable ingestion identifier" do
     test "then a blank ingestion identifier raises before Lens or Reflection side effects" do
       assert_raise ArgumentError, ~r/id must be a non-blank string/, fn ->
         Client.ingest(%{ingestion() | id: " "})
@@ -201,7 +203,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       refute_receive {:runner_started, _reflection, _ingestion, _artefact_id, _runner}
     end
+  end
 
+  describe "when an ingestion is replayed after one or more of its Reflections completed" do
     test "then replay after a Scheduler restart confirms one stable searchable artefact without rerunning" do
       assert :ok = Client.ingest(ingestion())
       assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, first_runner}
@@ -228,7 +232,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert searchable.id == first_artefact.id
     end
+  end
 
+  describe "when the supervised Reflection Scheduler crashes with unfinished work" do
     test "then a Scheduler crash resumes unfinished Runner work from durable state" do
       assert :ok = Client.ingest(ingestion())
 
@@ -245,7 +251,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       send(resumed_runner, :finish_reflection)
       assert_receive {:reflection_completed, "review", {:ok, %{id: ^artefact_id}}}
     end
+  end
 
+  describe "when one ingestion schedules several Reflections" do
     test "then one failed Reflection retries without rerunning its completed sibling", %{
       reflection: reflection
     } do
@@ -271,7 +279,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       send(retry_runner, :finish_reflection)
       assert_receive {:reflection_completed, "summary", {:ok, _artefact}}
     end
+  end
 
+  describe "when a Reflection Runner produces an artefact" do
     test "then canonical storage failure retries the exact artefact without rerunning the Runner" do
       start_supervised!({FailOnceStore, self()})
       Application.put_env(:jido_gralkor, :reflection_storage, FailOnceStore)
@@ -290,7 +300,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
       assert_receive {:reflection_completed, "review", {:ok, ^first_artefact}}
     end
+  end
 
+  describe "when overlapping requests schedule the same operator, ingestion, and Reflection" do
     test "then overlapping scheduling admits at most one active Runner" do
       requests = for _ <- 1..2, do: Task.async(fn -> Client.ingest(ingestion()) end)
       assert Task.await_many(requests) == [:ok, :ok]
@@ -309,7 +321,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                  result_type: :artefacts
                })
     end
+  end
 
+  describe "when a Reflection Runner returns an error or crashes" do
     test "then a Runner task crash is retried and can complete" do
       assert :ok = Client.ingest(ingestion())
       assert_receive {:runner_started, "review", "ingestion-one", artefact_id, runner}
@@ -322,7 +336,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       send(retry_runner, :finish_reflection)
       assert_receive {:reflection_completed, "review", {:ok, %{id: ^artefact_id}}}
     end
+  end
 
+  describe "when a Reflection Runner does not finish within its execution timeout" do
     test "then Runner timeout exhaustion is observable and releases its logical work", %{
       reflection: reflection
     } do
@@ -356,7 +372,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       send(replacement, :finish_reflection)
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
     end
+  end
 
+  describe "when one ingestion schedules several Reflections" do
     test "then a newly declared Reflection runs without rerunning a completed sibling", %{
       reflection: reflection
     } do
@@ -376,7 +394,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       send(summary_runner, :finish_reflection)
       assert_receive {:reflection_completed, "summary", {:ok, _artefact}}
     end
+  end
 
+  describe "if scheduling receives duplicate Reflection names" do
     test "then duplicate Reflection names fail before execution and empty work retains nothing",
          %{
            reflection: reflection
@@ -388,7 +408,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert {:ok, :scheduled} = Scheduler.schedule([], scheduler_ingestion())
       assert :ok = Scheduler.drain()
     end
+  end
 
+  describe "when an ingestion completes while no Reflections are declared" do
     test "then public ingestion with no Reflections succeeds without retaining work" do
       Application.put_env(:jido_gralkor, :reflections, [])
 
@@ -396,7 +418,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert :ok = Scheduler.drain()
       refute_receive {:runner_started, _name, _ingestion, _artefact_id, _runner}
     end
+  end
 
+  describe "when the application stops gracefully with unfinished Reflection work" do
     test "then graceful draining waits for admitted work to finish" do
       assert :ok = Client.ingest(ingestion())
       assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
