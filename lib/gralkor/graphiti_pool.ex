@@ -275,6 +275,7 @@ defmodule Gralkor.GraphitiPool do
              max_results > 0 and is_list(opts) do
     instance = __MODULE__.for(server, group_id)
     require_extraction_complete = Keyword.get(opts, :require_extraction_complete, false)
+    converge_by_identity = Keyword.get(opts, :converge_by_identity, false)
 
     {raw, _} =
       Pythonx.eval(
@@ -289,9 +290,25 @@ defmodule Gralkor.GraphitiPool do
 
         q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
         gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+        search_limit = max_results
+        if converge_by_identity:
+          if hasattr(g.driver, 'execute_query'):
+            records, _, _ = asyncio._gralkor_run(
+              g.driver.execute_query(
+                "MATCH (e:Episodic {group_id: $group_id}) RETURN count(e) AS count",
+                group_id=gid,
+              )
+            )
+            if records:
+              search_limit = max(search_limit, int(records[0]['count']))
+          else:
+            search_limit = max(
+              search_limit,
+              int(getattr(g.driver, '_gralkor_episode_count', search_limit)),
+            )
         config = SearchConfig(
           episode_config=EpisodeSearchConfig(search_methods=[EpisodeSearchMethod.bm25]),
-          limit=max_results,
+          limit=search_limit,
         )
         res = asyncio._gralkor_run(
           g.search_(q, config=config, group_ids=[gid], search_filter=SearchFilters())
@@ -324,7 +341,8 @@ defmodule Gralkor.GraphitiPool do
           "query" => query,
           "group_id" => Client.sanitize_group_id(group_id),
           "max_results" => max_results,
-          "require_extraction_complete" => require_extraction_complete
+          "require_extraction_complete" => require_extraction_complete,
+          "converge_by_identity" => converge_by_identity
         }
       )
 
