@@ -579,6 +579,49 @@ defmodule Gralkor.Reflection.SchedulerTest do
       refute_receive {:runner_invoked, _artefact_id}
       refute_receive {:store_put, _artefact, _storage_task}
     end
+
+    test "then a newly started Scheduler reopens and resumes retained storage work" do
+      start_supervised!(
+        {ControlledStore, {self(), [{:error, :not_found}, {:error, :not_found}], [:hang, :ok]}}
+      )
+
+      {name, runner} = immediate_runner(self())
+      path = journal_path()
+      first_journal = journal_name()
+      on_exit(fn -> File.rm(path) end)
+
+      start_scheduler(name,
+        runner: runner,
+        store_opts: [storage: ControlledStore],
+        retry_delays: [0],
+        notify: self(),
+        journal_path: path,
+        journal_name: first_journal
+      )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:runner_invoked, artefact_id}
+      assert_receive {:store_put, artefact, _storage_task}
+      assert artefact.id == artefact_id
+      assert :ok = stop_supervised(name)
+
+      start_scheduler(name,
+        runner: runner,
+        store_opts: [storage: ControlledStore],
+        retry_delays: [0],
+        notify: self(),
+        journal_path: path,
+        journal_name: journal_name()
+      )
+
+      assert_receive {:store_get, ^artefact_id, _confirmation_task}
+      assert_receive {:reflection_retrying, "review", %{reason: :scheduler_restart}}
+      assert_receive {:store_put, ^artefact, _resumed_storage_task}
+      refute_receive {:runner_invoked, ^artefact_id}
+      assert_receive {:reflection_completed, "review", {:ok, ^artefact}}
+    end
   end
 
   describe "when the Scheduler stops during a configured retry delay" do
