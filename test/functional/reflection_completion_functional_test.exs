@@ -127,10 +127,14 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
            {:finish_reflection, outcome} ->
              outcome
+
+           :crash ->
+             raise "runner crashed"
          end
        end,
        notify: test_pid,
        retry_delays: [0],
+       execution_timeout_ms: 50,
        journal_path: journal_path}
     )
 
@@ -250,6 +254,87 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
       assert_receive {:reflection_completed, "review", {:ok, ^first_artefact}}
     end
+
+    test "then overlapping scheduling admits at most one active Runner" do
+      requests = for _ <- 1..2, do: Task.async(fn -> Client.ingest(ingestion()) end)
+      assert Task.await_many(requests) == [:ok, :ok]
+
+      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
+      refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
+
+      send(runner, :finish_reflection)
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+    end
+
+    test "then a Runner task crash is retried and can complete" do
+      assert :ok = Client.ingest(ingestion())
+      assert_receive {:runner_started, "review", "ingestion-one", artefact_id, runner}
+      send(runner, :crash)
+
+      assert_receive {:reflection_retrying, "review",
+                      %{stage: :runner, reason: {:task_exit, _reason}}}
+
+      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, retry_runner}
+      send(retry_runner, :finish_reflection)
+      assert_receive {:reflection_completed, "review", {:ok, %{id: ^artefact_id}}}
+    end
+
+    test "then Runner timeout exhaustion is observable and releases its logical work" do
+      assert :ok = Client.ingest(ingestion())
+      assert_receive {:runner_started, "review", "ingestion-one", artefact_id, first_runner}
+      first_monitor = Process.monitor(first_runner)
+
+      assert_receive {:DOWN, ^first_monitor, :process, ^first_runner, :killed}
+      assert_receive {:reflection_retrying, "review", %{stage: :runner, reason: :timeout}}
+      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, second_runner}
+
+      assert_receive {:reflection_completed, "review",
+                      {:error,
+                       %{
+                         reflection: "review",
+                         stage: :runner,
+                         attempts: 2,
+                         reason: :timeout
+                       }}}
+
+      refute Process.alive?(second_runner)
+
+      assert :ok = Client.ingest(ingestion())
+      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, replacement}
+      send(replacement, :finish_reflection)
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+    end
+
+    test "then a newly declared Reflection runs without rerunning a completed sibling", %{
+      reflection: reflection
+    } do
+      assert :ok = Client.ingest(ingestion())
+      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
+      send(runner, :finish_reflection)
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+
+      summary = %{reflection | name: "summary"}
+      Application.put_env(:jido_gralkor, :reflections, [reflection, summary])
+      assert :ok = Client.ingest(ingestion())
+
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+      assert_receive {:runner_started, "summary", "ingestion-one", _artefact_id, summary_runner}
+      refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
+
+      send(summary_runner, :finish_reflection)
+      assert_receive {:reflection_completed, "summary", {:ok, _artefact}}
+    end
+
+    test "then duplicate Reflection names fail before execution and empty work retains nothing", %{
+      reflection: reflection
+    } do
+      assert {:error, {:duplicate_reflection, "review"}} =
+               Scheduler.schedule([reflection, reflection], scheduler_ingestion())
+
+      refute_receive {:runner_started, _name, _ingestion, _artefact_id, _runner}
+      assert {:ok, :scheduled} = Scheduler.schedule([], scheduler_ingestion())
+      assert :ok = Scheduler.drain()
+    end
   end
 
   describe "where Graphiti is the canonical Reflection store" do
@@ -368,6 +453,16 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       content: "The deployment succeeded.",
       source_description: "deployment",
       evidence_id: "evidence-one"
+    }
+  end
+
+  defp scheduler_ingestion do
+    %{
+      id: "ingestion-one",
+      operator_id: "operator-one",
+      intended_lenses: ["observations"],
+      completed_lenses: ["observations"],
+      representations: [%{lens: "observations", result: :ok}]
     }
   end
 
