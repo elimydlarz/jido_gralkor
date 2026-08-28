@@ -1,4 +1,4 @@
-Functional: reflection-completion (src: lib/gralkor/application.ex, lib/gralkor/client.ex, lib/gralkor/ingest.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/store.ex, lib/gralkor/reflection/storage/in_memory.ex, lib/gralkor/reflection/storage/graphiti.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/reflection_completion_functional_test.exs)
+Functional: reflection-completion (src: lib/gralkor/application.ex, lib/gralkor/client.ex, lib/gralkor/ingest.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/journal.ex, lib/gralkor/reflection/store.ex, lib/gralkor/reflection/storage/in_memory.ex, lib/gralkor/reflection/storage/graphiti.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/reflection_completion_functional_test.exs)
 
 when an application ingests information under a stable ingestion identifier while Reflections are declared
   then ingestion returns without waiting for Reflection completion
@@ -17,14 +17,17 @@ when one ingestion schedules several Reflections
     and the failed Reflection is retried independently
     and retrying the failed Reflection does not rerun the completed Reflection
 
-when a Reflection Runner fails or crashes
+when a Reflection Runner returns an error or crashes
   then the Scheduler retries that Runner on its bounded backoff schedule
   and each Runner attempt receives the same logical artefact identifier
   and host tools invoked before an interrupted Runner attempt are treated as at-least-once side effects
-  while a Runner attempt does not finish within its execution timeout
-    then that attempt is stopped and treated as a retryable Runner failure
-  when the retry schedule is exhausted
-    then terminal failure is observable with the Reflection name, Runner stage, and final reason
+
+when a Reflection Runner does not finish within its execution timeout
+  then that attempt exits before its replacement starts
+  and the timeout follows the same bounded Runner retry schedule
+
+when a retryable Runner failure consumes every configured retry
+  then terminal failure is observable with the Reflection name, Runner stage, attempt count, and final reason
 
 when a Reflection Runner produces an artefact
   if canonical storage fails, crashes, or does not finish within its execution timeout
@@ -50,6 +53,8 @@ when the supervised Reflection Scheduler crashes with unfinished work
 when the application stops gracefully with unfinished Reflection work
   then shutdown waits for every admitted Reflection to complete or exhaust its bounded retry schedule
   and no admitted Reflection task is silently abandoned
+  while the supervised Scheduler was restarted after CaptureBuffer began
+    then shutdown drains the current replacement Scheduler
 
 when repeated canonical writes use the same artefact identifier and immutable content
   then the first write creates the artefact
