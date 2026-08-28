@@ -1430,14 +1430,20 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
              ]
     end
 
-    test "then a conflicting attempt cannot poison an incomplete episode's later equal replay" do
+    test "then canonical lookup resumes an incomplete artefact without rerunning its Runner" do
       {pool, graphiti} = start_preclaim_graphiti_pool(:reflection_preclaim_incomplete_graphiti)
+      reflection = hd(Application.fetch_env!(:jido_gralkor, :reflections))
+      artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
+      artefact = Artefact.new(artefact_id, "review", %{"summary" => "stored"}, [nil])
+      content = Jason.encode!(Map.from_struct(artefact))
 
       Pythonx.eval(
         """
         import asyncio
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
+        uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
+        body = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
         asyncio._gralkor_run(graphiti.driver.execute_query(
             '''
             CREATE (episode:Episodic {
@@ -1454,81 +1460,116 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             })
             RETURN episode.uuid AS uuid
             ''',
-            uuid='preclaim-incomplete',
-            content='original',
+            uuid=uid,
+            content=body,
             created_at=now,
             valid_at=now,
         ))
         """,
-        %{"graphiti" => graphiti}
+        %{"graphiti" => graphiti, "uuid" => artefact_id, "content" => content}
       )
 
-      assert {:error, {:episode_conflict, "preclaim-incomplete"}} =
+      assert {:error, {:episode_conflict, ^artefact_id}} =
                GraphitiPool.add_episode(
                  pool,
                  "observations",
                  "conflicting",
                  "reflection:review",
                  nil,
-                 uuid: "preclaim-incomplete"
+                 uuid: artefact_id
                )
+
+      assert {:error, {:incomplete_artefact, ^artefact}} =
+               Gralkor.Reflection.Storage.Graphiti.get(
+                 reflection,
+                 "operator-one",
+                 artefact_id
+               )
+
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        Gralkor.Destination.Storage.Graphiti
+      )
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "stored",
+                 destinations: ["observations"],
+                 result_type: :artefacts,
+                 artefact_id: artefact_id
+               })
 
       {released_claim, _} =
         Pythonx.eval(
           """
           import asyncio
+          uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
           records, _, _ = asyncio._gralkor_run(graphiti.driver.execute_query(
               '''
-              MATCH (claim:_GralkorEpisodeClaim {uuid: 'preclaim-incomplete'})
+              MATCH (claim:_GralkorEpisodeClaim {uuid: $uuid})
               RETURN claim.content AS content,
                      claim.owner AS owner,
                      claim.lease_until_ms AS lease_until_ms
-              '''
+              ''',
+              uuid=uid,
           ))
           records[0]
           """,
-          %{"graphiti" => graphiti}
+          %{"graphiti" => graphiti, "uuid" => artefact_id}
         )
 
       assert Pythonx.decode(released_claim) == %{
-               "content" => "original",
+               "content" => content,
                "lease_until_ms" => nil,
                "owner" => nil
              }
 
-      assert :ok =
-               GraphitiPool.add_episode(
-                 pool,
-                 "observations",
-                 "original",
-                 "reflection:review",
-                 nil,
-                 uuid: "preclaim-incomplete"
-               )
+      Application.put_env(
+        :jido_gralkor,
+        :reflection_storage,
+        Gralkor.Reflection.Storage.Graphiti
+      )
+
+      assert {:ok, :scheduled} = Scheduler.schedule([reflection], scheduler_ingestion())
+      assert_receive {:reflection_completed, "review", {:ok, ^artefact}}, 1_000
+      refute_receive {:runner_started, "review", "ingestion-one", ^artefact_id, _runner}
+
+      assert {:ok, [%{destination: "observations", artefact: ^artefact}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "stored",
+                 destinations: ["observations"],
+                 result_type: :artefacts,
+                 artefact_id: artefact_id
+               })
 
       {proof, _} =
         Pythonx.eval(
           """
           import asyncio
+          uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
           records, _, _ = asyncio._gralkor_run(graphiti.driver.execute_query(
               '''
-              MATCH (episode:Episodic {uuid: 'preclaim-incomplete'})
-              MATCH (claim:_GralkorEpisodeClaim {uuid: 'preclaim-incomplete'})
+              MATCH (episode:Episodic {uuid: $uuid})
+              MATCH (claim:_GralkorEpisodeClaim {uuid: $uuid})
               RETURN episode.content AS episode_content,
                      episode._gralkor_extraction_complete AS complete,
                      claim.content AS claim_content
-              '''
+              ''',
+              uuid=uid,
           ))
           [records[0], graphiti.extractions]
           """,
-          %{"graphiti" => graphiti}
+          %{"graphiti" => graphiti, "uuid" => artefact_id}
         )
 
       assert Pythonx.decode(proof) == [
                %{
-                 "claim_content" => "original",
+                 "claim_content" => content,
                  "complete" => true,
-                 "episode_content" => "original"
+                 "episode_content" => content
                },
                1
              ]
