@@ -53,6 +53,10 @@ if a capture is requested with a missing or blank session id
   then an argument error is raised at the port boundary
   and no backend call is made
 
+if named-Lens capture is requested with a missing or blank operator identifier
+  then an argument error is raised at the port boundary
+  and no backend call is made
+
 if a flush or flush-and-await is requested with a missing or blank session id
   then an argument error is raised at the port boundary
   and no backend call is made

@@ -36,6 +36,10 @@ where a turn is captured through a primary Lens together with additional Lenses
   then each named Lens receives that turn in its own flush batch
   but the session buffers the turn only once
 
+if named-Lens capture is requested with a missing or blank operator identifier
+  then an argument error naming the operator identifier is raised
+  and no turn is buffered
+
 if a capture is requested with a missing or blank session id
   then an argument error naming the session id is raised
   and no turn is buffered
