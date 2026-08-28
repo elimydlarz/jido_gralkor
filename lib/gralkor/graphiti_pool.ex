@@ -944,6 +944,8 @@ defmodule Gralkor.GraphitiPool do
                         raise RuntimeError('graph-backed episode claim contract is unavailable')
                     claim_state['distributed'] = True
                     claim = records[0]
+                    if claim['owner'] == claim_owner:
+                        claim_state['generation'] = claim['generation']
                     episode_equal = (
                         claim['episode_uuid'] is None
                         or (
@@ -966,7 +968,6 @@ defmodule Gralkor.GraphitiPool do
                     if await extraction_complete():
                         return 'existing'
                     if claim['owner'] == claim_owner:
-                        claim_state['generation'] = claim['generation']
                         return 'acquired'
 
                     acquired, _, _ = await g.driver.execute_query(
@@ -1030,6 +1031,7 @@ defmodule Gralkor.GraphitiPool do
                 if uuid is not None:
                     claim = await acquire_claim()
                     if claim != 'acquired':
+                        await release_claim()
                         return claim
 
                     heartbeat = asyncio.create_task(renew_claim())
