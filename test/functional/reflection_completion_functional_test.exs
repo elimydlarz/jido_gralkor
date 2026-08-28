@@ -1606,6 +1606,16 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                   episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
                   await episode.save(self.driver)
 
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  from graphiti_core.nodes import EpisodicNode
+                  from graphiti_core.search.search_config import SearchResults
+                  episodes = await EpisodicNode.get_by_group_ids(
+                      self.driver,
+                      list(group_ids or []),
+                      limit=config.limit if config is not None else None,
+                  )
+                  return SearchResults(episodes=episodes)
+
           PreclaimGraphitiContract()
           """,
           %{"database" => database, "group_id" => group_id}
