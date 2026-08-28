@@ -148,6 +148,22 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
     end
 
+    test "then a blank ingestion identifier raises before Lens or Reflection side effects" do
+      assert_raise ArgumentError, ~r/id must be a non-blank string/, fn ->
+        Client.ingest(%{ingestion() | id: " "})
+      end
+
+      refute_receive {:runner_started, _reflection, _ingestion, _artefact_id, _runner}
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "",
+                 destinations: ["observations"],
+                 result_type: :episodes
+               })
+    end
+
     test "then replay after a Scheduler restart confirms one stable searchable artefact without rerunning" do
       assert :ok = Client.ingest(ingestion())
       assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, first_runner}
