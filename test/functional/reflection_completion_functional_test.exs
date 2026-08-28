@@ -846,12 +846,17 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       end
 
       table = :"reflection_partial_#{System.unique_integer([:positive])}"
+      artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
+
+      partial_artefact =
+        Artefact.new(artefact_id, "review", %{"summary" => "stored"}, ["evidence-one"])
+
+      content = Jason.encode!(Map.from_struct(partial_artefact))
 
       pool =
         start_supervised!(
           Supervisor.child_spec(
             {GraphitiPool,
-             name: nil,
              table: table,
              falkordb_spec: {:embedded, data_dir},
              construct_shared_clients: fn _llm, _embedder ->
@@ -866,22 +871,77 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         )
 
       assert {:error, {:python, "RuntimeError: lost after durable episode save"}} =
-               GraphitiPool.add_episode(pool, "observations", "content", "source", nil,
-                 uuid: "embedded-partial"
+               GraphitiPool.add_episode(
+                 pool,
+                 "observations",
+                 content,
+                 "reflection:review",
+                 Gralkor.DefaultOntology,
+                 uuid: artefact_id
                )
+
+      assert {:ok, %{"extraction_complete" => false}} =
+               GraphitiPool.get_episode(pool, "observations", artefact_id)
+
+      assert {:error, {:incomplete_artefact, ^partial_artefact}} =
+               Gralkor.Reflection.Storage.Graphiti.get(
+                 reflection(),
+                 "operator-one",
+                 artefact_id
+               )
+
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        Gralkor.Destination.Storage.Graphiti
+      )
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "stored",
+                 destinations: ["observations"],
+                 result_type: :artefacts,
+                 artefact_id: artefact_id
+               })
+
+      Application.put_env(
+        :jido_gralkor,
+        :reflection_storage,
+        Gralkor.Reflection.Storage.Graphiti
+      )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection()], scheduler_ingestion())
+
+      refute_receive {:runner_started, "review", "ingestion-one", ^artefact_id, _runner}
+      assert_receive {:reflection_completed, "review", {:ok, ^partial_artefact}}
+
+      assert {:ok, [^partial_artefact]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "stored",
+                 destinations: ["observations"],
+                 result_type: :artefacts,
+                 artefact_id: artefact_id
+               })
 
       assert :ok =
-               GraphitiPool.add_episode(pool, "observations", "content", "source", nil,
-                 uuid: "embedded-partial"
+               GraphitiPool.add_episode(
+                 pool,
+                 "observations",
+                 content,
+                 "reflection:review",
+                 Gralkor.DefaultOntology,
+                 uuid: artefact_id
                )
 
-      assert :ok =
-               GraphitiPool.add_episode(pool, "observations", "content", "source", nil,
-                 uuid: "embedded-partial"
-               )
-
-      assert {:ok, %{"content" => "content", "uuid" => "embedded-partial"}} =
-               GraphitiPool.get_episode(pool, "observations", "embedded-partial")
+      assert {:ok,
+              %{
+                "content" => ^content,
+                "uuid" => ^artefact_id,
+                "extraction_complete" => true
+              }} = GraphitiPool.get_episode(pool, "observations", artefact_id)
 
       graphiti = GraphitiPool.for(pool, "observations")
 
@@ -892,12 +952,12 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           async def proof():
               records, _, _ = await graphiti.driver.execute_query(
                   "MATCH (e:Episodic {uuid: $uuid}) RETURN e._gralkor_extraction_complete AS complete",
-                  uuid='embedded-partial',
+                  uuid=artefact_id,
               )
               return [graphiti.extractions, records[0]['complete']]
           asyncio._gralkor_run(proof())
           """,
-          %{"graphiti" => graphiti}
+          %{"graphiti" => graphiti, "artefact_id" => artefact_id}
         )
 
       assert Pythonx.decode(proof) == [2, true]
