@@ -725,22 +725,55 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "when Reflection scheduling needs a scheduler > while the capture buffer starts the scheduler it needs" do
-    test "then stopping the buffer stops that owned scheduler" do
+  describe "when Reflection scheduling needs a scheduler > while declared Reflections use default scheduling and no scheduler is registered" do
+    test "then startup fails identifying the required dedicated Reflection supervisor" do
       :ok = stop_supervised(CaptureBuffer)
+
+      assert {:error,
+              {:reflection_scheduler_unavailable, Gralkor.Reflection.Supervisor}} =
+               CaptureBuffer.start_link(
+                 flush_callback: fn _, _, _, _, _ -> :ok end,
+                 lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
+                 reflections: [:daily_summary],
+                 retries: []
+               )
+
+      refute Process.whereis(Scheduler)
+    end
+  end
+
+  describe "when Reflection scheduling needs a scheduler > while no Reflections are declared and no scheduler is registered" do
+    test "then the buffer starts without creating a scheduler" do
+      assert :ok = stop_supervised(CaptureBuffer)
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
+         reflections: [],
+         retries: []}
+      )
+
+      assert :sys.get_state(CaptureBuffer).reflection_scheduler == nil
+      refute Process.whereis(Scheduler)
+    end
+  end
+
+  describe "when Reflection scheduling needs a scheduler > while a custom Reflection scheduling callback is supplied and no scheduler is registered" do
+    test "then the buffer starts without creating a scheduler" do
+      assert :ok = stop_supervised(CaptureBuffer)
 
       start_supervised!(
         {CaptureBuffer,
          flush_callback: fn _, _, _, _, _ -> :ok end,
          lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
          reflections: [:daily_summary],
+         reflection_callback: fn _, _ -> :ok end,
          retries: []}
       )
 
-      {:owned, scheduler} = :sys.get_state(CaptureBuffer).reflection_scheduler
-      :ok = stop_supervised(CaptureBuffer)
-
-      refute Process.alive?(scheduler)
+      assert :sys.get_state(CaptureBuffer).reflection_scheduler == nil
+      refute Process.whereis(Scheduler)
     end
   end
 

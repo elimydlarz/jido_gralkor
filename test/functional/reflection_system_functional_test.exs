@@ -581,12 +581,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when a scheduled Reflection runs" do
-    test "then its programmatic Chain of Thought runner loads the declared YAML", context do
+  describe "when a configured Reflection is loaded" do
+    test "then its declared YAML is loaded as the programmatic Chain of Thought", context do
       assert %Gralkor.Reflection.ChainOfThought{path: path} = reflection(context).chain_of_thought
       assert String.ends_with?(path, ".yaml")
     end
+  end
 
+  describe "when a scheduled Reflection runs" do
     test "and starts its first step for the operator and completed ingestion operation",
          context do
       parent = self()

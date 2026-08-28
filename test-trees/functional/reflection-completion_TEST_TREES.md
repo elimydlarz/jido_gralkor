@@ -80,6 +80,7 @@ where Graphiti is the canonical Reflection store
     and Graphiti records durable extraction completion only after every graph effect succeeds
     if graph extraction fails before its claim-fenced transaction commits
       then canonical lookup and public artefact search report no episode
+      and a later equal write retries extraction from scratch
   when that artefact is written again after an uncertain response
     while durable extraction completion was recorded
       then Graphiti confirms the existing episode without repeating extraction
