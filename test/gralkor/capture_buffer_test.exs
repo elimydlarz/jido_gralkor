@@ -600,7 +600,7 @@ defmodule Gralkor.CaptureBufferTest do
   end
 
   describe "when Reflection scheduling needs a scheduler > while one is already running" do
-    test "then that scheduler is reused rather than duplicated" do
+    test "then its registered identity is retained so a supervised replacement remains reachable" do
       :ok = stop_supervised(CaptureBuffer)
       shared_scheduler = start_supervised!(Scheduler)
 
@@ -612,8 +612,8 @@ defmodule Gralkor.CaptureBufferTest do
          retries: []}
       )
 
-      assert :sys.get_state(CaptureBuffer).reflection_scheduler ==
-               {:shared, shared_scheduler}
+      assert :sys.get_state(CaptureBuffer).reflection_scheduler == {:shared, Scheduler}
+      assert Process.whereis(Scheduler) == shared_scheduler
     end
   end
 

@@ -76,7 +76,8 @@ where captured turns select a Lens
 
 when Reflection scheduling needs a scheduler
   while one is already running
-    then that scheduler is reused rather than duplicated
+    then that scheduler's registered identity is retained rather than duplicating it
+    and a supervised replacement remains reachable through that identity
   while the capture buffer starts the scheduler it needs
     then stopping the buffer stops that owned scheduler
   while the scheduler is shared rather than owned by the buffer
