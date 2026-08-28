@@ -90,6 +90,7 @@ defmodule Gralkor.ApplicationTest do
           System.tmp_dir!(),
           "ex_app_test_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
         )
+
       System.put_env("GRALKOR_DATA_DIR", data_dir)
 
       [_python, {Gralkor.GraphitiPool, opts}, _scheduler, _buffer] = App.children()
