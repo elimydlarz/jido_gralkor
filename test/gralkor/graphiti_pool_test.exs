@@ -444,7 +444,8 @@ defmodule Gralkor.GraphitiPoolTest do
           %{}
         )
 
-      [first_graph, second_graph] = Pythonx.decode(graphs)
+      {first_graph, _} = Pythonx.eval("graphs[0]", %{"graphs" => graphs})
+      {second_graph, _} = Pythonx.eval("graphs[1]", %{"graphs" => graphs})
 
       %{pid: first_pool} =
         start_pool(
@@ -497,7 +498,7 @@ defmodule Gralkor.GraphitiPoolTest do
       {proof, _} =
         Pythonx.eval(
           "[sum(g.extractions for g in graphs), len(graphs[0].driver.episodes)]",
-          %{"graphs" => [first_graph, second_graph]}
+          %{"graphs" => graphs}
         )
 
       assert Pythonx.decode(proof) == [2, 2]
