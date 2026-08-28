@@ -64,7 +64,7 @@ defmodule Gralkor.Reflection.Scheduler do
         |> Map.new(fn durable ->
           job =
             durable
-            |> Map.put(:opts, Keyword.merge(defaults, durable.opts))
+            |> Map.put(:opts, restore_execution_options(defaults, durable.opts))
             |> Map.put(:retry_timer, nil)
             |> Map.put_new(:retry_at_ms, nil)
             |> Map.put_new(:active, false)
@@ -596,6 +596,19 @@ defmodule Gralkor.Reflection.Scheduler do
       retry_delays: Keyword.fetch!(opts, :retry_delays),
       execution_timeout_ms: Keyword.fetch!(opts, :execution_timeout_ms)
     ]
+  end
+
+  defp restore_execution_options(defaults, durable) do
+    defaults
+    |> Keyword.merge(durable)
+    |> Keyword.put(
+      :runner_opts,
+      Keyword.merge(Keyword.get(defaults, :runner_opts, []), Keyword.get(durable, :runner_opts, []))
+    )
+    |> Keyword.put(
+      :store_opts,
+      Keyword.merge(Keyword.get(defaults, :store_opts, []), Keyword.get(durable, :store_opts, []))
+    )
   end
 
   defp restart_safe?(value)
