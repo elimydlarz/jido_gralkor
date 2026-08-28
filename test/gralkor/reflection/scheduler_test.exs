@@ -405,6 +405,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       start_supervised!({ControlledStore, {self(), [{:error, :not_found}], [:hang, :ok]}})
       {name, runner} = immediate_runner(self())
       path = journal_path()
+      on_exit(fn -> File.rm(path) end)
 
       scheduler =
         start_scheduler(name,
