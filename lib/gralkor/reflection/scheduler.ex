@@ -209,7 +209,9 @@ defmodule Gralkor.Reflection.Scheduler do
   end
 
   defp launch(state, key) do
-    job = Map.fetch!(state.jobs, key)
+    job = state.jobs |> Map.fetch!(key) |> Map.put(:active, true)
+    :ok = Journal.put_all(state.journal, [durable_job(job)])
+    state = %{state | jobs: Map.put(state.jobs, key, job)}
     operation = fn -> execute(job) end
     start_task = Keyword.get(job.opts, :start_task, &Task.Supervisor.async_nolink/2)
 
@@ -217,7 +219,7 @@ defmodule Gralkor.Reflection.Scheduler do
       {:ok, task} ->
         timeout = Keyword.fetch!(job.opts, :execution_timeout_ms)
         timeout_ref = Process.send_after(self(), {:attempt_timeout, task.ref}, timeout)
-        task_state = %{key: key, pid: task.pid, timeout_ref: timeout_ref}
+        task_state = %{key: key, pid: task.pid, timeout_ref: timeout_ref, active_timeout: false}
         %{state | tasks: Map.put(state.tasks, task.ref, task_state)}
 
       {:error, reason} ->
