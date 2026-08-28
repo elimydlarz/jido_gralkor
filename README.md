@@ -114,7 +114,7 @@ setup do
 end
 ```
 
-When the client and storage layers use these in-memory adapters, the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer) does not start and Lens or Reflection storage calls do not reach Graphiti. No FalkorDB backend is required.
+When the client and storage layers use these in-memory adapters, the native supervision tree (Pythonx → GraphitiPool → Reflection Scheduler → CaptureBuffer) does not start and Lens or Reflection storage calls do not reach Graphiti. No FalkorDB backend is required.
 
 **3. `Jido.Thread.Plugin` on your `use Jido` supervisor.** The plugin reads `session_id` from `agent.state[:__thread__].id`, so the thread plugin must be active:
 
@@ -128,7 +128,7 @@ end
 
 **4. A non-blank human name in agent state.** Before any completed or failed turn is captured, populate `agent.state[:user_name]` with the current human's name (for example, from the request's tool context in `on_before_cmd/2`). The plugin deliberately has no generic `"User"` fallback: a missing or blank value raises `ArgumentError` before capture.
 
-`:jido_gralkor` auto-supervises its native runtime (Python → GraphitiPool → CaptureBuffer) when a FalkorDB backend is configured — no separate `Gralkor.Server` to wire into your supervision tree, and no readiness gate to add. By the time `Application.start/2` returns, `Gralkor.Client` is ready.
+`:jido_gralkor` auto-supervises its native runtime (Python → GraphitiPool → Reflection Scheduler → CaptureBuffer) when a FalkorDB backend is configured — no separate `Gralkor.Server` to wire into your supervision tree, and no readiness gate to add. By the time `Application.start/2` returns, `Gralkor.Client` is ready. Graceful application shutdown flushes the capture buffer and drains all admitted Reflection work before the scheduler stops.
 
 ## Configuration reference
 
@@ -148,6 +148,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, a registered `:destination`, a repository-relative YAML `:chain_of_thought` path, and optional `:ontology` (default `Gralkor.DefaultOntology`). Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
 | `:reflection_root` | path | application package root | Root used to resolve Reflection YAML paths. The default makes the packaged `priv/reflections/*.yaml` files work after installation; set it when an application keeps custom CoTs under another repository directory. |
 | `:reflection_storage` | module | `Gralkor.Reflection.Storage.Graphiti` | Physical storage behind `Gralkor.Reflection.Store`. Tests can use `Gralkor.Reflection.Storage.InMemory`; Destination search should then use its in-memory adapter too. |
+| `:reflection_scheduler_journal_path` | path | `GRALKOR_DATA_DIR/reflection_scheduler.dets` for embedded storage; the platform user-data directory otherwise | Durable DETS journal for admitted Reflection phase state. Set an explicit writable, node-private path when the default is unsuitable. |
 | `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall search and presentation. On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. |
 | `:test` | boolean | `false` | Verbose diagnostic logging: recall queries, returned facts, and flushed capture bodies are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
 
@@ -476,6 +477,7 @@ Consumers that ingest, replace, or search outside an agent call the same public 
 ```elixir
 :ok =
   Gralkor.Client.ingest(%Gralkor.Ingest{
+    id: "release-planning-2026-08-28",
     operator_id: "operator-42",
     lens: "decisions",
     source_kind: :conversation,
@@ -515,7 +517,9 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   })
 ```
 
-Every ingestion declares deterministic provenance through `source_kind`:
+Every ingestion requires a non-blank, replay-stable `id` and declares deterministic provenance through `source_kind`. The ID is part of each Reflection completion identity, so a retry or replay of the same logical ingestion must reuse it; distinct ingestions must not share it.
+
+The supported source kinds are:
 
 - `:conversation` accepts speaker-attributed text and becomes a Graphiti message episode.
 - `:document` accepts text and becomes a Graphiti text episode.
@@ -552,6 +556,8 @@ On each store write, graphiti receives the selected Lens or Reflection ontology'
 ## Configure Reflections
 
 A Reflection is an asynchronous post-ingestion process over completed lensed representations. It is declared by name, registered Destination, extraction ontology, and a repository YAML Chain of Thought. Reflections are not Lenses: Lens definitions remain independent views for absorbing information, while Reflections operate over the successful results after every intended Lens has finished.
+
+The supervised scheduler coordinates each logical completion independently by `{operator_id, ingestion_id, reflection_name}`. It durably journals canonical lookup, Runner, and canonical-storage phases; permits at most one active attempt for that key; and uses bounded retries with default delays of one, two, and four seconds. Runner/tool effects are at-least-once because a process can fail after an external effect but before reporting success. Once the Runner returns, storage retries retain the exact artefact and never rerun successful siblings. Restart resumes admitted work, while replay first confirms canonical storage so already completed work is not executed again.
 
 The package supplies two declarations by default:
 
@@ -597,7 +603,7 @@ Multiple Reflections and Lenses may save to the same Destination. Search selects
   })
 ```
 
-`result_type: :artefacts` returns final Reflection artefacts from the selected Destinations, and `artefact_id` optionally narrows the lookup to one exact artefact. Each artefact carries its declaring Reflection.
+`result_type: :artefacts` returns final Reflection artefacts from the selected Destinations, and `artefact_id` optionally narrows the lookup to one exact artefact. Each artefact carries its declaring Reflection. Its deterministic UUID derives from the logical completion key. Repeating an equal Graphiti write is a successful confirmation without extraction; reusing that UUID with different immutable episode content returns an explicit artefact conflict.
 
 ## Testing against the in-memory twin
 
@@ -658,8 +664,8 @@ The embedded Gralkor adapter (under `lib/gralkor/`):
 - `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, `Gralkor.Ingest`, `Gralkor.IngestedRepresentation`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Search` — resolved ingestion models, completed-ingestion representation, and consumer request values.
 - `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — append, replacement, and search capabilities for exact Destination graph identities.
 - `Gralkor.Lens.Ingestion.Store` — the built-in straight-through ingestion process.
-- `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, `Gralkor.Reflection.Runner`, and `Gralkor.Reflection.Scheduler` — validated YAML declarations and asynchronous ordered execution after completed Lens ingestion.
-- `Gralkor.Reflection.Artefact`, `Gralkor.Reflection.Store`, and the Graphiti/InMemory Reflection storage modules — exactly-one-artefact persistence at referenced Destinations.
+- `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, `Gralkor.Reflection.Runner`, `Gralkor.Reflection.Scheduler`, and `Gralkor.Reflection.Journal` — validated YAML declarations plus durable, bounded, phase-aware asynchronous execution after completed Lens ingestion.
+- `Gralkor.Reflection.Artefact`, `Gralkor.Reflection.Store`, and the Graphiti/InMemory Reflection storage modules — deterministic create-or-confirm artefact persistence with explicit immutable-content conflicts at referenced Destinations.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
 - `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Format`, `Gralkor.Config`, and `Gralkor.Message` — the embedded capture, recall, and Graphiti pipelines.
 
