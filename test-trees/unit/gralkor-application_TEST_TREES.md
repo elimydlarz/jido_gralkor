@@ -1,4 +1,4 @@
-Unit: gralkor-application (src: lib/gralkor/application.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/reflection/supervisor.ex, lib/gralkor/reflection/scheduler.ex; integration: test/gralkor/application_test.exs; unit: test/gralkor/application_test.exs)
+Unit: gralkor-application (src: lib/gralkor/application.ex; integration: test/gralkor/application_test.exs; unit: test/gralkor/application_test.exs)
 
 when the application starts
   while a remote FalkorDB connection is configured
@@ -14,8 +14,6 @@ when the application starts
     and the graph pool is constructed with the embedded connection
     and the Python runtime is told to sweep for orphaned embedded servers, this deployment spawning one of its own
     and startup returns only once all four have initialised, so a consumer needs no separate readiness gate
-  while the application supervisor waits for CaptureBuffer to drain
-    then the dedicated Reflection supervisor remains able to replace a crashed Scheduler
   while neither a remote connection nor a data directory is configured
     then no children are supervised, because the consumer has not opted into the native runtime
   while the in-memory client is configured
