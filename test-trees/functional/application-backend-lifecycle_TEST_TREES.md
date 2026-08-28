@@ -1,4 +1,4 @@
-Functional: application-backend-lifecycle (src: lib/gralkor/application.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/application_backend_lifecycle_functional_test.exs)
+Functional: application-backend-lifecycle (src: lib/gralkor/application.ex, lib/gralkor/graphiti_pool.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/journal.ex; functional: test/functional/application_backend_lifecycle_functional_test.exs)
 
 when an application starts with a remote memory backend
   then the native memory runtime starts without owning an embedded server

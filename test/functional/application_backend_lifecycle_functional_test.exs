@@ -50,6 +50,16 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       assert Process.alive?(pool)
       assert process_running?(server_pid)
 
+      assert [
+               _python,
+               _pool,
+               {Gralkor.Reflection.Scheduler, scheduler_options},
+               _capture
+             ] = GralkorApplication.children()
+
+      assert Keyword.fetch!(scheduler_options, :journal_path) ==
+               Path.join(data_dir, "reflection_scheduler.dets")
+
       GenServer.stop(pool)
       File.rm_rf!(data_dir)
     end

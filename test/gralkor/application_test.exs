@@ -69,7 +69,7 @@ defmodule Gralkor.ApplicationTest do
       assert Keyword.fetch!(scheduler_opts, :journal_path) =~ "reflection_scheduler.dets"
     end
 
-    test "and startup returns only once all three have initialised, so a consumer needs no separate readiness gate" do
+    test "and startup returns only once all four have initialised, so a consumer needs no separate readiness gate" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
 
