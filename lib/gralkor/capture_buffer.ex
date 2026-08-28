@@ -547,7 +547,8 @@ defmodule Gralkor.CaptureBuffer do
                retries
              ) do
           {:ok, lens_representations} when is_list(lens_representations) ->
-            expected_evidence_id = if is_function(callback, 6) or is_function(callback, 7), do: entry.evidence_id
+            expected_evidence_id =
+              if is_function(callback, 6) or is_function(callback, 7), do: entry.evidence_id
 
             case validate_representations(lens_representations, lens, expected_evidence_id) do
               :ok -> {first_error, representations ++ lens_representations}
@@ -555,7 +556,8 @@ defmodule Gralkor.CaptureBuffer do
             end
 
           {:ok, representation} ->
-            expected_evidence_id = if is_function(callback, 6) or is_function(callback, 7), do: entry.evidence_id
+            expected_evidence_id =
+              if is_function(callback, 6) or is_function(callback, 7), do: entry.evidence_id
 
             case validate_representations([representation], lens, expected_evidence_id) do
               :ok -> {first_error, representations ++ [representation]}
