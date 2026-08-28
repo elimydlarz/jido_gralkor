@@ -202,6 +202,7 @@ defmodule Gralkor.CaptureBuffer do
        reflections: reflections,
        reflection_callback: reflection_callback || (&schedule_reflections/2),
        reflection_scheduler: scheduler,
+       flush_workers: %{},
        retries: Keyword.get(opts, :retries, @default_retries)
      }}
   end
@@ -337,17 +338,23 @@ defmodule Gralkor.CaptureBuffer do
           "[gralkor] flush scheduled — session:#{session_id} turns:#{length(entry.turns)}"
         )
 
-        Task.start(fn ->
-          do_flush_lenses(
-            entry,
-            state.lens_flush_callback,
-            state.reflections,
-            state.reflection_callback,
-            state.retries
-          )
-        end)
+        task =
+          Task.async(fn ->
+            do_flush_lenses(
+              entry,
+              state.lens_flush_callback,
+              state.reflections,
+              state.reflection_callback,
+              state.retries
+            )
+          end)
 
-        {:reply, :ok, %{state | lens_entries: lens_entries}}
+        {:reply, :ok,
+         %{
+           state
+           | lens_entries: lens_entries,
+             flush_workers: Map.put(state.flush_workers, task.ref, task)
+         }}
     end
   end
 
@@ -392,6 +399,8 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   def handle_call(:flush_all, _from, state) do
+    await_flush_workers(state.flush_workers)
+
     legacy_tasks =
       for {_session_id, {group, agent, user, ontology, turns}} <- state.entries do
         Task.async(fn ->
@@ -413,10 +422,36 @@ defmodule Gralkor.CaptureBuffer do
       end
 
     Task.await_many(legacy_tasks ++ lens_tasks, :infinity)
-    {:reply, :ok, %{state | entries: %{}, lens_entries: %{}}}
+    {:reply, :ok, %{state | entries: %{}, lens_entries: %{}, flush_workers: %{}}}
   end
 
   @impl true
+  def handle_info({reference, _outcome}, state) when is_reference(reference) do
+    case Map.pop(state.flush_workers, reference) do
+      {nil, _workers} ->
+        Logger.error(
+          "#{__MODULE__} received unexpected task result in handle_info/2: #{inspect(reference)}"
+        )
+
+        {:noreply, state}
+
+      {_task, workers} ->
+        Process.demonitor(reference, [:flush])
+        {:noreply, %{state | flush_workers: workers}}
+    end
+  end
+
+  def handle_info({:DOWN, reference, :process, _pid, reason}, state) do
+    case Map.pop(state.flush_workers, reference) do
+      {nil, _workers} ->
+        {:noreply, state}
+
+      {_task, workers} ->
+        Logger.error("[gralkor] capture flush worker exited — #{inspect(reason)}")
+        {:noreply, %{state | flush_workers: workers}}
+    end
+  end
+
   def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
 
   def handle_info(msg, state) do
@@ -426,6 +461,8 @@ defmodule Gralkor.CaptureBuffer do
 
   @impl true
   def terminate(_reason, state) do
+    await_flush_workers(state.flush_workers)
+
     for {_session_id, {group, agent, user, ontology, turns}} <- state.entries do
       do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
     end
@@ -457,11 +494,17 @@ defmodule Gralkor.CaptureBuffer do
       {{group, agent, user, ontology, turns}, entries} ->
         Logger.info("[gralkor] flush scheduled — session:#{session_id} turns:#{length(turns)}")
 
-        Task.start(fn ->
-          do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
-        end)
+        task =
+          Task.async(fn ->
+            do_flush(group, agent, user, ontology, turns, state.flush_callback, state.retries)
+          end)
 
-        {:reply, :ok, %{state | entries: entries}}
+        {:reply, :ok,
+         %{
+           state
+           | entries: entries,
+             flush_workers: Map.put(state.flush_workers, task.ref, task)
+         }}
     end
   end
 
@@ -735,6 +778,20 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   defp drain_reflection_scheduler(_), do: :ok
+
+  defp await_flush_workers(workers) do
+    workers
+    |> Map.values()
+    |> Enum.each(fn task ->
+      case Task.yield(task, :infinity) do
+        {:ok, _outcome} ->
+          :ok
+
+        {:exit, reason} ->
+          Logger.error("[gralkor] capture flush worker exited — #{inspect(reason)}")
+      end
+    end)
+  end
 
   defp validate_representations(representations, lens, evidence_id) do
     Enum.reduce_while(representations, :ok, fn representation, :ok ->
