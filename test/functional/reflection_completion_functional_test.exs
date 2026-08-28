@@ -342,6 +342,18 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert {:ok, :scheduled} = Scheduler.schedule([], scheduler_ingestion())
       assert :ok = Scheduler.drain()
     end
+
+    test "then graceful draining waits for admitted work to finish" do
+      assert :ok = Client.ingest(ingestion())
+      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
+
+      drainer = Task.async(fn -> Scheduler.drain() end)
+      assert Task.yield(drainer, 25) == nil
+
+      send(runner, :finish_reflection)
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+      assert Task.await(drainer) == :ok
+    end
   end
 
   describe "where Graphiti is the canonical Reflection store" do
