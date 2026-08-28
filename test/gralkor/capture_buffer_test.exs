@@ -1477,8 +1477,7 @@ defmodule Gralkor.CaptureBufferTest do
       end
 
       start_supervised!(
-        {Scheduler,
-         runner: runner, store_opts: [storage: EmptyReflectionStore], retry_delays: []}
+        {Scheduler, runner: runner, store_opts: [storage: EmptyReflectionStore], retry_delays: []}
       )
 
       buffer =

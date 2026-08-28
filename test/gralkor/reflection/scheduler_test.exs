@@ -599,8 +599,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       artefact = Artefact.new(artefact_id, "review", %{"stored" => true}, [])
 
       start_supervised!(
-        {ControlledStore,
-         {self(), [{:error, :not_found}, :hang, {:ok, artefact}], [:hang]}}
+        {ControlledStore, {self(), [{:error, :not_found}, :hang, {:ok, artefact}], [:hang]}}
       )
 
       {name, runner} = immediate_runner(self())
