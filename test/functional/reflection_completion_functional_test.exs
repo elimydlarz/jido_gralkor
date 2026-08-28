@@ -1675,6 +1675,14 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                         return
 
                     await episode.save(self.driver)
+                    await add_nodes_and_edges_bulk(
+                        self.driver,
+                        [episode],
+                        [],
+                        [],
+                        [],
+                        None,
+                    )
 
             SharedClaimGraphitiContract()
             """,
