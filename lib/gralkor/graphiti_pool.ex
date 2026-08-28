@@ -944,7 +944,8 @@ defmodule Gralkor.GraphitiPool do
       construct_instance: construct_instance,
       initialise_instance: initialise_instance,
       ontology_cache: %{},
-      episode_write_admission: episode_write_admission(falkordb_spec)
+      episode_write_admission: episode_write_admission(falkordb_spec),
+      episode_uuid_admissions: %{}
     }
 
     if warmup?, do: do_warmup(state)
@@ -992,6 +993,23 @@ defmodule Gralkor.GraphitiPool do
     {:noreply, %{state | episode_write_admission: admission}}
   end
 
+  def handle_call({:acquire_episode_uuid, uuid}, from, state) do
+    case Map.get(state.episode_uuid_admissions, uuid) do
+      nil ->
+        owner = elem(from, 0)
+        admission = %{owner: owner, monitor: Process.monitor(owner), waiting: :queue.new()}
+
+        {:reply, :acquired,
+         %{state | episode_uuid_admissions: Map.put(state.episode_uuid_admissions, uuid, admission)}}
+
+      admission ->
+        admission = %{admission | waiting: :queue.in(from, admission.waiting)}
+
+        {:noreply,
+         %{state | episode_uuid_admissions: Map.put(state.episode_uuid_admissions, uuid, admission)}}
+    end
+  end
+
   @impl true
   def handle_call({:materialise, module}, _from, state) do
     case Map.fetch(state.ontology_cache, module) do
@@ -1017,6 +1035,17 @@ defmodule Gralkor.GraphitiPool do
 
   def handle_cast({:release_episode_write, _owner}, state), do: {:noreply, state}
 
+  def handle_cast({:release_episode_uuid, uuid, owner}, state) do
+    case Map.get(state.episode_uuid_admissions, uuid) do
+      %{owner: ^owner} = admission ->
+        Process.demonitor(admission.monitor, [:flush])
+        {:noreply, admit_next_episode_uuid_write(state, uuid, admission)}
+
+      _ ->
+        {:noreply, state}
+    end
+  end
+
   @impl true
   def handle_info(
         {:DOWN, monitor, :process, owner, _reason},
@@ -1025,7 +1054,14 @@ defmodule Gralkor.GraphitiPool do
     {:noreply, admit_next_episode_write(state, admission)}
   end
 
-  def handle_info({:DOWN, _monitor, :process, _owner, _reason}, state), do: {:noreply, state}
+  def handle_info({:DOWN, monitor, :process, owner, _reason}, state) do
+    case Enum.find(state.episode_uuid_admissions, fn {_uuid, admission} ->
+           admission.owner == owner and admission.monitor == monitor
+         end) do
+      {uuid, admission} -> {:noreply, admit_next_episode_uuid_write(state, uuid, admission)}
+      nil -> {:noreply, state}
+    end
+  end
 
   @impl true
   def terminate(_reason, state) do
@@ -1118,6 +1154,31 @@ defmodule Gralkor.GraphitiPool do
           }
         else
           admit_next_episode_write(state, admission)
+        end
+    end
+  end
+
+  defp admit_next_episode_uuid_write(state, uuid, admission) do
+    case :queue.out(admission.waiting) do
+      {:empty, _waiting} ->
+        %{state | episode_uuid_admissions: Map.delete(state.episode_uuid_admissions, uuid)}
+
+      {{:value, from}, waiting} ->
+        owner = elem(from, 0)
+        admission = %{admission | waiting: waiting}
+
+        if Process.alive?(owner) do
+          monitor = Process.monitor(owner)
+          GenServer.reply(from, :acquired)
+          admission = %{admission | owner: owner, monitor: monitor}
+
+          %{
+            state
+            | episode_uuid_admissions:
+                Map.put(state.episode_uuid_admissions, uuid, admission)
+          }
+        else
+          admit_next_episode_uuid_write(state, uuid, admission)
         end
     end
   end
