@@ -358,6 +358,152 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
+
+    test "then independent pools use graph-backed admission for equal and conflicting concurrent writes" do
+      {graphs, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          from graphiti_core.errors import NodeNotFoundError
+
+          class _GraphOperations:
+              async def episodic_node_get_by_uuid(self, cls, driver, uuid):
+                  if uuid not in driver.episodes:
+                      raise NodeNotFoundError(uuid)
+                  return driver.episodes[uuid]
+
+              async def episodic_node_save(self, episode, driver):
+                  driver.episodes[episode.uuid] = episode
+
+          class _Driver:
+              def __init__(self):
+                  self.graph_operations_interface = _GraphOperations()
+                  self.episodes = {}
+                  self.claims = {}
+                  self.completed = set()
+                  self.lock = asyncio.Lock()
+
+              async def execute_query(self, query, **params):
+                  async with self.lock:
+                      if 'MERGE (c:_GralkorEpisodeClaim' in query:
+                          claim = self.claims.setdefault(params['uuid'], {
+                              'group_id': params['group_id'],
+                              'content': params['content'],
+                              'source': params['source'],
+                              'source_description': params['source_description'],
+                              'owner': params['owner'],
+                              'lease_until_ms': params['lease_until_ms'],
+                          })
+                          return [dict(claim)], None, None
+                      if 'WHERE c.owner IS NULL' in query:
+                          claim = self.claims[params['uuid']]
+                          if (
+                              claim['owner'] is None
+                              or claim['owner'] == params['owner']
+                              or claim['lease_until_ms'] <= params['now_ms']
+                          ):
+                              claim['owner'] = params['owner']
+                              claim['lease_until_ms'] = params['lease_until_ms']
+                              return [{'owner': params['owner']}], None, None
+                          return [], None, None
+                      if 'SET c.owner = NULL' in query:
+                          claim = self.claims[params['uuid']]
+                          if claim['owner'] == params['owner']:
+                              claim['owner'] = None
+                              claim['lease_until_ms'] = 0
+                          return [{'uuid': params['uuid']}], None, None
+                      if 'SET c.lease_until_ms' in query:
+                          claim = self.claims[params['uuid']]
+                          if claim['owner'] == params['owner']:
+                              claim['lease_until_ms'] = params['lease_until_ms']
+                          return [{'uuid': params['uuid']}], None, None
+                      if '_gralkor_extraction_complete = true' in query:
+                          self.completed.add(params['uuid'])
+                          return [{'uuid': params['uuid']}], None, None
+                      if 'coalesce(e._gralkor_extraction_complete' in query:
+                          return [
+                              {'complete': params['uuid'] in self.completed}
+                          ], None, None
+                      return [], None, None
+
+          class _FakeGraphiti:
+              def __init__(self, driver):
+                  self.driver = driver
+                  self.extractions = 0
+
+              async def add_episode(self, **kwargs):
+                  from graphiti_core.nodes import EpisodicNode
+                  self.extractions += 1
+                  await asyncio.sleep(0.05)
+                  episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                  await episode.save(self.driver)
+
+          driver = _Driver()
+          [_FakeGraphiti(driver), _FakeGraphiti(driver)]
+          """,
+          %{}
+        )
+
+      [first_graph, second_graph] = Pythonx.decode(graphs)
+
+      %{pid: first_pool} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> first_graph end,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      %{pid: second_pool} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> second_graph end,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      equal_writes = [
+        Task.async(fn ->
+          GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
+            uuid: "shared-equal"
+          )
+        end),
+        Task.async(fn ->
+          GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil,
+            uuid: "shared-equal"
+          )
+        end)
+      ]
+
+      assert [:ok, :ok] = Task.await_many(equal_writes)
+
+      conflicting_writes = [
+        Task.async(fn ->
+          GraphitiPool.add_episode(first_pool, "g1", "first", "source", nil,
+            uuid: "shared-conflict"
+          )
+        end),
+        Task.async(fn ->
+          GraphitiPool.add_episode(second_pool, "g1", "second", "source", nil,
+            uuid: "shared-conflict"
+          )
+        end)
+      ]
+
+      outcomes = Task.await_many(conflicting_writes)
+      assert Enum.count(outcomes, &(&1 == :ok)) == 1
+
+      assert Enum.count(
+               outcomes,
+               &(&1 == {:error, {:episode_conflict, "shared-conflict"}})
+             ) == 1
+
+      {proof, _} =
+        Pythonx.eval(
+          "[sum(g.extractions for g in graphs), len(graphs[0].driver.episodes)]",
+          %{"graphs" => [first_graph, second_graph]}
+        )
+
+      assert Pythonx.decode(proof) == [2, 2]
+      GenServer.stop(first_pool)
+      GenServer.stop(second_pool)
+    end
   end
 
   describe "when an episode is added" do
