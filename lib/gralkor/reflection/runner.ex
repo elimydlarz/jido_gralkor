@@ -54,7 +54,7 @@ defmodule Gralkor.Reflection.Runner do
             {:error, %{reflection: reflection.name, reason: :missing_artefact}}
 
           final ->
-            build_artefact(reflection, ingestion, outputs, final)
+            build_artefact(reflection, ingestion, outputs, final, opts)
         end
 
       {:error, _} = error ->
@@ -62,14 +62,20 @@ defmodule Gralkor.Reflection.Runner do
     end
   end
 
-  defp build_artefact(reflection, ingestion, outputs, final) do
+  defp build_artefact(reflection, ingestion, outputs, final, opts) do
     payload = Map.take(outputs, Map.keys(final.output))
 
     if map_size(payload) == 0 do
       {:error, %{reflection: reflection.name, reason: :missing_artefact}}
     else
       evidence_ids = Enum.map(representations(ingestion), &field(&1, :evidence_id))
-      {:ok, Artefact.new(reflection.name, payload, evidence_ids)}
+      artefact =
+        case Keyword.get(opts, :artefact_id) do
+          nil -> Artefact.new(reflection.name, payload, evidence_ids)
+          id -> Artefact.new(id, reflection.name, payload, evidence_ids)
+        end
+
+      {:ok, artefact}
     end
   end
 

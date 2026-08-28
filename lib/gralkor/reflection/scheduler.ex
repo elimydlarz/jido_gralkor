@@ -5,6 +5,7 @@ defmodule Gralkor.Reflection.Scheduler do
 
   alias Gralkor.Reflection.Runner
   alias Gralkor.Reflection.Store
+  alias Gralkor.Reflection.Artefact
 
   def start_link(opts \\ []),
     do: GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
@@ -46,7 +47,16 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp start_reflection(task_supervisor, reflection, ingestion, opts) do
     runner = Keyword.get(opts, :runner, &Runner.run/3)
-    runner_opts = Keyword.get(opts, :runner_opts, [])
+    runner_opts =
+      Keyword.get(opts, :runner_opts, [])
+      |> Keyword.put(
+        :artefact_id,
+        Artefact.id_for(
+          field(ingestion, :operator_id),
+          field(ingestion, :id),
+          reflection.name
+        )
+      )
     store_opts = Keyword.get(opts, :store_opts, [])
     notify = Keyword.get(opts, :notify)
 

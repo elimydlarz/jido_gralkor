@@ -13,10 +13,20 @@ defmodule Gralkor.Reflection.Storage.InMemory do
   def put(reflection, operator_id, artefact) do
     destination = Store.destination(reflection, operator_id)
 
-    Agent.update(
-      __MODULE__,
-      &Map.update(&1, destination, [artefact], fn values -> values ++ [artefact] end)
-    )
+    Agent.get_and_update(__MODULE__, fn state ->
+      artefacts = Map.get(state, destination, [])
+
+      case Enum.find(artefacts, &(&1.id == artefact.id)) do
+        ^artefact ->
+          {:ok, state}
+
+        nil ->
+          {:ok, Map.put(state, destination, artefacts ++ [artefact])}
+
+        _conflicting ->
+          {{:error, {:artefact_conflict, artefact.id}}, state}
+      end
+    end)
   end
 
   @doc false
