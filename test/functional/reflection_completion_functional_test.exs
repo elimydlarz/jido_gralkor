@@ -1457,6 +1457,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert {:error, {:python, stale_error}} = Task.await(stale_write, 5_000)
       assert stale_error =~ "episode claim lost"
+
       assert {:error, :not_found} =
                GraphitiPool.get_episode(first_pool, "observations", "embedded-stolen-claim")
 
