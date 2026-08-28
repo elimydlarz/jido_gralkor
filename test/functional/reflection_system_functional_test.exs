@@ -909,10 +909,15 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "and failure of one Reflection does not prevent another Reflection from completing",
          context do
-      runner = fn reflection, _, _ ->
+      runner = fn reflection, completed_ingestion, opts ->
         if reflection.name == "one",
           do: {:error, %{reflection: "one", reason: :failed}},
-          else: Runner.run(reflection, ingestion(), inference: &output_for/1)
+          else:
+            Runner.run(
+              reflection,
+              completed_ingestion,
+              Keyword.put(opts, :inference, &output_for/1)
+            )
       end
 
       assert {:ok, :scheduled} =
