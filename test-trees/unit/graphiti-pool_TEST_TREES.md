@@ -82,8 +82,13 @@ when an episode is added
   while an episode identifier is supplied
     when that identifier does not exist
       then one episode is created under that identifier through the normal extraction path
+      and durable extraction completion is recorded after the normal path succeeds
     when that identifier exists with equal immutable episode content
-      then the add succeeds without invoking extraction again
+      while durable extraction completion is recorded
+        then the add succeeds without invoking extraction again
+      while durable extraction completion is absent
+        then the normal extraction path runs again
+        and durable extraction completion is recorded after it succeeds
     when that identifier exists with conflicting immutable episode content
       then the add returns an episode conflict and leaves the original unchanged
     and concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent

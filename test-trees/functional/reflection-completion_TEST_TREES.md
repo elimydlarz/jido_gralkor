@@ -62,8 +62,12 @@ if repeated canonical writes use the same artefact identifier with conflicting i
 where Graphiti is the canonical Reflection store
   when a new artefact is written with its stable identifier
     then Graphiti creates one episode under a deterministic UUID derived from that artefact identifier
+    and Graphiti records durable extraction completion only after every graph effect succeeds
   when that artefact is written again after an uncertain response
-    then Graphiti confirms the existing episode without repeating extraction
+    while durable extraction completion was recorded
+      then Graphiti confirms the existing episode without repeating extraction
+    while the episode exists but extraction completion was not recorded
+      then Graphiti resumes the normal extraction path before reporting success
     and exactly one episode carrying that artefact remains searchable
 
 where in-memory storage is the canonical Reflection store
