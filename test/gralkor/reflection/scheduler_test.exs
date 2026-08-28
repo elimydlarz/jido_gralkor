@@ -518,7 +518,8 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
     test "then missing operator, missing ingestion, and incomplete ingestion are identified" do
       name = scheduler_name()
-      runner = fn _, _, _ -> send(self(), :runner_started) end
+      test_pid = self()
+      runner = fn _, _, _ -> send(test_pid, :runner_started) end
       start_scheduler(name, runner: runner, store_opts: [storage: EmptyStore])
 
       assert {:error, {:invalid_operator_id, nil}} =
