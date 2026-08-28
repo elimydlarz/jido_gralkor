@@ -847,7 +847,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         graphiti
       end
 
-      table = :"reflection_partial_#{System.unique_integer([:positive])}"
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
 
       partial_artefact =
@@ -859,7 +858,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         start_supervised!(
           Supervisor.child_spec(
             {GraphitiPool,
-             table: table,
              falkordb_spec: {:embedded, data_dir},
              construct_shared_clients: fn _llm, _embedder ->
                %{llm_client: nil, embedder: nil, cross_encoder: nil}
@@ -868,7 +866,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
              initialise_instance: fn _instance -> :ok end,
              warmup: false,
              embedded_falkordb_socket_timeout_ms: 60_000},
-            id: table
+            id: :reflection_partial_graphiti
           )
         )
 
