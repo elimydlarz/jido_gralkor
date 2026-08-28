@@ -672,7 +672,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
       Pythonx.eval(
         """
-        graphs[0].driver._gralkor_claim_lease_ms = 30
+        graphs[0]._gralkor_claim_lease_ms = 30
         graphs[0].driver.reject_renewals.add('renewal-lost')
         """,
         %{"graphs" => graphs}
