@@ -320,6 +320,28 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
+  describe "if named-Lens capture is requested with a missing or blank operator identifier" do
+    setup :start_capture_buffer
+
+    test "then an argument error names the operator identifier and no turn is buffered" do
+      for operator_id <- [nil, "", "  "],
+          lens_args <- [["observations"], ["observations", []], ["observations", [], %{}]] do
+        assert_raise ArgumentError, ~r/operator_id/, fn ->
+          apply(Native, :capture, [
+            "s1",
+            operator_id,
+            "Susu",
+            "Eli",
+            [Message.new("user", "hi")]
+            | lens_args
+          ])
+        end
+      end
+
+      assert CaptureBuffer.turns_for("s1") == []
+    end
+  end
+
   describe "when a session holding buffered turns is flushed" do
     setup :start_capture_buffer
 
