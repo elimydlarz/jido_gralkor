@@ -252,8 +252,10 @@ defmodule Gralkor.GraphitiPool do
   a different text and may be nothing at all: an episode naming one subject
   yields a node and no edge. Graphiti searches episodes by BM25 over their
   content, so retrieval here depends on the stored words rather than extraction.
-  Internal completion-only callers may request identity convergence, expanding
-  the ranked window to the group's episode count before filtering and limiting.
+  Internal completion-only callers may request identity convergence. Ranked
+  results choose artefact identifiers; every completed episode carrying a
+  selected identifier is then enumerated independently of BM25 so conflicts
+  outside the ranked window remain visible to the caller.
   """
   @spec search_episodes(String.t(), String.t(), pos_integer()) ::
           {:ok, [map()]} | {:error, term()}
@@ -283,6 +285,7 @@ defmodule Gralkor.GraphitiPool do
       Pythonx.eval(
         """
         import asyncio
+        import json
         from graphiti_core.search.search_config import (
           EpisodeSearchConfig,
           EpisodeSearchMethod,
@@ -333,10 +336,87 @@ defmodule Gralkor.GraphitiPool do
             )
           episodes = [e for e in episodes if e.uuid in completed_ids]
 
-        [
-          {"content": e.content, "source_description": e.source_description}
-          for e in episodes
-        ]
+        def artefact_id_for(content):
+          try:
+            decoded = json.loads(content)
+          except (TypeError, ValueError):
+            return None
+          identifier = decoded.get('id') if isinstance(decoded, dict) else None
+          return identifier if isinstance(identifier, str) and identifier else None
+
+        def episode_result(episode):
+          return {
+            "content": episode.content,
+            "source_description": episode.source_description,
+          }
+
+        if converge_by_identity:
+          selected_ids = []
+          for episode in episodes:
+            identifier = artefact_id_for(episode.content)
+            if identifier is not None and identifier not in selected_ids:
+              selected_ids.append(identifier)
+              if len(selected_ids) == max_results:
+                break
+
+          if hasattr(g.driver, 'execute_query') and selected_ids:
+            records, _, _ = asyncio._gralkor_run(
+              g.driver.execute_query(
+                '''
+                MATCH (e:Episodic {group_id: $group_id})
+                WHERE $include_incomplete OR
+                      coalesce(e._gralkor_extraction_complete, false) = true
+                RETURN e.uuid AS uuid,
+                       e.content AS content,
+                       e.source_description AS source_description
+                /* gralkor_exhaustive_identity_convergence */
+                ''',
+                group_id=gid,
+                include_incomplete=not require_extraction_complete,
+              )
+            )
+            candidates = [
+              {
+                "content": record['content'],
+                "source_description": record['source_description'],
+              }
+              for record in records
+            ]
+          elif selected_ids and hasattr(g.driver, 'episodes'):
+            completed_ids = set(
+              getattr(g.driver, '_gralkor_completed_episode_uuids', set())
+            )
+            candidates = [
+              episode_result(episode)
+              for episode in g.driver.episodes.values()
+              if getattr(episode, 'group_id', gid) == gid
+              and (
+                not require_extraction_complete
+                or episode.uuid in completed_ids
+              )
+            ]
+          elif selected_ids:
+            raise RuntimeError(
+              'identity convergence requires exhaustive episode enumeration'
+            )
+          else:
+            candidates = []
+
+          candidates_by_id = {}
+          for candidate in candidates:
+            identifier = artefact_id_for(candidate['content'])
+            if identifier in selected_ids:
+              candidates_by_id.setdefault(identifier, []).append(candidate)
+
+          episode_results = [
+            candidate
+            for identifier in selected_ids
+            for candidate in candidates_by_id.get(identifier, [])
+          ]
+        else:
+          episode_results = [episode_result(episode) for episode in episodes]
+
+        episode_results
         """,
         %{
           "g" => instance,
@@ -572,32 +652,10 @@ defmodule Gralkor.GraphitiPool do
                             '''
                             MATCH (c:_GralkorEpisodeClaim {uuid: $claim_uuid})
                             WHERE c.owner = $owner AND c.generation = $generation
-                            WITH c
-                            MERGE (n:Episodic {uuid: $uuid})
-                            SET n = {
-                              uuid: $uuid,
-                              name: $name,
-                              group_id: $group_id,
-                              source_description: $source_description,
-                              source: $source,
-                              content: $content,
-                              entity_edges: $entity_edges,
-                              created_at: $created_at,
-                              valid_at: $valid_at,
-                              _gralkor_extraction_complete: false
-                            }
-                            RETURN n.uuid AS uuid
+                            RETURN c.generation AS generation
+                            /* gralkor_claim_fence_check */
                             ''',
                             **fence_params,
-                            uuid=self.uuid,
-                            name=self.name,
-                            group_id=self.group_id,
-                            source_description=self.source_description,
-                            source=self.source.value,
-                            content=self.content,
-                            entity_edges=self.entity_edges,
-                            created_at=self.created_at,
-                            valid_at=self.valid_at,
                         )
                     else:
                         # Test/custom drivers cannot execute Falkor's episode mutation,
