@@ -905,12 +905,13 @@ defmodule Gralkor.GraphitiPool do
                 while True:
                     records, _, _ = await g.driver.execute_query(
                         '''
+                        OPTIONAL MATCH (e:Episodic {uuid: $uuid})
                         MERGE (c:_GralkorEpisodeClaim {uuid: $uuid})
                         ON CREATE SET
-                          c.group_id = $group_id,
-                          c.content = $content,
-                          c.source = $source,
-                          c.source_description = $source_description,
+                          c.group_id = CASE WHEN e IS NULL THEN $group_id ELSE e.group_id END,
+                          c.content = CASE WHEN e IS NULL THEN $content ELSE e.content END,
+                          c.source = CASE WHEN e IS NULL THEN $source ELSE e.source END,
+                          c.source_description = CASE WHEN e IS NULL THEN $source_description ELSE e.source_description END,
                           c.owner = $owner,
                           c.generation = 1,
                           c.lease_until_ms = timestamp() + $lease_ms
@@ -920,7 +921,12 @@ defmodule Gralkor.GraphitiPool do
                                c.source_description AS source_description,
                                c.owner AS owner,
                                coalesce(c.generation, 0) AS generation,
-                               coalesce(c.lease_until_ms, 0) AS lease_until_ms
+                               coalesce(c.lease_until_ms, 0) AS lease_until_ms,
+                               e.uuid AS episode_uuid,
+                               e.group_id AS episode_group_id,
+                               e.content AS episode_content,
+                               e.source AS episode_source,
+                               e.source_description AS episode_source_description
                         ''',
                         uuid=uid,
                         group_id=gid,
@@ -938,6 +944,17 @@ defmodule Gralkor.GraphitiPool do
                         raise RuntimeError('graph-backed episode claim contract is unavailable')
                     claim_state['distributed'] = True
                     claim = records[0]
+                    episode_equal = (
+                        claim['episode_uuid'] is None
+                        or (
+                            claim['episode_group_id'] == gid
+                            and claim['episode_content'] == c
+                            and claim['episode_source'] == source_value
+                            and claim['episode_source_description'] == s
+                        )
+                    )
+                    if not episode_equal:
+                        return 'conflict'
                     equal = (
                         claim['group_id'] == gid
                         and claim['content'] == c
