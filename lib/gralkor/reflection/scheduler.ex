@@ -54,40 +54,51 @@ defmodule Gralkor.Reflection.Scheduler do
         ])
       )
 
-    journal_name = Keyword.get(opts, :journal_name, Journal)
-    {:ok, journal} = Journal.open(Keyword.get(opts, :journal_path), journal_name)
+    with :ok <- validate_execution_options(defaults),
+         journal_name = Keyword.get(opts, :journal_name, Journal),
+         {:ok, journal} <- Journal.open(Keyword.get(opts, :journal_path), journal_name) do
+      jobs =
+        journal
+        |> Journal.all()
+        |> Map.new(fn durable ->
+          job =
+            durable
+            |> Map.put(:opts, Keyword.merge(defaults, durable.opts))
+            |> Map.put(:retry_timer, nil)
+            |> Map.put_new(:retry_at_ms, nil)
+            |> Map.put_new(:active, false)
 
-    jobs =
-      journal
-      |> Journal.all()
-      |> Map.new(fn durable ->
-        job =
-          durable
-          |> Map.put(:opts, Keyword.merge(defaults, durable.opts))
-          |> Map.put(:retry_timer, nil)
-          |> Map.put_new(:active, false)
+          {job.key, job}
+        end)
 
-        {job.key, job}
-      end)
+      if map_size(jobs) > 0, do: send(self(), :resume_unfinished)
 
-    if map_size(jobs) > 0, do: send(self(), :resume_unfinished)
-
-    {:ok,
-     %{
-       task_supervisor: supervisor,
-       defaults: defaults,
-       jobs: jobs,
-       tasks: %{},
-       drainers: [],
-       journal: journal
-     }}
+      {:ok,
+       %{
+         task_supervisor: supervisor,
+         defaults: defaults,
+         jobs: jobs,
+         tasks: %{},
+         drainers: [],
+         draining: false,
+         journal: journal
+       }}
+    else
+      {:error, reason} -> {:stop, reason}
+    end
   end
 
   @impl true
+  def handle_call({:schedule, _reflections, _ingestion, _opts}, _from, %{draining: true} = state) do
+    {:reply, {:error, :scheduler_draining}, state}
+  end
+
   def handle_call({:schedule, reflections, ingestion, opts}, _from, state) do
+    opts = Keyword.merge(state.defaults, Keyword.drop(opts, [:server]))
+
     with :ok <- validate_ingestion(ingestion),
-         :ok <- validate_reflections(reflections) do
-      opts = Keyword.merge(state.defaults, Keyword.drop(opts, [:server]))
+         :ok <- validate_reflections(reflections),
+         :ok <- validate_execution_options(opts) do
 
       new_jobs =
         Enum.reduce(reflections, [], fn reflection, jobs ->
@@ -122,11 +133,11 @@ defmodule Gralkor.Reflection.Scheduler do
   end
 
   def handle_call(:drain, _from, %{jobs: jobs} = state) when map_size(jobs) == 0 do
-    {:reply, :ok, state}
+    {:reply, :ok, %{state | draining: true}}
   end
 
   def handle_call(:drain, from, state) do
-    {:noreply, %{state | drainers: [from | state.drainers]}}
+    {:noreply, %{state | drainers: [from | state.drainers], draining: true}}
   end
 
   @impl true
@@ -173,7 +184,7 @@ defmodule Gralkor.Reflection.Scheduler do
   def handle_info({:retry, key}, state) do
     case Map.fetch(state.jobs, key) do
       {:ok, job} ->
-        job = %{job | retry_timer: nil}
+        job = %{job | retry_timer: nil, retry_at_ms: nil}
         {:noreply, launch(%{state | jobs: Map.put(state.jobs, key, job)}, key)}
 
       :error ->
@@ -184,11 +195,7 @@ defmodule Gralkor.Reflection.Scheduler do
   def handle_info(:resume_unfinished, state) do
     state =
       Enum.reduce(Map.keys(state.jobs), state, fn key, current ->
-        if Map.fetch!(current.jobs, key).active do
-          retry_or_finish(current, key, :scheduler_restart)
-        else
-          launch(current, key)
-        end
+        resume_job(current, key)
       end)
 
     {:noreply, state}
@@ -204,12 +211,17 @@ defmodule Gralkor.Reflection.Scheduler do
       attempt: 1,
       artefact: nil,
       retry_timer: nil,
+      retry_at_ms: nil,
       active: false
     }
   end
 
   defp launch(state, key) do
-    job = state.jobs |> Map.fetch!(key) |> Map.put(:active, true)
+    job =
+      state.jobs
+      |> Map.fetch!(key)
+      |> Map.put(:active, true)
+      |> Map.put(:retry_at_ms, nil)
     :ok = Journal.put_all(state.journal, [durable_job(job)])
     state = %{state | jobs: Map.put(state.jobs, key, job)}
     operation = fn -> execute(job) end
