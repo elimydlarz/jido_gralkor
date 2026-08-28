@@ -26,6 +26,10 @@ when a Runner attempt returns an error, crashes, or exceeds its execution timeou
 when a Runner, lookup, or storage task cannot start
   then that phase consumes one attempt and follows the configured bounded retry schedule
 
+when canonical lookup returns an error, crashes, or exceeds its execution timeout
+  then lookup follows the configured bounded storage retry schedule
+  and an immutable-content conflict ends without retry
+
 when a canonical storage attempt returns an error, crashes, or exceeds its execution timeout
   then only that storage phase is retried after each configured bounded delay
   and every attempt receives the exact artefact retained from the successful Runner
@@ -46,10 +50,18 @@ when the Scheduler process starts with durable unfinished work
   and already canonical work is confirmed complete without rerunning its Runner
   while the previous Scheduler stopped during an active attempt
     then that interrupted attempt consumes the durable retry budget before work resumes
+  while the previous Scheduler stopped during an active storage attempt
+    then canonical lookup first confirms whether that uncertain attempt completed
+    and a confirmed artefact completes even when no storage retry remains
+
+when the Scheduler stops during a configured retry delay
+  then the durable retry deadline survives restart
+  and the next attempt does not begin before the remaining delay elapses
 
 when the Scheduler is asked to drain
   then the caller waits while admitted logical work can still complete or exhaust retries
   and every waiting caller is released after all logical work ends
+  and later scheduling is rejected so no work can escape the drain boundary
 
 if scheduling receives an incomplete ingestion, a missing or blank operator or ingestion identifier, or duplicate Reflection names
   then scheduling fails before durable admission or Runner execution
@@ -57,3 +69,6 @@ if scheduling receives an incomplete ingestion, a missing or blank operator or i
 
 when scheduling receives no Reflections
   then scheduling succeeds without retaining admission or durable work
+
+if retry delays are not a finite list of non-negative integer milliseconds or the execution timeout is not a positive integer
+  then Scheduler startup or scheduling rejects the invalid boundedness configuration

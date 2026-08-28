@@ -163,3 +163,5 @@ if any other unexpected message arrives, a linked process exiting abnormally inc
 
 when the supervision tree stops the buffer
   then every pending entry is drained through the flush callback before termination returns
+  and every already-started fire-and-forget flush worker finishes before Reflection draining begins
+  and every Reflection admitted by those workers finishes before termination returns

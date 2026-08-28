@@ -57,6 +57,8 @@ when the supervised Reflection Scheduler crashes with unfinished work
 when the application stops gracefully with unfinished Reflection work
   then shutdown waits for every admitted Reflection to complete or exhaust its bounded retry schedule
   and no admitted Reflection task is silently abandoned
+  while a fire-and-forget capture flush is already running
+    then shutdown waits for that flush to admit its Reflection and for the admitted Reflection to finish
   while the supervised Scheduler was restarted after CaptureBuffer began
     then shutdown drains the current replacement Scheduler
 
