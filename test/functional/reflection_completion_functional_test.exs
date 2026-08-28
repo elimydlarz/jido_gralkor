@@ -2,6 +2,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Client
+  alias Gralkor.GraphitiPool
   alias Gralkor.Ingest
   alias Gralkor.Reflection
   alias Gralkor.Reflection.ChainOfThought
@@ -200,6 +201,113 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert second_artefact == first_artefact
       refute_receive {:runner_started, "review", "ingestion-one", _runner}
       assert_receive {:reflection_completed, "review", {:ok, ^first_artefact}}
+    end
+  end
+
+  describe "where Graphiti is the canonical Reflection store" do
+    test "then a fresh requested UUID is created once and equal retry confirms it without extraction" do
+      {graphiti, _} =
+        Pythonx.eval(
+          """
+          from graphiti_core.errors import NodeNotFoundError
+
+          class GraphOperations:
+              async def episodic_node_get_by_uuid(self, cls, driver, uuid):
+                  if uuid not in driver.episodes:
+                      raise NodeNotFoundError(uuid)
+                  return driver.episodes[uuid]
+
+              async def episodic_node_save(self, episode, driver):
+                  driver.episodes[episode.uuid] = episode
+
+          class Driver:
+              def __init__(self):
+                  self.graph_operations_interface = GraphOperations()
+                  self.episodes = {}
+
+          class PinnedGraphitiContract:
+              def __init__(self):
+                  self.driver = Driver()
+                  self.extractions = 0
+
+              async def add_episode(self, **kwargs):
+                  from graphiti_core.nodes import EpisodicNode
+                  self.extractions += 1
+                  episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                  await episode.save(self.driver)
+
+          PinnedGraphitiContract()
+          """,
+          %{}
+        )
+
+      table = :"reflection_graphiti_#{System.unique_integer([:positive])}"
+
+      pool =
+        start_supervised!(
+          Supervisor.child_spec(
+            {GraphitiPool,
+             name: nil,
+             table: table,
+             falkordb_spec: {:remote, []},
+             construct_falkor_db: fn _spec -> :stub_falkor_db end,
+             close_falkor_db: fn _database -> :ok end,
+             construct_shared_clients: fn _llm, _embedder ->
+               %{llm_client: nil, embedder: nil, cross_encoder: nil}
+             end,
+             construct_instance: fn _database, _shared, _group -> graphiti end,
+             initialise_instance: fn _instance -> :ok end,
+             warmup: false,
+             install_loop_fn: &Gralkor.Python.install_async_runtime/0},
+            id: table
+          )
+        )
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 pool,
+                 "observations",
+                 ~s({"id":"stable-id","payload":{"summary":"stored"}}),
+                 "reflection:review",
+                 nil,
+                 uuid: "stable-id"
+               )
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 pool,
+                 "observations",
+                 ~s({"id":"stable-id","payload":{"summary":"stored"}}),
+                 "reflection:review",
+                 nil,
+                 uuid: "stable-id"
+               )
+
+      assert {:error, {:episode_conflict, "stable-id"}} =
+               GraphitiPool.add_episode(
+                 pool,
+                 "observations",
+                 ~s({"id":"stable-id","payload":{"summary":"changed"}}),
+                 "reflection:review",
+                 nil,
+                 uuid: "stable-id"
+               )
+
+      {proof, _} =
+        Pythonx.eval(
+          """
+          episode = graphiti.driver.episodes['stable-id']
+          [len(graphiti.driver.episodes), graphiti.extractions, episode.uuid, episode.content]
+          """,
+          %{"graphiti" => graphiti}
+        )
+
+      assert Pythonx.decode(proof) == [
+               1,
+               1,
+               "stable-id",
+               ~s({"id":"stable-id","payload":{"summary":"stored"}})
+             ]
     end
   end
 
