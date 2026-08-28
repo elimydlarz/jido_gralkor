@@ -31,11 +31,15 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       assert [
                {Gralkor.Python, [reap_orphans: false]},
                {GraphitiPool, pool_options},
+               {Gralkor.Reflection.Scheduler, scheduler_options},
                {Gralkor.CaptureBuffer, _capture_options}
              ] = GralkorApplication.children()
 
       assert Keyword.fetch!(pool_options, :falkordb_spec) ==
                {:remote, [host: "memory.example", port: 6379]}
+
+      assert Keyword.fetch!(scheduler_options, :journal_path) =~
+               "jido_gralkor/reflection_scheduler.dets"
     end
   end
 
