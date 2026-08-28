@@ -663,7 +663,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
       [durable] = Journal.all(first_journal)
       assert durable.opts[:runner_opts] == []
-      refute Keyword.has_key?(durable.opts, :store_opts)
+      assert durable.opts[:store_opts] == [storage: ControlledStore]
 
       assert :ok = stop_supervised(name)
 

@@ -578,6 +578,7 @@ defmodule Gralkor.Reflection.Scheduler do
 
     [
       runner_opts: runner_opts,
+      store_opts: Keyword.get(opts, :store_opts, []),
       retry_delays: Keyword.fetch!(opts, :retry_delays),
       execution_timeout_ms: Keyword.fetch!(opts, :execution_timeout_ms)
     ]
