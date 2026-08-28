@@ -728,6 +728,7 @@ defmodule Gralkor.CaptureBufferTest do
   describe "when Reflection scheduling needs a scheduler > while declared Reflections use default scheduling and no scheduler is registered" do
     test "then startup fails identifying the required dedicated Reflection supervisor" do
       :ok = stop_supervised(CaptureBuffer)
+      Process.flag(:trap_exit, true)
 
       assert {:error,
               {:reflection_scheduler_unavailable, Gralkor.Reflection.Supervisor}} =
