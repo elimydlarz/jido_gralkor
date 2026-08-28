@@ -538,12 +538,18 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert {:ok, :scheduled} =
                Scheduler.schedule([reflection], scheduler_ingestion(), execution_timeout_ms: 50)
 
-      assert_receive {:runner_started, "review", "ingestion-one", artefact_id, first_runner}
+      assert_receive {:runner_started, "review", "ingestion-one", artefact_id, first_runner},
+                     1_000
+
       first_monitor = Process.monitor(first_runner)
 
-      assert_receive {:DOWN, ^first_monitor, :process, ^first_runner, :killed}
-      assert_receive {:reflection_retrying, "review", %{stage: :runner, reason: :timeout}}
-      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, second_runner}
+      assert_receive {:DOWN, ^first_monitor, :process, ^first_runner, :killed}, 1_000
+
+      assert_receive {:reflection_retrying, "review", %{stage: :runner, reason: :timeout}},
+                     1_000
+
+      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, second_runner},
+                     1_000
 
       assert_receive {:reflection_completed, "review",
                       {:error,
@@ -552,7 +558,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                          stage: :runner,
                          attempts: 2,
                          reason: :timeout
-                       }}}
+                       }}},
+                     1_000
 
       refute Process.alive?(second_runner)
 
@@ -1076,14 +1083,17 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       )
 
       assert :ok = Client.ingest(ingestion())
-      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, runner}
+      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, runner}, 1_000
       send(runner, :finish_reflection)
 
-      assert_receive {:graphiti_store_committed, first}
+      assert_receive {:graphiti_store_committed, first}, 1_000
       assert first.id == artefact_id
-      assert_receive {:reflection_retrying, "review", %{stage: :storage, reason: :response_lost}}
-      assert_receive {:graphiti_store_committed, ^first}
-      assert_receive {:reflection_completed, "review", {:ok, ^first}}
+
+      assert_receive {:reflection_retrying, "review", %{stage: :storage, reason: :response_lost}},
+                     1_000
+
+      assert_receive {:graphiti_store_committed, ^first}, 1_000
+      assert_receive {:reflection_completed, "review", {:ok, ^first}}, 1_000
 
       Application.put_env(
         :jido_gralkor,
@@ -1298,9 +1308,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert {:ok, :scheduled} =
                Scheduler.schedule([reflection], scheduler_ingestion())
 
-      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, runner}
+      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, runner}, 1_000
       send(runner, :finish_reflection)
-      assert_receive {:reflection_completed, "review", {:ok, ^partial_artefact}}
+      assert_receive {:reflection_completed, "review", {:ok, ^partial_artefact}}, 1_000
 
       assert {:ok, [%{destination: "observations", artefact: ^partial_artefact}]} =
                Client.search(%Search{
