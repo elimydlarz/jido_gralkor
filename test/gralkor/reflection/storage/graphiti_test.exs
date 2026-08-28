@@ -44,10 +44,29 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
       artefact = artefact()
 
       get_episode = fn "observations", "stable-id" ->
-        {:ok, %{content: Jason.encode!(Map.from_struct(artefact))}}
+        {:ok,
+         %{
+           content: Jason.encode!(Map.from_struct(artefact)),
+           extraction_complete: true
+         }}
       end
 
       assert {:ok, ^artefact} =
+               Graphiti.get(reflection(), "operator-one", "stable-id", get_episode)
+    end
+
+    test "then an unmarked matching episode returns its artefact as incomplete" do
+      artefact = artefact()
+
+      get_episode = fn "observations", "stable-id" ->
+        {:ok,
+         %{
+           content: Jason.encode!(Map.from_struct(artefact)),
+           extraction_complete: false
+         }}
+      end
+
+      assert {:error, {:incomplete_artefact, ^artefact}} =
                Graphiti.get(reflection(), "operator-one", "stable-id", get_episode)
     end
 
@@ -64,7 +83,11 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
 
       for stored <- [mismatched_id, mismatched_reflection] do
         get_episode = fn "observations", "stable-id" ->
-          {:ok, %{content: Jason.encode!(Map.from_struct(stored))}}
+          {:ok,
+           %{
+             content: Jason.encode!(Map.from_struct(stored)),
+             extraction_complete: true
+           }}
         end
 
         assert {:error, {:artefact_conflict, "stable-id"}} =
