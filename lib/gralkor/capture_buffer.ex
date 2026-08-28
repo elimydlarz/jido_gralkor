@@ -20,8 +20,6 @@ defmodule Gralkor.CaptureBuffer do
   alias Gralkor.Reflection.Scheduler
 
   @default_retries [1_000, 2_000, 4_000]
-  @scheduler_replacement_timeout_ms 5_000
-
   # ── Public API ──────────────────────────────────────────────
 
   def start_link(opts) when is_list(opts) do
