@@ -232,6 +232,26 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert searchable.id == first_artefact.id
     end
+
+    test "then a newly declared Reflection runs without rerunning a completed sibling", %{
+      reflection: reflection
+    } do
+      assert :ok = Client.ingest(ingestion())
+      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
+      send(runner, :finish_reflection)
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+
+      summary = %{reflection | name: "summary"}
+      Application.put_env(:jido_gralkor, :reflections, [reflection, summary])
+      assert :ok = Client.ingest(ingestion())
+
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+      assert_receive {:runner_started, "summary", "ingestion-one", _artefact_id, summary_runner}
+      refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
+
+      send(summary_runner, :finish_reflection)
+      assert_receive {:reflection_completed, "summary", {:ok, _artefact}}
+    end
   end
 
   describe "when the supervised Reflection Scheduler crashes with unfinished work" do
@@ -371,28 +391,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, replacement}
       send(replacement, :finish_reflection)
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
-    end
-  end
-
-  describe "when one ingestion schedules several Reflections" do
-    test "then a newly declared Reflection runs without rerunning a completed sibling", %{
-      reflection: reflection
-    } do
-      assert :ok = Client.ingest(ingestion())
-      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
-      send(runner, :finish_reflection)
-      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
-
-      summary = %{reflection | name: "summary"}
-      Application.put_env(:jido_gralkor, :reflections, [reflection, summary])
-      assert :ok = Client.ingest(ingestion())
-
-      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
-      assert_receive {:runner_started, "summary", "ingestion-one", _artefact_id, summary_runner}
-      refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
-
-      send(summary_runner, :finish_reflection)
-      assert_receive {:reflection_completed, "summary", {:ok, _artefact}}
     end
   end
 
