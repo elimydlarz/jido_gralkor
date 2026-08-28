@@ -557,7 +557,7 @@ On each store write, graphiti receives the selected Lens or Reflection ontology'
 
 A Reflection is an asynchronous post-ingestion process over completed lensed representations. It is declared by name, registered Destination, extraction ontology, and a repository YAML Chain of Thought. Reflections are not Lenses: Lens definitions remain independent views for absorbing information, while Reflections operate over the successful results after every intended Lens has finished.
 
-The supervised scheduler coordinates each logical completion independently by `{operator_id, ingestion_id, reflection_name}`. It durably journals canonical lookup, Runner, and canonical-storage phases; permits at most one active attempt for that key; and uses bounded retries with default delays of one, two, and four seconds. Runner/tool effects are at-least-once because a process can fail after an external effect but before reporting success. Once the Runner returns, storage retries retain the exact artefact and never rerun successful siblings. Restart resumes admitted work, while replay first confirms canonical storage so already completed work is not executed again.
+The supervised scheduler coordinates each logical completion independently by `{operator_id, ingestion_id, reflection_name}`. It durably journals canonical lookup, Runner, and canonical-storage phases; permits at most one active attempt for that key; and uses bounded retries with default delays of one, two, and four seconds. Returned errors, task-start failures, crashes, and timeouts consume that phase's retry budget; an immutable-content conflict is terminal. A crash-interrupted active attempt also consumes the durable budget after restart, and terminal failures are logged with Reflection, phase, attempt count, and reason. Runner/tool effects are at-least-once because a process can fail after an external effect but before reporting success. Once the Runner returns, storage retries retain the exact artefact and never rerun successful siblings. Restart resumes admitted work, while replay first confirms canonical storage so already completed work is not executed again.
 
 The package supplies two declarations by default:
 
@@ -603,7 +603,7 @@ Multiple Reflections and Lenses may save to the same Destination. Search selects
   })
 ```
 
-`result_type: :artefacts` returns final Reflection artefacts from the selected Destinations, and `artefact_id` optionally narrows the lookup to one exact artefact. Each artefact carries its declaring Reflection. Its deterministic UUID derives from the logical completion key. Repeating an equal Graphiti write is a successful confirmation without extraction; reusing that UUID with different immutable episode content returns an explicit artefact conflict.
+`result_type: :artefacts` returns final Reflection artefacts from the selected Destinations, and `artefact_id` optionally narrows the lookup to one exact artefact. Each artefact carries its declaring Reflection. Its deterministic UUID derives from the logical completion key. After normal extraction succeeds, Graphiti records durable completion on that episode. Repeating an equal write with that marker is a successful confirmation without extraction; an equal episode lacking the marker re-enters normal extraction to finish a possible partial commit. Reusing that UUID with different immutable episode content returns an explicit artefact conflict.
 
 ## Testing against the in-memory twin
 
