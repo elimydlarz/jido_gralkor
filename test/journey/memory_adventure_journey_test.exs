@@ -130,6 +130,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          ]}
       )
 
+    {:ok, _reflection_supervisor} =
+      start_supervised(
+        {Gralkor.Reflection.Supervisor,
+         scheduler_opts: [
+           journal_path: Path.join(data_dir, "reflection_scheduler.dets")
+         ]}
+      )
+
     {:ok, _buffer} =
       start_supervised(
         {CaptureBuffer,

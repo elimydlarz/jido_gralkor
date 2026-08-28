@@ -191,20 +191,25 @@ defmodule Gralkor.CaptureBuffer do
 
     reflections = Keyword.get(opts, :reflections, [])
     reflection_callback = Keyword.get(opts, :reflection_callback)
-    scheduler = maybe_start_reflection_scheduler(reflections, reflection_callback)
 
-    {:ok,
-     %{
-       entries: %{},
-       lens_entries: %{},
-       flush_callback: Keyword.fetch!(opts, :flush_callback),
-       lens_flush_callback: Keyword.get(opts, :lens_flush_callback),
-       reflections: reflections,
-       reflection_callback: reflection_callback || (&schedule_reflections/2),
-       reflection_scheduler: scheduler,
-       flush_workers: %{},
-       retries: Keyword.get(opts, :retries, @default_retries)
-     }}
+    case reflection_scheduler(reflections, reflection_callback) do
+      {:ok, scheduler} ->
+        {:ok,
+         %{
+           entries: %{},
+           lens_entries: %{},
+           flush_callback: Keyword.fetch!(opts, :flush_callback),
+           lens_flush_callback: Keyword.get(opts, :lens_flush_callback),
+           reflections: reflections,
+           reflection_callback: reflection_callback || (&schedule_reflections/2),
+           reflection_scheduler: scheduler,
+           flush_workers: %{},
+           retries: Keyword.get(opts, :retries, @default_retries)
+         }}
+
+      {:error, reason} ->
+        {:stop, reason}
+    end
   end
 
   @impl true
@@ -478,7 +483,6 @@ defmodule Gralkor.CaptureBuffer do
     end
 
     :ok = drain_reflection_scheduler(state.reflection_scheduler)
-    stop_owned_scheduler(state.reflection_scheduler)
 
     :ok
   end
@@ -737,37 +741,24 @@ defmodule Gralkor.CaptureBuffer do
     Scheduler.schedule(reflections, ingestion, runner_opts: runner_opts)
   end
 
-  defp maybe_start_reflection_scheduler(_reflections, callback) when is_function(callback, 2),
-    do: nil
+  defp reflection_scheduler(_reflections, callback) when is_function(callback, 2),
+    do: {:ok, nil}
 
-  defp maybe_start_reflection_scheduler(_reflections, nil) do
+  defp reflection_scheduler(reflections, nil) do
     case Process.whereis(Scheduler) do
+      nil when reflections == [] ->
+        {:ok, nil}
+
       nil ->
-        case Scheduler.start_link() do
-          {:ok, pid} -> {:owned, pid}
-          {:error, {:already_started, pid}} -> {:shared, pid}
-        end
+        {:error, {:reflection_scheduler_unavailable, Gralkor.Reflection.Supervisor}}
 
       _pid ->
-        {:shared, Scheduler}
+        {:ok, {:shared, Scheduler}}
     end
   end
 
-  defp stop_owned_scheduler({:owned, pid}) when is_pid(pid) do
-    if Process.alive?(pid), do: GenServer.stop(pid, :normal)
-  end
-
-  defp stop_owned_scheduler(_), do: :ok
-
   defp drain_reflection_scheduler({:shared, Scheduler}) do
     drain_registered_scheduler(Scheduler, Process.whereis(Scheduler))
-  end
-
-  defp drain_reflection_scheduler({:owned, pid}) when is_pid(pid) do
-    if Process.alive?(pid), do: Scheduler.drain(pid, :infinity), else: :ok
-  catch
-    :exit, reason ->
-      exit({:reflection_scheduler_drain_failed, reason})
   end
 
   defp drain_reflection_scheduler(_), do: :ok
