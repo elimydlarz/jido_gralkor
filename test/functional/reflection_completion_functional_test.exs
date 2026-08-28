@@ -110,7 +110,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert_receive {:runner_started, "review", "ingestion-one", _runner}
     end
 
-    test "then replay after a Scheduler restart retains one stable searchable artefact" do
+    test "then replay after a Scheduler restart confirms one stable searchable artefact without rerunning" do
       assert :ok = Client.ingest(ingestion())
       assert_receive {:runner_started, "review", "ingestion-one", first_runner}
       send(first_runner, :finish_reflection)
@@ -121,9 +121,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert eventually(fn -> Process.whereis(Scheduler) not in [nil, first_scheduler] end)
 
       assert :ok = Client.ingest(ingestion())
-      assert_receive {:runner_started, "review", "ingestion-one", second_runner}
-      send(second_runner, :finish_reflection)
       assert_receive {:reflection_completed, "review", {:ok, second_artefact}}
+      refute_receive {:runner_started, "review", "ingestion-one", _runner}
 
       assert second_artefact.id == first_artefact.id
 
