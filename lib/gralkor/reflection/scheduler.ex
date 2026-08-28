@@ -282,6 +282,18 @@ defmodule Gralkor.Reflection.Scheduler do
     transition(state, key, :runner, nil)
   end
 
+  defp handle_outcome(
+         state,
+         key,
+         :lookup,
+         {:error, {:incomplete_artefact, %Artefact{} = artefact}}
+       ) do
+    transition(state, key, :storage, artefact)
+  end
+
+  defp handle_outcome(state, key, :lookup, {:error, {:artefact_conflict, _} = reason}),
+    do: finish_failure(state, key, reason)
+
   defp handle_outcome(state, key, :runner, {:ok, %Artefact{} = artefact}) do
     transition(state, key, :storage, artefact)
   end

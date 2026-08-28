@@ -50,7 +50,11 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
         case decode(episode) do
           [%Artefact{id: ^artefact_id, reflection: reflection_name} = artefact]
           when reflection_name == reflection.name ->
-            {:ok, artefact}
+            if extraction_complete?(episode) do
+              {:ok, artefact}
+            else
+              {:error, {:incomplete_artefact, artefact}}
+            end
 
           [%Artefact{}] ->
             {:error, {:artefact_conflict, artefact_id}}
@@ -89,4 +93,8 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
   end
 
   def decode(_), do: []
+
+  defp extraction_complete?(episode) do
+    Map.get(episode, :extraction_complete, Map.get(episode, "extraction_complete", false)) == true
+  end
 end

@@ -40,21 +40,40 @@ defmodule Gralkor.Destination.Storage.Graphiti do
     search_query = Keyword.get(opts, :artefact_id) || query
 
     case GraphitiPool.search_episodes(
-           GraphitiPool,
-           Destination.graph_id(destination, operator_id),
-           search_query,
-           max_results
-         ) do
+         GraphitiPool,
+         Destination.graph_id(destination, operator_id),
+         search_query,
+         max_results,
+         require_extraction_complete: true
+       ) do
       {:ok, episodes} ->
-        artefacts = Enum.flat_map(episodes, &Gralkor.Reflection.Storage.Graphiti.decode/1)
+        artefacts =
+          episodes
+          |> Enum.flat_map(&Gralkor.Reflection.Storage.Graphiti.decode/1)
+          |> filter_artefact(Keyword.get(opts, :artefact_id))
 
-        case Keyword.get(opts, :artefact_id) do
-          nil -> {:ok, artefacts}
-          id -> {:ok, Enum.filter(artefacts, &(&1.id == id))}
-        end
+        converge_artefacts(artefacts)
 
       {:error, _} = error ->
         error
+    end
+  end
+
+  defp filter_artefact(artefacts, nil), do: artefacts
+  defp filter_artefact(artefacts, id), do: Enum.filter(artefacts, &(&1.id == id))
+
+  defp converge_artefacts(artefacts) do
+    conflict =
+      artefacts
+      |> Enum.group_by(& &1.id)
+      |> Enum.find_value(fn {id, matching} ->
+        if matching |> MapSet.new() |> MapSet.size() > 1, do: id
+      end)
+
+    if conflict do
+      {:error, {:artefact_conflict, conflict}}
+    else
+      {:ok, Enum.uniq_by(artefacts, & &1.id)}
     end
   end
 end

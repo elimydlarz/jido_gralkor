@@ -253,14 +253,28 @@ defmodule Gralkor.GraphitiPool do
   yields a node and no edge. Graphiti searches episodes by BM25 over their
   content, so retrieval here depends on the stored words rather than extraction.
   """
+  @spec search_episodes(String.t(), String.t(), pos_integer()) ::
+          {:ok, [map()]} | {:error, term()}
+  def search_episodes(group_id, query, max_results),
+    do: search_episodes(__MODULE__, group_id, query, max_results, [])
+
   @spec search_episodes(GenServer.server(), String.t(), String.t(), pos_integer()) ::
           {:ok, [map()]} | {:error, term()}
-  def search_episodes(server \\ __MODULE__, group_id, query, max_results)
+  def search_episodes(server, group_id, query, max_results),
+    do: search_episodes(server, group_id, query, max_results, [])
 
-  def search_episodes(server, group_id, query, max_results)
+  @spec search_episodes(
+          GenServer.server(),
+          String.t(),
+          String.t(),
+          pos_integer(),
+          keyword()
+        ) :: {:ok, [map()]} | {:error, term()}
+  def search_episodes(server, group_id, query, max_results, opts)
       when is_binary(group_id) and is_binary(query) and is_integer(max_results) and
-             max_results > 0 do
+             max_results > 0 and is_list(opts) do
     instance = __MODULE__.for(server, group_id)
+    require_extraction_complete = Keyword.get(opts, :require_extraction_complete, false)
 
     {raw, _} =
       Pythonx.eval(
@@ -282,16 +296,35 @@ defmodule Gralkor.GraphitiPool do
         res = asyncio._gralkor_run(
           g.search_(q, config=config, group_ids=[gid], search_filter=SearchFilters())
         )
+
+        episodes = res.episodes
+        if require_extraction_complete:
+          episode_ids = [e.uuid for e in episodes]
+          if hasattr(g.driver, 'execute_query') and episode_ids:
+            records, _, _ = asyncio._gralkor_run(
+              g.driver.execute_query(
+                "MATCH (e:Episodic) WHERE e.uuid IN $uuids AND coalesce(e._gralkor_extraction_complete, false) = true RETURN e.uuid AS uuid",
+                uuids=episode_ids,
+              )
+            )
+            completed_ids = {record['uuid'] for record in records}
+          else:
+            completed_ids = set(
+              getattr(g.driver, '_gralkor_completed_episode_uuids', set())
+            )
+          episodes = [e for e in episodes if e.uuid in completed_ids]
+
         [
           {"content": e.content, "source_description": e.source_description}
-          for e in res.episodes
+          for e in episodes
         ]
         """,
         %{
           "g" => instance,
           "query" => query,
           "group_id" => Client.sanitize_group_id(group_id),
-          "max_results" => max_results
+          "max_results" => max_results,
+          "require_extraction_complete" => require_extraction_complete
         }
       )
 
@@ -897,18 +930,35 @@ defmodule Gralkor.GraphitiPool do
         from graphiti_core.nodes import EpisodicNode
 
         uid = episode_uuid.decode('utf-8') if isinstance(episode_uuid, (bytes, bytearray)) else episode_uuid
-        try:
-            episode = asyncio._gralkor_run(EpisodicNode.get_by_uuid(g.driver, uid))
-            result = {
+        async def get_episode():
+            try:
+                episode = await EpisodicNode.get_by_uuid(g.driver, uid)
+            except NodeNotFoundError:
+                return None
+
+            if hasattr(g.driver, 'execute_query'):
+                records, _, _ = await g.driver.execute_query(
+                    "MATCH (e:Episodic {uuid: $uuid}) RETURN coalesce(e._gralkor_extraction_complete, false) AS complete",
+                    uuid=uid,
+                )
+                extraction_complete = bool(records and records[0]['complete'])
+            else:
+                extraction_complete = uid in getattr(
+                    g.driver,
+                    '_gralkor_completed_episode_uuids',
+                    set(),
+                )
+
+            return {
                 'uuid': episode.uuid,
                 'group_id': episode.group_id,
                 'content': episode.content,
                 'source': episode.source.value,
                 'source_description': episode.source_description,
+                'extraction_complete': extraction_complete,
             }
-        except NodeNotFoundError:
-            result = None
-        result
+
+        asyncio._gralkor_run(get_episode())
         """,
         %{"g" => instance, "episode_uuid" => episode_uuid}
       )
