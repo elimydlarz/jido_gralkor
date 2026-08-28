@@ -116,13 +116,14 @@ defmodule Gralkor.Application do
   def build_lens_flush_callback(deps \\ []) do
     ingest_fn = Keyword.get(deps, :ingest_fn, &Gralkor.Client.ingest_with_representation/1)
 
-    fn operator_id, agent_name, user_name, lens, turns, evidence_id ->
+    fn operator_id, agent_name, user_name, lens, turns, ingestion_id, evidence_id ->
       transcript = Distill.format_transcript(turns, agent_name, user_name)
 
       if transcript == "" do
         :ok
       else
         ingest_fn.(%Ingest{
+          id: ingestion_id,
           operator_id: operator_id,
           lens: lens,
           source_kind: :conversation,

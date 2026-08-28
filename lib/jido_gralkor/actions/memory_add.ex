@@ -43,6 +43,7 @@ defmodule JidoGralkor.Actions.MemoryAdd do
         case Map.get(context, :lens) do
           lens when is_binary(lens) ->
             Client.ingest(%Ingest{
+              id: "memory-add:#{System.unique_integer([:positive, :monotonic])}",
               operator_id: operator_id,
               lens: lens,
               source_kind: params.source_kind,
