@@ -219,6 +219,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       send(Map.fetch!(runners, "summary"), {:finish_reflection, {:error, :temporary}})
 
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+
       assert_receive {:reflection_retrying, "summary",
                       %{stage: :runner, reason: %{reason: :temporary}}}
 
