@@ -794,7 +794,11 @@ defmodule Gralkor.Reflection.SchedulerTest do
         name = scheduler_name()
 
         assert {:error, {:invalid_retry_delays, ^invalid}} =
-                 Scheduler.start_link(name: name, retry_delays: invalid)
+                 Task.async(fn ->
+                   Process.flag(:trap_exit, true)
+                   Scheduler.start_link(name: name, retry_delays: invalid)
+                 end)
+                 |> Task.await()
       end
 
       name = scheduler_name()
