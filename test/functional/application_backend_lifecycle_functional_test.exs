@@ -201,6 +201,8 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
     data_dir =
       Path.join(System.tmp_dir!(), "application_backend_#{System.unique_integer([:positive])}")
 
+    System.put_env("GRALKOR_DATA_DIR", data_dir)
+
     table = :"application_backend_pool_#{System.unique_integer([:positive])}"
 
     {:ok, pool} =
