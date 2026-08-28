@@ -35,6 +35,8 @@ if the user name is missing or blank
   then an argument error is raised
 
 where captured turns select a Lens
+  if the operator identifier is missing or blank
+    then an argument error is raised before any turn is buffered
   if no Lens is selected
     then an argument error is raised before any turn is buffered
   if a selected Lens name is missing or blank
