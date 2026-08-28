@@ -1,5 +1,9 @@
 Unit: reflection-scheduler (src: lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/journal.ex; unit: test/gralkor/reflection/scheduler_test.exs)
 
+when the Scheduler starts without execution overrides
+  then retry delays are one, two, and four seconds
+  and each phase attempt has a sixty-second execution timeout
+
 when completed ingestion schedules distinct Reflections
   then each operator, ingestion identifier, and Reflection name forms one logical completion key
   and each key receives one deterministic UUID that remains stable across Scheduler processes
