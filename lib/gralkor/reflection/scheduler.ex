@@ -349,7 +349,7 @@ defmodule Gralkor.Reflection.Scheduler do
   defp public_stage(stage), do: stage
 
   defp release_task(state, reference, task) do
-    Process.cancel_timer(task.timeout_ref)
+    if task.timeout_ref, do: Process.cancel_timer(task.timeout_ref)
     Process.demonitor(reference, [:flush])
     %{state | tasks: Map.delete(state.tasks, reference)}
   end
@@ -437,7 +437,8 @@ defmodule Gralkor.Reflection.Scheduler do
         ]),
       stage: job.stage,
       attempt: job.attempt,
-      artefact: job.artefact
+      artefact: job.artefact,
+      active: job.active
     }
   end
 
