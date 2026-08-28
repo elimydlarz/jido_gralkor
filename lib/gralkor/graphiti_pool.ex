@@ -440,126 +440,126 @@ defmodule Gralkor.GraphitiPool do
       with_episode_write_admission(server, uuid, fn skip_empty_edge_candidates ->
         {raw, _} =
           Pythonx.eval(
-        """
-        import asyncio
-        from contextvars import ContextVar
-        from datetime import datetime, timezone
-        from graphiti_core.errors import NodeNotFoundError
-        from graphiti_core.utils.maintenance import edge_operations
-        from graphiti_core.nodes import EpisodeType, EpisodicNode
-        c = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
-        s = source.decode('utf-8') if isinstance(source, (bytes, bytearray)) else source
-        n = name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name
-        gid = group.decode('utf-8') if isinstance(group, (bytes, bytearray)) else group
-        sk = source_kind.decode('utf-8') if isinstance(source_kind, (bytes, bytearray)) else source_kind
-        instructions = extraction_instructions.decode('utf-8') if isinstance(extraction_instructions, (bytes, bytearray)) else extraction_instructions
-        episode_type = {
-          'conversation': EpisodeType.message,
-          'structured_record': EpisodeType.json,
-        }.get(sk, EpisodeType.text)
-        kwargs = dict(
-          name=n,
-          episode_body=c,
-          source=episode_type,
-          source_description=s,
-          group_id=gid,
-          reference_time=datetime.now(timezone.utc),
-          custom_extraction_instructions=instructions,
-        )
-        if ontology_dicts is not None:
-            def _dec(x):
-                return x.decode('utf-8') if isinstance(x, (bytes, bytearray)) else x
-            for k, v in ontology_dicts.items():
-                kwargs[_dec(k)] = [_dec(i) for i in v] if isinstance(v, list) else v
-        if uuid is not None:
-            uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
-            kwargs['uuid'] = uid
-
-        guard = getattr(EpisodicNode, '_gralkor_requested_uuid_guard', None)
-        if guard is None:
-            guard = ContextVar('_gralkor_requested_uuid_guard', default=None)
-            original_get_by_uuid = EpisodicNode.get_by_uuid
-
-            async def guarded_get_by_uuid(cls, driver, requested_uuid):
-                try:
-                    return await original_get_by_uuid(driver, requested_uuid)
-                except NodeNotFoundError:
-                    seed = guard.get()
-                    if seed is None or requested_uuid != seed['uuid']:
-                        raise
-                    return EpisodicNode(**seed)
-
-            EpisodicNode._gralkor_requested_uuid_guard = guard
-            EpisodicNode.get_by_uuid = classmethod(guarded_get_by_uuid)
-
-        import sys
-        async def add_episode():
+            """
+            import asyncio
+            from contextvars import ContextVar
+            from datetime import datetime, timezone
+            from graphiti_core.errors import NodeNotFoundError
+            from graphiti_core.utils.maintenance import edge_operations
+            from graphiti_core.nodes import EpisodeType, EpisodicNode
+            c = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
+            s = source.decode('utf-8') if isinstance(source, (bytes, bytearray)) else source
+            n = name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name
+            gid = group.decode('utf-8') if isinstance(group, (bytes, bytearray)) else group
+            sk = source_kind.decode('utf-8') if isinstance(source_kind, (bytes, bytearray)) else source_kind
+            instructions = extraction_instructions.decode('utf-8') if isinstance(extraction_instructions, (bytes, bytearray)) else extraction_instructions
+            episode_type = {
+              'conversation': EpisodeType.message,
+              'structured_record': EpisodeType.json,
+            }.get(sk, EpisodeType.text)
+            kwargs = dict(
+              name=n,
+              episode_body=c,
+              source=episode_type,
+              source_description=s,
+              group_id=gid,
+              reference_time=datetime.now(timezone.utc),
+              custom_extraction_instructions=instructions,
+            )
+            if ontology_dicts is not None:
+                def _dec(x):
+                    return x.decode('utf-8') if isinstance(x, (bytes, bytearray)) else x
+                for k, v in ontology_dicts.items():
+                    kwargs[_dec(k)] = [_dec(i) for i in v] if isinstance(v, list) else v
             if uuid is not None:
-                try:
-                    existing = await EpisodicNode.get_by_uuid(g.driver, uid)
-                except NodeNotFoundError:
-                    existing = None
+                uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
+                kwargs['uuid'] = uid
 
-                if existing is not None:
-                    equal = (
-                        existing.group_id == gid
-                        and existing.content == c
-                        and existing.source == episode_type
-                        and existing.source_description == s
-                    )
-                    return 'existing' if equal else 'conflict'
+            guard = getattr(EpisodicNode, '_gralkor_requested_uuid_guard', None)
+            if guard is None:
+                guard = ContextVar('_gralkor_requested_uuid_guard', default=None)
+                original_get_by_uuid = EpisodicNode.get_by_uuid
 
-                token = guard.set(dict(
-                    uuid=uid,
-                    name=n,
-                    group_id=gid,
-                    labels=[],
-                    source=episode_type,
-                    content=c,
-                    source_description=s,
-                    created_at=datetime.now(timezone.utc),
-                    valid_at=kwargs['reference_time'],
-                ))
-            else:
-                token = None
+                async def guarded_get_by_uuid(cls, driver, requested_uuid):
+                    try:
+                        return await original_get_by_uuid(driver, requested_uuid)
+                    except NodeNotFoundError:
+                        seed = guard.get()
+                        if seed is None or requested_uuid != seed['uuid']:
+                            raise
+                        return EpisodicNode(**seed)
 
-            if not skip_empty_edge_candidates:
+                EpisodicNode._gralkor_requested_uuid_guard = guard
+                EpisodicNode.get_by_uuid = classmethod(guarded_get_by_uuid)
+
+            import sys
+            async def add_episode():
+                if uuid is not None:
+                    try:
+                        existing = await EpisodicNode.get_by_uuid(g.driver, uid)
+                    except NodeNotFoundError:
+                        existing = None
+
+                    if existing is not None:
+                        equal = (
+                            existing.group_id == gid
+                            and existing.content == c
+                            and existing.source == episode_type
+                            and existing.source_description == s
+                        )
+                        return 'existing' if equal else 'conflict'
+
+                    token = guard.set(dict(
+                        uuid=uid,
+                        name=n,
+                        group_id=gid,
+                        labels=[],
+                        source=episode_type,
+                        content=c,
+                        source_description=s,
+                        created_at=datetime.now(timezone.utc),
+                        valid_at=kwargs['reference_time'],
+                    ))
+                else:
+                    token = None
+
+                if not skip_empty_edge_candidates:
+                    try:
+                        await g.add_episode(**kwargs)
+                        return 'created'
+                    finally:
+                        if token is not None:
+                            guard.reset(token)
+
+                empty_edge_guard = edge_operations._gralkor_skip_empty_edge_candidates
+                empty_edge_token = empty_edge_guard.set(True)
                 try:
                     await g.add_episode(**kwargs)
                     return 'created'
                 finally:
+                    empty_edge_guard.reset(empty_edge_token)
                     if token is not None:
                         guard.reset(token)
-
-            empty_edge_guard = edge_operations._gralkor_skip_empty_edge_candidates
-            empty_edge_token = empty_edge_guard.set(True)
             try:
-                await g.add_episode(**kwargs)
-                return 'created'
-            finally:
-                empty_edge_guard.reset(empty_edge_token)
-                if token is not None:
-                    guard.reset(token)
-        try:
-            result = asyncio._gralkor_run(add_episode())
-        except BaseException as e:
-            print(f"[gralkor] add_episode failed: {type(e).__name__}: {e}", file=sys.stderr)
-            raise
-        result
-        """,
-        %{
-          "g" => instance,
-          "content" => content,
-          "source" => source_description,
-          "name" => name,
-          "group" => sanitized,
-          "ontology_dicts" => ontology_dicts,
-          "uuid" => uuid,
-          "source_kind" => source_kind && Atom.to_string(source_kind),
-          "extraction_instructions" => extraction_instructions,
-          "skip_empty_edge_candidates" => skip_empty_edge_candidates
-        }
-      )
+                result = asyncio._gralkor_run(add_episode())
+            except BaseException as e:
+                print(f"[gralkor] add_episode failed: {type(e).__name__}: {e}", file=sys.stderr)
+                raise
+            result
+            """,
+            %{
+              "g" => instance,
+              "content" => content,
+              "source" => source_description,
+              "name" => name,
+              "group" => sanitized,
+              "ontology_dicts" => ontology_dicts,
+              "uuid" => uuid,
+              "source_kind" => source_kind && Atom.to_string(source_kind),
+              "extraction_instructions" => extraction_instructions,
+              "skip_empty_edge_candidates" => skip_empty_edge_candidates
+            }
+          )
 
         Pythonx.decode(raw)
       end)
@@ -1000,13 +1000,19 @@ defmodule Gralkor.GraphitiPool do
         admission = %{owner: owner, monitor: Process.monitor(owner), waiting: :queue.new()}
 
         {:reply, :acquired,
-         %{state | episode_uuid_admissions: Map.put(state.episode_uuid_admissions, uuid, admission)}}
+         %{
+           state
+           | episode_uuid_admissions: Map.put(state.episode_uuid_admissions, uuid, admission)
+         }}
 
       admission ->
         admission = %{admission | waiting: :queue.in(from, admission.waiting)}
 
         {:noreply,
-         %{state | episode_uuid_admissions: Map.put(state.episode_uuid_admissions, uuid, admission)}}
+         %{
+           state
+           | episode_uuid_admissions: Map.put(state.episode_uuid_admissions, uuid, admission)
+         }}
     end
   end
 
@@ -1174,8 +1180,7 @@ defmodule Gralkor.GraphitiPool do
 
           %{
             state
-            | episode_uuid_admissions:
-                Map.put(state.episode_uuid_admissions, uuid, admission)
+            | episode_uuid_admissions: Map.put(state.episode_uuid_admissions, uuid, admission)
           }
         else
           admit_next_episode_uuid_write(state, uuid, admission)

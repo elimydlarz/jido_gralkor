@@ -33,6 +33,7 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
   describe "when Graphiti Reflection storage looks up an artefact identifier" do
     test "then it returns the matching deserialized artefact" do
       artefact = artefact()
+
       get_episode = fn "observations", "stable-id" ->
         {:ok, %{content: Jason.encode!(Map.from_struct(artefact))}}
       end

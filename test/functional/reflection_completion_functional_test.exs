@@ -69,6 +69,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     ])
 
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
     Application.put_env(
       :jido_gralkor,
       :destination_storage,

@@ -38,6 +38,7 @@ defmodule Gralkor.Reflection.Storage.InMemoryTest do
       conflict = artefact("stable-id", %{"summary" => "changed"})
 
       assert :ok = InMemory.put(reflection, "operator-one", original)
+
       assert {:error, {:artefact_conflict, "stable-id"}} =
                InMemory.put(reflection, "operator-one", conflict)
 
@@ -54,5 +55,6 @@ defmodule Gralkor.Reflection.Storage.InMemoryTest do
     }
   end
 
-  defp artefact(id, payload), do: %Artefact{id: id, reflection: "review", payload: payload, evidence_ids: []}
+  defp artefact(id, payload),
+    do: %Artefact{id: id, reflection: "review", payload: payload, evidence_ids: []}
 end
