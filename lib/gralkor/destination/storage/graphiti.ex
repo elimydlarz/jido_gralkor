@@ -40,12 +40,12 @@ defmodule Gralkor.Destination.Storage.Graphiti do
     search_query = Keyword.get(opts, :artefact_id) || query
 
     case GraphitiPool.search_episodes(
-         GraphitiPool,
-         Destination.graph_id(destination, operator_id),
-         search_query,
-         max_results,
-         require_extraction_complete: true
-       ) do
+           GraphitiPool,
+           Destination.graph_id(destination, operator_id),
+           search_query,
+           max_results,
+           require_extraction_complete: true
+         ) do
       {:ok, episodes} ->
         artefacts =
           episodes
