@@ -1178,8 +1178,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
-  describe "where Graphiti is the canonical Reflection store > while an equal episode lacks durable extraction completion" do
-    test "then failure after the staged episode save commits nothing and retries the Reflection",
+  describe "where Graphiti is the canonical Reflection store > when graph extraction fails before its claim-fenced transaction commits" do
+    test "then canonical lookup and public search expose no episode and a later equal write retries extraction",
          %{
            reflection: reflection
          } do
