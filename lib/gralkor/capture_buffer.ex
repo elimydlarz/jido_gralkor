@@ -82,12 +82,12 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   def append_lens(session_id, operator_id, agent_name, user_name, lens, msgs)
-      when is_binary(session_id) and is_binary(operator_id) and is_list(msgs) do
+      when is_binary(session_id) and is_list(msgs) do
     append_lenses(session_id, operator_id, agent_name, user_name, [lens], msgs, %{})
   end
 
   def append_lens(session_id, operator_id, agent_name, user_name, lens, msgs, reflection_context)
-      when is_binary(session_id) and is_binary(operator_id) and is_list(msgs) and
+      when is_binary(session_id) and is_list(msgs) and
              is_map(reflection_context) do
     append_lenses(
       session_id,
@@ -101,7 +101,7 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   def append_lenses(session_id, operator_id, agent_name, user_name, lenses, msgs)
-      when is_binary(session_id) and is_binary(operator_id) and is_list(lenses) and
+      when is_binary(session_id) and is_list(lenses) and
              is_list(msgs) do
     append_lenses(session_id, operator_id, agent_name, user_name, lenses, msgs, %{})
   end
@@ -115,8 +115,9 @@ defmodule Gralkor.CaptureBuffer do
         msgs,
         reflection_context
       )
-      when is_binary(session_id) and is_binary(operator_id) and is_list(lenses) and
+      when is_binary(session_id) and is_list(lenses) and
              is_list(msgs) and is_map(reflection_context) do
+    raise_if_blank!(:operator_id, operator_id)
     raise_if_blank!(:agent_name, agent_name)
     raise_if_blank!(:user_name, user_name)
 

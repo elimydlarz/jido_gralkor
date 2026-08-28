@@ -223,6 +223,39 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "where captured turns select a Lens > if the operator identifier is missing or blank" do
+    test "then a missing identifier raises an argument error before any turn is buffered" do
+      assert_raise ArgumentError, ~r/operator_id must be a non-blank string/, fn ->
+        CaptureBuffer.append_lens(
+          "s",
+          nil,
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "x")]
+        )
+      end
+
+      assert CaptureBuffer.turns_for("s") == []
+    end
+
+    test "then a blank identifier raises an argument error before any turn is buffered" do
+      assert_raise ArgumentError, ~r/operator_id must be a non-blank string/, fn ->
+        CaptureBuffer.append_lenses(
+          "s",
+          " \t",
+          "Susu",
+          "Eli",
+          ["observations"],
+          [Message.new("user", "x")],
+          %{tool_context: %{source: :test}}
+        )
+      end
+
+      assert CaptureBuffer.turns_for("s") == []
+    end
+  end
+
   describe "where captured turns select a Lens > if a selected Lens name is missing or blank" do
     test "then an argument error is raised before any turn is buffered" do
       for lens <- [nil, ""] do
