@@ -48,6 +48,7 @@ when the Scheduler process starts with durable unfinished work
   then every retained Runner or storage phase resumes with its retained retry state
   and retained storage work uses its exact retained artefact
   and already canonical work is confirmed complete without rerunning its Runner
+  and a newly started Scheduler can reopen and resume work after the prior Scheduler fully closes its journal
   while the previous Scheduler stopped during an active attempt
     then that interrupted attempt consumes the durable retry budget before work resumes
   while the previous Scheduler stopped during an active storage attempt
