@@ -213,7 +213,8 @@ defmodule Gralkor.GraphitiPoolTest do
                 "uuid" => "episode-uuid",
                 "content" => "content",
                 "source" => "text",
-                "source_description" => "source"
+                "source_description" => "source",
+                "extraction_complete" => true
               }} = GraphitiPool.get_episode(pid, "g1", "episode-uuid")
 
       assert {:error, :not_found} = GraphitiPool.get_episode(pid, "g1", "missing-uuid")
@@ -1600,6 +1601,56 @@ defmodule Gralkor.GraphitiPoolTest do
       assert rec["episode_methods"] == ["bm25"]
       refute rec["edge_config"]
       refute rec["node_config"]
+
+      GenServer.stop(pid)
+    end
+
+    test "then completion-only search excludes every episode without a durable extraction marker" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _Episode:
+              def __init__(self, uuid, content):
+                  self.uuid = uuid
+                  self.content = content
+                  self.source_description = "reflection:review"
+
+          class _Results:
+              def __init__(self):
+                  self.episodes = [
+                      _Episode("complete", "complete body"),
+                      _Episode("partial", "partial body"),
+                  ]
+                  self.nodes = []
+                  self.edges = []
+
+          class _Driver:
+              def __init__(self):
+                  self._gralkor_completed_episode_uuids = {"complete"}
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.driver = _Driver()
+
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  return _Results()
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:ok, [%{content: "complete body"}]} =
+               GraphitiPool.search_episodes(pid, "g1", "body", 5,
+                 require_extraction_complete: true
+               )
 
       GenServer.stop(pid)
     end
