@@ -916,8 +916,40 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       start_supervised!({LoseFirstGraphitiResponseStore, self()})
       Application.put_env(:jido_gralkor, :reflection_storage, LoseFirstGraphitiResponseStore)
 
+      artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
+
+      legacy_content =
+        Artefact.new(
+          artefact_id,
+          "review",
+          %{"summary" => "stored"},
+          ["evidence-one"]
+        )
+        |> Map.from_struct()
+        |> Jason.encode!()
+
+      Pythonx.eval(
+        """
+        from datetime import datetime, timezone
+        from graphiti_core.nodes import EpisodeType, EpisodicNode
+        body = legacy_content.decode('utf-8') if isinstance(legacy_content, (bytes, bytearray)) else legacy_content
+        graphiti.driver.episodes['legacy-pre-marker'] = EpisodicNode(
+            uuid='legacy-pre-marker',
+            name='legacy-reflection',
+            group_id='observations',
+            labels=[],
+            source=EpisodeType.text,
+            content=body,
+            source_description='reflection:review',
+            created_at=datetime.now(timezone.utc),
+            valid_at=datetime.now(timezone.utc),
+        )
+        """,
+        %{"graphiti" => graphiti, "legacy_content" => legacy_content}
+      )
+
       assert :ok = Client.ingest(ingestion())
-      assert_receive {:runner_started, "review", "ingestion-one", artefact_id, runner}
+      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, runner}
       send(runner, :finish_reflection)
 
       assert_receive {:graphiti_store_committed, first}
@@ -1005,7 +1037,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           %{"graphiti" => graphiti}
         )
 
-      assert Pythonx.decode(proof) == [28, 1]
+      assert Pythonx.decode(proof) == [29, 1]
     end
   end
 
