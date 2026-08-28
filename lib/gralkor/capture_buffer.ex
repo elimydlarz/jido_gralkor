@@ -800,12 +800,13 @@ defmodule Gralkor.CaptureBuffer do
       pid when is_pid(pid) and pid != previous_pid ->
         {:ok, pid}
 
-      _ when System.monotonic_time(:millisecond) >= deadline ->
-        {:error, :replacement_timeout}
-
       _ ->
-        Process.sleep(10)
-        await_scheduler_replacement(name, previous_pid, deadline)
+        if System.monotonic_time(:millisecond) >= deadline do
+          {:error, :replacement_timeout}
+        else
+          Process.sleep(10)
+          await_scheduler_replacement(name, previous_pid, deadline)
+        end
     end
   end
 
