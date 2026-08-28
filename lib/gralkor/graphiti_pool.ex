@@ -498,10 +498,10 @@ defmodule Gralkor.GraphitiPool do
           Pythonx.eval(
             """
             import asyncio
-            import time
             from contextvars import ContextVar
             from datetime import datetime, timezone
             from uuid import uuid4
+            from graphiti_core.driver.driver import GraphProvider
             from graphiti_core.errors import NodeNotFoundError
             from graphiti_core.utils.maintenance import edge_operations
             from graphiti_core.nodes import EpisodeType, EpisodicNode
@@ -537,18 +537,91 @@ defmodule Gralkor.GraphitiPool do
             if guard is None:
                 guard = ContextVar('_gralkor_requested_uuid_guard', default=None)
                 original_get_by_uuid = EpisodicNode.get_by_uuid
+                original_save = EpisodicNode.save
+
+                class ClaimLostError(RuntimeError):
+                    pass
 
                 async def guarded_get_by_uuid(cls, driver, requested_uuid):
                     try:
                         return await original_get_by_uuid(driver, requested_uuid)
                     except NodeNotFoundError:
                         seed = guard.get()
-                        if seed is None or requested_uuid != seed['uuid']:
+                        if (
+                            seed is None
+                            or requested_uuid != seed['uuid']
+                            or not seed['synthesise_missing']
+                        ):
                             raise
-                        return EpisodicNode(**seed)
+                        return EpisodicNode(**seed['episode'])
+
+                async def guarded_save(self, driver):
+                    fence = guard.get()
+                    if fence is None or self.uuid != fence['uuid'] or not fence['distributed']:
+                        return await original_save(self, driver)
+
+                    fence_params = dict(
+                        claim_uuid=fence['uuid'],
+                        owner=fence['owner'],
+                        generation=fence['generation'],
+                    )
+                    if getattr(driver, 'provider', None) == GraphProvider.FALKORDB:
+                        records, _, _ = await driver.execute_query(
+                            '''
+                            MATCH (c:_GralkorEpisodeClaim {uuid: $claim_uuid})
+                            WHERE c.owner = $owner AND c.generation = $generation
+                            WITH c
+                            MERGE (n:Episodic {uuid: $uuid})
+                            SET n = {
+                              uuid: $uuid,
+                              name: $name,
+                              group_id: $group_id,
+                              source_description: $source_description,
+                              source: $source,
+                              content: $content,
+                              entity_edges: $entity_edges,
+                              created_at: $created_at,
+                              valid_at: $valid_at,
+                              _gralkor_extraction_complete: false
+                            }
+                            RETURN n.uuid AS uuid
+                            ''',
+                            **fence_params,
+                            uuid=self.uuid,
+                            name=self.name,
+                            group_id=self.group_id,
+                            source_description=self.source_description,
+                            source=self.source.value,
+                            content=self.content,
+                            entity_edges=self.entity_edges,
+                            created_at=self.created_at,
+                            valid_at=self.valid_at,
+                        )
+                    else:
+                        # Test/custom drivers cannot execute Falkor's episode mutation,
+                        # but they must still prove ownership before their native save.
+                        records, _, _ = await driver.execute_query(
+                            '''
+                            MATCH (c:_GralkorEpisodeClaim {uuid: $claim_uuid})
+                            WHERE c.owner = $owner AND c.generation = $generation
+                            RETURN c.generation AS generation /* gralkor_claim_fence_check */
+                            ''',
+                            **fence_params,
+                        )
+                        if records:
+                            return await original_save(self, driver)
+
+                    if not records:
+                        raise ClaimLostError(
+                            f'episode claim lost for {self.uuid} generation {fence["generation"]}'
+                        )
 
                 EpisodicNode._gralkor_requested_uuid_guard = guard
+                EpisodicNode._gralkor_claim_lost_error = ClaimLostError
                 EpisodicNode.get_by_uuid = classmethod(guarded_get_by_uuid)
+                EpisodicNode.save = guarded_save
+
+            ClaimLostError = EpisodicNode._gralkor_claim_lost_error
 
             import sys
 
@@ -568,6 +641,26 @@ defmodule Gralkor.GraphitiPool do
                     completed.add(uid)
                     g.driver._gralkor_completed_episode_uuids = completed
                     return
+                if claim_state['distributed']:
+                    records, _, _ = await g.driver.execute_query(
+                        '''
+                        MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+                        WHERE c.owner = $owner AND c.generation = $generation
+                        WITH c
+                        MATCH (e:Episodic {uuid: $uuid})
+                        SET e._gralkor_extraction_complete = true
+                        RETURN e.uuid AS uuid
+                        ''',
+                        uuid=uid,
+                        owner=claim_owner,
+                        generation=claim_state['generation'],
+                    )
+                    if not records:
+                        raise ClaimLostError(
+                            f'episode claim lost before completion for {uid} '
+                            f'generation {claim_state["generation"]}'
+                        )
+                    return
                 await g.driver.execute_query(
                     "MATCH (e:Episodic {uuid: $uuid}) SET e._gralkor_extraction_complete = true RETURN e.uuid AS uuid",
                     uuid=uid,
@@ -575,7 +668,7 @@ defmodule Gralkor.GraphitiPool do
 
             claim_owner = str(uuid4()) if uuid is not None else None
             claim_lease_ms = 30_000
-            claim_state = {'distributed': False}
+            claim_state = {'distributed': False, 'generation': None}
 
             async def acquire_claim():
                 if not hasattr(g.driver, 'execute_query'):
@@ -583,7 +676,6 @@ defmodule Gralkor.GraphitiPool do
 
                 source_value = getattr(episode_type, 'value', str(episode_type))
                 while True:
-                    now_ms = int(time.time() * 1000)
                     records, _, _ = await g.driver.execute_query(
                         '''
                         MERGE (c:_GralkorEpisodeClaim {uuid: $uuid})
@@ -593,12 +685,14 @@ defmodule Gralkor.GraphitiPool do
                           c.source = $source,
                           c.source_description = $source_description,
                           c.owner = $owner,
-                          c.lease_until_ms = $lease_until_ms
+                          c.generation = 1,
+                          c.lease_until_ms = timestamp() + $lease_ms
                         RETURN c.group_id AS group_id,
                                c.content AS content,
                                c.source AS source,
                                c.source_description AS source_description,
                                c.owner AS owner,
+                               coalesce(c.generation, 0) AS generation,
                                coalesce(c.lease_until_ms, 0) AS lease_until_ms
                         ''',
                         uuid=uid,
@@ -607,13 +701,14 @@ defmodule Gralkor.GraphitiPool do
                         source=source_value,
                         source_description=s,
                         owner=claim_owner,
-                        lease_until_ms=now_ms + claim_lease_ms,
+                        lease_ms=claim_lease_ms,
                     )
                     claim_keys = {
-                        'group_id', 'content', 'source', 'source_description', 'owner'
+                        'group_id', 'content', 'source', 'source_description',
+                        'owner', 'generation', 'lease_until_ms'
                     }
                     if not records or not claim_keys.issubset(records[0].keys()):
-                        return 'acquired'
+                        raise RuntimeError('graph-backed episode claim contract is unavailable')
                     claim_state['distributed'] = True
                     claim = records[0]
                     equal = (
@@ -627,21 +722,25 @@ defmodule Gralkor.GraphitiPool do
                     if await extraction_complete():
                         return 'existing'
                     if claim['owner'] == claim_owner:
+                        claim_state['generation'] = claim['generation']
                         return 'acquired'
 
                     acquired, _, _ = await g.driver.execute_query(
                         '''
                         MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
-                        WHERE c.owner IS NULL OR c.owner = $owner OR coalesce(c.lease_until_ms, 0) <= $now_ms
-                        SET c.owner = $owner, c.lease_until_ms = $lease_until_ms
-                        RETURN c.owner AS owner
+                        WHERE c.owner IS NULL OR c.owner = $owner OR
+                              coalesce(c.lease_until_ms, 0) <= timestamp()
+                        SET c.owner = $owner,
+                            c.generation = coalesce(c.generation, 0) + 1,
+                            c.lease_until_ms = timestamp() + $lease_ms
+                        RETURN c.owner AS owner, c.generation AS generation
                         ''',
                         uuid=uid,
                         owner=claim_owner,
-                        now_ms=now_ms,
-                        lease_until_ms=now_ms + claim_lease_ms,
+                        lease_ms=claim_lease_ms,
                     )
                     if acquired and acquired[0]['owner'] == claim_owner:
+                        claim_state['generation'] = acquired[0]['generation']
                         return 'acquired'
                     await asyncio.sleep(0.01)
 
@@ -650,29 +749,37 @@ defmodule Gralkor.GraphitiPool do
                     return
                 while True:
                     await asyncio.sleep(claim_lease_ms / 3000)
-                    now_ms = int(time.time() * 1000)
-                    await g.driver.execute_query(
+                    renewed, _, _ = await g.driver.execute_query(
                         '''
-                        MATCH (c:_GralkorEpisodeClaim {uuid: $uuid, owner: $owner})
-                        SET c.lease_until_ms = $lease_until_ms
-                        RETURN c.uuid AS uuid
+                        MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+                        WHERE c.owner = $owner AND c.generation = $generation
+                        SET c.lease_until_ms = timestamp() + $lease_ms
+                        RETURN c.generation AS generation
                         ''',
                         uuid=uid,
                         owner=claim_owner,
-                        lease_until_ms=now_ms + claim_lease_ms,
+                        generation=claim_state['generation'],
+                        lease_ms=claim_lease_ms,
                     )
+                    if not renewed:
+                        raise ClaimLostError(
+                            f'episode claim renewal lost for {uid} '
+                            f'generation {claim_state["generation"]}'
+                        )
 
             async def release_claim():
                 if not claim_state['distributed']:
                     return
                 await g.driver.execute_query(
                     '''
-                    MATCH (c:_GralkorEpisodeClaim {uuid: $uuid, owner: $owner})
+                    MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+                    WHERE c.owner = $owner AND c.generation = $generation
                     SET c.owner = NULL, c.lease_until_ms = NULL
                     RETURN c.uuid AS uuid
                     ''',
                     uuid=uid,
                     owner=claim_owner,
+                    generation=claim_state['generation'],
                 )
 
             async def add_episode():
@@ -700,8 +807,13 @@ defmodule Gralkor.GraphitiPool do
                             if await extraction_complete():
                                 return 'existing'
 
-                        token = (
-                            guard.set(dict(
+                        token = guard.set(dict(
+                            uuid=uid,
+                            owner=claim_owner,
+                            generation=claim_state['generation'],
+                            distributed=claim_state['distributed'],
+                            synthesise_missing=existing is None,
+                            episode=dict(
                                 uuid=uid,
                                 name=n,
                                 group_id=gid,
@@ -711,10 +823,8 @@ defmodule Gralkor.GraphitiPool do
                                 source_description=s,
                                 created_at=datetime.now(timezone.utc),
                                 valid_at=kwargs['reference_time'],
-                            ))
-                            if existing is None
-                            else None
-                        )
+                            ),
+                        ))
 
                         if not skip_empty_edge_candidates:
                             try:
@@ -722,8 +832,7 @@ defmodule Gralkor.GraphitiPool do
                                 await record_extraction_complete()
                                 return 'created'
                             finally:
-                                if token is not None:
-                                    guard.reset(token)
+                                guard.reset(token)
 
                         empty_edge_guard = edge_operations._gralkor_skip_empty_edge_candidates
                         empty_edge_token = empty_edge_guard.set(True)
@@ -733,8 +842,7 @@ defmodule Gralkor.GraphitiPool do
                             return 'created'
                         finally:
                             empty_edge_guard.reset(empty_edge_token)
-                            if token is not None:
-                                guard.reset(token)
+                            guard.reset(token)
                     finally:
                         heartbeat.cancel()
                         try:
