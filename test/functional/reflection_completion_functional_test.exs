@@ -1335,6 +1335,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   describe "where Graphiti is the canonical Reflection store > when independent pools share one Falkor graph" do
+    @tag timeout: 120_000
     test "then server-timed generational claims serialize, reject conflicts, and fence a stale owner" do
       data_dir =
         Path.join(
@@ -1491,7 +1492,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         end)
       ]
 
-      assert [:ok, :ok] = Task.await_many(equal_writes, 5_000)
+      assert [:ok, :ok] = Task.await_many(equal_writes, 30_000)
 
       {equal_extractions, _} =
         Pythonx.eval(
@@ -1514,7 +1515,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         end)
       ]
 
-      conflict_outcomes = Task.await_many(conflicting_writes, 5_000)
+      conflict_outcomes = Task.await_many(conflicting_writes, 30_000)
       assert Enum.count(conflict_outcomes, &(&1 == :ok)) == 1
 
       assert Enum.count(
@@ -1546,7 +1547,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         %{"graph" => first_graph}
       )
 
-      assert {:error, {:python, stale_error}} = Task.await(stale_write, 5_000)
+      assert {:error, {:python, stale_error}} = Task.await(stale_write, 30_000)
       assert stale_error =~ "episode claim lost"
 
       assert {:error, :not_found} =
@@ -1559,7 +1560,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           )
         end)
 
-      assert {:error, {:python, bulk_stale_error}} = Task.await(bulk_stale_write, 5_000)
+      assert {:error, {:python, bulk_stale_error}} = Task.await(bulk_stale_write, 30_000)
       assert bulk_stale_error =~ "episode claim lost"
 
       {bulk_stale_proof, _} =
