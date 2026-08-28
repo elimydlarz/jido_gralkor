@@ -851,6 +851,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
           tool_executor: :replacement_executor
         ],
         store_opts: [storage: EmptyStore, namespace: "replacement-default"],
+        notify: test_pid,
         journal_path: path,
         journal_name: journal_name()
       )
