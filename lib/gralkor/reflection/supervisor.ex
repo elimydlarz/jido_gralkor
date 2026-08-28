@@ -5,7 +5,7 @@ defmodule Gralkor.Reflection.Supervisor do
 
   alias Gralkor.Reflection.Scheduler
 
-  def start_link(opts \ []) do
+  def start_link(opts \\ []) do
     Supervisor.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
   end
 
