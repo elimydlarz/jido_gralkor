@@ -743,8 +743,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
            retry_delays: []
          ]},
         {CaptureBuffer,
-         flush_callback: fn _group, _agent, _user, _ontology, _turns -> :ok end,
-         reflections: []}
+         flush_callback: fn _group, _agent, _user, _ontology, _turns -> :ok end, reflections: []}
       ]
 
       {:ok, supervisor} = Supervisor.start_link(children, strategy: :one_for_one)
@@ -802,8 +801,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
            journal_path: journal_path
          ]},
         {CaptureBuffer,
-         flush_callback: fn _group, _agent, _user, _ontology, _turns -> :ok end,
-         reflections: []}
+         flush_callback: fn _group, _agent, _user, _ontology, _turns -> :ok end, reflections: []}
       ]
 
       {:ok, supervisor} = Supervisor.start_link(children, strategy: :one_for_one)

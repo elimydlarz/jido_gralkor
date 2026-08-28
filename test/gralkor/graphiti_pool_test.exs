@@ -530,9 +530,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
       stale_write =
         Task.async(fn ->
-          GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
-            uuid: "stolen-claim"
-          )
+          GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil, uuid: "stolen-claim")
         end)
 
       assert eventually(fn ->
