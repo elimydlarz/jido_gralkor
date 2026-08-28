@@ -707,8 +707,8 @@ defmodule Gralkor.CaptureBuffer do
           {:error, {:already_started, pid}} -> {:shared, pid}
         end
 
-      pid ->
-        {:shared, pid}
+      _pid ->
+        {:shared, Scheduler}
     end
   end
 
@@ -718,10 +718,20 @@ defmodule Gralkor.CaptureBuffer do
 
   defp stop_owned_scheduler(_), do: :ok
 
-  defp drain_reflection_scheduler({_ownership, pid}) when is_pid(pid) do
+  defp drain_reflection_scheduler({:shared, Scheduler}) do
+    Scheduler.drain(Scheduler, :infinity)
+  catch
+    :exit, reason ->
+      Logger.error("[gralkor] Reflection scheduler drain failed — #{inspect(reason)}")
+      {:error, {:reflection_scheduler_drain_failed, reason}}
+  end
+
+  defp drain_reflection_scheduler({:owned, pid}) when is_pid(pid) do
     if Process.alive?(pid), do: Scheduler.drain(pid, :infinity)
   catch
-    :exit, _reason -> :ok
+    :exit, reason ->
+      Logger.error("[gralkor] Reflection scheduler drain failed — #{inspect(reason)}")
+      {:error, {:reflection_scheduler_drain_failed, reason}}
   end
 
   defp drain_reflection_scheduler(_), do: :ok
