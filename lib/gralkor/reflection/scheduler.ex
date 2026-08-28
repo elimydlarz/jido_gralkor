@@ -99,7 +99,6 @@ defmodule Gralkor.Reflection.Scheduler do
     with :ok <- validate_ingestion(ingestion),
          :ok <- validate_reflections(reflections),
          :ok <- validate_execution_options(opts) do
-
       new_jobs =
         Enum.reduce(reflections, [], fn reflection, jobs ->
           key = completion_key(reflection, ingestion)
@@ -257,6 +256,7 @@ defmodule Gralkor.Reflection.Scheduler do
       |> Map.fetch!(key)
       |> Map.put(:active, true)
       |> Map.put(:retry_at_ms, nil)
+
     :ok = Journal.put_all(state.journal, [durable_job(job)])
     state = %{state | jobs: Map.put(state.jobs, key, job)}
     operation = fn -> execute(job) end
@@ -527,7 +527,7 @@ defmodule Gralkor.Reflection.Scheduler do
 
     cond do
       not (is_list(retry_delays) and
-             Enum.all?(retry_delays, &(is_integer(&1) and &1 >= 0))) ->
+               Enum.all?(retry_delays, &(is_integer(&1) and &1 >= 0))) ->
         {:error, {:invalid_retry_delays, retry_delays}}
 
       not (is_integer(execution_timeout_ms) and execution_timeout_ms > 0) ->

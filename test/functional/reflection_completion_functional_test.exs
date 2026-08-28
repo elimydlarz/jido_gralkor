@@ -631,7 +631,12 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
          retry_delays: [0]}
       )
 
-      lens_flush_callback = fn _operator, _agent, _user, lens, _turns, _ingestion_id,
+      lens_flush_callback = fn _operator,
+                               _agent,
+                               _user,
+                               lens,
+                               _turns,
+                               _ingestion_id,
                                evidence_id ->
         send(test_pid, {:shutdown_lens_flush_started, self()})
 

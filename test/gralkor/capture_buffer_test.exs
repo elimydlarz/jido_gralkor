@@ -1400,7 +1400,12 @@ defmodule Gralkor.CaptureBufferTest do
     test "then an already-started fire-and-forget Lens flush finishes before termination returns" do
       test_pid = self()
 
-      lens_flush_callback = fn _operator, _agent, _user, lens, _turns, _ingestion_id,
+      lens_flush_callback = fn _operator,
+                               _agent,
+                               _user,
+                               lens,
+                               _turns,
+                               _ingestion_id,
                                evidence_id ->
         send(test_pid, {:fire_and_forget_started, self()})
 

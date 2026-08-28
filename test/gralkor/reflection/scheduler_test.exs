@@ -272,9 +272,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
             {:crash, :task_exit},
             {:hang, :timeout}
           ] do
-        start_supervised!(
-          {ControlledStore, {self(), [outcome, {:error, :not_found}], [:ok]}}
-        )
+        start_supervised!({ControlledStore, {self(), [outcome, {:error, :not_found}], [:ok]}})
 
         {name, runner} = immediate_runner(self())
 
@@ -309,8 +307,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
     test "then an immutable-content conflict ends without retry" do
       start_supervised!(
-        {ControlledStore,
-         {self(), [{:error, {:artefact_conflict, "stable-id"}}], []}}
+        {ControlledStore, {self(), [{:error, {:artefact_conflict, "stable-id"}}], []}}
       )
 
       {name, runner} = immediate_runner(self())
