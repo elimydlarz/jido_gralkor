@@ -125,6 +125,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     test "and memory search uses the configured Destinations" do
       assert :ok =
                Client.ingest(%Ingest{
+                 id: "lens-aware-baseline",
                  operator_id: "operator-one",
                  lens: "operator",
                  source_kind: :document,
@@ -156,6 +157,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     test "and every returned fact identifies its Destination" do
       assert :ok =
                Client.ingest(%Ingest{
+                 id: "lens-aware-attributed-observation",
                  operator_id: "operator-one",
                  lens: "observations",
                  source_kind: :document,
@@ -209,6 +211,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
           ] do
         assert :ok =
                  Client.ingest(%Ingest{
+                   id: "lens-aware-#{lens}",
                    operator_id: "operator-one",
                    lens: lens,
                    source_kind: :document,
@@ -252,6 +255,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     test "and memory search uses the packaged `global` Destination" do
       assert :ok =
                Client.ingest(%Ingest{
+                 id: "lens-aware-shared-generalisation",
                  operator_id: "operator-two",
                  lens: "shared-generalisations",
                  source_kind: :document,
@@ -279,6 +283,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     test "and every returned fact identifies its Destination" do
       assert :ok =
                Client.ingest(%Ingest{
+                 id: "lens-aware-attributed-baseline",
                  operator_id: "operator-one",
                  lens: "operator",
                  source_kind: :document,
