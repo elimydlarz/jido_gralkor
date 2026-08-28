@@ -1345,10 +1345,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                     await asyncio.sleep(0.1)
                     episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
 
-                    if kwargs['uuid'] == 'embedded-bulk-stolen':
+                    if kwargs['uuid'] in {'embedded-bulk-stolen', 'embedded-bulk-created'}:
+                        suffix = kwargs['uuid'].removeprefix('embedded-bulk-')
                         now = datetime.now(timezone.utc)
                         left = EntityNode(
-                            uuid='embedded-bulk-left',
+                            uuid=f'embedded-bulk-{suffix}-left',
                             name='left',
                             group_id=gid,
                             labels=['Person'],
@@ -1356,7 +1357,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                             name_embedding=[0.1],
                         )
                         right = EntityNode(
-                            uuid='embedded-bulk-right',
+                            uuid=f'embedded-bulk-{suffix}-right',
                             name='right',
                             group_id=gid,
                             labels=['Person'],
@@ -1364,14 +1365,14 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                             name_embedding=[0.2],
                         )
                         mention = EpisodicEdge(
-                            uuid='embedded-bulk-mention',
+                            uuid=f'embedded-bulk-{suffix}-mention',
                             group_id=gid,
                             source_node_uuid=episode.uuid,
                             target_node_uuid=left.uuid,
                             created_at=now,
                         )
                         relation = EntityEdge(
-                            uuid='embedded-bulk-relation',
+                            uuid=f'embedded-bulk-{suffix}-relation',
                             group_id=gid,
                             source_node_uuid=left.uuid,
                             target_node_uuid=right.uuid,
@@ -1381,14 +1382,15 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                             fact_embedding=[0.3],
                             episodes=[episode.uuid],
                         )
-                        await self.driver.execute_query(
-                            '''
-                            MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
-                            SET c.owner = 'replacement-owner', c.generation = c.generation + 1
-                            RETURN c.generation AS generation
-                            ''',
-                            uuid=episode.uuid,
-                        )
+                        if suffix == 'stolen':
+                            await self.driver.execute_query(
+                                '''
+                                MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+                                SET c.owner = 'replacement-owner', c.generation = c.generation + 1
+                                RETURN c.generation AS generation
+                                ''',
+                                uuid=episode.uuid,
+                            )
                         await add_nodes_and_edges_bulk(
                             self.driver,
                             [episode],
@@ -1544,10 +1546,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
               records, _, _ = await graph.driver.execute_query(
                   '''
                   OPTIONAL MATCH (episode:Episodic {uuid: 'embedded-bulk-stolen'})
-                  OPTIONAL MATCH (left:Entity {uuid: 'embedded-bulk-left'})
-                  OPTIONAL MATCH (right:Entity {uuid: 'embedded-bulk-right'})
-                  OPTIONAL MATCH ()-[mention:MENTIONS {uuid: 'embedded-bulk-mention'}]->()
-                  OPTIONAL MATCH ()-[relation:RELATES_TO {uuid: 'embedded-bulk-relation'}]->()
+                  OPTIONAL MATCH (left:Entity {uuid: 'embedded-bulk-stolen-left'})
+                  OPTIONAL MATCH (right:Entity {uuid: 'embedded-bulk-stolen-right'})
+                  OPTIONAL MATCH ()-[mention:MENTIONS {uuid: 'embedded-bulk-stolen-mention'}]->()
+                  OPTIONAL MATCH ()-[relation:RELATES_TO {uuid: 'embedded-bulk-stolen-relation'}]->()
                   RETURN episode IS NOT NULL AS episode,
                          left IS NOT NULL AS left,
                          right IS NOT NULL AS right,
@@ -1567,6 +1569,45 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                "mention" => false,
                "relation" => false,
                "right" => false
+             }
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 first_pool,
+                 "observations",
+                 "same",
+                 "source",
+                 nil,
+                 uuid: "embedded-bulk-created"
+               )
+
+      {bulk_created_proof, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          async def bulk_created_proof():
+              records, _, _ = await graph.driver.execute_query(
+                  '''
+                  MATCH (episode:Episodic {uuid: 'embedded-bulk-created'})
+                  MATCH (left:Entity {uuid: 'embedded-bulk-created-left'})
+                  MATCH (right:Entity {uuid: 'embedded-bulk-created-right'})
+                  MATCH (episode)-[mention:MENTIONS {uuid: 'embedded-bulk-created-mention'}]->(left)
+                  MATCH (left)-[relation:RELATES_TO {uuid: 'embedded-bulk-created-relation'}]->(right)
+                  RETURN episode._gralkor_extraction_complete AS complete,
+                         mention.uuid AS mention,
+                         relation.uuid AS relation
+                  '''
+              )
+              return records[0]
+          asyncio._gralkor_run(bulk_created_proof())
+          """,
+          %{"graph" => first_graph}
+        )
+
+      assert Pythonx.decode(bulk_created_proof) == %{
+               "complete" => true,
+               "mention" => "embedded-bulk-created-mention",
+               "relation" => "embedded-bulk-created-relation"
              }
 
       Pythonx.eval(
