@@ -212,6 +212,78 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
+
+    test "then concurrent equal writes serialize and extract once" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          from graphiti_core.errors import NodeNotFoundError
+
+          class _GraphOperations:
+              async def episodic_node_get_by_uuid(self, cls, driver, uuid):
+                  if uuid not in driver.episodes:
+                      raise NodeNotFoundError(uuid)
+                  return driver.episodes[uuid]
+
+              async def episodic_node_save(self, episode, driver):
+                  driver.episodes[episode.uuid] = episode
+
+          class _Driver:
+              def __init__(self):
+                  self.graph_operations_interface = _GraphOperations()
+                  self.episodes = {}
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.driver = _Driver()
+                  self.extractions = 0
+                  self.active = 0
+                  self.max_active = 0
+
+              async def add_episode(self, **kwargs):
+                  from graphiti_core.nodes import EpisodicNode
+                  self.extractions += 1
+                  self.active += 1
+                  self.max_active = max(self.max_active, self.active)
+                  await asyncio.sleep(0.05)
+                  episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                  await episode.save(self.driver)
+                  self.active -= 1
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      writes =
+        Enum.map(1..2, fn _index ->
+          Task.async(fn ->
+            GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
+              uuid: "concurrent-uuid"
+            )
+          end)
+        end)
+
+      assert [:ok, :ok] = Task.await_many(writes)
+
+      {proof, _} =
+        Pythonx.eval(
+          "[len(g.driver.episodes), g.extractions, g.max_active]",
+          %{"g" => g}
+        )
+
+      assert Pythonx.decode(proof) == [1, 1, 1]
+
+      GenServer.stop(pid)
+    end
   end
 
   describe "when an episode is added" do
