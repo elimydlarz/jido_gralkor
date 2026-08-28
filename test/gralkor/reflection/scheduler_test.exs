@@ -594,6 +594,48 @@ defmodule Gralkor.Reflection.SchedulerTest do
       refute_receive {:store_put, _artefact, _storage_task}
     end
 
+    test "then a replacement crash during storage confirmation confirms again without consuming retry budget" do
+      artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
+      artefact = Artefact.new(artefact_id, "review", %{"stored" => true}, [])
+
+      start_supervised!(
+        {ControlledStore,
+         {self(), [{:error, :not_found}, :hang, {:ok, artefact}], [:hang]}}
+      )
+
+      {name, runner} = immediate_runner(self())
+      path = journal_path()
+      on_exit(fn -> File.rm(path) end)
+
+      first_scheduler =
+        start_scheduler(name,
+          runner: runner,
+          store_opts: [storage: ControlledStore],
+          retry_delays: [],
+          notify: self(),
+          journal_path: path,
+          journal_name: journal_name()
+        )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:runner_invoked, ^artefact_id}
+      assert_receive {:store_put, ^artefact, _storage_task}
+      Process.exit(first_scheduler, :kill)
+      assert eventually(fn -> Process.whereis(name) not in [nil, first_scheduler] end)
+      second_scheduler = Process.whereis(name)
+      assert_receive {:store_get, ^artefact_id, _first_confirmation_task}
+
+      Process.exit(second_scheduler, :kill)
+      assert eventually(fn -> Process.whereis(name) not in [nil, second_scheduler] end)
+      assert_receive {:store_get, ^artefact_id, _second_confirmation_task}
+      assert_receive {:reflection_completed, "review", {:ok, ^artefact}}
+      refute_receive {:runner_invoked, _artefact_id}
+      refute_receive {:store_put, _artefact, _storage_task}
+      refute_receive {:reflection_retrying, "review", _failure}
+    end
+
     test "then a newly started Scheduler reopens and resumes retained storage work" do
       start_supervised!(
         {ControlledStore, {self(), [{:error, :not_found}, {:error, :not_found}], [:hang, :ok]}}
@@ -804,10 +846,30 @@ defmodule Gralkor.Reflection.SchedulerTest do
       name = scheduler_name()
       start_scheduler(name, runner: elem(immediate_runner(self()), 1))
 
+      too_large = 4_294_967_296
+
+      assert {:error, {:invalid_retry_delays, [^too_large]}} =
+               Scheduler.schedule([reflection("review")], ingestion(),
+                 server: name,
+                 retry_delays: [too_large]
+               )
+
       assert {:error, {:invalid_execution_timeout_ms, 0}} =
                Scheduler.schedule([reflection("review")], ingestion(),
                  server: name,
                  execution_timeout_ms: 0
+               )
+
+      assert {:error, {:invalid_execution_timeout_ms, ^too_large}} =
+               Scheduler.schedule([reflection("review")], ingestion(),
+                 server: name,
+                 execution_timeout_ms: too_large
+               )
+
+      assert {:error, :restart_unsafe_execution_data} =
+               Scheduler.schedule([reflection("review")], ingestion(),
+                 server: name,
+                 runner_opts: [tool_context: %{pid: self()}]
                )
 
       refute_receive {:runner_invoked, _artefact_id}
