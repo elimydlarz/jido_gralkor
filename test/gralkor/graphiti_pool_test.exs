@@ -634,6 +634,74 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       assert Pythonx.decode(marker_recovery) == [true, 3]
+
+      Pythonx.eval(
+        """
+        template = dict(graphs[0].driver.claims['shared-equal'])
+        template['owner'] = 'expired-owner'
+        template['generation'] = 7
+        template['lease_until_ms'] = graphs[0].driver.server_time_ms - 1
+        graphs[0].driver.claims['server-expired'] = template
+        """,
+        %{"graphs" => graphs}
+      )
+
+      assert :ok =
+               GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
+                 uuid: "server-expired"
+               )
+
+      {clock_proof, _} =
+        Pythonx.eval(
+          """
+          driver = graphs[0].driver
+          lease_calls = [
+              call for call in driver.query_calls
+              if 'lease_until_ms' in call['query']
+          ]
+          [
+              driver.claims['server-expired']['generation'],
+              all('timestamp()' in call['query'] for call in lease_calls),
+              all('now_ms' not in call['params'] and 'lease_until_ms' not in call['params'] for call in lease_calls),
+          ]
+          """,
+          %{"graphs" => graphs}
+        )
+
+      assert Pythonx.decode(clock_proof) == [8, true, true]
+
+      Pythonx.eval(
+        """
+        graphs[0].driver._gralkor_claim_lease_ms = 30
+        graphs[0].driver.reject_renewals.add('renewal-lost')
+        """,
+        %{"graphs" => graphs}
+      )
+
+      assert {:error, {:python, renewal_error}} =
+               GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
+                 uuid: "renewal-lost"
+               )
+
+      assert renewal_error =~ "episode claim renewal lost"
+
+      Pythonx.eval(
+        "graphs[0].driver.reject_renewals.remove('renewal-lost')",
+        %{"graphs" => graphs}
+      )
+
+      assert :ok =
+               GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil,
+                 uuid: "renewal-lost"
+               )
+
+      {renewal_proof, _} =
+        Pythonx.eval(
+          "['renewal-lost' in graphs[0].driver.completed, sum(g.extractions for g in graphs)]",
+          %{"graphs" => graphs}
+        )
+
+      assert Pythonx.decode(renewal_proof) == [true, 8]
       GenServer.stop(first_pool)
       GenServer.stop(second_pool)
     end
