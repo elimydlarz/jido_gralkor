@@ -1,4 +1,4 @@
-Unit: reflection-scheduler (src: lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/artefact.ex; unit: test/gralkor/reflection/scheduler_test.exs)
+Unit: reflection-scheduler (src: lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/journal.ex; unit: test/gralkor/reflection/scheduler_test.exs)
 
 when completed ingestion schedules distinct Reflections
   then each operator, ingestion identifier, and Reflection name forms one logical completion key
@@ -23,6 +23,9 @@ when a Runner attempt returns an error, crashes, or exceeds its execution timeou
   and every attempt receives the same deterministic artefact identifier
   and an expired attempt is stopped before its replacement begins
 
+when a Runner, lookup, or storage task cannot start
+  then that phase consumes one attempt and follows the configured bounded retry schedule
+
 when a canonical storage attempt returns an error, crashes, or exceeds its execution timeout
   then only that storage phase is retried after each configured bounded delay
   and every attempt receives the exact artefact retained from the successful Runner
@@ -41,6 +44,8 @@ when the Scheduler process starts with durable unfinished work
   then every retained Runner or storage phase resumes with its retained retry state
   and retained storage work uses its exact retained artefact
   and already canonical work is confirmed complete without rerunning its Runner
+  while the previous Scheduler stopped during an active attempt
+    then that interrupted attempt consumes the durable retry budget before work resumes
 
 when the Scheduler is asked to drain
   then the caller waits while admitted logical work can still complete or exhaust retries
