@@ -48,7 +48,13 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
     case get_episode.(group_id(reflection, operator_id), artefact_id) do
       {:ok, episode} ->
         case decode(episode) do
-          [%Artefact{} = artefact] -> {:ok, artefact}
+          [%Artefact{id: ^artefact_id, reflection: reflection_name} = artefact]
+          when reflection_name == reflection.name ->
+            {:ok, artefact}
+
+          [%Artefact{}] ->
+            {:error, {:artefact_conflict, artefact_id}}
+
           [] -> {:error, {:invalid_artefact, artefact_id}}
         end
 
