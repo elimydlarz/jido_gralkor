@@ -180,10 +180,8 @@ defmodule Gralkor.Client do
 
   defp schedule_direct_reflections(request, representations) do
     if Process.whereis(ReflectionScheduler) do
-      evidence_id = hd(representations).evidence_id
-
       ingestion = %{
-        id: "direct:#{evidence_id}:#{System.unique_integer([:positive, :monotonic])}",
+        id: request.id,
         operator_id: request.operator_id,
         intended_lenses: [request.lens],
         completed_lenses: [request.lens],

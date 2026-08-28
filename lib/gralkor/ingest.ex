@@ -12,7 +12,7 @@ defmodule Gralkor.Ingest do
   """
 
   @enforce_keys [:operator_id, :lens, :source_kind, :content, :source_description]
-  defstruct [:operator_id, :lens, :source_kind, :content, :source_description, :evidence_id]
+  defstruct [:id, :operator_id, :lens, :source_kind, :content, :source_description, :evidence_id]
 
   @type source_kind :: :conversation | :document | :structured_record
 
@@ -55,6 +55,7 @@ defmodule Gralkor.Ingest do
 
   @type t ::
           %__MODULE__{
+            id: String.t(),
             operator_id: String.t(),
             lens: String.t(),
             source_kind: :conversation,
@@ -63,6 +64,7 @@ defmodule Gralkor.Ingest do
             evidence_id: String.t() | nil
           }
           | %__MODULE__{
+              id: String.t(),
               operator_id: String.t(),
               lens: String.t(),
               source_kind: :document,
@@ -71,6 +73,7 @@ defmodule Gralkor.Ingest do
               evidence_id: String.t() | nil
             }
           | %__MODULE__{
+              id: String.t(),
               operator_id: String.t(),
               lens: String.t(),
               source_kind: :structured_record,
