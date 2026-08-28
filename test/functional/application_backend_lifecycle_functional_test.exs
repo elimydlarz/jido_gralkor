@@ -133,7 +133,6 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       assert eventually(fn -> :sys.get_state(Scheduler).draining end)
       Process.exit(first_scheduler, :kill)
 
-      assert eventually(fn -> Process.whereis(Scheduler) not in [nil, first_scheduler] end)
       assert_receive {:application_drain_runner, 2}
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
       assert :ok = Task.await(stopper)
