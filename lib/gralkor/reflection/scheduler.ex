@@ -50,7 +50,11 @@ defmodule Gralkor.Reflection.Scheduler do
       journal
       |> Journal.all()
       |> Map.new(fn durable ->
-        job = %{durable | opts: Keyword.merge(defaults, durable.opts), retry_timer: nil}
+        job =
+          durable
+          |> Map.put(:opts, Keyword.merge(defaults, durable.opts))
+          |> Map.put(:retry_timer, nil)
+
         {job.key, job}
       end)
 
