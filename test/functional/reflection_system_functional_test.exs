@@ -46,7 +46,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   setup do
     root =
-      Path.join(System.tmp_dir!(), "gralkor-reflection-#{System.unique_integer([:positive])}")
+      Path.join(
+        System.tmp_dir!(),
+        "gralkor-reflection-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+      )
 
     File.mkdir_p!(root)
     on_exit(fn -> File.rm_rf!(root) end)

@@ -85,7 +85,11 @@ defmodule Gralkor.ApplicationTest do
     end
 
     test "and the graph pool is constructed with the embedded connection" do
-      data_dir = Path.join(System.tmp_dir!(), "ex_app_test_#{System.unique_integer([:positive])}")
+      data_dir =
+        Path.join(
+          System.tmp_dir!(),
+          "ex_app_test_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
       System.put_env("GRALKOR_DATA_DIR", data_dir)
 
       [_python, {Gralkor.GraphitiPool, opts}, _scheduler, _buffer] = App.children()

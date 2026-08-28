@@ -199,7 +199,10 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
 
   defp start_embedded_runtime do
     data_dir =
-      Path.join(System.tmp_dir!(), "application_backend_#{System.unique_integer([:positive])}")
+      Path.join(
+        System.tmp_dir!(),
+        "application_backend_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+      )
 
     System.put_env("GRALKOR_DATA_DIR", data_dir)
 

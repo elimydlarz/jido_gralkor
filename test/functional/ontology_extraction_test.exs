@@ -64,7 +64,10 @@ defmodule Gralkor.OntologyExtractionTest do
 
   setup_all do
     data_dir =
-      Path.join(System.tmp_dir!(), "gralkor_ontology_#{System.unique_integer([:positive])}")
+      Path.join(
+        System.tmp_dir!(),
+        "gralkor_ontology_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+      )
 
     File.mkdir_p!(data_dir)
     System.put_env("GRALKOR_DATA_DIR", data_dir)

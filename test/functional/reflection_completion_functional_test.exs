@@ -1170,7 +1170,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       data_dir =
         Path.join(
           System.tmp_dir!(),
-          "reflection-partial-commit-#{System.unique_integer([:positive])}"
+          "reflection-partial-commit-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
         )
 
       File.mkdir_p!(data_dir)
@@ -1339,7 +1339,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       data_dir =
         Path.join(
           System.tmp_dir!(),
-          "reflection-shared-claims-#{System.unique_integer([:positive])}"
+          "reflection-shared-claims-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
         )
 
       File.mkdir_p!(data_dir)

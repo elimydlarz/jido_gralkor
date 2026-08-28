@@ -144,7 +144,10 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       configure("openai:gpt-5.6-luna", "openai:text-embedding-3-small")
 
       data_dir =
-        Path.join(System.tmp_dir!(), "gralkor_reasoning_#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "gralkor_reasoning_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
 
       on_exit(fn -> File.rm_rf!(data_dir) end)
 
