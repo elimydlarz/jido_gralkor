@@ -82,6 +82,11 @@ where Graphiti is the canonical Reflection store
       and public artefact search excludes that incomplete artefact
       and Graphiti resumes the normal extraction path without rerunning the Runner before reporting success
     and exactly one episode carrying that artefact remains searchable
+  when artefact search encounters historical complete episodes carrying the same artefact identifier
+    while their immutable artefact content is equal
+      then search returns one artefact
+    while their immutable artefact content conflicts
+      then search reports an artefact conflict
 
 where in-memory storage is the canonical Reflection store
   when the same artefact is written repeatedly
