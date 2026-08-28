@@ -1509,6 +1509,7 @@ defmodule Gralkor.CaptureBufferTest do
       test_pid = self()
       :ok = stop_supervised(CaptureBuffer)
       attempts = :atomics.new(1, [])
+
       journal_path =
         Path.join(
           System.tmp_dir!(),
