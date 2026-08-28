@@ -133,8 +133,12 @@ defmodule Gralkor.Reflection.Scheduler do
   def handle_info({reference, {stage, outcome}}, state) when is_reference(reference) do
     case Map.fetch(state.tasks, reference) do
       {:ok, task} ->
-        state = release_task(state, reference, task)
-        {:noreply, handle_outcome(state, task.key, stage, outcome)}
+        if task.active_timeout do
+          {:noreply, state}
+        else
+          state = release_task(state, reference, task)
+          {:noreply, handle_outcome(state, task.key, stage, outcome)}
+        end
 
       :error ->
         {:noreply, state}
@@ -145,7 +149,8 @@ defmodule Gralkor.Reflection.Scheduler do
     case Map.fetch(state.tasks, reference) do
       {:ok, task} ->
         state = release_task(state, reference, task)
-        {:noreply, retry_or_finish(state, task.key, {:task_exit, reason})}
+        failure_reason = if task.active_timeout, do: :timeout, else: {:task_exit, reason}
+        {:noreply, retry_or_finish(state, task.key, failure_reason)}
 
       :error ->
         {:noreply, state}
@@ -156,8 +161,9 @@ defmodule Gralkor.Reflection.Scheduler do
     case Map.fetch(state.tasks, reference) do
       {:ok, task} ->
         Process.exit(task.pid, :kill)
-        state = release_task(state, reference, task)
-        {:noreply, retry_or_finish(state, task.key, :timeout)}
+        Process.cancel_timer(task.timeout_ref)
+        task = %{task | timeout_ref: nil, active_timeout: true}
+        {:noreply, %{state | tasks: Map.put(state.tasks, reference, task)}}
 
       :error ->
         {:noreply, state}
@@ -176,7 +182,16 @@ defmodule Gralkor.Reflection.Scheduler do
   end
 
   def handle_info(:resume_unfinished, state) do
-    {:noreply, Enum.reduce(Map.keys(state.jobs), state, &launch(&2, &1))}
+    state =
+      Enum.reduce(Map.keys(state.jobs), state, fn key, current ->
+        if Map.fetch!(current.jobs, key).active do
+          retry_or_finish(current, key, :scheduler_restart)
+        else
+          launch(current, key)
+        end
+      end)
+
+    {:noreply, state}
   end
 
   defp new_job(key, reflection, ingestion, opts) do
@@ -188,7 +203,8 @@ defmodule Gralkor.Reflection.Scheduler do
       stage: :lookup,
       attempt: 1,
       artefact: nil,
-      retry_timer: nil
+      retry_timer: nil,
+      active: false
     }
   end
 
