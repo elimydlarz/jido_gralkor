@@ -730,8 +730,7 @@ defmodule Gralkor.CaptureBufferTest do
       :ok = stop_supervised(CaptureBuffer)
       Process.flag(:trap_exit, true)
 
-      assert {:error,
-              {:reflection_scheduler_unavailable, Gralkor.Reflection.Supervisor}} =
+      assert {:error, {:reflection_scheduler_unavailable, Gralkor.Reflection.Supervisor}} =
                CaptureBuffer.start_link(
                  flush_callback: fn _, _, _, _, _ -> :ok end,
                  lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
