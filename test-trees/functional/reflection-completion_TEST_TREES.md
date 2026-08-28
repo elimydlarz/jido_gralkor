@@ -97,6 +97,10 @@ where Graphiti is the canonical Reflection store
   when independent application runtimes write the same artefact UUID concurrently
     then graph-backed admission serializes extraction across runtimes
     and equal content converges while conflicting immutable content is rejected
+    while a claim lease changes owner
+      then graph-server time determines expiry
+      and every canonical episode mutation and completion marker is fenced by the current claim generation
+      and a stale owner cannot mutate or complete the artefact
   when upgrading from an unmarked pre-completion-marker artefact
     then it remains hidden until an explicit replay or migration establishes durable completion
     and upgrade behavior does not expose a possibly partial episode as completed
