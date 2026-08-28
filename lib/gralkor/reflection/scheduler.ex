@@ -3,6 +3,8 @@ defmodule Gralkor.Reflection.Scheduler do
 
   use GenServer
 
+  require Logger
+
   alias Gralkor.Reflection.Artefact
   alias Gralkor.Reflection.Journal
   alias Gralkor.Reflection.Runner
@@ -13,6 +15,14 @@ defmodule Gralkor.Reflection.Scheduler do
 
   def start_link(opts \\ []),
     do: GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
+
+  def child_spec(opts) do
+    %{
+      id: Keyword.get(opts, :name, __MODULE__),
+      start: {__MODULE__, :start_link, [opts]},
+      shutdown: :infinity
+    }
+  end
 
   def schedule(reflections, ingestion, opts \\ []) do
     server = Keyword.get(opts, :server, __MODULE__)
@@ -55,6 +65,7 @@ defmodule Gralkor.Reflection.Scheduler do
           durable
           |> Map.put(:opts, Keyword.merge(defaults, durable.opts))
           |> Map.put(:retry_timer, nil)
+          |> Map.put_new(:active, false)
 
         {job.key, job}
       end)
