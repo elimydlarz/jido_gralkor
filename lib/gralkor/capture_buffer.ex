@@ -20,6 +20,7 @@ defmodule Gralkor.CaptureBuffer do
   alias Gralkor.Reflection.Scheduler
 
   @default_retries [1_000, 2_000, 4_000]
+  @scheduler_replacement_timeout_ms 5_000
 
   # ── Public API ──────────────────────────────────────────────
 
@@ -477,7 +478,7 @@ defmodule Gralkor.CaptureBuffer do
       )
     end
 
-    drain_reflection_scheduler(state.reflection_scheduler)
+    :ok = drain_reflection_scheduler(state.reflection_scheduler)
     stop_owned_scheduler(state.reflection_scheduler)
 
     :ok
@@ -737,8 +738,6 @@ defmodule Gralkor.CaptureBuffer do
     Scheduler.schedule(reflections, ingestion, runner_opts: runner_opts)
   end
 
-  defp maybe_start_reflection_scheduler([], _callback), do: nil
-
   defp maybe_start_reflection_scheduler(_reflections, callback) when is_function(callback, 2),
     do: nil
 
@@ -762,22 +761,53 @@ defmodule Gralkor.CaptureBuffer do
   defp stop_owned_scheduler(_), do: :ok
 
   defp drain_reflection_scheduler({:shared, Scheduler}) do
-    Scheduler.drain(Scheduler, :infinity)
-  catch
-    :exit, reason ->
-      Logger.error("[gralkor] Reflection scheduler drain failed — #{inspect(reason)}")
-      {:error, {:reflection_scheduler_drain_failed, reason}}
+    deadline = System.monotonic_time(:millisecond) + @scheduler_replacement_timeout_ms
+    drain_registered_scheduler(Scheduler, Process.whereis(Scheduler), deadline)
   end
 
   defp drain_reflection_scheduler({:owned, pid}) when is_pid(pid) do
-    if Process.alive?(pid), do: Scheduler.drain(pid, :infinity)
+    if Process.alive?(pid), do: Scheduler.drain(pid, :infinity), else: :ok
   catch
     :exit, reason ->
-      Logger.error("[gralkor] Reflection scheduler drain failed — #{inspect(reason)}")
-      {:error, {:reflection_scheduler_drain_failed, reason}}
+      exit({:reflection_scheduler_drain_failed, reason})
   end
 
   defp drain_reflection_scheduler(_), do: :ok
+
+  defp drain_registered_scheduler(name, pid, deadline) when is_pid(pid) do
+    Scheduler.drain(name, :infinity)
+  catch
+    :exit, reason ->
+      Logger.warning(
+        "[gralkor] Reflection scheduler exited while draining — waiting for replacement: #{inspect(reason)}"
+      )
+
+      case await_scheduler_replacement(name, pid, deadline) do
+        {:ok, replacement} -> drain_registered_scheduler(name, replacement, deadline)
+        {:error, timeout} -> exit({:reflection_scheduler_drain_failed, timeout})
+      end
+  end
+
+  defp drain_registered_scheduler(name, nil, deadline) do
+    case await_scheduler_replacement(name, nil, deadline) do
+      {:ok, replacement} -> drain_registered_scheduler(name, replacement, deadline)
+      {:error, timeout} -> exit({:reflection_scheduler_drain_failed, timeout})
+    end
+  end
+
+  defp await_scheduler_replacement(name, previous_pid, deadline) do
+    case Process.whereis(name) do
+      pid when is_pid(pid) and pid != previous_pid ->
+        {:ok, pid}
+
+      _ when System.monotonic_time(:millisecond) >= deadline ->
+        {:error, :replacement_timeout}
+
+      _ ->
+        Process.sleep(10)
+        await_scheduler_replacement(name, previous_pid, deadline)
+    end
+  end
 
   defp await_flush_workers(workers) do
     workers
