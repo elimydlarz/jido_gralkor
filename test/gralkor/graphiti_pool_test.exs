@@ -208,6 +208,89 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert Pythonx.decode(proof) == [1, 1, "content"]
 
+      assert {:ok,
+              %{
+                "uuid" => "episode-uuid",
+                "content" => "content",
+                "source" => "text",
+                "source_description" => "source"
+              }} = GraphitiPool.get_episode(pid, "g1", "episode-uuid")
+
+      assert {:error, :not_found} = GraphitiPool.get_episode(pid, "g1", "missing-uuid")
+
+      GenServer.stop(pid)
+    end
+
+    test "then an episode-only partial commit resumes extraction before confirmation" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          from graphiti_core.errors import NodeNotFoundError
+
+          class _GraphOperations:
+              async def episodic_node_get_by_uuid(self, cls, driver, uuid):
+                  if uuid not in driver.episodes:
+                      raise NodeNotFoundError(uuid)
+                  return driver.episodes[uuid]
+
+              async def episodic_node_save(self, episode, driver):
+                  driver.episodes[episode.uuid] = episode
+
+          class _Driver:
+              def __init__(self):
+                  self.graph_operations_interface = _GraphOperations()
+                  self.episodes = {}
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.driver = _Driver()
+                  self.extractions = 0
+                  self.completed_effects = 0
+
+              async def add_episode(self, **kwargs):
+                  from graphiti_core.nodes import EpisodicNode
+                  self.extractions += 1
+                  episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                  await episode.save(self.driver)
+                  if self.extractions == 1:
+                      raise RuntimeError('response failed after episode save')
+                  self.completed_effects += 1
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:error, {:python, "RuntimeError: response failed after episode save"}} =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
+                 uuid: "partial-uuid"
+               )
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
+                 uuid: "partial-uuid"
+               )
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
+                 uuid: "partial-uuid"
+               )
+
+      {proof, _} =
+        Pythonx.eval(
+          "[len(g.driver.episodes), g.extractions, g.completed_effects, 'partial-uuid' in g.driver._gralkor_completed_episode_uuids]",
+          %{"g" => g}
+        )
+
+      assert Pythonx.decode(proof) == [1, 2, 1, true]
+
       GenServer.stop(pid)
     end
 
