@@ -92,7 +92,9 @@ defmodule Gralkor.Reflection.Scheduler do
               launch(current, job.key)
             end)
 
-          reply = if new_jobs == [] and reflections != [], do: :already_scheduled, else: :scheduled
+          reply =
+            if new_jobs == [] and reflections != [], do: :already_scheduled, else: :scheduled
+
           {:reply, {:ok, reply}, state}
 
         {:error, reason} ->
