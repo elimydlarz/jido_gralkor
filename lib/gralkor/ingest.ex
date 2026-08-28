@@ -11,7 +11,7 @@ defmodule Gralkor.Ingest do
   or list. It describes provenance, not credibility or truth.
   """
 
-  @enforce_keys [:operator_id, :lens, :source_kind, :content, :source_description]
+  @enforce_keys [:id, :operator_id, :lens, :source_kind, :content, :source_description]
   defstruct [:id, :operator_id, :lens, :source_kind, :content, :source_description, :evidence_id]
 
   @type source_kind :: :conversation | :document | :structured_record
