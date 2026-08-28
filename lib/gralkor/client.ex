@@ -137,6 +137,7 @@ defmodule Gralkor.Client do
   @spec ingest_with_representation(Ingest.t()) ::
           {:ok, [IngestedRepresentation.t()]} | {:error, term()}
   def ingest_with_representation(%Ingest{lens: lens_name} = request) do
+    Ingest.validate_operator_id!(request.operator_id)
     Ingest.validate_id!(request.id)
     Ingest.validate_source!(request.source_kind, request.content)
 

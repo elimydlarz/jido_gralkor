@@ -37,6 +37,21 @@ defmodule Gralkor.Ingest do
     raise ArgumentError, "id must be a non-blank string, got #{inspect(id)}"
   end
 
+  @spec validate_operator_id!(term()) :: :ok
+  def validate_operator_id!(operator_id) when is_binary(operator_id) do
+    if String.trim(operator_id) == "" do
+      raise ArgumentError,
+            "operator_id must be a non-blank string, got #{inspect(operator_id)}"
+    end
+
+    :ok
+  end
+
+  def validate_operator_id!(operator_id) do
+    raise ArgumentError,
+          "operator_id must be a non-blank string, got #{inspect(operator_id)}"
+  end
+
   @spec encode_content!(source_kind(), String.t() | map() | list()) :: String.t()
   def encode_content!(:structured_record, content), do: Jason.encode!(content)
   def encode_content!(_kind, content), do: content
