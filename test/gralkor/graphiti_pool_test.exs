@@ -461,14 +461,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
       equal_writes = [
         Task.async(fn ->
-          GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
-            uuid: "shared-equal"
-          )
+          GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil, uuid: "shared-equal")
         end),
         Task.async(fn ->
-          GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil,
-            uuid: "shared-equal"
-          )
+          GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil, uuid: "shared-equal")
         end)
       ]
 
