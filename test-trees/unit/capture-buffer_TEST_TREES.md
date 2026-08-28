@@ -83,10 +83,14 @@ when Reflection scheduling needs a scheduler
   while one is already running
     then that scheduler's registered identity is retained rather than duplicating it
     and a supervised replacement remains reachable through that identity
-  while the capture buffer starts the scheduler it needs
-    then stopping the buffer stops that owned scheduler
   while the scheduler is shared rather than owned by the buffer
     then stopping the buffer leaves it running
+  while declared Reflections use default scheduling and no scheduler is registered
+    then startup fails identifying the required dedicated Reflection supervisor
+  while no Reflections are declared and no scheduler is registered
+    then the buffer starts without creating a scheduler
+  while a custom Reflection scheduling callback is supplied and no scheduler is registered
+    then the buffer starts without creating a scheduler
 
 when a session's turns are read back before anything has been appended for it
   then nothing is returned

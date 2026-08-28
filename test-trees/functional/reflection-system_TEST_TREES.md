@@ -85,9 +85,11 @@ when an ingestion operation successfully stores information through one or more 
     and every declared Reflection begins one logical completion flow for the completed ingestion operation
     and no Reflection begins before every intended Lens ingestion has completed
 
+when a configured Reflection is loaded
+  then its declared YAML is loaded as the programmatic Chain of Thought
+
 when a scheduled Reflection runs
-  then its programmatic Chain of Thought runner loads the declared YAML
-  and starts its first step for the operator and completed ingestion operation
+  then its programmatic Chain of Thought runner starts its first step for the operator and completed ingestion operation
   and makes every ingested representation available with its evidence identifier and Lens identity
 
 when a Chain of Thought step begins

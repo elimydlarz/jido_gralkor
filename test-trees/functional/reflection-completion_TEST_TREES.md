@@ -78,6 +78,8 @@ where Graphiti is the canonical Reflection store
   when a new artefact is written with its stable identifier
     then Graphiti creates one episode under a deterministic UUID derived from that artefact identifier
     and Graphiti records durable extraction completion only after every graph effect succeeds
+    if graph extraction fails before its claim-fenced transaction commits
+      then canonical lookup and public artefact search report no episode
   when that artefact is written again after an uncertain response
     while durable extraction completion was recorded
       then Graphiti confirms the existing episode without repeating extraction
