@@ -58,6 +58,9 @@ where captured turns select a Lens
   when later turns contribute Reflection context
     then nested tool context is merged key by key
     and later context outside tool context replaces earlier context
+  when Lens-selected turns begin a new buffered ingestion
+    then one ingestion identifier is minted and retained for every retry of that buffered ingestion
+    and identifiers remain collision-resistant across process and VM restarts
   if one Lens's flush fails
     then every other Lens's batch is still attempted
     and an awaited flush reports the first failure only after every Lens has been attempted
