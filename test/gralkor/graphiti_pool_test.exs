@@ -198,9 +198,7 @@ defmodule Gralkor.GraphitiPoolTest do
                GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
 
       assert {:error, {:episode_conflict, "episode-uuid"}} =
-               GraphitiPool.add_episode(pid, "g1", "changed", "source", nil,
-                 uuid: "episode-uuid"
-               )
+               GraphitiPool.add_episode(pid, "g1", "changed", "source", nil, uuid: "episode-uuid")
 
       {proof, _} =
         Pythonx.eval(
@@ -266,9 +264,7 @@ defmodule Gralkor.GraphitiPoolTest do
       writes =
         Enum.map(1..2, fn _index ->
           Task.async(fn ->
-            GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
-              uuid: "concurrent-uuid"
-            )
+            GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "concurrent-uuid")
           end)
         end)
 
