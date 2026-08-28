@@ -69,6 +69,7 @@ defmodule Gralkor.Reflection.Runner do
       {:error, %{reflection: reflection.name, reason: :missing_artefact}}
     else
       evidence_ids = Enum.map(representations(ingestion), &field(&1, :evidence_id))
+
       artefact =
         case Keyword.get(opts, :artefact_id) do
           nil -> Artefact.new(reflection.name, payload, evidence_ids)

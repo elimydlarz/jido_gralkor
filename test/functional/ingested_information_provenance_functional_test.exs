@@ -272,8 +272,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                  "evidence-1"
                )
 
-      assert_receive {:captured_ingest,
-                      %Ingest{id: "ingestion-1", source_kind: :conversation}}
+      assert_receive {:captured_ingest, %Ingest{id: "ingestion-1", source_kind: :conversation}}
     end
 
     test "and their rendered speaker-attributed transcript is submitted as a conversational-message episode" do
