@@ -695,11 +695,13 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       end
 
       children = [
-        {Scheduler,
-         runner_opts: [inference: inference],
-         store_opts: [storage: Gralkor.Reflection.Storage.InMemory],
-         notify: test_pid,
-         retry_delays: [0]},
+        {Gralkor.Reflection.Supervisor,
+         scheduler_opts: [
+           runner_opts: [inference: inference],
+           store_opts: [storage: Gralkor.Reflection.Storage.InMemory],
+           notify: test_pid,
+           retry_delays: [0]
+         ]},
         {CaptureBuffer,
          flush_callback: fn _group, _agent, _user, _ontology, _turns -> :ok end,
          reflections: [reflection]}
