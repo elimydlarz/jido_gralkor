@@ -793,8 +793,8 @@ defmodule Gralkor.Reflection.SchedulerTest do
       for invalid <- ["not-a-list", [-1], [1.5]] do
         name = scheduler_name()
 
-        assert {:error, {:invalid_retry_delays, ^invalid}} =
-                 Scheduler.start_link(name: name, retry_delays: invalid)
+        assert {:invalid_retry_delays, ^invalid} =
+                 catch_exit(Scheduler.start_link(name: name, retry_delays: invalid))
       end
 
       name = scheduler_name()
