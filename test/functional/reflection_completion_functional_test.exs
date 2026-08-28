@@ -805,7 +805,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   describe "where Graphiti is the canonical Reflection store > while an equal episode lacks durable extraction completion" do
-    test "then an embedded episode-only partial commit resumes before durable confirmation" do
+    test "then an embedded episode-only partial commit resumes before durable confirmation", %{
+      reflection: reflection
+    } do
       data_dir =
         Path.join(
           System.tmp_dir!(),
@@ -885,7 +887,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert {:error, {:incomplete_artefact, ^partial_artefact}} =
                Gralkor.Reflection.Storage.Graphiti.get(
-                 reflection(),
+                 reflection,
                  "operator-one",
                  artefact_id
                )
@@ -912,7 +914,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       )
 
       assert {:ok, :scheduled} =
-               Scheduler.schedule([reflection()], scheduler_ingestion())
+               Scheduler.schedule([reflection], scheduler_ingestion())
 
       refute_receive {:runner_started, "review", "ingestion-one", ^artefact_id, _runner}
       assert_receive {:reflection_completed, "review", {:ok, ^partial_artefact}}
@@ -950,9 +952,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           """
           import asyncio
           async def proof():
+              uid = artefact_id.decode('utf-8') if isinstance(artefact_id, (bytes, bytearray)) else artefact_id
               records, _, _ = await graphiti.driver.execute_query(
                   "MATCH (e:Episodic {uuid: $uuid}) RETURN e._gralkor_extraction_complete AS complete",
-                  uuid=artefact_id,
+                  uuid=uid,
               )
               return [graphiti.extractions, records[0]['complete']]
           asyncio._gralkor_run(proof())
