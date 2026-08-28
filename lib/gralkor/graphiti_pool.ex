@@ -606,7 +606,10 @@ defmodule Gralkor.GraphitiPool do
                         owner=claim_owner,
                         lease_until_ms=now_ms + claim_lease_ms,
                     )
-                    if not records:
+                    claim_keys = {
+                        'group_id', 'content', 'source', 'source_description', 'owner'
+                    }
+                    if not records or not claim_keys.issubset(records[0].keys()):
                         return 'acquired'
                     claim_state['distributed'] = True
                     claim = records[0]
