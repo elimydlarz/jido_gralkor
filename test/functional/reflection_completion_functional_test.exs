@@ -719,6 +719,107 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert System.monotonic_time(:millisecond) - started >= 75
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
     end
+
+    test "then an empty initial Reflection registry still drains directly admitted work", %{
+      reflection: reflection
+    } do
+      test_pid = self()
+      assert :ok = stop_supervised(Scheduler)
+
+      runner = fn current_reflection, _ingestion, opts ->
+        send(test_pid, :empty_registry_functional_runner_started)
+        Process.sleep(100)
+
+        {:ok,
+         Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"}, [])}
+      end
+
+      children = [
+        {Gralkor.Reflection.Supervisor,
+         scheduler_opts: [
+           runner: runner,
+           store_opts: [storage: Gralkor.Reflection.Storage.InMemory],
+           notify: test_pid,
+           retry_delays: []
+         ]},
+        {CaptureBuffer,
+         flush_callback: fn _group, _agent, _user, _ontology, _turns -> :ok end,
+         reflections: []}
+      ]
+
+      {:ok, supervisor} = Supervisor.start_link(children, strategy: :one_for_one)
+
+      assert {:ok, :scheduled} = Scheduler.schedule([reflection], scheduler_ingestion())
+      assert_receive :empty_registry_functional_runner_started
+
+      stopper = Task.async(fn -> Supervisor.stop(supervisor, :normal, :infinity) end)
+      assert Task.yield(stopper, 25) == nil
+      assert :ok = Task.await(stopper)
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+    end
+
+    test "then a Scheduler exit during drain waits for its durable replacement", %{
+      reflection: reflection
+    } do
+      test_pid = self()
+      assert :ok = stop_supervised(Scheduler)
+      attempts = :atomics.new(1, [])
+
+      journal_path =
+        Path.join(
+          System.tmp_dir!(),
+          "reflection-drain-restart-#{System.unique_integer([:positive])}.dets"
+        )
+
+      on_exit(fn -> File.rm(journal_path) end)
+
+      runner = fn current_reflection, _ingestion, opts ->
+        attempt = :atomics.add_get(attempts, 1, 1)
+        send(test_pid, {:drain_restart_functional_runner, attempt, self()})
+
+        if attempt == 1 do
+          receive do
+            :never -> {:error, :unexpected}
+          end
+        else
+          {:ok,
+           Artefact.new(
+             opts[:artefact_id],
+             current_reflection.name,
+             %{"summary" => "stored"},
+             []
+           )}
+        end
+      end
+
+      children = [
+        {Gralkor.Reflection.Supervisor,
+         scheduler_opts: [
+           runner: runner,
+           store_opts: [storage: Gralkor.Reflection.Storage.InMemory],
+           notify: test_pid,
+           retry_delays: [0],
+           journal_path: journal_path
+         ]},
+        {CaptureBuffer,
+         flush_callback: fn _group, _agent, _user, _ontology, _turns -> :ok end,
+         reflections: []}
+      ]
+
+      {:ok, supervisor} = Supervisor.start_link(children, strategy: :one_for_one)
+      assert {:ok, :scheduled} = Scheduler.schedule([reflection], scheduler_ingestion())
+      assert_receive {:drain_restart_functional_runner, 1, _first_runner}
+
+      first_scheduler = Process.whereis(Scheduler)
+      stopper = Task.async(fn -> Supervisor.stop(supervisor, :normal, :infinity) end)
+      assert eventually(fn -> :sys.get_state(Scheduler).draining end)
+      Process.exit(first_scheduler, :kill)
+
+      assert eventually(fn -> Process.whereis(Scheduler) not in [nil, first_scheduler] end)
+      assert_receive {:drain_restart_functional_runner, 2, _replacement_runner}
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+      assert :ok = Task.await(stopper)
+    end
   end
 
   describe "where Graphiti is the canonical Reflection store" do
