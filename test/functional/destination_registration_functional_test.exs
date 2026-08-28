@@ -183,6 +183,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       assert_raise ArgumentError, fn ->
         Client.ingest(%Gralkor.Ingest{
+          id: "invalid-destination-ingestion",
           operator_id: "operator-one",
           lens: "observations",
           source_kind: :document,
