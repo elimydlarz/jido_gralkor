@@ -1334,6 +1334,116 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
+  describe "where Graphiti is the canonical Reflection store > when a deterministic episode predates graph-backed claim admission" do
+    test "then a completed episode rejects conflicting immutable content and remains unchanged" do
+      data_dir =
+        Path.join(
+          System.tmp_dir!(),
+          "reflection-preclaim-complete-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
+
+      File.mkdir_p!(data_dir)
+      on_exit(fn -> File.rm_rf!(data_dir) end)
+      start_supervised!(Gralkor.Python)
+
+      construct_instance = fn database, _shared, group_id ->
+        {graphiti, _} =
+          Pythonx.eval(
+            """
+            from graphiti_core.driver.falkordb_driver import FalkorDriver
+
+            gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+
+            class PreclaimGraphitiContract:
+                def __init__(self):
+                    self.driver = FalkorDriver(falkor_db=database, database=gid)
+
+                async def add_episode(self, **kwargs):
+                    raise AssertionError('conflicting completed episode must not be extracted')
+
+            PreclaimGraphitiContract()
+            """,
+            %{"database" => database, "group_id" => group_id}
+          )
+
+        graphiti
+      end
+
+      pool =
+        start_supervised!(
+          Supervisor.child_spec(
+            {GraphitiPool,
+             falkordb_spec: {:embedded, data_dir},
+             construct_shared_clients: fn _llm, _embedder ->
+               %{llm_client: nil, embedder: nil, cross_encoder: nil}
+             end,
+             construct_instance: construct_instance,
+             initialise_instance: fn _instance -> :ok end,
+             warmup: false,
+             embedded_falkordb_socket_timeout_ms: 60_000},
+            id: :reflection_preclaim_complete_graphiti
+          )
+        )
+
+      graphiti = GraphitiPool.for(pool, "observations")
+
+      Pythonx.eval(
+        """
+        import asyncio
+        asyncio._gralkor_run(graphiti.driver.execute_query(
+            '''
+            CREATE (episode:Episodic {
+              uuid: $uuid,
+              name: 'legacy deterministic episode',
+              group_id: 'observations',
+              source: 'text',
+              source_description: 'reflection:review',
+              content: $content,
+              _gralkor_extraction_complete: true
+            })
+            RETURN episode.uuid AS uuid
+            ''',
+            uuid='preclaim-complete',
+            content='original',
+        ))
+        """,
+        %{"graphiti" => graphiti}
+      )
+
+      assert {:error, {:episode_conflict, "preclaim-complete"}} =
+               GraphitiPool.add_episode(
+                 pool,
+                 "observations",
+                 "conflicting",
+                 "reflection:review",
+                 nil,
+                 uuid: "preclaim-complete"
+               )
+
+      {proof, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          records, _, _ = asyncio._gralkor_run(graphiti.driver.execute_query(
+              '''
+              MATCH (episode:Episodic {uuid: 'preclaim-complete'})
+              OPTIONAL MATCH (claim:_GralkorEpisodeClaim {uuid: 'preclaim-complete'})
+              RETURN episode.content AS episode_content,
+                     claim.content AS claim_content
+              '''
+          ))
+          records[0]
+          """,
+          %{"graphiti" => graphiti}
+        )
+
+      assert Pythonx.decode(proof) == %{
+               "claim_content" => "original",
+               "episode_content" => "original"
+             }
+    end
+  end
+
   describe "where Graphiti is the canonical Reflection store > when independent pools share one Falkor graph" do
     @tag timeout: 120_000
     test "then server-timed generational claims serialize, reject conflicts, and fence a stale owner" do
