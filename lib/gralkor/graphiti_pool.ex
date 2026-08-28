@@ -789,7 +789,7 @@ defmodule Gralkor.GraphitiPool do
                         '/* gralkor_claim_fenced_graph_effects */'
                     )
                     records, _, _ = await driver.execute_query(
-                        '\n'.join(clauses),
+                        '\\n'.join(clauses),
                         **params,
                     )
                     if not records:
