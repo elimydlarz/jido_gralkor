@@ -390,8 +390,10 @@ defmodule Gralkor.GraphitiPool do
   ## Options
 
     * `:uuid` — optional deterministic episode UUID. A missing UUID is created,
-      an equal existing episode succeeds without extraction, and conflicting
-      immutable episode content returns an episode conflict.
+      successful extraction records a durable completion marker, an equal
+      marked episode succeeds without extraction, an equal unmarked episode
+      resumes extraction, and conflicting immutable episode content returns an
+      episode conflict.
     * `:lens` — optional originating Lens name. It is appended to the episode's
       source description before the single graphiti `add_episode` call.
     * `:source_kind` — `:conversation`, `:document`, or `:structured_record`,
