@@ -252,6 +252,8 @@ defmodule Gralkor.GraphitiPool do
   a different text and may be nothing at all: an episode naming one subject
   yields a node and no edge. Graphiti searches episodes by BM25 over their
   content, so retrieval here depends on the stored words rather than extraction.
+  Internal completion-only callers may request identity convergence, expanding
+  the ranked window to the group's episode count before filtering and limiting.
   """
   @spec search_episodes(String.t(), String.t(), pos_integer()) ::
           {:ok, [map()]} | {:error, term()}
