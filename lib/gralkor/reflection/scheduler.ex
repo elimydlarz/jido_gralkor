@@ -356,7 +356,16 @@ defmodule Gralkor.Reflection.Scheduler do
     do: finish_failure(state, key, reason)
 
   defp handle_outcome(state, key, :runner, {:ok, %Artefact{} = artefact}) do
-    transition(state, key, :storage, artefact)
+    job = Map.fetch!(state.jobs, key)
+
+    expected = %{id: artefact_id(job), reflection: job.reflection.name}
+    actual = %{id: artefact.id, reflection: artefact.reflection}
+
+    if actual == expected do
+      transition(state, key, :storage, artefact)
+    else
+      retry_or_finish(state, key, {:artefact_identity_mismatch, %{expected: expected, actual: actual}})
+    end
   end
 
   defp handle_outcome(state, key, :storage, :ok),
