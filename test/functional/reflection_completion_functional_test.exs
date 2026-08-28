@@ -886,6 +886,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                       episode for episode in self.driver.episodes.values()
                       if not groups or episode.group_id in groups
                   ]
+                  if query:
+                      episodes = [
+                          episode for episode in episodes
+                          if query.lower() in episode.content.lower()
+                      ]
                   if config is not None:
                       episodes = episodes[:config.limit]
                   return SearchResults(episodes=episodes)
@@ -1148,7 +1153,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert {:error, {:artefact_conflict, ^artefact_id}} =
                Client.search(%Search{
                  operator_id: "operator-one",
-                 query: "",
+                 query: "stored",
                  destinations: ["observations"],
                  result_type: :artefacts
                })
@@ -1164,7 +1169,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   describe "where Graphiti is the canonical Reflection store > while an equal episode lacks durable extraction completion" do
-    test "then an embedded episode-only partial commit resumes before durable confirmation", %{
+    test "then failure after the staged episode save commits nothing and retries the Reflection", %{
       reflection: reflection
     } do
       data_dir =
@@ -1191,12 +1196,21 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                     self.extractions = 0
 
                 async def add_episode(self, **kwargs):
+                    from graphiti_core.graphiti import add_nodes_and_edges_bulk
                     from graphiti_core.nodes import EpisodicNode
                     self.extractions += 1
                     episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
                     await episode.save(self.driver)
                     if self.extractions == 1:
                         raise RuntimeError('lost after durable episode save')
+                    await add_nodes_and_edges_bulk(
+                        self.driver,
+                        [episode],
+                        [],
+                        [],
+                        [],
+                        None,
+                    )
 
                 async def search_(self, query, config=None, group_ids=None, search_filter=None):
                     from graphiti_core.nodes import EpisodicNode
@@ -1249,10 +1263,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                  uuid: artefact_id
                )
 
-      assert {:ok, %{"extraction_complete" => false}} =
+      assert {:error, :not_found} =
                GraphitiPool.get_episode(pool, "observations", artefact_id)
 
-      assert {:error, {:incomplete_artefact, ^partial_artefact}} =
+      assert {:error, :not_found} =
                Gralkor.Reflection.Storage.Graphiti.get(
                  reflection,
                  "operator-one",
@@ -1283,7 +1297,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert {:ok, :scheduled} =
                Scheduler.schedule([reflection], scheduler_ingestion())
 
-      refute_receive {:runner_started, "review", "ingestion-one", ^artefact_id, _runner}
+      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, runner}
+      send(runner, :finish_reflection)
       assert_receive {:reflection_completed, "review", {:ok, ^partial_artefact}}
 
       assert {:ok, [%{destination: "observations", artefact: ^partial_artefact}]} =
@@ -1639,6 +1654,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                             fact_embedding=[0.3],
                             episodes=[episode.uuid],
                         )
+                        await episode.save(self.driver)
                         if suffix == 'stolen':
                             await self.driver.execute_query(
                                 '''
