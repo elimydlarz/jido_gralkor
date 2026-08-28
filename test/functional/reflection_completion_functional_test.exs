@@ -353,6 +353,57 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
       assert_receive {:reflection_completed, "review", {:ok, ^first_artefact}}
     end
+
+    test "then a canonical storage task crash retries the exact artefact without rerunning the Runner" do
+      start_supervised!({ControlledCompletionStore, {self(), [:crash, :ok]}})
+      Application.put_env(:jido_gralkor, :reflection_storage, ControlledCompletionStore)
+
+      assert :ok = Client.ingest(ingestion())
+      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
+      send(runner, :finish_reflection)
+
+      assert_receive {:controlled_store_attempt, first_artefact, _first_store_task}
+
+      assert_receive {:reflection_retrying, "review",
+                      %{stage: :storage, reason: {:task_exit, _reason}}}
+
+      assert_receive {:controlled_store_attempt, second_artefact, _second_store_task}
+      assert second_artefact == first_artefact
+      refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
+      assert_receive {:reflection_completed, "review", {:ok, ^first_artefact}}
+    end
+
+    test "then storage timeout exhaustion is observable after each expired attempt exits", %{
+      reflection: reflection
+    } do
+      start_supervised!({ControlledCompletionStore, {self(), [:hang, :hang]}})
+      Application.put_env(:jido_gralkor, :reflection_storage, ControlledCompletionStore)
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection], scheduler_ingestion(), execution_timeout_ms: 25)
+
+      assert_receive {:runner_started, "review", "ingestion-one", artefact_id, runner}
+      send(runner, :finish_reflection)
+
+      assert_receive {:controlled_store_attempt, first_artefact, first_store_task}
+      first_monitor = Process.monitor(first_store_task)
+      assert_receive {:DOWN, ^first_monitor, :process, ^first_store_task, :killed}
+      assert_receive {:reflection_retrying, "review", %{stage: :storage, reason: :timeout}}
+
+      assert_receive {:controlled_store_attempt, ^first_artefact, second_store_task}
+      second_monitor = Process.monitor(second_store_task)
+      assert_receive {:DOWN, ^second_monitor, :process, ^second_store_task, :killed}
+
+      assert_receive {:reflection_completed, "review",
+                      {:error,
+                       %{
+                         stage: :storage,
+                         attempts: 2,
+                         reason: :timeout
+                       }}}
+
+      refute_receive {:runner_started, "review", "ingestion-one", ^artefact_id, _runner}
+    end
   end
 
   describe "when overlapping requests schedule the same operator, ingestion, and Reflection" do
