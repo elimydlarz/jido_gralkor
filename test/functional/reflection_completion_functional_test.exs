@@ -927,7 +927,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       refute_receive {:runner_started, "review", "ingestion-one", ^artefact_id, _runner}
       assert_receive {:reflection_completed, "review", {:ok, ^partial_artefact}}
 
-      assert {:ok, [^partial_artefact]} =
+      assert {:ok, [%{destination: "observations", artefact: ^partial_artefact}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "stored",
