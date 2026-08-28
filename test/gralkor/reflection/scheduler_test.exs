@@ -160,7 +160,10 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
   describe "when canonical storage fails after a successful Runner" do
     test "then storage retry receives the exact retained artefact without rerunning the Runner" do
-      start_supervised!({ControlledStore, {self(), [{:error, :not_found}], [{:error, :temporary}, :ok]}})
+      start_supervised!(
+        {ControlledStore, {self(), [{:error, :not_found}], [{:error, :temporary}, :ok]}}
+      )
+
       {name, runner} = immediate_runner(self())
 
       start_scheduler(name,
@@ -170,7 +173,9 @@ defmodule Gralkor.Reflection.SchedulerTest do
         notify: self()
       )
 
-      assert {:ok, :scheduled} = Scheduler.schedule([reflection("review")], ingestion(), server: name)
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
       assert_receive {:runner_invoked, artefact_id}
       assert_receive {:store_put, first, _store_task}
       assert_receive {:reflection_retrying, "review", %{stage: :storage, reason: :temporary}}
@@ -191,7 +196,9 @@ defmodule Gralkor.Reflection.SchedulerTest do
         notify: self()
       )
 
-      assert {:ok, :scheduled} = Scheduler.schedule([reflection("review")], ingestion(), server: name)
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
       assert_receive {:store_put, artefact, _store_task}
 
       assert_receive {:reflection_retrying, "review",
@@ -213,7 +220,9 @@ defmodule Gralkor.Reflection.SchedulerTest do
         notify: self()
       )
 
-      assert {:ok, :scheduled} = Scheduler.schedule([reflection("review")], ingestion(), server: name)
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
       assert_receive {:store_put, artefact, first_store_task}
       monitor = Process.monitor(first_store_task)
       assert_receive {:DOWN, ^monitor, :process, ^first_store_task, :killed}
@@ -239,7 +248,8 @@ defmodule Gralkor.Reflection.SchedulerTest do
         notify: self()
       )
 
-      assert {:ok, :scheduled} = Scheduler.schedule([reflection("review")], ingestion(), server: name)
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
 
       assert_receive {:reflection_completed, "review",
                       {:error,
@@ -264,8 +274,12 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
       start_scheduler(name, runner: runner, store_opts: [storage: EmptyStore])
 
-      assert {:ok, :scheduled} = Scheduler.schedule([reflection("review")], ingestion(), server: name)
-      assert {:ok, :already_scheduled} = Scheduler.schedule([reflection("review")], ingestion(), server: name)
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert {:ok, :already_scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
       assert_receive {:admitted_runner, runner_task}
       refute_receive {:admitted_runner, _runner_task}
       send(runner_task, :finish)

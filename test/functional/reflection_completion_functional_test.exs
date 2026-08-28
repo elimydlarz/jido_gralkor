@@ -304,7 +304,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       refute Process.alive?(second_runner)
 
       assert {:ok, :scheduled} =
-               Scheduler.schedule([reflection], scheduler_ingestion(), execution_timeout_ms: 1_000)
+               Scheduler.schedule([reflection], scheduler_ingestion(),
+                 execution_timeout_ms: 1_000
+               )
 
       assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, replacement}
       send(replacement, :finish_reflection)
