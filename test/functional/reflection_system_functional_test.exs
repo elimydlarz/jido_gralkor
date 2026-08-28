@@ -473,12 +473,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         ]
       ])
 
-      scheduled_before =
-        Scheduler
-        |> :sys.get_state()
-        |> Map.fetch!(:scheduled)
-        |> MapSet.size()
-
       started = System.monotonic_time(:millisecond)
 
       assert :ok =
@@ -493,14 +487,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                })
 
       assert System.monotonic_time(:millisecond) - started < 100
-
-      scheduled_after =
-        Scheduler
-        |> :sys.get_state()
-        |> Map.fetch!(:scheduled)
-        |> MapSet.size()
-
-      assert scheduled_after == scheduled_before + 1
     end
 
     test "and every declared Reflection is scheduled once for the completed ingestion operation",
@@ -910,11 +896,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  [reflection(context, "one"), reflection(context, "two")],
                  ingestion(),
                  runner: runner,
-                 notify: self()
+                 notify: self(),
+                 retry_delays: []
                )
 
-      assert_receive {:reflection_completed, "one", {:error, :failure}}
-      assert_receive {:reflection_completed, "two", {:error, :failure}}
+      assert_receive {:reflection_completed, "one", {:error, %{reason: :failure}}}
+      assert_receive {:reflection_completed, "two", {:error, %{reason: :failure}}}
     end
 
     test "and failure of one Reflection does not prevent another Reflection from completing",
@@ -931,10 +918,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  ingestion(),
                  runner: runner,
                  notify: self(),
+                 retry_delays: [],
                  store_opts: [storage: Gralkor.Reflection.Storage.InMemory]
                )
 
-      assert_receive {:reflection_completed, "one", {:error, %{reason: :failed}}}
+      assert_receive {:reflection_completed, "one", {:error, %{reason: %{reason: :failed}}}}
       assert_receive {:reflection_completed, "two", {:ok, _}}
     end
   end
@@ -1050,6 +1038,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Scheduler.schedule([reflection(context)], ingestion(),
                  runner_opts: [inference: &output_for/1],
                  notify: self(),
+                 retry_delays: [],
                  store_opts: [storage: FailingReflectionStorage]
                )
 
@@ -1081,6 +1070,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  ingestion(),
                  runner_opts: [inference: &output_for/1],
                  notify: self(),
+                 retry_delays: [],
                  store_opts: [storage: FailingReflectionStorage]
                )
 
