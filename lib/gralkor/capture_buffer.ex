@@ -761,8 +761,7 @@ defmodule Gralkor.CaptureBuffer do
   defp stop_owned_scheduler(_), do: :ok
 
   defp drain_reflection_scheduler({:shared, Scheduler}) do
-    deadline = System.monotonic_time(:millisecond) + @scheduler_replacement_timeout_ms
-    drain_registered_scheduler(Scheduler, Process.whereis(Scheduler), deadline)
+    drain_registered_scheduler(Scheduler, Process.whereis(Scheduler))
   end
 
   defp drain_reflection_scheduler({:owned, pid}) when is_pid(pid) do
@@ -774,7 +773,7 @@ defmodule Gralkor.CaptureBuffer do
 
   defp drain_reflection_scheduler(_), do: :ok
 
-  defp drain_registered_scheduler(name, pid, deadline) when is_pid(pid) do
+  defp drain_registered_scheduler(name, pid) when is_pid(pid) do
     Scheduler.drain(name, :infinity)
   catch
     :exit, reason ->
@@ -782,31 +781,23 @@ defmodule Gralkor.CaptureBuffer do
         "[gralkor] Reflection scheduler exited while draining — waiting for replacement: #{inspect(reason)}"
       )
 
-      case await_scheduler_replacement(name, pid, deadline) do
-        {:ok, replacement} -> drain_registered_scheduler(name, replacement, deadline)
-        {:error, timeout} -> exit({:reflection_scheduler_drain_failed, timeout})
-      end
+      replacement = await_scheduler_replacement(name, pid)
+      drain_registered_scheduler(name, replacement)
   end
 
-  defp drain_registered_scheduler(name, nil, deadline) do
-    case await_scheduler_replacement(name, nil, deadline) do
-      {:ok, replacement} -> drain_registered_scheduler(name, replacement, deadline)
-      {:error, timeout} -> exit({:reflection_scheduler_drain_failed, timeout})
-    end
+  defp drain_registered_scheduler(name, nil) do
+    replacement = await_scheduler_replacement(name, nil)
+    drain_registered_scheduler(name, replacement)
   end
 
-  defp await_scheduler_replacement(name, previous_pid, deadline) do
+  defp await_scheduler_replacement(name, previous_pid) do
     case Process.whereis(name) do
       pid when is_pid(pid) and pid != previous_pid ->
-        {:ok, pid}
+        pid
 
       _ ->
-        if System.monotonic_time(:millisecond) >= deadline do
-          {:error, :replacement_timeout}
-        else
-          Process.sleep(10)
-          await_scheduler_replacement(name, previous_pid, deadline)
-        end
+        Process.sleep(10)
+        await_scheduler_replacement(name, previous_pid)
     end
   end
 

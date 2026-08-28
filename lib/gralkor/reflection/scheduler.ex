@@ -95,7 +95,7 @@ defmodule Gralkor.Reflection.Scheduler do
   end
 
   def handle_call({:schedule, reflections, ingestion, opts}, _from, state) do
-    opts = Keyword.merge(state.defaults, Keyword.drop(opts, [:server]))
+    opts = restore_execution_options(state.defaults, Keyword.drop(opts, [:server]))
 
     with :ok <- validate_ingestion(ingestion),
          :ok <- validate_reflections(reflections),
