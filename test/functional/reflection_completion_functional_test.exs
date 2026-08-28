@@ -569,7 +569,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                ~s({"id":"stable-id","payload":{"summary":"stored"}})
              ]
     end
+  end
 
+  describe "when canonical storage commits an artefact but its response is lost" do
     test "then a committed write whose response is lost retries to one searchable artefact" do
       {graphiti, _} =
         Pythonx.eval(
@@ -653,7 +655,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert Pythonx.decode(proof) == [1, 1]
     end
+  end
 
+  describe "where Graphiti is the canonical Reflection store > while an equal episode lacks durable extraction completion" do
     test "then an embedded episode-only partial commit resumes before durable confirmation" do
       data_dir =
         Path.join(
