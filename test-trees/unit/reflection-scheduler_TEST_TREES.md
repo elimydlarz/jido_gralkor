@@ -66,6 +66,10 @@ when durable work survives a VM restart
   then its journal contains only restart-safe execution data
   and runtime-owned dependencies are restored from the replacement Scheduler configuration
 
+when scheduling supplies request-specific Runner or store options
+  then those options merge into the Scheduler's configured runtime dependencies
+  and first admission and restart restoration use the same option-composition contract
+
 when the Scheduler stops during a configured retry delay
   then the durable retry deadline survives restart
   and the next attempt does not begin before the remaining delay elapses

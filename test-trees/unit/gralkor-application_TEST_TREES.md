@@ -1,4 +1,4 @@
-Unit: gralkor-application (src: lib/gralkor/application.ex; integration: test/gralkor/application_test.exs; unit: test/gralkor/application_test.exs)
+Unit: gralkor-application (src: lib/gralkor/application.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/reflection/supervisor.ex, lib/gralkor/reflection/scheduler.ex; integration: test/gralkor/application_test.exs; unit: test/gralkor/application_test.exs)
 
 when the application starts
   while a remote FalkorDB connection is configured

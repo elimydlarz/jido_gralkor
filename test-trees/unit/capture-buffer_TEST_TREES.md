@@ -1,4 +1,4 @@
-Unit: capture-buffer (src: lib/gralkor/capture_buffer.ex, lib/gralkor/reflection/supervisor.ex; unit: test/gralkor/capture_buffer_test.exs)
+Unit: capture-buffer (src: lib/gralkor/capture_buffer.ex, lib/gralkor/reflection/supervisor.ex, lib/gralkor/reflection/scheduler.ex; unit: test/gralkor/capture_buffer_test.exs)
 
 when a turn is appended for a session that holds none
   then the turn is buffered and readable back for that session
