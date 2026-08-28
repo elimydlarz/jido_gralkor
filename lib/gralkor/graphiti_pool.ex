@@ -947,12 +947,12 @@ defmodule Gralkor.GraphitiPool do
                     if claim['owner'] == claim_owner:
                         claim_state['generation'] = claim['generation']
                     episode_equal = (
-                        claim['episode_uuid'] is None
+                        claim.get('episode_uuid') is None
                         or (
-                            claim['episode_group_id'] == gid
-                            and claim['episode_content'] == c
-                            and claim['episode_source'] == source_value
-                            and claim['episode_source_description'] == s
+                            claim.get('episode_group_id') == gid
+                            and claim.get('episode_content') == c
+                            and claim.get('episode_source') == source_value
+                            and claim.get('episode_source_description') == s
                         )
                     )
                     if not episode_equal:
