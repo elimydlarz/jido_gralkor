@@ -15,11 +15,38 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client.Native
+  alias Gralkor.Destination
   alias Gralkor.GraphitiPool
   alias Gralkor.Message
+  alias Gralkor.Reflection
+  alias Gralkor.Reflection.Artefact
+  alias Gralkor.Reflection.ChainOfThought
+  alias Gralkor.Reflection.Scheduler
 
   @moduletag :functional
   @moduletag timeout: 120_000
+
+  defmodule FailOnceReflectionStore do
+    @behaviour Gralkor.Reflection.Store
+
+    use Agent
+
+    def start_link(test_pid), do: Agent.start_link(fn -> {test_pid, 0} end, name: __MODULE__)
+
+    @impl true
+    def get(_reflection, _operator_id, _artefact_id), do: {:error, :not_found}
+
+    @impl true
+    def put(_reflection, _operator_id, artefact) do
+      Agent.get_and_update(__MODULE__, fn {test_pid, attempts} ->
+        attempt = attempts + 1
+        send(test_pid, {:reflection_store_attempt, attempt, artefact})
+
+        outcome = if attempt == 1, do: {:error, :temporary_store_failure}, else: :ok
+        {outcome, {test_pid, attempt}}
+      end)
+    end
+  end
 
   setup do
     # graphiti_core's own modules import each other; letting the first import
@@ -189,6 +216,83 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
       assert reason =~ "graph refused the write"
 
       assert attempts(g, "add") == 1
+    end
+  end
+
+  describe "when a Reflection Runner or canonical write fails after completed Lens ingestion" do
+    test "then only the Reflection Scheduler retries those phases" do
+      test_pid = self()
+      runner_attempts = :atomics.new(1, [])
+      lens_attempts = :atomics.new(1, [])
+
+      reflection = %Reflection{
+        name: "retry-owner",
+        destination: %Destination{name: "observations"},
+        ontology: Gralkor.DefaultOntology,
+        chain_of_thought: %ChainOfThought{path: "test", steps: []}
+      }
+
+      runner = fn current_reflection, _ingestion, opts ->
+        attempt = :atomics.add_get(runner_attempts, 1, 1)
+        send(test_pid, {:reflection_runner_attempt, attempt})
+
+        if attempt == 1 do
+          {:error, :temporary_runner_failure}
+        else
+          {:ok,
+           Artefact.new(
+             opts[:artefact_id],
+             current_reflection.name,
+             %{"summary" => "stored"},
+             []
+           )}
+        end
+      end
+
+      start_supervised!({FailOnceReflectionStore, test_pid})
+
+      start_supervised!(
+        {Scheduler,
+         runner: runner,
+         store_opts: [storage: FailOnceReflectionStore],
+         notify: test_pid,
+         retry_delays: [0]}
+      )
+
+      lens_flush_callback = fn _operator, _agent, _user, lens, _turns, evidence_id ->
+        attempt = :atomics.add_get(lens_attempts, 1, 1)
+        send(test_pid, {:lens_ingestion_attempt, attempt})
+        {:ok, %{lens: lens, evidence_id: evidence_id, result: :ok}}
+      end
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: lens_flush_callback,
+         reflections: [reflection],
+         retries: []}
+      )
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 "reflection-retry-owner",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 [Message.new("user", "remember")]
+               )
+
+      assert :ok = CaptureBuffer.flush_and_await("reflection-retry-owner", 2_000)
+      assert_receive {:lens_ingestion_attempt, 1}
+      assert_receive {:reflection_runner_attempt, 1}
+      assert_receive {:reflection_runner_attempt, 2}
+      assert_receive {:reflection_store_attempt, 1, artefact}
+      assert_receive {:reflection_store_attempt, 2, ^artefact}
+      assert_receive {:reflection_completed, "retry-owner", {:ok, ^artefact}}
+
+      assert :atomics.get(lens_attempts, 1) == 1
+      assert :atomics.get(runner_attempts, 1) == 2
     end
   end
 
