@@ -325,9 +325,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert_receive {:reflection_completed, "summary", {:ok, _artefact}}
     end
 
-    test "then duplicate Reflection names fail before execution and empty work retains nothing", %{
-      reflection: reflection
-    } do
+    test "then duplicate Reflection names fail before execution and empty work retains nothing",
+         %{
+           reflection: reflection
+         } do
       assert {:error, {:duplicate_reflection, "review"}} =
                Scheduler.schedule([reflection, reflection], scheduler_ingestion())
 
