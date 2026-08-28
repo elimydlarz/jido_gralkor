@@ -1341,6 +1341,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Pythonx.eval(
         """
         import asyncio
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
         asyncio._gralkor_run(graphiti.driver.execute_query(
             '''
             CREATE (episode:Episodic {
@@ -1350,12 +1352,17 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
               source: 'text',
               source_description: 'reflection:review',
               content: $content,
+              entity_edges: [],
+              created_at: $created_at,
+              valid_at: $valid_at,
               _gralkor_extraction_complete: true
             })
             RETURN episode.uuid AS uuid
             ''',
             uuid='preclaim-complete',
             content='original',
+            created_at=now,
+            valid_at=now,
         ))
         """,
         %{"graphiti" => graphiti}
@@ -1403,6 +1410,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Pythonx.eval(
         """
         import asyncio
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
         asyncio._gralkor_run(graphiti.driver.execute_query(
             '''
             CREATE (episode:Episodic {
@@ -1412,12 +1421,17 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
               source: 'text',
               source_description: 'reflection:review',
               content: $content,
+              entity_edges: [],
+              created_at: $created_at,
+              valid_at: $valid_at,
               _gralkor_extraction_complete: false
             })
             RETURN episode.uuid AS uuid
             ''',
             uuid='preclaim-incomplete',
             content='original',
+            created_at=now,
+            valid_at=now,
         ))
         """,
         %{"graphiti" => graphiti}
