@@ -1476,18 +1476,22 @@ defmodule Gralkor.CaptureBufferTest do
         {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"done" => true}, [])}
       end
 
-      start_supervised!(
-        {Scheduler, runner: runner, store_opts: [storage: EmptyReflectionStore], retry_delays: []}
-      )
+      children = [
+        {Gralkor.Reflection.Supervisor,
+         scheduler_opts: [
+           runner: runner,
+           store_opts: [storage: EmptyReflectionStore],
+           retry_delays: []
+         ]},
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
+         reflections: [],
+         retries: []}
+      ]
 
-      buffer =
-        start_supervised!(
-          {CaptureBuffer,
-           flush_callback: fn _, _, _, _, _ -> :ok end,
-           lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
-           reflections: [],
-           retries: []}
-        )
+      {:ok, supervisor} = Supervisor.start_link(children, strategy: :one_for_one)
+      buffer = Process.whereis(CaptureBuffer)
 
       assert :sys.get_state(buffer).reflection_scheduler == {:shared, Scheduler}
 
@@ -1495,9 +1499,10 @@ defmodule Gralkor.CaptureBufferTest do
                Scheduler.schedule([reflection()], completed_ingestion())
 
       assert_receive :empty_registry_runner_started
-      stopper = Task.async(fn -> stop_supervised(CaptureBuffer) end)
+      stopper = Task.async(fn -> Supervisor.terminate_child(supervisor, CaptureBuffer) end)
       assert Task.yield(stopper, 25) == nil
       assert :ok = Task.await(stopper)
+      assert :ok = Supervisor.stop(supervisor)
     end
 
     test "then a Scheduler crash during drain waits for and drains its supervised replacement" do
@@ -1519,8 +1524,12 @@ defmodule Gralkor.CaptureBufferTest do
       end
 
       children = [
-        {Scheduler,
-         runner: runner, store_opts: [storage: EmptyReflectionStore], retry_delays: [0]},
+        {Gralkor.Reflection.Supervisor,
+         scheduler_opts: [
+           runner: runner,
+           store_opts: [storage: EmptyReflectionStore],
+           retry_delays: [0]
+         ]},
         {CaptureBuffer,
          flush_callback: fn _, _, _, _, _ -> :ok end,
          lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
