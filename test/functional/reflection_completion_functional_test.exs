@@ -681,6 +681,42 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert_receive :shutdown_runner_started
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
     end
+
+    test "then stopping the production-ordered child tree waits for admitted work", %{
+      reflection: reflection
+    } do
+      test_pid = self()
+      assert :ok = stop_supervised(Scheduler)
+
+      inference = fn _request ->
+        send(test_pid, :application_tree_runner_started)
+        Process.sleep(100)
+        {:ok, %{output: %{"summary" => "stored"}}}
+      end
+
+      children = [
+        {Scheduler,
+         runner_opts: [inference: inference],
+         store_opts: [storage: Gralkor.Reflection.Storage.InMemory],
+         notify: test_pid,
+         retry_delays: [0]},
+        {CaptureBuffer,
+         flush_callback: fn _group, _agent, _user, _ontology, _turns -> :ok end,
+         reflections: [reflection]}
+      ]
+
+      {:ok, supervisor} = Supervisor.start_link(children, strategy: :one_for_one)
+
+      assert :ok = Client.ingest(ingestion())
+      assert_receive :application_tree_runner_started
+
+      started = System.monotonic_time(:millisecond)
+      stopper = Task.async(fn -> Supervisor.stop(supervisor, :normal, :infinity) end)
+      assert Task.yield(stopper, 25) == nil
+      assert :ok = Task.await(stopper)
+      assert System.monotonic_time(:millisecond) - started >= 75
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+    end
   end
 
   describe "where Graphiti is the canonical Reflection store" do
