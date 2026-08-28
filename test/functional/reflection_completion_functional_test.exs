@@ -98,11 +98,18 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     Application.put_env(:jido_gralkor, :reflections, [reflection])
 
     test_pid = self()
+    journal_path =
+      Path.join(System.tmp_dir!(), "reflection-scheduler-#{System.unique_integer([:positive])}.dets")
+
+    on_exit(fn -> File.rm(journal_path) end)
 
     start_supervised!(
       {Scheduler,
        runner: fn reflected, ingestion, opts ->
-         send(test_pid, {:runner_started, reflected.name, ingestion.id, self()})
+         send(
+           test_pid,
+           {:runner_started, reflected.name, ingestion.id, opts[:artefact_id], self()}
+         )
 
          receive do
            :finish_reflection ->
@@ -119,7 +126,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
          end
        end,
        notify: test_pid,
-       retry_delays: [0]}
+       retry_delays: [0],
+       journal_path: journal_path}
     )
 
     {:ok, reflection: reflection}
@@ -133,12 +141,12 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                Client.ingest(ingestion())
 
       assert System.monotonic_time(:millisecond) - started < 100
-      assert_receive {:runner_started, "review", "ingestion-one", _runner}
+      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
     end
 
     test "then replay after a Scheduler restart confirms one stable searchable artefact without rerunning" do
       assert :ok = Client.ingest(ingestion())
-      assert_receive {:runner_started, "review", "ingestion-one", first_runner}
+      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, first_runner}
       send(first_runner, :finish_reflection)
       assert_receive {:reflection_completed, "review", {:ok, first_artefact}}
 
@@ -148,7 +156,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert :ok = Client.ingest(ingestion())
       assert_receive {:reflection_completed, "review", {:ok, second_artefact}}
-      refute_receive {:runner_started, "review", "ingestion-one", _runner}
+      refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
 
       assert second_artefact.id == first_artefact.id
 
@@ -161,6 +169,23 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                })
 
       assert searchable.id == first_artefact.id
+    end
+
+    test "then a Scheduler crash resumes unfinished Runner work from durable state" do
+      assert :ok = Client.ingest(ingestion())
+
+      assert_receive {:runner_started, "review", "ingestion-one", artefact_id, first_runner}
+
+      first_scheduler = Process.whereis(Scheduler)
+      Process.exit(first_scheduler, :kill)
+      assert eventually(fn -> Process.whereis(Scheduler) not in [nil, first_scheduler] end)
+      refute Process.alive?(first_runner)
+
+      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, resumed_runner},
+                     500
+
+      send(resumed_runner, :finish_reflection)
+      assert_receive {:reflection_completed, "review", {:ok, %{id: ^artefact_id}}}
     end
 
     test "then one failed Reflection retries without rerunning its completed sibling", %{
@@ -177,8 +202,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
       assert_receive {:reflection_retrying, "summary", %{stage: :runner, reason: :temporary}}
-      assert_receive {:runner_started, "summary", "ingestion-one", retry_runner}, 500
-      refute_receive {:runner_started, "review", "ingestion-one", _runner}, 50
+      assert_receive {:runner_started, "summary", "ingestion-one", _artefact_id, retry_runner},
+                     500
+
+      refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}, 50
 
       send(retry_runner, :finish_reflection)
       assert_receive {:reflection_completed, "summary", {:ok, _artefact}}
@@ -189,7 +216,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Application.put_env(:jido_gralkor, :reflection_storage, FailOnceStore)
 
       assert :ok = Client.ingest(ingestion())
-      assert_receive {:runner_started, "review", "ingestion-one", runner}
+      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
       send(runner, :finish_reflection)
 
       assert_receive {:store_attempt, first_artefact}
@@ -199,7 +226,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert_receive {:store_attempt, second_artefact}
       assert second_artefact == first_artefact
-      refute_receive {:runner_started, "review", "ingestion-one", _runner}
+      refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
       assert_receive {:reflection_completed, "review", {:ok, ^first_artefact}}
     end
   end
@@ -339,7 +366,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   defp receive_runners(0, runners), do: runners
 
   defp receive_runners(remaining, runners) do
-    assert_receive {:runner_started, name, "ingestion-one", runner}
+    assert_receive {:runner_started, name, "ingestion-one", _artefact_id, runner}
     receive_runners(remaining - 1, Map.put(runners, name, runner))
   end
 
