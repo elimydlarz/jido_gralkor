@@ -338,6 +338,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     :ok =
       Client.ingest(%Ingest{
+        id: "journey-published-policy",
         operator_id: @operator_one,
         lens: "published",
         source_kind: :document,
@@ -347,6 +348,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     :ok =
       Client.ingest(%Ingest{
+        id: "journey-work-notes-registry",
         operator_id: @operator_one,
         lens: "work-notes",
         source_kind: :structured_record,

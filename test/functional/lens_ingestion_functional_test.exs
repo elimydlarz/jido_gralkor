@@ -265,6 +265,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
 
   defp request(content) do
     %Ingest{
+      id: "lens-ingestion-#{System.unique_integer([:positive])}",
       operator_id: "operator-one",
       lens: "observations",
       source_kind: :document,

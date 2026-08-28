@@ -417,6 +417,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       ])
 
       request = %Ingest{
+        id: "reflection-lens-ingestion",
         operator_id: "operator-one",
         lens: "observations",
         source_kind: :document,
@@ -480,6 +481,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert :ok =
                Client.ingest(%Ingest{
+                 id: "reflection-direct-ingestion",
                  operator_id: "operator-one",
                  lens: "observations",
                  source_kind: :document,

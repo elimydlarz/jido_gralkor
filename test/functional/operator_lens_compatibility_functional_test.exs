@@ -33,6 +33,7 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
     test "then implicit-default memory uses the graph named `operator/<operator id>`" do
       assert :ok =
                Client.ingest(%Ingest{
+                 id: "operator-compatibility-implicit",
                  operator_id: "operator-one",
                  lens: "operator",
                  source_kind: :document,
@@ -93,6 +94,7 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
     test "and the named Lens writes to that same graph" do
       assert :ok =
                Client.ingest(%Ingest{
+                 id: "operator-compatibility-named",
                  operator_id: "operator-one",
                  lens: "operator",
                  source_kind: :document,

@@ -156,6 +156,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
 
       assert_raise ArgumentError, fn ->
         Client.ingest(%Ingest{
+          id: "unregistered-lens-ingestion",
           operator_id: "operator-one",
           lens: "observations",
           source_kind: :document,

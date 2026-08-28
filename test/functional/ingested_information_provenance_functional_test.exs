@@ -96,6 +96,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     test "then its stored episode retains the declared source kind" do
       assert :ok =
                Client.ingest(%Ingest{
+                 id: "provenance-conversation",
                  operator_id: "operator-one",
                  lens: "observations",
                  source_kind: :conversation,
@@ -343,6 +344,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
   defp request(source_kind, content, source_description) do
     %Ingest{
+      id: "provenance-#{System.unique_integer([:positive])}",
       operator_id: "operator-one",
       lens: "observations",
       source_kind: source_kind,

@@ -195,6 +195,7 @@ defmodule Gralkor.OntologyExtractionTest do
 
     assert :ok =
              Client.ingest(%Ingest{
+               id: "ontology-#{operator_id}-#{lens}",
                operator_id: operator_id,
                lens: lens,
                source_kind: :document,

@@ -180,6 +180,7 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
 
   defp ingest(operator, lens, content) do
     Client.ingest(%Ingest{
+      id: "destination-#{operator}-#{lens}-#{System.unique_integer([:positive])}",
       operator_id: operator,
       lens: lens,
       source_kind: :document,
