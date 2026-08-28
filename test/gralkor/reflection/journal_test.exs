@@ -7,7 +7,7 @@ defmodule Gralkor.Reflection.JournalTest do
     path =
       Path.join(
         System.tmp_dir!(),
-        "reflection-journal-unit-#{System.unique_integer([:positive])}.dets"
+        "reflection-journal-unit-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}.dets"
       )
 
     on_exit(fn -> File.rm(path) end)

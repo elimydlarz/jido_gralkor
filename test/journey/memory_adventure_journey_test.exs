@@ -73,7 +73,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     data_dir =
       Path.join(
         System.tmp_dir!(),
-        "gralkor_memory_adventure_#{System.unique_integer([:positive])}"
+        "gralkor_memory_adventure_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
       )
 
     File.mkdir_p!(data_dir)

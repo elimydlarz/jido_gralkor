@@ -1609,7 +1609,7 @@ defmodule Gralkor.CaptureBufferTest do
       journal_path =
         Path.join(
           System.tmp_dir!(),
-          "capture-drain-#{System.unique_integer([:positive])}.dets"
+          "capture-drain-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}.dets"
         )
 
       on_exit(fn -> File.rm(journal_path) end)

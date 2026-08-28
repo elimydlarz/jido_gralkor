@@ -171,7 +171,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     journal_path =
       Path.join(
         System.tmp_dir!(),
-        "reflection-scheduler-#{System.unique_integer([:positive])}.dets"
+        "reflection-scheduler-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}.dets"
       )
 
     on_exit(fn -> File.rm(journal_path) end)
@@ -791,7 +791,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       journal_path =
         Path.join(
           System.tmp_dir!(),
-          "reflection-drain-restart-#{System.unique_integer([:positive])}.dets"
+          "reflection-drain-restart-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}.dets"
         )
 
       on_exit(fn -> File.rm(journal_path) end)
