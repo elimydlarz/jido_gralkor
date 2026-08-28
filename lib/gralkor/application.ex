@@ -44,7 +44,8 @@ defmodule Gralkor.Application do
     [
       {Gralkor.Python, [reap_orphans: not remote?]},
       {GraphitiPool, graphiti_opts},
-      {Gralkor.Reflection.Scheduler, [journal_path: reflection_journal_path(spec)]},
+      {Gralkor.Reflection.Supervisor,
+       [scheduler_opts: [journal_path: reflection_journal_path(spec)]]},
       {CaptureBuffer,
        [
          flush_callback: build_flush_callback(spec),
