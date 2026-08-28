@@ -656,7 +656,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                  "Susu",
                  "Eli",
                  "observations",
-                 [%Gralkor.Message{role: "user", content: "remember"}]
+                 [Gralkor.Message.new("user", "remember")]
                )
 
       assert :ok = CaptureBuffer.flush("shutdown-session")
