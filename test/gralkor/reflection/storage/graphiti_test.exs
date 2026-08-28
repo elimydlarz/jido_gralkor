@@ -28,6 +28,15 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
                "reflection" => "review"
              }
     end
+
+    test "then an episode conflict becomes the corresponding artefact conflict" do
+      add_episode = fn _group, _content, _source, _ontology, _opts ->
+        {:error, {:episode_conflict, "stable-id"}}
+      end
+
+      assert {:error, {:artefact_conflict, "stable-id"}} =
+               Graphiti.put(reflection(), "operator-one", artefact(), add_episode)
+    end
   end
 
   describe "when Graphiti Reflection storage looks up an artefact identifier" do
@@ -47,6 +56,20 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
 
       assert {:error, :not_found} =
                Graphiti.get(reflection(), "operator-one", "missing", get_episode)
+    end
+
+    test "then a mismatched artefact identifier or Reflection reports a conflict" do
+      mismatched_id = %{artefact() | id: "another-id"}
+      mismatched_reflection = %{artefact() | reflection: "another-reflection"}
+
+      for stored <- [mismatched_id, mismatched_reflection] do
+        get_episode = fn "observations", "stable-id" ->
+          {:ok, %{content: Jason.encode!(Map.from_struct(stored))}}
+        end
+
+        assert {:error, {:artefact_conflict, "stable-id"}} =
+                 Graphiti.get(reflection(), "operator-one", "stable-id", get_episode)
+      end
     end
   end
 
