@@ -585,7 +585,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       start_supervised!(
         Supervisor.child_spec(
           {GraphitiPool,
-           table: :reflection_uncertain_graphiti,
+           table: :gralkor_graphiti_instances,
            falkordb_spec: {:remote, []},
            construct_falkor_db: fn _spec -> :stub_falkor_db end,
            close_falkor_db: fn _database -> :ok end,
