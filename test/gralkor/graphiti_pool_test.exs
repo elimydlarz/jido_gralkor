@@ -162,6 +162,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
               async def episodic_node_save(self, episode, driver):
                   driver.episodes[episode.uuid] = episode
+                  if episode.uuid in driver.steal_after_save:
+                      claim = driver.claims[episode.uuid]
+                      claim['owner'] = 'replacement-after-save'
+                      claim['generation'] += 1
 
           class _Driver:
               def __init__(self):
@@ -383,6 +387,7 @@ defmodule Gralkor.GraphitiPoolTest do
                   self.completed = set()
                   self.lock = asyncio.Lock()
                   self.server_time_ms = 1_000_000
+                  self.steal_after_save = set()
 
               async def execute_query(self, query, **params):
                   async with self.lock:
@@ -581,6 +586,49 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       assert Pythonx.decode(recovered_proof) == [true, true, 3]
+
+      Pythonx.eval(
+        "graphs[0].driver.steal_after_save.add('marker-stolen')",
+        %{"graphs" => graphs}
+      )
+
+      assert {:error, {:python, marker_error}} =
+               GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
+                 uuid: "marker-stolen"
+               )
+
+      assert marker_error =~ "episode claim lost before completion"
+
+      {marker_proof, _} =
+        Pythonx.eval(
+          "['marker-stolen' in graphs[0].driver.episodes, 'marker-stolen' in graphs[0].driver.completed]",
+          %{"graphs" => graphs}
+        )
+
+      assert Pythonx.decode(marker_proof) == [true, false]
+
+      Pythonx.eval(
+        """
+        graphs[0].driver.steal_after_save.remove('marker-stolen')
+        claim = graphs[0].driver.claims['marker-stolen']
+        claim['owner'] = None
+        claim['lease_until_ms'] = 0
+        """,
+        %{"graphs" => graphs}
+      )
+
+      assert :ok =
+               GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil,
+                 uuid: "marker-stolen"
+               )
+
+      {marker_recovery, _} =
+        Pythonx.eval(
+          "['marker-stolen' in graphs[0].driver.completed, graphs[0].driver.claims['marker-stolen']['generation']]",
+          %{"graphs" => graphs}
+        )
+
+      assert Pythonx.decode(marker_recovery) == [true, 3]
       GenServer.stop(first_pool)
       GenServer.stop(second_pool)
     end
