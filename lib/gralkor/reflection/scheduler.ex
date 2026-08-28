@@ -4,6 +4,7 @@ defmodule Gralkor.Reflection.Scheduler do
   use GenServer
 
   alias Gralkor.Reflection.Artefact
+  alias Gralkor.Reflection.Journal
   alias Gralkor.Reflection.Runner
   alias Gralkor.Reflection.Store
 
@@ -42,13 +43,27 @@ defmodule Gralkor.Reflection.Scheduler do
         ])
       )
 
+    journal_name = Keyword.get(opts, :journal_name, Journal)
+    {:ok, journal} = Journal.open(Keyword.get(opts, :journal_path), journal_name)
+
+    jobs =
+      journal
+      |> Journal.all()
+      |> Map.new(fn durable ->
+        job = %{durable | opts: Keyword.merge(defaults, durable.opts), retry_timer: nil}
+        {job.key, job}
+      end)
+
+    if map_size(jobs) > 0, do: send(self(), :resume_unfinished)
+
     {:ok,
      %{
        task_supervisor: supervisor,
        defaults: defaults,
-       jobs: %{},
+       jobs: jobs,
        tasks: %{},
-       drainers: []
+       drainers: [],
+       journal: journal
      }}
   end
 
@@ -58,21 +73,31 @@ defmodule Gralkor.Reflection.Scheduler do
          :ok <- validate_reflections(reflections) do
       opts = Keyword.merge(state.defaults, Keyword.drop(opts, [:server]))
 
-      {state, admitted} =
-        Enum.reduce(reflections, {state, 0}, fn reflection, {current, count} ->
+      new_jobs =
+        Enum.reduce(reflections, [], fn reflection, jobs ->
           key = completion_key(reflection, ingestion)
 
-          if Map.has_key?(current.jobs, key) do
-            {current, count}
+          if Map.has_key?(state.jobs, key) do
+            jobs
           else
-            job = new_job(key, reflection, ingestion, opts)
-            current = %{current | jobs: Map.put(current.jobs, key, job)}
-            {launch(current, key), count + 1}
+            [new_job(key, reflection, ingestion, opts) | jobs]
           end
         end)
 
-      reply = if admitted == 0 and reflections != [], do: :already_scheduled, else: :scheduled
-      {:reply, {:ok, reply}, state}
+      case Journal.put_all(state.journal, Enum.map(new_jobs, &durable_job/1)) do
+        :ok ->
+          state =
+            Enum.reduce(new_jobs, state, fn job, current ->
+              current = %{current | jobs: Map.put(current.jobs, job.key, job)}
+              launch(current, job.key)
+            end)
+
+          reply = if new_jobs == [] and reflections != [], do: :already_scheduled, else: :scheduled
+          {:reply, {:ok, reply}, state}
+
+        {:error, reason} ->
+          {:reply, {:error, {:journal_write_failed, reason}}, state}
+      end
     else
       {:error, _} = error -> {:reply, error, state}
     end
@@ -130,6 +155,10 @@ defmodule Gralkor.Reflection.Scheduler do
       :error ->
         {:noreply, state}
     end
+  end
+
+  def handle_info(:resume_unfinished, state) do
+    {:noreply, Enum.reduce(Map.keys(state.jobs), state, &launch(&2, &1))}
   end
 
   defp new_job(key, reflection, ingestion, opts) do
@@ -220,6 +249,7 @@ defmodule Gralkor.Reflection.Scheduler do
   defp transition(state, key, stage, artefact) do
     job = Map.fetch!(state.jobs, key)
     job = %{job | stage: stage, attempt: 1, artefact: artefact}
+    :ok = Journal.put_all(state.journal, [durable_job(job)])
     launch(%{state | jobs: Map.put(state.jobs, key, job)}, key)
   end
 
@@ -235,6 +265,7 @@ defmodule Gralkor.Reflection.Scheduler do
         notify(job, {:reflection_retrying, job.reflection.name, failure(job, reason)})
         timer = Process.send_after(self(), {:retry, key}, delay)
         job = %{job | attempt: job.attempt + 1, retry_timer: timer}
+        :ok = Journal.put_all(state.journal, [durable_job(job)])
         %{state | jobs: Map.put(state.jobs, key, job)}
     end
   end
@@ -272,6 +303,7 @@ defmodule Gralkor.Reflection.Scheduler do
   end
 
   defp release_job(state, key) do
+    :ok = Journal.delete(state.journal, key)
     state = %{state | jobs: Map.delete(state.jobs, key)}
 
     if map_size(state.jobs) == 0 do
@@ -321,6 +353,24 @@ defmodule Gralkor.Reflection.Scheduler do
     Artefact.id_for(operator_id, ingestion_id, reflection_name)
   end
 
+  defp durable_job(job) do
+    %{
+      key: job.key,
+      reflection: job.reflection,
+      ingestion: job.ingestion,
+      opts:
+        Keyword.take(job.opts, [
+          :runner_opts,
+          :store_opts,
+          :retry_delays,
+          :execution_timeout_ms
+        ]),
+      stage: job.stage,
+      attempt: job.attempt,
+      artefact: job.artefact
+    }
+  end
+
   defp completed?(ingestion) do
     representations = field(ingestion, :representations) || []
     intended = field(ingestion, :intended_lenses) || Enum.map(representations, &field(&1, :lens))
@@ -334,4 +384,7 @@ defmodule Gralkor.Reflection.Scheduler do
   end
 
   defp field(map, key), do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
+
+  @impl true
+  def terminate(_reason, state), do: Journal.close(state.journal)
 end
