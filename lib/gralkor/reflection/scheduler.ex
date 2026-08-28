@@ -603,7 +603,10 @@ defmodule Gralkor.Reflection.Scheduler do
     |> Keyword.merge(durable)
     |> Keyword.put(
       :runner_opts,
-      Keyword.merge(Keyword.get(defaults, :runner_opts, []), Keyword.get(durable, :runner_opts, []))
+      Keyword.merge(
+        Keyword.get(defaults, :runner_opts, []),
+        Keyword.get(durable, :runner_opts, [])
+      )
     )
     |> Keyword.put(
       :store_opts,
