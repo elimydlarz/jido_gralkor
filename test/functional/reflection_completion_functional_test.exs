@@ -545,6 +545,90 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                ~s({"id":"stable-id","payload":{"summary":"stored"}})
              ]
     end
+
+    test "then a committed write whose response is lost retries to one searchable artefact" do
+      {graphiti, _} =
+        Pythonx.eval(
+          """
+          from graphiti_core.errors import NodeNotFoundError
+
+          class GraphOperations:
+              async def episodic_node_get_by_uuid(self, cls, driver, uuid):
+                  if uuid not in driver.episodes:
+                      raise NodeNotFoundError(uuid)
+                  return driver.episodes[uuid]
+
+              async def episodic_node_save(self, episode, driver):
+                  driver.episodes[episode.uuid] = episode
+
+          class Driver:
+              def __init__(self):
+                  self.graph_operations_interface = GraphOperations()
+                  self.episodes = {}
+
+          class GraphitiContract:
+              def __init__(self):
+                  self.driver = Driver()
+                  self.extractions = 0
+
+              async def add_episode(self, **kwargs):
+                  from graphiti_core.nodes import EpisodicNode
+                  self.extractions += 1
+                  episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                  await episode.save(self.driver)
+
+          GraphitiContract()
+          """,
+          %{}
+        )
+
+      start_supervised!(
+        Supervisor.child_spec(
+          {GraphitiPool,
+           table: :reflection_uncertain_graphiti,
+           falkordb_spec: {:remote, []},
+           construct_falkor_db: fn _spec -> :stub_falkor_db end,
+           close_falkor_db: fn _database -> :ok end,
+           construct_shared_clients: fn _llm, _embedder ->
+             %{llm_client: nil, embedder: nil, cross_encoder: nil}
+           end,
+           construct_instance: fn _database, _shared, _group -> graphiti end,
+           initialise_instance: fn _instance -> :ok end,
+           warmup: false,
+           install_loop_fn: &Gralkor.Python.install_async_runtime/0},
+          id: :reflection_uncertain_graphiti
+        )
+      )
+
+      start_supervised!({LoseFirstGraphitiResponseStore, self()})
+      Application.put_env(:jido_gralkor, :reflection_storage, LoseFirstGraphitiResponseStore)
+
+      assert :ok = Client.ingest(ingestion())
+      assert_receive {:runner_started, "review", "ingestion-one", artefact_id, runner}
+      send(runner, :finish_reflection)
+
+      assert_receive {:graphiti_store_committed, first}
+      assert first.id == artefact_id
+      assert_receive {:reflection_retrying, "review", %{stage: :storage, reason: :response_lost}}
+      assert_receive {:graphiti_store_committed, ^first}
+      assert_receive {:reflection_completed, "review", {:ok, ^first}}
+
+      assert {:ok, [%{artefact: ^first}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "",
+                 destinations: ["observations"],
+                 result_type: :artefacts
+               })
+
+      {proof, _} =
+        Pythonx.eval(
+          "[len(graphiti.driver.episodes), graphiti.extractions]",
+          %{"graphiti" => graphiti}
+        )
+
+      assert Pythonx.decode(proof) == [1, 1]
+    end
   end
 
   defp ingestion do
