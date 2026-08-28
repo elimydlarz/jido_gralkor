@@ -360,8 +360,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
   describe "when a retryable phase consumes every configured retry" do
     test "then terminal failure is logged and durable admission is deleted" do
       start_supervised!(
-        {ControlledStore,
-         {self(), [{:error, :not_found}], [{:error, :first}, {:error, :final}]}}
+        {ControlledStore, {self(), [{:error, :not_found}], [{:error, :first}, {:error, :final}]}}
       )
 
       {name, runner} = immediate_runner(self())
@@ -462,8 +461,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       assert eventually(fn -> Process.whereis(name) not in [nil, scheduler] end)
 
       assert_receive {:reflection_completed, "review",
-                      {:error,
-                       %{stage: :runner, attempts: 1, reason: :scheduler_restart}}}
+                      {:error, %{stage: :runner, attempts: 1, reason: :scheduler_restart}}}
 
       refute_receive {:active_runner, _runner}
     end
