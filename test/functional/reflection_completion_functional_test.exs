@@ -46,6 +46,39 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
+  defmodule ControlledCompletionStore do
+    @behaviour Gralkor.Reflection.Store
+
+    use Agent
+
+    def start_link({test_pid, outcomes}) do
+      Agent.start_link(fn -> {test_pid, outcomes} end, name: __MODULE__)
+    end
+
+    @impl true
+    def get(_reflection, _operator_id, _artefact_id), do: {:error, :not_found}
+
+    @impl true
+    def put(_reflection, _operator_id, artefact) do
+      {test_pid, outcome} =
+        Agent.get_and_update(__MODULE__, fn {test_pid, [outcome | remaining]} ->
+          {{test_pid, outcome}, {test_pid, remaining}}
+        end)
+
+      send(test_pid, {:controlled_store_attempt, artefact, self()})
+
+      case outcome do
+        :ok -> :ok
+        :crash -> raise "canonical storage crashed"
+
+        :hang ->
+          receive do
+            :release -> :ok
+          end
+      end
+    end
+  end
+
   defmodule LoseFirstGraphitiResponseStore do
     @behaviour Gralkor.Reflection.Store
 
@@ -355,6 +388,68 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, retry_runner}
       send(retry_runner, :finish_reflection)
       assert_receive {:reflection_completed, "review", {:ok, %{id: ^artefact_id}}}
+    end
+
+    test "then a host-tool side effect before interruption is invoked again on Runner retry", %{
+      reflection: reflection
+    } do
+      side_effects = :atomics.new(1, [])
+      test_pid = self()
+
+      inference = fn request ->
+        if request.tool_results == [] do
+          {:ok, %{tool_calls: [%{name: "record-side-effect", arguments: %{}}]}}
+        else
+          if :atomics.get(side_effects, 1) == 1 do
+            raise "response lost after host-tool side effect"
+          else
+            {:ok, %{output: %{"summary" => "stored"}}}
+          end
+        end
+      end
+
+      tool_executor = fn call, _context ->
+        count = :atomics.add_get(side_effects, 1, 1)
+        send(test_pid, {:host_tool_side_effect, count, call})
+        :recorded
+      end
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection], scheduler_ingestion(),
+                 runner_opts: [inference: inference, tool_executor: tool_executor]
+               )
+
+      assert_receive {:host_tool_side_effect, 1, %{name: "record-side-effect"}}
+      assert_receive {:reflection_retrying, "review", %{stage: :runner}}
+      assert_receive {:host_tool_side_effect, 2, %{name: "record-side-effect"}}
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+      assert :atomics.get(side_effects, 1) == 2
+    end
+  end
+
+  describe "when a Runner task cannot start" do
+    test "then the task-start failure follows the bounded Runner retry schedule", %{
+      reflection: reflection
+    } do
+      starts = :atomics.new(1, [])
+
+      start_task = fn supervisor, operation ->
+        if :atomics.add_get(starts, 1, 1) == 2 do
+          {:error, :task_supervisor_busy}
+        else
+          Task.Supervisor.async_nolink(supervisor, operation)
+        end
+      end
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection], scheduler_ingestion(), start_task: start_task)
+
+      assert_receive {:reflection_retrying, "review",
+                      %{stage: :runner, reason: {:task_start, :task_supervisor_busy}}}
+
+      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
+      send(runner, :finish_reflection)
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
     end
   end
 
