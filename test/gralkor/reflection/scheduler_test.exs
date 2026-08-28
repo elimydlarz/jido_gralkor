@@ -66,6 +66,17 @@ defmodule Gralkor.Reflection.SchedulerTest do
     end
   end
 
+  describe "when the Scheduler starts without execution overrides" do
+    test "then it uses one-, two-, and four-second retries and a sixty-second timeout" do
+      name = scheduler_name()
+      start_scheduler(name, runner: elem(immediate_runner(self()), 1))
+
+      defaults = :sys.get_state(name).defaults
+      assert defaults[:retry_delays] == [1_000, 2_000, 4_000]
+      assert defaults[:execution_timeout_ms] == 60_000
+    end
+  end
+
   describe "when completed ingestion schedules distinct Reflections" do
     test "then each logical completion receives a stable and distinct deterministic UUID" do
       id = Artefact.id_for("operator-one", "ingestion-one", "review")
