@@ -9,10 +9,10 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
   @impl true
   def put(reflection, operator_id, %Artefact{} = artefact) do
     put(reflection, operator_id, artefact, fn group_id,
-                                                content,
-                                                source_description,
-                                                ontology,
-                                                opts ->
+                                              content,
+                                              source_description,
+                                              ontology,
+                                              opts ->
       GraphitiPool.add_episode(
         GraphitiPool,
         group_id,
