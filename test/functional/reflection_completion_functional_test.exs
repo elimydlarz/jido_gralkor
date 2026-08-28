@@ -2,6 +2,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Client
+  alias Gralkor.CaptureBuffer
   alias Gralkor.GraphitiPool
   alias Gralkor.Ingest
   alias Gralkor.Reflection
@@ -162,6 +163,14 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                })
     end
 
+    test "then a missing ingestion identifier raises before Lens or Reflection side effects" do
+      assert_raise ArgumentError, ~r/id must be a non-blank string/, fn ->
+        Client.ingest(%{ingestion() | id: nil})
+      end
+
+      refute_receive {:runner_started, _reflection, _ingestion, _artefact_id, _runner}
+    end
+
     test "then replay after a Scheduler restart confirms one stable searchable artefact without rerunning" do
       assert :ok = Client.ingest(ingestion())
       assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, first_runner}
@@ -260,6 +269,14 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       send(runner, :finish_reflection)
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+
+      assert {:ok, [_one_artefact]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "",
+                 destinations: ["observations"],
+                 result_type: :artefacts
+               })
     end
 
     test "then a Runner task crash is retried and can complete" do
@@ -341,6 +358,14 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert :ok = Scheduler.drain()
     end
 
+    test "then public ingestion with no Reflections succeeds without retaining work" do
+      Application.put_env(:jido_gralkor, :reflections, [])
+
+      assert :ok = Client.ingest(ingestion())
+      assert :ok = Scheduler.drain()
+      refute_receive {:runner_started, _name, _ingestion, _artefact_id, _runner}
+    end
+
     test "then graceful draining waits for admitted work to finish" do
       assert :ok = Client.ingest(ingestion())
       assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
@@ -351,6 +376,35 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       send(runner, :finish_reflection)
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
       assert Task.await(drainer) == :ok
+    end
+
+    test "then CaptureBuffer shutdown drains the replacement Scheduler after a restart", %{
+      reflection: reflection
+    } do
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _group, _agent, _user, _ontology, _turns -> :ok end,
+         reflections: [reflection]}
+      )
+
+      original = Process.whereis(Scheduler)
+      Process.exit(original, :kill)
+      assert eventually(fn -> Process.whereis(Scheduler) not in [nil, original] end)
+
+      assert :ok = Client.ingest(ingestion())
+      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
+
+      finisher =
+        Task.async(fn ->
+          Process.sleep(50)
+          send(runner, :finish_reflection)
+        end)
+
+      started = System.monotonic_time(:millisecond)
+      assert :ok = stop_supervised(CaptureBuffer)
+      assert System.monotonic_time(:millisecond) - started >= 40
+      assert :ok = Task.await(finisher)
+      assert :ok = Scheduler.drain()
     end
   end
 
