@@ -670,9 +670,53 @@ defmodule Gralkor.GraphitiPool do
             claim_lease_ms = getattr(g, '_gralkor_claim_lease_ms', 30_000)
             claim_state = {'distributed': False, 'generation': None}
 
+            async def ensure_claim_constraint():
+                if getattr(g.driver, 'provider', None) != GraphProvider.FALKORDB:
+                    return
+                if getattr(g.driver, '_gralkor_claim_constraint_ready', False):
+                    return
+
+                graph = g.driver._get_graph(g.driver._database)
+                creation_error = None
+                try:
+                    await graph.create_node_unique_constraint(
+                        '_GralkorEpisodeClaim', 'uuid'
+                    )
+                except Exception as error:
+                    # Another runtime may be creating the same asynchronous
+                    # constraint. Its operational status below is authoritative.
+                    creation_error = error
+
+                for _ in range(1000):
+                    constraints = await graph.list_constraints()
+                    matching = [
+                        constraint for constraint in constraints
+                        if constraint.get('type') == 'UNIQUE'
+                        and constraint.get('label') == '_GralkorEpisodeClaim'
+                        and constraint.get('properties') == ['uuid']
+                    ]
+                    if matching:
+                        status = str(matching[0].get('status', '')).upper()
+                        if status in {'OPERATIONAL', 'ACTIVE'}:
+                            g.driver._gralkor_claim_constraint_ready = True
+                            return
+                        if status in {'FAILED', 'ERROR'}:
+                            raise RuntimeError(
+                                f'episode claim uniqueness constraint failed: {matching[0]}'
+                            )
+                    await asyncio.sleep(0.01)
+
+                if creation_error is not None:
+                    raise RuntimeError(
+                        f'episode claim uniqueness constraint unavailable: {creation_error}'
+                    )
+                raise RuntimeError('episode claim uniqueness constraint did not become operational')
+
             async def acquire_claim():
                 if not hasattr(g.driver, 'execute_query'):
                     return 'acquired'
+
+                await ensure_claim_constraint()
 
                 source_value = getattr(episode_type, 'value', str(episode_type))
                 while True:
