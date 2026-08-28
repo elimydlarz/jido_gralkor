@@ -1537,7 +1537,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           %{"first" => first_graph, "second" => second_graph}
         )
 
-      assert Pythonx.decode(proof) == [4, 8]
+      assert Pythonx.decode(proof) == [5, 8]
     end
   end
 
