@@ -1,11 +1,15 @@
 defmodule Gralkor.Reflection.SchedulerTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
+
   alias Gralkor.Destination
   alias Gralkor.Reflection
   alias Gralkor.Reflection.Artefact
   alias Gralkor.Reflection.ChainOfThought
+  alias Gralkor.Reflection.Journal
   alias Gralkor.Reflection.Scheduler
+  alias Gralkor.Reflection.Storage.InMemory
 
   defmodule EmptyStore do
     @behaviour Gralkor.Reflection.Store
@@ -115,6 +119,100 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
       send(retry_runner, :succeed)
       assert_receive {:reflection_completed, "summary", {:ok, _artefact}}
+    end
+
+    test "then a newly added Reflection runs without disturbing a completed sibling" do
+      start_supervised!(InMemory)
+      {name, runner} = immediate_runner(self())
+      start_scheduler(name, runner: runner, store_opts: [storage: InMemory], notify: self())
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:runner_invoked, review_id}
+      assert_receive {:reflection_completed, "review", {:ok, %{id: ^review_id}}}
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review"), reflection("summary")], ingestion(),
+                 server: name
+               )
+
+      assert_receive {:reflection_completed, "review", {:ok, %{id: ^review_id}}}
+      assert_receive {:runner_invoked, summary_id}
+      assert summary_id != review_id
+      refute_receive {:runner_invoked, ^review_id}
+      assert_receive {:reflection_completed, "summary", {:ok, %{id: ^summary_id}}}
+    end
+  end
+
+  describe "when a Runner attempt crashes or exceeds its execution timeout" do
+    test "then a crash retries the Runner with the same deterministic identifier" do
+      attempts = :atomics.new(1, [])
+      test_pid = self()
+      name = scheduler_name()
+
+      runner = fn reflection, _ingestion, opts ->
+        attempt = :atomics.add_get(attempts, 1, 1)
+        send(test_pid, {:runner_attempt, attempt, opts[:artefact_id]})
+
+        if attempt == 1 do
+          raise "runner crashed"
+        else
+          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"stored" => true}, [])}
+        end
+      end
+
+      start_scheduler(name,
+        runner: runner,
+        store_opts: [storage: EmptyStore],
+        retry_delays: [0],
+        notify: self()
+      )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:runner_attempt, 1, artefact_id}
+      assert_receive {:reflection_retrying, "review", %{stage: :runner}}
+      assert_receive {:runner_attempt, 2, ^artefact_id}
+      assert_receive {:reflection_completed, "review", {:ok, %{id: ^artefact_id}}}
+    end
+
+    test "then timeout waits for the expired Runner to exit before replacement begins" do
+      attempts = :atomics.new(1, [])
+      test_pid = self()
+      name = scheduler_name()
+
+      runner = fn reflection, _ingestion, opts ->
+        attempt = :atomics.add_get(attempts, 1, 1)
+        send(test_pid, {:timed_runner, attempt, self(), opts[:artefact_id]})
+
+        if attempt == 1 do
+          receive do
+            :never -> {:error, :unexpected}
+          end
+        else
+          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"stored" => true}, [])}
+        end
+      end
+
+      start_scheduler(name,
+        runner: runner,
+        store_opts: [storage: EmptyStore],
+        retry_delays: [0],
+        execution_timeout_ms: 25,
+        notify: self()
+      )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:timed_runner, 1, first_runner, artefact_id}
+      monitor = Process.monitor(first_runner)
+      assert_receive {:DOWN, ^monitor, :process, ^first_runner, :killed}
+      assert_receive {:reflection_retrying, "review", %{reason: :timeout}}
+      assert_receive {:timed_runner, 2, _replacement, ^artefact_id}
+      assert_receive {:reflection_completed, "review", {:ok, %{id: ^artefact_id}}}
     end
   end
 
@@ -259,6 +357,118 @@ defmodule Gralkor.Reflection.SchedulerTest do
     end
   end
 
+  describe "when a retryable phase consumes every configured retry" do
+    test "then terminal failure is logged and durable admission is deleted" do
+      start_supervised!(
+        {ControlledStore,
+         {self(), [{:error, :not_found}], [{:error, :first}, {:error, :final}]}}
+      )
+
+      {name, runner} = immediate_runner(self())
+      path = journal_path()
+      journal_name = journal_name()
+
+      start_scheduler(name,
+        runner: runner,
+        store_opts: [storage: ControlledStore],
+        retry_delays: [0],
+        notify: self(),
+        journal_path: path,
+        journal_name: journal_name
+      )
+
+      log =
+        capture_log(fn ->
+          assert {:ok, :scheduled} =
+                   Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+          assert_receive {:reflection_completed, "review",
+                          {:error, %{stage: :storage, attempts: 2, reason: :final}}}
+        end)
+
+      assert log =~ "Reflection failed"
+      assert log =~ "reflection:review"
+      assert log =~ "stage:storage"
+
+      assert :ok = stop_supervised(name)
+      reopened = journal_name()
+      assert {:ok, ^reopened} = Journal.open(path, reopened)
+      assert Journal.all(reopened) == []
+      assert :ok = Journal.close(reopened)
+      File.rm(path)
+    end
+  end
+
+  describe "when the Scheduler process starts with durable unfinished work" do
+    test "then retained storage resumes with the exact artefact and retry state" do
+      start_supervised!({ControlledStore, {self(), [{:error, :not_found}], [:hang, :ok]}})
+      {name, runner} = immediate_runner(self())
+      path = journal_path()
+
+      scheduler =
+        start_scheduler(name,
+          runner: runner,
+          store_opts: [storage: ControlledStore],
+          retry_delays: [0],
+          notify: self(),
+          journal_path: path,
+          journal_name: journal_name()
+        )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:store_put, artefact, first_store_task}
+      Process.exit(scheduler, :kill)
+      assert_receive {:EXIT, ^first_store_task, _reason}, 0
+      assert eventually(fn -> Process.whereis(name) not in [nil, scheduler] end)
+      assert_receive {:reflection_retrying, "review", %{reason: :scheduler_restart}}
+      assert_receive {:store_put, ^artefact, _resumed_store_task}
+      assert_receive {:reflection_completed, "review", {:ok, ^artefact}}
+      File.rm(path)
+    end
+
+    test "then an interrupted active attempt consumes the durable retry budget" do
+      test_pid = self()
+      name = scheduler_name()
+      path = journal_path()
+
+      runner = fn _reflection, _ingestion, _opts ->
+        send(test_pid, {:active_runner, self()})
+
+        receive do
+          :never -> {:error, :unexpected}
+        end
+      end
+
+      scheduler =
+        start_scheduler(name,
+          runner: runner,
+          store_opts: [storage: EmptyStore],
+          retry_delays: [],
+          notify: self(),
+          journal_path: path,
+          journal_name: journal_name()
+        )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:active_runner, active_runner}
+      Process.exit(scheduler, :kill)
+      ref = Process.monitor(active_runner)
+      assert_receive {:DOWN, ^ref, :process, ^active_runner, _reason}
+      assert eventually(fn -> Process.whereis(name) not in [nil, scheduler] end)
+
+      assert_receive {:reflection_completed, "review",
+                      {:error,
+                       %{stage: :runner, attempts: 1, reason: :scheduler_restart}}}
+
+      refute_receive {:active_runner, _runner}
+      File.rm(path)
+    end
+  end
+
   describe "when the same logical completion is scheduled concurrently" do
     test "then one Runner is active and duplicate admission is reported" do
       test_pid = self()
@@ -305,6 +515,54 @@ defmodule Gralkor.Reflection.SchedulerTest do
       assert :ok = Scheduler.drain(name)
       refute_receive :runner_started
     end
+
+    test "then missing operator, missing ingestion, and incomplete ingestion are identified" do
+      name = scheduler_name()
+      runner = fn _, _, _ -> send(self(), :runner_started) end
+      start_scheduler(name, runner: runner, store_opts: [storage: EmptyStore])
+
+      assert {:error, {:invalid_operator_id, nil}} =
+               Scheduler.schedule([reflection("review")], %{ingestion() | operator_id: nil},
+                 server: name
+               )
+
+      assert {:error, {:invalid_ingestion_id, nil}} =
+               Scheduler.schedule([reflection("review")], %{ingestion() | id: nil}, server: name)
+
+      incomplete = %{ingestion() | completed_lenses: [], representations: []}
+
+      assert {:error, {:incomplete_ingestion, "ingestion-one"}} =
+               Scheduler.schedule([reflection("review")], incomplete, server: name)
+
+      refute_receive :runner_started
+    end
+  end
+
+  describe "when the Scheduler is asked to drain" do
+    test "then every waiting caller is released after admitted work ends" do
+      test_pid = self()
+      name = scheduler_name()
+
+      runner = fn reflection, _ingestion, opts ->
+        send(test_pid, {:drain_runner, self()})
+
+        receive do
+          :finish ->
+            {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"stored" => true}, [])}
+        end
+      end
+
+      start_scheduler(name, runner: runner, store_opts: [storage: EmptyStore])
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:drain_runner, runner_task}
+      drainers = for _ <- 1..2, do: Task.async(fn -> Scheduler.drain(name) end)
+      assert Enum.all?(drainers, &(Task.yield(&1, 10) == nil))
+      send(runner_task, :finish)
+      assert Task.await_many(drainers) == [:ok, :ok]
+    end
   end
 
   defp reflection(name) do
@@ -350,4 +608,26 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
   defp scheduler_name,
     do: Module.concat(__MODULE__, "Scheduler#{System.unique_integer([:positive])}")
+
+  defp journal_name,
+    do: Module.concat(__MODULE__, "Journal#{System.unique_integer([:positive])}")
+
+  defp journal_path,
+    do:
+      Path.join(
+        System.tmp_dir!(),
+        "scheduler-unit-#{System.unique_integer([:positive])}.dets"
+      )
+
+  defp eventually(fun, attempts \\ 50)
+  defp eventually(fun, 0), do: fun.()
+
+  defp eventually(fun, attempts) do
+    if fun.() do
+      true
+    else
+      Process.sleep(10)
+      eventually(fun, attempts - 1)
+    end
+  end
 end
