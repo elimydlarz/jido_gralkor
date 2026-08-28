@@ -629,6 +629,104 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert Pythonx.decode(proof) == [1, 1]
     end
+
+    test "then an embedded episode-only partial commit resumes before durable confirmation" do
+      data_dir =
+        Path.join(
+          System.tmp_dir!(),
+          "reflection-partial-commit-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(data_dir)
+      on_exit(fn -> File.rm_rf!(data_dir) end)
+      start_supervised!(Gralkor.Python)
+
+      construct_instance = fn database, _shared, group_id ->
+        {graphiti, _} =
+          Pythonx.eval(
+            """
+            from graphiti_core.driver.falkordb_driver import FalkorDriver
+
+            gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+
+            class EmbeddedGraphitiContract:
+                def __init__(self):
+                    self.driver = FalkorDriver(falkor_db=database, database=gid)
+                    self.extractions = 0
+
+                async def add_episode(self, **kwargs):
+                    from graphiti_core.nodes import EpisodicNode
+                    self.extractions += 1
+                    episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                    await episode.save(self.driver)
+                    if self.extractions == 1:
+                        raise RuntimeError('lost after durable episode save')
+
+            EmbeddedGraphitiContract()
+            """,
+            %{"database" => database, "group_id" => group_id}
+          )
+
+        graphiti
+      end
+
+      table = :"reflection_partial_#{System.unique_integer([:positive])}"
+
+      pool =
+        start_supervised!(
+          Supervisor.child_spec(
+            {GraphitiPool,
+             name: nil,
+             table: table,
+             falkordb_spec: {:embedded, data_dir},
+             construct_shared_clients: fn _llm, _embedder ->
+               %{llm_client: nil, embedder: nil, cross_encoder: nil}
+             end,
+             construct_instance: construct_instance,
+             initialise_instance: fn _instance -> :ok end,
+             warmup: false,
+             embedded_falkordb_socket_timeout_ms: 60_000},
+            id: table
+          )
+        )
+
+      assert {:error, {:python, "RuntimeError: lost after durable episode save"}} =
+               GraphitiPool.add_episode(pool, "observations", "content", "source", nil,
+                 uuid: "embedded-partial"
+               )
+
+      assert :ok =
+               GraphitiPool.add_episode(pool, "observations", "content", "source", nil,
+                 uuid: "embedded-partial"
+               )
+
+      assert :ok =
+               GraphitiPool.add_episode(pool, "observations", "content", "source", nil,
+                 uuid: "embedded-partial"
+               )
+
+      assert {:ok, %{"content" => "content", "uuid" => "embedded-partial"}} =
+               GraphitiPool.get_episode(pool, "observations", "embedded-partial")
+
+      graphiti = GraphitiPool.for(pool, "observations")
+
+      {proof, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          async def proof():
+              records, _, _ = await graphiti.driver.execute_query(
+                  "MATCH (e:Episodic {uuid: $uuid}) RETURN e._gralkor_extraction_complete AS complete",
+                  uuid='embedded-partial',
+              )
+              return [graphiti.extractions, records[0]['complete']]
+          asyncio._gralkor_run(proof())
+          """,
+          %{"graphiti" => graphiti}
+        )
+
+      assert Pythonx.decode(proof) == [2, true]
+    end
   end
 
   defp ingestion do
