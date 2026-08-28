@@ -287,6 +287,18 @@ defmodule Gralkor.Reflection.Scheduler do
     {:storage, outcome}
   end
 
+  defp execute(%{stage: :storage_confirmation} = job) do
+    outcome =
+      Store.get(
+        job.reflection,
+        field(job.ingestion, :operator_id),
+        artefact_id(job),
+        Keyword.get(job.opts, :store_opts, [])
+      )
+
+    {:storage_confirmation, outcome}
+  end
+
   defp handle_outcome(state, key, :lookup, {:ok, artefact}),
     do: finish_success(state, key, artefact)
 
@@ -312,6 +324,28 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp handle_outcome(state, key, :storage, :ok),
     do: finish_success(state, key, Map.fetch!(state.jobs, key).artefact)
+
+  defp handle_outcome(state, key, :storage_confirmation, {:ok, artefact}),
+    do: finish_success(state, key, artefact)
+
+  defp handle_outcome(
+         state,
+         key,
+         :storage_confirmation,
+         {:error, {:incomplete_artefact, %Artefact{} = artefact}}
+       ),
+       do: retry_storage_or_finish(state, key, :scheduler_restart, artefact)
+
+  defp handle_outcome(state, key, :storage_confirmation, {:error, :not_found}),
+    do: retry_storage_or_finish(state, key, :scheduler_restart)
+
+  defp handle_outcome(
+         state,
+         key,
+         :storage_confirmation,
+         {:error, {:artefact_conflict, _} = reason}
+       ),
+       do: finish_failure(state, key, reason)
 
   defp handle_outcome(state, key, :storage, {:error, {:artefact_conflict, _} = reason}),
     do: finish_failure(state, key, reason)
@@ -340,10 +374,24 @@ defmodule Gralkor.Reflection.Scheduler do
       delay ->
         notify(job, {:reflection_retrying, job.reflection.name, failure(job, reason)})
         timer = Process.send_after(self(), {:retry, key}, delay)
-        job = %{job | attempt: job.attempt + 1, retry_timer: timer, active: false}
+
+        job = %{
+          job
+          | attempt: job.attempt + 1,
+            retry_timer: timer,
+            retry_at_ms: System.system_time(:millisecond) + delay,
+            active: false
+        }
+
         :ok = Journal.put_all(state.journal, [durable_job(job)])
         %{state | jobs: Map.put(state.jobs, key, job)}
     end
+  end
+
+  defp retry_storage_or_finish(state, key, reason, artefact \\ nil) do
+    job = Map.fetch!(state.jobs, key)
+    job = %{job | stage: :storage, artefact: artefact || job.artefact, active: false}
+    retry_or_finish(%{state | jobs: Map.put(state.jobs, key, job)}, key, reason)
   end
 
   defp finish_success(state, key, artefact) do
@@ -370,6 +418,7 @@ defmodule Gralkor.Reflection.Scheduler do
   end
 
   defp public_stage(:lookup), do: :storage
+  defp public_stage(:storage_confirmation), do: :storage
   defp public_stage(stage), do: stage
 
   defp release_task(state, reference, task) do
