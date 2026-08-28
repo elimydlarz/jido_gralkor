@@ -1129,7 +1129,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
     do:
       Path.join(
         System.tmp_dir!(),
-        "scheduler-unit-#{System.unique_integer([:positive])}.dets"
+        "scheduler-unit-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}.dets"
       )
 
   defp eventually(fun, attempts \\ 50)
