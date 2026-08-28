@@ -87,12 +87,16 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                  {:ok, %{output: %{"summary" => "stored"}}}
                end)
              )
+
+           {:finish_reflection, outcome} ->
+             outcome
          end
        end,
-       notify: test_pid}
+       notify: test_pid,
+       retry_delays: [0]}
     )
 
-    :ok
+    {:ok, reflection: reflection}
   end
 
   describe "when an application ingests information under a stable ingestion identifier while Reflections are declared" do
@@ -133,6 +137,27 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert searchable.id == first_artefact.id
     end
+
+    test "then one failed Reflection retries without rerunning its completed sibling", %{
+      reflection: reflection
+    } do
+      summary = %{reflection | name: "summary"}
+      Application.put_env(:jido_gralkor, :reflections, [reflection, summary])
+
+      assert :ok = Client.ingest(ingestion())
+
+      runners = receive_runners(2, %{})
+      send(Map.fetch!(runners, "review"), :finish_reflection)
+      send(Map.fetch!(runners, "summary"), {:finish_reflection, {:error, :temporary}})
+
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+      assert_receive {:reflection_completed, "summary", {:error, :temporary}}
+      assert_receive {:runner_started, "summary", "ingestion-one", retry_runner}, 500
+      refute_receive {:runner_started, "review", "ingestion-one", _runner}, 50
+
+      send(retry_runner, :finish_reflection)
+      assert_receive {:reflection_completed, "summary", {:ok, _artefact}}
+    end
   end
 
   defp ingestion do
@@ -159,6 +184,13 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   defp eventually(_assertion, 0), do: false
+
+  defp receive_runners(0, runners), do: runners
+
+  defp receive_runners(remaining, runners) do
+    assert_receive {:runner_started, name, "ingestion-one", runner}
+    receive_runners(remaining - 1, Map.put(runners, name, runner))
+  end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
