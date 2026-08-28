@@ -165,3 +165,7 @@ when the supervision tree stops the buffer
   then every pending entry is drained through the flush callback before termination returns
   and every already-started fire-and-forget flush worker finishes before Reflection draining begins
   and every Reflection admitted by those workers finishes before termination returns
+  while the buffer started with no declared Reflections
+    then work admitted directly or by a later Reflection registry is still drained
+  while the Scheduler exits during its drain call
+    then the buffer waits for its supervised replacement and drains that replacement before returning

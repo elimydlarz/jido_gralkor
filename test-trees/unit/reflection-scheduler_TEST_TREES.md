@@ -58,6 +58,13 @@ when the Scheduler process starts with durable unfinished work
   while the previous Scheduler stopped during an active storage attempt
     then canonical lookup first confirms whether that uncertain attempt completed
     and a confirmed artefact completes even when no storage retry remains
+  while a replacement Scheduler stops during canonical confirmation
+    then the next replacement confirms canonical storage again
+    and confirmation restart does not consume the storage retry budget
+
+when durable work survives a VM restart
+  then its journal contains only restart-safe execution data
+  and runtime-owned dependencies are restored from the replacement Scheduler configuration
 
 when the Scheduler stops during a configured retry delay
   then the durable retry deadline survives restart
@@ -75,5 +82,5 @@ if scheduling receives an incomplete ingestion, a missing or blank operator or i
 when scheduling receives no Reflections
   then scheduling succeeds without retaining admission or durable work
 
-if retry delays are not a finite list of non-negative integer milliseconds or the execution timeout is not a positive integer
+if retry delays are not a finite list of non-negative integer milliseconds within the supported timer range or the execution timeout is not a positive integer within that range
   then Scheduler startup or scheduling rejects the invalid boundedness configuration

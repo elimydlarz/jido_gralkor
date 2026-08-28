@@ -1,4 +1,4 @@
-Functional: reflection-completion (src: lib/gralkor/application.ex, lib/gralkor/client.ex, lib/gralkor/ingest.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/journal.ex, lib/gralkor/reflection/store.ex, lib/gralkor/reflection/storage/in_memory.ex, lib/gralkor/reflection/storage/graphiti.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/reflection_completion_functional_test.exs)
+Functional: reflection-completion (src: lib/gralkor/application.ex, lib/gralkor/client.ex, lib/gralkor/ingest.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/journal.ex, lib/gralkor/reflection/store.ex, lib/gralkor/reflection/storage/in_memory.ex, lib/gralkor/reflection/storage/graphiti.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/reflection_completion_functional_test.exs)
 
 when an application ingests information under a stable ingestion identifier while Reflections are declared
   then ingestion returns without waiting for Reflection completion
@@ -61,6 +61,10 @@ when the application stops gracefully with unfinished Reflection work
     then shutdown waits for that flush to admit its Reflection and for the admitted Reflection to finish
   while the supervised Scheduler was restarted after CaptureBuffer began
     then shutdown drains the current replacement Scheduler
+  while CaptureBuffer began with no declared Reflections
+    then shutdown still drains Reflection work admitted through the Scheduler
+  while the supervised Scheduler exits during its drain call
+    then shutdown waits for the replacement Scheduler and drains it
 
 when repeated canonical writes use the same artefact identifier and immutable content
   then the first write creates the artefact
@@ -87,6 +91,15 @@ where Graphiti is the canonical Reflection store
       then search returns one artefact
     while their immutable artefact content conflicts
       then search reports an artefact conflict
+  when incomplete or duplicate episodes outnumber the requested result window
+    then they cannot crowd completed unique artefacts out of the requested results
+    and conflicts for selected artefact identifiers are detected beyond the ranked window
+  when independent application runtimes write the same artefact UUID concurrently
+    then graph-backed admission serializes extraction across runtimes
+    and equal content converges while conflicting immutable content is rejected
+  when upgrading from an unmarked pre-completion-marker artefact
+    then it remains hidden until an explicit replay or migration establishes durable completion
+    and upgrade behavior does not expose a possibly partial episode as completed
 
 where in-memory storage is the canonical Reflection store
   when the same artefact is written repeatedly
