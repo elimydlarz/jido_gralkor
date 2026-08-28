@@ -134,7 +134,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
        end,
        notify: test_pid,
        retry_delays: [0],
-       execution_timeout_ms: 50,
+       execution_timeout_ms: 1_000,
        journal_path: journal_path}
     )
 
@@ -279,8 +279,12 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert_receive {:reflection_completed, "review", {:ok, %{id: ^artefact_id}}}
     end
 
-    test "then Runner timeout exhaustion is observable and releases its logical work" do
-      assert :ok = Client.ingest(ingestion())
+    test "then Runner timeout exhaustion is observable and releases its logical work", %{
+      reflection: reflection
+    } do
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection], scheduler_ingestion(), execution_timeout_ms: 50)
+
       assert_receive {:runner_started, "review", "ingestion-one", artefact_id, first_runner}
       first_monitor = Process.monitor(first_runner)
 
@@ -299,7 +303,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       refute Process.alive?(second_runner)
 
-      assert :ok = Client.ingest(ingestion())
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection], scheduler_ingestion(), execution_timeout_ms: 1_000)
+
       assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, replacement}
       send(replacement, :finish_reflection)
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
