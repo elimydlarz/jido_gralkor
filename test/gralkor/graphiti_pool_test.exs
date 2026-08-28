@@ -162,10 +162,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
               async def episodic_node_save(self, episode, driver):
                   driver.episodes[episode.uuid] = episode
-                  if episode.uuid in driver.steal_after_save:
-                      claim = driver.claims[episode.uuid]
-                      claim['owner'] = 'replacement-after-save'
-                      claim['generation'] += 1
 
           class _Driver:
               def __init__(self):
