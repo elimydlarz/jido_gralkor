@@ -689,6 +689,50 @@ defmodule Gralkor.Reflection.SchedulerTest do
     end
   end
 
+  describe "when scheduling supplies request-specific Runner or store options" do
+    test "then first admission composes them with configured runtime dependencies" do
+      test_pid = self()
+      name = scheduler_name()
+
+      runner = fn _reflection, _ingestion, opts ->
+        send(test_pid, {:composed_runner_opts, opts, self()})
+
+        receive do
+          :finish -> {:error, :expected_stop}
+        end
+      end
+
+      start_scheduler(name,
+        runner: runner,
+        runner_opts: [inference: :configured_inference, tool_executor: :configured_executor],
+        store_opts: [storage: EmptyStore, namespace: "configured"],
+        retry_delays: []
+      )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(),
+                 server: name,
+                 runner_opts: [tools: [:request_tool]],
+                 store_opts: [tenant: "request-tenant"]
+               )
+
+      assert_receive {:composed_runner_opts, runner_opts, runner_task}
+      assert runner_opts[:inference] == :configured_inference
+      assert runner_opts[:tool_executor] == :configured_executor
+      assert runner_opts[:tools] == [:request_tool]
+
+      [job] = name |> :sys.get_state() |> Map.fetch!(:jobs) |> Map.values()
+
+      assert job.opts[:store_opts] == [
+               storage: EmptyStore,
+               namespace: "configured",
+               tenant: "request-tenant"
+             ]
+
+      send(runner_task, :finish)
+    end
+  end
+
   describe "when the Scheduler stops during a configured retry delay" do
     test "then the durable deadline prevents an early replacement attempt" do
       attempts = :atomics.new(1, [])
