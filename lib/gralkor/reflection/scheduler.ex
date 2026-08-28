@@ -364,7 +364,11 @@ defmodule Gralkor.Reflection.Scheduler do
     if actual == expected do
       transition(state, key, :storage, artefact)
     else
-      retry_or_finish(state, key, {:artefact_identity_mismatch, %{expected: expected, actual: actual}})
+      retry_or_finish(
+        state,
+        key,
+        {:artefact_identity_mismatch, %{expected: expected, actual: actual}}
+      )
     end
   end
 
