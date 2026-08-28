@@ -1447,6 +1447,29 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                  uuid: "preclaim-incomplete"
                )
 
+      {released_claim, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          records, _, _ = asyncio._gralkor_run(graphiti.driver.execute_query(
+              '''
+              MATCH (claim:_GralkorEpisodeClaim {uuid: 'preclaim-incomplete'})
+              RETURN claim.content AS content,
+                     claim.owner AS owner,
+                     claim.lease_until_ms AS lease_until_ms
+              '''
+          ))
+          records[0]
+          """,
+          %{"graphiti" => graphiti}
+        )
+
+      assert Pythonx.decode(released_claim) == %{
+               "content" => "original",
+               "lease_until_ms" => nil,
+               "owner" => nil
+             }
+
       assert :ok =
                GraphitiPool.add_episode(
                  pool,
