@@ -888,10 +888,16 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   defp ingestion_id(session_id) do
-    "#{session_id}:#{System.unique_integer([:positive, :monotonic])}"
+    "#{session_id}:#{collision_resistant_token()}"
   end
 
   defp evidence_id do
-    "evidence-#{System.system_time(:microsecond)}-#{System.unique_integer([:positive, :monotonic])}"
+    "evidence-#{collision_resistant_token()}"
+  end
+
+  defp collision_resistant_token do
+    16
+    |> :crypto.strong_rand_bytes()
+    |> Base.url_encode64(padding: false)
   end
 end
