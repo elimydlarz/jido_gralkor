@@ -22,6 +22,10 @@ when a Reflection Runner returns an error or crashes
   and each Runner attempt receives the same logical artefact identifier
   and host tools invoked before an interrupted Runner attempt are treated as at-least-once side effects
 
+when a Runner task cannot start
+  then the task-start failure consumes one attempt on the bounded Runner retry schedule
+  and a later successful attempt can complete the same logical work
+
 when a Reflection Runner does not finish within its execution timeout
   then that attempt exits before its replacement starts
   and the timeout follows the same bounded Runner retry schedule
