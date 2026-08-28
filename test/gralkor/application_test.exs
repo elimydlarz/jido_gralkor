@@ -53,18 +53,20 @@ defmodule Gralkor.ApplicationTest do
   end
 
   describe "when the application starts > while a data directory is configured > and no remote connection is configured" do
-    test "then the Python runtime, the graph pool, and the capture buffer are supervised in that order" do
+    test "then the Python runtime, graph pool, Reflection Scheduler, and capture buffer are supervised in that order" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
 
       children = App.children()
 
-      assert length(children) == 3
+      assert length(children) == 4
 
-      [first, second, third] = children
+      [first, second, third, fourth] = children
 
       assert {Gralkor.Python, [reap_orphans: true]} = first
       assert {Gralkor.GraphitiPool, _} = second
-      assert {Gralkor.CaptureBuffer, _} = third
+      assert {Gralkor.Reflection.Scheduler, scheduler_opts} = third
+      assert {Gralkor.CaptureBuffer, _} = fourth
+      assert Keyword.fetch!(scheduler_opts, :journal_path) =~ "reflection_scheduler.dets"
     end
 
     test "and startup returns only once all three have initialised, so a consumer needs no separate readiness gate" do
@@ -74,6 +76,7 @@ defmodule Gralkor.ApplicationTest do
       assert [
                {Gralkor.Python, [reap_orphans: true]},
                {Gralkor.GraphitiPool, _},
+               {Gralkor.Reflection.Scheduler, _},
                {Gralkor.CaptureBuffer, opts}
              ] = App.children()
 
@@ -84,7 +87,7 @@ defmodule Gralkor.ApplicationTest do
       data_dir = Path.join(System.tmp_dir!(), "ex_app_test_#{System.unique_integer([:positive])}")
       System.put_env("GRALKOR_DATA_DIR", data_dir)
 
-      [_python, {Gralkor.GraphitiPool, opts}, _buffer] = App.children()
+      [_python, {Gralkor.GraphitiPool, opts}, _scheduler, _buffer] = App.children()
 
       assert Keyword.fetch!(opts, :falkordb_spec) == {:embedded, Path.expand(data_dir)}
     end
@@ -92,12 +95,12 @@ defmodule Gralkor.ApplicationTest do
     test "and the Python runtime is told to sweep for orphaned embedded servers, this deployment spawning one of its own" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
 
-      assert [{Gralkor.Python, [reap_orphans: true]}, _, _] = App.children()
+      assert [{Gralkor.Python, [reap_orphans: true]}, _, _, _] = App.children()
     end
   end
 
   describe "when the application starts > while a remote FalkorDB connection is configured" do
-    test "then the Python runtime, the graph pool, and the capture buffer are supervised in that order" do
+    test "then the Python runtime, graph pool, Reflection Scheduler, and capture buffer are supervised in that order" do
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
       children = App.children()
@@ -105,6 +108,7 @@ defmodule Gralkor.ApplicationTest do
       assert Enum.map(children, fn {module, _opts} -> module end) == [
                Gralkor.Python,
                Gralkor.GraphitiPool,
+               Gralkor.Reflection.Scheduler,
                Gralkor.CaptureBuffer
              ]
     end
@@ -117,7 +121,7 @@ defmodule Gralkor.ApplicationTest do
         password: "secret"
       )
 
-      [_python, {Gralkor.GraphitiPool, opts}, _] = App.children()
+      [_python, {Gralkor.GraphitiPool, opts}, _scheduler, _buffer] = App.children()
 
       assert Keyword.fetch!(opts, :falkordb_spec) ==
                {:remote,
@@ -127,14 +131,15 @@ defmodule Gralkor.ApplicationTest do
     test "and the Python runtime is told not to sweep for orphaned embedded servers, this deployment never having spawned one" do
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
-      assert [{Gralkor.Python, [reap_orphans: false]}, _, _] = App.children()
+      assert [{Gralkor.Python, [reap_orphans: false]}, _, _, _] = App.children()
     end
 
     test "and a configured data directory is ignored" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
-      [{Gralkor.Python, [reap_orphans: false]}, {Gralkor.GraphitiPool, opts}, _] = App.children()
+      [{Gralkor.Python, [reap_orphans: false]}, {Gralkor.GraphitiPool, opts}, _, _] =
+        App.children()
 
       assert {:remote, _} = Keyword.fetch!(opts, :falkordb_spec)
     end
