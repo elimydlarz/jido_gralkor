@@ -837,8 +837,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert eventually(fn -> :sys.get_state(Scheduler).draining end)
       Process.exit(first_scheduler, :kill)
 
-      assert_receive {:drain_restart_functional_runner, 2, _replacement_runner}
-      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+      assert_receive {:drain_restart_functional_runner, 2, _replacement_runner}, 1_000
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}, 1_000
       assert :ok = Task.await(stopper)
     end
   end
