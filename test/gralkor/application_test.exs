@@ -53,7 +53,7 @@ defmodule Gralkor.ApplicationTest do
   end
 
   describe "when the application starts > while a data directory is configured > and no remote connection is configured" do
-    test "then the Python runtime, graph pool, Reflection Scheduler, and capture buffer are supervised in that order" do
+    test "then the Python runtime, graph pool, Reflection supervisor, and capture buffer are supervised in that order" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
 
       children = App.children()
@@ -64,8 +64,9 @@ defmodule Gralkor.ApplicationTest do
 
       assert {Gralkor.Python, [reap_orphans: true]} = first
       assert {Gralkor.GraphitiPool, _} = second
-      assert {Gralkor.Reflection.Scheduler, scheduler_opts} = third
+      assert {Gralkor.Reflection.Supervisor, reflection_opts} = third
       assert {Gralkor.CaptureBuffer, _} = fourth
+      scheduler_opts = Keyword.fetch!(reflection_opts, :scheduler_opts)
       assert Keyword.fetch!(scheduler_opts, :journal_path) =~ "reflection_scheduler.dets"
     end
 
@@ -76,7 +77,7 @@ defmodule Gralkor.ApplicationTest do
       assert [
                {Gralkor.Python, [reap_orphans: true]},
                {Gralkor.GraphitiPool, _},
-               {Gralkor.Reflection.Scheduler, _},
+               {Gralkor.Reflection.Supervisor, _},
                {Gralkor.CaptureBuffer, opts}
              ] = App.children()
 
@@ -100,7 +101,7 @@ defmodule Gralkor.ApplicationTest do
   end
 
   describe "when the application starts > while a remote FalkorDB connection is configured" do
-    test "then the Python runtime, graph pool, Reflection Scheduler, and capture buffer are supervised in that order" do
+    test "then the Python runtime, graph pool, Reflection supervisor, and capture buffer are supervised in that order" do
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
       children = App.children()
@@ -108,7 +109,7 @@ defmodule Gralkor.ApplicationTest do
       assert Enum.map(children, fn {module, _opts} -> module end) == [
                Gralkor.Python,
                Gralkor.GraphitiPool,
-               Gralkor.Reflection.Scheduler,
+               Gralkor.Reflection.Supervisor,
                Gralkor.CaptureBuffer
              ]
     end

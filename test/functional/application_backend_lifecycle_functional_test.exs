@@ -31,12 +31,14 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       assert [
                {Gralkor.Python, [reap_orphans: false]},
                {GraphitiPool, pool_options},
-               {Gralkor.Reflection.Scheduler, scheduler_options},
+               {Gralkor.Reflection.Supervisor, reflection_options},
                {Gralkor.CaptureBuffer, _capture_options}
              ] = GralkorApplication.children()
 
       assert Keyword.fetch!(pool_options, :falkordb_spec) ==
                {:remote, [host: "memory.example", port: 6379]}
+
+      scheduler_options = Keyword.fetch!(reflection_options, :scheduler_opts)
 
       assert Keyword.fetch!(scheduler_options, :journal_path) =~
                "jido_gralkor/reflection_scheduler.dets"
@@ -53,9 +55,11 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       assert [
                _python,
                _pool,
-               {Gralkor.Reflection.Scheduler, scheduler_options},
+               {Gralkor.Reflection.Supervisor, reflection_options},
                _capture
              ] = GralkorApplication.children()
+
+      scheduler_options = Keyword.fetch!(reflection_options, :scheduler_opts)
 
       assert Keyword.fetch!(scheduler_options, :journal_path) ==
                Path.join(data_dir, "reflection_scheduler.dets")
