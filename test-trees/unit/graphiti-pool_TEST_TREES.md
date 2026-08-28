@@ -92,6 +92,11 @@ when an episode is added
     when that identifier exists with conflicting immutable episode content
       then the add returns an episode conflict and leaves the original unchanged
     and concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent
+
+when one episode is requested by exact identifier
+  then the matching episode content and immutable source fields are returned
+  while that identifier is absent
+    then lookup reports not found
   where a supported source kind is supplied
     then conversation, document, and structured-record sources reach the graph library as message, text, and JSON episodes respectively
     and the existing episode extraction is instructed to preserve source attribution and epistemic wording
