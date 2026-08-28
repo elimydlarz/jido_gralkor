@@ -1337,10 +1337,68 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                     self.extractions = 0
 
                 async def add_episode(self, **kwargs):
-                    from graphiti_core.nodes import EpisodicNode
+                    from datetime import datetime, timezone
+                    from graphiti_core.edges import EntityEdge, EpisodicEdge
+                    from graphiti_core.graphiti import add_nodes_and_edges_bulk
+                    from graphiti_core.nodes import EntityNode, EpisodicNode
                     self.extractions += 1
                     await asyncio.sleep(0.1)
                     episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+
+                    if kwargs['uuid'] == 'embedded-bulk-stolen':
+                        now = datetime.now(timezone.utc)
+                        left = EntityNode(
+                            uuid='embedded-bulk-left',
+                            name='left',
+                            group_id=gid,
+                            labels=['Person'],
+                            created_at=now,
+                            name_embedding=[0.1],
+                        )
+                        right = EntityNode(
+                            uuid='embedded-bulk-right',
+                            name='right',
+                            group_id=gid,
+                            labels=['Person'],
+                            created_at=now,
+                            name_embedding=[0.2],
+                        )
+                        mention = EpisodicEdge(
+                            uuid='embedded-bulk-mention',
+                            group_id=gid,
+                            source_node_uuid=episode.uuid,
+                            target_node_uuid=left.uuid,
+                            created_at=now,
+                        )
+                        relation = EntityEdge(
+                            uuid='embedded-bulk-relation',
+                            group_id=gid,
+                            source_node_uuid=left.uuid,
+                            target_node_uuid=right.uuid,
+                            created_at=now,
+                            name='KNOWS',
+                            fact='left knows right',
+                            fact_embedding=[0.3],
+                            episodes=[episode.uuid],
+                        )
+                        await self.driver.execute_query(
+                            '''
+                            MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+                            SET c.owner = 'replacement-owner', c.generation = c.generation + 1
+                            RETURN c.generation AS generation
+                            ''',
+                            uuid=episode.uuid,
+                        )
+                        await add_nodes_and_edges_bulk(
+                            self.driver,
+                            [episode],
+                            [mention],
+                            [left, right],
+                            [relation],
+                            None,
+                        )
+                        return
+
                     await episode.save(self.driver)
 
             SharedClaimGraphitiContract()
@@ -1467,6 +1525,49 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert {:error, :not_found} =
                GraphitiPool.get_episode(first_pool, "observations", "embedded-stolen-claim")
+
+      bulk_stale_write =
+        Task.async(fn ->
+          GraphitiPool.add_episode(first_pool, "observations", "same", "source", nil,
+            uuid: "embedded-bulk-stolen"
+          )
+        end)
+
+      assert {:error, {:python, bulk_stale_error}} = Task.await(bulk_stale_write, 5_000)
+      assert bulk_stale_error =~ "episode claim lost"
+
+      {bulk_stale_proof, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          async def bulk_stale_proof():
+              records, _, _ = await graph.driver.execute_query(
+                  '''
+                  OPTIONAL MATCH (episode:Episodic {uuid: 'embedded-bulk-stolen'})
+                  OPTIONAL MATCH (left:Entity {uuid: 'embedded-bulk-left'})
+                  OPTIONAL MATCH (right:Entity {uuid: 'embedded-bulk-right'})
+                  OPTIONAL MATCH ()-[mention:MENTIONS {uuid: 'embedded-bulk-mention'}]->()
+                  OPTIONAL MATCH ()-[relation:RELATES_TO {uuid: 'embedded-bulk-relation'}]->()
+                  RETURN episode IS NOT NULL AS episode,
+                         left IS NOT NULL AS left,
+                         right IS NOT NULL AS right,
+                         mention IS NOT NULL AS mention,
+                         relation IS NOT NULL AS relation
+                  '''
+              )
+              return records[0]
+          asyncio._gralkor_run(bulk_stale_proof())
+          """,
+          %{"graph" => first_graph}
+        )
+
+      assert Pythonx.decode(bulk_stale_proof) == %{
+               "episode" => false,
+               "left" => false,
+               "mention" => false,
+               "relation" => false,
+               "right" => false
+             }
 
       Pythonx.eval(
         """
