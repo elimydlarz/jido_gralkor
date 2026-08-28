@@ -380,8 +380,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       artefact = Gralkor.Reflection.Artefact.new("erl", erl_payload(), ["evidence-one"])
       caller = self()
 
-      add_episode = fn group_id, content, source, ontology ->
-        send(caller, {:reflection_episode, group_id, content, source, ontology})
+      add_episode = fn group_id, content, source, ontology, opts ->
+        send(caller, {:reflection_episode, group_id, content, source, ontology, opts})
         :ok
       end
 
@@ -394,7 +394,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
 
       assert_receive {:reflection_episode, _group_id, _content, "reflection:erl",
-                      Gralkor.Reflection.ERLOntology}
+                      Gralkor.Reflection.ERLOntology, [uuid: artefact_id]}
+
+      assert artefact_id == artefact.id
     end
 
     test "and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields" do

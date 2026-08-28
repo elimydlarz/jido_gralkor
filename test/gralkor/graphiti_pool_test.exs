@@ -148,16 +148,36 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added > while an episode identifier is supplied" do
-    test "then that identifier is forwarded to the graph library, so re-adding under it updates the episode by re-extraction" do
+    test "then missing, equal, and conflicting writes use create-or-confirm semantics" do
       {g, _} =
         Pythonx.eval(
           """
+          from graphiti_core.errors import NodeNotFoundError
+
+          class _GraphOperations:
+              async def episodic_node_get_by_uuid(self, cls, driver, uuid):
+                  if uuid not in driver.episodes:
+                      raise NodeNotFoundError(uuid)
+                  return driver.episodes[uuid]
+
+              async def episodic_node_save(self, episode, driver):
+                  driver.episodes[episode.uuid] = episode
+
+          class _Driver:
+              def __init__(self):
+                  self.graph_operations_interface = _GraphOperations()
+                  self.episodes = {}
+
           class _FakeGraphiti:
               def __init__(self):
-                  self.recorded_kwargs = None
+                  self.driver = _Driver()
+                  self.extractions = 0
 
               async def add_episode(self, **kwargs):
-                  self.recorded_kwargs = kwargs
+                  from graphiti_core.nodes import EpisodicNode
+                  self.extractions += 1
+                  episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                  await episode.save(self.driver)
 
           _FakeGraphiti()
           """,
@@ -172,12 +192,23 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       assert :ok =
-               GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
-                 uuid: "existing-episode-uuid"
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
+
+      assert {:error, {:episode_conflict, "episode-uuid"}} =
+               GraphitiPool.add_episode(pid, "g1", "changed", "source", nil,
+                 uuid: "episode-uuid"
                )
 
-      {uuid, _} = Pythonx.eval("g.recorded_kwargs['uuid']", %{"g" => g})
-      assert Pythonx.decode(uuid) == "existing-episode-uuid"
+      {proof, _} =
+        Pythonx.eval(
+          "[len(g.driver.episodes), g.extractions, g.driver.episodes['episode-uuid'].content]",
+          %{"g" => g}
+        )
+
+      assert Pythonx.decode(proof) == [1, 1, "content"]
 
       GenServer.stop(pid)
     end
