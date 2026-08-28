@@ -1169,9 +1169,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   describe "where Graphiti is the canonical Reflection store > while an equal episode lacks durable extraction completion" do
-    test "then failure after the staged episode save commits nothing and retries the Reflection", %{
-      reflection: reflection
-    } do
+    test "then failure after the staged episode save commits nothing and retries the Reflection",
+         %{
+           reflection: reflection
+         } do
       data_dir =
         Path.join(
           System.tmp_dir!(),
