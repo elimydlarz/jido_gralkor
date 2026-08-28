@@ -96,7 +96,7 @@ where Graphiti is the canonical Reflection store
     and conflicts for selected artefact identifiers are detected beyond the ranked window
   when independent application runtimes write the same artefact UUID concurrently
     then a graph uniqueness constraint exists before UUID claim admission
-    then graph-backed admission serializes extraction across runtimes
+    and graph-backed admission serializes extraction across runtimes
     and equal content converges while conflicting immutable content is rejected
     while a claim lease changes owner
       then graph-server time determines expiry
