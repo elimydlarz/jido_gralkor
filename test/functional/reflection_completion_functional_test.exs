@@ -1409,6 +1409,14 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert [:ok, :ok] = Task.await_many(equal_writes, 5_000)
 
+      {equal_extractions, _} =
+        Pythonx.eval(
+          "first.extractions + second.extractions",
+          %{"first" => first_graph, "second" => second_graph}
+        )
+
+      assert Pythonx.decode(equal_extractions) == 1
+
       conflicting_writes = [
         Task.async(fn ->
           GraphitiPool.add_episode(first_pool, "observations", "first", "source", nil,
@@ -1532,12 +1540,12 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
               'MATCH (c:_GralkorEpisodeClaim {uuid: $uuid}) RETURN c.generation AS generation',
               uuid='embedded-server-expired',
           ))
-          [first.extractions + second.extractions, records[0]['generation']]
+          records[0]['generation']
           """,
           %{"first" => first_graph, "second" => second_graph}
         )
 
-      assert Pythonx.decode(proof) == [5, 8]
+      assert Pythonx.decode(proof) == 8
     end
   end
 
