@@ -1311,6 +1311,236 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
+  describe "where Graphiti is the canonical Reflection store > when independent pools share one Falkor graph" do
+    test "then server-timed generational claims serialize, reject conflicts, and fence a stale owner" do
+      data_dir =
+        Path.join(
+          System.tmp_dir!(),
+          "reflection-shared-claims-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(data_dir)
+      on_exit(fn -> File.rm_rf!(data_dir) end)
+      start_supervised!(Gralkor.Python)
+
+      construct_instance = fn database, _shared, group_id ->
+        {graphiti, _} =
+          Pythonx.eval(
+            """
+            import asyncio
+            from graphiti_core.driver.falkordb_driver import FalkorDriver
+
+            gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+
+            class SharedClaimGraphitiContract:
+                def __init__(self):
+                    self.driver = FalkorDriver(falkor_db=database, database=gid)
+                    self.extractions = 0
+
+                async def add_episode(self, **kwargs):
+                    from graphiti_core.nodes import EpisodicNode
+                    self.extractions += 1
+                    await asyncio.sleep(0.1)
+                    episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                    await episode.save(self.driver)
+
+            SharedClaimGraphitiContract()
+            """,
+            %{"database" => database, "group_id" => group_id}
+          )
+
+        graphiti
+      end
+
+      common_options = [
+        construct_shared_clients: fn _llm, _embedder ->
+          %{llm_client: nil, embedder: nil, cross_encoder: nil}
+        end,
+        construct_instance: construct_instance,
+        initialise_instance: fn _instance -> :ok end,
+        warmup: false,
+        embedded_falkordb_socket_timeout_ms: 60_000
+      ]
+
+      first_pool =
+        start_supervised!(
+          Supervisor.child_spec(
+            {GraphitiPool,
+             [
+               name: nil,
+               table: :"shared_claims_first_#{System.unique_integer([:positive])}",
+               falkordb_spec: {:embedded, data_dir}
+             ] ++ common_options},
+            id: :reflection_shared_claims_first
+          )
+        )
+
+      database = :sys.get_state(first_pool).falkor_db
+
+      second_pool =
+        start_supervised!(
+          Supervisor.child_spec(
+            {GraphitiPool,
+             [
+               name: nil,
+               table: :"shared_claims_second_#{System.unique_integer([:positive])}",
+               falkordb_spec: {:remote, []},
+               construct_falkor_db: fn _spec -> database end,
+               close_falkor_db: fn _database -> :ok end
+             ] ++ common_options},
+            id: :reflection_shared_claims_second
+          )
+        )
+
+      first_graph = GraphitiPool.for(first_pool, "observations")
+      second_graph = GraphitiPool.for(second_pool, "observations")
+
+      equal_writes = [
+        Task.async(fn ->
+          GraphitiPool.add_episode(first_pool, "observations", "same", "source", nil,
+            uuid: "embedded-shared-equal"
+          )
+        end),
+        Task.async(fn ->
+          GraphitiPool.add_episode(second_pool, "observations", "same", "source", nil,
+            uuid: "embedded-shared-equal"
+          )
+        end)
+      ]
+
+      assert [:ok, :ok] = Task.await_many(equal_writes, 5_000)
+
+      conflicting_writes = [
+        Task.async(fn ->
+          GraphitiPool.add_episode(first_pool, "observations", "first", "source", nil,
+            uuid: "embedded-shared-conflict"
+          )
+        end),
+        Task.async(fn ->
+          GraphitiPool.add_episode(second_pool, "observations", "second", "source", nil,
+            uuid: "embedded-shared-conflict"
+          )
+        end)
+      ]
+
+      conflict_outcomes = Task.await_many(conflicting_writes, 5_000)
+      assert Enum.count(conflict_outcomes, &(&1 == :ok)) == 1
+
+      assert Enum.count(
+               conflict_outcomes,
+               &(&1 == {:error, {:episode_conflict, "embedded-shared-conflict"}})
+             ) == 1
+
+      stale_write =
+        Task.async(fn ->
+          GraphitiPool.add_episode(first_pool, "observations", "same", "source", nil,
+            uuid: "embedded-stolen-claim"
+          )
+        end)
+
+      assert eventually(fn -> graph_claim_exists?(first_graph, "embedded-stolen-claim") end)
+
+      Pythonx.eval(
+        """
+        import asyncio
+        asyncio._gralkor_run(graph.driver.execute_query(
+            '''
+            MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+            SET c.owner = 'replacement-owner', c.generation = c.generation + 1
+            RETURN c.generation AS generation
+            ''',
+            uuid='embedded-stolen-claim',
+        ))
+        """,
+        %{"graph" => first_graph}
+      )
+
+      assert {:error, {:python, stale_error}} = Task.await(stale_write, 5_000)
+      assert stale_error =~ "episode claim lost"
+      assert {:error, :not_found} =
+               GraphitiPool.get_episode(first_pool, "observations", "embedded-stolen-claim")
+
+      Pythonx.eval(
+        """
+        import asyncio
+        asyncio._gralkor_run(graph.driver.execute_query(
+            '''
+            MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+            SET c.owner = NULL, c.lease_until_ms = 0
+            RETURN c.generation AS generation
+            ''',
+            uuid='embedded-stolen-claim',
+        ))
+        """,
+        %{"graph" => first_graph}
+      )
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 second_pool,
+                 "observations",
+                 "same",
+                 "source",
+                 nil,
+                 uuid: "embedded-stolen-claim"
+               )
+
+      assert {:ok, %{"extraction_complete" => true}} =
+               GraphitiPool.get_episode(
+                 first_pool,
+                 "observations",
+                 "embedded-stolen-claim"
+               )
+
+      Pythonx.eval(
+        """
+        import asyncio
+        asyncio._gralkor_run(graph.driver.execute_query(
+            '''
+            MERGE (c:_GralkorEpisodeClaim {uuid: $uuid})
+            ON CREATE SET
+              c.group_id = 'observations',
+              c.content = 'same',
+              c.source = 'text',
+              c.source_description = 'source',
+              c.owner = 'expired-owner',
+              c.generation = 7,
+              c.lease_until_ms = timestamp() - 1
+            RETURN c.generation AS generation
+            ''',
+            uuid='embedded-server-expired',
+        ))
+        """,
+        %{"graph" => first_graph}
+      )
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 first_pool,
+                 "observations",
+                 "same",
+                 "source",
+                 nil,
+                 uuid: "embedded-server-expired"
+               )
+
+      {proof, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+          records, _, _ = asyncio._gralkor_run(first.driver.execute_query(
+              'MATCH (c:_GralkorEpisodeClaim {uuid: $uuid}) RETURN c.generation AS generation',
+              uuid='embedded-server-expired',
+          ))
+          [first.extractions + second.extractions, records[0]['generation']]
+          """,
+          %{"first" => first_graph, "second" => second_graph}
+        )
+
+      assert Pythonx.decode(proof) == [4, 8]
+    end
+  end
+
   defp ingestion do
     %Ingest{
       id: "ingestion-one",
@@ -1345,6 +1575,24 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   defp eventually(_assertion, 0), do: false
+
+  defp graph_claim_exists?(graph, uuid) do
+    {exists, _} =
+      Pythonx.eval(
+        """
+        import asyncio
+        uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
+        records, _, _ = asyncio._gralkor_run(graph.driver.execute_query(
+            'MATCH (c:_GralkorEpisodeClaim {uuid: $uuid}) RETURN c.uuid AS uuid',
+            uuid=uid,
+        ))
+        bool(records)
+        """,
+        %{"graph" => graph, "uuid" => uuid}
+      )
+
+    Pythonx.decode(exists)
+  end
 
   defp receive_runners(0, runners), do: runners
 
