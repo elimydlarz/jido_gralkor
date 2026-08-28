@@ -35,8 +35,6 @@ defmodule Gralkor.Reflection.Scheduler do
 
   @impl true
   def init(opts) do
-    {:ok, supervisor} = Task.Supervisor.start_link()
-
     defaults =
       [
         retry_delays: @default_retry_delays,
@@ -55,6 +53,7 @@ defmodule Gralkor.Reflection.Scheduler do
       )
 
     with :ok <- validate_execution_options(defaults),
+         {:ok, supervisor} <- Task.Supervisor.start_link(),
          journal_name = Keyword.get(opts, :journal_name, Journal),
          {:ok, journal} <- Journal.open(Keyword.get(opts, :journal_path), journal_name) do
       jobs =

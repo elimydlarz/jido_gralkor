@@ -491,7 +491,10 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
   describe "when the Scheduler process starts with durable unfinished work" do
     test "then retained storage resumes with the exact artefact and retry state" do
-      start_supervised!({ControlledStore, {self(), [{:error, :not_found}], [:hang, :ok]}})
+      start_supervised!(
+        {ControlledStore,
+         {self(), [{:error, :not_found}, {:error, :not_found}], [:hang, :ok]}}
+      )
       {name, runner} = immediate_runner(self())
       path = journal_path()
       on_exit(fn -> File.rm(path) end)
