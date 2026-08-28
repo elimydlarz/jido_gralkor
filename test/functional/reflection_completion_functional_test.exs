@@ -46,6 +46,37 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
+  defmodule LoseFirstGraphitiResponseStore do
+    @behaviour Gralkor.Reflection.Store
+
+    use Agent
+
+    alias Gralkor.Reflection.Storage.Graphiti
+    alias Gralkor.Reflection.Storage.InMemory
+
+    def start_link(test_pid), do: Agent.start_link(fn -> {test_pid, true} end, name: __MODULE__)
+
+    @impl true
+    def get(reflection, operator_id, artefact_id),
+      do: Graphiti.get(reflection, operator_id, artefact_id)
+
+    @impl true
+    def put(reflection, operator_id, artefact) do
+      with :ok <- Graphiti.put(reflection, operator_id, artefact),
+           :ok <- InMemory.put(reflection, operator_id, artefact) do
+        Agent.get_and_update(__MODULE__, fn {test_pid, lose_response?} ->
+          send(test_pid, {:graphiti_store_committed, artefact})
+
+          if lose_response? do
+            {{:error, :response_lost}, {test_pid, false}}
+          else
+            {:ok, {test_pid, false}}
+          end
+        end)
+      end
+    end
+  end
+
   setup do
     previous =
       for key <- [
