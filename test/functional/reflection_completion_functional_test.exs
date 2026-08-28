@@ -1608,6 +1608,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                 def __init__(self):
                     self.driver = FalkorDriver(falkor_db=database, database=gid)
                     self.extractions = 0
+                    self.wait_for_replacement_owner = False
 
                 async def add_episode(self, **kwargs):
                     from datetime import datetime, timezone
@@ -1616,7 +1617,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                     from graphiti_core.nodes import EntityNode, EpisodicNode
                     self.extractions += 1
 
-                    if kwargs['uuid'] == 'embedded-stolen-claim':
+                    if (
+                        kwargs['uuid'] == 'embedded-stolen-claim'
+                        and self.wait_for_replacement_owner
+                    ):
+                        self.wait_for_replacement_owner = False
                         for _ in range(1000):
                             records, _, _ = await self.driver.execute_query(
                                 '''
@@ -1752,6 +1757,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       first_graph = GraphitiPool.for(first_pool, "observations")
       second_graph = GraphitiPool.for(second_pool, "observations")
+
+      Pythonx.eval(
+        "first_graph.wait_for_replacement_owner = True",
+        %{"first_graph" => first_graph}
+      )
 
       equal_writes = [
         Task.async(fn ->
