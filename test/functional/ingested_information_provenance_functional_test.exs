@@ -268,10 +268,12 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                  "Mina",
                  "observations",
                  [[Gralkor.Message.new("user", "Atlas might launch Friday.")]],
+                 "ingestion-1",
                  "evidence-1"
                )
 
-      assert_receive {:captured_ingest, %Ingest{source_kind: :conversation}}
+      assert_receive {:captured_ingest,
+                      %Ingest{id: "ingestion-1", source_kind: :conversation}}
     end
 
     test "and their rendered speaker-attributed transcript is submitted as a conversational-message episode" do

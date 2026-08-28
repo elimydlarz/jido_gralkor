@@ -175,10 +175,19 @@ defmodule Gralkor.ApplicationTest do
       ]
 
       assert :ok =
-               callback.("operator-one", "Susu", "Eli", "observations", turns, "evidence-one")
+               callback.(
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 turns,
+                 "ingestion-one",
+                 "evidence-one"
+               )
 
       assert_receive {:ingested,
                       %Gralkor.Ingest{
+                        id: "ingestion-one",
                         operator_id: "operator-one",
                         lens: "observations",
                         content: "Eli: Remember this\nSusu: I will",
@@ -204,10 +213,19 @@ defmodule Gralkor.ApplicationTest do
       ]
 
       assert :ok =
-               callback.("operator-one", "Susu", "Eli", "observations", turns, "evidence-one")
+               callback.(
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 turns,
+                 "ingestion-one",
+                 "evidence-one"
+               )
 
       assert_receive {:ingested,
                       %Gralkor.Ingest{
+                        id: "ingestion-one",
                         operator_id: "operator-one",
                         lens: "observations",
                         content: "Eli: Remember this\nSusu: I will",
@@ -250,7 +268,16 @@ defmodule Gralkor.ApplicationTest do
           ingest_fn: fn _request -> flunk("Lens ingestion should not be called") end
         )
 
-      assert :ok = lens_cb.("operator", "TestAgent", "Eli", "observations", [], "evidence")
+      assert :ok =
+               lens_cb.(
+                 "operator",
+                 "TestAgent",
+                 "Eli",
+                 "observations",
+                 [],
+                 "ingestion",
+                 "evidence"
+               )
     end
 
     test "and the flush reports success" do
@@ -268,7 +295,16 @@ defmodule Gralkor.ApplicationTest do
           ingest_fn: fn _request -> flunk("Lens ingestion should not be called") end
         )
 
-      assert :ok = lens_cb.("operator", "TestAgent", "Eli", "observations", [], "evidence")
+      assert :ok =
+               lens_cb.(
+                 "operator",
+                 "TestAgent",
+                 "Eli",
+                 "observations",
+                 [],
+                 "ingestion",
+                 "evidence"
+               )
     end
   end
 
