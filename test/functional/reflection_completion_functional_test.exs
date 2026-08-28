@@ -19,6 +19,30 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
+  defmodule FailOnceStore do
+    @behaviour Gralkor.Reflection.Store
+
+    use Agent
+
+    def start_link(test_pid), do: Agent.start_link(fn -> {test_pid, 0} end, name: __MODULE__)
+
+    @impl true
+    def get(_reflection, _operator_id, _artefact_id), do: {:error, :not_found}
+
+    @impl true
+    def put(_reflection, _operator_id, artefact) do
+      Agent.get_and_update(__MODULE__, fn {test_pid, attempts} ->
+        send(test_pid, {:store_attempt, artefact})
+
+        if attempts == 0 do
+          {{:error, :temporary_store_failure}, {test_pid, 1}}
+        else
+          {:ok, {test_pid, attempts + 1}}
+        end
+      end)
+    end
+  end
+
   setup do
     previous =
       for key <- [
@@ -156,6 +180,25 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       send(retry_runner, :finish_reflection)
       assert_receive {:reflection_completed, "summary", {:ok, _artefact}}
+    end
+
+    test "then canonical storage failure retries the exact artefact without rerunning the Runner" do
+      start_supervised!({FailOnceStore, self()})
+      Application.put_env(:jido_gralkor, :reflection_storage, FailOnceStore)
+
+      assert :ok = Client.ingest(ingestion())
+      assert_receive {:runner_started, "review", "ingestion-one", runner}
+      send(runner, :finish_reflection)
+
+      assert_receive {:store_attempt, first_artefact}
+
+      assert_receive {:reflection_retrying, "review",
+                      %{stage: :storage, reason: :temporary_store_failure}}
+
+      assert_receive {:store_attempt, second_artefact}
+      assert second_artefact == first_artefact
+      refute_receive {:runner_started, "review", "ingestion-one", _runner}
+      assert_receive {:reflection_completed, "review", {:ok, ^first_artefact}}
     end
   end
 
