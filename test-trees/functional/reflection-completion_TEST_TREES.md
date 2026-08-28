@@ -112,7 +112,7 @@ where in-memory storage is the canonical Reflection store
   when the same artefact is written repeatedly
     then exactly one copy remains searchable in its original insertion position
 
-if public ingestion omits or supplies a blank stable ingestion identifier
+if public ingestion omits or supplies a blank operator or stable ingestion identifier
   then ingestion raises before any Lens ingestion, Runner execution, or canonical write begins
 
 if scheduling receives duplicate Reflection names
