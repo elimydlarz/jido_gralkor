@@ -103,6 +103,7 @@ defmodule Gralkor.Client.InMemory do
         reflection_context
       ) do
     raise_if_blank!(:session_id, session_id)
+    raise_if_blank!(:operator_id, operator_id)
     raise_if_blank!(:agent_name, agent_name)
     raise_if_blank!(:user_name, user_name)
 
