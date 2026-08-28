@@ -68,8 +68,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       send(test_pid, {:controlled_store_attempt, artefact, self()})
 
       case outcome do
-        :ok -> :ok
-        :crash -> raise "canonical storage crashed"
+        :ok ->
+          :ok
+
+        :crash ->
+          raise "canonical storage crashed"
 
         :hang ->
           receive do
