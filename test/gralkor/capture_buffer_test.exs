@@ -1481,6 +1481,7 @@ defmodule Gralkor.CaptureBufferTest do
          scheduler_opts: [
            runner: runner,
            store_opts: [storage: EmptyReflectionStore],
+           notify: test_pid,
            retry_delays: []
          ]},
         {CaptureBuffer,
@@ -1502,6 +1503,7 @@ defmodule Gralkor.CaptureBufferTest do
       stopper = Task.async(fn -> Supervisor.terminate_child(supervisor, CaptureBuffer) end)
       assert Task.yield(stopper, 25) == nil
       assert :ok = Task.await(stopper)
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
       assert :ok = Supervisor.stop(supervisor)
     end
 
