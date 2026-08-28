@@ -151,7 +151,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       send(Map.fetch!(runners, "summary"), {:finish_reflection, {:error, :temporary}})
 
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
-      assert_receive {:reflection_completed, "summary", {:error, :temporary}}
+      assert_receive {:reflection_retrying, "summary", %{stage: :runner, reason: :temporary}}
       assert_receive {:runner_started, "summary", "ingestion-one", retry_runner}, 500
       refute_receive {:runner_started, "review", "ingestion-one", _runner}, 50
 
