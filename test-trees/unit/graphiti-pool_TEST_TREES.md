@@ -80,7 +80,13 @@ when an episode is added
     and the forwarded dictionary carries exactly the keys the ontology selects, omitting the rest
     and the forwarded dictionary uses the graph library's key names outside and the ontology's declared type names inside
   while an episode identifier is supplied
-    then that identifier is forwarded to the graph library, so re-adding under it updates the episode by re-extraction
+    when that identifier does not exist
+      then one episode is created under that identifier through the normal extraction path
+    when that identifier exists with equal immutable episode content
+      then the add succeeds without invoking extraction again
+    when that identifier exists with conflicting immutable episode content
+      then the add returns an episode conflict and leaves the original unchanged
+    and concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent
   where a supported source kind is supplied
     then conversation, document, and structured-record sources reach the graph library as message, text, and JSON episodes respectively
     and the existing episode extraction is instructed to preserve source attribution and epistemic wording
