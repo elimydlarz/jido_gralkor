@@ -1,12 +1,30 @@
 defmodule Gralkor.Reflection.Store do
-  @moduledoc "Stores artefacts in destinations named by Reflections."
+  @moduledoc """
+  Canonical storage for artefacts in the Destinations named by Reflections.
+
+  Implementations are part of the Scheduler's retry contract. `put/3` must be
+  create-or-confirm by `artefact.id`: repeating the same immutable artefact
+  returns `:ok` without creating another searchable artefact, while the same
+  identifier with different immutable content returns
+  `{:error, {:artefact_conflict, artefact_id}}`. `get/3` returns only durably
+  completed artefacts; a stored but incomplete artefact may be returned as
+  `{:error, {:incomplete_artefact, artefact}}` so storage can resume without
+  rerunning the Runner.
+  """
 
   alias Gralkor.Reflection
   alias Gralkor.Reflection.Artefact
 
-  @callback put(Reflection.t(), String.t(), Artefact.t()) :: :ok | {:error, term()}
+  @callback put(Reflection.t(), String.t(), Artefact.t()) ::
+              :ok | {:error, {:artefact_conflict, String.t()} | term()}
+
   @callback get(Reflection.t(), String.t(), String.t()) ::
-              {:ok, Artefact.t()} | {:error, :not_found | term()}
+              {:ok, Artefact.t()}
+              | {:error,
+                 :not_found
+                 | {:incomplete_artefact, Artefact.t()}
+                 | {:artefact_conflict, String.t()}
+                 | term()}
 
   def put(%Reflection{} = reflection, operator_id, %Artefact{} = artefact, opts \\ []) do
     storage(opts).put(reflection, operator_id, artefact)
