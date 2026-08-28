@@ -731,6 +731,79 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
       send(runner_task, :finish)
     end
+
+    test "then restart restores durable request data and replacement runtime dependencies" do
+      test_pid = self()
+      name = scheduler_name()
+      path = journal_path()
+      on_exit(fn -> File.rm(path) end)
+
+      first_runner = fn _reflection, _ingestion, opts ->
+        send(test_pid, {:first_runtime_opts, opts, self()})
+
+        receive do
+          :never -> {:error, :unexpected}
+        end
+      end
+
+      start_scheduler(name,
+        runner: first_runner,
+        runner_opts: [inference: :first_inference, tool_executor: :first_executor],
+        store_opts: [storage: EmptyStore, namespace: "admitted"],
+        retry_delays: [0],
+        journal_path: path,
+        journal_name: journal_name()
+      )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(),
+                 server: name,
+                 runner_opts: [tools: [:request_tool], tool_context: %{request: "context"}],
+                 store_opts: [tenant: "request-tenant"]
+               )
+
+      assert_receive {:first_runtime_opts, first_opts, first_task}
+      assert first_opts[:inference] == :first_inference
+      assert first_opts[:tool_executor] == :first_executor
+      assert first_opts[:tools] == [:request_tool]
+      assert first_opts[:tool_context] == %{request: "context"}
+
+      assert :ok = stop_supervised(name)
+      ref = Process.monitor(first_task)
+      assert_receive {:DOWN, ^ref, :process, ^first_task, _reason}
+
+      replacement_runner = fn reflection, _ingestion, opts ->
+        send(test_pid, {:replacement_runtime_opts, opts})
+        {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{}, [])}
+      end
+
+      start_scheduler(name,
+        runner: replacement_runner,
+        runner_opts: [
+          inference: :replacement_inference,
+          tool_executor: :replacement_executor
+        ],
+        store_opts: [storage: EmptyStore, namespace: "replacement-default"],
+        journal_path: path,
+        journal_name: journal_name()
+      )
+
+      assert_receive {:replacement_runtime_opts, replacement_opts}
+      assert replacement_opts[:inference] == :replacement_inference
+      assert replacement_opts[:tool_executor] == :replacement_executor
+      assert replacement_opts[:tools] == [:request_tool]
+      assert replacement_opts[:tool_context] == %{request: "context"}
+
+      [job] = name |> :sys.get_state() |> Map.fetch!(:jobs) |> Map.values()
+
+      assert job.opts[:store_opts] == [
+               storage: EmptyStore,
+               namespace: "admitted",
+               tenant: "request-tenant"
+             ]
+
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+    end
   end
 
   describe "when the Scheduler stops during a configured retry delay" do
