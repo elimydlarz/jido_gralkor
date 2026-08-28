@@ -98,8 +98,12 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     Application.put_env(:jido_gralkor, :reflections, [reflection])
 
     test_pid = self()
+
     journal_path =
-      Path.join(System.tmp_dir!(), "reflection-scheduler-#{System.unique_integer([:positive])}.dets")
+      Path.join(
+        System.tmp_dir!(),
+        "reflection-scheduler-#{System.unique_integer([:positive])}.dets"
+      )
 
     on_exit(fn -> File.rm(journal_path) end)
 
@@ -202,6 +206,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
       assert_receive {:reflection_retrying, "summary", %{stage: :runner, reason: :temporary}}
+
       assert_receive {:runner_started, "summary", "ingestion-one", _artefact_id, retry_runner},
                      500
 
