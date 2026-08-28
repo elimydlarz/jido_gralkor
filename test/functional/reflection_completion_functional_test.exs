@@ -5,6 +5,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   alias Gralkor.GraphitiPool
   alias Gralkor.Ingest
   alias Gralkor.Reflection
+  alias Gralkor.Reflection.Artefact
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Reflection.Scheduler
   alias Gralkor.Search
@@ -107,31 +108,24 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
     on_exit(fn -> File.rm(journal_path) end)
 
+    inference = fn request ->
+      artefact_id = Artefact.id_for(request.operator_id, "ingestion-one", request.reflection)
+
+      send(
+        test_pid,
+        {:runner_started, request.reflection, "ingestion-one", artefact_id, self()}
+      )
+
+      receive do
+        :finish_reflection -> {:ok, %{output: %{"summary" => "stored"}}}
+        {:finish_reflection, outcome} -> outcome
+        :crash -> raise "runner crashed"
+      end
+    end
+
     start_supervised!(
       {Scheduler,
-       runner: fn reflected, ingestion, opts ->
-         send(
-           test_pid,
-           {:runner_started, reflected.name, ingestion.id, opts[:artefact_id], self()}
-         )
-
-         receive do
-           :finish_reflection ->
-             Gralkor.Reflection.Runner.run(
-               reflected,
-               ingestion,
-               Keyword.put(opts, :inference, fn _ ->
-                 {:ok, %{output: %{"summary" => "stored"}}}
-               end)
-             )
-
-           {:finish_reflection, outcome} ->
-             outcome
-
-           :crash ->
-             raise "runner crashed"
-         end
-       end,
+       runner_opts: [inference: inference],
        notify: test_pid,
        retry_delays: [0],
        execution_timeout_ms: 1_000,
