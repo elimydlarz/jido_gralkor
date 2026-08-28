@@ -8,7 +8,7 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
 
   @impl true
   def put(reflection, operator_id, %Artefact{} = artefact) do
-    put(reflection, operator_id, artefact, &GraphitiPool.add_episode/4)
+    put(reflection, operator_id, artefact, &GraphitiPool.add_episode/5)
   end
 
   @doc false
@@ -17,8 +17,23 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
       group_id(reflection, operator_id),
       Jason.encode!(Map.from_struct(artefact)),
       "reflection:#{reflection.name}",
-      reflection.ontology
+      reflection.ontology,
+      uuid: artefact.id
     )
+  end
+
+  @impl true
+  def get(reflection, operator_id, artefact_id) do
+    case GraphitiPool.get_episode(group_id(reflection, operator_id), artefact_id) do
+      {:ok, episode} ->
+        case decode(episode) do
+          [%Artefact{} = artefact] -> {:ok, artefact}
+          [] -> {:error, {:invalid_artefact, artefact_id}}
+        end
+
+      {:error, _} = error ->
+        error
+    end
   end
 
   defp group_id(reflection, operator_id) do

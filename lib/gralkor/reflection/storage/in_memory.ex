@@ -29,6 +29,18 @@ defmodule Gralkor.Reflection.Storage.InMemory do
     end)
   end
 
+  @impl true
+  def get(reflection, operator_id, artefact_id) do
+    destination = Store.destination(reflection, operator_id)
+
+    Agent.get(__MODULE__, fn state ->
+      case Enum.find(Map.get(state, destination, []), &(&1.id == artefact_id)) do
+        nil -> {:error, :not_found}
+        artefact -> {:ok, artefact}
+      end
+    end)
+  end
+
   @doc false
   def search_destination(destination, operator_id, query, max_results, artefact_id \\ nil) do
     graph_id = Gralkor.Destination.graph_id(destination, operator_id)

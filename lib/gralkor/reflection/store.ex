@@ -5,9 +5,15 @@ defmodule Gralkor.Reflection.Store do
   alias Gralkor.Reflection.Artefact
 
   @callback put(Reflection.t(), String.t(), Artefact.t()) :: :ok | {:error, term()}
+  @callback get(Reflection.t(), String.t(), String.t()) ::
+              {:ok, Artefact.t()} | {:error, :not_found | term()}
 
   def put(%Reflection{} = reflection, operator_id, %Artefact{} = artefact, opts \\ []) do
     storage(opts).put(reflection, operator_id, artefact)
+  end
+
+  def get(%Reflection{} = reflection, operator_id, artefact_id, opts \\ []) do
+    storage(opts).get(reflection, operator_id, artefact_id)
   end
 
   def destination(%Reflection{destination: destination}, operator_id),
