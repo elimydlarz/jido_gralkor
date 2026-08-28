@@ -2973,7 +2973,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
     setup do
       data_dir =
-        Path.join(System.tmp_dir!(), "gralkor_close_#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "gralkor_close_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
 
       table = :"close_pool_#{System.unique_integer([:positive])}"
 
@@ -3054,12 +3057,18 @@ defmodule Gralkor.GraphitiPoolTest do
 
     test "then stale embedded resume state is removed before database construction" do
       data_dir =
-        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "gralkor_pool_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
 
       File.mkdir_p!(data_dir)
 
       stale_tmp =
-        Path.join(System.tmp_dir!(), "gralkor_stale_#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "gralkor_stale_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
 
       File.mkdir_p!(stale_tmp)
       File.write!(Path.join(stale_tmp, "redis.socket"), "")
@@ -3100,7 +3109,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
     test "and the embedded database is constructed once and held for the pool's lifetime" do
       data_dir =
-        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "gralkor_pool_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
 
       File.mkdir_p!(data_dir)
 
@@ -3175,7 +3187,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
     test "then that ontology is translated into the graph library's schema representation on first encounter" do
       data_dir =
-        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "gralkor_pool_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
 
       File.mkdir_p!(data_dir)
 
@@ -3201,7 +3216,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
     test "and a later add with the same ontology reuses the translated representation rather than rebuilding it" do
       data_dir =
-        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "gralkor_pool_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
 
       File.mkdir_p!(data_dir)
       {:ok, pid} = start_embedded_pool(data_dir)
@@ -3218,7 +3236,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
     test "and the forwarded dictionary carries exactly the keys the ontology selects, omitting the rest" do
       data_dir =
-        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "gralkor_pool_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
 
       File.mkdir_p!(data_dir)
       {:ok, pid} = start_embedded_pool(data_dir)
@@ -3236,7 +3257,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
     test "and the forwarded dictionary uses the graph library's key names outside and the ontology's declared type names inside" do
       data_dir =
-        Path.join(System.tmp_dir!(), "gralkor_pool_#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "gralkor_pool_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
 
       File.mkdir_p!(data_dir)
       {:ok, pid} = start_embedded_pool(data_dir)
