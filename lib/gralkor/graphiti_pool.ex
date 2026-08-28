@@ -572,6 +572,7 @@ defmodule Gralkor.GraphitiPool do
 
             claim_owner = str(uuid4()) if uuid is not None else None
             claim_lease_ms = 30_000
+            claim_state = {'distributed': False}
 
             async def acquire_claim():
                 if not hasattr(g.driver, 'execute_query'):
@@ -605,6 +606,9 @@ defmodule Gralkor.GraphitiPool do
                         owner=claim_owner,
                         lease_until_ms=now_ms + claim_lease_ms,
                     )
+                    if not records:
+                        return 'acquired'
+                    claim_state['distributed'] = True
                     claim = records[0]
                     equal = (
                         claim['group_id'] == gid
@@ -636,7 +640,7 @@ defmodule Gralkor.GraphitiPool do
                     await asyncio.sleep(0.01)
 
             async def renew_claim():
-                if not hasattr(g.driver, 'execute_query'):
+                if not claim_state['distributed']:
                     return
                 while True:
                     await asyncio.sleep(claim_lease_ms / 3000)
@@ -653,7 +657,7 @@ defmodule Gralkor.GraphitiPool do
                     )
 
             async def release_claim():
-                if not hasattr(g.driver, 'execute_query'):
+                if not claim_state['distributed']:
                     return
                 await g.driver.execute_query(
                     """
