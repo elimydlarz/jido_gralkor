@@ -1615,7 +1615,24 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                     from graphiti_core.graphiti import add_nodes_and_edges_bulk
                     from graphiti_core.nodes import EntityNode, EpisodicNode
                     self.extractions += 1
-                    await asyncio.sleep(0.1)
+
+                    if kwargs['uuid'] == 'embedded-stolen-claim':
+                        for _ in range(1000):
+                            records, _, _ = await self.driver.execute_query(
+                                '''
+                                MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+                                RETURN c.owner AS owner
+                                ''',
+                                uuid=kwargs['uuid'],
+                            )
+                            if records and records[0]['owner'] == 'replacement-owner':
+                                break
+                            await asyncio.sleep(0.01)
+                        else:
+                            raise RuntimeError('timed out waiting for replacement owner')
+                    else:
+                        await asyncio.sleep(0.1)
+
                     episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
 
                     if kwargs['uuid'] in {'embedded-bulk-stolen', 'embedded-bulk-created'}:
