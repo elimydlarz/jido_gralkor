@@ -99,7 +99,8 @@ defmodule Gralkor.Reflection.Scheduler do
 
     with :ok <- validate_ingestion(ingestion),
          :ok <- validate_reflections(reflections),
-         :ok <- validate_execution_options(opts) do
+         :ok <- validate_execution_options(opts),
+         :ok <- validate_durable_work(reflections, ingestion) do
       new_jobs =
         Enum.reduce(reflections, [], fn reflection, jobs ->
           key = completion_key(reflection, ingestion)
@@ -544,6 +545,14 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp valid_identity?(value), do: is_binary(value) and String.trim(value) != ""
 
+  defp validate_durable_work(reflections, ingestion) do
+    if restart_safe?({reflections, durable_ingestion(ingestion)}) do
+      :ok
+    else
+      {:error, :restart_unsafe_work}
+    end
+  end
+
   defp valid_timer?(value, allow_zero?: allow_zero?) do
     is_integer(value) and value <= @max_timer_ms and (allow_zero? or value > 0) and value >= 0
   end
@@ -560,7 +569,7 @@ defmodule Gralkor.Reflection.Scheduler do
     %{
       key: job.key,
       reflection: job.reflection,
-      ingestion: job.ingestion,
+      ingestion: durable_ingestion(job.ingestion),
       opts: durable_execution_data(job.opts),
       stage: job.stage,
       attempt: job.attempt,
@@ -568,6 +577,11 @@ defmodule Gralkor.Reflection.Scheduler do
       retry_at_ms: job.retry_at_ms,
       active: job.active
     }
+  end
+
+  defp durable_ingestion(ingestion) do
+    ingestion
+    |> Map.drop([:tools, :tool_context, "tools", "tool_context"])
   end
 
   defp durable_execution_data(opts) do

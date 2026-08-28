@@ -876,6 +876,13 @@ defmodule Gralkor.Reflection.SchedulerTest do
                  runner_opts: [tool_context: %{pid: self()}]
                )
 
+      assert {:error, :restart_unsafe_work} =
+               Scheduler.schedule(
+                 [reflection("review")],
+                 put_in(ingestion(), [:representations, Access.at(0), :runtime], self()),
+                 server: name
+               )
+
       refute_receive {:runner_invoked, _artefact_id}
     end
   end
