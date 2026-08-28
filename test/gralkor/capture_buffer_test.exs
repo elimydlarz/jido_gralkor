@@ -491,6 +491,67 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "where captured turns select a Lens > when Lens-selected turns begin a new buffered ingestion" do
+    test "then one ingestion identifier is retained across retries" do
+      test_pid = self()
+      attempts = :atomics.new(1, [])
+
+      lens_flush_callback = fn _, _, _, lens, _, ingestion_id, evidence_id ->
+        attempt = :atomics.add_get(attempts, 1, 1)
+        send(test_pid, {:ingestion_attempt, attempt, ingestion_id})
+
+        if attempt == 1 do
+          {:error, :temporary}
+        else
+          {:ok, %{lens: lens, evidence_id: evidence_id, result: :ok}}
+        end
+      end
+
+      reflection_callback = fn _, ingestion ->
+        send(test_pid, {:reflections_scheduled, ingestion})
+        :ok
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: lens_flush_callback,
+         reflections: [:daily_summary],
+         reflection_callback: reflection_callback,
+         retries: [0]}
+      )
+
+      append_reflection_turn(%{})
+      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+
+      assert_receive {:ingestion_attempt, 1, ingestion_id}
+      assert_receive {:ingestion_attempt, 2, ^ingestion_id}
+      assert_receive {:reflections_scheduled, %{id: ^ingestion_id}}
+    end
+
+    test "and identifiers remain collision-resistant across process and VM restarts" do
+      restart_with_reflection_capture()
+      append_reflection_turn(%{})
+      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      assert_receive {:reflections_scheduled, _, first_ingestion}
+
+      restart_with_reflection_capture()
+      append_reflection_turn(%{})
+      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      assert_receive {:reflections_scheduled, _, second_ingestion}
+
+      assert first_ingestion.id != second_ingestion.id
+
+      assert first_ingestion.id =~
+               ~r/^reflection-session:[A-Za-z0-9_-]{22}$/
+
+      assert second_ingestion.id =~
+               ~r/^reflection-session:[A-Za-z0-9_-]{22}$/
+    end
+  end
+
   describe "where captured turns select a Lens > when every Lens batch for a completed ingestion succeeds and Reflections are declared" do
     test "then every completed representation retains the Lens identity supplied by its batch" do
       restart_with_reflection_capture()
