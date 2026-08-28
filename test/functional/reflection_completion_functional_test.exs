@@ -398,6 +398,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         Task.async(fn ->
           Process.sleep(50)
           send(runner, :finish_reflection)
+          :ok
         end)
 
       started = System.monotonic_time(:millisecond)
