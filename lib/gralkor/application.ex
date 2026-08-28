@@ -44,6 +44,7 @@ defmodule Gralkor.Application do
     [
       {Gralkor.Python, [reap_orphans: not remote?]},
       {GraphitiPool, graphiti_opts},
+      {Gralkor.Reflection.Scheduler, [journal_path: reflection_journal_path(spec)]},
       {CaptureBuffer,
        [
          flush_callback: build_flush_callback(spec),
@@ -58,6 +59,21 @@ defmodule Gralkor.Application do
   end
 
   defp embedded_falkordb_options({:remote, _options}), do: []
+
+  defp reflection_journal_path(spec) do
+    Application.get_env(:jido_gralkor, :reflection_scheduler_journal_path) ||
+      default_reflection_journal_path(spec)
+  end
+
+  defp default_reflection_journal_path({:embedded, data_dir}),
+    do: Path.join(data_dir, "reflection_scheduler.dets")
+
+  defp default_reflection_journal_path({:remote, _options}) do
+    :user_data
+    |> :filename.basedir("jido_gralkor")
+    |> to_string()
+    |> Path.join("reflection_scheduler.dets")
+  end
 
   @doc false
   def build_flush_callback(_config, deps \\ []) do

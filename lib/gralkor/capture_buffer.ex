@@ -27,6 +27,10 @@ defmodule Gralkor.CaptureBuffer do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
+  def child_spec(opts) do
+    %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}, shutdown: :infinity}
+  end
+
   @doc """
   Append one turn (a list of `Gralkor.Message`) to the session's buffer.
 
@@ -436,6 +440,7 @@ defmodule Gralkor.CaptureBuffer do
       )
     end
 
+    drain_reflection_scheduler(state.reflection_scheduler)
     stop_owned_scheduler(state.reflection_scheduler)
 
     :ok
@@ -709,6 +714,14 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   defp stop_owned_scheduler(_), do: :ok
+
+  defp drain_reflection_scheduler({_ownership, pid}) when is_pid(pid) do
+    if Process.alive?(pid), do: Scheduler.drain(pid, :infinity)
+  catch
+    :exit, _reason -> :ok
+  end
+
+  defp drain_reflection_scheduler(_), do: :ok
 
   defp validate_representations(representations, lens, evidence_id) do
     Enum.reduce_while(representations, :ok, fn representation, :ok ->
