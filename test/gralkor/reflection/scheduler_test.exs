@@ -73,6 +73,46 @@ defmodule Gralkor.Reflection.SchedulerTest do
     end
   end
 
+  describe "when a phase task cannot start" do
+    test "then that phase is retried within the bounded schedule" do
+      test_pid = self()
+      attempts = :atomics.new(1, [])
+      name = Module.concat(__MODULE__, "Scheduler#{System.unique_integer([:positive])}")
+
+      start_task = fn supervisor, operation ->
+        if :atomics.add_get(attempts, 1, 1) == 1 do
+          {:error, :task_supervisor_busy}
+        else
+          Task.Supervisor.async_nolink(supervisor, operation)
+        end
+      end
+
+      runner = fn reflection, _ingestion, opts ->
+        send(test_pid, {:runner_after_start_retry, self()})
+        {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{}, [])}
+      end
+
+      start_supervised!(
+        {Scheduler,
+         name: name,
+         runner: runner,
+         start_task: start_task,
+         store_opts: [storage: EmptyStore],
+         retry_delays: [0],
+         notify: test_pid}
+      )
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+      assert_receive {:reflection_retrying, "review",
+                      %{stage: :storage, reason: {:task_start, :task_supervisor_busy}}}
+
+      assert_receive {:runner_after_start_retry, _runner}
+      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
+    end
+  end
+
   defp reflection(name) do
     %Reflection{
       name: name,

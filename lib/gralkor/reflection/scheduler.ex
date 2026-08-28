@@ -36,6 +36,7 @@ defmodule Gralkor.Reflection.Scheduler do
         Keyword.take(opts, [
           :runner,
           :runner_opts,
+          :start_task,
           :store_opts,
           :notify,
           :retry_delays,
@@ -182,16 +183,32 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp launch(state, key) do
     job = Map.fetch!(state.jobs, key)
+    operation = fn -> execute(job) end
+    start_task = Keyword.get(job.opts, :start_task, &Task.Supervisor.async_nolink/2)
 
-    task =
-      Task.Supervisor.async_nolink(state.task_supervisor, fn ->
-        execute(job)
-      end)
+    case start_attempt(start_task, state.task_supervisor, operation) do
+      {:ok, task} ->
+        timeout = Keyword.fetch!(job.opts, :execution_timeout_ms)
+        timeout_ref = Process.send_after(self(), {:attempt_timeout, task.ref}, timeout)
+        task_state = %{key: key, pid: task.pid, timeout_ref: timeout_ref}
+        %{state | tasks: Map.put(state.tasks, task.ref, task_state)}
 
-    timeout = Keyword.fetch!(job.opts, :execution_timeout_ms)
-    timeout_ref = Process.send_after(self(), {:attempt_timeout, task.ref}, timeout)
-    task_state = %{key: key, pid: task.pid, timeout_ref: timeout_ref}
-    %{state | tasks: Map.put(state.tasks, task.ref, task_state)}
+      {:error, reason} ->
+        retry_or_finish(state, key, {:task_start, reason})
+    end
+  end
+
+  defp start_attempt(start_task, supervisor, operation) do
+    case start_task.(supervisor, operation) do
+      %Task{} = task -> {:ok, task}
+      {:ok, %Task{} = task} -> {:ok, task}
+      {:error, reason} -> {:error, reason}
+      outcome -> {:error, {:invalid_start_response, outcome}}
+    end
+  rescue
+    exception -> {:error, {:exception, exception}}
+  catch
+    kind, reason -> {:error, {kind, reason}}
   end
 
   defp execute(%{stage: :lookup} = job) do
