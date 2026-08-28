@@ -3364,4 +3364,17 @@ defmodule Gralkor.GraphitiPoolTest do
     GenServer.stop(pid)
     {node, %{"group_ids" => Pythonx.decode(group_ids)}}
   end
+
+  defp eventually(assertion, attempts \\ 100)
+
+  defp eventually(assertion, attempts) when attempts > 0 do
+    if assertion.() do
+      true
+    else
+      Process.sleep(10)
+      eventually(assertion, attempts - 1)
+    end
+  end
+
+  defp eventually(_assertion, 0), do: false
 end
