@@ -517,7 +517,7 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   })
 ```
 
-Every ingestion requires a non-blank, replay-stable `id` and declares deterministic provenance through `source_kind`. The ID is part of each Reflection completion identity, so a retry or replay of the same logical ingestion must reuse it; distinct ingestions must not share it.
+Every ingestion requires a non-blank `operator_id`, a non-blank replay-stable `id`, and deterministic provenance through `source_kind`. Both identifiers are validated before Lens storage begins. The ingestion ID is part of each Reflection completion identity, so a retry or replay of the same logical ingestion must reuse it; distinct ingestions must not share it.
 
 The supported source kinds are:
 
