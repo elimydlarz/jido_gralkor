@@ -715,6 +715,15 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                   episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
                   await episode.save(self.driver)
 
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  from graphiti_core.search.search_config import SearchResults
+                  groups = set(group_ids or [])
+                  episodes = [
+                      episode for episode in self.driver.episodes.values()
+                      if not groups or episode.group_id in groups
+                  ]
+                  return SearchResults(episodes=episodes)
+
           PinnedGraphitiContract()
           """,
           %{}
@@ -858,7 +867,58 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert_receive {:graphiti_store_committed, ^first}
       assert_receive {:reflection_completed, "review", {:ok, ^first}}
 
-      assert {:ok, [%{artefact: ^first}]} =
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        Gralkor.Destination.Storage.Graphiti
+      )
+
+      assert {:ok, [%{destination: "observations", artefact: ^first}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "",
+                 destinations: ["observations"],
+                 result_type: :artefacts
+               })
+
+      Pythonx.eval(
+        """
+        original = next(iter(graphiti.driver.episodes.values()))
+        duplicate = original.model_copy(update={'uuid': 'legacy-equal-duplicate'})
+        graphiti.driver.episodes[duplicate.uuid] = duplicate
+        graphiti.driver._gralkor_completed_episode_uuids.add(duplicate.uuid)
+        """,
+        %{"graphiti" => graphiti}
+      )
+
+      assert {:ok, [%{destination: "observations", artefact: ^first}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "",
+                 destinations: ["observations"],
+                 result_type: :artefacts
+               })
+
+      conflicting_content =
+        first
+        |> Map.put(:payload, %{"summary" => "conflicting"})
+        |> Map.from_struct()
+        |> Jason.encode!()
+
+      Pythonx.eval(
+        """
+        body = conflicting_content.decode('utf-8') if isinstance(conflicting_content, (bytes, bytearray)) else conflicting_content
+        original = next(iter(graphiti.driver.episodes.values()))
+        conflict = original.model_copy(
+            update={'uuid': 'legacy-conflicting-duplicate', 'content': body}
+        )
+        graphiti.driver.episodes[conflict.uuid] = conflict
+        graphiti.driver._gralkor_completed_episode_uuids.add(conflict.uuid)
+        """,
+        %{"graphiti" => graphiti, "conflicting_content" => conflicting_content}
+      )
+
+      assert {:error, {:artefact_conflict, ^artefact_id}} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "",
@@ -872,7 +932,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           %{"graphiti" => graphiti}
         )
 
-      assert Pythonx.decode(proof) == [1, 1]
+      assert Pythonx.decode(proof) == [3, 1]
     end
   end
 
