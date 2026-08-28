@@ -76,7 +76,9 @@ where Graphiti is the canonical Reflection store
     while durable extraction completion was recorded
       then Graphiti confirms the existing episode without repeating extraction
     while the episode exists but extraction completion was not recorded
-      then Graphiti resumes the normal extraction path before reporting success
+      then canonical lookup retains the exact episode artefact as incomplete rather than reporting completion
+      and public artefact search excludes that incomplete artefact
+      and Graphiti resumes the normal extraction path without rerunning the Runner before reporting success
     and exactly one episode carrying that artefact remains searchable
 
 where in-memory storage is the canonical Reflection store

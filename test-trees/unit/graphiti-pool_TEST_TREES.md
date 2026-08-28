@@ -95,6 +95,7 @@ when an episode is added
 
 when one episode is requested by exact identifier
   then the matching episode content and immutable source fields are returned
+  and the result identifies whether durable extraction completion is recorded
   while that identifier is absent
     then lookup reports not found
   where a supported source kind is supplied
@@ -158,6 +159,8 @@ when an episode search is run for a group
   and it is restricted to the sanitised group id the episodes were written under
   and each returned episode is rendered with the body that was written and its source description
   and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned
+  when only durably extraction-complete episodes are requested
+    then every unmarked episode is excluded
 
 if running an episode search raises inside the graph library
   then an error carrying the raised exception is returned

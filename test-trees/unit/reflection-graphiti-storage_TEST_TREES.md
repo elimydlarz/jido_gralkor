@@ -5,8 +5,10 @@ when Graphiti Reflection storage receives an artefact
   and it supplies the artefact identifier as the requested episode UUID
 
 when Graphiti Reflection storage looks up an artefact identifier
-  while the matching episode contains that artefact for the requested Reflection
+  while the matching episode contains that artefact for the requested Reflection and durable extraction completion is recorded
     then it returns the matching deserialized artefact
+  while the matching episode contains that artefact but durable extraction completion is absent
+    then lookup returns the incomplete artefact for canonical storage to resume without rerunning the Runner
   while the episode is missing
     then lookup reports not found
   while the episode body identifies another artefact or Reflection
