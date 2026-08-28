@@ -661,6 +661,11 @@ defmodule Gralkor.Reflection.SchedulerTest do
       assert_receive {:runner_invoked, artefact_id}
       assert_receive {:store_put, artefact, _storage_task}
       assert artefact.id == artefact_id
+
+      [durable] = Journal.all(first_journal)
+      assert durable.opts[:runner_opts] == []
+      refute Keyword.has_key?(durable.opts, :store_opts)
+
       assert :ok = stop_supervised(name)
 
       start_scheduler(name,
