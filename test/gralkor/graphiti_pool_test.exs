@@ -657,7 +657,7 @@ defmodule Gralkor.GraphitiPoolTest do
           driver = graphs[0].driver
           lease_calls = [
               call for call in driver.query_calls
-              if 'lease_until_ms' in call['query']
+              if '$lease_ms' in call['query']
           ]
           [
               driver.claims['server-expired']['generation'],
