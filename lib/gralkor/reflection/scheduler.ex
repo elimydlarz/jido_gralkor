@@ -12,6 +12,8 @@ defmodule Gralkor.Reflection.Scheduler do
 
   @default_retry_delays [1_000, 2_000, 4_000]
   @default_execution_timeout_ms 60_000
+  @max_timer_ms 4_294_967_295
+  @runtime_runner_option_keys [:inference, :tool_executor]
 
   def start_link(opts \\ []),
     do: GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
@@ -203,7 +205,7 @@ defmodule Gralkor.Reflection.Scheduler do
     job = Map.fetch!(state.jobs, key)
 
     cond do
-      job.active and job.stage == :storage ->
+      job.active and job.stage in [:storage, :storage_confirmation] ->
         job = %{
           job
           | stage: :storage_confirmation,
@@ -526,11 +528,14 @@ defmodule Gralkor.Reflection.Scheduler do
 
     cond do
       not (is_list(retry_delays) and
-               Enum.all?(retry_delays, &(is_integer(&1) and &1 >= 0))) ->
+               Enum.all?(retry_delays, &valid_timer?(&1, allow_zero?: true))) ->
         {:error, {:invalid_retry_delays, retry_delays}}
 
-      not (is_integer(execution_timeout_ms) and execution_timeout_ms > 0) ->
+      not valid_timer?(execution_timeout_ms, allow_zero?: false) ->
         {:error, {:invalid_execution_timeout_ms, execution_timeout_ms}}
+
+      not restart_safe?(durable_execution_data(opts)) ->
+        {:error, :restart_unsafe_execution_data}
 
       true ->
         :ok
@@ -538,6 +543,10 @@ defmodule Gralkor.Reflection.Scheduler do
   end
 
   defp valid_identity?(value), do: is_binary(value) and String.trim(value) != ""
+
+  defp valid_timer?(value, allow_zero?: allow_zero?) do
+    is_integer(value) and value <= @max_timer_ms and (allow_zero? or value > 0) and value >= 0
+  end
 
   defp completion_key(reflection, ingestion),
     do: {field(ingestion, :operator_id), field(ingestion, :id), reflection.name}
@@ -552,13 +561,7 @@ defmodule Gralkor.Reflection.Scheduler do
       key: job.key,
       reflection: job.reflection,
       ingestion: job.ingestion,
-      opts:
-        Keyword.take(job.opts, [
-          :runner_opts,
-          :store_opts,
-          :retry_delays,
-          :execution_timeout_ms
-        ]),
+      opts: durable_execution_data(job.opts),
       stage: job.stage,
       attempt: job.attempt,
       artefact: job.artefact,
@@ -566,6 +569,36 @@ defmodule Gralkor.Reflection.Scheduler do
       active: job.active
     }
   end
+
+  defp durable_execution_data(opts) do
+    runner_opts =
+      opts
+      |> Keyword.get(:runner_opts, [])
+      |> Keyword.drop(@runtime_runner_option_keys)
+
+    [
+      runner_opts: runner_opts,
+      retry_delays: Keyword.fetch!(opts, :retry_delays),
+      execution_timeout_ms: Keyword.fetch!(opts, :execution_timeout_ms)
+    ]
+  end
+
+  defp restart_safe?(value)
+       when is_atom(value) or is_binary(value) or is_number(value) or is_boolean(value) or
+              is_nil(value),
+       do: true
+
+  defp restart_safe?(value) when is_list(value), do: Enum.all?(value, &restart_safe?/1)
+
+  defp restart_safe?(value) when is_tuple(value),
+    do: value |> Tuple.to_list() |> Enum.all?(&restart_safe?/1)
+
+  defp restart_safe?(%_{} = value), do: value |> Map.from_struct() |> restart_safe?()
+
+  defp restart_safe?(value) when is_map(value),
+    do: Enum.all?(value, fn {key, item} -> restart_safe?(key) and restart_safe?(item) end)
+
+  defp restart_safe?(_value), do: false
 
   defp completed?(ingestion) do
     representations = field(ingestion, :representations) || []
