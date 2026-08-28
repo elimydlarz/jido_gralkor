@@ -22,6 +22,19 @@ defmodule Gralkor.Ingest do
     validate_source_content!(kind, content)
   end
 
+  @spec validate_id!(term()) :: :ok
+  def validate_id!(id) when is_binary(id) do
+    if String.trim(id) == "" do
+      raise ArgumentError, "id must be a non-blank string, got #{inspect(id)}"
+    end
+
+    :ok
+  end
+
+  def validate_id!(id) do
+    raise ArgumentError, "id must be a non-blank string, got #{inspect(id)}"
+  end
+
   @spec encode_content!(source_kind(), String.t() | map() | list()) :: String.t()
   def encode_content!(:structured_record, content), do: Jason.encode!(content)
   def encode_content!(_kind, content), do: content
