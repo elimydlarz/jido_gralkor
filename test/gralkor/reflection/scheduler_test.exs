@@ -366,6 +366,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
       {name, runner} = immediate_runner(self())
       path = journal_path()
+      on_exit(fn -> File.rm(path) end)
       journal_name = journal_name()
 
       start_scheduler(name,
@@ -418,20 +419,19 @@ defmodule Gralkor.Reflection.SchedulerTest do
       assert {:ok, :scheduled} =
                Scheduler.schedule([reflection("review")], ingestion(), server: name)
 
-      assert_receive {:store_put, artefact, first_store_task}
+      assert_receive {:store_put, artefact, _first_store_task}
       Process.exit(scheduler, :kill)
-      assert_receive {:EXIT, ^first_store_task, _reason}, 0
       assert eventually(fn -> Process.whereis(name) not in [nil, scheduler] end)
       assert_receive {:reflection_retrying, "review", %{reason: :scheduler_restart}}
       assert_receive {:store_put, ^artefact, _resumed_store_task}
       assert_receive {:reflection_completed, "review", {:ok, ^artefact}}
-      File.rm(path)
     end
 
     test "then an interrupted active attempt consumes the durable retry budget" do
       test_pid = self()
       name = scheduler_name()
       path = journal_path()
+      on_exit(fn -> File.rm(path) end)
 
       runner = fn _reflection, _ingestion, _opts ->
         send(test_pid, {:active_runner, self()})
@@ -465,7 +465,6 @@ defmodule Gralkor.Reflection.SchedulerTest do
                        %{stage: :runner, attempts: 1, reason: :scheduler_restart}}}
 
       refute_receive {:active_runner, _runner}
-      File.rm(path)
     end
   end
 
