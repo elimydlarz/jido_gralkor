@@ -13,5 +13,10 @@ when a graph write raises inside a capture chain
 when a graph write fails outside a capture chain
   then the direct caller receives the failure after one attempt
 
+when a Reflection Runner or canonical write fails after completed Lens ingestion
+  then the Reflection Scheduler alone owns its bounded retry schedule
+  and the Runner and canonical store each make one attempt when invoked by the Scheduler
+  and no ingestion or capture layer retries the same Reflection failure
+
 when recall's outermost deadline expires
   then recall returns without retrying and logs the expiry as a warning

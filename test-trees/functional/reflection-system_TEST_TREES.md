@@ -82,7 +82,7 @@ when an ingestion operation successfully stores information through one or more 
   while Reflections are declared
     then every stored representation retains its evidence identifier and Lens identity
     and the ingestion caller receives success without waiting for Reflection
-    and every declared Reflection is scheduled once for the completed ingestion operation
+    and every declared Reflection begins one logical completion flow for the completed ingestion operation
     and no Reflection begins before every intended Lens ingestion has completed
 
 when a scheduled Reflection runs
@@ -135,7 +135,7 @@ when the final Chain of Thought step returns valid structured output
 
 when multiple declared Reflections process one completed ingestion operation
   then every Reflection runs independently
-  and failure of one Reflection does not prevent another Reflection from completing
+  and retry or terminal failure of one Reflection does not prevent another Reflection from completing
 
 if any intended Lens ingestion fails
   then no Reflection is scheduled for the incomplete ingestion operation
