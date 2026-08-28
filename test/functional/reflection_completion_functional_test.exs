@@ -1380,20 +1380,21 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
               MATCH (episode:Episodic {uuid: 'preclaim-complete'})
               OPTIONAL MATCH (claim:_GralkorEpisodeClaim {uuid: 'preclaim-complete'})
               RETURN episode.content AS episode_content,
-                     claim.content AS claim_content,
-                     graphiti.extractions AS extractions
+                     claim.content AS claim_content
               '''
           ))
-          records[0]
+          [records[0], graphiti.extractions]
           """,
           %{"graphiti" => graphiti}
         )
 
-      assert Pythonx.decode(proof) == %{
-               "claim_content" => "original",
-               "episode_content" => "original",
-               "extractions" => 0
-             }
+      assert Pythonx.decode(proof) == [
+               %{
+                 "claim_content" => "original",
+                 "episode_content" => "original"
+               },
+               0
+             ]
     end
 
     test "then a conflicting attempt cannot poison an incomplete episode's later equal replay" do
@@ -1469,6 +1470,63 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                1
              ]
     end
+  end
+
+  defp start_preclaim_graphiti_pool(child_id) do
+    data_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "reflection-preclaim-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+      )
+
+    File.mkdir_p!(data_dir)
+    on_exit(fn -> File.rm_rf!(data_dir) end)
+    start_supervised!(Gralkor.Python)
+
+    construct_instance = fn database, _shared, group_id ->
+      {graphiti, _} =
+        Pythonx.eval(
+          """
+          from graphiti_core.driver.falkordb_driver import FalkorDriver
+
+          gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+
+          class PreclaimGraphitiContract:
+              def __init__(self):
+                  self.driver = FalkorDriver(falkor_db=database, database=gid)
+                  self.extractions = 0
+
+              async def add_episode(self, **kwargs):
+                  from graphiti_core.nodes import EpisodicNode
+                  self.extractions += 1
+                  episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                  await episode.save(self.driver)
+
+          PreclaimGraphitiContract()
+          """,
+          %{"database" => database, "group_id" => group_id}
+        )
+
+      graphiti
+    end
+
+    pool =
+      start_supervised!(
+        Supervisor.child_spec(
+          {GraphitiPool,
+           falkordb_spec: {:embedded, data_dir},
+           construct_shared_clients: fn _llm, _embedder ->
+             %{llm_client: nil, embedder: nil, cross_encoder: nil}
+           end,
+           construct_instance: construct_instance,
+           initialise_instance: fn _instance -> :ok end,
+           warmup: false,
+           embedded_falkordb_socket_timeout_ms: 60_000},
+          id: child_id
+        )
+      )
+
+    {pool, GraphitiPool.for(pool, "observations")}
   end
 
   describe "where Graphiti is the canonical Reflection store > when independent pools share one Falkor graph" do
