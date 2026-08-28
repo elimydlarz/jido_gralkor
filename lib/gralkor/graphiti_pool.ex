@@ -389,10 +389,9 @@ defmodule Gralkor.GraphitiPool do
 
   ## Options
 
-    * `:uuid` — optional episode UUID forwarded to graphiti's `add_episode`.
-      When given, graphiti fetches the existing episode and re-runs extraction
-      against it (update path). When nil (default), graphiti generates a new
-      UUID.
+    * `:uuid` — optional deterministic episode UUID. A missing UUID is created,
+      an equal existing episode succeeds without extraction, and conflicting
+      immutable episode content returns an episode conflict.
     * `:lens` — optional originating Lens name. It is appended to the episode's
       source description before the single graphiti `add_episode` call.
     * `:source_kind` — `:conversation`, `:document`, or `:structured_record`,
@@ -437,13 +436,17 @@ defmodule Gralkor.GraphitiPool do
     source_kind = Keyword.get(opts, :source_kind)
     extraction_instructions = @provenance_extraction_instructions
 
-    with_episode_write_admission(server, fn skip_empty_edge_candidates ->
-      Pythonx.eval(
+    result =
+      with_episode_write_admission(server, uuid, fn skip_empty_edge_candidates ->
+        {raw, _} =
+          Pythonx.eval(
         """
         import asyncio
+        from contextvars import ContextVar
         from datetime import datetime, timezone
+        from graphiti_core.errors import NodeNotFoundError
         from graphiti_core.utils.maintenance import edge_operations
-        from graphiti_core.nodes import EpisodeType
+        from graphiti_core.nodes import EpisodeType, EpisodicNode
         c = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
         s = source.decode('utf-8') if isinstance(source, (bytes, bytearray)) else source
         n = name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name
@@ -471,22 +474,78 @@ defmodule Gralkor.GraphitiPool do
         if uuid is not None:
             uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
             kwargs['uuid'] = uid
+
+        guard = getattr(EpisodicNode, '_gralkor_requested_uuid_guard', None)
+        if guard is None:
+            guard = ContextVar('_gralkor_requested_uuid_guard', default=None)
+            original_get_by_uuid = EpisodicNode.get_by_uuid
+
+            async def guarded_get_by_uuid(cls, driver, requested_uuid):
+                try:
+                    return await original_get_by_uuid(driver, requested_uuid)
+                except NodeNotFoundError:
+                    seed = guard.get()
+                    if seed is None or requested_uuid != seed['uuid']:
+                        raise
+                    return EpisodicNode(**seed)
+
+            EpisodicNode._gralkor_requested_uuid_guard = guard
+            EpisodicNode.get_by_uuid = classmethod(guarded_get_by_uuid)
+
         import sys
         async def add_episode():
+            if uuid is not None:
+                try:
+                    existing = await EpisodicNode.get_by_uuid(g.driver, uid)
+                except NodeNotFoundError:
+                    existing = None
+
+                if existing is not None:
+                    equal = (
+                        existing.group_id == gid
+                        and existing.content == c
+                        and existing.source == episode_type
+                        and existing.source_description == s
+                    )
+                    return 'existing' if equal else 'conflict'
+
+                token = guard.set(dict(
+                    uuid=uid,
+                    name=n,
+                    group_id=gid,
+                    labels=[],
+                    source=episode_type,
+                    content=c,
+                    source_description=s,
+                    created_at=datetime.now(timezone.utc),
+                    valid_at=kwargs['reference_time'],
+                ))
+            else:
+                token = None
+
             if not skip_empty_edge_candidates:
-                return await g.add_episode(**kwargs)
-            guard = edge_operations._gralkor_skip_empty_edge_candidates
-            token = guard.set(True)
+                try:
+                    await g.add_episode(**kwargs)
+                    return 'created'
+                finally:
+                    if token is not None:
+                        guard.reset(token)
+
+            empty_edge_guard = edge_operations._gralkor_skip_empty_edge_candidates
+            empty_edge_token = empty_edge_guard.set(True)
             try:
-                return await g.add_episode(**kwargs)
+                await g.add_episode(**kwargs)
+                return 'created'
             finally:
-                guard.reset(token)
+                empty_edge_guard.reset(empty_edge_token)
+                if token is not None:
+                    guard.reset(token)
         try:
-            asyncio._gralkor_run(add_episode())
+            result = asyncio._gralkor_run(add_episode())
         except BaseException as e:
             print(f"[gralkor] add_episode failed: {type(e).__name__}: {e}", file=sys.stderr)
             raise
-        None
+        result
         """,
         %{
           "g" => instance,
@@ -502,23 +561,42 @@ defmodule Gralkor.GraphitiPool do
         }
       )
 
-      :ok
-    end)
+        Pythonx.decode(raw)
+      end)
+
+    case result do
+      "conflict" -> {:error, {:episode_conflict, uuid}}
+      _ -> :ok
+    end
   rescue
     e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
   end
 
-  defp with_episode_write_admission(server, operation) do
-    case GenServer.call(server, :acquire_episode_write, :infinity) do
-      :unbounded ->
-        operation.(false)
+  defp with_episode_write_admission(server, uuid, operation) do
+    with_uuid_write_admission(server, uuid, fn ->
+      case GenServer.call(server, :acquire_episode_write, :infinity) do
+        :unbounded ->
+          operation.(false)
 
-      :acquired ->
-        try do
-          operation.(true)
-        after
-          GenServer.cast(server, {:release_episode_write, self()})
-        end
+        :acquired ->
+          try do
+            operation.(true)
+          after
+            GenServer.cast(server, {:release_episode_write, self()})
+          end
+      end
+    end)
+  end
+
+  defp with_uuid_write_admission(_server, nil, operation), do: operation.()
+
+  defp with_uuid_write_admission(server, uuid, operation) do
+    :acquired = GenServer.call(server, {:acquire_episode_uuid, uuid}, :infinity)
+
+    try do
+      operation.()
+    after
+      GenServer.cast(server, {:release_episode_uuid, uuid, self()})
     end
   end
 
