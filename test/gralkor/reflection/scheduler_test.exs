@@ -573,6 +573,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       assert {:ok, :scheduled} =
                Scheduler.schedule([reflection("review")], ingestion(), server: name)
 
+      assert_receive {:runner_invoked, ^artefact_id}
       assert_receive {:store_put, ^artefact, _storage_task}
       Process.exit(scheduler, :kill)
       assert eventually(fn -> Process.whereis(name) not in [nil, scheduler] end)
@@ -681,6 +682,11 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
       assert {:error, {:invalid_operator_id, nil}} =
                Scheduler.schedule([reflection("review")], %{ingestion() | operator_id: nil},
+                 server: name
+               )
+
+      assert {:error, {:invalid_operator_id, " "}} =
+               Scheduler.schedule([reflection("review")], %{ingestion() | operator_id: " "},
                  server: name
                )
 
