@@ -300,7 +300,7 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp transition(state, key, stage, artefact) do
     job = Map.fetch!(state.jobs, key)
-    job = %{job | stage: stage, attempt: 1, artefact: artefact}
+    job = %{job | stage: stage, attempt: 1, artefact: artefact, active: false}
     :ok = Journal.put_all(state.journal, [durable_job(job)])
     launch(%{state | jobs: Map.put(state.jobs, key, job)}, key)
   end
@@ -316,7 +316,7 @@ defmodule Gralkor.Reflection.Scheduler do
       delay ->
         notify(job, {:reflection_retrying, job.reflection.name, failure(job, reason)})
         timer = Process.send_after(self(), {:retry, key}, delay)
-        job = %{job | attempt: job.attempt + 1, retry_timer: timer}
+        job = %{job | attempt: job.attempt + 1, retry_timer: timer, active: false}
         :ok = Journal.put_all(state.journal, [durable_job(job)])
         %{state | jobs: Map.put(state.jobs, key, job)}
     end
@@ -367,11 +367,29 @@ defmodule Gralkor.Reflection.Scheduler do
   end
 
   defp notify(job, message) do
+    log(message)
+
     case Keyword.get(job.opts, :notify) do
       pid when is_pid(pid) -> send(pid, message)
       _ -> :ok
     end
   end
+
+  defp log({:reflection_retrying, name, failure}) do
+    Logger.warning(
+      "[gralkor] Reflection retrying — reflection:#{name} stage:#{failure.stage} " <>
+        "attempt:#{failure.attempts} reason:#{inspect(failure.reason)}"
+    )
+  end
+
+  defp log({:reflection_completed, name, {:error, failure}}) do
+    Logger.error(
+      "[gralkor] Reflection failed — reflection:#{name} stage:#{failure.stage} " <>
+        "attempts:#{failure.attempts} reason:#{inspect(failure.reason)}"
+    )
+  end
+
+  defp log({:reflection_completed, _name, {:ok, _artefact}}), do: :ok
 
   defp validate_ingestion(ingestion) do
     id = field(ingestion, :id)
