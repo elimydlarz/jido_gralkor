@@ -582,7 +582,7 @@ defmodule Gralkor.GraphitiPool do
                 while True:
                     now_ms = int(time.time() * 1000)
                     records, _, _ = await g.driver.execute_query(
-                        """
+                        '''
                         MERGE (c:_GralkorEpisodeClaim {uuid: $uuid})
                         ON CREATE SET
                           c.group_id = $group_id,
@@ -597,7 +597,7 @@ defmodule Gralkor.GraphitiPool do
                                c.source_description AS source_description,
                                c.owner AS owner,
                                coalesce(c.lease_until_ms, 0) AS lease_until_ms
-                        """,
+                        ''',
                         uuid=uid,
                         group_id=gid,
                         content=c,
@@ -624,12 +624,12 @@ defmodule Gralkor.GraphitiPool do
                         return 'acquired'
 
                     acquired, _, _ = await g.driver.execute_query(
-                        """
+                        '''
                         MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
                         WHERE c.owner IS NULL OR c.owner = $owner OR coalesce(c.lease_until_ms, 0) <= $now_ms
                         SET c.owner = $owner, c.lease_until_ms = $lease_until_ms
                         RETURN c.owner AS owner
-                        """,
+                        ''',
                         uuid=uid,
                         owner=claim_owner,
                         now_ms=now_ms,
@@ -646,11 +646,11 @@ defmodule Gralkor.GraphitiPool do
                     await asyncio.sleep(claim_lease_ms / 3000)
                     now_ms = int(time.time() * 1000)
                     await g.driver.execute_query(
-                        """
+                        '''
                         MATCH (c:_GralkorEpisodeClaim {uuid: $uuid, owner: $owner})
                         SET c.lease_until_ms = $lease_until_ms
                         RETURN c.uuid AS uuid
-                        """,
+                        ''',
                         uuid=uid,
                         owner=claim_owner,
                         lease_until_ms=now_ms + claim_lease_ms,
@@ -660,11 +660,11 @@ defmodule Gralkor.GraphitiPool do
                 if not claim_state['distributed']:
                     return
                 await g.driver.execute_query(
-                    """
+                    '''
                     MATCH (c:_GralkorEpisodeClaim {uuid: $uuid, owner: $owner})
                     SET c.owner = NULL, c.lease_until_ms = NULL
                     RETURN c.uuid AS uuid
-                    """,
+                    ''',
                     uuid=uid,
                     owner=claim_owner,
                 )
