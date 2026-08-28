@@ -769,6 +769,45 @@ defmodule Gralkor.GraphitiPool do
     end)
   end
 
+  @doc "Returns one episode by its exact UUID."
+  @spec get_episode(GenServer.server(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, :not_found | term()}
+  def get_episode(server \\ __MODULE__, group_id, episode_uuid)
+      when is_binary(group_id) and is_binary(episode_uuid) do
+    instance = __MODULE__.for(server, group_id)
+
+    {raw, _} =
+      Pythonx.eval(
+        """
+        import asyncio
+        from graphiti_core.errors import NodeNotFoundError
+        from graphiti_core.nodes import EpisodicNode
+
+        uid = episode_uuid.decode('utf-8') if isinstance(episode_uuid, (bytes, bytearray)) else episode_uuid
+        try:
+            episode = asyncio._gralkor_run(EpisodicNode.get_by_uuid(g.driver, uid))
+            result = {
+                'uuid': episode.uuid,
+                'group_id': episode.group_id,
+                'content': episode.content,
+                'source': episode.source.value,
+                'source_description': episode.source_description,
+            }
+        except NodeNotFoundError:
+            result = None
+        result
+        """,
+        %{"g" => instance, "episode_uuid" => episode_uuid}
+      )
+
+    case Pythonx.decode(raw) do
+      nil -> {:error, :not_found}
+      episode -> {:ok, episode}
+    end
+  rescue
+    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
+  end
+
   # ── GenServer ──────────────────────────────────────────────
 
   @impl true
