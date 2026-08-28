@@ -22,6 +22,10 @@ when a Runner attempt succeeds
   and canonical storage receives that exact artefact without rerunning the Runner
   and canonical storage success completes and releases the logical work
 
+if a Runner returns an artefact whose identifier or Reflection name does not match the logical completion
+  then the Runner phase treats the response as invalid and follows its bounded retry schedule
+  and canonical storage never receives the mismatched artefact
+
 when a Runner attempt returns an error, crashes, or exceeds its execution timeout
   then only that Runner phase is retried after each configured bounded delay
   and every attempt receives the same deterministic artefact identifier
