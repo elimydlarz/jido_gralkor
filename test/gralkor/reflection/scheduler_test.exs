@@ -773,8 +773,11 @@ defmodule Gralkor.Reflection.SchedulerTest do
       assert_receive {:DOWN, ^ref, :process, ^first_task, _reason}
 
       replacement_runner = fn reflection, _ingestion, opts ->
-        send(test_pid, {:replacement_runtime_opts, opts})
-        {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{}, [])}
+        send(test_pid, {:replacement_runtime_opts, opts, self()})
+
+        receive do
+          :finish -> {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{}, [])}
+        end
       end
 
       start_scheduler(name,
@@ -788,7 +791,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
         journal_name: journal_name()
       )
 
-      assert_receive {:replacement_runtime_opts, replacement_opts}
+      assert_receive {:replacement_runtime_opts, replacement_opts, replacement_task}
       assert replacement_opts[:inference] == :replacement_inference
       assert replacement_opts[:tool_executor] == :replacement_executor
       assert replacement_opts[:tools] == [:request_tool]
@@ -802,6 +805,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
                tenant: "request-tenant"
              ]
 
+      send(replacement_task, :finish)
       assert_receive {:reflection_completed, "review", {:ok, _artefact}}
     end
   end
