@@ -495,8 +495,10 @@ defmodule Gralkor.GraphitiPool do
           Pythonx.eval(
             """
             import asyncio
+            import time
             from contextvars import ContextVar
             from datetime import datetime, timezone
+            from uuid import uuid4
             from graphiti_core.errors import NodeNotFoundError
             from graphiti_core.utils.maintenance import edge_operations
             from graphiti_core.nodes import EpisodeType, EpisodicNode
@@ -568,48 +570,174 @@ defmodule Gralkor.GraphitiPool do
                     uuid=uid,
                 )
 
+            claim_owner = str(uuid4()) if uuid is not None else None
+            claim_lease_ms = 30_000
+
+            async def acquire_claim():
+                if not hasattr(g.driver, 'execute_query'):
+                    return 'acquired'
+
+                source_value = getattr(episode_type, 'value', str(episode_type))
+                while True:
+                    now_ms = int(time.time() * 1000)
+                    records, _, _ = await g.driver.execute_query(
+                        """
+                        MERGE (c:_GralkorEpisodeClaim {uuid: $uuid})
+                        ON CREATE SET
+                          c.group_id = $group_id,
+                          c.content = $content,
+                          c.source = $source,
+                          c.source_description = $source_description,
+                          c.owner = $owner,
+                          c.lease_until_ms = $lease_until_ms
+                        RETURN c.group_id AS group_id,
+                               c.content AS content,
+                               c.source AS source,
+                               c.source_description AS source_description,
+                               c.owner AS owner,
+                               coalesce(c.lease_until_ms, 0) AS lease_until_ms
+                        """,
+                        uuid=uid,
+                        group_id=gid,
+                        content=c,
+                        source=source_value,
+                        source_description=s,
+                        owner=claim_owner,
+                        lease_until_ms=now_ms + claim_lease_ms,
+                    )
+                    claim = records[0]
+                    equal = (
+                        claim['group_id'] == gid
+                        and claim['content'] == c
+                        and claim['source'] == source_value
+                        and claim['source_description'] == s
+                    )
+                    if not equal:
+                        return 'conflict'
+                    if await extraction_complete():
+                        return 'existing'
+                    if claim['owner'] == claim_owner:
+                        return 'acquired'
+
+                    acquired, _, _ = await g.driver.execute_query(
+                        """
+                        MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+                        WHERE c.owner IS NULL OR c.owner = $owner OR coalesce(c.lease_until_ms, 0) <= $now_ms
+                        SET c.owner = $owner, c.lease_until_ms = $lease_until_ms
+                        RETURN c.owner AS owner
+                        """,
+                        uuid=uid,
+                        owner=claim_owner,
+                        now_ms=now_ms,
+                        lease_until_ms=now_ms + claim_lease_ms,
+                    )
+                    if acquired and acquired[0]['owner'] == claim_owner:
+                        return 'acquired'
+                    await asyncio.sleep(0.01)
+
+            async def renew_claim():
+                if not hasattr(g.driver, 'execute_query'):
+                    return
+                while True:
+                    await asyncio.sleep(claim_lease_ms / 3000)
+                    now_ms = int(time.time() * 1000)
+                    await g.driver.execute_query(
+                        """
+                        MATCH (c:_GralkorEpisodeClaim {uuid: $uuid, owner: $owner})
+                        SET c.lease_until_ms = $lease_until_ms
+                        RETURN c.uuid AS uuid
+                        """,
+                        uuid=uid,
+                        owner=claim_owner,
+                        lease_until_ms=now_ms + claim_lease_ms,
+                    )
+
+            async def release_claim():
+                if not hasattr(g.driver, 'execute_query'):
+                    return
+                await g.driver.execute_query(
+                    """
+                    MATCH (c:_GralkorEpisodeClaim {uuid: $uuid, owner: $owner})
+                    SET c.owner = NULL, c.lease_until_ms = NULL
+                    RETURN c.uuid AS uuid
+                    """,
+                    uuid=uid,
+                    owner=claim_owner,
+                )
+
             async def add_episode():
                 if uuid is not None:
+                    claim = await acquire_claim()
+                    if claim != 'acquired':
+                        return claim
+
+                    heartbeat = asyncio.create_task(renew_claim())
                     try:
-                        existing = await EpisodicNode.get_by_uuid(g.driver, uid)
-                    except NodeNotFoundError:
-                        existing = None
+                        try:
+                            existing = await EpisodicNode.get_by_uuid(g.driver, uid)
+                        except NodeNotFoundError:
+                            existing = None
 
-                    if existing is not None:
-                        equal = (
-                            existing.group_id == gid
-                            and existing.content == c
-                            and existing.source == episode_type
-                            and existing.source_description == s
+                        if existing is not None:
+                            equal = (
+                                existing.group_id == gid
+                                and existing.content == c
+                                and existing.source == episode_type
+                                and existing.source_description == s
+                            )
+                            if not equal:
+                                return 'conflict'
+                            if await extraction_complete():
+                                return 'existing'
+
+                        token = (
+                            guard.set(dict(
+                                uuid=uid,
+                                name=n,
+                                group_id=gid,
+                                labels=[],
+                                source=episode_type,
+                                content=c,
+                                source_description=s,
+                                created_at=datetime.now(timezone.utc),
+                                valid_at=kwargs['reference_time'],
+                            ))
+                            if existing is None
+                            else None
                         )
-                        if not equal:
-                            return 'conflict'
-                        if await extraction_complete():
-                            return 'existing'
 
-                    token = (
-                        guard.set(dict(
-                            uuid=uid,
-                            name=n,
-                            group_id=gid,
-                            labels=[],
-                            source=episode_type,
-                            content=c,
-                            source_description=s,
-                            created_at=datetime.now(timezone.utc),
-                            valid_at=kwargs['reference_time'],
-                        ))
-                        if existing is None
-                        else None
-                    )
+                        if not skip_empty_edge_candidates:
+                            try:
+                                await g.add_episode(**kwargs)
+                                await record_extraction_complete()
+                                return 'created'
+                            finally:
+                                if token is not None:
+                                    guard.reset(token)
+
+                        empty_edge_guard = edge_operations._gralkor_skip_empty_edge_candidates
+                        empty_edge_token = empty_edge_guard.set(True)
+                        try:
+                            await g.add_episode(**kwargs)
+                            await record_extraction_complete()
+                            return 'created'
+                        finally:
+                            empty_edge_guard.reset(empty_edge_token)
+                            if token is not None:
+                                guard.reset(token)
+                    finally:
+                        heartbeat.cancel()
+                        try:
+                            await heartbeat
+                        except asyncio.CancelledError:
+                            pass
+                        await release_claim()
                 else:
                     token = None
 
                 if not skip_empty_edge_candidates:
                     try:
                         await g.add_episode(**kwargs)
-                        if uuid is not None:
-                            await record_extraction_complete()
                         return 'created'
                     finally:
                         if token is not None:
@@ -619,8 +747,6 @@ defmodule Gralkor.GraphitiPool do
                 empty_edge_token = empty_edge_guard.set(True)
                 try:
                     await g.add_episode(**kwargs)
-                    if uuid is not None:
-                        await record_extraction_complete()
                     return 'created'
                 finally:
                     empty_edge_guard.reset(empty_edge_token)
