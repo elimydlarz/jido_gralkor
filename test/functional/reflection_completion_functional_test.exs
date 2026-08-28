@@ -880,6 +880,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                       episode for episode in self.driver.episodes.values()
                       if not groups or episode.group_id in groups
                   ]
+                  if config is not None:
+                      episodes = episodes[:config.limit]
                   return SearchResults(episodes=episodes)
 
           GraphitiContract()
