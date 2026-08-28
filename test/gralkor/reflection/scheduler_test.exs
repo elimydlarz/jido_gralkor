@@ -227,6 +227,70 @@ defmodule Gralkor.Reflection.SchedulerTest do
     end
   end
 
+  describe "if a Runner returns an artefact whose identifier or Reflection name does not match the logical completion" do
+    test "then the Runner phase retries boundedly without sending the mismatched artefact to storage" do
+      for mismatch <- [:identifier, :reflection] do
+        start_supervised!({ControlledStore, {self(), [{:error, :not_found}], []}})
+        attempts = :atomics.new(1, [])
+        test_pid = self()
+        name = scheduler_name()
+
+        runner = fn reflection, _ingestion, opts ->
+          attempt = :atomics.add_get(attempts, 1, 1)
+          expected_id = opts[:artefact_id]
+
+          artefact =
+            case mismatch do
+              :identifier -> Artefact.new("another-id", reflection.name, %{}, [])
+              :reflection -> Artefact.new(expected_id, "another-reflection", %{}, [])
+            end
+
+          send(test_pid, {:mismatched_runner, mismatch, attempt, expected_id})
+          {:ok, artefact}
+        end
+
+        start_scheduler(name,
+          runner: runner,
+          store_opts: [storage: ControlledStore],
+          retry_delays: [0],
+          notify: test_pid
+        )
+
+        assert {:ok, :scheduled} =
+                 Scheduler.schedule([reflection("review")], ingestion(), server: name)
+
+        assert_receive {:mismatched_runner, ^mismatch, 1, expected_id}
+
+        assert_receive {:reflection_retrying, "review",
+                        %{
+                          stage: :runner,
+                          attempts: 1,
+                          reason:
+                            {:artefact_identity_mismatch,
+                             %{
+                               expected: %{id: ^expected_id, reflection: "review"},
+                               actual: actual
+                             }}
+                        }}
+
+        assert actual != %{id: expected_id, reflection: "review"}
+        assert_receive {:mismatched_runner, ^mismatch, 2, ^expected_id}
+
+        assert_receive {:reflection_completed, "review",
+                        {:error,
+                         %{
+                           stage: :runner,
+                           attempts: 2,
+                           reason: {:artefact_identity_mismatch, _identity}
+                         }}}
+
+        refute_receive {:store_put, _artefact, _task}
+        assert :ok = stop_supervised(name)
+        assert :ok = stop_supervised(ControlledStore)
+      end
+    end
+  end
+
   describe "when a Runner, lookup, or storage task cannot start" do
     test "then that phase consumes one attempt and follows the bounded retry schedule" do
       test_pid = self()
