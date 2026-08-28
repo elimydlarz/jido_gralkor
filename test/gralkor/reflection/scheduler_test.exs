@@ -137,11 +137,8 @@ defmodule Gralkor.Reflection.SchedulerTest do
       {name, runner} = immediate_runner(self())
       start_scheduler(name, runner: runner, store_opts: [storage: InMemory], notify: self())
 
-      admitted_ingestion =
-        Map.merge(ingestion(), %{tools: [:runtime_tool], tool_context: %{request: "runtime"}})
-
       assert {:ok, :scheduled} =
-               Scheduler.schedule([reflection("review")], admitted_ingestion, server: name)
+               Scheduler.schedule([reflection("review")], ingestion(), server: name)
 
       assert_receive {:runner_invoked, review_id}
       assert_receive {:reflection_completed, "review", {:ok, %{id: ^review_id}}}
@@ -183,8 +180,11 @@ defmodule Gralkor.Reflection.SchedulerTest do
         notify: self()
       )
 
+      admitted_ingestion =
+        Map.merge(ingestion(), %{tools: [:runtime_tool], tool_context: %{request: "runtime"}})
+
       assert {:ok, :scheduled} =
-               Scheduler.schedule([reflection("review")], ingestion(), server: name)
+               Scheduler.schedule([reflection("review")], admitted_ingestion, server: name)
 
       assert_receive {:runner_attempt, 1, artefact_id}
       assert_receive {:reflection_retrying, "review", %{stage: :runner}}
