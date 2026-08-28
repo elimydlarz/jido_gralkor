@@ -740,6 +740,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                   self.graph_operations_interface = GraphOperations()
                   self.episodes = {}
 
+              @property
+              def _gralkor_episode_count(self):
+                  return len(self.episodes)
+
           class PinnedGraphitiContract:
               def __init__(self):
                   self.driver = Driver()
@@ -758,6 +762,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                       episode for episode in self.driver.episodes.values()
                       if not groups or episode.group_id in groups
                   ]
+                  if config is not None:
+                      episodes = episodes[:config.limit]
                   return SearchResults(episodes=episodes)
 
           PinnedGraphitiContract()
@@ -918,6 +924,20 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         Gralkor.Destination.Storage.Graphiti
       )
 
+      Pythonx.eval(
+        """
+        original = next(iter(graphiti.driver.episodes.values()))
+        partials = {
+            f'legacy-unmarked-{index}': original.model_copy(
+                update={'uuid': f'legacy-unmarked-{index}'}
+            )
+            for index in range(25)
+        }
+        graphiti.driver.episodes = {**partials, **graphiti.driver.episodes}
+        """,
+        %{"graphiti" => graphiti}
+      )
+
       assert {:ok, [%{destination: "observations", artefact: ^first}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
@@ -977,7 +997,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           %{"graphiti" => graphiti}
         )
 
-      assert Pythonx.decode(proof) == [3, 1]
+      assert Pythonx.decode(proof) == [28, 1]
     end
   end
 
