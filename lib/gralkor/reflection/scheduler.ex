@@ -201,6 +201,41 @@ defmodule Gralkor.Reflection.Scheduler do
     {:noreply, state}
   end
 
+  defp resume_job(state, key) do
+    job = Map.fetch!(state.jobs, key)
+
+    cond do
+      job.active and job.stage == :storage ->
+        job = %{
+          job
+          | stage: :storage_confirmation,
+            active: false,
+            retry_timer: nil,
+            retry_at_ms: nil
+        }
+
+        :ok = Journal.put_all(state.journal, [durable_job(job)])
+        launch(%{state | jobs: Map.put(state.jobs, key, job)}, key)
+
+      job.active ->
+        retry_or_finish(state, key, :scheduler_restart)
+
+      is_integer(job.retry_at_ms) ->
+        remaining = max(job.retry_at_ms - System.system_time(:millisecond), 0)
+
+        if remaining == 0 do
+          launch(state, key)
+        else
+          timer = Process.send_after(self(), {:retry, key}, remaining)
+          job = %{job | retry_timer: timer}
+          %{state | jobs: Map.put(state.jobs, key, job)}
+        end
+
+      true ->
+        launch(state, key)
+    end
+  end
+
   defp new_job(key, reflection, ingestion, opts) do
     %{
       key: key,
@@ -486,6 +521,23 @@ defmodule Gralkor.Reflection.Scheduler do
     if duplicate, do: {:error, {:duplicate_reflection, duplicate}}, else: :ok
   end
 
+  defp validate_execution_options(opts) do
+    retry_delays = Keyword.get(opts, :retry_delays)
+    execution_timeout_ms = Keyword.get(opts, :execution_timeout_ms)
+
+    cond do
+      not (is_list(retry_delays) and
+             Enum.all?(retry_delays, &(is_integer(&1) and &1 >= 0))) ->
+        {:error, {:invalid_retry_delays, retry_delays}}
+
+      not (is_integer(execution_timeout_ms) and execution_timeout_ms > 0) ->
+        {:error, {:invalid_execution_timeout_ms, execution_timeout_ms}}
+
+      true ->
+        :ok
+    end
+  end
+
   defp valid_identity?(value), do: is_binary(value) and String.trim(value) != ""
 
   defp completion_key(reflection, ingestion),
@@ -511,6 +563,7 @@ defmodule Gralkor.Reflection.Scheduler do
       stage: job.stage,
       attempt: job.attempt,
       artefact: job.artefact,
+      retry_at_ms: job.retry_at_ms,
       active: job.active
     }
   end
