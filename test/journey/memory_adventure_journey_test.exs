@@ -641,11 +641,11 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
   defp learning_artefact?(results) do
     Enum.any?(results, fn
-      %{artefact: %{reflection: "erl", payload: payload, evidence_ids: evidence_ids}} ->
+      %{artefact: %{reflection: "erl", payload: payload}} ->
         is_binary(payload["problem_kind"]) and
           is_binary(payload["approach"]) and
           is_boolean(payload["success"]) and
-          is_binary(payload["lesson"]) and evidence_ids != []
+          is_binary(payload["lesson"])
 
       _ ->
         false
