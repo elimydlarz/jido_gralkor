@@ -91,7 +91,11 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
           end
         end
 
-      assert Enum.all?(Enum.take(events, 4), &match?({:related_memory_search, _, _, _, _, _, _}, &1))
+      assert Enum.all?(
+               Enum.take(events, 4),
+               &match?({:related_memory_search, _, _, _, _, _, _}, &1)
+             )
+
       assert List.last(events) == {:generalisation_inference, "inspect-related-information"}
     end
 
@@ -192,7 +196,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                    "payload" => stored_generalisation.payload
                  }
 
-               _ -> false
+               _ ->
+                 false
              end)
 
       assert Enum.any?(stored_information, fn

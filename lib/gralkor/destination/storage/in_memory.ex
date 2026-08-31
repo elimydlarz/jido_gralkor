@@ -30,7 +30,7 @@ defmodule Gralkor.Destination.Storage.InMemory do
         {:ok, artefacts} =
           ReflectionStorage.search_destination(destination, operator_id, nil, max_results)
 
-        Enum.map(artefacts, &(Jason.encode!(Map.from_struct(&1))))
+        Enum.map(artefacts, &Jason.encode!(Map.from_struct(&1)))
       else
         []
       end
