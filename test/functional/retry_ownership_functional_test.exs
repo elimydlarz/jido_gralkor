@@ -243,8 +243,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
            Artefact.new(
              opts[:artefact_id],
              current_reflection.name,
-             %{"summary" => "stored"},
-             []
+             %{"summary" => "stored"}
            )}
         end
       end
