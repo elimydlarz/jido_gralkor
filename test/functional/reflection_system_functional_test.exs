@@ -823,8 +823,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   describe "when the final Chain of Thought step returns valid structured output" do
     test "then that structured output becomes the Reflection's single artefact", context do
+      application_reflection = reflection(context, "generalisations")
+
       assert {:ok, artefact} =
-               Runner.run(reflection(context), ingestion(), inference: &output_for/1)
+               Runner.run(application_reflection, ingestion(), inference: &output_for/1)
 
       assert artefact.payload == %{"artefact" => "durable pattern"}
     end
