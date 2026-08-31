@@ -358,8 +358,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       artefact = %Gralkor.Reflection.Artefact{
         id: "a-1",
         reflection: "review",
-        payload: %{},
-        evidence_ids: []
+        payload: %{}
       }
 
       Application.put_env(:jido_gralkor, :destination_search_responses, %{
