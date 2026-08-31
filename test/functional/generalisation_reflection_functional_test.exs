@@ -90,6 +90,22 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert query =~ "Prefer explicit APIs"
       assert query =~ "Choose direct designs"
     end
+
+    test "and the same search reads the `operator` Destination, the `global` Destination, and every Destination referenced by the represented Lenses" do
+      assert {:ok, _artefact} =
+               Runner.run(generalisation(), ingestion(), inference: &output_for/1)
+
+      searches =
+        for _ <- 1..4 do
+          assert_receive {:related_memory_search, destination, _, _, :episodes, _, _}
+          destination
+        end
+
+      assert MapSet.new(searches) ==
+               MapSet.new(["operator", "global", "observations-memory", "decisions-memory"])
+
+      refute_receive {:related_memory_search, _, _, _, _, _, _}
+    end
   end
 
   defp generalisation do
