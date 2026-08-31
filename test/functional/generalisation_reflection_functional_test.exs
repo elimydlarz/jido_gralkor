@@ -213,6 +213,19 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       refute_receive :inference
     end
+
+    test "and the completed ingestion remains unchanged" do
+      Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
+        "global" => {:error, :memory_unavailable}
+      })
+
+      completed_ingestion = ingestion()
+
+      assert {:error, _} =
+               Runner.run(generalisation(), completed_ingestion, inference: &output_for/1)
+
+      assert completed_ingestion == ingestion()
+    end
   end
 
   defp generalisation do
