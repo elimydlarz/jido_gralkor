@@ -409,6 +409,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert Enum.map(learning.fields, & &1.name) == [:problem_kind, :approach, :success, :lesson]
       assert Enum.all?(learning.fields, &(&1.required == false))
     end
+
+    test "and the stored Learning payload contains exactly its problem kind, approach, success, and reusable lesson" do
+      Application.delete_env(:jido_gralkor, :reflections)
+      erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
+
+      assert {:ok, artefact} = Runner.run(erl, ingestion(), inference: &erl_output_for/1)
+      assert artefact.payload == erl_payload()
+    end
   end
 
   describe "when an ingestion operation successfully stores information through one or more Lenses" do
@@ -1244,6 +1252,33 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   defp output_for(%{step: %{label: "reflect"}}),
     do: {:ok, %{output: %{"artefact" => "durable pattern"}}}
+
+  defp erl_output_for(%{step: %{label: "inspect-reasoning"}}) do
+    {:ok,
+     %{
+       output: %{
+         "reasoning_assessment" => %{
+           "problem_kind" => "overlapping schedules",
+           "approach" => "move one job",
+           "outcome" => "succeeded",
+           "evidence_ids" => []
+         }
+       }
+     }}
+  end
+
+  defp erl_output_for(%{step: %{label: "derive-lesson"}}) do
+    {:ok,
+     %{
+       output: %{
+         "learning_candidate" =>
+           Map.put(erl_payload(), "evidence_ids", [])
+       }
+     }}
+  end
+
+  defp erl_output_for(%{step: %{label: "synthesise-artefact"}}),
+    do: {:ok, %{output: erl_payload()}}
 
   defp run_and_collect_requests(reflection, ingestion) do
     parent = self()
