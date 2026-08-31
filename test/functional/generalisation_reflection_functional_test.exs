@@ -363,14 +363,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     test "and the new generalisation records the content and level of every influencing generalisation" do
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(),
-                 inference: fn request ->
-                   if request.step.label == "synthesise-artefact" do
-                     assert request.directions =~
-                              "Preserve each selected assessment's exact `generalises_over` content and level entries"
-                   end
-
-                   higher_level_output_for(request)
-                 end
+                 inference: &ancestry_preserving_output_for/1
                )
 
       assert [%{"generalises_over" => preceding}] = artefact.payload["generalisations"]
@@ -531,6 +524,15 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
          ]
        }
      }}
+  end
+
+  defp ancestry_preserving_output_for(request) do
+    if request.step.label == "synthesise-artefact" do
+      assert request.directions =~
+               "Preserve each selected assessment's exact `generalises_over` content and level entries"
+    end
+
+    higher_level_output_for(request)
   end
 
   defp influencing_generalisations do
