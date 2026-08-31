@@ -178,6 +178,27 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
   end
 
+  describe "when the packaged generalisation Reflection's related-memory search returns no stored information" do
+    test "then generalisation inference still processes every current representation" do
+      parent = self()
+
+      assert {:ok, _artefact} =
+               Runner.run(generalisation(), ingestion(),
+                 inference: fn request ->
+                   send(
+                     parent,
+                     {:empty_search_inference, request.representations, request.stored_information}
+                   )
+
+                   output_for(request)
+                 end
+               )
+
+      assert_receive {:empty_search_inference, representations, []}
+      assert Enum.map(representations, & &1.id) == ["representation-one", "representation-two"]
+    end
+  end
+
   defp generalisation do
     Registry.configured!()
     |> Enum.find(&(&1.name == "generalisations"))
