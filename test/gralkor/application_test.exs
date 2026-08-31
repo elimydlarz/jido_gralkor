@@ -187,8 +187,7 @@ defmodule Gralkor.ApplicationTest do
                  "Eli",
                  "observations",
                  turns,
-                 "ingestion-one",
-                 "evidence-one"
+                 "ingestion-one"
                )
 
       assert_receive {:ingested,
@@ -197,8 +196,7 @@ defmodule Gralkor.ApplicationTest do
                         operator_id: "operator-one",
                         lens: "observations",
                         content: "Eli: Remember this\nSusu: I will",
-                        source_description: "captured",
-                        evidence_id: "evidence-one"
+                        source_description: "captured"
                       }}
     end
 
@@ -225,8 +223,7 @@ defmodule Gralkor.ApplicationTest do
                  "Eli",
                  "observations",
                  turns,
-                 "ingestion-one",
-                 "evidence-one"
+                 "ingestion-one"
                )
 
       assert_receive {:ingested,
@@ -235,8 +232,7 @@ defmodule Gralkor.ApplicationTest do
                         operator_id: "operator-one",
                         lens: "observations",
                         content: "Eli: Remember this\nSusu: I will",
-                        source_description: "captured",
-                        evidence_id: "evidence-one"
+                        source_description: "captured"
                       }}
     end
   end
@@ -281,8 +277,7 @@ defmodule Gralkor.ApplicationTest do
                  "Eli",
                  "observations",
                  [],
-                 "ingestion",
-                 "evidence"
+                 "ingestion"
                )
     end
 
@@ -308,8 +303,7 @@ defmodule Gralkor.ApplicationTest do
                  "Eli",
                  "observations",
                  [],
-                 "ingestion",
-                 "evidence"
+                 "ingestion"
                )
     end
   end
