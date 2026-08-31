@@ -667,13 +667,12 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                                _user,
                                lens,
                                _turns,
-                               _ingestion_id,
-                               evidence_id ->
+                               _ingestion_id ->
         send(test_pid, {:shutdown_lens_flush_started, self()})
 
         receive do
           :finish_lens_flush ->
-            {:ok, %{lens: lens, evidence_id: evidence_id, result: :ok}}
+            {:ok, %{id: "representation-one", lens: lens, result: :ok}}
         end
       end
 
@@ -2065,8 +2064,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       lens: "observations",
       source_kind: :document,
       content: "The deployment succeeded.",
-      source_description: "deployment",
-      evidence_id: "evidence-one"
+      source_description: "deployment"
     }
   end
 
@@ -2076,7 +2074,14 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       operator_id: "operator-one",
       intended_lenses: ["observations"],
       completed_lenses: ["observations"],
-      representations: [%{lens: "observations", result: :ok}]
+      representations: [
+        %{
+          id: "representation-one",
+          lens: "observations",
+          content: "The deployment succeeded.",
+          result: :ok
+        }
+      ]
     }
   end
 
