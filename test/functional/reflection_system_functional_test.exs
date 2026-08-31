@@ -848,6 +848,18 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Runner.run(reflection(context), ingestion(), inference: &output_for/1)
     end
 
+    test "and the artefact consists of its stable identifier, declaring Reflection, and structured payload",
+         context do
+      assert {:ok, artefact} =
+               Runner.run(reflection(context), ingestion(), inference: &output_for/1)
+
+      assert Map.from_struct(artefact) == %{
+               id: artefact.id,
+               reflection: "generalisation",
+               payload: %{"artefact" => "durable pattern"}
+             }
+    end
+
     test "where the referenced Destination is `operator` then the artefact is available only to the operator whose ingestion triggered the Reflection",
          context do
       reflection = reflection(context)
