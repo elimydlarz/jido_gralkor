@@ -187,7 +187,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  inference: fn request ->
                    send(
                      parent,
-                     {:empty_search_inference, request.representations, request.stored_information}
+                     {:empty_search_inference, request.representations,
+                      request.stored_information}
                    )
 
                    output_for(request)
@@ -209,7 +210,10 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
               %{
                 reflection: "generalisations",
                 reason: {:related_memory_search, :memory_unavailable}
-              }} = Runner.run(generalisation(), ingestion(), inference: fn _ -> send(self(), :inference) end)
+              }} =
+               Runner.run(generalisation(), ingestion(),
+                 inference: fn _ -> send(self(), :inference) end
+               )
 
       refute_receive :inference
     end
@@ -257,7 +261,13 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                    payload: %{
                      generalisations:
                        influencing_generalisations() ++
-                         [%{content: "Prefer abstractions everywhere", level: 8, generalises_over: []}]
+                         [
+                           %{
+                             content: "Prefer abstractions everywhere",
+                             level: 8,
+                             generalises_over: []
+                           }
+                         ]
                    }
                  }),
                source_description: "reflection:generalisations"
@@ -332,8 +342,18 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       intended_lenses: ["observations", "decisions"],
       completed_lenses: ["observations", "decisions"],
       representations: [
-        %{id: "representation-one", lens: "observations", content: "Prefer explicit APIs", result: :ok},
-        %{id: "representation-two", lens: "decisions", content: "Choose direct designs", result: :ok}
+        %{
+          id: "representation-one",
+          lens: "observations",
+          content: "Prefer explicit APIs",
+          result: :ok
+        },
+        %{
+          id: "representation-two",
+          lens: "decisions",
+          content: "Choose direct designs",
+          result: :ok
+        }
       ]
     }
   end
