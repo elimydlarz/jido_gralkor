@@ -494,6 +494,17 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert context.tool_context.session_id == "session-one"
       assert context.tool_context.precedence == "retained"
     end
+
+    test "and the current operator is supplied as the host agent identifier expected by forwarded tools" do
+      context =
+        reflection_capture_context(
+          [],
+          %{agent_id: "configured-agent"},
+          %{agent_id: "retained-agent"}
+        )
+
+      assert context.tool_context.agent_id == "operator-one"
+    end
   end
 
   describe "when turns in one session select different Lenses" do
