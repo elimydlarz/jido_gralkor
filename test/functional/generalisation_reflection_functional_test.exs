@@ -81,6 +81,15 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert_receive {:related_memory_search, _, _, _, :episodes, _, _}
       assert_receive {:generalisation_inference, _}
     end
+
+    test "and the search query contains the content of every completed representation" do
+      assert {:ok, _artefact} =
+               Runner.run(generalisation(), ingestion(), inference: &output_for/1)
+
+      assert_receive {:related_memory_search, _, _, query, :episodes, _, _}
+      assert query =~ "Prefer explicit APIs"
+      assert query =~ "Choose direct designs"
+    end
   end
 
   defp generalisation do
