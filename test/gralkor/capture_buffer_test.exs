@@ -529,14 +529,14 @@ defmodule Gralkor.CaptureBufferTest do
       test_pid = self()
       attempts = :atomics.new(1, [])
 
-      lens_flush_callback = fn _, _, _, lens, _, ingestion_id, evidence_id ->
+      lens_flush_callback = fn _, _, _, lens, _, ingestion_id ->
         attempt = :atomics.add_get(attempts, 1, 1)
         send(test_pid, {:ingestion_attempt, attempt, ingestion_id})
 
         if attempt == 1 do
           {:error, :temporary}
         else
-          {:ok, %{lens: lens, evidence_id: evidence_id, result: :ok}}
+          {:ok, %{id: "representation-one", lens: lens, result: :ok}}
         end
       end
 
@@ -586,7 +586,7 @@ defmodule Gralkor.CaptureBufferTest do
   end
 
   describe "where captured turns select a Lens > when every Lens batch for a completed ingestion succeeds and Reflections are declared" do
-    test "then every completed representation retains the Lens identity supplied by its batch" do
+    test "then every completed representation retains its own identifier and the Lens identity supplied by its batch" do
       restart_with_reflection_capture()
 
       :ok =
@@ -603,26 +603,10 @@ defmodule Gralkor.CaptureBufferTest do
       assert_receive {:reflections_scheduled, _, ingestion}
 
       assert Enum.map(ingestion.representations, & &1.lens) == ["observations", "decisions"]
-    end
 
-    test "and every completed representation retains the evidence identity supplied by its batch" do
-      restart_with_reflection_capture()
-
-      :ok =
-        CaptureBuffer.append_lenses(
-          "reflection-session",
-          "operator-one",
-          "Susu",
-          "Eli",
-          ["observations", "decisions"],
-          [Message.new("user", "remember this")]
-        )
-
-      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
-      assert_receive {:reflections_scheduled, _, ingestion}
-
-      assert ingestion.representations |> Enum.map(& &1.evidence_id) |> Enum.uniq() |> length() ==
-               1
+      representation_ids = Enum.map(ingestion.representations, & &1.id)
+      assert Enum.all?(representation_ids, &(is_binary(&1) and String.trim(&1) != ""))
+      assert Enum.uniq(representation_ids) == representation_ids
     end
 
     test "and every declared Reflection is scheduled exactly once" do
@@ -643,8 +627,8 @@ defmodule Gralkor.CaptureBufferTest do
 
       assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
       assert_receive {:reflections_scheduled, _, ingestion}
-      assert [%{lens: "observations", evidence_id: evidence_id}] = ingestion.representations
-      assert is_binary(evidence_id)
+      assert [%{id: representation_id, lens: "observations"}] = ingestion.representations
+      assert is_binary(representation_id)
     end
 
     test "and each scheduled Reflection receives the ingestion context" do
@@ -659,7 +643,7 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "where captured turns select a Lens > if a completed representation does not carry its batch's Lens and evidence identity" do
+  describe "where captured turns select a Lens > if a completed representation does not carry its own identifier and its batch's Lens identity" do
     test "then the awaited flush reports the representation validation failure" do
       restart_with_invalid_representation()
       append_reflection_turn(%{})
@@ -1463,8 +1447,8 @@ defmodule Gralkor.CaptureBufferTest do
   defp restart_with_invalid_representation do
     test_pid = self()
 
-    lens_flush_callback = fn _, _, _, _lens, _, evidence_id ->
-      {:ok, %{lens: "wrong-lens", evidence_id: evidence_id}}
+    lens_flush_callback = fn _, _, _, _lens, _, _ingestion_id ->
+      {:ok, %{id: "representation-one", lens: "wrong-lens"}}
     end
 
     reflection_callback = fn reflections, ingestion ->
@@ -1476,8 +1460,8 @@ defmodule Gralkor.CaptureBufferTest do
   end
 
   defp restart_with_scheduling_callback(reflection_callback) do
-    lens_flush_callback = fn _, _, _, lens, _, evidence_id ->
-      {:ok, %{lens: lens, evidence_id: evidence_id, result: :ok}}
+    lens_flush_callback = fn _, _, _, lens, _, _ingestion_id ->
+      {:ok, %{id: "representation-#{lens}", lens: lens, result: :ok}}
     end
 
     restart_reflection_buffer(lens_flush_callback, reflection_callback)
@@ -1546,13 +1530,12 @@ defmodule Gralkor.CaptureBufferTest do
                                _user,
                                lens,
                                _turns,
-                               _ingestion_id,
-                               evidence_id ->
+                               _ingestion_id ->
         send(test_pid, {:fire_and_forget_started, self()})
 
         receive do
           :finish_flush ->
-            {:ok, %{lens: lens, evidence_id: evidence_id, result: :ok}}
+            {:ok, %{id: "representation-one", lens: lens, result: :ok}}
         end
       end
 
