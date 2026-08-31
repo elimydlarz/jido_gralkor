@@ -152,6 +152,30 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  false
              end)
     end
+
+    test "and inference receives every current representation separately from the returned stored information" do
+      Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
+        "global" => {:ok, [%{content: "stored", source_description: "global"}]}
+      })
+
+      parent = self()
+
+      assert {:ok, _artefact} =
+               Runner.run(generalisation(), ingestion(),
+                 inference: fn request ->
+                   send(
+                     parent,
+                     {:inference_inputs, request.representations, request.stored_information}
+                   )
+
+                   output_for(request)
+                 end
+               )
+
+      assert_receive {:inference_inputs, representations, stored_information}
+      assert Enum.map(representations, & &1.id) == ["representation-one", "representation-two"]
+      assert [%{destination: "global", episode: %{content: "stored"}}] = stored_information
+    end
   end
 
   defp generalisation do
