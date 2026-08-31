@@ -659,6 +659,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
             "first representation"
           )
         ],
+        stored_information: [],
         tools: tools,
         tool_context: tool_context,
         operator_id: "operator-one"
