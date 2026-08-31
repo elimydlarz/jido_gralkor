@@ -1,4 +1,4 @@
-Functional: generalisation-reflection (src: lib/gralkor/reflection/runner.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex, priv/reflections/generalisations.yaml; functional: none)
+Functional: generalisation-reflection (src: lib/gralkor/reflection/runner.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex, priv/reflections/generalisations.yaml; functional: test/functional/generalisation_reflection_functional_test.exs)
 
 when the packaged generalisation Reflection processes completed lensed representations
   then one related-memory episode search completes before generalisation inference begins
