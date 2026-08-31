@@ -528,8 +528,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
   defp ancestry_preserving_output_for(request) do
     if request.step.label == "synthesise-artefact" do
-      assert request.directions =~
-               "Preserve each selected assessment's exact `generalises_over` content and level entries"
+      assert request.directions =~ "Preserve each selected assessment's exact"
+      assert request.directions =~ "`generalises_over` content and level entries"
     end
 
     higher_level_output_for(request)
