@@ -99,7 +99,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
         receive do
           :fail -> {:error, :temporary}
-          :succeed -> {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{}, [])}
+          :succeed -> {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{})}
         end
       end
 
@@ -169,7 +169,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
         if attempt == 1 do
           raise "runner crashed"
         else
-          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"stored" => true}, [])}
+          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"stored" => true})}
         end
       end
 
@@ -203,7 +203,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
             :never -> {:error, :unexpected}
           end
         else
-          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"stored" => true}, [])}
+          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"stored" => true})}
         end
       end
 
@@ -241,8 +241,8 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
           artefact =
             case mismatch do
-              :identifier -> Artefact.new("another-id", reflection.name, %{}, [])
-              :reflection -> Artefact.new(expected_id, "another-reflection", %{}, [])
+              :identifier -> Artefact.new("another-id", reflection.name, %{})
+              :reflection -> Artefact.new(expected_id, "another-reflection", %{})
             end
 
           send(test_pid, {:mismatched_runner, mismatch, attempt, expected_id})
@@ -313,7 +313,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
         runner = fn reflection, _ingestion, opts ->
           send(test_pid, {:runner_after_start_retry, phase})
-          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{}, [])}
+          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{})}
         end
 
         start_scheduler(name,
@@ -625,7 +625,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
     test "then an uncertain final storage attempt is confirmed before retry exhaustion" do
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
-      artefact = Artefact.new(artefact_id, "review", %{"stored" => true}, [])
+      artefact = Artefact.new(artefact_id, "review", %{"stored" => true})
 
       start_supervised!(
         {ControlledStore, {self(), [{:error, :not_found}, {:ok, artefact}], [:hang]}}
@@ -660,7 +660,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
     test "then a replacement crash during storage confirmation confirms again without consuming retry budget" do
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
-      artefact = Artefact.new(artefact_id, "review", %{"stored" => true}, [])
+      artefact = Artefact.new(artefact_id, "review", %{"stored" => true})
 
       start_supervised!(
         {ControlledStore, {self(), [{:error, :not_found}, :hang, {:ok, artefact}], [:hang]}}
@@ -840,7 +840,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
         send(test_pid, {:replacement_runtime_opts, opts, self()})
 
         receive do
-          :finish -> {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{}, [])}
+          :finish -> {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{})}
         end
       end
 
@@ -890,7 +890,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
         if attempt == 1 do
           {:error, :temporary}
         else
-          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{}, [])}
+          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{})}
         end
       end
 
@@ -927,7 +927,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
         send(test_pid, {:admitted_runner, self()})
 
         receive do
-          :finish -> {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{}, [])}
+          :finish -> {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{})}
         end
       end
 
@@ -1003,7 +1003,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
         receive do
           :finish ->
-            {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"stored" => true}, [])}
+            {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"stored" => true})}
         end
       end
 
@@ -1109,7 +1109,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
     runner = fn reflection, _ingestion, opts ->
       send(test_pid, {:runner_invoked, opts[:artefact_id]})
-      {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"stored" => true}, [])}
+      {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"stored" => true})}
     end
 
     {name, runner}
