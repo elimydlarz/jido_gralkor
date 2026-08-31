@@ -1160,6 +1160,18 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                })
     end
 
+    test "and every result retains its structured payload", context do
+      {reflection, _} = stored_artefact(context)
+
+      assert {:ok, [%{artefact: %{payload: %{"artefact" => "durable pattern"}}}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "durable",
+                 destinations: [reflection.destination.name],
+                 result_type: :artefacts
+               })
+    end
+
     test "where the search also identifies one artefact then only that artefact is returned from the selected Destination",
          context do
       {reflection, artefact} = stored_artefact(context)
