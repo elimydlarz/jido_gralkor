@@ -16,6 +16,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   alias Gralkor.GraphitiPool
   alias Gralkor.Ingest
   alias Gralkor.Message
+  alias Gralkor.Reflection.Artefact
   alias Gralkor.Reflection.Registry
   alias Gralkor.Replace
   alias Gralkor.Search
@@ -109,6 +110,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     ])
 
     Application.put_env(:jido_gralkor, :reflections, [
+      [
+        name: "generalisations",
+        chain_of_thought: "priv/reflections/generalisations.yaml",
+        destination: "global",
+        ontology: Gralkor.DefaultOntology
+      ],
       [
         name: "erl",
         chain_of_thought: "priv/reflections/erl.yaml",
@@ -218,6 +225,36 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
+  describe "when the Journey ingests related information through successive completed ingestions" do
+    test "then the first resulting generalisation has level one and no preceding generalisations",
+         %{adventure: adventure} do
+      assert %{
+               "content" => content,
+               "level" => 1,
+               "generalises_over" => []
+             } = adventure.first_generalisation
+
+      assert is_binary(content) and content != ""
+    end
+
+    test "and the later generalisation that generalises over the first has level two", %{
+      adventure: adventure
+    } do
+      assert %{"level" => 2} = adventure.later_generalisation
+    end
+
+    test "and the later generalisation records the first generalisation's content and level", %{
+      adventure: adventure
+    } do
+      assert %{"content" => first_content, "level" => 1} = adventure.first_generalisation
+
+      assert %{"generalises_over" => preceding_generalisations} =
+               adventure.later_generalisation
+
+      assert %{"content" => first_content, "level" => 1} in preceding_generalisations
+    end
+  end
+
   describe "when the Journey ingests conversation, document, and structured-record episodes" do
     test "then every retrieved conversation fact identifies every originating episode", %{
       adventure: adventure
@@ -314,6 +351,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                },
                %{agent_id: @operator_one}
              )
+
+    {first_generalisation, later_generalisation} = evolve_global_generalisation()
 
     implicit_episodes =
       search_until(
@@ -469,11 +508,120 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       current_replacement: contains_fact?(current_graph, "Payments settles through Clearing."),
       superseded_replacement:
         contains_fact?(superseded_graph, "Payments settles through Ledger."),
+      first_generalisation: first_generalisation,
+      later_generalisation: later_generalisation,
       conversation_facts: conversation_facts,
       document_facts: document_facts,
       structured_record_facts: structured_record_facts
     }
   end
+
+  defp evolve_global_generalisation do
+    first_ingestion_id = "journey-generalisation-level-one"
+
+    first_report = """
+    Three independently operated services reached the same result. Aurora,
+    Borealis, and Cygnus each detected configuration faults before customers
+    were affected when a reversible canary ran before the full deployment.
+    The cross-team review concluded that starting deployments with reversible
+    canaries exposes configuration faults before broad customer impact.
+    """
+
+    :ok =
+      Client.ingest(%Ingest{
+        id: first_ingestion_id,
+        operator_id: @operator_one,
+        lens: "work-notes",
+        source_kind: :document,
+        content: first_report,
+        source_description: "cross-team canary deployment review"
+      })
+
+    first_generalisation =
+      first_ingestion_id
+      |> generalisation_artefact_until()
+      |> find_generalisation(fn generalisation ->
+        generalisation["level"] == 1 and generalisation["generalises_over"] == []
+      end)
+
+    first_content =
+      case first_generalisation do
+        %{"content" => content} when is_binary(content) and content != "" -> content
+        _ -> "Deployments that begin with reversible canaries expose faults before broad impact."
+      end
+
+    later_ingestion_id = "journey-generalisation-level-two"
+
+    later_report = """
+    A later operational review extends this preceding stored generalisation:
+    #{first_content}
+
+    The same result now recurs beyond deployments. Database migrations and
+    feature releases also avoided customer-impacting failures when they began
+    with reversible limited-scope trials. Across deployments, migrations, and
+    feature releases, beginning a change with a reversible limited-scope trial
+    exposes faults before broad impact.
+    """
+
+    :ok =
+      Client.ingest(%Ingest{
+        id: later_ingestion_id,
+        operator_id: @operator_one,
+        lens: "work-notes",
+        source_kind: :document,
+        content: later_report,
+        source_description: "cross-domain reversible change review"
+      })
+
+    later_generalisation =
+      later_ingestion_id
+      |> generalisation_artefact_until()
+      |> find_generalisation(fn generalisation ->
+        generalisation["level"] == 2 and
+          %{"content" => first_content, "level" => 1} in
+            generalisation["generalises_over"]
+      end)
+
+    {first_generalisation, later_generalisation}
+  end
+
+  defp generalisation_artefact_until(ingestion_id, attempts \\ 120) do
+    artefact_id = Artefact.id_for(@operator_one, ingestion_id, "generalisations")
+    generalisation_artefact_until(artefact_id, attempts, nil)
+  end
+
+  defp generalisation_artefact_until(_artefact_id, 0, last_results), do: last_results
+
+  defp generalisation_artefact_until(artefact_id, attempts, _last_results) do
+    assert {:ok, results} =
+             Client.search(%Search{
+               operator_id: @operator_one,
+               query: artefact_id,
+               destinations: ["global"],
+               result_type: :artefacts,
+               artefact_id: artefact_id,
+               max_results: 1
+             })
+
+    case Enum.find(results, fn
+           %{artefact: %{id: ^artefact_id, reflection: "generalisations"}} -> true
+           _ -> false
+         end) do
+      nil ->
+        Process.sleep(1_000)
+        generalisation_artefact_until(artefact_id, attempts - 1, results)
+
+      %{artefact: artefact} ->
+        artefact
+    end
+  end
+
+  defp find_generalisation(%{payload: %{"generalisations" => generalisations}}, predicate)
+       when is_list(generalisations) do
+    Enum.find(generalisations, predicate)
+  end
+
+  defp find_generalisation(_artefact, _predicate), do: nil
 
   defp replacement(target, suffix) do
     %Replace{
