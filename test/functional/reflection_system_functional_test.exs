@@ -619,21 +619,22 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert {:ok, _} = Runner.run(reflection(context), ingestion(), inference: inference)
 
-      assert_receive {:available,
-                      [
-                        %{
-                          id: "representation-one",
-                          lens: "observations",
-                          content: "fact one",
-                          result: :ok
-                        },
-                        %{
-                          id: "representation-two",
-                          lens: "decisions",
-                          content: "fact two",
-                          result: :ok
-                        }
-                      ]}
+      assert_receive {:available, representations}
+
+      assert representations == [
+               %{
+                 id: "representation-one",
+                 lens: "observations",
+                 content: "fact one",
+                 result: :ok
+               },
+               %{
+                 id: "representation-two",
+                 lens: "decisions",
+                 content: "fact two",
+                 result: :ok
+               }
+             ]
     end
   end
 
