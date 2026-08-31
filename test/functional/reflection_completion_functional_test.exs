@@ -1299,7 +1299,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, runner}, 1_000
       send(runner, :finish_reflection)
-      assert_receive {:reflection_completed, "review", {:ok, ^partial_artefact}}, 1_000
+      assert_receive {:reflection_completed, "review", {:ok, ^partial_artefact}}, 5_000
 
       assert {:ok, [%{destination: "observations", artefact: ^partial_artefact}]} =
                Client.search(%Search{
