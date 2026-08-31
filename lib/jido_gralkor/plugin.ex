@@ -302,6 +302,7 @@ defmodule JidoGralkor.Plugin do
       configured_tool_context
       |> Map.merge(retained_tool_context)
       |> Map.merge(%{
+        agent_id: agent.id,
         operator_id: agent.id,
         agent_name: agent_name(agent),
         lens: lens
