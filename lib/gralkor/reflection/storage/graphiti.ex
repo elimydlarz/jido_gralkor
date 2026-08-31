@@ -83,7 +83,8 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
          "id" => id,
          "reflection" => reflection,
          "payload" => payload
-       }} ->
+       } = decoded}
+      when map_size(decoded) == 3 ->
         [%Artefact{id: id, reflection: reflection, payload: payload}]
 
       _ ->
