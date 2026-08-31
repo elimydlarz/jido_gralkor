@@ -315,6 +315,14 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
   end
 
   describe "when the packaged generalisation Reflection synthesises a generalisation > while no returned generalisation influences the new generalisation" do
+    setup do
+      put_stored_generalisation_response([
+        %{"content" => "Prefer abstractions everywhere", "level" => 8}
+      ])
+
+      :ok
+    end
+
     test "then the new generalisation has level one" do
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(), inference: &output_for/1)
@@ -332,30 +340,10 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
   describe "when the packaged generalisation Reflection synthesises a generalisation > while one or more returned generalisations influence the new generalisation" do
     setup do
-      Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
-        "global" =>
-          {:ok,
-           [
-             %{
-               content:
-                 Jason.encode!(%{
-                   reflection: "generalisations",
-                   payload: %{
-                     generalisations:
-                       influencing_generalisations() ++
-                         [
-                           %{
-                             content: "Prefer abstractions everywhere",
-                             level: 8,
-                             generalises_over: []
-                           }
-                         ]
-                   }
-                 }),
-               source_description: "reflection:generalisations"
-             }
-           ]}
-      })
+      put_stored_generalisation_response(
+        influencing_generalisations() ++
+          [%{"content" => "Prefer abstractions everywhere", "level" => 8}]
+      )
 
       :ok
     end
@@ -369,7 +357,16 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
     test "and the new generalisation records the content and level of every influencing generalisation" do
       assert {:ok, artefact} =
-               Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
+               Runner.run(generalisation(), ingestion(),
+                 inference: fn request ->
+                   if request.step.label == "synthesise-artefact" do
+                     assert request.directions =~
+                              "Preserve each selected assessment's exact `generalises_over` content and level entries"
+                   end
+
+                   higher_level_output_for(request)
+                 end
+               )
 
       assert [%{"generalises_over" => preceding}] = artefact.payload["generalisations"]
       assert preceding == influencing_generalisations()
@@ -401,10 +398,13 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
 
     test "and each stored preceding generalisation contains exactly the content and level returned by the related-memory search" do
+      put_stored_generalisation_response(influencing_generalisations())
+
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
 
       assert [%{"generalises_over" => preceding}] = artefact.payload["generalisations"]
+      assert preceding == influencing_generalisations()
 
       assert Enum.all?(preceding, fn item ->
                MapSet.new(Map.keys(item)) == MapSet.new(["content", "level"])
@@ -482,14 +482,14 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
      }}
   end
 
-  defp higher_level_output_for(%{step: %{label: "inspect-related-information"}}) do
+  defp higher_level_output_for(%{step: %{label: "inspect-related-information"}} = request) do
     {:ok,
      %{
        output: %{
          "candidates" => [
            %{
              "content" => "Prefer the smallest explicit interface",
-             "generalises_over" => influencing_generalisations(),
+             "generalises_over" => selected_influences(request.stored_information),
              "rationale" => "It generalises both earlier interface lessons"
            }
          ]
@@ -497,14 +497,14 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
      }}
   end
 
-  defp higher_level_output_for(%{step: %{label: "evaluate-durability"}}) do
+  defp higher_level_output_for(%{step: %{label: "evaluate-durability"}} = request) do
     {:ok,
      %{
        output: %{
          "assessments" => [
            %{
              "content" => "Prefer the smallest explicit interface",
-             "generalises_over" => influencing_generalisations(),
+             "generalises_over" => selected_influences(request.stored_information),
              "durable" => true,
              "reasoning" => "It remains useful across interface designs"
            }
@@ -513,7 +513,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
      }}
   end
 
-  defp higher_level_output_for(%{step: %{label: "synthesise-artefact"}}) do
+  defp higher_level_output_for(%{step: %{label: "synthesise-artefact"}} = request) do
     {:ok,
      %{
        output: %{
@@ -521,7 +521,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
            %{
              "content" => "Prefer the smallest explicit interface",
              "level" => 99,
-             "generalises_over" => influencing_generalisations()
+             "generalises_over" => selected_influences(request.stored_information)
            }
          ]
        }
@@ -533,6 +533,54 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       %{"content" => "Prefer explicit APIs", "level" => 1},
       %{"content" => "Keep public interfaces small", "level" => 4}
     ]
+  end
+
+  defp put_stored_generalisation_response(generalisations) do
+    stored = Enum.map(generalisations, &Map.put(&1, "generalises_over", []))
+
+    Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
+      "global" =>
+        {:ok,
+         [
+           %{
+             content:
+               Jason.encode!(%{
+                 reflection: "generalisations",
+                 payload: %{generalisations: stored}
+               }),
+             source_description: "reflection:generalisations"
+           }
+         ]}
+    })
+  end
+
+  defp selected_influences(stored_information) do
+    selected_contents = MapSet.new(Enum.map(influencing_generalisations(), & &1["content"]))
+
+    stored_information
+    |> Enum.flat_map(fn
+      %{destination: "global", episode: %{content: content}} ->
+        stored_generalisations(content)
+
+      %{destination: "global", episode: content} when is_binary(content) ->
+        stored_generalisations(content)
+
+      _ ->
+        []
+    end)
+    |> Enum.filter(&MapSet.member?(selected_contents, &1["content"]))
+    |> Enum.map(&Map.take(&1, ["content", "level"]))
+  end
+
+  defp stored_generalisations(content) do
+    case Jason.decode(content) do
+      {:ok, %{"payload" => %{"generalisations" => generalisations}}}
+      when is_list(generalisations) ->
+        generalisations
+
+      _ ->
+        []
+    end
   end
 
   defp restore_env({key, nil}), do: Application.delete_env(:jido_gralkor, key)
