@@ -412,7 +412,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "when an ingestion operation successfully stores information through one or more Lenses" do
-    test "while Reflections are declared then every stored representation retains its evidence identifier and Lens identity" do
+    test "while Reflections are declared then every stored representation retains its own identifier, Lens identity, content, and storage result" do
       Application.put_env(:jido_gralkor, :lenses, [
         [
           name: "observations",
@@ -427,22 +427,19 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         lens: "observations",
         source_kind: :document,
         content: "fact one",
-        source_description: "functional",
-        evidence_id: "ev-1"
+        source_description: "functional"
       }
 
       assert {:ok,
               [
                 %Gralkor.IngestedRepresentation{
                   id: first_id,
-                  evidence_id: "ev-1",
                   lens: "observations",
                   content: "first lensed: fact one",
                   result: :ok
                 },
                 %Gralkor.IngestedRepresentation{
                   id: second_id,
-                  evidence_id: "ev-1",
                   lens: "observations",
                   content: "second lensed: fact one",
                   result: :ok
@@ -485,8 +482,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  lens: "observations",
                  source_kind: :document,
                  content: "direct fact",
-                 source_description: "functional",
-                 evidence_id: "ev-direct"
+                 source_description: "functional"
                })
 
       assert System.monotonic_time(:millisecond) - started < 100
@@ -544,7 +540,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                "decisions"
              ]
 
-      assert reps |> Enum.map(& &1.evidence_id) |> Enum.uniq() |> length() == 1
       assert reps |> Enum.map(& &1.id) |> Enum.uniq() |> length() == 4
       refute_receive {:scheduled, _, _}
     end
@@ -602,7 +597,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_receive {:first, "operator-one", "gather"}
     end
 
-    test "and makes every ingested representation available with its evidence identifier and Lens identity",
+    test "and makes every ingested representation available with its identifier, Lens identity, content, and storage result",
          context do
       parent = self()
 
@@ -615,8 +610,18 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert_receive {:available,
                       [
-                        %{evidence_id: "ev-1", lens: "observations"},
-                        %{evidence_id: "ev-2", lens: "decisions"}
+                        %{
+                          id: "representation-one",
+                          lens: "observations",
+                          content: "fact one",
+                          result: :ok
+                        },
+                        %{
+                          id: "representation-two",
+                          lens: "decisions",
+                          content: "fact two",
+                          result: :ok
+                        }
                       ]}
     end
   end
@@ -642,7 +647,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         output_schema: %{"artefact" => "string"},
         representations: [
           Gralkor.IngestedRepresentation.new(
-            "ev-1",
             "observations",
             "first representation"
           )
@@ -664,7 +668,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       configured = Gralkor.Config.llm_model()
       assert model == "#{configured.provider}:#{configured.id}"
-      assert prompt =~ ~s("evidence_id":"ev-1")
       assert prompt =~ ~s("lens":"observations")
       assert received_context.tools == tools
 
@@ -836,11 +839,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Runner.run(reflection(context), ingestion(), inference: &output_for/1)
     end
 
-    test "and the artefact retains its supporting evidence identifiers", context do
-      assert {:ok, %{evidence_ids: ["ev-1", "ev-2"]}} =
-               Runner.run(reflection(context), ingestion(), inference: &output_for/1)
-    end
-
     test "where the referenced Destination is `operator` then the artefact is available only to the operator whose ingestion triggered the Reflection",
          context do
       reflection = reflection(context)
@@ -951,9 +949,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
          [
            %{
              id: "representation-decisions",
-             evidence_id: "evidence-shared",
              lens: lens,
-             content: "stored decision"
+             content: "stored decision",
+             result: :ok
            }
          ]}
       end
@@ -1141,18 +1139,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                })
     end
 
-    test "and every result retains its supporting evidence identifiers", context do
-      {reflection, _} = stored_artefact(context)
-
-      assert {:ok, [%{artefact: %{evidence_ids: ["ev-1", "ev-2"]}}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "durable",
-                 destinations: [reflection.destination.name],
-                 result_type: :artefacts
-               })
-    end
-
     test "where the search also identifies one artefact then only that artefact is returned from the selected Destination",
          context do
       {reflection, artefact} = stored_artefact(context)
@@ -1226,8 +1212,18 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       operator_id: "operator-one",
       intended_lenses: ["observations", "decisions"],
       representations: [
-        %{evidence_id: "ev-1", lens: "observations", result: :ok},
-        %{evidence_id: "ev-2", lens: "decisions", result: :ok}
+        %{
+          id: "representation-one",
+          lens: "observations",
+          content: "fact one",
+          result: :ok
+        },
+        %{
+          id: "representation-two",
+          lens: "decisions",
+          content: "fact two",
+          result: :ok
+        }
       ]
     }
   end
@@ -1300,9 +1296,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
        [
          %{
            id: "representation-#{lens}",
-           evidence_id: "evidence-shared",
            lens: lens,
-           content: "stored through #{lens}"
+           content: "stored through #{lens}",
+           result: :ok
          }
        ]}
     end

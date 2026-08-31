@@ -267,7 +267,7 @@ defmodule Gralkor.Reflection.Runner do
     request
     |> Map.get(:representations, [])
     |> Enum.map(fn representation ->
-      Map.take(representation, [:id, :evidence_id, :lens, :content, :result])
+      Map.take(representation, [:id, :lens, :content, :result])
     end)
   end
 
