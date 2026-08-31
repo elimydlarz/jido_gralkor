@@ -74,8 +74,8 @@ defmodule Gralkor.Python do
 
   Only the first `Gralkor.Python` to boot runs before this VM has started a
   server of its own, so every later sweep would be aiming at a live server we
-  own — a daemonised, init-reparented `redis-server` carries no evidence of
-  which VM spawned it.
+  own — a daemonised, init-reparented `redis-server` does not identify which VM
+  spawned it.
   """
   @spec sweep_orphans_once((-> [integer()]), (integer() -> any())) :: :ok
   def sweep_orphans_once(list_orphans, kill_pid)
