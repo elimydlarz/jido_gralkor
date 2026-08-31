@@ -82,10 +82,9 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
        %{
          "id" => id,
          "reflection" => reflection,
-         "payload" => payload,
-         "evidence_ids" => evidence_ids
+         "payload" => payload
        }} ->
-        [%Artefact{id: id, reflection: reflection, payload: payload, evidence_ids: evidence_ids}]
+        [%Artefact{id: id, reflection: reflection, payload: payload}]
 
       _ ->
         []
