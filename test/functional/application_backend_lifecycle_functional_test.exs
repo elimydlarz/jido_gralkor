@@ -89,7 +89,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
             :never -> {:error, :unexpected}
           end
         else
-          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"done" => true}, [])}
+          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"done" => true})}
         end
       end
 

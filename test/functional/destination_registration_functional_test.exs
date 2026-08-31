@@ -142,8 +142,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       artefact = %Gralkor.Reflection.Artefact{
         id: "review-one",
         reflection: "review",
-        payload: %{"lesson" => "preserve"},
-        evidence_ids: ["evidence-one"]
+        payload: %{"lesson" => "preserve"}
       }
 
       assert :ok =

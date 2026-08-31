@@ -216,8 +216,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       artefact = %Gralkor.Reflection.Artefact{
         id: "review-one",
         reflection: "review",
-        payload: %{"lesson" => "keep this"},
-        evidence_ids: ["evidence-one"]
+        payload: %{"lesson" => "keep this"}
       }
 
       assert :ok =
