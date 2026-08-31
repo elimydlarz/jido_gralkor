@@ -548,34 +548,6 @@ defmodule JidoGralkor.PluginTest do
 
   describe "when an agent turn completes > while a thread has committed to agent state > where the plugin was mounted with Lens selections" do
     test "then the capture carries the selected Lens" do
-      InMemory.set_capture(:ok)
-      plugin_state = lens_plugin_state()
-      request_id = "request-lens-capture"
-
-      lens_agent =
-        agent("operator-one",
-          agent_name: "Susu",
-          thread_id: "thread-one",
-          strategy_config: %{
-            tools: [JidoGralkor.Actions.MemorySearch, JidoGralkor.Actions.MemoryAdd],
-            tool_context: %{tenant: "tenant-one"}
-          },
-          request_traces: %{
-            request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
-          },
-          requests: %{request_id => %{query: "Remember this", status: :pending, result: nil}}
-        )
-        |> put_in([:state, :__memory__], plugin_state)
-
-      signal =
-        Signal.new!(
-          "ai.request.completed",
-          %{request_id: request_id, result: "Remembered."},
-          source: "/test"
-        )
-
-      assert {:ok, :continue} = Plugin.handle_signal(signal, context(lens_agent))
-
       assert [
                [
                  "thread-one",
@@ -587,7 +559,7 @@ defmodule JidoGralkor.PluginTest do
                  [],
                  reflection_context
                ]
-             ] = InMemory.captures()
+             ] = lens_capture()
 
       assert reflection_context.tools == [
                JidoGralkor.Actions.MemorySearch,
@@ -596,11 +568,17 @@ defmodule JidoGralkor.PluginTest do
 
       assert reflection_context.tool_context == %{
                tenant: "tenant-one",
+               agent_id: "operator-one",
                operator_id: "operator-one",
                agent_name: "Susu",
                lens: "observations",
                session_id: "thread-one"
              }
+    end
+
+    test "and the current operator is supplied as the host agent identifier expected by forwarded tools" do
+      [[_, _, _, _, _, _, _, reflection_context]] = lens_capture()
+      assert reflection_context.tool_context.agent_id == "operator-one"
     end
   end
 
@@ -790,6 +768,37 @@ defmodule JidoGralkor.PluginTest do
     assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
     assert [capture] = InMemory.captures()
     capture
+  end
+
+  defp lens_capture do
+    InMemory.set_capture(:ok)
+    plugin_state = lens_plugin_state()
+    request_id = "request-lens-capture"
+
+    lens_agent =
+      agent("operator-one",
+        agent_name: "Susu",
+        thread_id: "thread-one",
+        strategy_config: %{
+          tools: [JidoGralkor.Actions.MemorySearch, JidoGralkor.Actions.MemoryAdd],
+          tool_context: %{tenant: "tenant-one"}
+        },
+        request_traces: %{
+          request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
+        },
+        requests: %{request_id => %{query: "Remember this", status: :pending, result: nil}}
+      )
+      |> put_in([:state, :__memory__], plugin_state)
+
+    signal =
+      Signal.new!(
+        "ai.request.completed",
+        %{request_id: request_id, result: "Remembered."},
+        source: "/test"
+      )
+
+    assert {:ok, :continue} = Plugin.handle_signal(signal, context(lens_agent))
+    InMemory.captures()
   end
 
   defp failed_capture do
