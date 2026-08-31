@@ -176,6 +176,39 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert Enum.map(representations, & &1.id) == ["representation-one", "representation-two"]
       assert [%{destination: "global", episode: %{content: "stored"}}] = stored_information
     end
+
+    test "and default inference presents the current representations separately from the returned stored information" do
+      stored_information = [
+        %{destination: "global", episode: %{content: "A prior generalisation"}}
+      ]
+
+      request = %{
+        directions: "Synthesize a generalisation.",
+        operator_id: "operator-one",
+        output_schema: %{
+          "generalisations" =>
+            "Array<{ content: string; level: integer; generalises_over: Array<{ content: string; level: integer }> }>"
+        },
+        representations: ingestion().representations,
+        stored_information: stored_information,
+        tool_context: %{},
+        tools: []
+      }
+
+      call = fn _action, params, _context ->
+        send(self(), {:default_inference_prompt, params.prompt})
+        {:ok, %{text: Jason.encode!(%{"generalisations" => []})}}
+      end
+
+      assert {:ok, %{output: %{"generalisations" => []}}} =
+               Runner.default_inference(request, call)
+
+      assert_receive {:default_inference_prompt, prompt}
+      assert prompt =~ "Lensed representations available"
+      assert prompt =~ "Prefer explicit APIs"
+      assert prompt =~ "Related stored information available"
+      assert prompt =~ "A prior generalisation"
+    end
   end
 
   describe "when the packaged generalisation Reflection's related-memory search returns no stored information" do
