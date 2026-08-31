@@ -72,5 +72,5 @@ defmodule Gralkor.Reflection.Storage.InMemoryTest do
   end
 
   defp artefact(id, payload),
-    do: %Artefact{id: id, reflection: "review", payload: payload, evidence_ids: []}
+    do: %Artefact{id: id, reflection: "review", payload: payload}
 end

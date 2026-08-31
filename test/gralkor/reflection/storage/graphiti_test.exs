@@ -22,7 +22,6 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
                       Gralkor.DefaultOntology, [uuid: "stable-id"]}
 
       assert Jason.decode!(content) == %{
-               "evidence_ids" => ["evidence-one"],
                "id" => "stable-id",
                "payload" => %{"summary" => "stored"},
                "reflection" => "review"
@@ -109,8 +108,7 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
     %Artefact{
       id: "stable-id",
       reflection: "review",
-      payload: %{"summary" => "stored"},
-      evidence_ids: ["evidence-one"]
+      payload: %{"summary" => "stored"}
     }
   end
 end

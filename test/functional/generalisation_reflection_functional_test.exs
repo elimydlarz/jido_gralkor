@@ -228,6 +228,17 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
   end
 
+  describe "when the packaged generalisation Reflection synthesises a generalisation" do
+    describe "while no returned generalisation influences the new generalisation" do
+      test "then the new generalisation has level one" do
+        assert {:ok, artefact} =
+                 Runner.run(generalisation(), ingestion(), inference: &output_for/1)
+
+        assert [%{"level" => 1}] = artefact.payload["generalisations"]
+      end
+    end
+  end
+
   defp generalisation do
     Registry.configured!()
     |> Enum.find(&(&1.name == "generalisations"))
