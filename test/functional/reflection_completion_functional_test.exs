@@ -650,8 +650,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         send(test_pid, :shutdown_runner_started)
         Process.sleep(100)
 
-        {:ok,
-         Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"})}
+        {:ok, Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"})}
       end
 
       start_supervised!(
@@ -662,12 +661,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
          retry_delays: [0]}
       )
 
-      lens_flush_callback = fn _operator,
-                               _agent,
-                               _user,
-                               lens,
-                               _turns,
-                               _ingestion_id ->
+      lens_flush_callback = fn _operator, _agent, _user, lens, _turns, _ingestion_id ->
         send(test_pid, {:shutdown_lens_flush_started, self()})
 
         receive do
@@ -760,8 +754,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         send(test_pid, :empty_registry_functional_runner_started)
         Process.sleep(100)
 
-        {:ok,
-         Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"})}
+        {:ok, Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"})}
       end
 
       children = [
