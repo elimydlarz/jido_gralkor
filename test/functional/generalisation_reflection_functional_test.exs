@@ -106,6 +106,52 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       refute_receive {:related_memory_search, _, _, _, _, _, _}
     end
+
+    test "and stored generalisation artefacts returned from `global` are included alongside other related episodes" do
+      stored_generalisation =
+        Jason.encode!(%{
+          id: "generalisation-artefact",
+          reflection: "generalisations",
+          payload: %{
+            generalisations: [
+              %{content: "Prefer small public APIs", level: 1, generalises_over: []}
+            ]
+          }
+        })
+
+      Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
+        "global" =>
+          {:ok,
+           [%{content: stored_generalisation, source_description: "reflection:generalisations"}]},
+        "observations-memory" =>
+          {:ok, [%{content: "A related observation", source_description: "observations"}]}
+      })
+
+      parent = self()
+
+      assert {:ok, _artefact} =
+               Runner.run(generalisation(), ingestion(),
+                 inference: fn request ->
+                   send(parent, {:stored_information, request.stored_information})
+                   output_for(request)
+                 end
+               )
+
+      assert_receive {:stored_information, stored_information}
+
+      assert Enum.any?(stored_information, fn
+               %{destination: "global", episode: %{content: ^stored_generalisation}} -> true
+               _ -> false
+             end)
+
+      assert Enum.any?(stored_information, fn
+               %{destination: "observations-memory", episode: %{content: "A related observation"}} ->
+                 true
+
+               _ ->
+                 false
+             end)
+    end
   end
 
   defp generalisation do
