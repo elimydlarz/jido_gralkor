@@ -9,9 +9,7 @@ when Reflection declarations are validated
   and every step declares one or more named structured outputs and their types
   and output names are unique across the Chain of Thought
   and every interpolation references an output from an earlier step
-  and every Reflection declares exactly one artefact target
-  and every memory target references a registered Destination by name
-  and every collaborative-document target identifies a non-blank location
+  and every Reflection references a registered Destination by name
     then validation succeeds
 
   if the configured Reflection registry is not a list
@@ -56,39 +54,25 @@ when Reflection declarations are validated
   if an interpolation references an output not declared by an earlier step
     then validation fails identifying that Reflection, step, and interpolation
 
-  if a Reflection has no artefact target
-    then validation fails identifying that Reflection and missing target
-
-  if a Reflection declares more than one artefact target
-    then validation fails identifying that Reflection and conflicting targets
-
-  if a Reflection declares an unsupported artefact target
-    then validation fails identifying that Reflection and target
-
-  if a memory target has no Destination name
+  if a Reflection has no Destination name
     then validation fails identifying that Reflection and missing Destination
 
-  if a memory target references an unknown Destination
+  if a Reflection references an unknown Destination
     then validation fails identifying that Reflection and Destination
-
-  if a collaborative-document target has no non-blank location
-    then validation fails identifying that Reflection and collaborative-document location
 
   if a Reflection declares an invalid ontology
     then validation fails identifying that Reflection and ontology
 
 where the packaged default Reflections are used
-  then ERL targets memory at the packaged `operator` Destination
+  then ERL references the packaged `operator` Destination
   and ERL carries jido_gralkor's built-in experiential-learning ontology
-  and generalisation targets memory at the packaged `global` Destination
+  and generalisation references the packaged `global` Destination
 
 where an application-defined Reflection omits its ontology
-  while its artefact target is memory
-    then its final artefact receives generic extraction
+  then its final artefact receives generic extraction
 
 where an application-defined Reflection declares an application ontology
-  while its artefact target is memory
-    then its final artefact is extracted through that Reflection's ontology
+  then its final artefact is extracted through that Reflection's ontology
 
 when the default ERL Reflection stores its final artefact
   then extraction receives the built-in `Learning` entity type from ERL's ontology
@@ -141,21 +125,15 @@ when inference returns a structured output for the current step
 
 when the final Chain of Thought step returns valid structured output
   then that structured output becomes the Reflection's single artefact
-  and the artefact is sent only to the artefact target declared by the Reflection
+  and the artefact is stored at the Destination referenced by the Reflection
   and the artefact identifies its declaring Reflection
   and the artefact retains its supporting evidence identifiers
 
-  where the artefact target is memory at the `operator` Destination
+  where the referenced Destination is `operator`
     then the artefact is available only to the operator whose ingestion triggered the Reflection
-    and no collaborative document is published
 
-  where the artefact target is memory at a Destination other than `operator`
+  where the referenced Destination is not `operator`
     then the artefact is available to every operator through that Destination's one graph
-    and no collaborative document is published
-
-  where the artefact target is a collaborative-document location
-    then one collaborative document containing the artefact is published at that location
-    and the artefact is not stored in or searchable through any memory Destination
 
 when multiple declared Reflections process one completed ingestion operation
   then every Reflection runs independently
@@ -173,14 +151,14 @@ if a Reflection's Chain of Thought fails
   and the successful ingestion result remains unchanged
   and every other declared Reflection remains eligible to complete
 
-if sending a Reflection artefact to its declared target fails
-  then the Reflection failure identifies its name, target location, and reason
+if storing a Reflection artefact at its destination fails
+  then the Reflection failure identifies its name, destination, and reason
   and the successful ingestion result remains unchanged
   and every other declared Reflection remains eligible to complete
 
 when a Destination is searched for artefacts
   then that Destination is searched
-  and relevant artefacts produced by any Reflection targeting memory at that Destination are returned
+  and relevant artefacts produced by any Reflection using that Destination are returned
   and every result identifies its declaring Reflection
   and every result retains its supporting evidence identifiers
 

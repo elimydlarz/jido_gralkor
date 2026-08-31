@@ -3,23 +3,16 @@ Functional: reflection-completion (src: lib/gralkor/application.ex, lib/gralkor/
 when an application ingests information under a stable ingestion identifier while Reflections are declared
   then ingestion returns without waiting for Reflection completion
   and each Reflection has one logical completion identity combining the operator, ingestion, and Reflection names
-  and each completed Reflection publishes one artefact whose stable identifier represents that logical completion to its declared target location
-
-  where a Reflection targets memory at a Destination
-    then its completed artefact remains searchable through that Destination
-    and no collaborative document is published for that artefact
-
-  where a Reflection targets a collaborative-document location
-    then its completed artefact is available as one collaborative document at that location
-    and its completed artefact is not searchable through any memory Destination
+  and each completed Reflection stores one artefact whose stable identifier represents that logical completion
+  and every completed artefact remains searchable through its Reflection's Destination
 
 when overlapping requests schedule the same operator, ingestion, and Reflection
   then at most one Runner execution for that logical completion is active at a time
-  and at most one canonical artefact for that logical completion becomes available at its declared target location
+  and at most one canonical artefact for that logical completion becomes searchable
 
 when one ingestion schedules several Reflections
-  while one Reflection completes canonical publication to its target location
-  and another Reflection fails before canonical publication to its target location
+  while one Reflection completes canonical storage
+  and another Reflection fails before canonical storage
     then the completed Reflection remains completed
     and the failed Reflection is retried independently
     and retrying the failed Reflection does not rerun the completed Reflection
@@ -41,25 +34,25 @@ when a retryable Runner failure consumes every configured retry
   then terminal failure is observable with the Reflection name, Runner stage, attempt count, and final reason
 
 when a Reflection Runner produces an artefact
-  if publication to the declared target location fails, crashes, or does not finish within its execution timeout
-    then the Scheduler retries publication to that target location without rerunning the Runner
-    and every publication attempt receives the exact same artefact and target location
+  if canonical storage fails, crashes, or does not finish within its execution timeout
+    then the Scheduler retries canonical storage without rerunning the Runner
+    and every storage attempt receives the exact same artefact
     when the retry schedule is exhausted
-      then terminal failure is observable with the Reflection name, publication stage, target location, and final reason
+      then terminal failure is observable with the Reflection name, storage stage, and final reason
 
-when a target location commits an artefact but its response is lost
+when canonical storage commits an artefact but its response is lost
   then the Scheduler retries the exact same artefact identifier
-  and the retry converges on one canonical artefact at the same target location
-  and exactly one artefact for that logical completion is available at that target location
+  and the retry converges on one canonical artefact
+  and exactly one artefact for that logical completion is searchable
 
 when an ingestion is replayed after one or more of its Reflections completed
-  then each declared target location identifies its already completed Reflection without rerunning its Runner
+  then canonical storage identifies every already completed Reflection without rerunning its Runner
   and a newly declared Reflection for that ingestion remains eligible to run and complete
 
 when the supervised Reflection Scheduler crashes with unfinished work
   then the application restarts the Scheduler
   and the restarted Scheduler resumes every unfinished logical completion from durable work state
-  and the declared target location prevents already committed work from rerunning
+  and canonical storage prevents already committed work from rerunning
 
 when the application stops gracefully with unfinished Reflection work
   then shutdown waits for every admitted Reflection to complete or exhaust its bounded retry schedule
@@ -73,13 +66,13 @@ when the application stops gracefully with unfinished Reflection work
   while the supervised Scheduler exits during its drain call
     then shutdown waits for the replacement Scheduler and drains it
 
-when repeated publications to one target location use the same artefact identifier and immutable content
-  then the first publication creates the artefact at that target location
+when repeated canonical writes use the same artefact identifier and immutable content
+  then the first write creates the artefact
   and every later write reports success without creating another artefact
 
-if repeated publications to one target location use the same artefact identifier with conflicting immutable content
+if repeated canonical writes use the same artefact identifier with conflicting immutable content
   then the repeated write is rejected as an artefact conflict
-  and the original artefact at that target location remains unchanged
+  and the original canonical artefact remains unchanged
 
 where Graphiti is the canonical Reflection store
   when a new artefact is written with its stable identifier
@@ -121,17 +114,6 @@ where Graphiti is the canonical Reflection store
 where in-memory storage is the canonical Reflection store
   when the same artefact is written repeatedly
     then exactly one copy remains searchable in its original insertion position
-
-where a collaborative-document location is the artefact target
-  when a new artefact is published with its stable identifier
-    then one collaborative document representing that artefact is created at the declared location
-    and the document retains the artefact's declaring Reflection and supporting evidence identifiers
-    and no copy of the artefact is stored in a memory Destination
-  when that artefact is published again after an uncertain response
-    then the existing collaborative document is confirmed without creating another document
-  if a repeated publication uses the same artefact identifier with conflicting immutable content
-    then publication is rejected as an artefact conflict
-    and the original collaborative document remains unchanged
 
 if public ingestion omits or supplies a blank operator or stable ingestion identifier
   then ingestion raises before any Lens ingestion, Runner execution, or canonical write begins
