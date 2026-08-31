@@ -1261,8 +1261,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
          "reasoning_assessment" => %{
            "problem_kind" => "overlapping schedules",
            "approach" => "move one job",
-           "outcome" => "succeeded",
-           "evidence_ids" => []
+           "outcome" => "succeeded"
          }
        }
      }}
@@ -1272,8 +1271,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     {:ok,
      %{
        output: %{
-         "learning_candidate" =>
-           Map.put(erl_payload(), "evidence_ids", [])
+         "learning_candidate" => erl_payload()
        }
      }}
   end

@@ -1,12 +1,12 @@
 steps:
   - label: inspect-reasoning
     directions: |-
-      Inspect the completed reasoning evidence supplied for this ingestion
+      Inspect the completed reasoning information supplied for this ingestion
       operation, including the problem, attempted approach, tool interactions,
       and outcome. Use any available tools when their results would materially
-      improve the assessment. Preserve the identifiers of evidence used.
+      improve the assessment.
     output:
-      reasoning_assessment: "{ problem_kind: string; approach: string; outcome: string; evidence_ids: Array<string> }"
+      reasoning_assessment: "{ problem_kind: string; approach: string; outcome: string }"
 
   - label: derive-lesson
     directions: |-
@@ -15,9 +15,9 @@ steps:
       {{reasoning_assessment}}
 
       Determine whether the approach succeeded and state the reusable lesson
-      supported by the evidence.
+      supported by the completed reasoning information.
     output:
-      learning_candidate: "{ problem_kind: string; approach: string; success: boolean; lesson: string; evidence_ids: Array<string> }"
+      learning_candidate: "{ problem_kind: string; approach: string; success: boolean; lesson: string }"
 
   - label: synthesise-artefact
     directions: |-
@@ -25,11 +25,10 @@ steps:
 
       {{learning_candidate}}
 
-      Preserve the assessed problem kind, approach, success, lesson, and every
-      supporting evidence identifier exactly as structured fields.
+      Preserve the assessed problem kind, approach, success, and lesson exactly
+      as structured fields.
     output:
       problem_kind: "string"
       approach: "string"
       success: "boolean"
       lesson: "string"
-      evidence_ids: "Array<string>"
