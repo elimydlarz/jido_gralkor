@@ -77,10 +77,11 @@ where an application-defined Reflection declares an application ontology
 when the default ERL Reflection stores its final artefact
   then extraction receives the built-in `Learning` entity type from ERL's ontology
   and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields
+  and the stored Learning payload contains exactly its problem kind, approach, success, and reusable lesson
 
 when an ingestion operation successfully stores information through one or more Lenses
   while Reflections are declared
-    then every stored representation retains its evidence identifier and Lens identity
+    then every stored representation retains its own identifier, Lens identity, content, and storage result
     and the ingestion caller receives success without waiting for Reflection
     and every declared Reflection begins one logical completion flow for the completed ingestion operation
     and no Reflection begins before every intended Lens ingestion has completed
@@ -90,7 +91,7 @@ when a configured Reflection is loaded
 
 when a scheduled Reflection runs
   then its programmatic Chain of Thought runner starts its first step for the operator and completed ingestion operation
-  and makes every ingested representation available with its evidence identifier and Lens identity
+  and makes every ingested representation available with its identifier, Lens identity, content, and storage result
 
 when a Chain of Thought step begins
   then built-in inference receives that step's interpolated natural-language directions
@@ -127,7 +128,7 @@ when the final Chain of Thought step returns valid structured output
   then that structured output becomes the Reflection's single artefact
   and the artefact is stored at the Destination referenced by the Reflection
   and the artefact identifies its declaring Reflection
-  and the artefact retains its supporting evidence identifiers
+  and the artefact consists of its stable identifier, declaring Reflection, and structured payload
 
   where the referenced Destination is `operator`
     then the artefact is available only to the operator whose ingestion triggered the Reflection
@@ -160,7 +161,7 @@ when a Destination is searched for artefacts
   then that Destination is searched
   and relevant artefacts produced by any Reflection using that Destination are returned
   and every result identifies its declaring Reflection
-  and every result retains its supporting evidence identifiers
+  and every result retains its structured payload
 
   where the search also identifies one artefact
     then only that artefact is returned from the selected Destination
