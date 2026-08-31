@@ -244,6 +244,82 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
   end
 
+  describe "when the packaged generalisation Reflection synthesises a generalisation > while one or more returned generalisations influence the new generalisation" do
+    setup do
+      Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
+        "global" =>
+          {:ok,
+           [
+             %{
+               content:
+                 Jason.encode!(%{
+                   reflection: "generalisations",
+                   payload: %{
+                     generalisations:
+                       influencing_generalisations() ++
+                         [%{content: "Prefer abstractions everywhere", level: 8, generalises_over: []}]
+                   }
+                 }),
+               source_description: "reflection:generalisations"
+             }
+           ]}
+      })
+
+      :ok
+    end
+
+    test "then the new generalisation's level is one greater than the highest influencing level" do
+      assert {:ok, artefact} =
+               Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
+
+      assert [%{"level" => 5}] = artefact.payload["generalisations"]
+    end
+
+    test "and the new generalisation records the content and level of every influencing generalisation" do
+      assert {:ok, artefact} =
+               Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
+
+      assert [%{"generalises_over" => preceding}] = artefact.payload["generalisations"]
+      assert preceding == influencing_generalisations()
+    end
+
+    test "but the new generalisation records no returned generalisation that did not influence it" do
+      assert {:ok, artefact} =
+               Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
+
+      assert [%{"generalises_over" => preceding}] = artefact.payload["generalisations"]
+      refute Enum.any?(preceding, &(&1["content"] == "Prefer abstractions everywhere"))
+    end
+  end
+
+  describe "when the packaged generalisation Reflection completes" do
+    test "then its artefact payload contains an array of generalisations" do
+      assert {:ok, artefact} =
+               Runner.run(generalisation(), ingestion(), inference: &output_for/1)
+
+      assert is_list(artefact.payload["generalisations"])
+    end
+
+    test "and each stored generalisation contains exactly its content, level, and preceding generalisations" do
+      assert {:ok, artefact} =
+               Runner.run(generalisation(), ingestion(), inference: &output_for/1)
+
+      assert [stored] = artefact.payload["generalisations"]
+      assert MapSet.new(Map.keys(stored)) == MapSet.new(["content", "level", "generalises_over"])
+    end
+
+    test "and each stored preceding generalisation contains exactly the content and level returned by the related-memory search" do
+      assert {:ok, artefact} =
+               Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
+
+      assert [%{"generalises_over" => preceding}] = artefact.payload["generalisations"]
+
+      assert Enum.all?(preceding, fn item ->
+               MapSet.new(Map.keys(item)) == MapSet.new(["content", "level"])
+             end)
+    end
+  end
+
   defp generalisation do
     Registry.configured!()
     |> Enum.find(&(&1.name == "generalisations"))
@@ -302,6 +378,59 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
          ]
        }
      }}
+  end
+
+  defp higher_level_output_for(%{step: %{label: "inspect-related-information"}}) do
+    {:ok,
+     %{
+       output: %{
+         "candidates" => [
+           %{
+             "content" => "Prefer the smallest explicit interface",
+             "generalises_over" => influencing_generalisations(),
+             "rationale" => "It generalises both earlier interface lessons"
+           }
+         ]
+       }
+     }}
+  end
+
+  defp higher_level_output_for(%{step: %{label: "evaluate-durability"}}) do
+    {:ok,
+     %{
+       output: %{
+         "assessments" => [
+           %{
+             "content" => "Prefer the smallest explicit interface",
+             "generalises_over" => influencing_generalisations(),
+             "durable" => true,
+             "reasoning" => "It remains useful across interface designs"
+           }
+         ]
+       }
+     }}
+  end
+
+  defp higher_level_output_for(%{step: %{label: "synthesise-artefact"}}) do
+    {:ok,
+     %{
+       output: %{
+         "generalisations" => [
+           %{
+             "content" => "Prefer the smallest explicit interface",
+             "level" => 99,
+             "generalises_over" => influencing_generalisations()
+           }
+         ]
+       }
+     }}
+  end
+
+  defp influencing_generalisations do
+    [
+      %{"content" => "Prefer explicit APIs", "level" => 1},
+      %{"content" => "Keep public interfaces small", "level" => 4}
+    ]
   end
 
   defp restore_env({key, nil}), do: Application.delete_env(:jido_gralkor, key)
