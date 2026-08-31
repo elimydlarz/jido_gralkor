@@ -280,7 +280,6 @@ defmodule Gralkor.CaptureBuffer do
           lens_order: Enum.uniq(lenses),
           batches: Map.new(Enum.uniq(lenses), &{&1, [msgs]}),
           ingestion_id: ingestion_id(session_id),
-          evidence_id: evidence_id(),
           reflection_context: reflection_context
         }
 
@@ -579,8 +578,7 @@ defmodule Gralkor.CaptureBuffer do
             user_name,
             lens_name,
             lens_turns,
-            entry.ingestion_id,
-            entry.evidence_id
+            entry.ingestion_id
           )
         end
 
@@ -594,19 +592,13 @@ defmodule Gralkor.CaptureBuffer do
                retries
              ) do
           {:ok, lens_representations} when is_list(lens_representations) ->
-            expected_evidence_id =
-              if is_function(callback, 6) or is_function(callback, 7), do: entry.evidence_id
-
-            case validate_representations(lens_representations, lens, expected_evidence_id) do
+            case validate_representations(lens_representations, lens) do
               :ok -> {first_error, representations ++ lens_representations}
               {:error, _} = error -> {first_error || error, representations}
             end
 
           {:ok, representation} ->
-            expected_evidence_id =
-              if is_function(callback, 6) or is_function(callback, 7), do: entry.evidence_id
-
-            case validate_representations([representation], lens, expected_evidence_id) do
+            case validate_representations([representation], lens) do
               :ok -> {first_error, representations ++ [representation]}
               {:error, _} = error -> {first_error || error, representations}
             end
@@ -805,38 +797,32 @@ defmodule Gralkor.CaptureBuffer do
     end)
   end
 
-  defp validate_representations(representations, lens, evidence_id) do
+  defp validate_representations(representations, lens) do
     Enum.reduce_while(representations, :ok, fn representation, :ok ->
-      case validate_representation(representation, lens, evidence_id) do
+      case validate_representation(representation, lens) do
         :ok -> {:cont, :ok}
         {:error, _} = error -> {:halt, error}
       end
     end)
   end
 
-  defp validate_representation(representation, lens, evidence_id)
-       when is_map(representation) do
+  defp validate_representation(representation, lens) when is_map(representation) do
+    representation_id = Map.get(representation, :id) || Map.get(representation, "id")
     representation_lens = Map.get(representation, :lens) || Map.get(representation, "lens")
-
-    representation_evidence_id =
-      Map.get(representation, :evidence_id) || Map.get(representation, "evidence_id")
 
     cond do
       representation_lens != lens ->
         {:error, {:representation_lens_mismatch, lens, representation_lens}}
 
-      not (is_binary(representation_evidence_id) and String.trim(representation_evidence_id) != "") ->
-        {:error, {:missing_evidence_id, lens}}
-
-      not is_nil(evidence_id) and representation_evidence_id != evidence_id ->
-        {:error, {:representation_evidence_mismatch, lens, representation_evidence_id}}
+      not (is_binary(representation_id) and String.trim(representation_id) != "") ->
+        {:error, {:missing_representation_id, lens}}
 
       true ->
         :ok
     end
   end
 
-  defp validate_representation(_representation, lens, _evidence_id),
+  defp validate_representation(_representation, lens),
     do: {:error, {:invalid_ingested_representation, lens}}
 
   defp invoke_lens_callback(
@@ -846,23 +832,11 @@ defmodule Gralkor.CaptureBuffer do
          user_name,
          lens,
          turns,
-         ingestion_id,
-         evidence_id
+         ingestion_id
        ) do
     cond do
-      is_function(callback, 7) ->
-        callback.(
-          operator_id,
-          agent_name,
-          user_name,
-          lens,
-          turns,
-          ingestion_id,
-          evidence_id
-        )
-
       is_function(callback, 6) ->
-        callback.(operator_id, agent_name, user_name, lens, turns, evidence_id)
+        callback.(operator_id, agent_name, user_name, lens, turns, ingestion_id)
 
       is_function(callback, 5) ->
         callback.(operator_id, agent_name, user_name, lens, turns)
@@ -881,10 +855,6 @@ defmodule Gralkor.CaptureBuffer do
 
   defp ingestion_id(session_id) do
     "#{session_id}:#{collision_resistant_token()}"
-  end
-
-  defp evidence_id do
-    "evidence-#{collision_resistant_token()}"
   end
 
   defp collision_resistant_token do
