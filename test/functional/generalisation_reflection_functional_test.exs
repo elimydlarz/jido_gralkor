@@ -75,13 +75,24 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert {:ok, _artefact} =
                Runner.run(generalisation(), ingestion(),
                  inference: fn request ->
-                   send(parent, {:generalisation_inference, request.step.label})
+                   if request.step.label == "inspect-related-information" do
+                     send(parent, {:generalisation_inference, request.step.label})
+                   end
+
                    output_for(request)
                  end
                )
 
-      assert_receive {:related_memory_search, _, _, _, :episodes, _, _}
-      assert_receive {:generalisation_inference, _}
+      events =
+        for _ <- 1..5 do
+          receive do
+            {:related_memory_search, _, _, _, :episodes, _, _} = search -> search
+            {:generalisation_inference, _} = inference -> inference
+          end
+        end
+
+      assert Enum.all?(Enum.take(events, 4), &match?({:related_memory_search, _, _, _, _, _, _}, &1))
+      assert List.last(events) == {:generalisation_inference, "inspect-related-information"}
     end
 
     test "and the search query contains the content of every completed representation" do
@@ -215,10 +226,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert_receive {:inference_inputs, representations, stored_information}
       assert Enum.map(representations, & &1.id) == ["representation-one", "representation-two"]
       assert [%{destination: "global", episode: %{content: "stored"}}] = stored_information
-    end
 
-    test "and default inference presents the current representations separately from the returned stored information" do
-      stored_information = [
+      prompt_stored_information = [
         %{destination: "global", episode: %{content: "A prior generalisation"}}
       ]
 
@@ -230,7 +239,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
             "Array<{ content: string; level: integer; generalises_over: Array<{ content: string; level: integer }> }>"
         },
         representations: ingestion().representations,
-        stored_information: stored_information,
+        stored_information: prompt_stored_information,
         tool_context: %{},
         tools: []
       }

@@ -31,6 +31,7 @@ steps:
       Include every selected durable generalisation. A generalisation with no
       preceding generalisations has level 1. Otherwise its level is one greater
       than the highest level among the generalisations it generalises over. Do
-      not include rejected candidates.
+      not include rejected candidates. Preserve each selected assessment's exact
+      `generalises_over` content and level entries in the final result.
     output:
       generalisations: "Array<{ content: string; level: integer; generalises_over: Array<{ content: string; level: integer }> }>"
