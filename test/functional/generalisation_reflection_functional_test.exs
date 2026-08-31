@@ -235,6 +235,13 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       assert [%{"level" => 1}] = artefact.payload["generalisations"]
     end
+
+    test "and the new generalisation records no preceding generalisations" do
+      assert {:ok, artefact} =
+               Runner.run(generalisation(), ingestion(), inference: &output_for/1)
+
+      assert [%{"generalises_over" => []}] = artefact.payload["generalisations"]
+    end
   end
 
   defp generalisation do
