@@ -4,12 +4,43 @@ defmodule Gralkor.Reflection.Runner do
   alias Gralkor.Reflection
   alias Gralkor.Reflection.Artefact
   alias Gralkor.Reflection.ChainOfThought
+  alias Gralkor.Client
+  alias Gralkor.Search
 
   def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
     inference = Keyword.get(opts, :inference, &default_inference/1)
     tool_executor = Keyword.get(opts, :tool_executor, &default_tool_executor/2)
     tools = Keyword.get(opts, :tools, [])
     tool_context = Keyword.get(opts, :tool_context, %{})
+
+    case related_memory(reflection, ingestion) do
+      {:ok, stored_information} ->
+        run_steps(
+          reflection,
+          ingestion,
+          inference,
+          tool_executor,
+          tools,
+          tool_context,
+          stored_information,
+          opts
+        )
+
+      {:error, reason} ->
+        {:error, %{reflection: reflection.name, reason: {:related_memory_search, reason}}}
+    end
+  end
+
+  defp run_steps(
+         reflection,
+         ingestion,
+         inference,
+         tool_executor,
+         tools,
+         tool_context,
+         stored_information,
+         opts
+       ) do
 
     result =
       Enum.reduce_while(reflection.chain_of_thought.steps, {:ok, %{}}, fn step, {:ok, outputs} ->
@@ -22,6 +53,7 @@ defmodule Gralkor.Reflection.Runner do
           step: %{label: step.label, directions: directions},
           directions: directions,
           output_schema: step.output,
+          stored_information: stored_information,
           tools: tools,
           tool_context: tool_context,
           tool_results: []
@@ -61,6 +93,31 @@ defmodule Gralkor.Reflection.Runner do
         error
     end
   end
+
+  defp related_memory(%Reflection{name: "generalisations"}, ingestion) do
+    representations = representations(ingestion)
+
+    destinations =
+      representations
+      |> Enum.map(&field(&1, :lens))
+      |> Enum.map(&Client.lens!(&1).destination.name)
+      |> then(&Enum.uniq(["operator", "global" | &1]))
+
+    query =
+      representations
+      |> Enum.map(&field(&1, :content))
+      |> Enum.map(&render_value/1)
+      |> Enum.join("\n")
+
+    Client.search(%Search{
+      operator_id: field(ingestion, :operator_id),
+      query: query,
+      destinations: destinations,
+      result_type: :episodes
+    })
+  end
+
+  defp related_memory(%Reflection{}, _ingestion), do: {:ok, []}
 
   defp build_artefact(reflection, ingestion, outputs, final, opts) do
     payload = Map.take(outputs, Map.keys(final.output))
