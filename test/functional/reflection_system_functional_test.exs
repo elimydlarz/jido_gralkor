@@ -438,21 +438,24 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         source_description: "functional"
       }
 
-      assert {:ok,
-              [
-                %Gralkor.IngestedRepresentation{
-                  id: first_id,
-                  lens: "observations",
-                  content: "first lensed: fact one",
-                  result: :ok
-                },
-                %Gralkor.IngestedRepresentation{
-                  id: second_id,
-                  lens: "observations",
-                  content: "second lensed: fact one",
-                  result: :ok
-                }
-              ]} = Client.ingest_with_representation(request)
+      assert {:ok, [first, second]} = Client.ingest_with_representation(request)
+
+      first_id = first.id
+      second_id = second.id
+
+      assert Map.from_struct(first) == %{
+               id: first_id,
+               lens: "observations",
+               content: "first lensed: fact one",
+               result: :ok
+             }
+
+      assert Map.from_struct(second) == %{
+               id: second_id,
+               lens: "observations",
+               content: "second lensed: fact one",
+               result: :ok
+             }
 
       assert is_binary(first_id) and first_id != ""
       assert is_binary(second_id) and second_id != ""
