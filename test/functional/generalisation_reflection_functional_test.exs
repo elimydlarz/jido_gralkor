@@ -41,7 +41,9 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       :destination_storage,
       :generalisation_search_responses,
       :generalisation_test_pid,
+      :lens_storage,
       :lenses,
+      :reflection_storage,
       :reflections
     ]
 
@@ -108,24 +110,56 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
 
     test "and stored generalisation artefacts returned from `global` are included alongside other related episodes" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      start_supervised!(Gralkor.Reflection.Storage.InMemory)
+
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        Gralkor.Destination.Storage.InMemory
+      )
+
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(
+        :jido_gralkor,
+        :reflection_storage,
+        Gralkor.Reflection.Storage.InMemory
+      )
+
+      observation_store = %Gralkor.Lens.Store{
+        operator_id: "operator-one",
+        lens: Gralkor.Client.lens!("observations")
+      }
+
+      assert :ok =
+               Gralkor.Lens.Store.add(
+                 observation_store,
+                 "A related observation",
+                 "observations"
+               )
+
       stored_generalisation =
-        Jason.encode!(%{
-          id: "generalisation-artefact",
-          reflection: "generalisations",
-          payload: %{
-            generalisations: [
-              %{content: "Prefer small public APIs", level: 1, generalises_over: []}
+        Gralkor.Reflection.Artefact.new(
+          "generalisation-artefact",
+          "generalisations",
+          %{
+            "generalisations" => [
+              %{
+                "content" => "Prefer small public APIs",
+                "level" => 1,
+                "generalises_over" => []
+              }
             ]
           }
-        })
+        )
 
-      Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
-        "global" =>
-          {:ok,
-           [%{content: stored_generalisation, source_description: "reflection:generalisations"}]},
-        "observations-memory" =>
-          {:ok, [%{content: "A related observation", source_description: "observations"}]}
-      })
+      assert :ok =
+               Gralkor.Reflection.Store.put(
+                 generalisation(),
+                 "operator-one",
+                 stored_generalisation
+               )
 
       parent = self()
 
@@ -140,12 +174,18 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert_receive {:stored_information, stored_information}
 
       assert Enum.any?(stored_information, fn
-               %{destination: "global", episode: %{content: ^stored_generalisation}} -> true
+               %{destination: "global", episode: encoded} when is_binary(encoded) ->
+                 Jason.decode!(encoded) == %{
+                   "id" => "generalisation-artefact",
+                   "reflection" => "generalisations",
+                   "payload" => stored_generalisation.payload
+                 }
+
                _ -> false
              end)
 
       assert Enum.any?(stored_information, fn
-               %{destination: "observations-memory", episode: %{content: "A related observation"}} ->
+               %{destination: "observations-memory", episode: "A related observation"} ->
                  true
 
                _ ->
