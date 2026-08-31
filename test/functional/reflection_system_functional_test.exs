@@ -13,11 +13,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   alias Gralkor.Reflection.Store
   alias Gralkor.Search
 
-  defmodule ReflectionEvidenceOntology do
+  defmodule ReflectionOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
   end
 
-  defmodule EvidenceIngestion do
+  defmodule MultiRepresentationIngestion do
     @behaviour Gralkor.Lens.Ingestion
 
     @impl true
@@ -365,14 +365,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
           [
             valid_definition(root,
               destination: "observations",
-              ontology: ReflectionEvidenceOntology
+              ontology: ReflectionOntology
             )
           ],
           root: root
         )
         |> List.first()
 
-      assert reflection.ontology == ReflectionEvidenceOntology
+      assert reflection.ontology == ReflectionOntology
     end
   end
 
@@ -380,7 +380,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then extraction receives the built-in `Learning` entity type from ERL's ontology" do
       Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
-      artefact = Gralkor.Reflection.Artefact.new("erl", erl_payload(), ["evidence-one"])
+      artefact = Gralkor.Reflection.Artefact.new("erl", erl_payload())
       caller = self()
 
       add_episode = fn group_id, content, source, ontology, opts ->
@@ -425,7 +425,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         [
           name: "observations",
           destination: "observations",
-          ingestion: EvidenceIngestion
+          ingestion: MultiRepresentationIngestion
         ]
       ])
 
@@ -480,7 +480,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         [
           name: "observations",
           destination: "observations",
-          ingestion: EvidenceIngestion
+          ingestion: MultiRepresentationIngestion
         ]
       ])
 
@@ -508,12 +508,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         [
           name: "observations",
           destination: "observations",
-          ingestion: EvidenceIngestion
+          ingestion: MultiRepresentationIngestion
         ],
         [
           name: "decisions",
           destination: "decisions",
-          ingestion: EvidenceIngestion
+          ingestion: MultiRepresentationIngestion
         ]
       ])
 
@@ -690,7 +690,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "and the current step is the only step exposed to inference", context do
       assert [first | _] = run_and_collect_requests(reflection(context), ingestion())
-      assert first.step == %{label: "gather", directions: "Gather evidence."}
+      assert first.step == %{label: "gather", directions: "Gather facts."}
       refute Map.has_key?(first, :steps)
     end
 
@@ -1383,7 +1383,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       write_cot(root, "valid.yaml", """
       steps:
         - label: gather
-          directions: Gather evidence.
+          directions: Gather facts.
           output:
             facts: Array<string>
         - label: synthesise
