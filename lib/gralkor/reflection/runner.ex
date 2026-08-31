@@ -7,6 +7,8 @@ defmodule Gralkor.Reflection.Runner do
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Search
 
+  @packaged_generalisation_path "priv/reflections/generalisations.yaml"
+
   def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
     inference = Keyword.get(opts, :inference, &default_inference/1)
     tool_executor = Keyword.get(opts, :tool_executor, &default_tool_executor/2)
@@ -93,7 +95,15 @@ defmodule Gralkor.Reflection.Runner do
     end
   end
 
-  defp related_memory(%Reflection{name: "generalisations"}, ingestion) do
+  defp related_memory(%Reflection{} = reflection, ingestion) do
+    if packaged_generalisation?(reflection) do
+      search_related_memory(ingestion)
+    else
+      {:ok, []}
+    end
+  end
+
+  defp search_related_memory(ingestion) do
     representations = representations(ingestion)
 
     destinations =
@@ -116,8 +126,6 @@ defmodule Gralkor.Reflection.Runner do
     })
   end
 
-  defp related_memory(%Reflection{}, _ingestion), do: {:ok, []}
-
   defp build_artefact(reflection, outputs, final, opts) do
     payload = outputs |> Map.take(Map.keys(final.output)) |> normalize_payload(reflection)
 
@@ -134,13 +142,24 @@ defmodule Gralkor.Reflection.Runner do
     end
   end
 
-  defp normalize_payload(payload, %Reflection{name: "generalisations"}) do
-    Map.update!(payload, "generalisations", fn generalisations ->
-      Enum.map(generalisations, &normalize_generalisation/1)
-    end)
+  defp normalize_payload(payload, %Reflection{} = reflection) do
+    if packaged_generalisation?(reflection) do
+      Map.update!(payload, "generalisations", fn generalisations ->
+        Enum.map(generalisations, &normalize_generalisation/1)
+      end)
+    else
+      payload
+    end
   end
 
-  defp normalize_payload(payload, %Reflection{}), do: payload
+  defp packaged_generalisation?(%Reflection{
+         name: "generalisations",
+         chain_of_thought: %ChainOfThought{path: path}
+       }) do
+    path == Application.app_dir(:jido_gralkor, @packaged_generalisation_path)
+  end
+
+  defp packaged_generalisation?(%Reflection{}), do: false
 
   defp normalize_generalisation(generalisation) do
     preceding =
