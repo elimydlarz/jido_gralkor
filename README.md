@@ -564,6 +564,8 @@ The package supplies two declarations by default:
 - `generalisations` uses `priv/reflections/generalisations.yaml`, writes to `global`, and uses `Gralkor.DefaultOntology`.
 - `erl` uses `priv/reflections/erl.yaml`, writes to `operator`, and uses `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
 
+Before packaged generalisation inference begins, Gralkor searches episode memory in `operator`, `global`, and every Destination referenced by the completed representations' Lenses. The query contains each current representation, and inference receives the returned related episodes separately from the current representations. A related-memory search failure fails that Reflection before inference without changing the completed ingestion.
+
 Set `:reflections` to replace those defaults with application declarations, and set `:reflection_root` when their YAML paths resolve from somewhere other than the installed application root. A Reflection's optional `:ontology` governs its extraction and defaults to `Gralkor.DefaultOntology`.
 
 ```elixir
@@ -579,7 +581,7 @@ config :jido_gralkor,
   ]
 ```
 
-Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the completed ingestion's lensed representations, the host agent's tools, and its full tool context. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one stored `%Gralkor.Reflection.Artefact{}` with its supporting evidence identifiers.
+Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the completed ingestion's lensed representations, the host agent's tools, and its full tool context. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one stored `%Gralkor.Reflection.Artefact{}`.
 
 Multiple Reflections and Lenses may save to the same Destination. Search selects Destinations directly:
 
