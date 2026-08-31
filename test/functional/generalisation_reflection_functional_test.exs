@@ -249,20 +249,20 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       intended_lenses: ["observations", "decisions"],
       completed_lenses: ["observations", "decisions"],
       representations: [
-        %{id: "representation-one", evidence_id: "evidence-one", lens: "observations", content: "Prefer explicit APIs", result: :ok},
-        %{id: "representation-two", evidence_id: "evidence-one", lens: "decisions", content: "Choose direct designs", result: :ok}
+        %{id: "representation-one", lens: "observations", content: "Prefer explicit APIs", result: :ok},
+        %{id: "representation-two", lens: "decisions", content: "Choose direct designs", result: :ok}
       ]
     }
   end
 
-  defp output_for(%{step: %{label: "inspect-evidence"}}) do
+  defp output_for(%{step: %{label: "inspect-related-information"}}) do
     {:ok,
      %{
        output: %{
          "candidates" => [
            %{
-             "statement" => "Prefer direct APIs",
-             "evidence_ids" => ["evidence-one"],
+             "content" => "Prefer direct APIs",
+             "generalises_over" => [],
              "rationale" => "Both representations support it"
            }
          ]
@@ -276,8 +276,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
        output: %{
          "assessments" => [
            %{
-             "statement" => "Prefer direct APIs",
-             "evidence_ids" => ["evidence-one"],
+             "content" => "Prefer direct APIs",
+             "generalises_over" => [],
              "durable" => true,
              "reasoning" => "It applies repeatedly"
            }
@@ -291,7 +291,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
      %{
        output: %{
          "generalisations" => [
-           %{"statement" => "Prefer direct APIs", "evidence_ids" => ["evidence-one"]}
+           %{"content" => "Prefer direct APIs", "level" => 99, "generalises_over" => []}
          ]
        }
      }}

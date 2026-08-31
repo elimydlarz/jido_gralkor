@@ -1,10 +1,10 @@
 defmodule Gralkor.Reflection.Runner do
   @moduledoc "Runs a repository-defined Chain of Thought as an ordered, tool-capable inference sequence."
 
+  alias Gralkor.Client
   alias Gralkor.Reflection
   alias Gralkor.Reflection.Artefact
   alias Gralkor.Reflection.ChainOfThought
-  alias Gralkor.Client
   alias Gralkor.Search
 
   def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
@@ -41,7 +41,6 @@ defmodule Gralkor.Reflection.Runner do
          stored_information,
          opts
        ) do
-
     result =
       Enum.reduce_while(reflection.chain_of_thought.steps, {:ok, %{}}, fn step, {:ok, outputs} ->
         directions = interpolate(step.directions, outputs)
@@ -120,7 +119,7 @@ defmodule Gralkor.Reflection.Runner do
   defp related_memory(%Reflection{}, _ingestion), do: {:ok, []}
 
   defp build_artefact(reflection, outputs, final, opts) do
-    payload = Map.take(outputs, Map.keys(final.output))
+    payload = outputs |> Map.take(Map.keys(final.output)) |> normalize_payload(reflection)
 
     if map_size(payload) == 0 do
       {:error, %{reflection: reflection.name, reason: :missing_artefact}}
@@ -133,6 +132,35 @@ defmodule Gralkor.Reflection.Runner do
 
       {:ok, artefact}
     end
+  end
+
+  defp normalize_payload(payload, %Reflection{name: "generalisations"}) do
+    Map.update!(payload, "generalisations", fn generalisations ->
+      Enum.map(generalisations, &normalize_generalisation/1)
+    end)
+  end
+
+  defp normalize_payload(payload, %Reflection{}), do: payload
+
+  defp normalize_generalisation(generalisation) do
+    preceding =
+      generalisation
+      |> field(:generalises_over)
+      |> Enum.map(fn item ->
+        %{"content" => field(item, :content), "level" => field(item, :level)}
+      end)
+
+    level =
+      case preceding do
+        [] -> 1
+        items -> items |> Enum.map(& &1["level"]) |> Enum.max() |> Kernel.+(1)
+      end
+
+    %{
+      "content" => field(generalisation, :content),
+      "level" => level,
+      "generalises_over" => preceding
+    }
   end
 
   defp infer_step(request, inference, tool_executor) do
@@ -234,6 +262,9 @@ defmodule Gralkor.Reflection.Runner do
 
     Lensed representations available to this Reflection step:
     #{Jason.encode!(serializable_representations(request))}
+
+    Related stored information available to this Reflection step:
+    #{Jason.encode!(request.stored_information)}
 
     Return only one JSON object satisfying this exact output contract:
     #{Jason.encode!(request.output_schema)}

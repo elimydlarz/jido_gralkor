@@ -1,14 +1,14 @@
 steps:
-  - label: inspect-evidence
+  - label: inspect-related-information
     directions: |-
-      Inspect every lensed representation supplied for this completed ingestion
-      operation. Identify candidate patterns that are supported across the
-      evidence rather than merely repeating one observation. Use memory_search
-      when earlier memory would help establish whether a pattern recurs; do not
-      call it when the supplied evidence is sufficient. Preserve the evidence
-      identifiers supporting every candidate.
+      Inspect every current lensed representation and all related stored
+      information supplied to this Reflection. Identify candidate patterns that
+      remain useful beyond this completed ingestion. For each candidate, include
+      the exact content and level of every stored generalisation that it
+      generalises over. Exclude stored generalisations that do not influence the
+      candidate.
     output:
-      candidates: "Array<{ statement: string; evidence_ids: Array<string>; rationale: string }>"
+      candidates: "Array<{ content: string; generalises_over: Array<{ content: string; level: integer }>; rationale: string }>"
 
   - label: evaluate-durability
     directions: |-
@@ -16,11 +16,11 @@ steps:
 
       {{candidates}}
 
-      Select only patterns that are sufficiently supported to remain useful
-      beyond the ingestion operation that produced them. Preserve the evidence
-      identifiers for each assessment and explain the selection decision.
+      Select only patterns that are sufficiently supported and durable. Preserve
+      the exact preceding generalisations for each assessment and explain the
+      selection decision.
     output:
-      assessments: "Array<{ statement: string; evidence_ids: Array<string>; durable: boolean; reasoning: string }>"
+      assessments: "Array<{ content: string; generalises_over: Array<{ content: string; level: integer }>; durable: boolean; reasoning: string }>"
 
   - label: synthesise-artefact
     directions: |-
@@ -28,7 +28,9 @@ steps:
 
       {{assessments}}
 
-      Include every selected durable generalisation and its supporting evidence
-      identifiers. Do not include rejected candidates.
+      Include every selected durable generalisation. A generalisation with no
+      preceding generalisations has level 1. Otherwise its level is one greater
+      than the highest level among the generalisations it generalises over. Do
+      not include rejected candidates.
     output:
-      generalisations: "Array<{ statement: string; evidence_ids: Array<string> }>"
+      generalisations: "Array<{ content: string; level: integer; generalises_over: Array<{ content: string; level: integer }> }>"
