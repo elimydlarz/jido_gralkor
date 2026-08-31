@@ -199,6 +199,22 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
   end
 
+  describe "if the packaged generalisation Reflection's related-memory search fails" do
+    test "then the Reflection fails before generalisation inference begins and identifies the search failure" do
+      Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
+        "global" => {:error, :memory_unavailable}
+      })
+
+      assert {:error,
+              %{
+                reflection: "generalisations",
+                reason: {:related_memory_search, :memory_unavailable}
+              }} = Runner.run(generalisation(), ingestion(), inference: fn _ -> send(self(), :inference) end)
+
+      refute_receive :inference
+    end
+  end
+
   defp generalisation do
     Registry.configured!()
     |> Enum.find(&(&1.name == "generalisations"))
