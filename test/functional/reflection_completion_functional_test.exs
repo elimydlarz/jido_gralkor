@@ -651,7 +651,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         Process.sleep(100)
 
         {:ok,
-         Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"}, [])}
+         Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"})}
       end
 
       start_supervised!(
@@ -762,7 +762,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         Process.sleep(100)
 
         {:ok,
-         Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"}, [])}
+         Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"})}
       end
 
       children = [
@@ -816,8 +816,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
            Artefact.new(
              opts[:artefact_id],
              current_reflection.name,
-             %{"summary" => "stored"},
-             []
+             %{"summary" => "stored"}
            )}
         end
       end
@@ -1056,8 +1055,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         Artefact.new(
           artefact_id,
           "review",
-          %{"summary" => "stored"},
-          ["evidence-one"]
+          %{"summary" => "stored"}
         )
         |> Map.from_struct()
         |> Jason.encode!()
@@ -1243,8 +1241,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
 
-      partial_artefact =
-        Artefact.new(artefact_id, "review", %{"summary" => "stored"}, [nil])
+      partial_artefact = Artefact.new(artefact_id, "review", %{"summary" => "stored"})
 
       content = Jason.encode!(Map.from_struct(partial_artefact))
 
@@ -1434,7 +1431,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       {pool, graphiti} = start_preclaim_graphiti_pool(:reflection_preclaim_incomplete_graphiti)
       reflection = hd(Application.fetch_env!(:jido_gralkor, :reflections))
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
-      artefact = Artefact.new(artefact_id, "review", %{"summary" => "stored"}, [nil])
+      artefact = Artefact.new(artefact_id, "review", %{"summary" => "stored"})
       content = Jason.encode!(Map.from_struct(artefact))
 
       Pythonx.eval(
