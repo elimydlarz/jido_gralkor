@@ -259,10 +259,10 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
          retry_delays: [0]}
       )
 
-      lens_flush_callback = fn _operator, _agent, _user, lens, _turns, evidence_id ->
+      lens_flush_callback = fn _operator, _agent, _user, lens, _turns, _ingestion_id ->
         attempt = :atomics.add_get(lens_attempts, 1, 1)
         send(test_pid, {:lens_ingestion_attempt, attempt})
-        {:ok, %{lens: lens, evidence_id: evidence_id, result: :ok}}
+        {:ok, %{id: "representation-one", lens: lens, result: :ok}}
       end
 
       start_supervised!(
