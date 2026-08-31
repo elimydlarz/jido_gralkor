@@ -578,8 +578,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       |> generalisation_artefact_until()
       |> find_generalisation(fn generalisation ->
         generalisation["level"] == 2 and
-          %{"content" => first_content, "level" => 1} in
-            generalisation["generalises_over"]
+          %{"content" => first_content, "level" => 1} in generalisation["generalises_over"]
       end)
 
     {first_generalisation, later_generalisation}
