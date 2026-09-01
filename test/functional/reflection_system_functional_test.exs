@@ -204,6 +204,23 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Registry.load([definition], root: root)
     end
 
+    test "if a Reflection schedule has an invalid expression or missing operator identifier then validation fails identifying that Reflection and invalid schedule",
+         %{root: root} do
+      invalid_expression =
+        valid_definition(root,
+          triggers: [[schedule: "not a schedule", operator_id: "operator-one"]]
+        )
+
+      missing_operator =
+        valid_definition(root, triggers: [[schedule: "0 * * * *", operator_id: " "]])
+
+      assert {:error, {:invalid_schedule, "generalisation", "not a schedule", "operator-one"}} =
+               Registry.load([invalid_expression], root: root)
+
+      assert {:error, {:invalid_schedule, "generalisation", "0 * * * *", " "}} =
+               Registry.load([missing_operator], root: root)
+    end
+
     test "if a Reflection has no Chain of Thought then validation fails identifying that Reflection",
          %{root: root} do
       definition = valid_definition(root) |> Keyword.delete(:chain_of_thought)
