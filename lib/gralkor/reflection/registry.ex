@@ -144,6 +144,9 @@ defmodule Gralkor.Reflection.Registry do
       not is_list(triggers) or triggers == [] ->
         {:error, {:missing_triggers, name}}
 
+      invalid_trigger = Enum.find(triggers, &(not supported_trigger?(&1))) ->
+        {:error, {:invalid_trigger, name, invalid_trigger}}
+
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
 
@@ -215,6 +218,14 @@ defmodule Gralkor.Reflection.Registry do
       operator_id: Keyword.get(trigger, :operator_id)
     }
   end
+
+  defp supported_trigger?(trigger) when trigger in [:ingestion, :agent_request], do: true
+
+  defp supported_trigger?(trigger) when is_list(trigger) do
+    Keyword.keyword?(trigger) and Keyword.has_key?(trigger, :schedule)
+  end
+
+  defp supported_trigger?(_trigger), do: false
 
   defp duplicate(values) do
     values
