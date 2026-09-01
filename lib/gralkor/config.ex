@@ -19,12 +19,10 @@ defmodule Gralkor.Config do
       `ReqLLM.model/1` accepts without a catalog lookup (no "unverified model"
       `IO.warn` when the model id is newer than the LLMDB snapshot bundled
       with `req_llm`). Parsing is provider-agnostic, but the native
-      `Gralkor.GraphitiPool` boundary currently accepts Google LLM and embedder
-      specs only; explicit ReqLLM-only calls may use other providers.
+      `Gralkor.GraphitiPool` boundary accepts OpenAI and Google LLM and embedder
+      specs; explicit ReqLLM-only calls may use other providers.
   """
 
-  # Defaults match server-side gralkor/server/main.py — both stacks pick the
-  # same model so consumers see identical output.
   @default_llm_model %{provider: :google, id: "gemini-3.1-flash-lite"}
   @default_embedder_model %{provider: :google, id: "gemini-embedding-2-preview"}
   @default_embedded_falkordb_socket_timeout_ms 60_000

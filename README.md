@@ -2,7 +2,7 @@
 
 Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded Gralkor memory adapter — Graphiti driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), with no separate Gralkor service to deploy. Storage uses either an embedded FalkorDB child or a remote FalkorDB deployment.
 
-You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Destinations** for named graphs, **Lenses** for ingestion, and **Reflections** for asynchronous post-ingestion synthesis.
+You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Destinations** for named graphs, **Lenses** for ingestion, and **Reflections** for asynchronous synthesis triggered by ingestion, an agent request, or a schedule.
 
 This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 8.0"}` for the whole memory stack.
 
@@ -145,7 +145,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → Reflection supervisor/Scheduler → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
 | `:destination_storage` | module | `Gralkor.Destination.Storage.Graphiti` | Search storage behind `Client.search/1`. Set to `Gralkor.Destination.Storage.InMemory` in tests. |
-| `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, a registered `:destination`, a repository-relative YAML `:chain_of_thought` path, and optional `:ontology` (default `Gralkor.DefaultOntology`). Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
+| `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, one or more `:triggers`, a registered `:destination`, a repository-relative YAML `:chain_of_thought` path, and optional `:ontology` (default `Gralkor.DefaultOntology`). Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
 | `:reflection_root` | path | application package root | Root used to resolve Reflection YAML paths. The default makes the packaged `priv/reflections/*.yaml` files work after installation; set it when an application keeps custom CoTs under another repository directory. |
 | `:reflection_storage` | module implementing `Gralkor.Reflection.Store` | `Gralkor.Reflection.Storage.Graphiti` | Canonical artefact storage. Custom implementations must create-or-confirm by `artefact.id`: an equal repeat returns `:ok` without another searchable artefact, conflicting immutable content returns `{:error, {:artefact_conflict, id}}`, and `get/3` exposes only completed artefacts (or returns `{:incomplete_artefact, artefact}` for resumable partial state). Tests can use `Gralkor.Reflection.Storage.InMemory`; Destination search should then use its in-memory adapter too. |
 | `:reflection_scheduler_journal_path` | path | `GRALKOR_DATA_DIR/reflection_scheduler.dets` for embedded storage; the platform user-data directory otherwise | Durable DETS journal for admitted Reflection phase state. Set an explicit writable path unique to each BEAM node when several nodes share a filesystem. |
@@ -256,11 +256,13 @@ config :jido_gralkor,
   reflections: [
     [
       name: "generalisations",
+      triggers: [:ingestion],
       destination: "global",
       chain_of_thought: "priv/reflections/generalisations.yaml"
     ],
     [
       name: "erl",
+      triggers: [:ingestion],
       destination: "operator",
       ontology: Gralkor.Reflection.ERLOntology,
       chain_of_thought: "priv/reflections/erl.yaml"
@@ -555,9 +557,9 @@ On each store write, graphiti receives the selected Lens or Reflection ontology'
 
 ## Configure Reflections
 
-A Reflection is an asynchronous post-ingestion process over completed lensed representations. It is declared by name, registered Destination, extraction ontology, and a repository YAML Chain of Thought. Reflections are not Lenses: Lens definitions remain independent views for absorbing information, while Reflections operate over the successful results after every intended Lens has finished.
+A Reflection is an asynchronous synthesis process declared by name, one or more triggers, a registered Destination, an extraction ontology, and a repository YAML Chain of Thought. Supported triggers are `:ingestion`, `:agent_request`, and a schedule written as `[schedule: "<cron>", operator_id: "<operator>"]`; cron expressions may use five or six fields. The packaged `generalisations` and `erl` Reflections enable `:ingestion`. Reflections are not Lenses: Lens definitions remain independent views for absorbing information, while an ingestion-triggered Reflection operates only after every intended Lens has finished.
 
-The supervised scheduler coordinates each logical completion independently by `{operator_id, ingestion_id, reflection_name}`. It durably journals canonical lookup, Runner, and canonical-storage phases; permits at most one active attempt for that key; and uses bounded retries with default delays of one, two, and four seconds. Retry deadlines survive Scheduler or VM restart, so restart does not skip the remaining backoff. Returned errors, task-start failures, crashes, and timeouts consume that phase's retry budget; delays and timeouts outside BEAM's supported timer range are rejected, and an immutable-content conflict is terminal during lookup or write. A crash-interrupted active attempt also consumes the durable budget after restart, except that an uncertain active storage or storage-confirmation attempt is checked for canonical completion again—even its final allowed attempt can therefore confirm a committed response-lost write across repeated Scheduler crashes. Terminal failures are logged with Reflection, phase, attempt count, and reason. Runner/tool effects are at-least-once because a process can fail after an external effect but before reporting success. Runner output must carry the deterministic ID and Reflection name supplied for the logical completion; a mismatch consumes the bounded Runner retry rather than reaching canonical storage. Once the Runner returns valid output, storage retries retain that exact artefact and never rerun successful siblings. Restart resumes admitted work, while replay first confirms canonical storage so already completed work is not executed again. Journalled execution data is restricted to restart-safe values: canonical store selection and restart-safe Runner/tool data persist, inference and tool-executor functions come from the replacement Scheduler configuration, and scheduling rejects process-local values such as PIDs or references inside durable tool context. Graceful drain closes admission, waits for every admitted key, and is preceded by awaiting already-started capture flush workers so none can schedule work after the drain boundary. CaptureBuffer retains the Scheduler identity even when its initial Reflection registry is empty, and the dedicated Reflection supervisor can replace a Scheduler that exits during drain.
+The supervised scheduler coordinates each logical completion independently by `{operator_id, invocation_id, reflection_name}`. Ingestion reuses its replay-stable ingestion ID as the invocation ID; agent requests mint and return an invocation ID; scheduled occurrences derive one deterministically from the Reflection, operator, and due time. The scheduler durably journals canonical lookup, Runner, and canonical-storage phases; permits at most one active attempt for that key; and uses bounded retries with default delays of one, two, and four seconds. Retry deadlines survive Scheduler or VM restart, so restart does not skip the remaining backoff. Returned errors, task-start failures, crashes, and timeouts consume that phase's retry budget; delays and timeouts outside BEAM's supported timer range are rejected, and an immutable-content conflict is terminal during lookup or write. A crash-interrupted active attempt also consumes the durable budget after restart, except that an uncertain active storage or storage-confirmation attempt is checked for canonical completion again—even its final allowed attempt can therefore confirm a committed response-lost write across repeated Scheduler crashes. Terminal failures are logged with Reflection, phase, attempt count, and reason. Runner/tool effects are at-least-once because a process can fail after an external effect but before reporting success. Runner output must carry the deterministic ID and Reflection name supplied for the logical completion; a mismatch consumes the bounded Runner retry rather than reaching canonical storage. Once the Runner returns valid output, storage retries retain that exact artefact and never rerun successful siblings. Restart resumes admitted work, while replay first confirms canonical storage so already completed work is not executed again. Journalled execution data is restricted to restart-safe values: canonical store selection and restart-safe Runner/tool data persist, inference and tool-executor functions come from the replacement Scheduler configuration, and scheduling rejects process-local values such as PIDs or references inside durable tool context. Graceful drain closes admission, waits for every admitted key, and is preceded by awaiting already-started capture flush workers so none can schedule work after the drain boundary. CaptureBuffer retains the Scheduler identity even when its initial Reflection registry is empty, and the dedicated Reflection supervisor can replace a Scheduler that exits during drain.
 
 The package supplies two declarations by default:
 
@@ -576,6 +578,11 @@ config :jido_gralkor,
   reflections: [
     [
       name: "release-review",
+      triggers: [
+        :ingestion,
+        :agent_request,
+        [schedule: "0 9 * * 1", operator_id: "release-operator"]
+      ],
       destination: "global",
       ontology: MyApp.ReleaseOntology,
       chain_of_thought: "priv/reflections/release-review.yaml"
@@ -583,7 +590,22 @@ config :jido_gralkor,
   ]
 ```
 
-Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the completed ingestion's lensed representations, the host agent's tools, and its full tool context. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one stored `%Gralkor.Reflection.Artefact{}` whose fields are exactly `id`, `reflection`, and `payload`.
+An agent can admit one named request-triggered Reflection without waiting for its completion:
+
+```elixir
+{:ok, invocation_id} =
+  Gralkor.Client.request_reflection(
+    "release-review",
+    "operator-42",
+    "Review the current release decision",
+    tools: host_tools,
+    tool_context: host_tool_context
+  )
+```
+
+Unknown names and Reflections without `:agent_request` return explicit errors before durable work is admitted. Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the invocation ID, trigger type, trigger context, host tools, and tool context; ingestion triggers also receive completed lensed representations. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one stored `%Gralkor.Reflection.Artefact{}` whose fields are exactly `id`, `reflection`, and `payload`.
+
+Registry-backed client operations resolve current application configuration per call. Mounted plugins retain their resolved Lens and search Destinations, while CaptureBuffer and scheduled-trigger supervision retain the Reflection declarations loaded when they start. Restart the application after changing mounted plugin, capture, scheduled Reflection, or backend configuration.
 
 Multiple Reflections and Lenses may save to the same Destination. Search selects Destinations directly:
 
