@@ -613,6 +613,37 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       refute_receive {:scheduled, _, _}
     end
 
+    test "and every Reflection without the ingestion trigger remains uninvoked", context do
+      parent = self()
+      ingestion_reflection = reflection(context, "ingestion")
+      request_reflection = %{reflection(context, "request") | triggers: [:agent_request]}
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: representation_callback(parent),
+         reflection_callback: fn reflections, _invocation ->
+           send(parent, {:eligible_reflections, Enum.map(reflections, & &1.name)})
+           :ok
+         end,
+         reflections: [ingestion_reflection, request_reflection],
+         retries: []}
+      )
+
+      :ok =
+        CaptureBuffer.append_lens(
+          "session-trigger-filter",
+          "operator-one",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "remember")]
+        )
+
+      assert :ok = CaptureBuffer.flush_and_await("session-trigger-filter", 1_000)
+      assert_receive {:eligible_reflections, ["ingestion"]}
+    end
+
     test "and no Reflection begins before every intended Lens ingestion has completed", context do
       parent = self()
 
