@@ -738,7 +738,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         {Scheduler,
          runner: fn reflection, invocation, opts ->
            send(parent, {:request_invocation, reflection, invocation, opts})
-           {:ok, Gralkor.Reflection.Artefact.new("requested", %{"artefact" => "done"})}
+
+           {:ok,
+            Gralkor.Reflection.Artefact.new(
+              opts[:artefact_id],
+              "requested",
+              %{"artefact" => "done"}
+            )}
          end}
       )
 
@@ -771,9 +777,15 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       start_supervised!(
         {Scheduler,
-         runner: fn reflection, invocation, _opts ->
+         runner: fn _reflection, invocation, opts ->
            send(parent, {:runner_invocation_id, invocation.id})
-           {:ok, Gralkor.Reflection.Artefact.new("requested", %{"artefact" => "done"})}
+
+           {:ok,
+            Gralkor.Reflection.Artefact.new(
+              opts[:artefact_id],
+              "requested",
+              %{"artefact" => "done"}
+            )}
          end}
       )
 
@@ -1649,9 +1661,15 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     start_supervised!(
       {Scheduler,
-       runner: fn reflection, invocation, _opts ->
+       runner: fn reflection, invocation, opts ->
          send(parent, {:scheduled_invocation, reflection, invocation})
-         {:ok, Gralkor.Reflection.Artefact.new("scheduled", %{"artefact" => "done"})}
+
+         {:ok,
+          Gralkor.Reflection.Artefact.new(
+            opts[:artefact_id],
+            "scheduled",
+            %{"artefact" => "done"}
+          )}
        end}
     )
 
