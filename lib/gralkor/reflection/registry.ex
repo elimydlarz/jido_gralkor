@@ -152,11 +152,11 @@ defmodule Gralkor.Reflection.Registry do
         {:error, {:invalid_ontology, name, ontology}}
 
       true ->
-        load_cot(name, destination, ontology, relative, root)
+        load_cot(name, destination, ontology, triggers, relative, root)
     end
   end
 
-  defp load_cot(name, destination_name, ontology, relative, root) do
+  defp load_cot(name, destination_name, ontology, triggers, relative, root) do
     path = Path.expand(relative, root)
 
     cond do
