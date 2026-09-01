@@ -196,6 +196,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Registry.load([definition], root: root)
     end
 
+    test "if a Reflection declares an unsupported trigger then validation fails identifying that Reflection and trigger",
+         %{root: root} do
+      definition = valid_definition(root, triggers: [:manual])
+
+      assert {:error, {:invalid_trigger, "generalisation", :manual}} =
+               Registry.load([definition], root: root)
+    end
+
     test "if a Reflection has no Chain of Thought then validation fails identifying that Reflection",
          %{root: root} do
       definition = valid_definition(root) |> Keyword.delete(:chain_of_thought)
