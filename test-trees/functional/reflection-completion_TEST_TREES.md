@@ -1,12 +1,12 @@
 Functional: reflection-completion (src: lib/gralkor/application.ex, lib/gralkor/client.ex, lib/gralkor/ingest.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/supervisor.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/journal.ex, lib/gralkor/reflection/store.ex, lib/gralkor/reflection/storage/in_memory.ex, lib/gralkor/reflection/storage/graphiti.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/reflection_completion_functional_test.exs)
 
-when an application invokes eligible Reflections under a stable invocation identifier
+when an application invokes eligible Reflections with a non-blank `invocation_id`
   then the triggering operation returns without waiting for Reflection completion
-  and each Reflection has one logical completion identity combining the operator, invocation, and Reflection names
+  and each Reflection has the logical completion identity `{operator_id, invocation_id, reflection_name}`
   and each completed Reflection stores one artefact whose stable identifier represents that logical completion
   and every completed artefact remains searchable through its Reflection's Destination
 
-when overlapping triggers invoke the same operator, invocation, and Reflection
+when overlapping triggers invoke the same `{operator_id, invocation_id, reflection_name}`
   then at most one Runner execution for that logical completion is active at a time
   and at most one canonical artefact for that logical completion becomes searchable
 

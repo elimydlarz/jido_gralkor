@@ -98,6 +98,7 @@ when an ingestion operation successfully stores information through one or more 
     then every stored representation retains its own identifier, Lens identity, content, and storage result
     and the ingestion caller receives success without waiting for Reflection
     and every ingestion-triggered Reflection begins one logical completion flow for the completed ingestion operation
+    and the ingestion identifier becomes the Reflection `invocation_id`
     and every Reflection without the ingestion trigger remains uninvoked
     and no Reflection begins before every intended Lens ingestion has completed
 
@@ -106,7 +107,7 @@ when a consuming agent requests a named Reflection
     then the agent receives admission without waiting for Reflection completion
     and only the requested Reflection begins one logical completion flow for that agent request
     and the Reflection receives the requesting operator, request content, host tools, and tool context
-    and the agent request receives one stable invocation identifier
+    and the agent request supplies the replay-stable Reflection `invocation_id`
 
   if the named Reflection is unknown
     then the request fails identifying the unknown Reflection before durable work is admitted
@@ -117,7 +118,7 @@ when a consuming agent requests a named Reflection
 when a configured Reflection schedule becomes due
   then that Reflection begins one logical completion flow for the configured operator and due occurrence
   and the Reflection receives the configured operator and scheduled occurrence time
-  and the due occurrence receives one stable invocation identifier
+  and the configured schedule expression and due occurrence time determine the Reflection `invocation_id`
 
 when an ingestion completes with no Reflection enabling the ingestion trigger
   then ingestion succeeds without admitting Reflection work
