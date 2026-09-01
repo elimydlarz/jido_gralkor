@@ -188,6 +188,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Registry.load([definition, definition], root: root)
     end
 
+    test "if a Reflection declares no triggers then validation fails identifying that Reflection and its missing triggers",
+         %{root: root} do
+      definition = valid_definition(root) |> Keyword.delete(:triggers)
+
+      assert {:error, {:missing_triggers, "generalisation"}} =
+               Registry.load([definition], root: root)
+    end
+
     test "if a Reflection has no Chain of Thought then validation fails identifying that Reflection",
          %{root: root} do
       definition = valid_definition(root) |> Keyword.delete(:chain_of_thought)
