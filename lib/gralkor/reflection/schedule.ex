@@ -3,7 +3,6 @@ defmodule Gralkor.Reflection.Schedule do
 
   use GenServer
 
-  alias Gralkor.Reflection.Artefact
   alias Gralkor.Reflection.Registry
   alias Gralkor.Reflection.Scheduler
 
