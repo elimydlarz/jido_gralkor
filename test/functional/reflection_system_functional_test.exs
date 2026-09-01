@@ -99,6 +99,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test("while every Reflection has a non-blank name", context, do: assert_valid(context))
     test("and every Reflection name is unique", context, do: assert_valid(context))
 
+    test "and every Reflection declares one or more triggers", %{root: root} do
+      [reflection] = Registry.load!([valid_definition(root)], root: root)
+
+      assert Map.fetch!(reflection, :triggers) == [:ingestion]
+    end
+
     test("and every Reflection references a repository YAML Chain of Thought", context,
       do: assert_valid(context)
     )
@@ -1398,6 +1404,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     Keyword.merge(
       [
         name: "generalisation",
+        triggers: [:ingestion],
         chain_of_thought: "valid.yaml",
         destination: "operator"
       ],
