@@ -47,6 +47,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
     Application.put_env(:jido_gralkor, :reflections, [
       [
         name: "review",
+        triggers: [:ingestion],
         destination: "shared",
         ontology: MemoryOntology,
         chain_of_thought: "priv/reflections/erl.yaml"
@@ -284,6 +285,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       Application.put_env(:jido_gralkor, :reflections, [
         [
           name: "review",
+          triggers: [:ingestion],
           destination: "missing",
           ontology: MemoryOntology,
           chain_of_thought: "priv/reflections/erl.yaml"

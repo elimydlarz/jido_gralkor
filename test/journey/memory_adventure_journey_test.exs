@@ -112,12 +112,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Application.put_env(:jido_gralkor, :reflections, [
       [
         name: "generalisations",
+        triggers: [:ingestion],
         chain_of_thought: "priv/reflections/generalisations.yaml",
         destination: "global",
         ontology: Gralkor.DefaultOntology
       ],
       [
         name: "erl",
+        triggers: [:ingestion],
         chain_of_thought: "priv/reflections/erl.yaml",
         destination: "operator",
         ontology: Gralkor.Reflection.ERLOntology
