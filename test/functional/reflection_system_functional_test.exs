@@ -702,6 +702,30 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert is_binary(invocation_id) and invocation_id != ""
       assert System.monotonic_time(:millisecond) - started < 100
     end
+
+    test "while that Reflection enables the agent-request trigger and only the requested Reflection begins one logical completion flow for that agent request",
+         context do
+      requested = %{reflection(context, "requested") | triggers: [:agent_request]}
+      other = %{reflection(context, "other") | triggers: [:agent_request]}
+      configure_reflections([requested, other])
+
+      assert {:ok, invocation_id} =
+               Client.request_reflection("requested", "operator-one", "Review this")
+
+      assert :ok = Scheduler.drain()
+      requested_id = Gralkor.Reflection.Artefact.id_for("operator-one", invocation_id, "requested")
+      other_id = Gralkor.Reflection.Artefact.id_for("operator-one", invocation_id, "other")
+
+      assert {:ok, _artefact} =
+               Store.get(requested, "operator-one", requested_id,
+                 storage: Gralkor.Reflection.Storage.InMemory
+               )
+
+      assert {:error, :not_found} =
+               Store.get(other, "operator-one", other_id,
+                 storage: Gralkor.Reflection.Storage.InMemory
+               )
+    end
   end
 
   describe "when a scheduled Reflection runs" do
