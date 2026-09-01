@@ -683,6 +683,27 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when a consuming agent requests a named Reflection" do
+    test "while that Reflection enables the agent-request trigger then the agent receives admission without waiting for Reflection completion",
+         context do
+      requested = %{reflection(context, "requested") | triggers: [:agent_request]}
+      configure_reflections([requested])
+      started = System.monotonic_time(:millisecond)
+
+      assert {:ok, invocation_id} =
+               Client.request_reflection(
+                 "requested",
+                 "operator-one",
+                 "Review the current situation",
+                 tools: [:memory_search],
+                 tool_context: %{session_id: "session-one"}
+               )
+
+      assert is_binary(invocation_id) and invocation_id != ""
+      assert System.monotonic_time(:millisecond) - started < 100
+    end
+  end
+
   describe "when a scheduled Reflection runs" do
     test "and starts its first step for the operator and completed ingestion operation",
          context do
