@@ -1,5 +1,5 @@
 defmodule Gralkor.Reflection do
-  @moduledoc "A named post-ingestion process that saves to a Destination."
+  @moduledoc "A named trigger-driven synthesis process that saves to a Destination."
 
   alias Gralkor.Reflection.ChainOfThought
 

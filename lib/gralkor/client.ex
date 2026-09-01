@@ -3,7 +3,9 @@ defmodule Gralkor.Client do
   Public entry point and adapter port for Gralkor memory.
 
   Named Lens operations use `ingest/1` and `replace/1`; `search/1` selects
-  registered Destinations. Ingestion
+  registered Destinations. `request_reflection/4` admits one named
+  request-triggered Reflection with the requesting operator's content, tools,
+  and tool context. Ingestion
   resolves an appending Lens and invokes its ingestion process with a
   Lens-bound store. Replacement validates and stores the complete graph for a
   replaceable Lens. Lenses and Reflections reference first-class Destinations,
