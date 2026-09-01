@@ -1,16 +1,16 @@
 Functional: reflection-completion (src: lib/gralkor/application.ex, lib/gralkor/client.ex, lib/gralkor/ingest.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/supervisor.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/journal.ex, lib/gralkor/reflection/store.ex, lib/gralkor/reflection/storage/in_memory.ex, lib/gralkor/reflection/storage/graphiti.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/reflection_completion_functional_test.exs)
 
-when an application ingests information under a stable ingestion identifier while Reflections are declared
-  then ingestion returns without waiting for Reflection completion
-  and each Reflection has one logical completion identity combining the operator, ingestion, and Reflection names
+when an application invokes eligible Reflections under a stable invocation identifier
+  then the triggering operation returns without waiting for Reflection completion
+  and each Reflection has one logical completion identity combining the operator, invocation, and Reflection names
   and each completed Reflection stores one artefact whose stable identifier represents that logical completion
   and every completed artefact remains searchable through its Reflection's Destination
 
-when overlapping requests schedule the same operator, ingestion, and Reflection
+when overlapping triggers invoke the same operator, invocation, and Reflection
   then at most one Runner execution for that logical completion is active at a time
   and at most one canonical artefact for that logical completion becomes searchable
 
-when one ingestion schedules several Reflections
+when one invocation admits several eligible Reflections
   while one Reflection completes canonical storage
   and another Reflection fails before canonical storage
     then the completed Reflection remains completed
@@ -45,9 +45,9 @@ when canonical storage commits an artefact but its response is lost
   and the retry converges on one canonical artefact
   and exactly one artefact for that logical completion is searchable
 
-when an ingestion is replayed after one or more of its Reflections completed
+when an invocation is replayed after one or more of its Reflections completed
   then canonical storage identifies every already completed Reflection without rerunning its Runner
-  and a newly declared Reflection for that ingestion remains eligible to run and complete
+  and a newly eligible Reflection for that invocation remains eligible to run and complete
 
 when the supervised Reflection Scheduler crashes with unfinished work
   then the application restarts the Scheduler
@@ -122,8 +122,8 @@ if scheduling receives duplicate Reflection names
   then scheduling fails before any Runner execution begins
   and the duplicated Reflection name is identified
 
-when an ingestion completes while no Reflections are declared
-  then ingestion succeeds without retaining scheduler work
+when a trigger has no eligible Reflections
+  then the triggering operation succeeds without retaining scheduler work
 
 when Reflection work completes or exhausts its retry schedule
   then its in-memory admission state and durable unfinished-work record are released

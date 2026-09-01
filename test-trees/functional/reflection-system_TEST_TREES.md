@@ -3,6 +3,9 @@ Functional: reflection-system (src: lib/gralkor/reflection.ex, lib/gralkor/refle
 when Reflection declarations are validated
   while every Reflection has a non-blank name
   and every Reflection name is unique
+  and every Reflection declares one or more triggers
+  and every declared trigger is ingestion, agent request, or a schedule
+  and every schedule declares a valid schedule expression and non-blank operator identifier
   and every Reflection references a repository YAML Chain of Thought
   and every referenced Chain of Thought contains one or more ordered steps
   and every step has a non-blank label and natural-language directions
@@ -20,6 +23,15 @@ when Reflection declarations are validated
 
   if Reflection names are duplicated
     then validation fails identifying the duplicate name
+
+  if a Reflection declares no triggers
+    then validation fails identifying that Reflection and its missing triggers
+
+  if a Reflection declares an unsupported trigger
+    then validation fails identifying that Reflection and trigger
+
+  if a Reflection schedule has an invalid expression or missing operator identifier
+    then validation fails identifying that Reflection and invalid schedule
 
   if a Reflection has no Chain of Thought
     then validation fails identifying that Reflection
@@ -66,7 +78,9 @@ when Reflection declarations are validated
 where the packaged default Reflections are used
   then ERL references the packaged `operator` Destination
   and ERL carries jido_gralkor's built-in experiential-learning ontology
+  and ERL enables the ingestion trigger
   and generalisation references the packaged `global` Destination
+  and generalisation enables the ingestion trigger
 
 where an application-defined Reflection omits its ontology
   then its final artefact receives generic extraction
@@ -80,18 +94,42 @@ when the default ERL Reflection stores its final artefact
   and the stored Learning payload contains exactly its problem kind, approach, success, and reusable lesson
 
 when an ingestion operation successfully stores information through one or more Lenses
-  while Reflections are declared
+  while one or more declared Reflections enable the ingestion trigger
     then every stored representation retains its own identifier, Lens identity, content, and storage result
     and the ingestion caller receives success without waiting for Reflection
-    and every declared Reflection begins one logical completion flow for the completed ingestion operation
+    and every ingestion-triggered Reflection begins one logical completion flow for the completed ingestion operation
+    and every Reflection without the ingestion trigger remains uninvoked
     and no Reflection begins before every intended Lens ingestion has completed
+
+when a consuming agent requests a named Reflection
+  while that Reflection enables the agent-request trigger
+    then the agent receives admission without waiting for Reflection completion
+    and only the requested Reflection begins one logical completion flow for that agent request
+    and the Reflection receives the requesting operator, request content, host tools, and tool context
+    and the agent request receives one stable invocation identifier
+
+  if the named Reflection is unknown
+    then the request fails identifying the unknown Reflection before durable work is admitted
+
+  if the named Reflection does not enable the agent-request trigger
+    then the request fails identifying the disabled trigger before durable work is admitted
+
+when a configured Reflection schedule becomes due
+  then that Reflection begins one logical completion flow for the configured operator and due occurrence
+  and the Reflection receives the configured operator and scheduled occurrence time
+  and the due occurrence receives one stable invocation identifier
+
+when an ingestion completes with no Reflection enabling the ingestion trigger
+  then ingestion succeeds without admitting Reflection work
 
 when a configured Reflection is loaded
   then its declared YAML is loaded as the programmatic Chain of Thought
 
-when a scheduled Reflection runs
-  then its programmatic Chain of Thought runner starts its first step for the operator and completed ingestion operation
-  and makes every ingested representation available with its identifier, Lens identity, content, and storage result
+when an admitted Reflection runs
+  then its programmatic Chain of Thought runner starts its first step for the operator and triggering invocation
+  and makes the trigger type and trigger context available to every step
+  where the Reflection was triggered by ingestion
+    then every ingested representation is available with its identifier, Lens identity, content, and storage result
 
 when a Chain of Thought step begins
   then built-in inference receives that step's interpolated natural-language directions
@@ -131,17 +169,17 @@ when the final Chain of Thought step returns valid structured output
   and the artefact consists of its stable identifier, declaring Reflection, and structured payload
 
   where the referenced Destination is `operator`
-    then the artefact is available only to the operator whose ingestion triggered the Reflection
+    then the artefact is available only to the operator whose invocation triggered the Reflection
 
   where the referenced Destination is not `operator`
     then the artefact is available to every operator through that Destination's one graph
 
-when multiple declared Reflections process one completed ingestion operation
+when multiple eligible Reflections process one triggering invocation
   then every Reflection runs independently
   and retry or terminal failure of one Reflection does not prevent another Reflection from completing
 
 if any intended Lens ingestion fails
-  then no Reflection is scheduled for the incomplete ingestion operation
+  then no ingestion-triggered Reflection is admitted for the incomplete ingestion operation
 
 if a Reflection's Chain of Thought completes without a valid final structured output
   then the Reflection fails identifying its name and missing artefact
