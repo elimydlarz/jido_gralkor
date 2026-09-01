@@ -806,33 +806,29 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   describe "when a configured Reflection schedule becomes due" do
     test "then that Reflection begins one logical completion flow for the configured operator and due occurrence",
-         %{root: root} do
-      parent = self()
+         context do
+      {scheduled, invocation} = await_scheduled_invocation(context)
+      assert scheduled.name == "scheduled"
+      assert invocation.trigger == :schedule
+    end
 
-      [scheduled] =
-        Registry.load!(
-          [
-            valid_definition(root,
-              name: "scheduled",
-              triggers: [[schedule: "* * * * * *", operator_id: "operator-one"]]
-            )
-          ],
-          root: root
-        )
+    test "and the Reflection receives the configured operator and scheduled occurrence time",
+         context do
+      {_scheduled, invocation} = await_scheduled_invocation(context)
+      assert invocation.operator_id == "operator-one"
+      assert {:ok, _due_at} = NaiveDateTime.from_iso8601(invocation.trigger_context.scheduled_at)
+    end
 
-      stop_supervised(Scheduler)
+    test "and the due occurrence receives one stable invocation identifier", context do
+      {scheduled, invocation} = await_scheduled_invocation(context)
+      {:ok, due_at} = NaiveDateTime.from_iso8601(invocation.trigger_context.scheduled_at)
 
-      start_supervised!(
-        {Scheduler,
-         runner: fn reflection, invocation, _opts ->
-           send(parent, {:scheduled_invocation, reflection, invocation})
-           {:ok, Gralkor.Reflection.Artefact.new("scheduled", %{"artefact" => "done"})}
-         end}
-      )
-
-      start_supervised!({Gralkor.Reflection.Schedule, reflections: [scheduled]})
-
-      assert_receive {:scheduled_invocation, ^scheduled, %{trigger: :schedule}}, 1_500
+      assert invocation.id ==
+               Gralkor.Reflection.Schedule.invocation_id(
+                 scheduled.name,
+                 invocation.operator_id,
+                 due_at
+               )
     end
   end
 
