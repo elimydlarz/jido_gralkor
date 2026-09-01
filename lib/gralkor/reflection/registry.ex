@@ -147,6 +147,11 @@ defmodule Gralkor.Reflection.Registry do
       invalid_trigger = Enum.find(triggers, &(not supported_trigger?(&1))) ->
         {:error, {:invalid_trigger, name, invalid_trigger}}
 
+      invalid_schedule = Enum.find(triggers, &invalid_schedule?/1) ->
+        {:error,
+         {:invalid_schedule, name, Keyword.get(invalid_schedule, :schedule),
+          Keyword.get(invalid_schedule, :operator_id)}}
+
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
 
@@ -226,6 +231,22 @@ defmodule Gralkor.Reflection.Registry do
   end
 
   defp supported_trigger?(_trigger), do: false
+
+  defp invalid_schedule?(trigger) when is_list(trigger) do
+    expression = Keyword.get(trigger, :schedule)
+    operator_id = Keyword.get(trigger, :operator_id)
+
+    not non_blank?(operator_id) or not valid_schedule_expression?(expression)
+  end
+
+  defp invalid_schedule?(_trigger), do: false
+
+  defp valid_schedule_expression?(expression) when is_binary(expression) do
+    extended = expression |> String.split(~r/\s+/, trim: true) |> length() |> Kernel.>(5)
+    match?({:ok, _}, Crontab.CronExpression.Parser.parse(expression, extended))
+  end
+
+  defp valid_schedule_expression?(_expression), do: false
 
   defp duplicate(values) do
     values
