@@ -135,7 +135,7 @@ defmodule Gralkor.Reflection.Registry do
     name = field(definition, :name)
     destination = field(definition, :destination)
     ontology = field(definition, :ontology) || Gralkor.DefaultOntology
-    triggers = field(definition, :triggers)
+    triggers = definition |> field(:triggers) |> Enum.map(&normalize_trigger/1)
     relative = field(definition, :chain_of_thought)
 
     cond do
@@ -200,6 +200,16 @@ defmodule Gralkor.Reflection.Registry do
 
   defp field(keyword, key) when is_list(keyword), do: Keyword.get(keyword, key)
   defp field(_, _), do: nil
+
+  defp normalize_trigger(trigger) when trigger in [:ingestion, :agent_request], do: trigger
+
+  defp normalize_trigger(trigger) when is_list(trigger) do
+    %{
+      type: :schedule,
+      expression: Keyword.get(trigger, :schedule),
+      operator_id: Keyword.get(trigger, :operator_id)
+    }
+  end
 
   defp duplicate(values) do
     values
