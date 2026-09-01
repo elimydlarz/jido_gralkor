@@ -135,6 +135,7 @@ defmodule Gralkor.Reflection.Registry do
     name = field(definition, :name)
     destination = field(definition, :destination)
     ontology = field(definition, :ontology) || Gralkor.DefaultOntology
+    triggers = field(definition, :triggers)
     relative = field(definition, :chain_of_thought)
 
     cond do
@@ -170,7 +171,8 @@ defmodule Gralkor.Reflection.Registry do
                name: name,
                destination: fetch_destination!(name, destination_name),
                ontology: ontology,
-               chain_of_thought: cot
+               chain_of_thought: cot,
+               triggers: triggers
              }}
 
           {:error, reason} ->
