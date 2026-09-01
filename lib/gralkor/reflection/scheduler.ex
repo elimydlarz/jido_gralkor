@@ -97,7 +97,7 @@ defmodule Gralkor.Reflection.Scheduler do
   def handle_call({:schedule, reflections, ingestion, opts}, _from, state) do
     opts = restore_execution_options(state.defaults, Keyword.drop(opts, [:server]))
 
-    with :ok <- validate_ingestion(ingestion),
+    with :ok <- validate_invocation(ingestion),
          :ok <- validate_reflections(reflections),
          :ok <- validate_execution_options(opts),
          :ok <- validate_durable_work(reflections, ingestion) do
@@ -514,17 +514,21 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp log({:reflection_completed, _name, {:ok, _artefact}}), do: :ok
 
-  defp validate_ingestion(ingestion) do
+  defp validate_invocation(ingestion) do
     id = field(ingestion, :id)
     operator_id = field(ingestion, :operator_id)
+    trigger = field(ingestion, :trigger) || :ingestion
 
     cond do
       not valid_identity?(operator_id) -> {:error, {:invalid_operator_id, operator_id}}
-      not valid_identity?(id) -> {:error, {:invalid_ingestion_id, id}}
-      not completed?(ingestion) -> {:error, {:incomplete_ingestion, id}}
+      not valid_identity?(id) -> invalid_invocation_id(trigger, id)
+      not completed?(ingestion, trigger) -> {:error, {:incomplete_ingestion, id}}
       true -> :ok
     end
   end
+
+  defp invalid_invocation_id(:ingestion, id), do: {:error, {:invalid_ingestion_id, id}}
+  defp invalid_invocation_id(_trigger, id), do: {:error, {:invalid_invocation_id, id}}
 
   defp validate_reflections(reflections) when is_list(reflections) do
     duplicate =
@@ -644,7 +648,9 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp restart_safe?(_value), do: false
 
-  defp completed?(ingestion) do
+  defp completed?(_ingestion, trigger) when trigger in [:agent_request, :schedule], do: true
+
+  defp completed?(ingestion, :ingestion) do
     representations = field(ingestion, :representations) || []
     intended = field(ingestion, :intended_lenses) || Enum.map(representations, &field(&1, :lens))
 

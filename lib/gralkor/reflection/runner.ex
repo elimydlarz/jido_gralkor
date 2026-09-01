@@ -50,6 +50,9 @@ defmodule Gralkor.Reflection.Runner do
         request = %{
           reflection: reflection.name,
           operator_id: Map.get(ingestion, :operator_id) || Map.get(ingestion, "operator_id"),
+          invocation_id: field(ingestion, :id),
+          trigger: field(ingestion, :trigger) || :ingestion,
+          trigger_context: field(ingestion, :trigger_context) || %{},
           representations: representations(ingestion),
           step: %{label: step.label, directions: directions},
           directions: directions,

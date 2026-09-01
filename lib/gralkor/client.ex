@@ -133,6 +133,65 @@ defmodule Gralkor.Client do
     end
   end
 
+  @spec request_reflection(String.t(), String.t(), term(), keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def request_reflection(reflection_name, operator_id, content, opts \\ []) do
+    validate_non_blank!(:reflection_name, reflection_name)
+    Ingest.validate_operator_id!(operator_id)
+
+    reflections = ReflectionRegistry.configured!()
+
+    case Enum.find(reflections, &(&1.name == reflection_name)) do
+      nil ->
+        {:error, {:unknown_reflection, reflection_name}}
+
+      reflection ->
+        request_agent_reflection(reflection, operator_id, content, opts)
+    end
+  end
+
+  defp request_agent_reflection(reflection, operator_id, content, opts) do
+    if :agent_request in reflection.triggers do
+      invocation_id = new_invocation_id()
+
+      invocation = %{
+        id: invocation_id,
+        operator_id: operator_id,
+        trigger: :agent_request,
+        trigger_context: %{request_content: content},
+        representations: []
+      }
+
+      runner_opts = [
+        tools: Keyword.get(opts, :tools, []),
+        tool_context: Keyword.get(opts, :tool_context, %{})
+      ]
+
+      case ReflectionScheduler.schedule([reflection], invocation, runner_opts: runner_opts) do
+        {:ok, _status} -> {:ok, invocation_id}
+        {:error, _reason} = error -> error
+      end
+    else
+      {:error, {:trigger_disabled, reflection.name, :agent_request}}
+    end
+  end
+
+  defp new_invocation_id do
+    Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
+  end
+
+  defp validate_non_blank!(field, value) when is_binary(value) do
+    if String.trim(value) == "" do
+      raise ArgumentError, "#{field} must be a non-blank string, got #{inspect(value)}"
+    end
+
+    :ok
+  end
+
+  defp validate_non_blank!(field, value) do
+    raise ArgumentError, "#{field} must be a non-blank string, got #{inspect(value)}"
+  end
+
   @doc false
   @spec ingest_with_representation(Ingest.t()) ::
           {:ok, [IngestedRepresentation.t()]} | {:error, term()}
