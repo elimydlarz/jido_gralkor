@@ -832,21 +832,32 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when a scheduled Reflection runs" do
-    test "and starts its first step for the operator and completed ingestion operation",
+  describe "when an admitted Reflection runs" do
+    test "then its programmatic Chain of Thought runner starts its first step for the operator and triggering invocation",
          context do
       parent = self()
 
       inference = fn request ->
-        send(parent, {:first, request.operator_id, request.step.label})
+        send(parent, {:first, request.operator_id, request.invocation_id, request.step.label})
         output_for(request)
       end
 
       assert {:ok, _} = Runner.run(reflection(context), ingestion(), inference: inference)
-      assert_receive {:first, "operator-one", "gather"}
+      assert_receive {:first, "operator-one", "ingestion-1", "gather"}
     end
 
-    test "and makes every ingested representation available with its identifier, Lens identity, content, and storage result",
+    test "and makes the trigger type and trigger context available to every step", context do
+      requests = run_and_collect_requests(reflection(context), ingestion())
+
+      assert Enum.all?(requests, fn request ->
+               request.trigger == :ingestion and
+                 request.trigger_context == %{source: "direct-ingestion"}
+             end)
+    end
+  end
+
+  describe "when an admitted Reflection runs > where the Reflection was triggered by ingestion" do
+    test "then every ingested representation is available with its identifier, Lens identity, content, and storage result",
          context do
       parent = self()
 
@@ -1487,6 +1498,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     %{
       id: "ingestion-1",
       operator_id: "operator-one",
+      trigger: :ingestion,
+      trigger_context: %{source: "direct-ingestion"},
       intended_lenses: ["observations", "decisions"],
       representations: [
         %{
