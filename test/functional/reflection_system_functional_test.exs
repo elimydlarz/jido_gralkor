@@ -762,6 +762,46 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert runner_opts[:tools] == [:memory_search]
       assert runner_opts[:tool_context] == %{session_id: "session-one"}
     end
+
+    test "and the agent request receives one stable invocation identifier", context do
+      requested = %{reflection(context, "requested") | triggers: [:agent_request]}
+      configure_reflections([requested])
+      parent = self()
+      stop_supervised(Scheduler)
+
+      start_supervised!(
+        {Scheduler,
+         runner: fn reflection, invocation, _opts ->
+           send(parent, {:runner_invocation_id, invocation.id})
+           {:ok, Gralkor.Reflection.Artefact.new("requested", %{"artefact" => "done"})}
+         end}
+      )
+
+      assert {:ok, invocation_id} =
+               Client.request_reflection("requested", "operator-one", "Review this")
+
+      assert_receive {:runner_invocation_id, ^invocation_id}
+    end
+  end
+
+
+  describe "when a consuming agent requests a named Reflection > if the named Reflection is unknown" do
+    test "then the request fails identifying the unknown Reflection before durable work is admitted" do
+      configure_reflections([])
+
+      assert {:error, {:unknown_reflection, "missing"}} =
+               Client.request_reflection("missing", "operator-one", "Review this")
+    end
+  end
+
+  describe "when a consuming agent requests a named Reflection > if the named Reflection does not enable the agent-request trigger" do
+    test "then the request fails identifying the disabled trigger before durable work is admitted",
+         context do
+      configure_reflections([reflection(context, "ingestion-only")])
+
+      assert {:error, {:trigger_disabled, "ingestion-only", :agent_request}} =
+               Client.request_reflection("ingestion-only", "operator-one", "Review this")
+    end
   end
 
   describe "when a scheduled Reflection runs" do
