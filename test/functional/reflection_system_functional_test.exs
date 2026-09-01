@@ -105,6 +105,25 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert Map.fetch!(reflection, :triggers) == [:ingestion]
     end
 
+    test "and every declared trigger is ingestion, agent request, or a schedule", %{root: root} do
+      definition =
+        valid_definition(root,
+          triggers: [
+            :ingestion,
+            :agent_request,
+            [schedule: "0 * * * *", operator_id: "operator-one"]
+          ]
+        )
+
+      assert {:ok, [reflection]} = Registry.load([definition], root: root)
+
+      assert reflection.triggers == [
+               :ingestion,
+               :agent_request,
+               %{type: :schedule, expression: "0 * * * *", operator_id: "operator-one"}
+             ]
+    end
+
     test("and every Reflection references a repository YAML Chain of Thought", context,
       do: assert_valid(context)
     )
