@@ -726,6 +726,39 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  storage: Gralkor.Reflection.Storage.InMemory
                )
     end
+
+    test "while that Reflection enables the agent-request trigger and the Reflection receives the requesting operator, request content, host tools, and tool context",
+         context do
+      requested = %{reflection(context, "requested") | triggers: [:agent_request]}
+      configure_reflections([requested])
+      parent = self()
+      stop_supervised(Scheduler)
+
+      start_supervised!(
+        {Scheduler,
+         runner: fn reflection, invocation, opts ->
+           send(parent, {:request_invocation, reflection, invocation, opts})
+           {:ok, Gralkor.Reflection.Artefact.new("requested", %{"artefact" => "done"})}
+         end}
+      )
+
+      assert {:ok, _invocation_id} =
+               Client.request_reflection(
+                 "requested",
+                 "operator-one",
+                 "Review the current situation",
+                 tools: [:memory_search],
+                 tool_context: %{session_id: "session-one"}
+               )
+
+      assert_receive {:request_invocation, ^requested,
+                      %{
+                        operator_id: "operator-one",
+                        trigger: :agent_request,
+                        trigger_context: %{request_content: "Review the current situation"}
+                      },
+                      [tools: [:memory_search], tool_context: %{session_id: "session-one"}]}
+    end
   end
 
   describe "when a scheduled Reflection runs" do
