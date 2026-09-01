@@ -276,14 +276,14 @@ defmodule Gralkor.Client do
 
   defp schedule_direct_reflection_invocation(reflections, ingestion) do
     case ReflectionScheduler.schedule(reflections, ingestion) do
-        {:ok, _} ->
-          :ok
+      {:ok, _} ->
+        :ok
 
-        {:error, reason} ->
-          Logger.warning(
-            "[gralkor] direct-ingestion Reflection scheduling failed — #{inspect(reason)}"
-          )
-      end
+      {:error, reason} ->
+        Logger.warning(
+          "[gralkor] direct-ingestion Reflection scheduling failed — #{inspect(reason)}"
+        )
+    end
   end
 
   @spec replace(Replace.t()) :: :ok | {:error, term()}

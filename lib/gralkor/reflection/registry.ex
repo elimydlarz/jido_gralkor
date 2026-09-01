@@ -165,7 +165,14 @@ defmodule Gralkor.Reflection.Registry do
         {:error, {:invalid_ontology, name, ontology}}
 
       true ->
-        load_cot(name, destination, ontology, Enum.map(triggers, &normalize_trigger/1), relative, root)
+        load_cot(
+          name,
+          destination,
+          ontology,
+          Enum.map(triggers, &normalize_trigger/1),
+          relative,
+          root
+        )
     end
   end
 

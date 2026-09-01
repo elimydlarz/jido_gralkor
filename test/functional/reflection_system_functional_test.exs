@@ -713,7 +713,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.request_reflection("requested", "operator-one", "Review this")
 
       assert :ok = Scheduler.drain()
-      requested_id = Gralkor.Reflection.Artefact.id_for("operator-one", invocation_id, "requested")
+
+      requested_id =
+        Gralkor.Reflection.Artefact.id_for("operator-one", invocation_id, "requested")
+
       other_id = Gralkor.Reflection.Artefact.id_for("operator-one", invocation_id, "other")
 
       assert {:ok, _artefact} =
@@ -762,8 +765,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                         operator_id: "operator-one",
                         trigger: :agent_request,
                         trigger_context: %{request_content: "Review the current situation"}
-                      },
-                      runner_opts}
+                      }, runner_opts}
 
       assert runner_opts[:tools] == [:memory_search]
       assert runner_opts[:tool_context] == %{session_id: "session-one"}
@@ -795,7 +797,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_receive {:runner_invocation_id, ^invocation_id}
     end
   end
-
 
   describe "when a consuming agent requests a named Reflection > if the named Reflection is unknown" do
     test "then the request fails identifying the unknown Reflection before durable work is admitted" do

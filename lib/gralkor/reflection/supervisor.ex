@@ -14,6 +14,9 @@ defmodule Gralkor.Reflection.Supervisor do
   def init(opts) do
     scheduler_opts = Keyword.get(opts, :scheduler_opts, [])
     schedule_opts = Keyword.get(opts, :schedule_opts, [])
-    Supervisor.init([{Scheduler, scheduler_opts}, {Schedule, schedule_opts}], strategy: :one_for_one)
+
+    Supervisor.init([{Scheduler, scheduler_opts}, {Schedule, schedule_opts}],
+      strategy: :one_for_one
+    )
   end
 end
