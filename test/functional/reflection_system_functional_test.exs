@@ -683,8 +683,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when a consuming agent requests a named Reflection" do
-    test "while that Reflection enables the agent-request trigger then the agent receives admission without waiting for Reflection completion",
+  describe "when a consuming agent requests a named Reflection > while that Reflection enables the agent-request trigger" do
+    test "then the agent receives admission without waiting for Reflection completion",
          context do
       requested = %{reflection(context, "requested") | triggers: [:agent_request]}
       configure_reflections([requested])
@@ -703,7 +703,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert System.monotonic_time(:millisecond) - started < 100
     end
 
-    test "while that Reflection enables the agent-request trigger and only the requested Reflection begins one logical completion flow for that agent request",
+    test "and only the requested Reflection begins one logical completion flow for that agent request",
          context do
       requested = %{reflection(context, "requested") | triggers: [:agent_request]}
       other = %{reflection(context, "other") | triggers: [:agent_request]}
@@ -727,7 +727,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
     end
 
-    test "while that Reflection enables the agent-request trigger and the Reflection receives the requesting operator, request content, host tools, and tool context",
+    test "and the Reflection receives the requesting operator, request content, host tools, and tool context",
          context do
       requested = %{reflection(context, "requested") | triggers: [:agent_request]}
       configure_reflections([requested])
