@@ -1618,6 +1618,35 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     {reflection, artefact}
   end
 
+  defp await_scheduled_invocation(%{root: root}) do
+    parent = self()
+
+    [scheduled] =
+      Registry.load!(
+        [
+          valid_definition(root,
+            name: "scheduled",
+            triggers: [[schedule: "* * * * * *", operator_id: "operator-one"]]
+          )
+        ],
+        root: root
+      )
+
+    stop_supervised(Scheduler)
+
+    start_supervised!(
+      {Scheduler,
+       runner: fn reflection, invocation, _opts ->
+         send(parent, {:scheduled_invocation, reflection, invocation})
+         {:ok, Gralkor.Reflection.Artefact.new("scheduled", %{"artefact" => "done"})}
+       end}
+    )
+
+    start_supervised!({Gralkor.Reflection.Schedule, reflections: [scheduled]})
+    assert_receive {:scheduled_invocation, ^scheduled, invocation}, 1_500
+    {scheduled, invocation}
+  end
+
   defp valid_definition(root, overrides \\ []) do
     unless File.exists?(Path.join(root, "valid.yaml")) do
       write_cot(root, "valid.yaml", """
