@@ -804,6 +804,38 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when a configured Reflection schedule becomes due" do
+    test "then that Reflection begins one logical completion flow for the configured operator and due occurrence",
+         %{root: root} do
+      parent = self()
+
+      [scheduled] =
+        Registry.load!(
+          [
+            valid_definition(root,
+              name: "scheduled",
+              triggers: [[schedule: "* * * * * *", operator_id: "operator-one"]]
+            )
+          ],
+          root: root
+        )
+
+      stop_supervised(Scheduler)
+
+      start_supervised!(
+        {Scheduler,
+         runner: fn reflection, invocation, _opts ->
+           send(parent, {:scheduled_invocation, reflection, invocation})
+           {:ok, Gralkor.Reflection.Artefact.new("scheduled", %{"artefact" => "done"})}
+         end}
+      )
+
+      start_supervised!({Gralkor.Reflection.Schedule, reflections: [scheduled]})
+
+      assert_receive {:scheduled_invocation, ^scheduled, %{trigger: :schedule}}, 1_500
+    end
+  end
+
   describe "when a scheduled Reflection runs" do
     test "and starts its first step for the operator and completed ingestion operation",
          context do
