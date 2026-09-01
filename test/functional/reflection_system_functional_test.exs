@@ -757,7 +757,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                         trigger: :agent_request,
                         trigger_context: %{request_content: "Review the current situation"}
                       },
-                      [tools: [:memory_search], tool_context: %{session_id: "session-one"}]}
+                      runner_opts}
+
+      assert runner_opts[:tools] == [:memory_search]
+      assert runner_opts[:tool_context] == %{session_id: "session-one"}
     end
   end
 
