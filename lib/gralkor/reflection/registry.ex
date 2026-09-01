@@ -8,12 +8,14 @@ defmodule Gralkor.Reflection.Registry do
   @built_in_definitions [
     [
       name: "generalisations",
+      triggers: [:ingestion],
       chain_of_thought: "priv/reflections/generalisations.yaml",
       destination: "global",
       ontology: Gralkor.DefaultOntology
     ],
     [
       name: "erl",
+      triggers: [:ingestion],
       chain_of_thought: "priv/reflections/erl.yaml",
       destination: "operator",
       ontology: Gralkor.Reflection.ERLOntology
