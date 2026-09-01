@@ -699,9 +699,13 @@ defmodule Gralkor.CaptureBuffer do
 
   defp schedule_after_ingestion(entry, representations, reflections, callback)
        when is_function(callback, 2) do
+    eligible_reflections = Enum.filter(reflections, &(:ingestion in &1.triggers))
+
     ingestion = %{
       id: entry.ingestion_id,
       operator_id: entry.operator_id,
+      trigger: :ingestion,
+      trigger_context: %{},
       intended_lenses: entry.lens_order,
       completed_lenses: entry.lens_order,
       representations: representations,
@@ -709,6 +713,16 @@ defmodule Gralkor.CaptureBuffer do
       tool_context: Map.get(entry.reflection_context, :tool_context, %{})
     }
 
+    case eligible_reflections do
+      [] ->
+        :ok
+
+      _ ->
+        run_reflection_callback(callback, eligible_reflections, ingestion)
+    end
+  end
+
+  defp run_reflection_callback(callback, reflections, ingestion) do
     case callback.(reflections, ingestion) do
       {:error, reason} ->
         Logger.warning("[gralkor] Reflection scheduling failed — #{inspect(reason)}")
