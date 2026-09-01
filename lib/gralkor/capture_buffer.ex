@@ -699,7 +699,7 @@ defmodule Gralkor.CaptureBuffer do
 
   defp schedule_after_ingestion(entry, representations, reflections, callback)
        when is_function(callback, 2) do
-    eligible_reflections = Enum.filter(reflections, &(:ingestion in &1.triggers))
+    eligible_reflections = Enum.filter(reflections, &ingestion_trigger?/1)
 
     ingestion = %{
       id: entry.ingestion_id,
@@ -737,6 +737,11 @@ defmodule Gralkor.CaptureBuffer do
           Exception.format(:error, exception, __STACKTRACE__)
       )
   end
+
+  defp ingestion_trigger?(%Gralkor.Reflection{triggers: triggers}),
+    do: :ingestion in triggers
+
+  defp ingestion_trigger?(_reflection), do: true
 
   defp schedule_reflections(reflections, ingestion) do
     runner_opts = [
