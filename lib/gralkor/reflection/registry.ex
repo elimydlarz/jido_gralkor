@@ -137,10 +137,13 @@ defmodule Gralkor.Reflection.Registry do
     name = field(definition, :name)
     destination = field(definition, :destination)
     ontology = field(definition, :ontology) || Gralkor.DefaultOntology
-    triggers = definition |> field(:triggers) |> Enum.map(&normalize_trigger/1)
+    triggers = field(definition, :triggers)
     relative = field(definition, :chain_of_thought)
 
     cond do
+      not is_list(triggers) or triggers == [] ->
+        {:error, {:missing_triggers, name}}
+
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
 
@@ -154,7 +157,7 @@ defmodule Gralkor.Reflection.Registry do
         {:error, {:invalid_ontology, name, ontology}}
 
       true ->
-        load_cot(name, destination, ontology, triggers, relative, root)
+        load_cot(name, destination, ontology, Enum.map(triggers, &normalize_trigger/1), relative, root)
     end
   end
 
