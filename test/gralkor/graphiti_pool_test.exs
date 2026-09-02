@@ -1551,7 +1551,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
-
   end
 
   describe "when a fact search is run for a group > where edge types are supplied" do
@@ -1958,7 +1957,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
-
   end
 
   describe "when an episode search is run for a group > when only durably extraction-complete episodes are requested" do
@@ -2011,7 +2009,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
-
   end
 
   describe "when an episode search is run for a group > when Lens names are supplied" do
