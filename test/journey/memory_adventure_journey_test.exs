@@ -362,9 +362,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.published_input_at_global
     end
 
-    test "and each stable ingestion identifier resolves a completed `generalisations` artefact", %{
-      adventure: adventure
-    } do
+    test "and each stable ingestion identifier resolves a completed `generalisations` artefact",
+         %{
+           adventure: adventure
+         } do
       assert %Artefact{id: work_notes_artefact_id} = adventure.work_notes_generalisation_artefact
       assert %Artefact{id: published_artefact_id} = adventure.published_generalisation_artefact
 
