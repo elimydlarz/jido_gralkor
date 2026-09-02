@@ -229,6 +229,21 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                         20, []}
       end
     end
+
+    test "then the operator Destination is still isolated to the current operator" do
+      use_in_memory_storage()
+      assert :ok = add_episode("operator", "operator-one", "current operator", "operator")
+      assert :ok = add_episode("operator", "operator-two", "other operator", "operator")
+
+      assert {:ok,
+              [
+                %{
+                  destination: "operator",
+                  episode: %{content: "current operator", lens: "operator"}
+                }
+              ]} =
+               Client.search(%Search{operator_id: "operator-one", query: "operator"})
+    end
   end
 
   describe "where a caller supplies only Lenses" do
@@ -439,6 +454,23 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  query: "stored",
                  destinations: ["first"],
                  result_type: :episodes
+               })
+    end
+
+    test "then every Lens writing to a selected Destination can contribute" do
+      use_in_memory_storage()
+      assert :ok = add_episode("first", "operator-one", "alpha", "first-alpha")
+      assert :ok = add_episode("first", "operator-one", "beta", "first-beta")
+
+      assert {:ok,
+              [
+                %{destination: "first", episode: %{content: "alpha", lens: "first-alpha"}},
+                %{destination: "first", episode: %{content: "beta", lens: "first-beta"}}
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 destinations: ["first"]
                })
     end
 
