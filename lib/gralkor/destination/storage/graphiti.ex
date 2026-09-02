@@ -96,7 +96,8 @@ defmodule Gralkor.Destination.Storage.Graphiti do
            query,
            max_results,
            lenses: Keyword.get(opts, :lenses, []),
-           require_reflection_complete: true
+           require_reflection_complete: true,
+           require_trusted_provenance: true
          ) do
       {:ok, episodes} -> {:ok, Enum.map(episodes, &episode_provenance/1)}
       {:error, _} = error -> error
