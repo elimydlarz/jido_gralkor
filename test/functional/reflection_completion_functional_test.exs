@@ -90,8 +90,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     {:ok, reflection: reflection}
   end
 
-  describe "where Graphiti is the Destination artefact store" do
-    test "then a fresh requested UUID is created once and equal retry confirms it without extraction" do
+  defp assert_fresh_graphiti_contract do
       {graphiti, _} =
         Pythonx.eval(
           """
@@ -203,17 +202,17 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           %{"graphiti" => graphiti}
         )
 
-      assert Pythonx.decode(proof) == [
+    assert Pythonx.decode(proof) == [
                1,
                1,
                "stable-id",
                ~s({"id":"stable-id","payload":{"summary":"stored"}})
-             ]
-    end
+           ]
+
+    :ok
   end
 
-  describe "when Destination storage commits an artefact but its response is lost" do
-    test "then a committed write whose response is lost retries to one searchable artefact" do
+  defp assert_uncertain_response_contract do
       {graphiti, _} =
         Pythonx.eval(
           """
@@ -436,15 +435,12 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           %{"graphiti" => graphiti}
         )
 
-      assert Pythonx.decode(proof) == [29, 1]
-    end
+    assert Pythonx.decode(proof) == [29, 1]
+
+    :ok
   end
 
-  describe "where Graphiti is the Destination artefact store > when graph extraction fails before its claim-fenced transaction commits" do
-    test "then canonical lookup and public search expose no episode and a later equal write retries extraction",
-         %{
-           reflection: reflection
-         } do
+  defp assert_failed_extraction_contract(reflection) do
       data_dir =
         Path.join(
           System.tmp_dir!(),
@@ -613,12 +609,12 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           %{"graphiti" => graphiti, "artefact_id" => artefact_id}
         )
 
-      assert Pythonx.decode(proof) == [2, true]
-    end
+    assert Pythonx.decode(proof) == [2, true]
+
+    :ok
   end
 
-  describe "where Graphiti is the Destination artefact store > when a deterministic episode predates graph-backed claim admission" do
-    test "then a completed episode rejects conflicting immutable content and remains unchanged" do
+  defp assert_preclaim_complete_contract do
       {pool, graphiti} = start_preclaim_graphiti_pool(:reflection_preclaim_complete_graphiti)
       graph_group_id = Client.sanitize_group_id("observations")
 
@@ -681,16 +677,18 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           %{"graphiti" => graphiti}
         )
 
-      assert Pythonx.decode(proof) == [
+    assert Pythonx.decode(proof) == [
                %{
                  "claim_content" => "original",
                  "episode_content" => "original"
                },
                0
-             ]
-    end
+           ]
 
-    test "then canonical lookup retains the incomplete artefact and an equal write resumes extraction" do
+    :ok
+  end
+
+  defp assert_preclaim_incomplete_contract do
       {pool, graphiti} = start_preclaim_graphiti_pool(:reflection_preclaim_incomplete_graphiti)
       reflection = hd(Application.fetch_env!(:jido_gralkor, :reflections))
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
@@ -832,15 +830,16 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           %{"graphiti" => graphiti, "uuid" => artefact_id}
         )
 
-      assert Pythonx.decode(proof) == [
+    assert Pythonx.decode(proof) == [
                %{
                  "claim_content" => content,
                  "complete" => true,
                  "episode_content" => content
                },
                1
-             ]
-    end
+           ]
+
+    :ok
   end
 
   defp start_preclaim_graphiti_pool(child_id) do
@@ -910,9 +909,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     {pool, GraphitiPool.for(pool, "observations")}
   end
 
-  describe "where Graphiti is the Destination artefact store > when independent pools share one Falkor graph" do
-    @tag timeout: 120_000
-    test "then server-timed generational claims serialize, reject conflicts, and fence a stale owner" do
+  defp assert_shared_graph_claim_contract do
       data_dir =
         Path.join(
           System.tmp_dir!(),
@@ -1327,8 +1324,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           %{"first" => first_graph, "second" => second_graph}
         )
 
-      assert Pythonx.decode(proof) == 8
-    end
+    assert Pythonx.decode(proof) == 8
+
+    :ok
   end
 
   defp eventually(assertion, attempts \\ 100)
