@@ -103,7 +103,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       test_pid = self()
       name = Module.concat(__MODULE__, "Scheduler#{System.unique_integer([:positive])}")
 
-      runner = fn reflection, _ingestion, opts ->
+      runner = fn _reflection, _ingestion, opts ->
         send(test_pid, {:runner, reflection.name, opts[:artefact_id], self()})
 
         receive do
@@ -171,7 +171,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       test_pid = self()
       name = scheduler_name()
 
-      runner = fn reflection, _ingestion, opts ->
+      runner = fn _reflection, _ingestion, opts ->
         attempt = :atomics.add_get(attempts, 1, 1)
         send(test_pid, {:runner_attempt, attempt, opts[:artefact_id]})
 
@@ -244,7 +244,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
         test_pid = self()
         name = scheduler_name()
 
-        runner = fn reflection, _ingestion, opts ->
+        runner = fn _reflection, _ingestion, opts ->
           attempt = :atomics.add_get(attempts, 1, 1)
           expected_id = opts[:artefact_id]
 
@@ -316,7 +316,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
           end
         end
 
-        runner = fn reflection, _ingestion, opts ->
+        runner = fn _reflection, _ingestion, opts ->
           send(test_pid, {:runner_after_start_retry, phase})
           {:ok, Artefact.new(opts[:artefact_id], %{})}
         end
@@ -841,7 +841,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       ref = Process.monitor(first_task)
       assert_receive {:DOWN, ^ref, :process, ^first_task, _reason}
 
-      replacement_runner = fn reflection, _ingestion, opts ->
+      replacement_runner = fn _reflection, _ingestion, opts ->
         send(test_pid, {:replacement_runtime_opts, opts, self()})
 
         receive do
@@ -888,7 +888,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       path = journal_path()
       on_exit(fn -> File.rm(path) end)
 
-      runner = fn reflection, _ingestion, opts ->
+      runner = fn _reflection, _ingestion, opts ->
         attempt = :atomics.add_get(attempts, 1, 1)
         send(test_pid, {:delayed_runner, attempt, System.monotonic_time(:millisecond)})
 
@@ -928,7 +928,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       test_pid = self()
       name = scheduler_name()
 
-      runner = fn reflection, _ingestion, opts ->
+      runner = fn _reflection, _ingestion, opts ->
         send(test_pid, {:admitted_runner, self()})
 
         receive do
@@ -1003,7 +1003,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       test_pid = self()
       name = scheduler_name()
 
-      runner = fn reflection, _ingestion, opts ->
+      runner = fn _reflection, _ingestion, opts ->
         send(test_pid, {:drain_runner, self()})
 
         receive do
@@ -1117,7 +1117,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
   defp immediate_runner(test_pid) do
     name = scheduler_name()
 
-    runner = fn reflection, _ingestion, opts ->
+    runner = fn _reflection, _ingestion, opts ->
       send(test_pid, {:runner_invoked, opts[:artefact_id]})
       {:ok, Artefact.new(opts[:artefact_id], %{"stored" => true})}
     end

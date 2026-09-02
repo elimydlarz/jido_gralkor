@@ -1580,7 +1580,7 @@ defmodule Gralkor.CaptureBufferTest do
       test_pid = self()
       :ok = stop_supervised(CaptureBuffer)
 
-      runner = fn reflection, _ingestion, opts ->
+      runner = fn _reflection, _ingestion, opts ->
         send(test_pid, :empty_registry_runner_started)
         Process.sleep(100)
         {:ok, Artefact.new(opts[:artefact_id], %{"done" => true})}
@@ -1630,7 +1630,7 @@ defmodule Gralkor.CaptureBufferTest do
 
       on_exit(fn -> File.rm(journal_path) end)
 
-      runner = fn reflection, _ingestion, opts ->
+      runner = fn _reflection, _ingestion, opts ->
         attempt = :atomics.add_get(attempts, 1, 1)
         send(test_pid, {:replacement_drain_runner, attempt, self()})
 
