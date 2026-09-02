@@ -19,7 +19,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
   alias Gralkor.GraphitiPool
   alias Gralkor.Message
   alias Gralkor.Reflection
-  alias Gralkor.Reflection.Artefact
+  alias Gralkor.Artefact
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Reflection.Scheduler
 
@@ -27,17 +27,14 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
   @moduletag timeout: 120_000
 
   defmodule FailOnceReflectionStore do
-    @behaviour Gralkor.Reflection.Store
-
     use Agent
 
     def start_link(test_pid), do: Agent.start_link(fn -> {test_pid, 0} end, name: __MODULE__)
 
-    @impl true
-    def get(_reflection, _operator_id, _artefact_id), do: {:error, :not_found}
+    def get_artefact(_output, _reflection_name, _operator_id, _artefact_id),
+      do: {:error, :not_found}
 
-    @impl true
-    def put(_reflection, _operator_id, artefact) do
+    def put_artefact(_output, _reflection_name, _operator_id, artefact) do
       Agent.get_and_update(__MODULE__, fn {test_pid, attempts} ->
         attempt = attempts + 1
         send(test_pid, {:reflection_store_attempt, attempt, artefact})
@@ -230,6 +227,13 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         triggers: [:ingestion],
         destination: %Destination{name: "observations"},
         ontology: Gralkor.DefaultOntology,
+        outputs: [
+          %{
+            kind: :destination,
+            destination: %Destination{name: "observations"},
+            ontology: Gralkor.DefaultOntology
+          }
+        ],
         chain_of_thought: %ChainOfThought{path: "test", steps: []}
       }
 
@@ -243,7 +247,6 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
           {:ok,
            Artefact.new(
              opts[:artefact_id],
-             current_reflection.name,
              %{"summary" => "stored"}
            )}
         end
