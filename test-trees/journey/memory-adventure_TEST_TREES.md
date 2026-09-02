@@ -42,9 +42,10 @@ when a fresh agent handles a request related to an evolved generalisation
   and the recommendation applies their reversible limited-scope lesson to the requested migration
 
 when the agent searches with both Destination and Lens selectors
-  then only memory in the intersection is returned
+  then relevant memory whose Destination and originating Lens both match the selectors is returned
   and a selected Lens does not contribute its memory from an unselected Destination
-  and a subsequent selector-free search again returns memory from every accessible registered Destination
+  and a subsequent selector-free search returns relevant memory from a Destination omitted by the earlier Destination selector
+  and that search returns relevant memory from a Lens omitted by the earlier Lens selector
 
 when the Journey ingests conversation, document, and structured-record episodes
   then every retrieved conversation fact identifies every originating episode
