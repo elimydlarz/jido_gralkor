@@ -1331,34 +1331,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
-  defp ingestion do
-    %Ingest{
-      id: "ingestion-one",
-      operator_id: "operator-one",
-      lens: "observations",
-      source_kind: :document,
-      content: "The deployment succeeded.",
-      source_description: "deployment"
-    }
-  end
-
-  defp scheduler_ingestion do
-    %{
-      id: "ingestion-one",
-      operator_id: "operator-one",
-      intended_lenses: ["observations"],
-      completed_lenses: ["observations"],
-      representations: [
-        %{
-          id: "representation-one",
-          lens: "observations",
-          content: "The deployment succeeded.",
-          result: :ok
-        }
-      ]
-    }
-  end
-
   defp eventually(assertion, attempts \\ 100)
 
   defp eventually(assertion, attempts) when attempts > 0 do
@@ -1388,13 +1360,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       )
 
     Pythonx.decode(exists)
-  end
-
-  defp receive_runners(0, runners), do: runners
-
-  defp receive_runners(remaining, runners) do
-    assert_receive {:runner_started, name, "ingestion-one", _artefact_id, runner}
-    receive_runners(remaining - 1, Map.put(runners, name, runner))
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
