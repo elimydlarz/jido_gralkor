@@ -122,8 +122,5 @@ if scheduling receives duplicate Reflection names
   then scheduling fails before any Runner execution begins
   and the duplicated Reflection name is identified
 
-when an ingestion has no eligible Lens-ingestion Reflections
-  then ingestion succeeds without retaining scheduler work
-
 when Reflection work completes or exhausts its retry schedule
   then its in-memory admission state and durable unfinished-work record are released

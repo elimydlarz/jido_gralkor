@@ -3,6 +3,7 @@ Functional: reflection-system (src: lib/gralkor/reflection.ex, lib/gralkor/refle
 when Reflection declarations are validated
   while every Reflection has a non-blank name
   and every Reflection name is unique
+  and every Reflection declares one or more `:programmatic`, `{:lens_ingestion, :all}`, or `{:lens_ingestion, [lens_name]}` triggers with valid Lens selections
   and every Reflection references a repository YAML Chain of Thought
   and every referenced Chain of Thought contains one or more ordered steps
   and every step has a non-blank label and natural-language directions
