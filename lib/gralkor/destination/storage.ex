@@ -19,6 +19,8 @@ defmodule Gralkor.Destination.Storage do
   @callback get_artefact(map(), String.t(), String.t(), Artefact.t()) ::
               {:ok, Artefact.t()} | {:error, term()}
 
+  @optional_callbacks put_artefact: 4, get_artefact: 4
+
   def search(destination, operator_id, query, result_type, max_results, opts) do
     storage().search(destination, operator_id, query, result_type, max_results, opts)
   end

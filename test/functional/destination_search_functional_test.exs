@@ -483,12 +483,18 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         name: "review",
         destination: destination,
         ontology: Gralkor.DefaultOntology,
+        outputs: [
+          %{
+            kind: :destination,
+            destination: destination,
+            ontology: Gralkor.DefaultOntology
+          }
+        ],
         chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "functional", steps: []}
       }
 
-      artefact = %Gralkor.Reflection.Artefact{
+      artefact = %Gralkor.Artefact{
         id: "review-one",
-        reflection: "review",
         payload: %{"lesson" => "keep it simple"}
       }
 
@@ -512,9 +518,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
   describe "where a caller selects artefacts" do
     test "then relevant Reflection artefacts from the selected Destinations are returned" do
-      artefact = %Gralkor.Reflection.Artefact{
+      artefact = %Gralkor.Artefact{
         id: "a-1",
-        reflection: "review",
         payload: %{"lesson" => "keep it simple"}
       }
 
@@ -531,10 +536,9 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                })
     end
 
-    test "and every artefact identifies its declaring Reflection" do
-      artefact = %Gralkor.Reflection.Artefact{
+    test "and every artefact contains only its stable identifier and payload" do
+      artefact = %Gralkor.Artefact{
         id: "a-1",
-        reflection: "review",
         payload: %{}
       }
 
@@ -542,13 +546,15 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         "first" => {:ok, [artefact]}
       })
 
-      assert {:ok, [%{artefact: %{reflection: "review"}}]} =
+      assert {:ok, [%{artefact: returned}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "question",
                  destinations: ["first"],
                  result_type: :artefacts
                })
+
+      assert Map.from_struct(returned) == %{id: "a-1", payload: %{}}
     end
   end
 
@@ -741,12 +747,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     start_supervised!(Gralkor.Lens.Storage.InMemory)
     start_supervised!(Gralkor.Reflection.Storage.InMemory)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-
-    Application.put_env(
-      :jido_gralkor,
-      :reflection_storage,
-      Gralkor.Reflection.Storage.InMemory
-    )
 
     Application.put_env(
       :jido_gralkor,
