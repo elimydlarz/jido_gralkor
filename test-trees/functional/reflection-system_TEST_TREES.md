@@ -148,7 +148,7 @@ when ingestion completes through its intended Lenses
 if any intended Lens ingestion fails
   then no Lens-ingestion Reflection is admitted for that incomplete ingestion
 
-when a consumer programmatically requests a named Reflection with a non-blank `operator_id` and replay-stable `invocation_id`
+when a consumer requests a Reflection programmatically with stable identity
   while that Reflection declares `:programmatic`
     then the consumer receives successful admission without waiting for its artefact
     and only the named Reflection is admitted for that request
