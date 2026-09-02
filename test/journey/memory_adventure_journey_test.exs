@@ -345,8 +345,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       answer = String.downcase(adventure.agent_answer)
 
       assert String.trim(answer) != ""
-      assert String.contains?(answer, "harbor")
+      assert Regex.match?(~r/choice:\s*harbor/i, answer)
       assert contains_any?(answer, ["deployment", "deployments", "canary", "canaries"])
+      assert contains_any?(answer, ["migration", "migrations", "schema"])
       assert contains_any?(answer, ["fault", "failure", "risk", "impact"])
     end
   end
