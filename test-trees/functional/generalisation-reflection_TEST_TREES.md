@@ -23,13 +23,16 @@ when the packaged generalisation Reflection synthesises an evolved generalisatio
     and the evolved generalisation's `evolves_from` is empty
   while one or more returned prior generalisations influence the evolved generalisation
     then the evolved generalisation's evolution-depth level is one greater than the highest influencing level
-    and `evolves_from` records the content and level of every influencing prior generalisation
+    and each `evolves_from` snapshot exactly matches the content and level of an influencing prior generalisation returned in a generalisations Reflection episode
     but `evolves_from` records no returned generalisation that did not influence the evolution
+  while an evolution's lineage does not exactly match a prior generalisation returned in a generalisations Reflection episode
+    then the Reflection fails explicitly without producing an artefact
   while the evolved generalisation replaces a prior generalisation
     then the replaced generalisation remains searchable as historical lineage
 
 when the packaged generalisation Reflection completes
   then its artefact payload contains an array of generalisations
   and each stored generalisation contains exactly `content`, `level`, and `evolves_from`
-  and each stored `evolves_from` snapshot contains exactly the content and level returned by related-memory search
+  and each stored `evolves_from` snapshot is the exact content-and-level snapshot of a prior generalisation decoded from related-memory
+  and final synthesis cannot change any preceding evolution's content or `evolves_from`
   and later evolution leaves every earlier stored lineage snapshot unchanged
