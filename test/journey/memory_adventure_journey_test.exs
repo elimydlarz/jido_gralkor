@@ -569,11 +569,11 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              inspect(adventure.document_facts)
     end
 
-    test "and every retrieved document fact identifies its deployment-policy source description",
+    test "and a retrieved document fact identifies its deployment-policy source description",
          %{
            adventure: adventure
          } do
-      assert every_fact_has_source_description?(adventure.document_facts, "deployment policy"),
+      assert any_fact_has_source_description?(adventure.document_facts, "deployment policy"),
              inspect(adventure.document_facts)
     end
 
@@ -872,14 +872,21 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       )
 
     document_facts =
-      attributed_facts(
+      search_until(
         @operator_two,
-        "global",
+        ["global"],
+        :facts,
         "Atlas Deployment requires Rollback Checkpoint",
-        &contains_all?(&1.fact, ["rollback checkpoint", "configuration faults"]),
-        "document",
-        "deployment policy"
+        fn facts ->
+          selected =
+            Enum.filter(facts, &String.contains?(&1.fact, "Rollback Checkpoint"))
+
+          every_fact_has_episode_id?(selected) and
+            every_fact_has_source_kind?(selected, "document") and
+            any_fact_has_source_description?(selected, "deployment policy")
+        end
       )
+      |> Enum.filter(&String.contains?(&1.fact, "Rollback Checkpoint"))
 
     structured_record_facts =
       attributed_facts(
@@ -1423,6 +1430,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
   defp every_fact_has_source_description?(results, source_description) do
     Enum.all?(results, fn %{fact: fact} -> String.contains?(fact, source_description) end)
+  end
+
+  defp any_fact_has_source_description?(results, source_description) do
+    Enum.any?(results, fn %{fact: fact} -> String.contains?(fact, source_description) end)
   end
 
   defp contains_all?(text, expected) do

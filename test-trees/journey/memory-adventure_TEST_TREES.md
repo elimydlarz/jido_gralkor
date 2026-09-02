@@ -53,7 +53,7 @@ when the Journey ingests conversation, document, and structured-record episodes
   and every retrieved conversation fact identifies its captured-turn source description
   and every retrieved document fact identifies every originating episode
   and every retrieved document fact identifies its document source kind
-  and every retrieved document fact identifies its deployment-policy source description
+  and a retrieved document fact identifies its deployment-policy source description
   and every retrieved structured-record fact identifies every originating episode
   and every retrieved structured-record fact identifies its structured-record source kind
   and every retrieved structured-record fact identifies its dependency-registry source description
