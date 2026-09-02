@@ -54,7 +54,8 @@ when the pool terminates
     and finalising the async wrapper emits no unawaited-coroutine warning
 
 when a graph instance is requested for a group
-  then the instance is looked up from a cache shared across callers
+  then the logical identifier is encoded into its collision-free physical identifier at this boundary
+  and the instance is looked up from a cache shared across callers by that physical identifier
   while instances are already cached for their groups
     then concurrent callers read those instances in parallel without passing through the pool process
   while no instance is cached for that group
@@ -158,7 +159,7 @@ when an episode search is run for a group
   then the graph library is asked for episodes only, with the requested result count
   when Lens names are supplied
     then writer filtering occurs before the requested result count
-  and it is restricted to the sanitised group id the episodes were written under
+  and it is restricted to the physically encoded group id the episodes were written under
   and each returned episode is rendered with the body that was written and its source description
   and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned
   when only durably extraction-complete episodes are requested
@@ -168,7 +169,7 @@ if running an episode search raises inside the graph library
   then an error carrying the raised exception is returned
 
 when a node search is run for a group
-  then it is restricted to the sanitised group id the episodes were written under, so a group id carrying hyphens still matches
+  then it is restricted to the physically encoded group id the episodes were written under, so a group id carrying hyphens still matches
   while node labels are supplied
     then the graph library's node search is invoked with the requested result count and a filter carrying those labels
     and each returned node is rendered with its name, summary, and attributes, ordered by relevance
@@ -183,8 +184,8 @@ when an index and constraint rebuild is requested for the whole graph
   and a group whose instance has never been created is left alone, its indices being built the moment it is
 
 when community building is requested for a group
-  then the group is sanitised before its graph instance is selected
-  and the graph library builds communities for that sanitised group's instance
+  then the logical group is physically encoded before its graph instance is selected
+  and the graph library builds communities for that physical group's instance
   and the returned community and edge counts are reported
 
 if community building raises inside the graph library
