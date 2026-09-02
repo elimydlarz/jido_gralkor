@@ -5,21 +5,19 @@ defmodule JidoGralkor.Plugin do
   attached to the agent.
 
   On `ai.react.query` the plugin plants the current thread's `:session_id`
-  and the configured `:agent_name` on the signal's `tool_context` so the
-  `MemorySearch` ReAct tool can find them. A Lens-aware mount also plants its
-  selected `:lens` and `:search_destinations`:
+  and the configured `:agent_name` on the signal's `tool_context`. A
+  Lens-aware mount also plants its selected ingestion `:lens`:
 
     * `:session_id` — the current Jido thread id (read from
       `agent.state[:__thread__].id`). Absent when no thread is
       committed yet (first query of a fresh agent, before the ReAct
-      strategy's `ThreadAgent.append` runs inside `@start`); on that
-      turn `MemorySearch` short-circuits with a non-result message.
+	      strategy's `ThreadAgent.append` runs inside `@start`). Memory search
+	      remains available because it is scoped by operator rather than session.
     * `:agent_name` — the value supplied at mount.
 
   The plugin does **not** search memory on its own. Search is the LLM's job,
-  invoked through `MemorySearch`: Lens-aware mounts call
-  `Gralkor.Client.search/1`; implicit-operator mounts call the configured
-  client's legacy `recall/4`.
+  invoked through `MemorySearch`, which calls `Gralkor.Client.search/1` with
+  selectors supplied for that search invocation.
   Consumers force it on the first ReAct iteration via
   `JidoGralkor.ReAct.maybe_force_memory_search/2` from their
   `Jido.AI.Reasoning.ReAct.RequestTransformer`.
@@ -74,25 +72,22 @@ defmodule JidoGralkor.Plugin do
       raise ArgumentError, ":default_lens was removed; use :ingestion_lens instead"
     end
 
+    if has_opt?(opts, :search_destinations) do
+      raise ArgumentError,
+            ":search_destinations was removed; use MemorySearch's per-search :destinations selector instead"
+    end
+
     case fetch_opt(opts, :ingestion_lens) do
       nil ->
-        if fetch_opt(opts, :search_destinations) != nil do
-          raise ArgumentError, ":ingestion_lens is required when Lens options are configured"
-        end
-
         {:ok, %{agent_name: agent_name}}
 
       ingestion_lens ->
         lens = Client.lens!(ingestion_lens)
 
-        search_destinations =
-          validate_search_destinations!(fetch_opt(opts, :search_destinations))
-
         {:ok,
          %{
            agent_name: agent_name,
            ingestion_lens: ingestion_lens,
-           search_destinations: search_destinations,
            lens: lens
          }}
     end
@@ -102,21 +97,9 @@ defmodule JidoGralkor.Plugin do
   defp fetch_opt(opts, key) when is_map(opts), do: Map.get(opts, key)
   defp fetch_opt(_, _), do: nil
 
-  defp validate_search_destinations!(nil), do: []
-
-  defp validate_search_destinations!(destinations) when is_list(destinations) do
-    Enum.each(destinations, fn
-      name when is_binary(name) -> Gralkor.Destination.Registry.fetch!(name)
-      name -> raise ArgumentError, "invalid Destination #{inspect(name)}"
-    end)
-
-    destinations
-  end
-
-  defp validate_search_destinations!(destinations) do
-    raise ArgumentError,
-          "search_destinations must be a list, got #{inspect(destinations)}"
-  end
+  defp has_opt?(opts, key) when is_list(opts), do: Keyword.has_key?(opts, key)
+  defp has_opt?(opts, key) when is_map(opts), do: Map.has_key?(opts, key)
+  defp has_opt?(_, _), do: false
 
   @impl Jido.Plugin
   def handle_signal(%Signal{type: "ai.react.query"} = signal, %{agent: agent}) do
@@ -254,8 +237,8 @@ defmodule JidoGralkor.Plugin do
 
   defp lens_context(agent) do
     case plugin_state(agent) do
-      %{ingestion_lens: lens, search_destinations: destinations} ->
-        %{lens: lens, search_destinations: destinations}
+      %{ingestion_lens: lens} ->
+        %{lens: lens}
 
       _ ->
         %{}
