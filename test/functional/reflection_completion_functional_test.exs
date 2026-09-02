@@ -6,7 +6,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   alias Gralkor.GraphitiPool
   alias Gralkor.Ingest
   alias Gralkor.Reflection
-  alias Gralkor.Reflection.Artefact
+  alias Gralkor.Artefact
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Reflection.Scheduler
   alias Gralkor.Search
@@ -23,17 +23,16 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   defmodule FailOnceStore do
-    @behaviour Gralkor.Reflection.Store
-
     use Agent
 
     def start_link(test_pid), do: Agent.start_link(fn -> {test_pid, 0} end, name: __MODULE__)
 
     @impl true
-    def get(_reflection, _operator_id, _artefact_id), do: {:error, :not_found}
+    def get_artefact(_output, _reflection_name, _operator_id, _artefact_id),
+      do: {:error, :not_found}
 
     @impl true
-    def put(_reflection, _operator_id, artefact) do
+    def put_artefact(_output, _reflection_name, _operator_id, artefact) do
       Agent.get_and_update(__MODULE__, fn {test_pid, attempts} ->
         send(test_pid, {:store_attempt, artefact})
 
@@ -47,8 +46,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   defmodule ControlledCompletionStore do
-    @behaviour Gralkor.Reflection.Store
-
     use Agent
 
     def start_link({test_pid, outcomes}) do
@@ -56,10 +53,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
 
     @impl true
-    def get(_reflection, _operator_id, _artefact_id), do: {:error, :not_found}
+    def get_artefact(_output, _reflection_name, _operator_id, _artefact_id),
+      do: {:error, :not_found}
 
     @impl true
-    def put(_reflection, _operator_id, artefact) do
+    def put_artefact(_output, _reflection_name, _operator_id, artefact) do
       {test_pid, outcome} =
         Agent.get_and_update(__MODULE__, fn {test_pid, [outcome | remaining]} ->
           {{test_pid, outcome}, {test_pid, remaining}}
@@ -83,23 +81,25 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   defmodule LoseFirstGraphitiResponseStore do
-    @behaviour Gralkor.Reflection.Store
-
     use Agent
 
     alias Gralkor.Reflection.Storage.Graphiti
-    alias Gralkor.Reflection.Storage.InMemory
 
     def start_link(test_pid), do: Agent.start_link(fn -> {test_pid, true} end, name: __MODULE__)
 
     @impl true
-    def get(reflection, operator_id, artefact_id),
-      do: Graphiti.get(reflection, operator_id, artefact_id)
+    def get_artefact(output, reflection_name, operator_id, artefact_id),
+      do: Graphiti.get_output(output, reflection_name, operator_id, artefact_id)
 
     @impl true
-    def put(reflection, operator_id, artefact) do
-      with :ok <- Graphiti.put(reflection, operator_id, artefact),
-           :ok <- InMemory.put(reflection, operator_id, artefact) do
+    def put_artefact(output, reflection_name, operator_id, artefact) do
+      with :ok <- Graphiti.put_output(output, reflection_name, operator_id, artefact),
+           :ok <-
+             Gralkor.Reflection.Storage.InMemory.put_destination(
+               output.destination,
+               operator_id,
+               artefact
+             ) do
         Agent.get_and_update(__MODULE__, fn {test_pid, lose_response?} ->
           send(test_pid, {:graphiti_store_committed, artefact})
 
@@ -146,13 +146,18 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Gralkor.Destination.Storage.InMemory
     )
 
-    Application.put_env(:jido_gralkor, :reflection_storage, Gralkor.Reflection.Storage.InMemory)
-
     reflection = %Reflection{
       name: "review",
-      triggers: [:ingestion],
+      triggers: [{:lens_ingestion, :any}],
       destination: %Gralkor.Destination{name: "observations"},
       ontology: Gralkor.DefaultOntology,
+      outputs: [
+        %{
+          kind: :destination,
+          destination: %Gralkor.Destination{name: "observations"},
+          ontology: Gralkor.DefaultOntology
+        }
+      ],
       chain_of_thought: %ChainOfThought{
         path: "reflection-completion.yaml",
         steps: [
@@ -365,7 +370,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   describe "when a Reflection Runner produces an artefact" do
     test "then canonical storage failure retries the exact artefact without rerunning the Runner" do
       start_supervised!({FailOnceStore, self()})
-      Application.put_env(:jido_gralkor, :reflection_storage, FailOnceStore)
+      Application.put_env(:jido_gralkor, :destination_storage, FailOnceStore)
 
       assert :ok = Client.ingest(ingestion())
       assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
@@ -384,7 +389,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
     test "then a canonical storage task crash retries the exact artefact without rerunning the Runner" do
       start_supervised!({ControlledCompletionStore, {self(), [:crash, :ok]}})
-      Application.put_env(:jido_gralkor, :reflection_storage, ControlledCompletionStore)
+      Application.put_env(:jido_gralkor, :destination_storage, ControlledCompletionStore)
 
       assert :ok = Client.ingest(ingestion())
       assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
@@ -405,7 +410,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       reflection: reflection
     } do
       start_supervised!({ControlledCompletionStore, {self(), [:hang, :hang]}})
-      Application.put_env(:jido_gralkor, :reflection_storage, ControlledCompletionStore)
+      Application.put_env(:jido_gralkor, :destination_storage, ControlledCompletionStore)
 
       assert {:ok, :scheduled} =
                Scheduler.schedule([reflection], scheduler_ingestion(), execution_timeout_ms: 25)
@@ -657,7 +662,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       start_supervised!(
         {Scheduler,
          runner: runner,
-         store_opts: [storage: Gralkor.Reflection.Storage.InMemory],
+         store_opts: [storage: Gralkor.Destination.Storage.InMemory],
          notify: test_pid,
          retry_delays: [0]}
       )
@@ -723,7 +728,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         {Gralkor.Reflection.Supervisor,
          scheduler_opts: [
            runner_opts: [inference: inference],
-           store_opts: [storage: Gralkor.Reflection.Storage.InMemory],
+           store_opts: [storage: Gralkor.Destination.Storage.InMemory],
            notify: test_pid,
            retry_delays: [0]
          ]},
@@ -762,7 +767,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         {Gralkor.Reflection.Supervisor,
          scheduler_opts: [
            runner: runner,
-           store_opts: [storage: Gralkor.Reflection.Storage.InMemory],
+           store_opts: [storage: Gralkor.Destination.Storage.InMemory],
            notify: test_pid,
            retry_delays: []
          ]},
@@ -818,7 +823,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         {Gralkor.Reflection.Supervisor,
          scheduler_opts: [
            runner: runner,
-           store_opts: [storage: Gralkor.Reflection.Storage.InMemory],
+           store_opts: [storage: Gralkor.Destination.Storage.InMemory],
            notify: test_pid,
            retry_delays: [0],
            journal_path: journal_path
@@ -1040,7 +1045,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       )
 
       start_supervised!({LoseFirstGraphitiResponseStore, self()})
-      Application.put_env(:jido_gralkor, :reflection_storage, LoseFirstGraphitiResponseStore)
+      Application.put_env(:jido_gralkor, :destination_storage, LoseFirstGraphitiResponseStore)
 
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
 
