@@ -349,6 +349,37 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
+  describe "when distinct ingestions use Lenses backed by different Destinations" do
+    test "then the `work-notes` input is searchable through the `operator` Destination", %{
+      adventure: adventure
+    } do
+      assert adventure.work_notes_input_at_operator
+    end
+
+    test "and the `published` input is searchable through the `global` Destination", %{
+      adventure: adventure
+    } do
+      assert adventure.published_input_at_global
+    end
+
+    test "and each stable ingestion identifier resolves a completed `generalisations` artefact", %{
+      adventure: adventure
+    } do
+      assert %Artefact{id: work_notes_artefact_id} = adventure.work_notes_generalisation_artefact
+      assert %Artefact{id: published_artefact_id} = adventure.published_generalisation_artefact
+
+      assert work_notes_artefact_id ==
+               Artefact.id_for(
+                 @operator_one,
+                 "journey-generalisation-level-one",
+                 "generalisations"
+               )
+
+      assert published_artefact_id ==
+               Artefact.id_for(@operator_one, "journey-published-policy", "generalisations")
+    end
+  end
+
   describe "when a completed ingestion triggers a consumer-defined Reflection with Destination and return outputs" do
     test "then its artefact is searchable through its Destination", %{adventure: adventure} do
       assert %Artefact{id: artefact_id} = adventure.consumer_destination_artefact
@@ -548,7 +579,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                %{agent_id: @operator_one}
              )
 
-    {first_generalisation, later_generalisation} = evolve_global_generalisation()
+    {first_generalisation, later_generalisation, work_notes_generalisation_artefact} =
+      evolve_global_generalisation()
 
     agent_request = agent_request(agent)
     default_memory_search = agent_request.memory_search_results
@@ -607,6 +639,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     consumer_returned_artefact = return_artefact_until(consumer_artefact_id)
 
+    published_generalisation_artefact =
+      generalisation_artefact_until("journey-published-policy")
+
     :ok =
       Client.ingest(%Ingest{
         id: "journey-work-notes-registry",
@@ -653,6 +688,15 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         :episodes,
         "Atlas Deployment requires Rollback Checkpoint",
         &(&1 != [])
+      )
+
+    work_notes_input =
+      search_until(
+        @operator_one,
+        ["operator"],
+        :episodes,
+        "Aurora Borealis Cygnus reversible canary",
+        &contains_episode?(&1, "aurora")
       )
 
     local_for_second = search(@operator_two, ["operator"], :episodes, "backup vacuum")
@@ -724,6 +768,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         contains_fact?(superseded_graph, "Payments settles through Ledger."),
       first_generalisation: first_generalisation,
       later_generalisation: later_generalisation,
+      work_notes_input_at_operator: contains_episode?(work_notes_input, "aurora"),
+      published_input_at_global: contains_episode?(global_for_first, "rollback"),
+      work_notes_generalisation_artefact: work_notes_generalisation_artefact,
+      published_generalisation_artefact: published_generalisation_artefact,
       consumer_destination_artefact: consumer_destination_artefact,
       consumer_returned_artefact: consumer_returned_artefact,
       default_memory_search: default_memory_search,
@@ -759,9 +807,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         source_description: "cross-team canary deployment review"
       })
 
+    first_generalisation_artefact = generalisation_artefact_until(first_ingestion_id)
+
     first_generalisation =
-      first_ingestion_id
-      |> generalisation_artefact_until()
+      first_generalisation_artefact
       |> find_generalisation(fn generalisation ->
         generalisation["level"] == 1 and generalisation["evolves_from"] == []
       end)
@@ -803,7 +852,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
           %{"content" => first_content, "level" => 1} in generalisation["evolves_from"]
       end)
 
-    {first_generalisation, later_generalisation}
+    {first_generalisation, later_generalisation, first_generalisation_artefact}
   end
 
   defp generalisation_artefact_until(ingestion_id, attempts \\ 120) do
