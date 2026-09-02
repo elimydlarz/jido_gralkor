@@ -2353,6 +2353,7 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       assert {:instance, ^physical_group} = GraphitiPool.for(pid, "operator-one")
+
       assert [{^physical_group, {:instance, ^physical_group}}] =
                :ets.lookup(table, physical_group)
 

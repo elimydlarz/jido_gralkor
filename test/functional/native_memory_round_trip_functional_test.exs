@@ -180,6 +180,7 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       assert :ok = Native.memory_add(second_logical, "second operator fact", "manual")
 
       refute first_physical == second_physical
+
       assert [{^first_physical, _instance}] =
                :ets.lookup(:gralkor_graphiti_instances, first_physical)
 
