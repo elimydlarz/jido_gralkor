@@ -35,6 +35,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
 
     start_supervised!(Gralkor.Lens.Storage.InMemory)
+    start_supervised!(Gralkor.Reflection.Storage.InMemory)
 
     Application.put_env(:jido_gralkor, :client, InMemory)
 
@@ -201,6 +202,64 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  }
                }
              ]
+    end
+
+    test "and every returned episode identifies its Destination and originating Lens or declaring Reflection" do
+      assert :ok =
+               Client.ingest(%Ingest{
+                 id: "provenance-lens-episode",
+                 operator_id: "operator-one",
+                 lens: "observations",
+                 source_kind: :document,
+                 content: "lensed provenance",
+                 source_description: "functional"
+               })
+
+      reflection = %Gralkor.Reflection{
+        name: "generalisations",
+        destination: Gralkor.Destination.Registry.fetch!("global"),
+        ontology: Gralkor.DefaultOntology,
+        chain_of_thought: nil
+      }
+
+      artefact = %Gralkor.Reflection.Artefact{
+        id: "provenance-generalisation",
+        reflection: "generalisations",
+        payload: %{
+          "generalisations" => [
+            %{"content" => "evolved provenance", "level" => 1, "evolves_from" => []}
+          ]
+        }
+      }
+
+      assert :ok =
+               Gralkor.Reflection.Storage.InMemory.put(reflection, "operator-one", artefact)
+
+      assert {:ok, %{result: result}} =
+               MemorySearch.run(
+                 %{query: "provenance", destinations: ["observations", "global"]},
+                 %{agent_id: "operator-one"}
+               )
+
+      assert [
+               %{
+                 "destination" => "observations",
+                 "episode" => %{"content" => "lensed provenance", "lens" => "observations"}
+               },
+               %{
+                 "destination" => "global",
+                 "episode" => %{
+                   "content" => encoded_artefact,
+                   "reflection" => "generalisations"
+                 }
+               }
+             ] = Jason.decode!(result)
+
+      assert Jason.decode!(encoded_artefact) == %{
+               "id" => "provenance-generalisation",
+               "payload" => artefact.payload,
+               "reflection" => "generalisations"
+             }
     end
 
     test "where no conversation thread has been committed then memory search still runs for the current operator" do
