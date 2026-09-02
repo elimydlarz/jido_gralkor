@@ -256,7 +256,7 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "if named-Lens capture is requested with a missing or blank operator identifier" do
-        test "then an argument error is raised at the port boundary and no backend call is made" do
+        test "then an argument error is raised at the port boundary" do
           unquote(setup_block).()
           configure_capture(:ok)
 
@@ -276,10 +276,36 @@ defmodule Gralkor.ClientContract do
 
           assert Gralkor.Client.InMemory.captures() == []
         end
+
+        test "and no backend call is made" do
+          unquote(setup_block).()
+          configure_capture(:ok)
+
+          assert_raise ArgumentError, ~r/operator_id/, fn ->
+            client().capture(
+              "session-1",
+              " ",
+              "TestAgent",
+              "Eli",
+              [Gralkor.Message.new("user", "hi")],
+              "observations"
+            )
+          end
+
+          assert Gralkor.Client.InMemory.captures() == []
+        end
       end
 
       describe "when a flush is requested for a session" do
-        test "then success is returned before the flush completes" do
+        test "then the call is recorded with its session id" do
+          unquote(setup_block).()
+          configure_flush(:ok)
+
+          assert :ok = client().flush("session-1")
+          assert Gralkor.Client.InMemory.flushes() == ["session-1"]
+        end
+
+        test "and success is returned before the flush completes" do
           unquote(setup_block).()
           configure_flush(:ok)
 

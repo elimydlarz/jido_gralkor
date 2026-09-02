@@ -250,7 +250,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       assert owned.id == "systems"
     end
 
-    test "and information saved through Reflections at that destination remains unchanged" do
+    test "and artefacts written through Destination outputs at that destination remain unchanged" do
       systems = replaceable_store("operator-one", "systems", :global)
 
       reflection_information = %{

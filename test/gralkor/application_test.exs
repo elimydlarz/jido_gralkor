@@ -577,5 +577,22 @@ defmodule Gralkor.ApplicationTest do
       assert rec["group_id"] == Client.sanitize_group_id("flush_group")
       assert rec["episode_body"] =~ "vacuum"
     end
+
+    test "and the logical group is encoded exactly once by that graph pool boundary", %{g: g} do
+      cb = App.build_flush_callback({:embedded, "/tmp/never_used"})
+
+      turns = [
+        [
+          Gralkor.Message.new("user", "the backup keeps failing"),
+          Gralkor.Message.new("assistant", "I moved the vacuum job to 04:00")
+        ]
+      ]
+
+      assert :ok = cb.("operator/one", "Susu", "Eli", nil, turns)
+
+      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      rec = Pythonx.decode(rec)
+      assert rec["group_id"] == Client.sanitize_group_id("operator/one")
+    end
   end
 end

@@ -319,7 +319,7 @@ defmodule Gralkor.Client.NativeTest do
   describe "if named-Lens capture is requested with a missing or blank operator identifier" do
     setup :start_capture_buffer
 
-    test "then an argument error names the operator identifier and no turn is buffered" do
+    test "then an argument error naming the operator identifier is raised" do
       for operator_id <- [nil, "", "  "],
           lens_args <- [["observations"], ["observations", []]] do
         assert_raise ArgumentError, ~r/operator_id/, fn ->
@@ -332,6 +332,21 @@ defmodule Gralkor.Client.NativeTest do
             | lens_args
           ])
         end
+      end
+
+      assert CaptureBuffer.turns_for("s1") == []
+    end
+
+    test "and no turn is buffered" do
+      assert_raise ArgumentError, ~r/operator_id/, fn ->
+        Native.capture(
+          "s1",
+          " ",
+          "Susu",
+          "Eli",
+          [Message.new("user", "hi")],
+          "observations"
+        )
       end
 
       assert CaptureBuffer.turns_for("s1") == []
@@ -578,6 +593,16 @@ defmodule Gralkor.Client.NativeTest do
       assert :ok = Native.memory_add("g1", "content", "manual")
       assert [episode] = episodes(g)
       refute "entity_types" in episode["kwargs"]
+      refute "excluded_entity_types" in episode["kwargs"]
+    end
+
+    test "and generic entity and relationship extraction remains enabled without an application-owned schema",
+         %{g: g} do
+      assert :ok = Native.memory_add("g1", "content", "manual")
+      assert [episode] = episodes(g)
+      refute "entity_types" in episode["kwargs"]
+      refute "edge_types" in episode["kwargs"]
+      refute "edge_type_map" in episode["kwargs"]
       refute "excluded_entity_types" in episode["kwargs"]
     end
   end
