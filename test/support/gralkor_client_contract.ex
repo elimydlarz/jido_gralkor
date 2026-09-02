@@ -296,6 +296,37 @@ defmodule Gralkor.ClientContract do
         end
       end
 
+      describe "if a flush or flush-and-await is requested with a missing or blank session id" do
+        test "then an argument error is raised at the port boundary" do
+          unquote(setup_block).()
+          configure_flush(:ok)
+          configure_flush_and_await(:ok)
+
+          for session_id <- [nil, "", "  "] do
+            assert_raise ArgumentError, ~r/session_id/, fn -> client().flush(session_id) end
+
+            assert_raise ArgumentError, ~r/session_id/, fn ->
+              client().flush_and_await(session_id, 5_000)
+            end
+          end
+        end
+
+        test "and no backend call is made" do
+          unquote(setup_block).()
+          configure_flush(:ok)
+          configure_flush_and_await(:ok)
+
+          assert_raise ArgumentError, ~r/session_id/, fn -> client().flush("") end
+
+          assert_raise ArgumentError, ~r/session_id/, fn ->
+            client().flush_and_await("", 5_000)
+          end
+
+          assert Gralkor.Client.InMemory.flushes() == []
+          assert Gralkor.Client.InMemory.flush_and_awaits() == []
+        end
+      end
+
       describe "when a flush is requested for a session" do
         test "then the call is recorded with its session id" do
           unquote(setup_block).()
