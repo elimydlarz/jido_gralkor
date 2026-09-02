@@ -221,7 +221,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       assert_raise ArgumentError,
                    ~r/invalid Destination "operator\/shared".*reserved.*"operator\/"/,
-                   fn -> Client.lens!("observations") end
+                   fn -> Gralkor.Destination.Registry.configured!() end
     end
 
     test "and a duplicate Destination name is identified" do
