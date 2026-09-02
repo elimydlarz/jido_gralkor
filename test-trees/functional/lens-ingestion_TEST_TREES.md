@@ -1,4 +1,4 @@
-Functional: lens-ingestion (src: lib/gralkor/lens/ingestion.ex, lib/gralkor/lens/ingestion/store.ex, lib/gralkor/lens/storage.ex; functional: test/functional/lens_ingestion_functional_test.exs)
+Functional: lens-ingestion (src: lib/gralkor/client.ex, lib/gralkor/lens/ingestion.ex, lib/gralkor/lens/ingestion/store.ex, lib/gralkor/lens/storage.ex; functional: test/functional/lens_ingestion_functional_test.exs)
 
 when information is submitted through a registered Lens
   then the Lens's ingestion process receives the original information and a store bound to that Lens
@@ -10,6 +10,7 @@ when information is submitted through a registered Lens
 where information is submitted directly without a mounted plugin or conversational turn
   then the selected Lens's ingestion process runs without requiring an agent response or capture flush
   and the caller observes whether ingestion succeeded or failed
+  and completed ingestion neither resolves nor invokes configured Reflections
 
 if ingestion selects an invalid Lens
   then ingestion fails before an ingestion process runs or memory is stored

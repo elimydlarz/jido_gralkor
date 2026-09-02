@@ -151,6 +151,7 @@ when the final Chain of Thought step returns valid structured output
   and the artefact contains exactly its stable identifier and structured payload
   and the artefact carries no producer identity
   and the caller receives that artefact
+  and the Runner does not deliver any declared Destination or return output
 
 if a Reflection's Chain of Thought completes without a valid final structured output
   then the Reflection fails identifying its name and missing artefact
