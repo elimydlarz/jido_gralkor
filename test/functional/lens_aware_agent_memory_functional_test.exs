@@ -270,7 +270,10 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
              }
     end
 
-    test "where no conversation thread has been committed then memory search still runs for the current operator" do
+  end
+
+  describe "when an agent with a mounted memory plugin invokes memory search > where no conversation thread has been committed" do
+    test "then memory search still runs for the current operator" do
       assert :ok =
                Client.ingest(%Ingest{
                  id: "first-turn-search",
@@ -301,7 +304,10 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert [%{"destination" => "observations"}] = Jason.decode!(result)
     end
 
-    test "where both selectors are omitted then memory search uses every accessible registered Destination" do
+  end
+
+  describe "when an agent with a mounted memory plugin invokes memory search > where the Destination selector is omitted or empty > and the Lens selector is omitted or empty" do
+    test "then memory search uses every accessible registered Destination" do
       for {lens, content} <- [
             {"operator", "operator memory"},
             {"shared-generalisations", "global memory"},
@@ -516,7 +522,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   end
 
   describe "if an agent turn selects an unknown or non-binary Lens" do
-    test "then handling the turn fails before memory addition or capture and identifies the invalid Lens" do
+    test "then handling the turn fails before memory addition or capture" do
       assert {:ok, plugin_state} =
                Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
 
@@ -535,6 +541,24 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert InMemory.adds() == []
       assert InMemory.captures() == []
+    end
+
+    test "and the invalid Lens is identified" do
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+
+      for invalid <- ["missing", 42] do
+        signal = %Jido.Signal{
+          id: "invalid-lens",
+          source: "/functional",
+          type: "ai.react.query",
+          data: %{query: "Remember this", tool_context: %{lens: invalid}}
+        }
+
+        assert_raise ArgumentError, ~r/unknown Lens|invalid Lens/, fn ->
+          Plugin.handle_signal(signal, %{agent: agent(plugin_state)})
+        end
+      end
     end
   end
 
@@ -668,7 +692,17 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   end
 
   describe "if a mounted plugin receives the removed `:search_destinations` option" do
-    test "then mounting fails before the plugin handles an agent signal and the error identifies MemorySearch's per-search `destinations` selector as its replacement" do
+    test "then mounting fails before the plugin handles an agent signal" do
+      assert_raise ArgumentError, ~r/search_destinations.*MemorySearch.*destinations/s, fn ->
+        Plugin.mount(%{},
+          agent_name: "Susu",
+          ingestion_lens: "observations",
+          search_destinations: ["observations"]
+        )
+      end
+    end
+
+    test "and the error identifies MemorySearch's per-search `destinations` selector as its replacement" do
       assert_raise ArgumentError, ~r/search_destinations.*MemorySearch.*destinations/s, fn ->
         Plugin.mount(%{},
           agent_name: "Susu",
