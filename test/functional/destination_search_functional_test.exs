@@ -677,6 +677,18 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
       refute_receive {:destination_search, _, _, _, _, _, _}
     end
+
+    test "then an invalid Destination selector is identified before search starts" do
+      assert_raise ArgumentError, ~r/search destinations must be a list/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "question",
+          destinations: "first"
+        })
+      end
+
+      refute_receive {:destination_search, _, _, _, _, _, _}
+    end
   end
 
   describe "if search combines Lenses with a non-episode result type" do
