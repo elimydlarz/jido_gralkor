@@ -351,7 +351,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate i
 
 **Session identity.** `session_id` is the current Jido thread id (read from `agent.state[:__thread__].id`, populated by `Jido.Thread.Plugin`). The plugin does not mint its own identifier — Jido's thread lifecycle is the single source of truth.
 
-**Destinations.** Every Lens and Reflection references a registered Destination, which is one graph. `global` is the single shared graph, `operator` resolves to `operator/<operator id>`, and an application Destination resolves to its exact shared name. Appending Lenses and Reflections govern their own extraction. Multiple writers may save to the same Destination. Replacement writes inject `_gralkor_lens` into supplied nodes and relationships so a replaceable Lens changes only its own content there.
+**Destinations.** Every Lens and every Reflection Destination output references a registered Destination, which is one graph. `global` is the single shared graph, `operator` resolves to `operator/<operator id>`, and an application Destination resolves to its exact shared name. Appending Lenses and Destination outputs govern their own extraction. Multiple writers may save to the same Destination. Replacement writes inject `_gralkor_lens` into supplied nodes and relationships so a replaceable Lens changes only its own content there.
 
 **Post-ingestion Reflections.** Lens-aware capture requires a non-blank operator before buffering. A successful flush first completes every intended Lens ingestion and retains the actual zero, one, or many outputs each Lens stored. Every completed representation has exactly its own `id`, `lens`, `content`, and `result`. CaptureBuffer assigns that buffered ingestion one cryptographically collision-resistant ID and reuses it across flush retries; direct `Gralkor.Ingest` callers supply their own replay-stable ID. When at least one representation was stored, the declared Reflections are then scheduled asynchronously. Each Reflection runs independently, so one failure does not prevent another from completing or storing its artefact.
 
@@ -574,9 +574,11 @@ On each store write, graphiti receives the selected Lens or Reflection ontology'
 
 ## Configure Reflections
 
-A Reflection is an asynchronous synthesis process declared by name, one or more triggers, a registered Destination, an extraction ontology, and a repository YAML Chain of Thought. Supported triggers are `:ingestion`, `:agent_request`, and a schedule written as `[schedule: "<cron>", operator_id: "<operator>"]`; cron expressions may use five or six fields. The packaged `generalisations` and `erl` Reflections enable `:ingestion`. Reflections are not Lenses: Lens definitions remain independent views for absorbing information, while an ingestion-triggered Reflection operates only after every intended Lens has finished.
+A Reflection is an asynchronous synthesis process declared by name, one or more triggers, a repository YAML Chain of Thought, and an `outputs` list. Supported triggers are `:programmatic`, `{:lens_ingestion, :any}`, and `{:lens_ingestion, [lens_names]}`. A Lens-ingestion Reflection operates only after every intended Lens has finished. The packaged `generalisations` and `erl` Reflections use `{:lens_ingestion, :any}`.
 
-The supervised scheduler coordinates each logical completion independently by `{operator_id, invocation_id, reflection_name}`. Ingestion reuses its replay-stable ingestion ID as the invocation ID; agent requests mint and return an invocation ID; scheduled occurrences derive one deterministically from the Reflection, operator, and due time. The scheduler durably journals canonical lookup, Runner, and canonical-storage phases; permits at most one active attempt for that key; and uses bounded retries with default delays of one, two, and four seconds. Retry deadlines survive Scheduler or VM restart, so restart does not skip the remaining backoff. Returned errors, task-start failures, crashes, and timeouts consume that phase's retry budget; delays and timeouts outside BEAM's supported timer range are rejected, and an immutable-content conflict is terminal during lookup or write. A crash-interrupted active attempt also consumes the durable budget after restart, except that an uncertain active storage or storage-confirmation attempt is checked for canonical completion again—even its final allowed attempt can therefore confirm a committed response-lost write across repeated Scheduler crashes. Terminal failures are logged with Reflection, phase, attempt count, and reason. Runner/tool effects are at-least-once because a process can fail after an external effect but before reporting success. Runner output must carry the deterministic ID and Reflection name supplied for the logical completion; a mismatch consumes the bounded Runner retry rather than reaching canonical storage. Once the Runner returns valid output, storage retries retain that exact artefact and never rerun successful siblings. Restart resumes admitted work, while replay first confirms canonical storage so already completed work is not executed again. Journalled execution data is restricted to restart-safe values: canonical store selection and restart-safe Runner/tool data persist, inference and tool-executor functions come from the replacement Scheduler configuration, and scheduling rejects process-local values such as PIDs or references inside durable tool context. Graceful drain closes admission, waits for every admitted key, and is preceded by awaiting already-started capture flush workers so none can schedule work after the drain boundary. CaptureBuffer retains the Scheduler identity even when its initial Reflection registry is empty, and the dedicated Reflection supervisor can replace a Scheduler that exits during drain.
+Every Reflection declares exactly one `:destination` output and at most one `:return` output. The Destination output names the memory Destination and extraction ontology. A return output names only a consumer module implementing `Gralkor.Artefact.ReturnHandler`; Gralkor always invokes its standard `return/3` callback.
+
+The supervised Scheduler coordinates each logical completion independently by `{operator_id, invocation_id, reflection_name}`. Lens ingestion uses its replay-stable ingestion ID as the invocation ID; programmatic callers supply their own replay-stable ID. The Scheduler journals lookup, Runner, Destination output, and return output phases independently and retries each phase with the exact same `%Gralkor.Artefact{id, payload}`. Output delivery is at-least-once: handlers must make repeated calls idempotent using `artefact.id`. A return failure retries the return output without rerunning the Runner or a successful Destination output; a terminal Destination failure does not prevent the return output from being attempted. Graceful shutdown drains all admitted work.
 
 The package supplies two declarations by default:
 
@@ -587,7 +589,7 @@ Before packaged generalisation inference begins, Gralkor performs one default ep
 
 The packaged process inspects current and related observations with prior generalisations, then carries forward, combines, broadens, narrows, splits, replaces, or otherwise revises generalisations as those observations warrant. Each stored generalisation contains exactly `content`, evolution-depth `level`, and `evolves_from`. `evolves_from` contains only the influencing prior generalisations, each snapshotted as exactly its `content` and `level`; historical predecessors and snapshots remain unchanged. A generalisation with no snapshots is level `1`; otherwise its level is one greater than the highest referenced level.
 
-Set `:reflections` to replace those defaults with application declarations, and set `:reflection_root` when their YAML paths resolve from somewhere other than the installed application root. A Reflection's optional `:ontology` governs its extraction and defaults to `Gralkor.DefaultOntology`.
+Set `:reflections` to replace those defaults, and set `:reflection_root` when their YAML paths resolve from somewhere other than the installed application root. A Destination output's optional `:ontology` defaults to `Gralkor.DefaultOntology`.
 
 ```elixir
 config :jido_gralkor,
@@ -595,32 +597,48 @@ config :jido_gralkor,
   reflections: [
     [
       name: "release-review",
-      triggers: [
-        :ingestion,
-        :agent_request,
-        [schedule: "0 9 * * 1", operator_id: "release-operator"]
-      ],
-      destination: "global",
-      ontology: MyApp.ReleaseOntology,
-      chain_of_thought: "priv/reflections/release-review.yaml"
+      triggers: [:programmatic, {:lens_ingestion, ["release-notes"]}],
+      chain_of_thought: "priv/reflections/release-review.yaml",
+      outputs: [
+        [
+          kind: :destination,
+          destination: "global",
+          ontology: MyApp.ReleaseOntology
+        ],
+        [kind: :return, handler: MyApp.ReleaseReviews]
+      ]
     ]
   ]
 ```
 
-An agent can admit one named request-triggered Reflection without waiting for its completion:
+The return handler is intentionally small because Gralkor owns the mapping and callback name:
+
+```elixir
+defmodule MyApp.ReleaseReviews do
+  @behaviour Gralkor.Artefact.ReturnHandler
+
+  @impl true
+  def return(operator_id, invocation_id, %Gralkor.Artefact{} = artefact) do
+    MyApp.deliver_release_review(operator_id, invocation_id, artefact)
+  end
+end
+```
+
+A caller can admit one named programmatic Reflection without waiting for its artefact:
 
 ```elixir
 {:ok, invocation_id} =
   Gralkor.Client.request_reflection(
     "release-review",
     "operator-42",
+    "release-2026-09-02",
     "Review the current release decision",
     tools: host_tools,
     tool_context: host_tool_context
   )
 ```
 
-Unknown names and Reflections without `:agent_request` return explicit errors before durable work is admitted. Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the invocation ID, trigger type, trigger context, host tools, and tool context; ingestion triggers also receive completed lensed representations. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one stored `%Gralkor.Reflection.Artefact{}` whose fields are exactly `id`, `reflection`, and `payload`.
+Unknown names and Reflections without `:programmatic` return explicit errors before durable work is admitted. Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the invocation ID, trigger type, trigger context, host tools, and tool context; Lens-ingestion triggers also receive completed lensed representations. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one `%Gralkor.Artefact{}` whose fields are exactly `id` and `payload`. Producer identity remains execution provenance and is not embedded in the artefact.
 
 Registry-backed client operations resolve current application configuration per call. Mounted plugins retain their resolved ingestion Lens, each MemorySearch invocation carries its own selectors, and CaptureBuffer plus scheduled-trigger supervision retain the Reflection declarations loaded when they start. Restart the application after changing mounted plugin, capture, scheduled Reflection, or backend configuration.
 
@@ -646,7 +664,7 @@ Multiple Reflections and Lenses may save to the same Destination. Search selects
   })
 ```
 
-`result_type: :artefacts` returns final Reflection artefacts from the selected Destinations, and `artefact_id` optionally narrows the lookup to one exact artefact. Each artefact carries its declaring Reflection. Its deterministic UUID derives from the logical completion key. Before extraction, Graphiti waits for a graph uniqueness constraint and acquires a graph-backed UUID claim with a renewable lease, so independent application runtimes serialize equal work and reject conflicting immutable content before Graphiti's upsert can overwrite it. Lease expiry and renewal use the graph server's clock; every ownership transfer advances a generation. For a claimed deterministic UUID, the episode, every extracted entity and edge, and its extraction-completion marker persist in one generation-fenced FalkorDB query, so loss of ownership aborts the complete graph-effect set before it commits. Until that marker exists, canonical lookup retains the episode only as resumable storage state and artefact search excludes it. Repeating an equal marked write is a successful confirmation without extraction; an equal unmarked deterministic episode re-enters normal extraction without rerunning the Runner. Artefact search uses ranked completed episodes to select up to the requested number of artefact identifiers, then enumerates every completed episode carrying those identifiers independently of BM25. It collapses equal historical duplicates by artefact ID, preserves the selected ranking, and reports an artefact conflict if any completed duplicate under a selected ID disagrees.
+`result_type: :artefacts` returns artefacts from the selected Destinations, and `artefact_id` optionally narrows the lookup to one exact artefact. The deterministic UUID derives from the logical Reflection completion key, but the artefact itself contains no producer identity. Before extraction, Graphiti waits for a graph uniqueness constraint and acquires a graph-backed UUID claim with a renewable lease, so independent application runtimes serialize equal work and reject conflicting immutable content before Graphiti's upsert can overwrite it. Lease expiry and renewal use the graph server's clock; every ownership transfer advances a generation. For a claimed deterministic UUID, the episode, every extracted entity and edge, and its extraction-completion marker persist in one generation-fenced FalkorDB query, so loss of ownership aborts the complete graph-effect set before it commits. Until that marker exists, canonical lookup retains the episode only as resumable storage state and artefact search excludes it. Repeating an equal marked write is a successful confirmation without extraction; an equal unmarked deterministic episode re-enters normal extraction without rerunning the Runner. Artefact search uses ranked completed episodes to select up to the requested number of artefact identifiers, then enumerates every completed episode carrying those identifiers independently of BM25. It collapses equal historical duplicates by artefact ID, preserves the selected ranking, and reports an artefact conflict if any completed duplicate under a selected ID disagrees.
 
 Episodes written before the extraction-completion marker existed remain hidden because an absent marker cannot distinguish a fully extracted legacy write from a partial write. The safe upgrade path is to replay the original stable ingestion: this creates or resumes the deterministic UUID and establishes the marker; unmarked legacy episodes remain non-searchable. An operator-authored migration may mark a legacy episode only after independently verifying that its extraction completed and its immutable artefact content is the intended canonical value.
 
@@ -710,7 +728,7 @@ The embedded Gralkor adapter (under `lib/gralkor/`):
 - `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — append, replacement, and search capabilities for exact Destination graph identities.
 - `Gralkor.Lens.Ingestion.Store` — the built-in straight-through ingestion process.
 - `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, `Gralkor.Reflection.Runner`, `Gralkor.Reflection.Supervisor`, `Gralkor.Reflection.Scheduler`, and `Gralkor.Reflection.Journal` — validated YAML declarations plus restartable, durable, bounded, phase-aware asynchronous execution after completed Lens ingestion.
-- `Gralkor.Reflection.Artefact`, `Gralkor.Reflection.Store`, and the Graphiti/InMemory Reflection storage modules — deterministic create-or-confirm artefact persistence with explicit immutable-content conflicts at referenced Destinations.
+- `Gralkor.Artefact`, `Gralkor.Artefact.ReturnHandler`, and `Gralkor.Destination.Storage` — producer-independent artefacts, standard consumer return delivery, and deterministic create-or-confirm persistence at Destination outputs.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
 - `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Format`, `Gralkor.Config`, and `Gralkor.Message` — the embedded capture, recall, and Graphiti pipelines.
 
