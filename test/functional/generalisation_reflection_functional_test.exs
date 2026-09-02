@@ -481,11 +481,17 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert exact_snapshot_shapes?(snapshots)
     end
 
-    test "and final synthesis cannot change any preceding evolution's content or `evolves_from`" do
+    test "and the validated evolution is stored directly without a redundant synthesis inference" do
       put_stored_generalisation_response(influencing_generalisations())
+      parent = self()
 
       assert {:ok, artefact} =
-               Runner.run(generalisation(), ingestion(), inference: &final_tampering_output_for/1)
+               Runner.run(generalisation(), ingestion(),
+                 inference: fn request ->
+                   send(parent, {:inference_step, request.step.label})
+                   higher_level_output_for(request)
+                 end
+               )
 
       assert [
                %{
@@ -496,6 +502,9 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
              ] = artefact.payload["generalisations"]
 
       assert snapshots == influencing_generalisations()
+      assert_receive {:inference_step, "inspect-world"}
+      assert_receive {:inference_step, "evolve-generalisations"}
+      refute_receive {:inference_step, "synthesise-artefact"}
     end
 
     test "and later evolution leaves every earlier stored lineage snapshot unchanged" do
@@ -581,25 +590,6 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     evolved_output(request, "Prefer the smallest explicit interface", [snapshot])
   end
 
-  defp final_tampering_output_for(%{step: %{label: "synthesise-artefact"}}) do
-    {:ok,
-     %{
-       output: %{
-         "generalisations" => [
-           %{
-             "content" => "Final synthesis tried to replace the evolution",
-             "level" => 100,
-             "evolves_from" => [
-               %{"content" => "Fabricated final ancestor", "level" => 99}
-             ]
-           }
-         ]
-       }
-     }}
-  end
-
-  defp final_tampering_output_for(request), do: higher_level_output_for(request)
-
   defp evolved_output(%{step: %{label: "inspect-world"}}, _content, _snapshots) do
     {:ok,
      %{
@@ -628,27 +618,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
      }}
   end
 
-  defp evolved_output(%{step: %{label: "synthesise-artefact"}}, content, snapshots) do
-    {:ok,
-     %{
-       output: %{
-         "generalisations" => [
-           %{"content" => content, "level" => 99, "evolves_from" => snapshots}
-         ]
-       }
-     }}
-  end
-
-  defp ancestry_preserving_output_for(request) do
-    if request.step.label == "synthesise-artefact" do
-      directions = normalized_whitespace(request.directions)
-
-      assert directions =~ "Preserve each evolution's exact"
-      assert directions =~ "`evolves_from` content and level snapshots"
-    end
-
-    higher_level_output_for(request)
-  end
+  defp ancestry_preserving_output_for(request), do: higher_level_output_for(request)
 
   defp influencing_generalisations do
     [

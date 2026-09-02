@@ -34,5 +34,5 @@ when the packaged generalisation Reflection completes
   then its artefact payload contains an array of generalisations
   and each stored generalisation contains exactly `content`, `level`, and `evolves_from`
   and each stored `evolves_from` snapshot is the exact content-and-level snapshot of a prior generalisation decoded from related-memory
-  and final synthesis cannot change any preceding evolution's content or `evolves_from`
+  and the validated evolution is stored directly without a redundant synthesis inference
   and later evolution leaves every earlier stored lineage snapshot unchanged
