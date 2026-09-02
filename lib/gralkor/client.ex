@@ -2,18 +2,23 @@ defmodule Gralkor.Client do
   @moduledoc """
   Public entry point and adapter port for Gralkor memory.
 
-  Named Lens operations use `ingest/1` and `replace/1`; `search/1` selects
-  registered Destinations. `request_reflection/4` admits one named
+  Named Lens operations use `ingest/1` and `replace/1`; `search/1` reads
+  registered Destinations and may filter episode writers by Lens.
+  `request_reflection/4` admits one named
   request-triggered Reflection with the requesting operator's content, tools,
   and tool context. Ingestion
   resolves an appending Lens and invokes its ingestion process with a
   Lens-bound store. Replacement validates and stores the complete graph for a
   replaceable Lens. Lenses and Reflections reference first-class Destinations,
   each of which names one graph. Appending Lenses and Reflections select the
-  ontology for their own writes. Destination search runs every distinct
-  selection concurrently, defaults an empty selection to the packaged
-  `operator` and `global` graphs, and can return facts, nodes, episodes, or
-  Reflection artefacts.
+  ontology for their own writes. With empty selectors, search runs every
+  accessible registered Destination concurrently and returns episodes from
+  every Lens and Reflection writer. Destination and Lens names are ORed within
+  their respective selectors and ANDed across them; Lens filters are
+  episode-only. Each result identifies its Destination, while each episode
+  identifies its originating Lens or Reflection and Lens episodes retain their
+  source description. Facts, nodes, and Reflection artefacts are explicit
+  advanced result types.
 
   The compatibility surface remains `recall/4`, `capture/5`, `flush/1`,
   `flush_and_await/2`, and `memory_add/3` or `/4`. Lens-aware capture uses
@@ -21,8 +26,9 @@ defmodule Gralkor.Client do
   additional Lenses. The internal `capture/8` form also carries the host tools
   and tool context made available to subsequent Reflections. Logical graph IDs
   are sanitised only at their physical graph boundary (`sanitize_group_id/1`).
-  The `operator` Destination resolves to `operator/<operator id>` and every
-  other Destination resolves to its exact name.
+  The `operator` Destination resolves to `operator/<operator id>`, so search
+  reads only the current operator's operator graph; every other Destination
+  resolves to its exact shared name.
 
   `flush/1` returns `:ok` before the buffered turns have landed
   (fire-and-forget — appropriate for shutdown paths that cannot block).

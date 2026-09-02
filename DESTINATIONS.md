@@ -62,19 +62,54 @@ Information saved through other Lenses, information saved through Reflections, a
 
 ## Search
 
-Search names Destinations directly:
+Search reads registered Destinations. With no selectors it searches every accessible registered Destination and returns relevant episodes:
+
+```elixir
+Gralkor.Client.search(%Gralkor.Search{
+  operator_id: operator_id,
+  query: "What should I remember?"
+})
+```
+
+That includes the packaged `operator` and `global` Destinations and every application Destination. Only the current operator's `operator/<operator id>` graph is searched; other registered Destinations retain their shared graph identity.
+
+Callers may narrow the graphs with `destinations` and may narrow episode writers with `lenses`:
 
 ```elixir
 Gralkor.Client.search(%Gralkor.Search{
   operator_id: operator_id,
   query: "What should I remember?",
   destinations: ["operator", "global"],
+  lenses: ["support-cases", "decisions"]
+})
+```
+
+Names within each selector are alternatives: either Destination and either Lens may contribute. When both selectors are present, an episode must satisfy both dimensions. A Lens selector filters writers within the selected Destination graphs; it is not a Destination alias. Lens filtering applies only to episode results.
+
+Each distinct Destination is searched once. Multiple Destinations are searched concurrently, their results retain requested Destination order, and every result identifies its Destination. Episode results also identify their writer. A Lens-written result has this shape:
+
+```elixir
+%{
+  destination: "global",
+  episode: %{
+    content: "...",
+    source_description: "support transcript",
+    lens: "support-cases"
+  }
+}
+```
+
+A Reflection-written result carries `episode.reflection` with the Reflection name and its encoded artefact in `episode.content`.
+
+Facts, nodes, and Reflection artefacts remain available as explicit advanced result types:
+
+```elixir
+Gralkor.Client.search(%Gralkor.Search{
+  operator_id: operator_id,
+  query: "What should I remember?",
+  destinations: ["global"],
   result_type: :facts
 })
 ```
 
-Each distinct Destination is searched once. Multiple Destinations are searched concurrently, their results retain requested Destination order, and every result identifies its Destination.
-
-When no Destination is supplied, search uses `operator` and `global`.
-
-Search supports `:facts`, `:nodes`, `:episodes`, and `:artefacts`. Node results may be filtered by ontology entity type, and fact results by ontology relationship type. Lens and Reflection names are not search aliases.
+Set `result_type` to `:facts`, `:nodes`, or `:artefacts` for those forms. Node results may be filtered by ontology entity type, and fact results by ontology relationship type. A non-empty `lenses` selector cannot be combined with these non-episode result types.
