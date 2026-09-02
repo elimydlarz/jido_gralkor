@@ -227,6 +227,52 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert prompt =~ "A prior generalisation"
     end
 
+    test "and evolution inference receives the exact eligible prior-generalisation lineage snapshots separately from observations" do
+      prior = %{"content" => "Prefer explicit APIs", "level" => 2, "evolves_from" => []}
+
+      stored_information = [
+        %{
+          destination: "global",
+          episode: %{
+            reflection: "generalisations",
+            content:
+              Jason.encode!(%{
+                id: "prior-generalisations",
+                payload: %{generalisations: [prior]}
+              })
+          }
+        },
+        %{
+          destination: "observations-memory",
+          episode: %{lens: "observations", content: "Prefer explicit APIs"}
+        }
+      ]
+
+      request = %{
+        directions: "Evolve generalisations.",
+        operator_id: "operator-one",
+        output_schema: %{"evolutions" => "Array<{ content: string }>"},
+        representations: ingestion().representations,
+        stored_information: stored_information,
+        tool_context: %{},
+        tools: []
+      }
+
+      call = fn _action, params, _context ->
+        send(self(), {:default_inference_prompt, params.prompt})
+        {:ok, %{text: Jason.encode!(%{"evolutions" => []})}}
+      end
+
+      assert {:ok, %{output: %{"evolutions" => []}}} =
+               Runner.default_inference(request, call)
+
+      assert_receive {:default_inference_prompt, prompt}
+
+      assert prompt =~
+               "Eligible prior-generalisation lineage snapshots:\n" <>
+                 Jason.encode!([Map.take(prior, ["content", "level"])])
+    end
+
     test "and inference is directed to revisit current and related observations together with prior generalisations" do
       directions = step_directions("inspect-world")
 
