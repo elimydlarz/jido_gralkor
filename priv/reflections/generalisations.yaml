@@ -27,17 +27,3 @@ steps:
       evolution.
     output:
       evolutions: "Array<{ content: string; evolves_from: Array<{ content: string; level: integer }>; reasoning: string }>"
-
-  - label: synthesise-artefact
-    directions: |-
-      Synthesize the final generalisation artefact from these evolutions:
-
-      {{evolutions}}
-
-      Include every evolved generalisation. A generalisation with an empty
-      `evolves_from` has evolution-depth level 1. Otherwise its level is one
-      greater than the highest level in `evolves_from`. Preserve each
-      evolution's exact `evolves_from` content and level snapshots in the final
-      result.
-    output:
-      generalisations: "Array<{ content: string; level: integer; evolves_from: Array<{ content: string; level: integer }> }>"
