@@ -107,10 +107,10 @@ when a consumer stores the default ERL Reflection's artefact through its Destina
   and the Runner-returned Learning payload contains exactly its problem kind, approach, success, and reusable lesson
 
 when a configured Reflection is loaded
-  then its declared YAML is loaded as the programmatic Chain of Thought
+  then its declared YAML is loaded as the Reflection's Chain of Thought
 
 when a Reflection Runner is invoked
-  then its programmatic Chain of Thought runner starts its first step for the supplied operator and invocation
+  then its ordered Chain of Thought runner starts its first step for the supplied operator and invocation
   and makes the consumer-supplied invocation context available to every step
   where the invocation supplies ingested representations
     then every representation is available with its identifier, Lens identity, content, and storage result
