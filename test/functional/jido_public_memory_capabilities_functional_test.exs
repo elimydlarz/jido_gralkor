@@ -23,6 +23,17 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       do: {:error, :unavailable}
   end
 
+  defmodule RecordingSearchStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(destination, operator_id, query, result_type, max_results, opts) do
+      test_pid = Application.fetch_env!(:jido_gralkor, :public_search_test_pid)
+      send(test_pid, {:public_search, destination.name, operator_id, query, result_type, max_results, opts})
+      {:ok, [%{content: "matching stored episode", lens: "observations"}]}
+    end
+  end
+
   setup do
     previous =
       for key <- [:destinations, :destination_storage, :lenses, :lens_storage], into: %{} do
@@ -184,6 +195,29 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                  "episode" => %{
                    "content" => "private memory for operator-one",
                    "lens" => "operator"
+                 }
+               }
+             ]
+    end
+
+    test "and the usable query selects relevant stored episodes" do
+      Application.put_env(:jido_gralkor, :destination_storage, RecordingSearchStorage)
+      Application.put_env(:jido_gralkor, :public_search_test_pid, self())
+      on_exit(fn -> Application.delete_env(:jido_gralkor, :public_search_test_pid) end)
+
+      query = "  launch city  "
+
+      assert {:ok, %{result: result}} =
+               memory_search(%{query: query, destinations: ["observations"]}, [])
+
+      assert_receive {:public_search, "observations", "operator-one", ^query, :episodes, 20, []}
+
+      assert Jason.decode!(result) == [
+               %{
+                 "destination" => "observations",
+                 "episode" => %{
+                   "content" => "matching stored episode",
+                   "lens" => "observations"
                  }
                }
              ]
