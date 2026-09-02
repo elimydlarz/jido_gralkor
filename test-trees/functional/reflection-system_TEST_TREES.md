@@ -1,12 +1,8 @@
-Functional: reflection-system (src: lib/gralkor/reflection.ex, lib/gralkor/reflection/registry.ex, lib/gralkor/artefact.ex, lib/gralkor/artefact/return_handler.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex, priv/reflections/erl.yaml, priv/reflections/generalisations.yaml; functional: test/functional/reflection_system_functional_test.exs)
+Functional: reflection-system (src: lib/gralkor/reflection.ex, lib/gralkor/reflection/registry.ex, lib/gralkor/artefact.ex, lib/gralkor/artefact/return_handler.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex, priv/reflections/erl.yaml, priv/reflections/generalisations.yaml; functional: test/functional/reflection_system_functional_test.exs)
 
 when Reflection declarations are validated
   while every Reflection has a non-blank name
   and every Reflection name is unique
-  and every Reflection declares one or more triggers
-  and every trigger is `:programmatic`, `{:lens_ingestion, :any}`, or `{:lens_ingestion, [lens_name]}`
-  and every Lens list is non-empty
-  and every named Lens is a registered appending Lens
   and every Reflection references a repository YAML Chain of Thought
   and every referenced Chain of Thought contains one or more ordered steps
   and every step has a non-blank label and natural-language directions
@@ -32,21 +28,6 @@ when Reflection declarations are validated
 
   if Reflection names are duplicated
     then validation fails identifying the duplicate name
-
-  if a Reflection declares no triggers
-    then validation fails identifying that Reflection and its missing triggers
-
-  if a Reflection declares a trigger other than `:programmatic` or `:lens_ingestion`
-    then validation fails identifying that Reflection and unsupported trigger
-
-  if a Lens-ingestion trigger contains an empty Lens list
-    then validation fails identifying that Reflection and empty Lens selection
-
-  if a Lens-ingestion trigger names an unknown Lens
-    then validation fails identifying that Reflection and unknown Lens
-
-  if a Lens-ingestion trigger names a Lens that does not support appending ingestion
-    then validation fails identifying that Reflection and incompatible Lens
 
   if a Reflection has no Chain of Thought
     then validation fails identifying that Reflection
@@ -111,9 +92,7 @@ when Reflection declarations are validated
 where the packaged default Reflections are used
   then ERL declares one Destination output referencing the packaged `operator` Destination
   and ERL's Destination output carries jido_gralkor's built-in experiential-learning ontology
-  and ERL declares `{:lens_ingestion, :any}`
   and generalisation declares one Destination output referencing the packaged `global` Destination
-  and generalisation declares `{:lens_ingestion, :any}`
   and neither packaged Reflection declares a return output
 
 where an application-defined Destination output omits its ontology
@@ -127,58 +106,14 @@ when the default ERL Reflection writes its artefact through its Destination outp
   and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields
   and the stored Learning payload contains exactly its problem kind, approach, success, and reusable lesson
 
-when ingestion completes through its intended Lenses
-  then the ingestion caller receives success without waiting for Reflection artefacts
-  and no Lens-ingestion Reflection is admitted before every intended Lens ingestion succeeds
-
-  while a Reflection declares `{:lens_ingestion, :any}`
-    then that Reflection is admitted exactly once for the completed ingestion
-    and the ingestion identifier becomes its `invocation_id`
-    and every completed representation is supplied to that Reflection
-
-  while a Reflection's named-Lens trigger matches one or more completed Lenses
-    then it is admitted exactly once for the completed ingestion
-    and the ingestion identifier becomes its `invocation_id`
-    and every completed representation is supplied to that Reflection
-    and additional matching Lenses do not admit another invocation for that ingestion
-
-  while none of a Reflection's named Lenses completed
-    then that Reflection is not admitted
-
-  while a Reflection declares only `:programmatic`
-    then that Reflection is not admitted
-
-if any intended Lens ingestion fails
-  then no Lens-ingestion Reflection is admitted for that incomplete ingestion
-
-when a consumer requests a Reflection programmatically with stable identity
-  while that Reflection declares `:programmatic`
-    then the consumer receives successful admission without waiting for its artefact
-    and only the named Reflection is admitted for that request
-    and the request content is supplied to that Reflection
-    and the consumer's host tools and tool context are supplied to that Reflection
-    and repeated requests with the same `{operator_id, invocation_id, reflection_name}` do not produce another artefact
-
-  if the named Reflection is unknown
-    then the request fails identifying the unknown Reflection before durable work is admitted
-
-  if the named Reflection does not declare `:programmatic`
-    then the request fails identifying the disabled programmatic trigger before durable work is admitted
-
-  if the `operator_id` or `invocation_id` is missing or blank
-    then the request fails identifying the invalid identity before durable work is admitted
-
-when an ingestion completes with no eligible Lens-ingestion Reflection
-  then ingestion succeeds without admitting Reflection work
-
 when a configured Reflection is loaded
   then its declared YAML is loaded as the programmatic Chain of Thought
 
-when an admitted Reflection runs
-  then its programmatic Chain of Thought runner starts its first step for the operator and triggering invocation
-  and makes the trigger type and trigger context available to every step
-  where the Reflection was triggered after ingestion
-    then every ingested representation is available with its identifier, Lens identity, content, and storage result
+when a Reflection Runner is invoked
+  then its programmatic Chain of Thought runner starts its first step for the supplied operator and invocation
+  and makes the consumer-supplied invocation context available to every step
+  where the invocation supplies ingested representations
+    then every representation is available with its identifier, Lens identity, content, and storage result
 
 when a Chain of Thought step begins
   then built-in inference receives that step's interpolated natural-language directions
@@ -215,38 +150,13 @@ when the final Chain of Thought step returns valid structured output
   then that structured output becomes one `%Gralkor.Artefact{}`
   and the artefact contains exactly its stable identifier and structured payload
   and the artefact carries no producer identity
-  and every declared output receives that exact artefact
-
-  where the Destination output references `operator`
-    then the artefact is searchable only by the operator whose invocation triggered the Reflection
-
-  where the Destination output references any other Destination
-    then the artefact is searchable by every operator through that Destination's one graph
-
-  where a return output is declared
-    then its handler's standard `return/3` callback receives the operator identifier, invocation identifier, and exact artefact
-
-  where no return output is declared
-    then no consumer return handler is called
-
-when multiple eligible Reflections process one triggering invocation
-  then every Reflection runs independently
-  and retry or terminal failure of one Reflection does not prevent another Reflection from producing its artefact
+  and the caller receives that artefact
 
 if a Reflection's Chain of Thought completes without a valid final structured output
   then the Reflection fails identifying its name and missing artefact
-  and the successful ingestion result remains unchanged
 
 if a Reflection's Chain of Thought fails
   then the Reflection failure identifies its name and reason
-  and the successful ingestion result remains unchanged
-  and every other declared Reflection remains eligible to produce its artefact
-
-if writing an artefact through one output fails
-  then the Reflection failure identifies its name, output kind, and reason
-  and the successful ingestion result remains unchanged
-  and every other declared output remains eligible to receive that artefact
-  and every other declared Reflection remains eligible to produce its artefact
 
 when a Destination is searched for artefacts
   then that Destination is searched
