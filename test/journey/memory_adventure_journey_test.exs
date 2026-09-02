@@ -258,18 +258,18 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when a fresh agent handles a request related to an evolved generalisation" do
-    test "then one MemorySearch call is made without selectors", %{adventure: adventure} do
+  describe "when a fresh request searches evolved generalisations" do
+    test "then MemorySearch runs once without selectors", %{adventure: adventure} do
       assert is_list(adventure.default_memory_search)
     end
 
-    test "and every accessible registered Destination is searched", %{adventure: adventure} do
+    test "and all registered Destinations contribute", %{adventure: adventure} do
       searched = Enum.map(adventure.default_memory_search, & &1["destination"])
 
       assert MapSet.new(searched) == MapSet.new(["operator", "global"])
     end
 
-    test "and its results include relevant lensed information and relevant stored generalisations",
+    test "and lensed information and stored generalisations contribute",
          %{adventure: adventure} do
       assert has_originating_lens?(
                adventure.default_memory_search,
@@ -284,14 +284,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              )
     end
 
-    test "and every result identifies its Destination and originating Lens or declaring Reflection",
+    test "and results retain Destination and origin provenance",
          %{adventure: adventure} do
       assert every_episode_has_provenance?(adventure.default_memory_search)
     end
   end
 
-  describe "when the agent searches with both Destination and Lens selectors" do
-    test "then only memory in the intersection is returned", %{adventure: adventure} do
+  describe "when one search selects a Destination and Lens" do
+    test "then results match the intersection", %{adventure: adventure} do
       assert adventure.selected_memory_search != []
 
       assert Enum.all?(adventure.selected_memory_search, fn result ->
@@ -299,7 +299,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              end)
     end
 
-    test "and those search selectors do not change the Lens used for later ingestion or capture",
+    test "and later ingestion retains its Lens",
          %{adventure: adventure} do
       assert has_originating_lens?(
                adventure.post_selector_published_episodes,
