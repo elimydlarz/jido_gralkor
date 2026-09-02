@@ -109,12 +109,6 @@ defmodule Gralkor.Reflection.Runner do
   defp search_related_memory(ingestion) do
     representations = representations(ingestion)
 
-    destinations =
-      representations
-      |> Enum.map(&field(&1, :lens))
-      |> Enum.map(&Client.lens!(&1).destination.name)
-      |> then(&Enum.uniq(["operator", "global" | &1]))
-
     query =
       representations
       |> Enum.map(&field(&1, :content))
@@ -124,7 +118,6 @@ defmodule Gralkor.Reflection.Runner do
     Client.search(%Search{
       operator_id: field(ingestion, :operator_id),
       query: query,
-      destinations: destinations,
       result_type: :episodes
     })
   end
@@ -165,15 +158,15 @@ defmodule Gralkor.Reflection.Runner do
   defp packaged_generalisation?(%Reflection{}), do: false
 
   defp normalize_generalisation(generalisation) do
-    preceding =
+    snapshots =
       generalisation
-      |> field(:generalises_over)
+      |> field(:evolves_from)
       |> Enum.map(fn item ->
         %{"content" => field(item, :content), "level" => field(item, :level)}
       end)
 
     level =
-      case preceding do
+      case snapshots do
         [] -> 1
         items -> items |> Enum.map(& &1["level"]) |> Enum.max() |> Kernel.+(1)
       end
@@ -181,7 +174,7 @@ defmodule Gralkor.Reflection.Runner do
     %{
       "content" => field(generalisation, :content),
       "level" => level,
-      "generalises_over" => preceding
+      "evolves_from" => snapshots
     }
   end
 
