@@ -263,8 +263,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert Jason.decode!(encoded_artefact) == %{
                "id" => "provenance-generalisation",
-               "payload" => artefact.payload,
-               "reflection" => "generalisations"
+               "payload" => artefact.payload
              }
     end
 
