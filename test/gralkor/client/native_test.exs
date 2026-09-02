@@ -549,6 +549,11 @@ defmodule Gralkor.Client.NativeTest do
       assert [episode] = episodes(g)
       assert episode["group_id"] == "operator_with_hyphens"
       assert episode["body"] == "Eli works at Anthropic"
+    end
+
+    test "and the trusted originating Lens is recorded as `operator`", %{g: g} do
+      assert :ok = Native.memory_add("g1", "content", "manual")
+      assert [episode] = episodes(g)
       assert episode["source_description"] == "manual [lens: operator]"
     end
 
@@ -626,7 +631,7 @@ defmodule Gralkor.Client.NativeTest do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then it is the source recorded on the episode", %{g: g} do
+    test "then it is retained as the source beneath trusted `operator` Lens provenance", %{g: g} do
       assert :ok = Native.memory_add("g1", "content", "captured")
       assert [%{"source_description" => "captured [lens: operator]"}] = episodes(g)
     end
@@ -636,7 +641,8 @@ defmodule Gralkor.Client.NativeTest do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then the source recorded on the episode is \"manual\"", %{g: g} do
+    test "then the source retained beneath trusted `operator` Lens provenance is \"manual\"",
+         %{g: g} do
       assert :ok = Native.memory_add("g1", "content", nil)
       assert [%{"source_description" => "manual [lens: operator]"}] = episodes(g)
     end

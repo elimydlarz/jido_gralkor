@@ -329,6 +329,22 @@ defmodule Gralkor.ApplicationTest do
       assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn])
       assert_receive {:add, "g1", "Eli: Q\nSusu: A", "captured", :ont}
     end
+
+    test "and the trusted originating Lens is recorded as `operator`", %{turn: turn} do
+      test_pid = self()
+
+      cb =
+        App.build_flush_callback(nil,
+          add_episode_fn: fn _group, _body, _source, _ontology, opts ->
+            send(test_pid, {:capture_opts, opts})
+            :ok
+          end
+        )
+
+      assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
+      assert_receive {:capture_opts, opts}
+      assert opts[:lens] == "operator"
+    end
   end
 
   describe "when a capture flush writes its captured episode successfully" do
