@@ -38,10 +38,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   defmodule FailingReflectionStorage do
-    @behaviour Gralkor.Reflection.Store
-    def put(_, _, _), do: {:error, :destination_unavailable}
-    def search(_, _, _, _), do: {:error, :destination_unavailable}
-    def get(_, _, _), do: {:error, :destination_unavailable}
+    def put_artefact(_, _, _, _), do: {:error, :destination_unavailable}
+    def get_artefact(_, _, _, _), do: {:error, :destination_unavailable}
   end
 
   defmodule ReturnHandler do
@@ -104,7 +102,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     )
 
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-    Application.put_env(:jido_gralkor, :reflection_storage, Gralkor.Reflection.Storage.InMemory)
     Application.put_env(:jido_gralkor, :reflection_return_test_pid, self())
 
     on_exit(fn -> Enum.each(previous, fn {key, value} -> restore_env(key, value) end) end)
@@ -924,12 +921,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert {:ok, _artefact} =
                Store.get(requested, "operator-one", requested_id,
-                 storage: Gralkor.Reflection.Storage.InMemory
+                 storage: Gralkor.Destination.Storage.InMemory
                )
 
       assert {:error, :not_found} =
                Store.get(other, "operator-one", other_id,
-                 storage: Gralkor.Reflection.Storage.InMemory
+                 storage: Gralkor.Destination.Storage.InMemory
                )
     end
 
@@ -1283,7 +1280,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert :ok =
                Store.put(reflection, "operator-one", artefact,
-                 storage: Gralkor.Reflection.Storage.InMemory
+                 storage: Gralkor.Destination.Storage.InMemory
                )
 
       assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
@@ -1342,7 +1339,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       :ok =
         Store.put(reflection, "operator-one", artefact,
-          storage: Gralkor.Reflection.Storage.InMemory
+          storage: Gralkor.Destination.Storage.InMemory
         )
 
       assert {:ok, [_]} =
@@ -1369,7 +1366,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       :ok =
         Store.put(reflection, "operator-one", artefact,
-          storage: Gralkor.Reflection.Storage.InMemory
+          storage: Gralkor.Destination.Storage.InMemory
         )
 
       assert {:ok, [%{destination: "global", artefact: ^artefact}]} =
@@ -1423,7 +1420,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  runner: runner,
                  notify: self(),
                  retry_delays: [],
-                 store_opts: [storage: Gralkor.Reflection.Storage.InMemory]
+                 store_opts: [storage: Gralkor.Destination.Storage.InMemory]
                )
 
       assert_receive {:reflection_completed, "one", {:error, %{reason: %{reason: :failed}}}}
@@ -1534,7 +1531,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  ingestion(),
                  runner: runner,
                  notify: self(),
-                 store_opts: [storage: Gralkor.Reflection.Storage.InMemory]
+                 store_opts: [storage: Gralkor.Destination.Storage.InMemory]
                )
 
       assert_receive {:reflection_completed, "two", {:ok, _}}
@@ -1607,8 +1604,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       two = reflection(context, "two")
       {:ok, a1} = Runner.run(one, ingestion(), inference: &output_for/1)
       {:ok, a2} = Runner.run(two, ingestion(), inference: &output_for/1)
-      :ok = Store.put(one, "operator-one", a1, storage: Gralkor.Reflection.Storage.InMemory)
-      :ok = Store.put(two, "operator-one", a2, storage: Gralkor.Reflection.Storage.InMemory)
+      :ok = Store.put(one, "operator-one", a1, storage: Gralkor.Destination.Storage.InMemory)
+      :ok = Store.put(two, "operator-one", a2, storage: Gralkor.Destination.Storage.InMemory)
 
       assert {:ok,
               [
@@ -1658,7 +1655,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       {:ok, other} = Runner.run(reflection, ingestion(), inference: &output_for/1)
 
       :ok =
-        Store.put(reflection, "operator-one", other, storage: Gralkor.Reflection.Storage.InMemory)
+        Store.put(reflection, "operator-one", other,
+          storage: Gralkor.Destination.Storage.InMemory
+        )
 
       assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
                Client.search(%Search{
@@ -1672,7 +1671,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   test "if memory is searched naming an unknown Destination then the search fails before any storage is searched" do
-    Application.put_env(:jido_gralkor, :reflection_storage, FailingReflectionStorage)
+    Application.put_env(:jido_gralkor, :destination_storage, FailingReflectionStorage)
 
     assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
       Client.search(%Search{
@@ -1850,7 +1849,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     :ok =
       Store.put(reflection, "operator-one", artefact,
-        storage: Gralkor.Reflection.Storage.InMemory
+        storage: Gralkor.Destination.Storage.InMemory
       )
 
     {reflection, artefact}
