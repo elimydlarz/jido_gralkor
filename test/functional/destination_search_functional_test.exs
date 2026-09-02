@@ -291,6 +291,38 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  max_results: 2
                })
     end
+
+    test "but no result from another Lens or from a Destination artefact output can contribute" do
+      use_in_memory_storage()
+      assert :ok = add_episode("first", "operator-one", "selected memory", "first-alpha")
+
+      output = %{
+        kind: :destination,
+        destination: Gralkor.Destination.Registry.fetch!("first"),
+        ontology: Gralkor.DefaultOntology
+      }
+
+      assert :ok =
+               Gralkor.Destination.Storage.put_artefact(
+                 output,
+                 "review",
+                 "operator-one",
+                 Gralkor.Artefact.new("review-one", %{"content" => "artefact memory"})
+               )
+
+      assert {:ok,
+              [
+                %{
+                  destination: "first",
+                  episode: %{content: "selected memory", lens: "first-alpha"}
+                }
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 lenses: ["first-alpha"]
+               })
+    end
   end
 
   describe "where a caller supplies both Destinations and Lenses" do
