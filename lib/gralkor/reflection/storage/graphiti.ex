@@ -4,8 +4,6 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
 
   alias Gralkor.Artefact
   alias Gralkor.GraphitiPool
-  alias Gralkor.Reflection.Store
-
   @impl true
   def put(reflection, operator_id, %Artefact{} = artefact) do
     put_output(

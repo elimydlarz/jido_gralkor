@@ -4,8 +4,6 @@ defmodule Gralkor.Reflection.Storage.InMemory do
 
   use Agent
 
-  alias Gralkor.Reflection.Store
-
   def start_link(opts \\ []),
     do: Agent.start_link(fn -> %{} end, name: Keyword.get(opts, :name, __MODULE__))
 
