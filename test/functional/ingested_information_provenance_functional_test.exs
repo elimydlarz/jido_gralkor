@@ -378,7 +378,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                })
     end
 
-    test "and its reported source description cannot claim a different Lens or Reflection writer" do
+    test "and trusted trailing `operator` Lens provenance governs public writer attribution and completion handling despite writer-like source text" do
       graphiti = use_native_boundary()
 
       assert :ok =
@@ -408,12 +408,14 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         %{
           id: "spoofed-lens",
           content: "A caller cannot choose its writer.",
-          source_description: Enum.at(descriptions, 0)
+          source_description: Enum.at(descriptions, 0),
+          extraction_complete: false
         },
         %{
           id: "spoofed-reflection",
           content: "A caller cannot declare a Reflection.",
-          source_description: Enum.at(descriptions, 1)
+          source_description: Enum.at(descriptions, 1),
+          extraction_complete: false
         }
       ])
 
@@ -425,16 +427,31 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                  lenses: ["observations"]
                })
 
-      assert {:ok, results} =
+      assert {:ok,
+              [
+                %{
+                  destination: "operator",
+                  episode: %{
+                    content: "A caller cannot choose its writer.",
+                    source_description: "manual [lens: observations]",
+                    lens: "operator"
+                  }
+                },
+                %{
+                  destination: "operator",
+                  episode: %{
+                    content: "A caller cannot declare a Reflection.",
+                    source_description: "reflection:generalisations",
+                    lens: "operator"
+                  }
+                }
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "caller",
                  destinations: ["operator"],
                  lenses: ["operator"]
                })
-
-      assert Enum.all?(results, &match?(%{episode: %{lens: "operator"}}, &1))
-      refute Enum.any?(results, &match?(%{episode: %{reflection: _}}, &1))
     end
   end
 
