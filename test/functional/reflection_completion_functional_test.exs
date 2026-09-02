@@ -1109,6 +1109,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         from datetime import datetime, timezone
         from graphiti_core.nodes import EpisodeType, EpisodicNode
         body = legacy_content.decode('utf-8') if isinstance(legacy_content, (bytes, bytearray)) else legacy_content
+        group_id = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
         graphiti.driver.episodes['legacy-pre-marker'] = EpisodicNode(
             uuid='legacy-pre-marker',
             name='legacy-reflection',
@@ -1417,6 +1418,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         import asyncio
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
+        group_id = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
         asyncio._gralkor_run(graphiti.driver.execute_query(
             '''
             CREATE (episode:Episodic {
@@ -1492,6 +1494,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         import asyncio
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
+        group_id = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
         uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
         body = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
         asyncio._gralkor_run(graphiti.driver.execute_query(
@@ -1932,6 +1935,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Pythonx.eval(
         """
         import asyncio
+        group_id = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
         asyncio._gralkor_run(graph.driver.execute_query(
             '''
             MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
