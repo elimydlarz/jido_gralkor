@@ -680,32 +680,67 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
           Message.new("assistant", appended_fact)
         ],
         "work-notes",
-        [],
-        %{tools: [], tool_context: %{session_id: session_id}}
+        []
       )
 
     :ok = Native.flush_and_await(session_id, 90_000)
 
-    :ok =
-      Client.ingest(%Ingest{
-        id: "journey-published-policy",
-        operator_id: @operator_one,
-        lens: "published",
-        source_kind: :document,
-        content: global_fact,
-        source_description: "deployment policy"
-      })
+    _erl_artefact =
+      invoke_reflection!(
+        "erl",
+        @operator_one,
+        "journey-erl-learning",
+        [
+          %{
+            id: "journey-erl-learning-representation",
+            lens: "work-notes",
+            content: appended_fact,
+            result: :ok
+          }
+        ]
+      )
+
+    published_request = %Ingest{
+      id: "journey-published-policy",
+      operator_id: @operator_one,
+      lens: "published",
+      source_kind: :document,
+      content: global_fact,
+      source_description: "deployment policy"
+    }
+
+    assert {:ok, published_representations} =
+             Client.ingest_with_representation(published_request)
+
+    published_generalisation_artefact =
+      invoke_reflection!(
+        "generalisations",
+        @operator_one,
+        "journey-published-policy",
+        published_representations
+      )
+
+    store_artefact!(
+      published_generalisation_artefact,
+      "generalisations",
+      @operator_one,
+      "operations"
+    )
+
+    consumer_destination_artefact =
+      invoke_reflection!(
+        "published-policy-review",
+        @operator_one,
+        "journey-published-policy",
+        published_representations
+      )
 
     consumer_artefact_id =
       Artefact.id_for(@operator_one, "journey-published-policy", "published-policy-review")
 
-    consumer_destination_artefact =
-      destination_artefact_until(@operator_one, "global", consumer_artefact_id)
+    assert consumer_destination_artefact.id == consumer_artefact_id
 
     consumer_returned_artefact = return_artefact_until(consumer_artefact_id)
-
-    published_generalisation_artefact =
-      generalisation_artefact_until("journey-published-policy")
 
     :ok =
       Client.ingest(%Ingest{
