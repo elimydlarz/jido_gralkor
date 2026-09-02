@@ -422,8 +422,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 ingestion_lens: "observations",
-                 search_destinations: ["observations"]
+                 ingestion_lens: "observations"
                )
 
       request_id = "decision-request"
