@@ -1016,13 +1016,26 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                source_description: "cross-domain reversible change review"
              })
 
+    parent = self()
+
     later_generalisation_artefact =
       invoke_reflection!(
         "generalisations",
         @operator_one,
         later_ingestion_id,
-        later_representations
+        later_representations,
+        inference_observer: fn request ->
+          if request.step.label == "evolve-generalisations" do
+            send(
+              parent,
+              {:later_eligible_lineage, request.eligible_generalisation_lineage}
+            )
+          end
+        end
       )
+
+    assert_receive {:later_eligible_lineage, eligible_lineage}
+    assert %{"content" => first_content, "level" => 1} in eligible_lineage
 
     store_artefact!(
       later_generalisation_artefact,
@@ -1040,7 +1053,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     {first_generalisation, later_generalisation, first_generalisation_artefact}
   end
 
-  defp invoke_reflection!(reflection_name, operator_id, invocation_id, representations) do
+  defp invoke_reflection!(reflection_name, operator_id, invocation_id, representations, opts \\ []) do
     reflection = Enum.find(Registry.configured!(), &(&1.name == reflection_name))
 
     invocation = %{
@@ -1050,7 +1063,21 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       representations: representations
     }
 
-    {:ok, artefact} = Runner.run(reflection, invocation)
+    runner_opts =
+      case Keyword.get(opts, :inference_observer) do
+        observer when is_function(observer, 1) ->
+          [
+            inference: fn request ->
+              observer.(request)
+              Runner.default_inference(request)
+            end
+          ]
+
+        nil ->
+          []
+      end
+
+    {:ok, artefact} = Runner.run(reflection, invocation, runner_opts)
 
     Enum.each(reflection.outputs, fn
       %{kind: :destination} = output ->
