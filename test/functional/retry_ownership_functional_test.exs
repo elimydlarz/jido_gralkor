@@ -224,7 +224,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
       reflection = %Reflection{
         name: "retry-owner",
-        triggers: [:ingestion],
+        triggers: [{:lens_ingestion, :any}],
         destination: %Destination{name: "observations"},
         ontology: Gralkor.DefaultOntology,
         outputs: [
