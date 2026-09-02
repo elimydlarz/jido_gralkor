@@ -323,7 +323,13 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
       assert :ok = Gralkor.Lens.Store.add(store, "stored episode", "functional")
 
-      assert {:ok, [%{destination: "first", episode: "stored episode"}]} =
+      assert {:ok,
+              [
+                %{
+                  destination: "first",
+                  episode: %{content: "stored episode", lens: "first"}
+                }
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "stored",
