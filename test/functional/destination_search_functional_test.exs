@@ -89,8 +89,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     :ok
   end
 
-  describe "when a caller searches memory naming one or more Destinations" do
-    test "then every distinct Destination is searched concurrently" do
+  describe "when a caller searches memory" do
+    test "then every distinct selected Destination is searched concurrently" do
       Application.put_env(:jido_gralkor, :destination_search_barrier, true)
 
       search =
@@ -111,7 +111,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert {:ok, _results} = Task.await(search)
     end
 
-    test "and results retain the requested Destination order" do
+    test "and results retain the selected Destination order" do
       assert {:ok, [%{destination: "second"}, %{destination: "first"}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
@@ -155,7 +155,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert_receive {:destination_search, "second", _, _, _, 7, _}
     end
 
-    test "and no unselected Destination can contribute a result" do
+    test "and unselected writers cannot consume the result allowance for selected-Lens results" do
       Application.put_env(:jido_gralkor, :destination_search_responses, %{
         "first" => {:ok, ["selected"]},
         "second" => {:ok, ["unselected"]}
@@ -173,7 +173,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "where a caller selects the `operator` Destination" do
+  describe "where the selected Destinations include `operator`" do
     test "then another operator's graph cannot contribute a result" do
       use_in_memory_storage()
       assert :ok = add_episode("operator", "operator-one", "private memory")
@@ -187,7 +187,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "where a caller selects any other Destination" do
+  describe "where the selected Destinations include any shared Destination" do
     test "then results saved by every operator to that Destination's one graph can contribute" do
       use_in_memory_storage()
       assert :ok = add_episode("first", "operator-one", "shared memory")
@@ -217,8 +217,15 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "where neither Destinations nor Lenses are supplied" do
-    test "then every accessible registered Destination is searched" do
+  describe "when a caller searches memory > where the Destination selector is omitted or empty" do
+    test "and the Lens selector is omitted or empty" do
+      assert {:ok, _results} =
+               Client.search(%Search{operator_id: "operator-one", query: "question"})
+
+      assert_receive {:destination_search, "operator", _, _, _, _, []}
+    end
+
+    test "then every accessible registered Destination is selected" do
       assert {:ok, results} =
                Client.search(%Search{operator_id: "operator-one", query: "question"})
 
@@ -230,7 +237,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       end
     end
 
-    test "then the operator Destination is still isolated to the current operator" do
+    test "and results written by every Lens or Destination artefact output can contribute" do
       use_in_memory_storage()
       assert :ok = add_episode("operator", "operator-one", "current operator", "operator")
       assert :ok = add_episode("operator", "operator-two", "other operator", "operator")
@@ -246,8 +253,21 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "where a caller supplies only Lenses" do
-    test "then every selected Lens can contribute from its Destination" do
+  describe "when a caller searches memory > where the Destination selector is omitted or empty > while one or more Lenses are supplied" do
+    test "then every accessible registered Destination is selected" do
+      assert {:ok, _results} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 lenses: ["first-alpha"]
+               })
+
+      for destination <- ["operator", "global", "first", "second"] do
+        assert_receive {:destination_search, ^destination, _, _, _, _, _}
+      end
+    end
+
+    test "and results originating in any supplied Lens can contribute" do
       use_in_memory_storage()
       assert :ok = add_episode("first", "operator-one", "alpha memory", "first-alpha")
       assert :ok = add_episode("first", "operator-one", "unselected memory", "first-beta")
@@ -271,7 +291,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                })
     end
 
-    test "then Lens filtering happens before the result limit" do
+    test "and unselected writers cannot consume the result allowance for selected-Lens results" do
       use_in_memory_storage()
       assert :ok = add_episode("first", "operator-one", "unselected one", "first-beta")
       assert :ok = add_episode("first", "operator-one", "unselected two", "first-beta")
@@ -325,8 +345,21 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "where a caller supplies both Destinations and Lenses" do
-    test "then only episodes satisfying both selections can contribute" do
+  describe "when a caller searches memory > where one or more Destinations are supplied > and one or more Lenses are supplied" do
+    test "and one or more Lenses are supplied" do
+      assert {:ok, _} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 destinations: ["first"],
+                 lenses: ["first-alpha"]
+               })
+
+      assert_receive {:destination_search, "first", _, _, :episodes, _,
+                      [lenses: ["first-alpha"]]}
+    end
+
+    test "then only results whose Destination matches any supplied Destination and whose originating Lens matches any supplied Lens can contribute" do
       use_in_memory_storage()
       assert :ok = add_episode("first", "operator-one", "selected", "first-alpha")
       assert :ok = add_episode("first", "operator-one", "wrong Lens", "first-beta")
@@ -346,10 +379,23 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  lenses: ["first-alpha", "second-beta"]
                })
     end
+
+    test "and selecting a Lens does not add that Lens's Destination to the supplied Destinations" do
+      assert {:ok, _} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 destinations: ["first"],
+                 lenses: ["second-beta"]
+               })
+
+      assert_receive {:destination_search, "first", _, _, _, _, _}
+      refute_receive {:destination_search, "second", _, _, _, _, _}
+    end
   end
 
-  describe "where a caller supplies duplicate Lenses" do
-    test "then each Lens is supplied to storage only once" do
+  describe "where the same Lens is selected more than once" do
+    test "then that Lens contributes no duplicate result" do
       assert {:ok, _} =
                Client.search(%Search{
                  operator_id: "operator-one",
@@ -377,7 +423,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "where a caller selects facts" do
+  describe "where a caller explicitly selects facts" do
     test "then relevant relationships extracted in the selected Destinations are returned" do
       assert {:ok, [%{destination: "first", fact: "first:question"}]} =
                Client.search(%Search{
@@ -389,7 +435,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "where a caller selects nodes" do
+  describe "where a caller explicitly selects nodes" do
     test "then relevant entities extracted in the selected Destinations are returned" do
       assert {:ok, [%{destination: "first", node: "first:question"}]} =
                Client.search(%Search{
@@ -440,8 +486,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "where a caller selects episodes" do
-    test "then relevant episode bodies from the selected Destinations are returned" do
+  describe "when a caller omits the result type or explicitly selects episodes" do
+    test "then relevant stored episode content is returned" do
       assert {:ok, [%{destination: "first", episode: "first:question"}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
@@ -489,7 +535,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                })
     end
 
-    test "then every Lens writing to a selected Destination can contribute" do
+    test "and every episode written through a Lens identifies that originating Lens" do
       use_in_memory_storage()
       assert :ok = add_episode("first", "operator-one", "alpha", "first-alpha")
       assert :ok = add_episode("first", "operator-one", "beta", "first-beta")
@@ -506,7 +552,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                })
     end
 
-    test "then a Reflection episode identifies the Reflection that wrote it" do
+    test "and every episode written through a Destination artefact output retains its artefact identifier" do
       use_in_memory_storage()
 
       destination = Gralkor.Destination.Registry.fetch!("first")
@@ -553,8 +599,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "where a caller selects artefacts" do
-    test "then relevant Reflection artefacts from the selected Destinations are returned" do
+  describe "where a caller explicitly selects artefacts" do
+    test "then relevant artefacts from the selected Destinations are returned" do
       artefact = %Gralkor.Artefact{
         id: "a-1",
         payload: %{"lesson" => "keep it simple"}
@@ -573,7 +619,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                })
     end
 
-    test "and every artefact contains only its stable identifier and payload" do
+    test "and every artefact contains exactly its stable identifier and structured payload" do
       artefact = %Gralkor.Artefact{
         id: "a-1",
         payload: %{}
@@ -688,7 +734,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "if search names a Destination that is not registered or packaged" do
+  describe "if search supplies any Destination or Lens selection that is not a list of registered non-blank names" do
     test "then search fails before any Destination query is started" do
       assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
         Client.search(%Search{
@@ -713,7 +759,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       refute_receive {:destination_search, "first", _, _, _, _, _}
     end
 
-    test "and the error identifies the unknown Destination" do
+    test "and the error identifies whether the rejected selection was for Destinations or Lenses" do
       assert_raise ArgumentError, ~r/missing/, fn ->
         Client.search(%Search{
           operator_id: "operator-one",
@@ -724,8 +770,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "if search names a Lens that is not registered or packaged" do
-    test "then search fails before any Destination query is started" do
+  describe "if search supplies any Destination or Lens selection that is not a list of registered non-blank names" do
+    test "and the error identifies the rejected value" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Client.search(%Search{
           operator_id: "operator-one",
@@ -739,34 +785,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "if search supplies an invalid selector shape" do
-    test "then search identifies the invalid selector before starting a Destination query" do
-      assert_raise ArgumentError, ~r/search lenses must be a list/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "question",
-          lenses: "first-alpha"
-        })
-      end
-
-      refute_receive {:destination_search, _, _, _, _, _, _}
-    end
-
-    test "then an invalid Destination selector is identified before search starts" do
-      assert_raise ArgumentError, ~r/search destinations must be a list/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "question",
-          destinations: "first"
-        })
-      end
-
-      refute_receive {:destination_search, _, _, _, _, _, _}
-    end
-  end
-
-  describe "if search combines Lenses with a non-episode result type" do
-    test "then search rejects the incoherent selection before querying a Destination" do
+  describe "if search combines one or more Lenses with a non-episode result type" do
+    test "then search fails before any Destination query is started" do
       assert_raise ArgumentError, ~r/Lens selection requires episode results/, fn ->
         Client.search(%Search{
           operator_id: "operator-one",
@@ -777,6 +797,17 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       end
 
       refute_receive {:destination_search, _, _, _, _, _, _}
+    end
+
+    test "and the error identifies that Lens selection requires episode results" do
+      assert_raise ArgumentError, ~r/Lens selection requires episode results/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "question",
+          lenses: ["first-alpha"],
+          result_type: :facts
+        })
+      end
     end
   end
 
