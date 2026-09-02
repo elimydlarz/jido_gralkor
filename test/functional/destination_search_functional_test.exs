@@ -255,6 +255,65 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  lenses: ["first-alpha", "second-beta"]
                })
     end
+
+    test "then Lens filtering happens before the result limit" do
+      use_in_memory_storage()
+      assert :ok = add_episode("first", "operator-one", "unselected one", "first-beta")
+      assert :ok = add_episode("first", "operator-one", "unselected two", "first-beta")
+      assert :ok = add_episode("first", "operator-one", "selected one", "first-alpha")
+      assert :ok = add_episode("first", "operator-one", "selected two", "first-alpha")
+
+      assert {:ok,
+              [
+                %{episode: %{content: "selected one", lens: "first-alpha"}},
+                %{episode: %{content: "selected two", lens: "first-alpha"}}
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 destinations: ["first"],
+                 lenses: ["first-alpha"],
+                 max_results: 2
+               })
+    end
+  end
+
+  describe "where a caller supplies both Destinations and Lenses" do
+    test "then only episodes satisfying both selections can contribute" do
+      use_in_memory_storage()
+      assert :ok = add_episode("first", "operator-one", "selected", "first-alpha")
+      assert :ok = add_episode("first", "operator-one", "wrong Lens", "first-beta")
+      assert :ok = add_episode("second", "operator-one", "wrong Destination", "second-beta")
+
+      assert {:ok,
+              [
+                %{
+                  destination: "first",
+                  episode: %{content: "selected", lens: "first-alpha"}
+                }
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 destinations: ["first"],
+                 lenses: ["first-alpha", "second-beta"]
+               })
+    end
+  end
+
+  describe "where a caller supplies duplicate Lenses" do
+    test "then each Lens is supplied to storage only once" do
+      assert {:ok, _} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 destinations: ["first"],
+                 lenses: ["first-alpha", "first-alpha"]
+               })
+
+      assert_receive {:destination_search, "first", _, _, :episodes, _,
+                      [lenses: ["first-alpha"]]}
+    end
   end
 
   describe "where a caller supplies no maximum result count" do
@@ -588,6 +647,50 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
           destinations: ["missing"]
         })
       end
+    end
+  end
+
+  describe "if search names a Lens that is not registered or packaged" do
+    test "then search fails before any Destination query is started" do
+      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "question",
+          destinations: ["first"],
+          lenses: ["first-alpha", "missing"]
+        })
+      end
+
+      refute_receive {:destination_search, _, _, _, _, _, _}
+    end
+  end
+
+  describe "if search supplies an invalid selector shape" do
+    test "then search identifies the invalid selector before starting a Destination query" do
+      assert_raise ArgumentError, ~r/search lenses must be a list/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "question",
+          lenses: "first-alpha"
+        })
+      end
+
+      refute_receive {:destination_search, _, _, _, _, _, _}
+    end
+  end
+
+  describe "if search combines Lenses with a non-episode result type" do
+    test "then search rejects the incoherent selection before querying a Destination" do
+      assert_raise ArgumentError, ~r/Lens selection requires episode results/, fn ->
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "question",
+          lenses: ["first-alpha"],
+          result_type: :facts
+        })
+      end
+
+      refute_receive {:destination_search, _, _, _, _, _, _}
     end
   end
 
