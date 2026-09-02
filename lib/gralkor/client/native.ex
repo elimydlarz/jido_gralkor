@@ -142,7 +142,8 @@ defmodule Gralkor.Client.Native do
            episode_body,
            source,
            DefaultOntology,
-           source_kind: source_kind
+           source_kind: source_kind,
+           lens: "operator"
          ) do
       :ok -> :ok
       {:error, _} = err -> err

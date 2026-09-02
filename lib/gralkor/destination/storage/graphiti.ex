@@ -33,7 +33,8 @@ defmodule Gralkor.Destination.Storage.Graphiti do
            Destination.graph_id(destination, operator_id),
            query,
            max_results,
-           lenses: Keyword.get(opts, :lenses, [])
+           lenses: Keyword.get(opts, :lenses, []),
+           require_reflection_complete: true
          ) do
       {:ok, episodes} -> {:ok, Enum.map(episodes, &episode_provenance/1)}
       {:error, _} = error -> error

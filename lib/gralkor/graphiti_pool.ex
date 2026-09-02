@@ -255,7 +255,9 @@ defmodule Gralkor.GraphitiPool do
   Internal completion-only callers may request identity convergence. Ranked
   results choose artefact identifiers; every completed episode carrying a
   selected identifier is then enumerated independently of BM25 so conflicts
-  outside the ranked window remain visible to the caller.
+  outside the ranked window remain visible to the caller. Mixed public episode
+  searches may require completion only for Reflection-authored episodes while
+  leaving ordinary historical episodes visible.
   """
   @spec search_episodes(String.t(), String.t(), pos_integer()) ::
           {:ok, [map()]} | {:error, term()}
@@ -279,6 +281,7 @@ defmodule Gralkor.GraphitiPool do
              max_results > 0 and is_list(opts) do
     instance = __MODULE__.for(server, group_id)
     require_extraction_complete = Keyword.get(opts, :require_extraction_complete, false)
+    require_reflection_complete = Keyword.get(opts, :require_reflection_complete, false)
     converge_by_identity = Keyword.get(opts, :converge_by_identity, false)
     lenses = Keyword.get(opts, :lenses, [])
 
@@ -301,7 +304,7 @@ defmodule Gralkor.GraphitiPool do
           for name in lenses
         ]
         search_limit = max_results
-        if converge_by_identity or lens_names:
+        if converge_by_identity or lens_names or require_reflection_complete:
           if hasattr(g.driver, 'execute_query'):
             records, _, _ = asyncio._gralkor_run(
               g.driver.execute_query(
@@ -325,8 +328,15 @@ defmodule Gralkor.GraphitiPool do
         )
 
         episodes = res.episodes
-        if require_extraction_complete:
-          episode_ids = [e.uuid for e in episodes]
+        def reflection_episode(episode):
+          return (episode.source_description or '').startswith('reflection:')
+
+        if require_extraction_complete or require_reflection_complete:
+          episode_ids = [
+            e.uuid
+            for e in episodes
+            if require_extraction_complete or reflection_episode(e)
+          ]
           if hasattr(g.driver, 'execute_query') and episode_ids:
             records, _, _ = asyncio._gralkor_run(
               g.driver.execute_query(
@@ -339,7 +349,15 @@ defmodule Gralkor.GraphitiPool do
             completed_ids = set(
               getattr(g.driver, '_gralkor_completed_episode_uuids', set())
             )
-          episodes = [e for e in episodes if e.uuid in completed_ids]
+          episodes = [
+            e
+            for e in episodes
+            if not (
+              require_extraction_complete
+              or (require_reflection_complete and reflection_episode(e))
+            )
+            or e.uuid in completed_ids
+          ]
 
         if lens_names:
           lens_suffixes = tuple(f" [lens: {name}]" for name in lens_names)
@@ -437,6 +455,7 @@ defmodule Gralkor.GraphitiPool do
           "group_id" => Client.sanitize_group_id(group_id),
           "max_results" => max_results,
           "require_extraction_complete" => require_extraction_complete,
+          "require_reflection_complete" => require_reflection_complete,
           "converge_by_identity" => converge_by_identity,
           "lenses" => lenses
         }
