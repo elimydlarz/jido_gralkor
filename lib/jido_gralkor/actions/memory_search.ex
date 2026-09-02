@@ -52,11 +52,12 @@ defmodule JidoGralkor.Actions.MemorySearch do
         operator_id: Map.fetch!(context, :agent_id),
         query: query,
         destinations: Map.get(params, :destinations, []),
+        lenses: Map.get(params, :lenses, []),
         result_type: :episodes
       }
 
       case Client.search(request) do
-        {:ok, results} -> {:ok, %{result: Jason.encode!(results)} }
+        {:ok, results} -> {:ok, %{result: Jason.encode!(results)}}
         {:error, reason} -> {:error, reason}
       end
     end
