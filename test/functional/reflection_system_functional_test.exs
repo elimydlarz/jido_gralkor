@@ -147,37 +147,63 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
              ]
     end
 
+    test("and exactly one output has kind `:destination`", context,
+      do: assert_valid(context)
+    )
+
+    test("and at most one output has kind `:return`", context,
+      do: assert_valid(context)
+    )
+
+    test("and every Destination output references a registered Destination by name", context,
+      do: assert_valid(context)
+    )
+
+    test("and every Destination output declares a valid extraction ontology", context,
+      do: assert_valid(context)
+    )
+
     test(
-      "and every Reflection references a registered Destination by name then validation succeeds",
+      "and every return output names a loaded handler implementing `Gralkor.Artefact.ReturnHandler`",
       context,
       do: assert_valid(context)
     )
 
-    test "if the configured Reflection registry is not a list then validation fails identifying the configured value" do
+    test("then validation succeeds", context, do: assert_valid(context))
+  end
+
+  describe "when Reflection declarations are validated > if the configured Reflection registry is not a list" do
+    test "then validation fails identifying the configured value" do
       Application.put_env(:jido_gralkor, :reflections, :invalid_registry)
 
       assert_raise ArgumentError, ~r/invalid Reflection declarations: :invalid_registry/, fn ->
         Registry.configured!()
       end
     end
+  end
 
-    test "if a Reflection's `outputs` value is not a list then validation fails identifying that Reflection and outputs value",
+  describe "when Reflection declarations are validated > if a Reflection's `outputs` value is not a list" do
+    test "then validation fails identifying that Reflection and outputs value",
          %{root: root} do
       definition = valid_definition(root, outputs: :invalid)
 
       assert {:error, {:invalid_outputs, "generalisation", :invalid}} =
                Registry.load([definition], root: root)
     end
+  end
 
-    test "if a Reflection declares no Destination output then validation fails identifying that Reflection and missing Destination output",
+  describe "when Reflection declarations are validated > if a Reflection declares no Destination output" do
+    test "then validation fails identifying that Reflection and missing Destination output",
          %{root: root} do
       definition = valid_definition(root, outputs: [])
 
       assert {:error, {:missing_destination_output, "generalisation"}} =
                Registry.load([definition], root: root)
     end
+  end
 
-    test "if a Reflection declares more than one Destination output then validation fails identifying that Reflection and duplicate Destination output kind",
+  describe "when Reflection declarations are validated > if a Reflection declares more than one Destination output" do
+    test "then validation fails identifying that Reflection and duplicate Destination output kind",
          %{root: root} do
       output = [kind: :destination, destination: "operator"]
       definition = valid_definition(root, outputs: [output, output])
@@ -185,8 +211,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert {:error, {:duplicate_output, "generalisation", :destination}} =
                Registry.load([definition], root: root)
     end
+  end
 
-    test "if a Reflection declares more than one return output then validation fails identifying that Reflection and duplicate return output kind",
+  describe "when Reflection declarations are validated > if a Reflection declares more than one return output" do
+    test "then validation fails identifying that Reflection and duplicate return output kind",
          %{root: root} do
       outputs = [
         [kind: :destination, destination: "operator"],
@@ -197,8 +225,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert {:error, {:duplicate_output, "generalisation", :return}} =
                Registry.load([valid_definition(root, outputs: outputs)], root: root)
     end
+  end
 
-    test "if a Reflection declares an unsupported output kind then validation fails identifying that Reflection and output kind",
+  describe "when Reflection declarations are validated > if a Reflection declares an unsupported output kind" do
+    test "then validation fails identifying that Reflection and output kind",
          %{root: root} do
       outputs = [
         [kind: :destination, destination: "operator"],
@@ -208,8 +238,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert {:error, {:unsupported_output, "generalisation", :webhook}} =
                Registry.load([valid_definition(root, outputs: outputs)], root: root)
     end
+  end
 
-    test "if a return output has no loaded handler implementing `Gralkor.Artefact.ReturnHandler` then validation fails identifying that Reflection and handler",
+  describe "when Reflection declarations are validated > if a return output has no loaded handler implementing `Gralkor.Artefact.ReturnHandler`" do
+    test "then validation fails identifying that Reflection and handler",
          %{root: root} do
       outputs = [
         [kind: :destination, destination: "operator"],
@@ -219,8 +251,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert {:error, {:invalid_return_handler, "generalisation", String}} =
                Registry.load([valid_definition(root, outputs: outputs)], root: root)
     end
+  end
 
-    test "if a Reflection name is blank then validation fails identifying the blank name", %{
+  describe "when Reflection declarations are validated > if a Reflection name is blank" do
+    test "then validation fails identifying the blank name", %{
       root: root
     } do
       assert {:error, {:blank_name, " "}} =
@@ -242,6 +276,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert_raise ArgumentError, ~r/blank_name.*" "/, fn -> Registry.configured!() end
     end
+  end
 
     test "if a Reflection name contains the reserved provenance delimiter ` [lens: ` then validation fails identifying the Reflection and reserved provenance syntax",
          %{root: root} do
