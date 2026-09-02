@@ -141,6 +141,29 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       do: assert_valid(context)
     )
 
+    test "and every Reflection declares an `outputs` list", %{root: root} do
+      definition =
+        valid_definition(root,
+          outputs: [
+            [
+              kind: :destination,
+              destination: "operator",
+              ontology: ReflectionOntology
+            ]
+          ]
+        )
+
+      assert {:ok, [reflection]} = Registry.load([definition], root: root)
+
+      assert reflection.outputs == [
+               %{
+                 kind: :destination,
+                 destination: %Gralkor.Destination{name: "operator"},
+                 ontology: ReflectionOntology
+               }
+             ]
+    end
+
     test(
       "and every Reflection references a registered Destination by name then validation succeeds",
       context,
