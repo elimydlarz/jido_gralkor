@@ -1985,17 +1985,6 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "and it is restricted to the physically encoded group id the episodes were written under" do
-      assert_episode_group_restriction()
-    end
-
-    test "and each returned episode is rendered with the body that was written and its source description" do
-      assert_episode_rendering()
-    end
-
-    test "and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned" do
-      assert_episode_without_extraction()
-    end
   end
 
   describe "if community building raises inside the graph library" do
@@ -2090,6 +2079,18 @@ defmodule Gralkor.GraphitiPoolTest do
       refute rec["node_config"]
 
       GenServer.stop(pid)
+    end
+
+    test "and it is restricted to the physically encoded group id the episodes were written under" do
+      assert_episode_group_restriction()
+    end
+
+    test "and each returned episode is rendered with the body that was written and its source description" do
+      assert_episode_rendering()
+    end
+
+    test "and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned" do
+      assert_episode_without_extraction()
     end
   end
 
