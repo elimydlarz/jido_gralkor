@@ -535,7 +535,7 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   })
 ```
 
-Every ingestion requires a non-blank `operator_id`, a non-blank replay-stable `id`, and deterministic provenance through `source_kind`. Both identifiers are validated before Lens storage begins. The ingestion ID is part of each Reflection completion identity, so a retry or replay of the same logical ingestion must reuse it; distinct ingestions must not share it. Reusing the ID stabilises eligible Reflection completion identity; it does not deduplicate the Lens episode write.
+Every ingestion requires a non-blank `operator_id`, a non-blank replay-stable `id`, and deterministic provenance through `source_kind`. Both identifiers are validated before Lens storage begins. A consumer may use that ingestion ID as a related Reflection invocation ID; `Gralkor.Reflection.Runner` derives the artefact ID from the operator ID, invocation ID, and Reflection name. Reusing an ingestion ID does not deduplicate the Lens episode write.
 
 The supported source kinds are:
 
@@ -575,11 +575,9 @@ On each store write, graphiti receives the selected Lens or Reflection ontology'
 
 ## Configure Reflections
 
-A Reflection is an asynchronous synthesis process declared by name, one or more triggers, a repository YAML Chain of Thought, and an `outputs` list. Supported triggers are `:programmatic`, `{:lens_ingestion, :any}`, and `{:lens_ingestion, [lens_names]}`. A Lens-ingestion Reflection operates only after every intended Lens has finished. The packaged `generalisations` and `erl` Reflections use `{:lens_ingestion, :any}`.
+A Reflection is a named synthesis process declared with a repository YAML Chain of Thought and an `outputs` list. The registry loads and validates declarations; it does not decide when they run.
 
-Every Reflection declares exactly one `:destination` output and at most one `:return` output. The Destination output names the memory Destination and extraction ontology. A return output names only a consumer module implementing `Gralkor.Artefact.ReturnHandler`; Gralkor always invokes its standard `return/3` callback.
-
-The supervised Scheduler coordinates each logical completion independently by `{operator_id, invocation_id, reflection_name}`. Lens ingestion uses its replay-stable ingestion ID as the invocation ID; programmatic callers supply their own replay-stable ID. The Scheduler journals lookup, Runner, Destination output, and return output phases independently and retries each phase with the exact same `%Gralkor.Artefact{id, payload}`. Output delivery is at-least-once: handlers must make repeated calls idempotent using `artefact.id`. A return failure retries the return output without rerunning the Runner or a successful Destination output; a terminal Destination failure does not prevent the return output from being attempted. Graceful shutdown drains all admitted work.
+Every Reflection declares exactly one `:destination` output and at most one `:return` output. The Destination output names the memory Destination and extraction ontology. A return output names a consumer module implementing `Gralkor.Artefact.ReturnHandler`. These declarations are resolved output targets: after `Gralkor.Reflection.Runner` produces an artefact, the consumer decides when and how to call `Gralkor.Destination.Storage.put_artefact/4` and the handler's standard `return/3` callback. Jido Gralkor does not schedule, supervise, retry, or journal Reflection execution or output delivery.
 
 The package supplies two declarations by default:
 
@@ -598,7 +596,6 @@ config :jido_gralkor,
   reflections: [
     [
       name: "release-review",
-      triggers: [:programmatic, {:lens_ingestion, ["release-notes"]}],
       chain_of_thought: "priv/reflections/release-review.yaml",
       outputs: [
         [
@@ -625,23 +622,47 @@ defmodule MyApp.ReleaseReviews do
 end
 ```
 
-A caller can admit one named programmatic Reflection without waiting for its artefact:
+A consumer selects and invokes a configured Reflection synchronously, then orchestrates each declared output explicitly:
 
 ```elixir
-{:ok, invocation_id} =
-  Gralkor.Client.request_reflection(
-    "release-review",
-    "operator-42",
-    "release-2026-09-02",
-    "Review the current release decision",
+alias Gralkor.Destination.Storage
+alias Gralkor.Reflection.Registry
+alias Gralkor.Reflection.Runner
+
+operator_id = "operator-42"
+invocation_id = "release-2026-09-02"
+
+reflection =
+  Enum.find(Registry.configured!(), &(&1.name == "release-review")) ||
+    raise "unknown Reflection"
+
+invocation = %{
+  id: invocation_id,
+  operator_id: operator_id,
+  invocation_context: %{reason: "release decision"},
+  representations: completed_representations
+}
+
+{:ok, artefact} =
+  Runner.run(
+    reflection,
+    invocation,
     tools: host_tools,
     tool_context: host_tool_context
   )
+
+Enum.each(reflection.outputs, fn
+  %{kind: :destination} = output ->
+    :ok = Storage.put_artefact(output, reflection.name, operator_id, artefact)
+
+  %{kind: :return, handler: handler} ->
+    :ok = handler.return(operator_id, invocation_id, artefact)
+end)
 ```
 
-Unknown names and Reflections without `:programmatic` return explicit errors before durable work is admitted. Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the invocation ID, trigger type, trigger context, host tools, and tool context; Lens-ingestion triggers also receive completed lensed representations. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one `%Gralkor.Artefact{}` whose fields are exactly `id` and `payload`. Producer identity remains execution provenance and is not embedded in the artefact.
+Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the invocation ID, invocation context, completed lensed representations, host tools, and tool context. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one `%Gralkor.Artefact{}` whose fields are exactly `id` and `payload`. Producer identity remains execution provenance and is not embedded in the artefact.
 
-Registry-backed client operations resolve current application configuration per call. Mounted plugins retain their resolved ingestion Lens, each MemorySearch invocation carries its own selectors, and CaptureBuffer retains the Reflection declarations loaded when it starts. Restart the application after changing mounted-plugin, capture, Reflection, or backend configuration.
+Registry-backed client operations resolve current application configuration per call. Mounted plugins retain their resolved ingestion Lens and each MemorySearch invocation carries its own selectors. Restart the application after changing mounted-plugin, capture, Reflection, or backend configuration.
 
 Multiple Reflections and Lenses may save to the same Destination. Search selects Destinations directly:
 
@@ -667,7 +688,7 @@ Multiple Reflections and Lenses may save to the same Destination. Search selects
 
 `result_type: :artefacts` returns artefacts from the selected Destinations, and `artefact_id` optionally narrows the lookup to one exact artefact. The deterministic UUID derives from the logical Reflection completion key, but the artefact itself contains no producer identity. Before extraction, Graphiti waits for a graph uniqueness constraint and acquires a graph-backed UUID claim with a renewable lease, so independent application runtimes serialize equal work and reject conflicting immutable content before Graphiti's upsert can overwrite it. Lease expiry and renewal use the graph server's clock; every ownership transfer advances a generation. For a claimed deterministic UUID, the episode, every extracted entity and edge, and its extraction-completion marker persist in one generation-fenced FalkorDB query, so loss of ownership aborts the complete graph-effect set before it commits. Until that marker exists, canonical lookup retains the episode only as resumable storage state and artefact search excludes it. Repeating an equal marked write is a successful confirmation without extraction; an equal unmarked deterministic episode re-enters normal extraction without rerunning the Runner. Artefact search uses ranked completed episodes to select up to the requested number of artefact identifiers, then enumerates every completed episode carrying those identifiers independently of BM25. It collapses equal historical duplicates by artefact ID, preserves the selected ranking, and reports an artefact conflict if any completed duplicate under a selected ID disagrees.
 
-Reflection artefact episodes written before the extraction-completion marker existed remain hidden because an absent marker cannot distinguish a fully extracted legacy write from a partial write. Replay the original Reflection trigger with the same stable ingestion ID (Lens-triggered) or invocation ID (programmatic) to establish the marker; unmarked legacy episodes remain non-searchable. An operator-authored migration may mark a legacy episode only after independently verifying that its extraction completed and its immutable artefact content is the intended canonical value. This does not migrate an episode left under the former physical graph-ID encoding.
+Reflection artefact episodes written before the extraction-completion marker existed remain hidden because an absent marker cannot distinguish a fully extracted legacy write from a partial write. Invoke the original Reflection again with the same stable invocation ID and deliver its artefact to the same Destination to establish the marker; unmarked legacy episodes remain non-searchable. An operator-authored migration may mark a legacy episode only after independently verifying that its extraction completed and its immutable artefact content is the intended canonical value. This does not migrate an episode left under the former physical graph-ID encoding.
 
 ## Testing against the in-memory twin
 
