@@ -134,25 +134,21 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when a group id holding hyphens is sanitised" do
-    test "then every hyphen is replaced with an underscore" do
-      assert Client.sanitize_group_id("a-b-c") == "a_b_c"
+  describe "when a logical graph identifier is encoded for Graphiti" do
+    test "then its physical identifier is `g_` followed by the lowercase hexadecimal encoding of every original byte" do
+      logical_id = <<0, 255, ?/, ?a, ?->>
+
+      assert Client.sanitize_group_id(logical_id) ==
+               "g_" <> Base.encode16(logical_id, case: :lower)
     end
 
-    test "and consecutive hyphens are each replaced independently, so none is collapsed into another" do
-      assert Client.sanitize_group_id("a--b") == "a__b"
-    end
-  end
+    test "and distinct logical identifiers always produce distinct physical identifiers" do
+      logical_ids = ["a-b", "a_b", "operator/a-b", "operator/a_b", "g_612d62"]
 
-  describe "when an `operator/<operator id>` Destination graph is sanitised for Graphiti" do
-    test "then the slash is replaced with an underscore" do
-      assert Client.sanitize_group_id("operator/operator-one") == "operator_operator_one"
-    end
-  end
-
-  describe "when a group id holding no hyphens or slashes is sanitised" do
-    test "then it is returned unchanged" do
-      assert Client.sanitize_group_id("abc") == "abc"
+      assert logical_ids
+             |> Enum.map(&Client.sanitize_group_id/1)
+             |> Enum.uniq()
+             |> length() == length(logical_ids)
     end
   end
 
@@ -175,14 +171,14 @@ defmodule Gralkor.Client.NativeTest do
   describe "when a grouped session captures messages with agent and user names" do
     setup :start_capture_buffer
 
-    test "then the group is sanitised before it is buffered" do
+    test "then the logical group is buffered unchanged so the physical Graphiti boundary can encode it exactly once" do
       msgs = [Message.new("user", "hi")]
 
       assert :ok = Native.capture("s1", "with-hyphens", "Susu", "Eli", msgs)
       assert [^msgs] = CaptureBuffer.turns_for("s1")
 
       :ok = CaptureBuffer.flush("s1")
-      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", Gralkor.DefaultOntology, [^msgs]}
+      assert_receive {:flushed, "with-hyphens", "Susu", "Eli", Gralkor.DefaultOntology, [^msgs]}
     end
 
     test "and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own" do
@@ -197,12 +193,12 @@ defmodule Gralkor.Client.NativeTest do
       assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
-    test "and the buffer receives the session, sanitised group, names, ontology and messages" do
+    test "and the buffer receives the session, logical group, names, ontology and messages" do
       msgs = [Message.new("user", "hi")]
       assert :ok = Native.capture("s1", "with-hyphens", "Susu", "Eli", msgs)
       assert [^msgs] = CaptureBuffer.turns_for("s1")
       assert :ok = CaptureBuffer.flush("s1")
-      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", Gralkor.DefaultOntology, [^msgs]}
+      assert_receive {:flushed, "with-hyphens", "Susu", "Eli", Gralkor.DefaultOntology, [^msgs]}
     end
 
     test "and success is returned immediately, no distillation running before the call returns" do
@@ -537,17 +533,18 @@ defmodule Gralkor.Client.NativeTest do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then the group is sanitised before the write", %{g: g} do
-      assert :ok = Native.memory_add("operator-with-hyphens", "Eli works at Anthropic", "manual")
-      assert [episode] = episodes(g)
-      assert episode["group_id"] == "operator_with_hyphens"
-    end
-
-    test "and the content is written to the graph as a plain-text episode scoped to the sanitised group",
+    test "then the logical group reaches the physical Graphiti boundary unchanged and is encoded exactly once there",
          %{g: g} do
       assert :ok = Native.memory_add("operator-with-hyphens", "Eli works at Anthropic", "manual")
       assert [episode] = episodes(g)
-      assert episode["group_id"] == "operator_with_hyphens"
+      assert episode["group_id"] == Client.sanitize_group_id("operator-with-hyphens")
+    end
+
+    test "and the content is written to the graph as a plain-text episode scoped to that physical group",
+         %{g: g} do
+      assert :ok = Native.memory_add("operator-with-hyphens", "Eli works at Anthropic", "manual")
+      assert [episode] = episodes(g)
+      assert episode["group_id"] == Client.sanitize_group_id("operator-with-hyphens")
       assert episode["body"] == "Eli works at Anthropic"
     end
 
@@ -782,19 +779,19 @@ defmodule Gralkor.Client.NativeTest do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then the group is sanitised before use" do
+    test "then the logical group reaches the physical Graphiti boundary unchanged and is encoded exactly once there" do
       assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("with-hyphens")
 
       assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
-               group == "with_hyphens"
+               group == Client.sanitize_group_id("with-hyphens")
              end)
     end
 
-    test "and community building is scoped to the sanitised group" do
+    test "and community building is scoped to that physical group" do
       assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("with-hyphens")
 
       assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
-               group == "with_hyphens"
+               group == Client.sanitize_group_id("with-hyphens")
              end)
     end
 

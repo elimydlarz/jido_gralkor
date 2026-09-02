@@ -241,7 +241,7 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       assert :ok = Native.flush("session-transcript")
       episode = await_episode(g, @captured_source)
       assert episode, "expected a captured episode to reach the graph"
-      assert episode["group_id"] == "operator_one"
+      assert episode["group_id"] == Client.sanitize_group_id("operator_one")
       assert episode["body"] =~ "teal"
     end
 
