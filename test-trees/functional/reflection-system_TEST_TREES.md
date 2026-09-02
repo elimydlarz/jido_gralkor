@@ -4,8 +4,8 @@ when Reflection declarations are validated
   while every Reflection has a non-blank name
   and every Reflection name is unique
   and every Reflection declares one or more triggers
-  and every declared trigger is post-ingestion or programmatic
-  and every post-ingestion trigger selects all Lenses or a non-empty list of registered appending Lenses
+  and every declared trigger is Lens ingestion or programmatic
+  and every Lens-ingestion trigger selects all Lenses or a non-empty list of registered appending Lenses
   and every Reflection references a repository YAML Chain of Thought
   and every referenced Chain of Thought contains one or more ordered steps
   and every step has a non-blank label and natural-language directions
@@ -30,7 +30,7 @@ when Reflection declarations are validated
   if a Reflection declares an unsupported trigger
     then validation fails identifying that Reflection and trigger
 
-  if a post-ingestion trigger selects no Lenses, an unknown Lens, or a Lens that does not support ingestion
+  if a Lens-ingestion trigger selects no Lenses, an unknown Lens, or a Lens that does not support ingestion
     then validation fails identifying that Reflection and invalid Lens selection
 
   if a Reflection has no Chain of Thought
@@ -78,9 +78,9 @@ when Reflection declarations are validated
 where the packaged default Reflections are used
   then ERL references the packaged `operator` Destination
   and ERL carries jido_gralkor's built-in experiential-learning ontology
-  and ERL enables post-ingestion triggering for every Lens
+  and ERL enables Lens-ingestion triggering for every Lens
   and generalisation references the packaged `global` Destination
-  and generalisation enables post-ingestion triggering for every Lens
+  and generalisation enables Lens-ingestion triggering for every Lens
 
 where an application-defined Reflection omits its ontology
   then its final artefact receives generic extraction
@@ -96,19 +96,19 @@ when the default ERL Reflection stores its final artefact
 when an ingestion operation successfully stores information through one or more Lenses
   then every stored representation retains its own identifier, Lens identity, content, and storage result
   and the ingestion caller receives success without waiting for Reflection
-  and no post-ingestion Reflection begins before every intended Lens ingestion has completed
+  and no Lens-ingestion Reflection begins before every intended Lens ingestion has completed
 
-  while a Reflection enables post-ingestion triggering for every Lens
+  while a Reflection enables Lens-ingestion triggering for every Lens
     then that Reflection begins exactly one logical completion flow for the completed ingestion operation
     and the ingestion identifier becomes the Reflection `invocation_id`
 
-  while a Reflection enables post-ingestion triggering for named Lenses
+  while a Reflection enables Lens-ingestion triggering for named Lenses
   and at least one completed Lens is selected by that Reflection
     then that Reflection begins exactly one logical completion flow for the completed ingestion operation
     and the ingestion identifier becomes the Reflection `invocation_id`
     and completing additional selected Lenses does not admit another flow for that ingestion
 
-  while a Reflection enables post-ingestion triggering for named Lenses
+  while a Reflection enables Lens-ingestion triggering for named Lenses
   and no completed Lens is selected by that Reflection
     then that Reflection remains uninvoked
 
@@ -125,7 +125,7 @@ when a consumer programmatically requests a named Reflection
   if the named Reflection does not enable the programmatic trigger
     then the request fails identifying the disabled trigger before durable work is admitted
 
-when an ingestion completes with no eligible post-ingestion Reflection
+when an ingestion completes with no eligible Lens-ingestion Reflection
   then ingestion succeeds without admitting Reflection work
 
 when a configured Reflection is loaded
@@ -185,7 +185,7 @@ when multiple eligible Reflections process one triggering invocation
   and retry or terminal failure of one Reflection does not prevent another Reflection from completing
 
 if any intended Lens ingestion fails
-  then no post-ingestion Reflection is admitted for the incomplete ingestion operation
+  then no Lens-ingestion Reflection is admitted for the incomplete ingestion operation
 
 if a Reflection's Chain of Thought completes without a valid final structured output
   then the Reflection fails identifying its name and missing artefact
