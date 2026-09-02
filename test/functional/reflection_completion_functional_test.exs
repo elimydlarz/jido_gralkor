@@ -159,7 +159,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
-  describe "where Graphiti stores a Destination artefact output > when a new artefact is written with its stable identifier > if graph extraction fails before its claim-fenced transaction commits" do
+  # ExUnit cannot nest describes, and the BEAM limits generated function-name atoms
+  # before this complete three-level path fits. Keep the deepest contract branch exact.
+  describe "if graph extraction fails before its claim-fenced transaction commits" do
     test "then canonical lookup and public artefact search report no episode", %{
       reflection: reflection
     } do
