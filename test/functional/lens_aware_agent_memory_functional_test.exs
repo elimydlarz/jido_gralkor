@@ -289,6 +289,35 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert [%{"destination" => "observations"}] = Jason.decode!(result)
     end
+
+    test "where both selectors are omitted then memory search uses every accessible registered Destination" do
+      for {lens, content} <- [
+            {"operator", "operator memory"},
+            {"shared-generalisations", "global memory"},
+            {"observations", "observation memory"},
+            {"decisions", "decision memory"}
+          ] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   id: "default-all-#{lens}",
+                   operator_id: "operator-one",
+                   lens: lens,
+                   source_kind: :document,
+                   content: content,
+                   source_description: "functional"
+                 })
+      end
+
+      assert {:ok, %{result: result}} =
+               MemorySearch.run(%{query: "memory"}, %{agent_id: "operator-one"})
+
+      assert Enum.map(Jason.decode!(result), & &1["destination"]) == [
+               "operator",
+               "global",
+               "observations",
+               "decisions"
+             ]
+    end
   end
 
   describe "when a mounted memory plugin has a configured ingestion Lens" do
