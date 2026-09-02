@@ -1,10 +1,9 @@
-defmodule Gralkor.Reflection.Storage.GraphitiTest do
+defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
   use ExUnit.Case, async: true
 
   alias Gralkor.Destination
-  alias Gralkor.Reflection
   alias Gralkor.Artefact
-  alias Gralkor.Reflection.Storage.Graphiti
+  alias Gralkor.Destination.Storage.Graphiti
 
   describe "when Graphiti Reflection storage receives an artefact" do
     test "then it supplies the artefact identifier as the requested episode UUID" do
@@ -16,7 +15,7 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
         :ok
       end
 
-      assert :ok = Graphiti.put(reflection(), "operator-one", artefact, add_episode)
+      assert :ok = Graphiti.put_artefact(output(), "review", "operator-one", artefact, add_episode)
 
       assert_receive {:add_episode, "observations", content, "reflection:review",
                       Gralkor.DefaultOntology, [uuid: "stable-id"]}
@@ -33,7 +32,13 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
       end
 
       assert {:error, {:artefact_conflict, "stable-id"}} =
-               Graphiti.put(reflection(), "operator-one", artefact(), add_episode)
+               Graphiti.put_artefact(
+                 output(),
+                 "review",
+                 "operator-one",
+                 artefact(),
+                 add_episode
+               )
     end
   end
 
@@ -50,7 +55,13 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
       end
 
       assert {:ok, ^artefact} =
-               Graphiti.get(reflection(), "operator-one", "stable-id", get_episode)
+               Graphiti.get_artefact(
+                 output(),
+                 "review",
+                 "operator-one",
+                 "stable-id",
+                 get_episode
+               )
     end
 
     test "then an unmarked matching episode returns its artefact as incomplete" do
@@ -65,14 +76,26 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
       end
 
       assert {:error, {:incomplete_artefact, ^artefact}} =
-               Graphiti.get(reflection(), "operator-one", "stable-id", get_episode)
+               Graphiti.get_artefact(
+                 output(),
+                 "review",
+                 "operator-one",
+                 "stable-id",
+                 get_episode
+               )
     end
 
     test "then a missing episode reports not found" do
       get_episode = fn "observations", "missing" -> {:error, :not_found} end
 
       assert {:error, :not_found} =
-               Graphiti.get(reflection(), "operator-one", "missing", get_episode)
+               Graphiti.get_artefact(
+                 output(),
+                 "review",
+                 "operator-one",
+                 "missing",
+                 get_episode
+               )
     end
 
     test "then a mismatched artefact identifier reports a conflict" do
@@ -88,24 +111,23 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
         end
 
         assert {:error, {:artefact_conflict, "stable-id"}} =
-                 Graphiti.get(reflection(), "operator-one", "stable-id", get_episode)
+                 Graphiti.get_artefact(
+                   output(),
+                   "review",
+                   "operator-one",
+                   "stable-id",
+                   get_episode
+                 )
       end
     end
   end
 
-  defp reflection do
-    %Reflection{
-      name: "review",
-      outputs: [
-        %{
-          kind: :destination,
-          destination: %Destination{name: "observations"},
-          ontology: Gralkor.DefaultOntology
-        }
-      ],
-      chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "test", steps: []}
+  defp output,
+    do: %{
+      kind: :destination,
+      destination: %Destination{name: "observations"},
+      ontology: Gralkor.DefaultOntology
     }
-  end
 
   defp artefact do
     %Artefact{
