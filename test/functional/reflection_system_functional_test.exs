@@ -1314,7 +1314,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 destinations: [reflection.destination.name],
+                 destinations: [destination_output(reflection).destination.name],
                  result_type: :artefacts
                })
     end
@@ -1373,7 +1373,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 destinations: [reflection.destination.name],
+                 destinations: [destination_output(reflection).destination.name],
                  result_type: :artefacts
                })
 
@@ -1381,7 +1381,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "durable",
-                 destinations: [reflection.destination.name],
+                 destinations: [destination_output(reflection).destination.name],
                  result_type: :artefacts
                })
     end
@@ -1400,7 +1400,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "durable",
-                 destinations: [reflection.destination.name],
+                 destinations: [destination_output(reflection).destination.name],
                  result_type: :artefacts
                })
     end
@@ -1645,7 +1645,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 destinations: [reflection.destination.name],
+                 destinations: [destination_output(reflection).destination.name],
                  result_type: :artefacts
                })
     end
@@ -1679,7 +1679,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 destinations: [reflection.destination.name],
+                 destinations: [destination_output(reflection).destination.name],
                  result_type: :artefacts
                })
 
@@ -1696,7 +1696,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 destinations: [reflection.destination.name],
+                 destinations: [destination_output(reflection).destination.name],
                  result_type: :artefacts
                })
     end
@@ -1715,7 +1715,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 destinations: [reflection.destination.name],
+                 destinations: [destination_output(reflection).destination.name],
                  result_type: :artefacts,
                  artefact_id: artefact.id
                })
@@ -1774,6 +1774,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     reflection
   end
+
+  defp destination_output(reflection),
+    do: Enum.find(reflection.outputs, &(&1.kind == :destination))
 
   defp one_step_reflection(%{root: root}) do
     write_cot(
