@@ -29,7 +29,12 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     @impl true
     def search(destination, operator_id, query, result_type, max_results, opts) do
       test_pid = Application.fetch_env!(:jido_gralkor, :public_search_test_pid)
-      send(test_pid, {:public_search, destination.name, operator_id, query, result_type, max_results, opts})
+
+      send(
+        test_pid,
+        {:public_search, destination.name, operator_id, query, result_type, max_results, opts}
+      )
+
       {:ok, [%{content: "matching stored episode", lens: "observations"}]}
     end
   end

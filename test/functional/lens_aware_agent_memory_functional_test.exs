@@ -276,7 +276,10 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
 
-      fresh_agent = %{agent(plugin_state) | state: Map.delete(agent(plugin_state).state, :__thread__)}
+      fresh_agent = %{
+        agent(plugin_state)
+        | state: Map.delete(agent(plugin_state).state, :__thread__)
+      }
 
       assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(fresh_agent)
       refute Map.has_key?(tool_context, :session_id)

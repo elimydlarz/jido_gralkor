@@ -11,8 +11,8 @@ defmodule JidoGralkor.Plugin do
     * `:session_id` — the current Jido thread id (read from
       `agent.state[:__thread__].id`). Absent when no thread is
       committed yet (first query of a fresh agent, before the ReAct
-	      strategy's `ThreadAgent.append` runs inside `@start`). Memory search
-	      remains available because it is scoped by operator rather than session.
+       strategy's `ThreadAgent.append` runs inside `@start`). Memory search
+       remains available because it is scoped by operator rather than session.
     * `:agent_name` — the value supplied at mount.
 
   The plugin does **not** search memory on its own. Search is the LLM's job,
