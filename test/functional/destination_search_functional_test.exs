@@ -96,7 +96,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "question",
-                 destinations: ["second", "first"]
+                 destinations: ["second", "first"],
+                 result_type: :facts
                })
     end
 
@@ -115,7 +116,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "question",
-                 destinations: ["first", "second"]
+                 destinations: ["first", "second"],
+                 result_type: :facts
                })
     end
 
@@ -125,6 +127,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  operator_id: "operator-one",
                  query: "question",
                  destinations: ["first", "second"],
+                 result_type: :facts,
                  max_results: 7
                })
 
@@ -142,7 +145,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "question",
-                 destinations: ["first"]
+                 destinations: ["first"],
+                 result_type: :facts
                })
 
       refute_receive {:destination_search, "second", _, _, _, _, _}
@@ -172,7 +176,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "shared",
-                 destinations: ["first"]
+                 destinations: ["first"],
+                 result_type: :facts
                })
     end
   end
@@ -183,7 +188,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "question",
-                 destinations: ["first", "first"]
+                 destinations: ["first", "first"],
+                 result_type: :facts
                })
 
       assert_receive {:destination_search, "first", _, _, _, _, _}
@@ -211,7 +217,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "question",
-                 destinations: ["first", "second"]
+                 destinations: ["first", "second"],
+                 result_type: :facts
                })
 
       assert_receive {:destination_search, "first", _, _, _, 20, _}
@@ -409,7 +416,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "question",
-                 destinations: ["first", "second"]
+                 destinations: ["first", "second"],
+                 result_type: :facts
                })
     end
   end
