@@ -295,6 +295,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert {:error, {:missing_triggers, "generalisation"}} =
                Registry.load([definition], root: root)
+
+      [resolved] = Registry.load!([valid_definition(root)], root: root)
+      configure_reflections([%{resolved | triggers: []}])
+
+      assert_raise ArgumentError, ~r/missing_triggers.*generalisation/, fn ->
+        Registry.configured!()
+      end
     end
 
     test "if a Reflection declares an unsupported trigger then validation fails identifying that Reflection and trigger",
