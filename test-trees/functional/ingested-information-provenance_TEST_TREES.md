@@ -1,8 +1,9 @@
-Functional: ingested-information-provenance (src: lib/gralkor/ingest.ex, lib/gralkor/client.ex, lib/gralkor/lens/store.ex, lib/gralkor/lens/storage/graphiti.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/ingested_information_provenance_functional_test.exs)
+Functional: ingested-information-provenance (src: lib/gralkor/ingest.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/lens/store.ex, lib/gralkor/lens/storage/graphiti.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/ingested_information_provenance_functional_test.exs)
 
 when information is submitted through public ingestion with a supported source kind
   then its stored episode retains the declared source kind
   and its stored episode retains the reported source description
+  and public episode search presents the originating Lens separately from episode content and source description
   and every returned fact identifies each originating episode by identifier, source kind, and source description
   and recall presents the extracted fact wording and its source attribution without rewriting either
 
