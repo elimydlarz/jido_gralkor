@@ -6,9 +6,9 @@ defmodule Gralkor.Reflection.Scheduler do
   require Logger
 
   alias Gralkor.Artefact
+  alias Gralkor.Destination.Storage
   alias Gralkor.Reflection.Journal
   alias Gralkor.Reflection.Runner
-  alias Gralkor.Reflection.Store
 
   @default_retry_delays [1_000, 2_000, 4_000]
   @default_execution_timeout_ms 60_000
@@ -293,8 +293,9 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp execute(%{stage: :lookup} = job) do
     outcome =
-      Store.get(
-        job.reflection,
+      Storage.get_artefact(
+        destination_output(job.reflection),
+        job.reflection.name,
         field(job.ingestion, :operator_id),
         artefact_id(job),
         Keyword.get(job.opts, :store_opts, [])
@@ -316,8 +317,9 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp execute(%{stage: :storage} = job) do
     outcome =
-      Store.put(
-        job.reflection,
+      Storage.put_artefact(
+        destination_output(job.reflection),
+        job.reflection.name,
         field(job.ingestion, :operator_id),
         job.artefact,
         Keyword.get(job.opts, :store_opts, [])
@@ -328,8 +330,9 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp execute(%{stage: :storage_confirmation} = job) do
     outcome =
-      Store.get(
-        job.reflection,
+      Storage.get_artefact(
+        destination_output(job.reflection),
+        job.reflection.name,
         field(job.ingestion, :operator_id),
         artefact_id(job),
         Keyword.get(job.opts, :store_opts, [])
@@ -722,6 +725,10 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp return_output(reflection) do
     Enum.find(reflection.outputs, &(&1.kind == :return))
+  end
+
+  defp destination_output(reflection) do
+    Enum.find(reflection.outputs, &(&1.kind == :destination))
   end
 
   defp field(map, key), do: Map.get(map, key) || Map.get(map, Atom.to_string(key))

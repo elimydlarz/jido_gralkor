@@ -22,10 +22,20 @@ defmodule Gralkor.Destination.Storage do
   @optional_callbacks put_artefact: 4, get_artefact: 4
 
   def search(destination, operator_id, query, result_type, max_results, opts) do
-    storage().search(destination, operator_id, query, result_type, max_results, opts)
+    configured_storage().search(destination, operator_id, query, result_type, max_results, opts)
   end
 
-  defp storage do
+  def put_artefact(output, reflection_name, operator_id, artefact, opts \\ []) do
+    storage(opts).put_artefact(output, reflection_name, operator_id, artefact)
+  end
+
+  def get_artefact(output, reflection_name, operator_id, artefact_id, opts \\ []) do
+    storage(opts).get_artefact(output, reflection_name, operator_id, artefact_id)
+  end
+
+  defp storage(opts), do: Keyword.get(opts, :storage, configured_storage())
+
+  defp configured_storage do
     Application.get_env(
       :jido_gralkor,
       :destination_storage,
