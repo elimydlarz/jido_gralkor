@@ -576,7 +576,12 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     }
 
     assert :ok =
-             Gralkor.Reflection.Storage.InMemory.put(reflection, "operator-one", artefact)
+             Gralkor.Destination.Storage.InMemory.put_artefact(
+               Enum.find(reflection.outputs, &(&1.kind == :destination)),
+               reflection.name,
+               "operator-one",
+               artefact
+             )
 
     artefact
   end

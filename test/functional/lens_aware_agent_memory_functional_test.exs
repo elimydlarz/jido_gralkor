@@ -237,7 +237,12 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       }
 
       assert :ok =
-               Gralkor.Reflection.Storage.InMemory.put(reflection, "operator-one", artefact)
+               Gralkor.Destination.Storage.InMemory.put_artefact(
+                 Enum.find(reflection.outputs, &(&1.kind == :destination)),
+                 reflection.name,
+                 "operator-one",
+                 artefact
+               )
 
       assert {:ok, %{result: result}} =
                MemorySearch.run(
