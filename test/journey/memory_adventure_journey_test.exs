@@ -876,7 +876,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         @operator_two,
         "global",
         "Atlas Deployment requires Rollback Checkpoint",
-        &String.contains?(&1.fact, "Rollback Checkpoint"),
+        &contains_all?(&1.fact, ["rollback checkpoint", "configuration faults"]),
         "document",
         "deployment policy"
       )
