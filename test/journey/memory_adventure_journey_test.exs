@@ -626,7 +626,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       "The Backup job overlaps the Vacuum job at 02:00. Moving the Vacuum job to 04:00 prevents the Backup job from failing."
 
     global_fact =
-      "The Atlas Deployment requires the Rollback Checkpoint before the Atlas release."
+      "The Atlas Deployment requires the Rollback Checkpoint and a reversible canary to expose configuration faults before the Atlas release."
 
     structured_fact = %{
       "source_system" => "Payments",
