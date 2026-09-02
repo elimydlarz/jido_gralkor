@@ -198,7 +198,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
 
     test "and information saved through Reflections at the resolved destination remains unchanged" do
       use_in_memory(:global)
-      start_supervised!(Gralkor.Reflection.Storage.InMemory)
+      start_supervised!(Gralkor.Destination.Storage.InMemory)
 
       Application.put_env(
         :jido_gralkor,
