@@ -483,7 +483,7 @@ defmodule Gralkor.Reflection.Scheduler do
   defp failure(job, reason) do
     %{
       reflection: job.reflection.name,
-      destination: job.reflection.destination.name,
+      output: output_kind(job.stage),
       stage: public_stage(job.stage),
       attempts: job.attempt,
       reason: reason
@@ -493,6 +493,12 @@ defmodule Gralkor.Reflection.Scheduler do
   defp public_stage(:lookup), do: :storage
   defp public_stage(:storage_confirmation), do: :storage
   defp public_stage(stage), do: stage
+
+  defp output_kind(stage) when stage in [:lookup, :storage, :storage_confirmation],
+    do: :destination
+
+  defp output_kind(:return), do: :return
+  defp output_kind(_stage), do: nil
 
   defp release_task(state, reference, task) do
     if task.timeout_ref, do: Process.cancel_timer(task.timeout_ref)
