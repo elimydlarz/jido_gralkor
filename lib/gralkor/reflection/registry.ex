@@ -139,6 +139,7 @@ defmodule Gralkor.Reflection.Registry do
     ontology = field(definition, :ontology) || Gralkor.DefaultOntology
     triggers = field(definition, :triggers)
     relative = field(definition, :chain_of_thought)
+    lens_error = named_lens_error(name, triggers)
 
     cond do
       not is_list(triggers) or triggers == [] ->
@@ -149,6 +150,9 @@ defmodule Gralkor.Reflection.Registry do
 
       Enum.any?(triggers, &match?({:lens_ingestion, []}, &1)) ->
         {:error, {:empty_lens_selection, name}}
+
+      lens_error ->
+        {:error, lens_error}
 
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
@@ -224,6 +228,29 @@ defmodule Gralkor.Reflection.Registry do
   defp supported_trigger?({:lens_ingestion, lenses}) when is_list(lenses), do: true
 
   defp supported_trigger?(_trigger), do: false
+
+  defp named_lens_error(_reflection_name, triggers) when not is_list(triggers), do: nil
+
+  defp named_lens_error(reflection_name, triggers) do
+    triggers
+    |> Enum.flat_map(fn
+      {:lens_ingestion, lenses} when is_list(lenses) -> lenses
+      _ -> []
+    end)
+    |> Enum.find_value(fn lens_name ->
+      case resolve_lens(lens_name) do
+        {:ok, %Gralkor.Lens{}} -> nil
+        {:ok, _lens} -> {:incompatible_lens, reflection_name, lens_name}
+        :error -> {:unknown_lens, reflection_name, lens_name}
+      end
+    end)
+  end
+
+  defp resolve_lens(lens_name) do
+    {:ok, apply(Gralkor.Client, :lens!, [lens_name])}
+  rescue
+    ArgumentError -> :error
+  end
 
   defp duplicate(values) do
     values
