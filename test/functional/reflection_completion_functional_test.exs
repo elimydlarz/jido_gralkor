@@ -1935,7 +1935,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Pythonx.eval(
         """
         import asyncio
-        group_id = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
         asyncio._gralkor_run(graph.driver.execute_query(
             '''
             MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
@@ -2039,6 +2038,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Pythonx.eval(
         """
         import asyncio
+        group_id = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
         asyncio._gralkor_run(graph.driver.execute_query(
             '''
             MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
