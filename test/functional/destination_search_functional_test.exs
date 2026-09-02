@@ -311,8 +311,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  lenses: ["first-alpha", "first-alpha"]
                })
 
-      assert_receive {:destination_search, "first", _, _, :episodes, _,
-                      [lenses: ["first-alpha"]]}
+      assert_receive {:destination_search, "first", _, _, :episodes, _, [lenses: ["first-alpha"]]}
     end
   end
 
@@ -710,6 +709,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     start_supervised!(Gralkor.Lens.Storage.InMemory)
     start_supervised!(Gralkor.Reflection.Storage.InMemory)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
     Application.put_env(
       :jido_gralkor,
       :reflection_storage,

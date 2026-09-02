@@ -2052,9 +2052,7 @@ defmodule Gralkor.GraphitiPoolTest do
                 %{content: "selected one"},
                 %{content: "selected two"}
               ]} =
-               GraphitiPool.search_episodes(pid, "g1", "selected", 2,
-                 lenses: ["selected"]
-               )
+               GraphitiPool.search_episodes(pid, "g1", "selected", 2, lenses: ["selected"])
 
       {limit, _} = Pythonx.eval("g.limit", %{"g" => g})
       assert Pythonx.decode(limit) == 3
