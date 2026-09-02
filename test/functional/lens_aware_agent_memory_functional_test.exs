@@ -364,7 +364,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  %{agent: completion}
                )
 
-      assert [[_, _, _, _, _, "observations", [], _reflection_context]] = InMemory.captures()
+      assert [[_, _, _, _, _, "observations", []]] = InMemory.captures()
     end
 
     test "and the plugin does not redefine the selected Lens's Destination or ingestion process" do
@@ -511,7 +511,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       }
 
       assert {:ok, :continue} = Plugin.handle_signal(failure_signal, %{agent: failed_agent})
-      assert [[_, _, _, _, _, "decisions", [], _]] = InMemory.captures()
+      assert [[_, _, _, _, _, "decisions", []]] = InMemory.captures()
     end
   end
 
@@ -535,48 +535,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert InMemory.adds() == []
       assert InMemory.captures() == []
-    end
-  end
-
-  describe "when a mounted memory plugin captures through a Lens for an agent request" do
-    test "then the host agent's configured tools reach every scheduled Reflection" do
-      context = reflection_capture_context([:host_tool], %{}, %{})
-      assert context.tools == [:host_tool]
-    end
-
-    test "and the retained request tool context reaches every scheduled Reflection" do
-      context = reflection_capture_context([], %{}, %{tenant: "retained"})
-      assert context.tool_context.tenant == "retained"
-    end
-
-    test "and the current operator, agent name, Lens, and session id override conflicting configured or retained context" do
-      conflicts = %{
-        operator_id: "wrong",
-        agent_name: "Wrong",
-        lens: "observations",
-        session_id: "wrong",
-        precedence: "retained"
-      }
-
-      context =
-        reflection_capture_context([], Map.put(conflicts, :precedence, "configured"), conflicts)
-
-      assert context.tool_context.operator_id == "operator-one"
-      assert context.tool_context.agent_name == "Susu"
-      assert context.tool_context.lens == "decisions"
-      assert context.tool_context.session_id == "session-one"
-      assert context.tool_context.precedence == "retained"
-    end
-
-    test "and the current operator is supplied as the host agent identifier expected by forwarded tools" do
-      context =
-        reflection_capture_context(
-          [],
-          %{agent_id: "configured-agent"},
-          %{agent_id: "retained-agent"}
-        )
-
-      assert context.tool_context.agent_id == "operator-one"
     end
   end
 
@@ -607,8 +565,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
 
       assert [
-               [_, _, _, _, observation_messages, "observations", [], _],
-               [_, _, _, _, decision_messages, "decisions", [], _]
+               [_, _, _, _, observation_messages, "observations", []],
+               [_, _, _, _, decision_messages, "decisions", []]
              ] = InMemory.captures()
 
       assert Enum.any?(observation_messages, &(&1.content == "Observed."))
@@ -787,45 +745,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       type: "ai.request.completed",
       data: %{request_id: request_id, result: result}
     }
-  end
-
-  defp reflection_capture_context(tools, configured_tool_context, retained_tool_context) do
-    assert {:ok, plugin_state} =
-             Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
-
-    request_id = "reflection-context"
-    query_agent = agent(plugin_state)
-
-    signal = %Jido.Signal{
-      id: "query-reflection-context",
-      source: "/functional",
-      type: "ai.react.query",
-      data: %{
-        request_id: request_id,
-        query: "Remember this",
-        tool_context: Map.put(retained_tool_context, :lens, "decisions")
-      }
-    }
-
-    assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
-             Plugin.handle_signal(signal, %{agent: query_agent})
-
-    completed_agent = completion_agent(query_agent, request_id, retained_refs)
-
-    completed_agent =
-      put_in(
-        completed_agent,
-        [:state, :__strategy__, :config],
-        %{tools: tools, tool_context: configured_tool_context}
-      )
-
-    assert {:ok, :continue} =
-             Plugin.handle_signal(completion_signal(request_id, "remembered"), %{
-               agent: completed_agent
-             })
-
-    assert [[_, _, _, _, _, "decisions", [], context]] = InMemory.captures()
-    context
   end
 
   defp start_lens_capture_buffer do
