@@ -370,6 +370,39 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
+  describe "if an ontology relationship source does not name an alias" do
+    test "then compilation fails" do
+      assert_raise CompileError, fn ->
+        Code.compile_string("""
+        defmodule NonAliasRelationshipSourceOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+          from :user do
+            prefers(Preference)
+          end
+        end
+        """)
+      end
+    end
+
+    test "and the error shows the expected `from Source` form" do
+      error =
+        assert_raise CompileError, fn ->
+          Code.compile_string("""
+          defmodule InvalidRelationshipSourceFormOntology do
+            use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+            from :user do
+              prefers(Preference)
+            end
+          end
+          """)
+        end
+
+      assert Exception.message(error) =~ "from Source"
+    end
+  end
+
   describe "when an ontology declares an aliased relationship source > where the block calls `verb Target` with no do-block" do
     test "then a relationship is declared from the source entity to the target entity under the verb's edge name" do
       ontology = BareVerbOntology.__ontology__()
