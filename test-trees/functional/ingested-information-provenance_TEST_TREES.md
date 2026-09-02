@@ -36,6 +36,10 @@ when public episode search encounters an incomplete Reflection episode
   then the incomplete Reflection episode does not contribute
   and completion filtering occurs before the per-Destination result limit
 
+when public episode search encounters an episode without a trusted Lens suffix or Reflection prefix
+  then the unprovenanced episode does not contribute
+  and provenance filtering occurs before the per-Destination result limit
+
 if public ingestion omits or supplies an unsupported source kind
   then ingestion raises an argument error identifying the rejected source kind
   and no Lens ingestion process or Graphiti operation begins
