@@ -817,6 +817,45 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when one episode is requested by exact identifier" do
+    test "then the matching episode content and immutable source fields are returned" do
+      {pid, _g} = start_episode_identity_pool()
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
+
+      assert {:ok,
+              %{
+                uuid: "episode-uuid",
+                content: "content",
+                source: "text",
+                source_description: "source"
+              }} = GraphitiPool.get_episode(pid, "g1", "episode-uuid")
+
+      GenServer.stop(pid)
+    end
+
+    test "and the result identifies whether durable extraction completion is recorded" do
+      {pid, _g} = start_episode_identity_pool()
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
+
+      assert {:ok, %{extraction_complete: true}} =
+               GraphitiPool.get_episode(pid, "g1", "episode-uuid")
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "when one episode is requested by exact identifier > while that identifier is absent" do
+    test "then lookup reports not found" do
+      {pid, _g} = start_episode_identity_pool()
+      assert {:error, :not_found} = GraphitiPool.get_episode(pid, "g1", "missing-uuid")
+      GenServer.stop(pid)
+    end
+  end
+
   describe "when an episode is added > while an embedded connection is configured > while another episode addition is in progress" do
     test "then the graph library receives the episode only after the in-progress addition finishes" do
       {g, _} =
@@ -3664,6 +3703,52 @@ defmodule Gralkor.GraphitiPoolTest do
     {group_ids, _} = Pythonx.eval("g.group_ids", %{"g" => graph})
     GenServer.stop(pid)
     {node, %{"group_ids" => Pythonx.decode(group_ids)}}
+  end
+
+  defp start_episode_identity_pool do
+    {g, _} =
+      Pythonx.eval(
+        """
+        from graphiti_core.errors import NodeNotFoundError
+
+        class _GraphOperations:
+            async def episodic_node_get_by_uuid(self, cls, driver, uuid):
+                if uuid not in driver.episodes:
+                    raise NodeNotFoundError(uuid)
+                return driver.episodes[uuid]
+
+            async def episodic_node_save(self, episode, driver):
+                driver.episodes[episode.uuid] = episode
+
+        class _Driver:
+            def __init__(self):
+                self.graph_operations_interface = _GraphOperations()
+                self.episodes = {}
+
+        class _FakeGraphiti:
+            def __init__(self):
+                self.driver = _Driver()
+                self.extractions = 0
+
+            async def add_episode(self, **kwargs):
+                from graphiti_core.nodes import EpisodicNode
+                self.extractions += 1
+                episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                await episode.save(self.driver)
+
+        _FakeGraphiti()
+        """,
+        %{}
+      )
+
+    %{pid: pid} =
+      start_pool(
+        construct_instance: fn _db, _shared, _group_id -> g end,
+        warmup: false,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0
+      )
+
+    {pid, g}
   end
 
   defp eventually(assertion, attempts \\ 100)
