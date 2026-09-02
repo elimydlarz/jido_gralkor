@@ -19,10 +19,10 @@ if a recall is requested with a missing or blank agent name
   and no search is issued
 
 when a grouped session captures messages with agent and user names
-  then the group is sanitised before it is buffered
+  then the logical group is buffered unchanged so the physical Graphiti boundary can encode it exactly once
   and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own
   and that built-in ontology is buffered alongside the turn
-  and the buffer receives the session, sanitised group, names, ontology and messages
+  and the buffer receives the session, logical group, names, ontology and messages
   and success is returned immediately, no distillation running before the call returns
   and nothing is logged for the turn itself, captured content becoming observable only at flush
 
@@ -83,8 +83,8 @@ if a flush-and-await is requested with a missing or non-positive timeout
   then an argument error naming the timeout is raised
 
 when memory is added with a group and content
-  then the group is sanitised before the write
-  and the content is written to the graph as a plain-text episode scoped to the sanitised group
+  then the logical group reaches the physical Graphiti boundary unchanged and is encoded exactly once there
+  and the content is written to the graph as a plain-text episode scoped to that physical group
   and the trusted originating Lens is recorded as `operator`
   and the generated name combines the millisecond timestamp with a positive monotonic integer
   and success is returned once the graph accepts the write
@@ -108,21 +108,15 @@ when an index and constraint rebuild is requested
     then that failure is returned unchanged
 
 when community building is requested for a group
-  then the group is sanitised before use
-  and community building is scoped to the sanitised group
+  then the logical group reaches the physical Graphiti boundary unchanged and is encoded exactly once there
+  and community building is scoped to that physical group
   and the number of communities and the number of edges built are returned
   if the graph fails
     then that failure is returned unchanged
 
-when a group id holding hyphens is sanitised
-  then every hyphen is replaced with an underscore
-  and consecutive hyphens are each replaced independently, so none is collapsed into another
-
-when an `operator/<operator id>` Destination graph is sanitised for Graphiti
-  then the slash is replaced with an underscore
-
-when a group id holding no hyphens or slashes is sanitised
-  then it is returned unchanged
+when a logical graph identifier is encoded for Graphiti
+  then its physical identifier is `g_` followed by the lowercase hexadecimal encoding of every original byte
+  and distinct logical identifiers always produce distinct physical identifiers
 
 when the client implementation is resolved
   while no client module is configured

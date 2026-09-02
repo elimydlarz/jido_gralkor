@@ -1,8 +1,12 @@
-Functional: native-memory-round-trip (src: lib/gralkor/client/native.ex, lib/gralkor/recall.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/application.ex; functional: test/functional/native_memory_round_trip_functional_test.exs)
+Functional: native-memory-round-trip (src: lib/gralkor/client.ex, lib/gralkor/client/native.ex, lib/gralkor/graphiti_pool.ex, lib/gralkor/recall.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/application.ex; functional: test/functional/native_memory_round_trip_functional_test.exs)
 
 when a fact is written into an operator's memory
   then the graph stores its plain text unchanged
   and the graph named `operator/<operator id>` receives it
+
+when facts are written for logical operator graphs that previously normalised to the same name
+  then each logical graph identifier is encoded exactly once at the physical Graphiti boundary
+  and the pool constructs and caches a distinct physical graph instance for each logical graph
 
 when memory search returns facts for recall
   then every returned fact is presented verbatim and in order inside an untrusted memory block
