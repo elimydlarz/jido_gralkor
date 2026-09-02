@@ -593,7 +593,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       end
 
       assert :ok =
-               Gralkor.Reflection.Storage.Graphiti.put_output(
+               Gralkor.Destination.Storage.Graphiti.put_artefact(
                  destination_output(erl),
                  erl.name,
                  "operator-one",

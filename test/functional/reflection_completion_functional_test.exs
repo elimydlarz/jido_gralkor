@@ -79,15 +79,15 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   defmodule LoseFirstGraphitiResponseStore do
     use Agent
 
-    alias Gralkor.Reflection.Storage.Graphiti
+    alias Gralkor.Destination.Storage.Graphiti
 
     def start_link(test_pid), do: Agent.start_link(fn -> {test_pid, true} end, name: __MODULE__)
 
     def get_artefact(output, reflection_name, operator_id, artefact_id),
-      do: Graphiti.get_output(output, reflection_name, operator_id, artefact_id)
+      do: Graphiti.get_artefact(output, reflection_name, operator_id, artefact_id)
 
     def put_artefact(output, reflection_name, operator_id, artefact) do
-      with :ok <- Graphiti.put_output(output, reflection_name, operator_id, artefact),
+      with :ok <- Graphiti.put_artefact(output, reflection_name, operator_id, artefact),
            :ok <-
              Gralkor.Destination.Storage.InMemory.put_artefact(
                output,
@@ -1317,8 +1317,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                GraphitiPool.get_episode(pool, "observations", artefact_id)
 
       assert {:error, :not_found} =
-               Gralkor.Reflection.Storage.Graphiti.get(
-                 reflection,
+               Gralkor.Destination.Storage.Graphiti.get_artefact(
+                 Enum.find(reflection.outputs, &(&1.kind == :destination)),
+                 reflection.name,
                  "operator-one",
                  artefact_id
                )
@@ -1513,8 +1514,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                )
 
       assert {:error, {:incomplete_artefact, ^artefact}} =
-               Gralkor.Reflection.Storage.Graphiti.get(
-                 reflection,
+               Gralkor.Destination.Storage.Graphiti.get_artefact(
+                 Enum.find(reflection.outputs, &(&1.kind == :destination)),
+                 reflection.name,
                  "operator-one",
                  artefact_id
                )
