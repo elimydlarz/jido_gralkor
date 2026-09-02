@@ -10,7 +10,7 @@ when memory search returns facts for recall
 
 when a captured turn is flushed for its session
   then flush returns before graph ingestion completes
-  and the rendered transcript eventually reaches the session's group
+  and the rendered transcript eventually reaches the session's group with trusted `operator` Lens provenance
   and a second flush writes no duplicate transcript
 
 if the graph fails a recall search
