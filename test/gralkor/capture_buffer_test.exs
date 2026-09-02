@@ -509,7 +509,7 @@ defmodule Gralkor.CaptureBufferTest do
       )
 
       append_lens_turn()
-      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      assert :ok = CaptureBuffer.flush_and_await("lens-session", 1_000)
 
       assert_receive {:ingestion_attempt, 1, ingestion_id}
       assert_receive {:ingestion_attempt, 2, ^ingestion_id}
@@ -518,21 +518,21 @@ defmodule Gralkor.CaptureBufferTest do
     test "and identifiers remain collision-resistant across process and VM restarts" do
       restart_with_ingestion_id_capture()
       append_lens_turn()
-      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      assert :ok = CaptureBuffer.flush_and_await("lens-session", 1_000)
       assert_receive {:lens_flushed, first_ingestion_id}
 
       restart_with_ingestion_id_capture()
       append_lens_turn()
-      assert :ok = CaptureBuffer.flush_and_await("reflection-session", 1_000)
+      assert :ok = CaptureBuffer.flush_and_await("lens-session", 1_000)
       assert_receive {:lens_flushed, second_ingestion_id}
 
       assert first_ingestion_id != second_ingestion_id
 
       assert first_ingestion_id =~
-               ~r/^reflection-session:[A-Za-z0-9_-]{22}$/
+               ~r/^lens-session:[A-Za-z0-9_-]{22}$/
 
       assert second_ingestion_id =~
-               ~r/^reflection-session:[A-Za-z0-9_-]{22}$/
+               ~r/^lens-session:[A-Za-z0-9_-]{22}$/
     end
   end
 
@@ -1181,7 +1181,7 @@ defmodule Gralkor.CaptureBufferTest do
 
   defp append_lens_turn do
     CaptureBuffer.append_lens(
-      "reflection-session",
+      "lens-session",
       "operator-one",
       "Susu",
       "Eli",
