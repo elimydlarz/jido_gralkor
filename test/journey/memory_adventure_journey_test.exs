@@ -1053,7 +1053,13 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     {first_generalisation, later_generalisation, first_generalisation_artefact}
   end
 
-  defp invoke_reflection!(reflection_name, operator_id, invocation_id, representations, opts \\ []) do
+  defp invoke_reflection!(
+         reflection_name,
+         operator_id,
+         invocation_id,
+         representations,
+         opts \\ []
+       ) do
     reflection = Enum.find(Registry.configured!(), &(&1.name == reflection_name))
 
     invocation = %{
