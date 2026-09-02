@@ -1866,6 +1866,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       first_graph = GraphitiPool.for(first_pool, "observations")
       second_graph = GraphitiPool.for(second_pool, "observations")
+      graph_group_id = Client.sanitize_group_id("observations")
 
       Pythonx.eval(
         "first_graph.wait_for_replacement_owner = True",
@@ -2067,7 +2068,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             '''
             MERGE (c:_GralkorEpisodeClaim {uuid: $uuid})
             ON CREATE SET
-              c.group_id = 'observations',
+              c.group_id = $group_id,
               c.content = 'same',
               c.source = 'text',
               c.source_description = 'source',
@@ -2077,9 +2078,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             RETURN c.generation AS generation
             ''',
             uuid='embedded-server-expired',
+            group_id=group_id,
         ))
         """,
-        %{"graph" => first_graph}
+        %{"graph" => first_graph, "group_id" => graph_group_id}
       )
 
       assert :ok =
