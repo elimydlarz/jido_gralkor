@@ -1022,35 +1022,49 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     {first_generalisation, later_generalisation, first_generalisation_artefact}
   end
 
-  defp generalisation_artefact_until(ingestion_id, attempts \\ 120) do
-    artefact_id = Artefact.id_for(@operator_one, ingestion_id, "generalisations")
-    generalisation_artefact_until(artefact_id, attempts, nil)
+  defp invoke_reflection!(reflection_name, operator_id, invocation_id, representations) do
+    reflection = Enum.find(Registry.configured!(), &(&1.name == reflection_name))
+
+    invocation = %{
+      id: invocation_id,
+      operator_id: operator_id,
+      invocation_context: %{},
+      representations: representations
+    }
+
+    {:ok, artefact} = Runner.run(reflection, invocation)
+
+    Enum.each(reflection.outputs, fn
+      %{kind: :destination} = output ->
+        :ok =
+          Gralkor.Destination.Storage.put_artefact(
+            output,
+            reflection.name,
+            operator_id,
+            artefact
+          )
+
+      %{kind: :return, handler: handler} ->
+        :ok = handler.return(operator_id, invocation_id, artefact)
+    end)
+
+    artefact
   end
 
-  defp generalisation_artefact_until(_artefact_id, 0, last_results), do: last_results
+  defp store_artefact!(artefact, reflection_name, operator_id, destination_name) do
+    output = %{
+      kind: :destination,
+      destination: Gralkor.Destination.Registry.fetch!(destination_name),
+      ontology: Gralkor.DefaultOntology
+    }
 
-  defp generalisation_artefact_until(artefact_id, attempts, _last_results) do
-    assert {:ok, results} =
-             Client.search(%Search{
-               operator_id: @operator_one,
-               query: artefact_id,
-               destinations: ["global"],
-               result_type: :artefacts,
-               artefact_id: artefact_id,
-               max_results: 1
-             })
-
-    case Enum.find(results, fn
-           %{artefact: %{id: ^artefact_id}} -> true
-           _ -> false
-         end) do
-      nil ->
-        Process.sleep(1_000)
-        generalisation_artefact_until(artefact_id, attempts - 1, results)
-
-      %{artefact: artefact} ->
+    :ok =
+      Gralkor.Destination.Storage.put_artefact(
+        output,
+        reflection_name,
+        operator_id,
         artefact
-    end
+      )
   end
 
   defp destination_artefact_until(operator_id, destination, artefact_id, attempts \\ 120)
