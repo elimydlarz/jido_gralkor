@@ -825,8 +825,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       reflection = %{
         reflection
-        | outputs:
-            reflection.outputs ++ [%{kind: :return, handler: OutputProbeReturnHandler}]
+        | outputs: reflection.outputs ++ [%{kind: :return, handler: OutputProbeReturnHandler}]
       }
 
       Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
