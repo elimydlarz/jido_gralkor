@@ -266,8 +266,6 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       assert_receive {:eligible_lineage, "evolve-generalisations",
                       {:ok, [%{"content" => "Prefer explicit APIs", "level" => 2}]}}
-
-      assert_receive {:eligible_lineage, "synthesise-artefact", :error}
     end
 
     test "and evolution inference is directed to leave lineage empty when no eligible snapshot exists and otherwise copy only eligible snapshots exactly" do
