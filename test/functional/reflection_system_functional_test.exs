@@ -147,13 +147,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
              ]
     end
 
-    test("and exactly one output has kind `:destination`", context,
-      do: assert_valid(context)
-    )
+    test("and exactly one output has kind `:destination`", context, do: assert_valid(context))
 
-    test("and at most one output has kind `:return`", context,
-      do: assert_valid(context)
-    )
+    test("and at most one output has kind `:return`", context, do: assert_valid(context))
 
     test("and every Destination output references a registered Destination by name", context,
       do: assert_valid(context)
@@ -727,7 +723,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert first.step == %{label: "gather", directions: "Gather facts."}
       refute Map.has_key?(first, :steps)
     end
-
   end
 
   describe "when a Chain of Thought step begins > where the directions reference outputs from earlier steps" do
@@ -987,7 +982,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                payload: %{"artefact" => "durable pattern"}
              }
     end
-
   end
 
   describe "when a Destination is searched for artefacts > where the search also identifies one artefact" do
