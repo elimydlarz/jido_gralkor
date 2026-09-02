@@ -161,20 +161,32 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
-  describe "when an agent invokes legacy memory search with a usable query and committed session" do
-    test "while the backend returns a memory block then the agent receives that memory block unchanged" do
-      block = "<gralkor-memory>remembered</gralkor-memory>"
-      InMemory.set_recall({:ok, block})
+  describe "when an agent invokes memory search with a usable query" do
+    test "then returned results are scoped to the current operator" do
+      for operator <- ["operator-one", "operator-two"] do
+        assert :ok =
+                 Client.ingest(%Ingest{
+                   id: "operator-scope-#{operator}",
+                   operator_id: operator,
+                   lens: "operator",
+                   source_kind: :document,
+                   content: "private memory for #{operator}",
+                   source_description: "functional"
+                 })
+      end
 
-      assert {:ok, %{result: ^block}} =
-               memory_search(%{query: "launch"}, session_id: "thread-one")
-    end
+      assert {:ok, %{result: result}} =
+               memory_search(%{query: "private", destinations: ["operator"]}, [])
 
-    test "if the backend fails then the backend failure is returned unchanged" do
-      InMemory.set_recall({:error, :unavailable})
-
-      assert {:error, :unavailable} =
-               memory_search(%{query: "launch"}, session_id: "thread-one")
+      assert Jason.decode!(result) == [
+               %{
+                 "destination" => "operator",
+                 "episode" => %{
+                   "content" => "private memory for operator-one",
+                   "lens" => "operator"
+                 }
+               }
+             ]
     end
   end
 
