@@ -1605,6 +1605,31 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_receive {:reflection_completed, "one", {:error, _}}
       assert_receive {:reflection_completed, "two", {:error, _}}
     end
+
+    test "and every other declared output remains eligible to receive that artefact", %{
+      root: root
+    } do
+      outputs = [
+        [kind: :destination, destination: "operator"],
+        [kind: :return, handler: ReturnHandler]
+      ]
+
+      [reflection] =
+        Registry.load!([valid_definition(root, outputs: outputs)], root: root)
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection], ingestion(),
+                 runner_opts: [inference: &output_for/1],
+                 notify: self(),
+                 retry_delays: [],
+                 store_opts: [storage: FailingReflectionStorage]
+               )
+
+      assert_receive {:returned_artefact, "operator-one", "ingestion-1", %Gralkor.Artefact{}}
+
+      assert_receive {:reflection_completed, "generalisation",
+                      {:error, %{output: :destination, reason: :destination_unavailable}}}
+    end
   end
 
   describe "when a Destination is searched for artefacts" do
