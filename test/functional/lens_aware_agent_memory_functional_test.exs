@@ -269,7 +269,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                "payload" => artefact.payload
              }
     end
-
   end
 
   describe "when an agent with a mounted memory plugin invokes memory search > where no conversation thread has been committed" do
@@ -303,7 +302,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert [%{"destination" => "observations"}] = Jason.decode!(result)
     end
-
   end
 
   describe "when an agent with a mounted memory plugin invokes memory search > where the Destination selector is omitted or empty > and the Lens selector is omitted or empty" do

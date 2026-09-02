@@ -97,7 +97,6 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
 
       assert Config.embedded_falkordb_socket_timeout_ms() == 60_000
     end
-
   end
 
   describe "when the embedded runtime starts > while a positive `:embedded_falkordb_socket_timeout_ms` is configured" do

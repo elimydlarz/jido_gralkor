@@ -405,8 +405,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  lenses: ["first-alpha"]
                })
 
-      assert_receive {:destination_search, "first", _, _, :episodes, _,
-                      [lenses: ["first-alpha"]]}
+      assert_receive {:destination_search, "first", _, _, :episodes, _, [lenses: ["first-alpha"]]}
     end
 
     test "then only results whose Destination matches any supplied Destination and whose originating Lens matches any supplied Lens can contribute" do

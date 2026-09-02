@@ -330,7 +330,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert Jason.decode!(encoded_artefact)["payload"] == artefact.payload
     end
-
   end
 
   describe "when an agent invokes memory search with a usable query > where both selectors are omitted or empty" do
@@ -349,7 +348,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                "decisions"
              ]
     end
-
   end
 
   describe "when an agent invokes memory search with a usable query > where only Destinations are supplied" do
@@ -373,7 +371,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                }
              ]
     end
-
   end
 
   describe "when an agent invokes memory search with a usable query > where only Lenses are supplied" do
@@ -394,7 +391,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                }
              ]
     end
-
   end
 
   describe "when an agent invokes memory search with a usable query > where Destinations and Lenses are supplied" do
@@ -414,7 +410,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert Jason.decode!(result) == []
     end
-
   end
 
   describe "when an agent invokes memory search with a usable query > where no conversation thread has been committed" do
@@ -437,7 +432,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                }
              ]
     end
-
   end
 
   describe "when an agent invokes memory search with a usable query > if Search fails" do
@@ -492,7 +486,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         complete_plugin_turn(%{}, :ok)
       end
     end
-
   end
 
   describe "when a mounted plugin completes a memory-worthy turn with a committed thread > if capture fails" do
