@@ -138,7 +138,10 @@ defmodule JidoGralkor.PluginTest do
              }
     end
 
-    test "if the ingestion Lens is unknown then mounting raises an ArgumentError identifying the unknown Lens" do
+  end
+
+  describe "when mount selects an ingestion Lens > if the ingestion Lens is unknown" do
+    test "then mounting raises an ArgumentError identifying the unknown Lens" do
       configure_lenses()
 
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
@@ -148,8 +151,10 @@ defmodule JidoGralkor.PluginTest do
         )
       end
     end
+  end
 
-    test "if the removed `:default_lens` option is supplied then mounting raises an ArgumentError identifying `:ingestion_lens` as its replacement" do
+  describe "when mount selects an ingestion Lens > if the removed `:default_lens` option is supplied" do
+    test "then mounting raises an ArgumentError identifying `:ingestion_lens` as its replacement" do
       configure_lenses()
 
       assert_raise ArgumentError, ~r/default_lens.*ingestion_lens/, fn ->
@@ -298,7 +303,10 @@ defmodule JidoGralkor.PluginTest do
       assert [[_, _, _, _, _, "observations", []]] = InMemory.captures()
     end
 
-    test "if the selected Lens is unknown or non-binary then the callback raises identifying the invalid Lens" do
+  end
+
+  describe "when an agent turn begins > while a thread has committed to agent state > where the incoming tool context selects a Lens > if the selected Lens is unknown or non-binary" do
+    test "then the callback raises identifying the invalid Lens" do
       plugin_state = lens_plugin_state()
 
       lens_agent =
