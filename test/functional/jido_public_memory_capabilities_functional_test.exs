@@ -325,12 +325,117 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                "decisions"
              ]
     end
+
+    test "where only Destinations are supplied then only results from any supplied Destination can contribute" do
+      assert :ok = ingest_memory("observations", "destination-only observation")
+      assert :ok = ingest_memory("decisions", "destination-only decision")
+
+      assert {:ok, %{result: result}} =
+               memory_search(
+                 %{query: "destination-only", destinations: ["observations"]},
+                 []
+               )
+
+      assert Jason.decode!(result) == [
+               %{
+                 "destination" => "observations",
+                 "episode" => %{
+                   "content" => "destination-only observation",
+                   "lens" => "observations"
+                 }
+               }
+             ]
+    end
+
+    test "where only Lenses are supplied then only results originating in any supplied Lens can contribute" do
+      assert :ok = ingest_memory("observations", "lens-only observation")
+      assert :ok = ingest_memory("decisions", "lens-only decision")
+
+      assert {:ok, %{result: result}} =
+               memory_search(%{query: "lens-only", lenses: ["decisions"]}, [])
+
+      assert Jason.decode!(result) == [
+               %{
+                 "destination" => "decisions",
+                 "episode" => %{
+                   "content" => "lens-only decision",
+                   "lens" => "decisions"
+                 }
+               }
+             ]
+    end
+
+    test "where Destinations and Lenses are supplied then only results matching both selections can contribute" do
+      assert :ok = ingest_memory("observations", "intersection observation")
+      assert :ok = ingest_memory("decisions", "intersection decision")
+
+      assert {:ok, %{result: result}} =
+               memory_search(
+                 %{
+                   query: "intersection",
+                   destinations: ["observations"],
+                   lenses: ["decisions"]
+                 },
+                 []
+               )
+
+      assert Jason.decode!(result) == []
+    end
+
+    test "where no conversation thread has been committed then search still runs for the current operator" do
+      assert :ok = ingest_memory("observations", "thread-independent search")
+
+      assert {:ok, %{result: result}} =
+               memory_search(
+                 %{query: "thread-independent", destinations: ["observations"]},
+                 []
+               )
+
+      assert Jason.decode!(result) == [
+               %{
+                 "destination" => "observations",
+                 "episode" => %{
+                   "content" => "thread-independent search",
+                   "lens" => "observations"
+                 }
+               }
+             ]
+    end
+
+    test "if Search fails then the failure is returned unchanged" do
+      Application.put_env(:jido_gralkor, :destination_storage, FailingSearchStorage)
+
+      assert {:error, :unavailable} =
+               memory_search(
+                 %{query: "unavailable", destinations: ["observations"]},
+                 []
+               )
+    end
+  end
+
+  describe "when an agent receives the memory search tool" do
+    test "then its description directs the agent to search related observations and generalisations" do
+      description = MemorySearch.__action_metadata__().description
+
+      assert description =~ "Search related stored observations and generalisations"
+    end
+
+    test "and its description directs the agent to apply relevant generalisations in light of their evolution histories and related observations" do
+      description = MemorySearch.__action_metadata__().description
+
+      assert description =~
+               "Apply relevant generalisations in light of their evolution histories and related observations"
+    end
   end
 
   describe "if an agent invokes memory search without a usable query" do
-    test "then no backend is queried" do
+    test "then no Search is issued" do
+      Application.put_env(:jido_gralkor, :destination_storage, RecordingSearchStorage)
+      Application.put_env(:jido_gralkor, :public_search_test_pid, self())
+      on_exit(fn -> Application.delete_env(:jido_gralkor, :public_search_test_pid) end)
+
       assert {:ok, _result} = memory_search(%{query: "  "}, session_id: "thread-one")
-      assert InMemory.recalls() == []
+      refute_receive {:public_search, _, _, _, _, _, _}
     end
 
     test "and the agent receives an explicit non-result" do
@@ -339,21 +444,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert result =~ "NON-RESULT"
       assert result =~ "no query was provided"
-    end
-  end
-
-  describe "if an agent invokes memory search without a committed session" do
-    test "then no backend is queried" do
-      assert {:ok, _result} = memory_search(%{query: "launch"}, [])
-      assert InMemory.recalls() == []
-    end
-
-    test "and the agent receives an explicit non-result" do
-      assert {:ok, %{result: result}} =
-               memory_search(%{query: "launch"}, [])
-
-      assert result =~ "NON-RESULT"
-      assert result =~ "long-term memory was NOT queried"
     end
   end
 
