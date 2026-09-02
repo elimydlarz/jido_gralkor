@@ -89,8 +89,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     def put_artefact(output, reflection_name, operator_id, artefact) do
       with :ok <- Graphiti.put_output(output, reflection_name, operator_id, artefact),
            :ok <-
-             Gralkor.Reflection.Storage.InMemory.put_destination(
-               output.destination,
+             Gralkor.Destination.Storage.InMemory.put_artefact(
+               output,
+               reflection_name,
                operator_id,
                artefact
              ) do
