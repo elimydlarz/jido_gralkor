@@ -25,7 +25,8 @@ defmodule Gralkor.Client do
   `capture/6`, or `capture/7` when the same turn is also routed through
   additional Lenses. The internal `capture/8` form also carries the host tools
   and tool context made available to subsequent Reflections. Logical graph IDs
-  are sanitised only at their physical graph boundary (`sanitize_group_id/1`).
+  are encoded exactly once at the physical graph boundary as `g_` plus the
+  lowercase hexadecimal encoding of every original byte (`sanitize_group_id/1`).
   The `operator` Destination resolves to `operator/<operator id>`, so search
   reads only the current operator's operator graph; every other Destination
   resolves to its exact shared name.
