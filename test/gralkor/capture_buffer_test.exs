@@ -12,13 +12,18 @@ defmodule Gralkor.CaptureBufferTest do
   alias Gralkor.Reflection.Scheduler
 
   defmodule EmptyReflectionStore do
-    @behaviour Gralkor.Reflection.Store
+    @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def get(_reflection, _operator_id, _artefact_id), do: {:error, :not_found}
+    def get_artefact(_output, _reflection_name, _operator_id, _artefact_id),
+      do: {:error, :not_found}
 
     @impl true
-    def put(_reflection, _operator_id, _artefact), do: :ok
+    def put_artefact(_output, _reflection_name, _operator_id, _artefact), do: :ok
+
+    @impl true
+    def search(_destination, _operator_id, _query, _result_type, _max_results, _opts),
+      do: {:ok, []}
   end
 
   setup do

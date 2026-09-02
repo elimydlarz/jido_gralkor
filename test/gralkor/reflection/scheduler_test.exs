@@ -9,20 +9,25 @@ defmodule Gralkor.Reflection.SchedulerTest do
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Reflection.Journal
   alias Gralkor.Reflection.Scheduler
-  alias Gralkor.Reflection.Storage.InMemory
+  alias Gralkor.Destination.Storage.InMemory
 
   defmodule EmptyStore do
-    @behaviour Gralkor.Reflection.Store
+    @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def get(_reflection, _operator_id, _artefact_id), do: {:error, :not_found}
+    def get_artefact(_output, _reflection_name, _operator_id, _artefact_id),
+      do: {:error, :not_found}
 
     @impl true
-    def put(_reflection, _operator_id, _artefact), do: :ok
+    def put_artefact(_output, _reflection_name, _operator_id, _artefact), do: :ok
+
+    @impl true
+    def search(_destination, _operator_id, _query, _result_type, _max_results, _opts),
+      do: {:ok, []}
   end
 
   defmodule ControlledStore do
-    @behaviour Gralkor.Reflection.Store
+    @behaviour Gralkor.Destination.Storage
 
     use Agent
 
@@ -34,14 +39,14 @@ defmodule Gralkor.Reflection.SchedulerTest do
     end
 
     @impl true
-    def get(_reflection, _operator_id, artefact_id) do
+    def get_artefact(_output, _reflection_name, _operator_id, artefact_id) do
       {test_pid, outcome} = take(:get)
       send(test_pid, {:store_get, artefact_id, self()})
       perform(outcome)
     end
 
     @impl true
-    def put(_reflection, _operator_id, artefact) do
+    def put_artefact(_output, _reflection_name, _operator_id, artefact) do
       {test_pid, outcome} = take(:put)
       send(test_pid, {:store_put, artefact, self()})
       perform(outcome)
@@ -64,6 +69,10 @@ defmodule Gralkor.Reflection.SchedulerTest do
         :release -> :ok
       end
     end
+
+    @impl true
+    def search(_destination, _operator_id, _query, _result_type, _max_results, _opts),
+      do: {:ok, []}
   end
 
   describe "when the Scheduler starts without execution overrides" do
