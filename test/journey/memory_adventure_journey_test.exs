@@ -336,8 +336,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
   describe "when a completed ingestion triggers a consumer-defined Reflection with Destination and return outputs" do
     test "then its artefact is searchable through its Destination", %{adventure: adventure} do
-      assert %Artefact{id: "a0ea900d-5a9a-560d-8991-eebcf555ceac"} =
-               adventure.consumer_destination_artefact
+      assert %Artefact{id: artefact_id} = adventure.consumer_destination_artefact
+
+      assert artefact_id ==
+               Artefact.id_for(
+                 @operator_one,
+                 "journey-published-policy",
+                 "published-policy-review"
+               )
     end
 
     test "and its consumer return handler receives that exact artefact", %{adventure: adventure} do
