@@ -294,7 +294,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
   end
 
-  describe "when the packaged generalisation Reflection synthesises a generalisation > while no returned generalisation influences the new generalisation" do
+  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while no returned prior generalisation influences the evolved generalisation" do
     setup do
       put_stored_generalisation_response([
         %{"content" => "Prefer abstractions everywhere", "level" => 8}
@@ -303,22 +303,22 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       :ok
     end
 
-    test "then the new generalisation has level one" do
+    test "then the evolved generalisation has evolution-depth level one" do
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(), inference: &output_for/1)
 
       assert [%{"level" => 1}] = artefact.payload["generalisations"]
     end
 
-    test "and the new generalisation records no preceding generalisations" do
+    test "and the evolved generalisation's `evolves_from` is empty" do
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(), inference: &output_for/1)
 
-      assert [%{"generalises_over" => []}] = artefact.payload["generalisations"]
+      assert [%{"evolves_from" => []}] = artefact.payload["generalisations"]
     end
   end
 
-  describe "when the packaged generalisation Reflection synthesises a generalisation > while one or more returned generalisations influence the new generalisation" do
+  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while one or more returned prior generalisations influence the evolved generalisation" do
     setup do
       put_stored_generalisation_response(
         influencing_generalisations() ++
@@ -328,29 +328,68 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       :ok
     end
 
-    test "then the new generalisation's level is one greater than the highest influencing level" do
+    test "then the evolved generalisation's evolution-depth level is one greater than the highest influencing level" do
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
 
       assert [%{"level" => 5}] = artefact.payload["generalisations"]
     end
 
-    test "and the new generalisation records the content and level of every influencing generalisation" do
+    test "and `evolves_from` records the content and level of every influencing prior generalisation" do
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(),
                  inference: &ancestry_preserving_output_for/1
                )
 
-      assert [%{"generalises_over" => preceding}] = artefact.payload["generalisations"]
-      assert preceding == influencing_generalisations()
+      assert [%{"evolves_from" => snapshots}] = artefact.payload["generalisations"]
+      assert snapshots == influencing_generalisations()
     end
 
-    test "but the new generalisation records no returned generalisation that did not influence it" do
+    test "but `evolves_from` records no returned generalisation that did not influence the evolution" do
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
 
-      assert [%{"generalises_over" => preceding}] = artefact.payload["generalisations"]
-      refute Enum.any?(preceding, &(&1["content"] == "Prefer abstractions everywhere"))
+      assert [%{"evolves_from" => snapshots}] = artefact.payload["generalisations"]
+      refute Enum.any?(snapshots, &(&1["content"] == "Prefer abstractions everywhere"))
+    end
+  end
+
+  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while the evolved generalisation replaces a prior generalisation" do
+    test "then the replaced generalisation remains searchable as historical lineage" do
+      use_real_memory()
+
+      prior =
+        Gralkor.Reflection.Artefact.new(
+          "prior-generalisation",
+          "generalisations",
+          %{
+            "generalisations" => [
+              %{"content" => "Use one API everywhere", "level" => 1, "evolves_from" => []}
+            ]
+          }
+        )
+
+      assert :ok = Gralkor.Reflection.Store.put(generalisation(), "operator-one", prior)
+
+      assert {:ok, replacement} =
+               Runner.run(generalisation(), ingestion(),
+                 inference: &replacement_output_for/1,
+                 artefact_id: "replacement-generalisation"
+               )
+
+      assert :ok =
+               Gralkor.Reflection.Store.put(generalisation(), "operator-one", replacement)
+
+      assert {:ok, results} =
+               Gralkor.Client.search(%Gralkor.Search{
+                 operator_id: "operator-one",
+                 query: "generalisation",
+                 destinations: ["global"],
+                 result_type: :artefacts
+               })
+
+      assert Enum.any?(results, &match?(%{artefact: %{id: "prior-generalisation"}}, &1))
+      assert Enum.any?(results, &match?(%{artefact: %{id: "replacement-generalisation"}}, &1))
     end
   end
 
@@ -364,24 +403,46 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
     test "and each stored generalisation contains exactly `content`, `level`, and `evolves_from`" do
       assert {:ok, artefact} =
-               Runner.run(generalisation(), ingestion(), inference: &evolves_from_output_for/1)
+               Runner.run(generalisation(), ingestion(), inference: &output_for/1)
 
       assert [stored] = artefact.payload["generalisations"]
       assert MapSet.new(Map.keys(stored)) == MapSet.new(["content", "level", "evolves_from"])
     end
 
-    test "and each stored preceding generalisation contains exactly the content and level returned by the related-memory search" do
+    test "and each stored `evolves_from` snapshot contains exactly the content and level returned by related-memory search" do
       put_stored_generalisation_response(influencing_generalisations())
 
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
 
-      assert [%{"generalises_over" => preceding}] = artefact.payload["generalisations"]
-      assert preceding == influencing_generalisations()
+      assert [%{"evolves_from" => snapshots}] = artefact.payload["generalisations"]
+      assert snapshots == influencing_generalisations()
 
-      assert Enum.all?(preceding, fn item ->
+      assert Enum.all?(snapshots, fn item ->
                MapSet.new(Map.keys(item)) == MapSet.new(["content", "level"])
              end)
+    end
+
+    test "and later evolution leaves every earlier stored lineage snapshot unchanged" do
+      put_stored_generalisation_response(influencing_generalisations())
+
+      assert {:ok, earlier} =
+               Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
+
+      earlier_payload = earlier.payload
+      [%{"content" => earlier_content, "level" => earlier_level}] =
+        earlier.payload["generalisations"]
+
+      put_stored_generalisation_response([
+        %{"content" => earlier_content, "level" => earlier_level}
+      ])
+
+      assert {:ok, _later} =
+               Runner.run(generalisation(), ingestion(), inference: &all_prior_output_for/1)
+
+      assert earlier.payload == earlier_payload
+      assert [%{"evolves_from" => snapshots}] = earlier.payload["generalisations"]
+      assert snapshots == influencing_generalisations()
     end
   end
 
