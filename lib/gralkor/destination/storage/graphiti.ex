@@ -83,7 +83,7 @@ defmodule Gralkor.Destination.Storage.Graphiti do
   end
 
   defp episode_provenance(%{content: content, source_description: source_description}) do
-    case Regex.run(~r/^(.*) \[lens: ([^\]]+)\]$/s, source_description) do
+    case Regex.run(~r/^(.*) \[lens: (.+)\]$/s, source_description) do
       [_, source_description, lens] ->
         %{content: content, source_description: source_description, lens: lens}
 
