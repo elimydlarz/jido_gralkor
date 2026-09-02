@@ -27,11 +27,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
     def start_link(test_pid), do: Agent.start_link(fn -> {test_pid, 0} end, name: __MODULE__)
 
-    @impl true
     def get_artefact(_output, _reflection_name, _operator_id, _artefact_id),
       do: {:error, :not_found}
 
-    @impl true
     def put_artefact(_output, _reflection_name, _operator_id, artefact) do
       Agent.get_and_update(__MODULE__, fn {test_pid, attempts} ->
         send(test_pid, {:store_attempt, artefact})
@@ -52,11 +50,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Agent.start_link(fn -> {test_pid, outcomes} end, name: __MODULE__)
     end
 
-    @impl true
     def get_artefact(_output, _reflection_name, _operator_id, _artefact_id),
       do: {:error, :not_found}
 
-    @impl true
     def put_artefact(_output, _reflection_name, _operator_id, artefact) do
       {test_pid, outcome} =
         Agent.get_and_update(__MODULE__, fn {test_pid, [outcome | remaining]} ->
@@ -87,11 +83,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
     def start_link(test_pid), do: Agent.start_link(fn -> {test_pid, true} end, name: __MODULE__)
 
-    @impl true
     def get_artefact(output, reflection_name, operator_id, artefact_id),
       do: Graphiti.get_output(output, reflection_name, operator_id, artefact_id)
 
-    @impl true
     def put_artefact(output, reflection_name, operator_id, artefact) do
       with :ok <- Graphiti.put_output(output, reflection_name, operator_id, artefact),
            :ok <-
@@ -656,7 +650,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         send(test_pid, :shutdown_runner_started)
         Process.sleep(100)
 
-        {:ok, Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"})}
+        {:ok, Artefact.new(opts[:artefact_id], %{"summary" => "stored"})}
       end
 
       start_supervised!(
@@ -760,7 +754,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         send(test_pid, :empty_registry_functional_runner_started)
         Process.sleep(100)
 
-        {:ok, Artefact.new(opts[:artefact_id], current_reflection.name, %{"summary" => "stored"})}
+        {:ok, Artefact.new(opts[:artefact_id], %{"summary" => "stored"})}
       end
 
       children = [
@@ -813,7 +807,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           {:ok,
            Artefact.new(
              opts[:artefact_id],
-             current_reflection.name,
              %{"summary" => "stored"}
            )}
         end
@@ -1052,7 +1045,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       legacy_content =
         Artefact.new(
           artefact_id,
-          "review",
           %{"summary" => "stored"}
         )
         |> Map.from_struct()
@@ -1239,7 +1231,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
 
-      partial_artefact = Artefact.new(artefact_id, "review", %{"summary" => "stored"})
+      partial_artefact = Artefact.new(artefact_id, %{"summary" => "stored"})
 
       content = Jason.encode!(Map.from_struct(partial_artefact))
 
@@ -1429,7 +1421,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       {pool, graphiti} = start_preclaim_graphiti_pool(:reflection_preclaim_incomplete_graphiti)
       reflection = hd(Application.fetch_env!(:jido_gralkor, :reflections))
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
-      artefact = Artefact.new(artefact_id, "review", %{"summary" => "stored"})
+      artefact = Artefact.new(artefact_id, %{"summary" => "stored"})
       content = Jason.encode!(Map.from_struct(artefact))
 
       Pythonx.eval(
