@@ -817,9 +817,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         })
       end
     end
-  end
 
-  describe "if search supplies any Destination or Lens selection that is not a list of registered non-blank names" do
     test "and the error identifies the rejected value" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Client.search(%Search{
