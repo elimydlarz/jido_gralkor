@@ -728,15 +728,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       refute Map.has_key?(first, :steps)
     end
 
-    test "where the directions reference outputs from earlier steps then every referenced value is interpolated from the Chain of Thought's shared output space",
+  end
+
+  describe "when a Chain of Thought step begins > where the directions reference outputs from earlier steps" do
+    test "then every referenced value is interpolated from the Chain of Thought's shared output space",
          context do
       assert [_first, second] = run_and_collect_requests(reflection(context), invocation())
       assert second.directions =~ "fact one"
       refute second.directions =~ "{{facts}}"
     end
+  end
 
+  describe "when a Chain of Thought step begins > where inference directs a tool call" do
     @tag timeout: 120_000
-    test "where inference directs a tool call then the requested tool is called with the model-produced arguments",
+    test "then the requested tool is called with the model-produced arguments",
          context do
       parent = self()
       inference = tool_calling_inference(parent, 1)
@@ -784,8 +789,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert_receive {:continued_tools, "reflect", ^tools}
     end
+  end
 
-    test "where inference directs further tool calls then each requested call and result continues the same step in sequence",
+  describe "when a Chain of Thought step begins > where inference directs further tool calls" do
+    test "then each requested call and result continues the same step in sequence",
          context do
       parent = self()
       inference = tool_calling_inference(parent, 2)
@@ -806,8 +813,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when inference returns a structured output for the current step" do
-    test "while its keys and values satisfy that step's declared output contract then the output is added to the Chain of Thought's shared output space",
+  describe "when inference returns a structured output for the current step > while its keys and values satisfy that step's declared output contract" do
+    test "then the output is added to the Chain of Thought's shared output space",
          context do
       assert [_first, second] = run_and_collect_requests(reflection(context), invocation())
       assert second.directions =~ "fact one"
@@ -818,8 +825,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert second.step.label == "synthesise"
       assert second.directions == "Synthesise [\"fact one\"]"
     end
+  end
 
-    test "if a declared output key is missing then the Reflection fails identifying its name, current step, and missing key",
+  describe "when inference returns a structured output for the current step > if a declared output key is missing" do
+    test "then the Reflection fails identifying its name, current step, and missing key",
          context do
       assert {:error,
               %{reflection: "generalisation", step: "gather", reason: {:missing_output, "facts"}}} =
@@ -827,8 +836,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  inference: fn _ -> {:ok, %{output: %{}}} end
                )
     end
+  end
 
-    test "if an undeclared output key is returned then the Reflection fails identifying its name, current step, and unexpected key",
+  describe "when inference returns a structured output for the current step > if an undeclared output key is returned" do
+    test "then the Reflection fails identifying its name, current step, and unexpected key",
          context do
       assert {:error,
               %{
@@ -840,8 +851,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  inference: fn _ -> {:ok, %{output: %{"facts" => [], "extra" => true}}} end
                )
     end
+  end
 
-    test "if an output value does not satisfy its declared type then the Reflection fails identifying its name, current step, and type mismatch",
+  describe "when inference returns a structured output for the current step > if an output value does not satisfy its declared type" do
+    test "then the Reflection fails identifying its name, current step, and type mismatch",
          context do
       assert {:error,
               %{
