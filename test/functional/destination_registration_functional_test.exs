@@ -286,9 +286,10 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       Application.put_env(:jido_gralkor, :reflections, [
         [
           name: "review",
-          triggers: [:ingestion],
-          destination: "missing",
-          ontology: MemoryOntology,
+          triggers: [{:lens_ingestion, :any}],
+          outputs: [
+            [kind: :destination, destination: "missing", ontology: MemoryOntology]
+          ],
           chain_of_thought: "priv/reflections/erl.yaml"
         ]
       ])
