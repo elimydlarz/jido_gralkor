@@ -196,7 +196,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
              ]
     end
 
-    test "and information saved through Reflections at the resolved destination remains unchanged" do
+    test "and artefacts written through Destination outputs at the resolved destination remain unchanged" do
       use_in_memory(:global)
       start_supervised!(Gralkor.Destination.Storage.InMemory)
 

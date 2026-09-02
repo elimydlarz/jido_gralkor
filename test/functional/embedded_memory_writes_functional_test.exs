@@ -91,14 +91,17 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
     end
   end
 
-  describe "when the embedded runtime starts" do
-    test "while no embedded FalkorDB socket read timeout is configured then the embedded connection uses a sixty-second socket read timeout" do
+  describe "when the embedded runtime starts > while no embedded FalkorDB socket read timeout is configured" do
+    test "then the embedded connection uses a sixty-second socket read timeout" do
       delete_env_restored(:embedded_falkordb_socket_timeout_ms)
 
       assert Config.embedded_falkordb_socket_timeout_ms() == 60_000
     end
 
-    test "while a positive :embedded_falkordb_socket_timeout_ms is configured then the embedded connection uses that timeout" do
+  end
+
+  describe "when the embedded runtime starts > while a positive `:embedded_falkordb_socket_timeout_ms` is configured" do
+    test "then the embedded connection uses that timeout" do
       put_env_restored(:embedded_falkordb_socket_timeout_ms, 90_000)
       parent = self()
 
@@ -114,7 +117,7 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
     end
   end
 
-  describe "if :embedded_falkordb_socket_timeout_ms is not a positive integer" do
+  describe "if `:embedded_falkordb_socket_timeout_ms` is not a positive integer" do
     test "then application startup raises naming the setting and its offending value" do
       Enum.each([0, -1, "60000"], fn invalid ->
         put_env_restored(:embedded_falkordb_socket_timeout_ms, invalid)

@@ -231,8 +231,8 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
-  describe "where the source kind is conversation" do
-    test "while the supplied content is speaker-attributed text then Graphiti receives a conversational-message episode containing that text" do
+  describe "where the source kind is conversation > while the supplied content is speaker-attributed text" do
+    test "then Graphiti receives a conversational-message episode containing that text" do
       graphiti = use_native_boundary()
 
       assert :ok =
@@ -249,8 +249,8 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
-  describe "where the source kind is document" do
-    test "while the supplied content is text then Graphiti receives a document-text episode containing that text" do
+  describe "where the source kind is document > while the supplied content is text" do
+    test "then Graphiti receives a document-text episode containing that text" do
       graphiti = use_native_boundary()
 
       assert :ok =
@@ -261,8 +261,8 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
-  describe "where the source kind is structured record" do
-    test "while the supplied content is a JSON-compatible map or list then Graphiti receives a structured-data episode containing its JSON encoding" do
+  describe "where the source kind is structured record > while the supplied content is a JSON-compatible map or list" do
+    test "then Graphiti receives a structured-data episode containing its JSON encoding" do
       graphiti = use_native_boundary()
 
       assert :ok =
@@ -456,7 +456,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
   end
 
   describe "when public episode search encounters an incomplete Reflection episode" do
-    test "then it does not contribute and completion filtering occurs before the per-Destination result limit" do
+    test "then the incomplete Reflection episode does not contribute" do
       graphiti = use_native_boundary()
 
       set_episode_search_fixture(graphiti, [
@@ -485,6 +485,33 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                   }
                 }
               ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "complete",
+                 destinations: ["observations"],
+                 max_results: 1
+               })
+    end
+
+    test "and completion filtering occurs before the per-Destination result limit" do
+      graphiti = use_native_boundary()
+
+      set_episode_search_fixture(graphiti, [
+        %{
+          id: "incomplete-generalisation",
+          content: ~s({"id":"incomplete-generalisation"}),
+          source_description: "reflection:generalisations",
+          extraction_complete: false
+        },
+        %{
+          id: "complete-observation",
+          content: "A complete Lens observation.",
+          source_description: "field notes [lens: observations]",
+          extraction_complete: true
+        }
+      ])
+
+      assert {:ok, [%{episode: %{content: "A complete Lens observation."}}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "complete",
