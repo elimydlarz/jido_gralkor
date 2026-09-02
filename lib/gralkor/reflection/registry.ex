@@ -161,6 +161,9 @@ defmodule Gralkor.Reflection.Registry do
       is_list(outputs) and Enum.count(outputs, &(field(&1, :kind) == :destination)) == 0 ->
         {:error, {:missing_destination_output, name}}
 
+      is_list(outputs) and Enum.count(outputs, &(field(&1, :kind) == :destination)) > 1 ->
+        {:error, {:duplicate_output, name, :destination}}
+
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
 
