@@ -242,8 +242,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     test "and the later generalisation that evolves from the first has evolution-depth level two",
          %{
-      adventure: adventure
-    } do
+           adventure: adventure
+         } do
       assert %{"level" => 2} = adventure.later_generalisation
     end
 
