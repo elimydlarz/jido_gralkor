@@ -149,17 +149,6 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps" do
-      assert_fact_timestamps()
-    end
-
-    test "and each returned edge identifies its originating episodes by identifier, source kind, and source description" do
-      assert_fact_sources()
-    end
-
-    test "and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints" do
-      assert_fact_excludes_standalone_node()
-    end
   end
 
   describe "when an episode is added > while an episode identifier is supplied > when that identifier does not exist" do
@@ -1673,6 +1662,18 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
+
+    test "and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps" do
+      assert_fact_timestamps()
+    end
+
+    test "and each returned edge identifies its originating episodes by identifier, source kind, and source description" do
+      assert_fact_sources()
+    end
+
+    test "and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints" do
+      assert_fact_excludes_standalone_node()
+    end
   end
 
   describe "when a fact search is run for a group > where edge types are supplied" do
@@ -1874,17 +1875,6 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "and it is restricted to the physically encoded group id the episodes were written under" do
-      assert_episode_group_restriction()
-    end
-
-    test "and each returned episode is rendered with the body that was written and its source description" do
-      assert_episode_rendering()
-    end
-
-    test "and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned" do
-      assert_episode_without_extraction()
-    end
   end
 
   describe "when an index and constraint rebuild is requested for the whole graph" do
@@ -1996,6 +1986,18 @@ defmodule Gralkor.GraphitiPoolTest do
                GraphitiPool.build_communities(pid, "operator-one")
 
       GenServer.stop(pid)
+    end
+
+    test "and it is restricted to the physically encoded group id the episodes were written under" do
+      assert_episode_group_restriction()
+    end
+
+    test "and each returned episode is rendered with the body that was written and its source description" do
+      assert_episode_rendering()
+    end
+
+    test "and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned" do
+      assert_episode_without_extraction()
     end
   end
 
