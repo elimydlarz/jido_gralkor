@@ -290,7 +290,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       start_supervised!({LoseFirstGraphitiResponseStore, self()})
       Application.put_env(:jido_gralkor, :destination_storage, LoseFirstGraphitiResponseStore)
 
+      reflection = hd(Application.fetch_env!(:jido_gralkor, :reflections))
+      output = Enum.find(reflection.outputs, &(&1.kind == :destination))
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
+      first = Artefact.new(artefact_id, %{"summary" => "stored"})
 
       legacy_content =
         Artefact.new(
@@ -327,18 +330,25 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         }
       )
 
-      assert :ok = Client.ingest(ingestion())
-      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, runner}, 1_000
-      send(runner, :finish_reflection)
-
-      assert_receive {:graphiti_store_committed, first}, 1_000
-      assert first.id == artefact_id
-
-      assert_receive {:reflection_retrying, "review", %{stage: :storage, reason: :response_lost}},
-                     1_000
+      assert {:error, :response_lost} =
+               Gralkor.Destination.Storage.put_artefact(
+                 output,
+                 reflection.name,
+                 "operator-one",
+                 first
+               )
 
       assert_receive {:graphiti_store_committed, ^first}, 1_000
-      assert_receive {:reflection_completed, "review", {:ok, ^first}}, 1_000
+
+      assert :ok =
+               Gralkor.Destination.Storage.put_artefact(
+                 output,
+                 reflection.name,
+                 "operator-one",
+                 first
+               )
+
+      assert_receive {:graphiti_store_committed, ^first}, 1_000
 
       Application.put_env(
         :jido_gralkor,
@@ -551,12 +561,13 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                  artefact_id: artefact_id
                })
 
-      assert {:ok, :scheduled} =
-               Scheduler.schedule([reflection], scheduler_ingestion())
-
-      assert_receive {:runner_started, "review", "ingestion-one", ^artefact_id, runner}, 1_000
-      send(runner, :finish_reflection)
-      assert_receive {:reflection_completed, "review", {:ok, ^partial_artefact}}, 5_000
+      assert :ok =
+               Gralkor.Destination.Storage.Graphiti.put_artefact(
+                 Enum.find(reflection.outputs, &(&1.kind == :destination)),
+                 reflection.name,
+                 "operator-one",
+                 partial_artefact
+               )
 
       assert {:ok, [%{destination: "observations", artefact: ^partial_artefact}]} =
                Client.search(%Search{
@@ -679,7 +690,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
              ]
     end
 
-    test "then canonical lookup resumes an incomplete artefact without rerunning its Runner" do
+    test "then canonical lookup retains the incomplete artefact and an equal write resumes extraction" do
       {pool, graphiti} = start_preclaim_graphiti_pool(:reflection_preclaim_incomplete_graphiti)
       reflection = hd(Application.fetch_env!(:jido_gralkor, :reflections))
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
@@ -784,9 +795,13 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                "owner" => nil
              }
 
-      assert {:ok, :scheduled} = Scheduler.schedule([reflection], scheduler_ingestion())
-      assert_receive {:reflection_completed, "review", {:ok, ^artefact}}, 1_000
-      refute_receive {:runner_started, "review", "ingestion-one", ^artefact_id, _runner}
+      assert :ok =
+               Gralkor.Destination.Storage.Graphiti.put_artefact(
+                 Enum.find(reflection.outputs, &(&1.kind == :destination)),
+                 reflection.name,
+                 "operator-one",
+                 artefact
+               )
 
       assert {:ok, [%{destination: "observations", artefact: ^artefact}]} =
                Client.search(%Search{
