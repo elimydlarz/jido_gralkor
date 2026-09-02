@@ -289,7 +289,9 @@ defmodule Gralkor.Client do
 
   defp lens_ingestion_trigger?(reflection, completed_lenses) do
     Enum.any?(reflection.triggers, fn
-      {:lens_ingestion, :any} -> true
+      {:lens_ingestion, :any} ->
+        true
+
       {:lens_ingestion, names} when is_list(names) ->
         Enum.any?(completed_lenses, &(&1 in names))
 

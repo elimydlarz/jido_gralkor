@@ -118,9 +118,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert Map.fetch!(reflection, :triggers) == [{:lens_ingestion, :any}]
     end
 
-    test "and every trigger is `:programmatic`, `{:lens_ingestion, :any}`, or `{:lens_ingestion, [lens_name]}`", %{
-      root: root
-    } do
+    test "and every trigger is `:programmatic`, `{:lens_ingestion, :any}`, or `{:lens_ingestion, [lens_name]}`",
+         %{
+           root: root
+         } do
       definition =
         valid_definition(root,
           triggers: [:programmatic, {:lens_ingestion, :any}]
@@ -1672,7 +1673,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                })
     end
 
-    test "and every artefact contains exactly its stable identifier and structured payload", context do
+    test "and every artefact contains exactly its stable identifier and structured payload",
+         context do
       {reflection, _} = stored_artefact(context)
 
       assert {:ok, [%{artefact: artefact}]} =

@@ -804,7 +804,6 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     )
 
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-
   end
 
   defp decode_episode(%{content: content}), do: Jason.decode!(content)

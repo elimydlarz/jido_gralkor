@@ -386,8 +386,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       reflection = %{
         reflection
-        | outputs:
-            reflection.outputs ++ [%{kind: :return, handler: FailOnceReturnHandler}]
+        | outputs: reflection.outputs ++ [%{kind: :return, handler: FailOnceReturnHandler}]
       }
 
       Application.put_env(:jido_gralkor, :reflections, [reflection])

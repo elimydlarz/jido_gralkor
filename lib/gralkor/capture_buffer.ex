@@ -741,7 +741,9 @@ defmodule Gralkor.CaptureBuffer do
 
   defp lens_ingestion_trigger?(%Gralkor.Reflection{triggers: triggers}, completed_lenses) do
     Enum.any?(triggers, fn
-      {:lens_ingestion, :any} -> true
+      {:lens_ingestion, :any} ->
+        true
+
       {:lens_ingestion, names} when is_list(names) ->
         Enum.any?(completed_lenses, &(&1 in names))
 
