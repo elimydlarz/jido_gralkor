@@ -102,16 +102,17 @@ defmodule Gralkor.Reflection.Registry do
 
   defp validate_resolved(%Reflection{} = reflection) do
     name = reflection.name
+    output_error = output_error(name, reflection.outputs)
 
     cond do
-      not match?(%Gralkor.Destination{}, reflection.destination) ->
-        {:error, {:missing_destination, name, reflection.destination}}
-
-      not valid_ontology?(reflection.ontology) ->
-        {:error, {:invalid_ontology, name, reflection.ontology}}
+      output_error ->
+        {:error, output_error}
 
       true ->
-        fetch_destination!(name, reflection.destination.name)
+        reflection.outputs
+        |> Enum.find(&(&1.kind == :destination))
+        |> Map.fetch!(:destination)
+        |> then(&fetch_destination!(name, &1.name))
 
         case ChainOfThought.validate(reflection.chain_of_thought) do
           :ok -> :ok
@@ -185,13 +186,10 @@ defmodule Gralkor.Reflection.Registry do
         case ChainOfThought.load(path) do
           {:ok, cot} ->
             resolved_outputs = resolve_outputs(name, outputs)
-            destination = Enum.find(resolved_outputs, &(&1.kind == :destination))
 
             {:ok,
              %Reflection{
                name: name,
-               destination: destination.destination,
-               ontology: destination.ontology,
                chain_of_thought: cot,
                outputs: resolved_outputs,
                triggers: triggers

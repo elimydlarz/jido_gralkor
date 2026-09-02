@@ -3,13 +3,11 @@ defmodule Gralkor.Reflection do
 
   alias Gralkor.Reflection.ChainOfThought
 
-  @enforce_keys [:name, :destination, :ontology, :chain_of_thought]
-  defstruct [:name, :destination, :ontology, :chain_of_thought, outputs: [], triggers: []]
+  @enforce_keys [:name, :chain_of_thought, :outputs]
+  defstruct [:name, :chain_of_thought, :outputs, triggers: []]
 
   @type t :: %__MODULE__{
           name: String.t(),
-          destination: Gralkor.Destination.t(),
-          ontology: module(),
           chain_of_thought: ChainOfThought.t(),
           outputs: [map()],
           triggers: list()

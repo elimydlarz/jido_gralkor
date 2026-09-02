@@ -7,7 +7,7 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
   @impl true
   def put(reflection, operator_id, %Artefact{} = artefact) do
     put_output(
-      %{destination: reflection.destination, ontology: reflection.ontology},
+      destination_output(reflection),
       reflection.name,
       operator_id,
       artefact,
@@ -31,7 +31,7 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
   @doc false
   def put(reflection, operator_id, %Artefact{} = artefact, add_episode) do
     put_output(
-      %{destination: reflection.destination, ontology: reflection.ontology},
+      destination_output(reflection),
       reflection.name,
       operator_id,
       artefact,
@@ -72,7 +72,7 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
   @impl true
   def get(reflection, operator_id, artefact_id) do
     get_output(
-      %{destination: reflection.destination, ontology: reflection.ontology},
+      destination_output(reflection),
       reflection.name,
       operator_id,
       artefact_id
@@ -87,7 +87,7 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
   @doc false
   def get(reflection, operator_id, artefact_id, get_episode) do
     get_output(
-      %{destination: reflection.destination, ontology: reflection.ontology},
+      destination_output(reflection),
       reflection.name,
       operator_id,
       artefact_id,
@@ -142,4 +142,8 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
   defp extraction_complete?(episode) do
     Map.get(episode, :extraction_complete, Map.get(episode, "extraction_complete", false)) == true
   end
+
+
+  defp destination_output(reflection),
+    do: Enum.find(reflection.outputs, &(&1.kind == :destination))
 end

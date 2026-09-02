@@ -16,7 +16,7 @@ defmodule Gralkor.Destination.Storage do
   @callback put_artefact(map(), String.t(), String.t(), Artefact.t()) ::
               :ok | {:error, term()}
 
-  @callback get_artefact(map(), String.t(), String.t(), Artefact.t()) ::
+  @callback get_artefact(map(), String.t(), String.t(), String.t()) ::
               {:ok, Artefact.t()} | {:error, term()}
 
   @optional_callbacks put_artefact: 4, get_artefact: 4

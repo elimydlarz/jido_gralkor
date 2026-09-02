@@ -9,7 +9,7 @@ defmodule Gralkor.Reflection.Storage.InMemory do
 
   @impl true
   def put(reflection, operator_id, artefact) do
-    put_destination(reflection.destination, reflection.name, operator_id, artefact)
+    put_destination(destination_output(reflection).destination, reflection.name, operator_id, artefact)
   end
 
   def put_destination(destination, operator_id, artefact) do
@@ -39,7 +39,7 @@ defmodule Gralkor.Reflection.Storage.InMemory do
 
   @impl true
   def get(reflection, operator_id, artefact_id) do
-    get_destination(reflection.destination, operator_id, artefact_id)
+    get_destination(destination_output(reflection).destination, operator_id, artefact_id)
   end
 
   def get_destination(destination, operator_id, artefact_id) do
@@ -83,4 +83,7 @@ defmodule Gralkor.Reflection.Storage.InMemory do
 
   defp entry_artefact(%{artefact: artefact}), do: artefact
   defp entry_artefact(artefact), do: artefact
+
+  defp destination_output(reflection),
+    do: Enum.find(reflection.outputs, &(&1.kind == :destination))
 end
