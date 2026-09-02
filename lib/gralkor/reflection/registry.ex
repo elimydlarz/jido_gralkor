@@ -141,6 +141,7 @@ defmodule Gralkor.Reflection.Registry do
     triggers = field(definition, :triggers)
     relative = field(definition, :chain_of_thought)
     lens_error = named_lens_error(name, triggers)
+    unsupported_output = unsupported_output(outputs)
 
     cond do
       not is_list(triggers) or triggers == [] ->
@@ -166,6 +167,9 @@ defmodule Gralkor.Reflection.Registry do
 
       is_list(outputs) and Enum.count(outputs, &(field(&1, :kind) == :return)) > 1 ->
         {:error, {:duplicate_output, name, :return}}
+
+      unsupported_output ->
+        {:error, {:unsupported_output, name, unsupported_output}}
 
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
@@ -245,6 +249,15 @@ defmodule Gralkor.Reflection.Registry do
       ontology: ontology
     }
   end
+
+  defp unsupported_output(outputs) when is_list(outputs) do
+    Enum.find_value(outputs, fn output ->
+      kind = field(output, :kind)
+      if kind not in [:destination, :return], do: kind
+    end)
+  end
+
+  defp unsupported_output(_outputs), do: nil
 
   defp repository_path?(path, root), do: path == root or String.starts_with?(path, root <> "/")
 
