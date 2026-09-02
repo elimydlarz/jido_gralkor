@@ -165,6 +165,44 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert destination_episodes("decisions") == []
     end
 
+    test "and a turn-selected ingestion Lens neither defaults nor restricts memory search" do
+      assert :ok =
+               Client.ingest(%Ingest{
+                 id: "turn-lens-independent-search",
+                 operator_id: "operator-one",
+                 lens: "observations",
+                 source_kind: :document,
+                 content: "observation visible from a decision turn",
+                 source_description: "functional"
+               })
+
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+
+      mounted_agent = agent(plugin_state)
+
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
+               query(mounted_agent, "decisions")
+
+      assert tool_context.lens == "decisions"
+
+      assert {:ok, %{result: result}} =
+               MemorySearch.run(
+                 %{query: "observation", destinations: ["observations"]},
+                 Map.put(tool_context, :agent_id, mounted_agent.id)
+               )
+
+      assert Jason.decode!(result) == [
+               %{
+                 "destination" => "observations",
+                 "episode" => %{
+                   "content" => "observation visible from a decision turn",
+                   "lens" => "observations"
+                 }
+               }
+             ]
+    end
+
     test "where no conversation thread has been committed then memory search still runs for the current operator" do
       assert :ok =
                Client.ingest(%Ingest{
