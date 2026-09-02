@@ -23,15 +23,16 @@ defmodule Gralkor.Reflection.Storage.InMemory do
       entries = Map.get(state, destination, [])
 
       case Enum.find(entries, &(entry_artefact(&1).id == artefact.id)) do
-        entry when entry_artefact(entry) == artefact ->
-          {:ok, state}
-
         nil ->
           entry = %{artefact: artefact, reflection: reflection_name}
           {:ok, Map.put(state, destination, entries ++ [entry])}
 
-        _conflicting ->
-          {{:error, {:artefact_conflict, artefact.id}}, state}
+        entry ->
+          if entry_artefact(entry) == artefact do
+            {:ok, state}
+          else
+            {{:error, {:artefact_conflict, artefact.id}}, state}
+          end
       end
     end)
   end

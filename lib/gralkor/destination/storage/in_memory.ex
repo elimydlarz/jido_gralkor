@@ -7,10 +7,10 @@ defmodule Gralkor.Destination.Storage.InMemory do
   alias Gralkor.Reflection.Storage.InMemory, as: ReflectionStorage
 
   @impl true
-  def put_artefact(output, _reflection_name, operator_id, artefact) do
+  def put_artefact(output, reflection_name, operator_id, artefact) do
     ReflectionStorage.put_destination(
       output.destination,
-      _reflection_name,
+      reflection_name,
       operator_id,
       artefact
     )
