@@ -44,6 +44,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get(_, _, _), do: {:error, :destination_unavailable}
   end
 
+  defmodule ReturnHandler do
+    @behaviour Gralkor.Artefact.ReturnHandler
+
+    @impl true
+    def return(operator_id, invocation_id, artefact) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :reflection_return_test_pid),
+        {:returned_artefact, operator_id, invocation_id, artefact}
+      )
+
+      :ok
+    end
+  end
+
   setup do
     root =
       Path.join(
@@ -70,7 +84,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
             :lenses,
             :lens_storage,
             :reflections,
-            :reflection_storage
+            :reflection_storage,
+            :reflection_return_test_pid
           ],
           into: %{} do
         {key, Application.get_env(:jido_gralkor, key)}
@@ -90,6 +105,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
     Application.put_env(:jido_gralkor, :reflection_storage, Gralkor.Reflection.Storage.InMemory)
+    Application.put_env(:jido_gralkor, :reflection_return_test_pid, self())
 
     on_exit(fn -> Enum.each(previous, fn {key, value} -> restore_env(key, value) end) end)
     %{root: root}
@@ -1288,6 +1304,30 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
          context do
       assert {:ok, artefact} =
                Runner.run(reflection(context), ingestion(), inference: &output_for/1)
+
+      assert Map.from_struct(artefact) == %{
+               id: artefact.id,
+               payload: %{"artefact" => "durable pattern"}
+             }
+    end
+
+    test "where a return output is declared then its handler's standard `return/3` callback receives the operator identifier, invocation identifier, and exact artefact",
+         %{root: root} do
+      outputs = [
+        [kind: :destination, destination: "operator"],
+        [kind: :return, handler: ReturnHandler]
+      ]
+
+      [reflection] =
+        Registry.load!([valid_definition(root, outputs: outputs)], root: root)
+
+      assert {:ok, :scheduled} =
+               Scheduler.schedule([reflection], ingestion(), retry_delays: [])
+
+      assert :ok = Scheduler.drain()
+
+      assert_receive {:returned_artefact, "operator-one", "ingestion-1",
+                      %Gralkor.Artefact{} = artefact}
 
       assert Map.from_struct(artefact) == %{
                id: artefact.id,
