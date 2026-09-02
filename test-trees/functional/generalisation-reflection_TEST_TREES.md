@@ -7,6 +7,8 @@ when the packaged generalisation Reflection inspects a completed ingestion
   and every related observation identifies its originating Lens
   and related-memory results distinguish prior generalisations from Lens-authored observations
   and inference receives every current representation separately from related observations and generalisations
+  and evolution inference receives the exact eligible prior-generalisation lineage snapshots separately from observations
+  and evolution inference is directed to leave lineage empty when no eligible snapshot exists and otherwise copy only eligible snapshots exactly
   and inference is directed to revisit current and related observations together with prior generalisations
   and inference is directed to carry forward, combine, broaden, narrow, split, replace, or otherwise revise generalisations as observations warrant
 
