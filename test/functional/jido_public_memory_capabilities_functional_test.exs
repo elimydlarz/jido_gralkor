@@ -309,6 +309,22 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert Jason.decode!(encoded_artefact)["payload"] == artefact.payload
     end
+
+    test "where both selectors are omitted or empty then every accessible registered Destination can contribute" do
+      assert :ok = ingest_memory("operator", "operator default")
+      assert :ok = ingest_memory("shared-notes", "global default")
+      assert :ok = ingest_memory("observations", "observation default")
+      assert :ok = ingest_memory("decisions", "decision default")
+
+      assert {:ok, %{result: result}} = memory_search(%{query: "default"}, [])
+
+      assert Enum.map(Jason.decode!(result), & &1["destination"]) == [
+               "operator",
+               "global",
+               "observations",
+               "decisions"
+             ]
+    end
   end
 
   describe "if an agent invokes memory search without a usable query" do
