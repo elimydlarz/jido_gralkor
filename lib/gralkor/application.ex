@@ -19,6 +19,8 @@ defmodule Gralkor.Application do
 
   @doc false
   def children do
+    validate_retired_config!()
+
     cond do
       Application.get_env(:jido_gralkor, :client) == Gralkor.Client.InMemory ->
         []
@@ -28,6 +30,13 @@ defmodule Gralkor.Application do
           nil -> []
           spec -> build_children(spec)
         end
+    end
+  end
+
+  defp validate_retired_config! do
+    if Application.get_env(:jido_gralkor, :reflection_storage) do
+      raise ArgumentError,
+            ":reflection_storage is retired; Destination outputs are the artefact memory boundary"
     end
   end
 
