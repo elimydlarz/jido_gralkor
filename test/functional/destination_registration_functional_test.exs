@@ -47,7 +47,6 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
     Application.put_env(:jido_gralkor, :reflections, [
       [
         name: "review",
-        triggers: [{:lens_ingestion, :any}],
         outputs: [
           [kind: :destination, destination: "shared", ontology: MemoryOntology]
         ],
@@ -300,7 +299,6 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       Application.put_env(:jido_gralkor, :reflections, [
         [
           name: "review",
-          triggers: [{:lens_ingestion, :any}],
           outputs: [
             [kind: :destination, destination: "missing", ontology: MemoryOntology]
           ],
