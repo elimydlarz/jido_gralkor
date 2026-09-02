@@ -215,6 +215,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Registry.load([valid_definition(root, outputs: outputs)], root: root)
     end
 
+    test "if a Reflection declares an unsupported output kind then validation fails identifying that Reflection and output kind",
+         %{root: root} do
+      outputs = [
+        [kind: :destination, destination: "operator"],
+        [kind: :webhook]
+      ]
+
+      assert {:error, {:unsupported_output, "generalisation", :webhook}} =
+               Registry.load([valid_definition(root, outputs: outputs)], root: root)
+    end
+
     test "if a Reflection name is blank then validation fails identifying the blank name", %{
       root: root
     } do
