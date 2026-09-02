@@ -51,7 +51,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
     Application.put_env(:jido_gralkor, :destinations, [
       [name: "observations-memory"],
-      [name: "decisions-memory"]
+      [name: "decisions-memory"],
+      [name: "unrepresented-memory"]
     ])
 
     Application.put_env(:jido_gralkor, :destination_storage, SearchStorage)
@@ -68,14 +69,14 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     on_exit(fn -> Enum.each(previous, &restore_env/1) end)
   end
 
-  describe "when the packaged generalisation Reflection processes completed lensed representations" do
-    test "then one related-memory episode search completes before generalisation inference begins" do
+  describe "when the packaged generalisation Reflection inspects a completed ingestion" do
+    test "then one default related-memory episode search completes before generalisation inference begins" do
       parent = self()
 
       assert {:ok, _artefact} =
                Runner.run(generalisation(), ingestion(),
                  inference: fn request ->
-                   if request.step.label == "inspect-related-information" do
+                   if request.step.label == "inspect-world" do
                      send(parent, {:generalisation_inference, request.step.label})
                    end
 
@@ -84,7 +85,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                )
 
       events =
-        for _ <- 1..5 do
+        for _ <- 1..6 do
           receive do
             {:related_memory_search, _, _, _, :episodes, _, _} = search -> search
             {:generalisation_inference, _} = inference -> inference
@@ -92,11 +93,11 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
         end
 
       assert Enum.all?(
-               Enum.take(events, 4),
+               Enum.take(events, 5),
                &match?({:related_memory_search, _, _, _, _, _, _}, &1)
              )
 
-      assert List.last(events) == {:generalisation_inference, "inspect-related-information"}
+      assert List.last(events) == {:generalisation_inference, "inspect-world"}
     end
 
     test "and the search query contains the content of every completed representation" do
@@ -108,18 +109,24 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert query =~ "Choose direct designs"
     end
 
-    test "and the same search reads the `operator` Destination, the `global` Destination, and every Destination referenced by the represented Lenses" do
+    test "and the same search reads every accessible registered Destination" do
       assert {:ok, _artefact} =
                Runner.run(generalisation(), ingestion(), inference: &output_for/1)
 
       searches =
-        for _ <- 1..4 do
+        for _ <- 1..5 do
           assert_receive {:related_memory_search, destination, _, _, :episodes, _, _}
           destination
         end
 
       assert MapSet.new(searches) ==
-               MapSet.new(["operator", "global", "observations-memory", "decisions-memory"])
+               MapSet.new([
+                 "operator",
+                 "global",
+                 "observations-memory",
+                 "decisions-memory",
+                 "unrepresented-memory"
+               ])
 
       refute_receive {:related_memory_search, _, _, _, _, _, _}
     end
