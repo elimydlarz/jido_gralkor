@@ -194,6 +194,15 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Registry.load([definition], root: root)
     end
 
+    test "if a Reflection declares more than one Destination output then validation fails identifying that Reflection and duplicate Destination output kind",
+         %{root: root} do
+      output = [kind: :destination, destination: "operator"]
+      definition = valid_definition(root, outputs: [output, output])
+
+      assert {:error, {:duplicate_output, "generalisation", :destination}} =
+               Registry.load([definition], root: root)
+    end
+
     test "if a Reflection name is blank then validation fails identifying the blank name", %{
       root: root
     } do
