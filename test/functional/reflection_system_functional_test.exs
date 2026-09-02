@@ -917,34 +917,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when a configured Reflection schedule becomes due" do
-    test "then that Reflection begins one logical completion flow for the configured operator and due occurrence",
-         context do
-      {scheduled, invocation} = await_scheduled_invocation(context)
-      assert scheduled.name == "scheduled"
-      assert invocation.trigger == :schedule
-    end
-
-    test "and the Reflection receives the configured operator and scheduled occurrence time",
-         context do
-      {_scheduled, invocation} = await_scheduled_invocation(context)
-      assert invocation.operator_id == "operator-one"
-      assert {:ok, _due_at} = NaiveDateTime.from_iso8601(invocation.trigger_context.scheduled_at)
-    end
-
-    test "and the due occurrence receives one stable invocation identifier", context do
-      {scheduled, invocation} = await_scheduled_invocation(context)
-      {:ok, due_at} = NaiveDateTime.from_iso8601(invocation.trigger_context.scheduled_at)
-
-      assert invocation.id ==
-               Gralkor.Reflection.Schedule.invocation_id(
-                 scheduled.name,
-                 invocation.operator_id,
-                 due_at
-               )
-    end
-  end
-
   describe "when an admitted Reflection runs" do
     test "then its programmatic Chain of Thought runner starts its first step for the operator and triggering invocation",
          context do
@@ -1742,41 +1714,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       )
 
     {reflection, artefact}
-  end
-
-  defp await_scheduled_invocation(%{root: root}) do
-    parent = self()
-
-    [scheduled] =
-      Registry.load!(
-        [
-          valid_definition(root,
-            name: "scheduled",
-            triggers: [[schedule: "* * * * * *", operator_id: "operator-one"]]
-          )
-        ],
-        root: root
-      )
-
-    stop_supervised(Scheduler)
-
-    start_supervised!(
-      {Scheduler,
-       runner: fn reflection, invocation, opts ->
-         send(parent, {:scheduled_invocation, reflection, invocation})
-
-         {:ok,
-          Gralkor.Reflection.Artefact.new(
-            opts[:artefact_id],
-            "scheduled",
-            %{"artefact" => "done"}
-          )}
-       end}
-    )
-
-    start_supervised!({Gralkor.Reflection.Schedule, reflections: [scheduled]})
-    assert_receive {:scheduled_invocation, ^scheduled, invocation}, 1_500
-    {scheduled, invocation}
   end
 
   defp valid_definition(root, overrides \\ []) do

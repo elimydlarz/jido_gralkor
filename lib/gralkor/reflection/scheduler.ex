@@ -650,7 +650,7 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp completed?(_ingestion, trigger) when trigger in [:agent_request, :schedule], do: true
 
-  defp completed?(ingestion, :ingestion) do
+  defp completed?(ingestion, trigger) when trigger in [:ingestion, :lens_ingestion] do
     representations = field(ingestion, :representations) || []
     intended = field(ingestion, :intended_lenses) || Enum.map(representations, &field(&1, :lens))
 
