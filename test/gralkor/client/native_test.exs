@@ -219,7 +219,7 @@ defmodule Gralkor.Client.NativeTest do
   describe "where a turn is captured through a named Lens" do
     setup :start_capture_buffer
 
-    test "then the operator id is buffered unsanitised, so the Lens keeps the operator's original identity" do
+    test "then the operator id is buffered unchanged, so the Lens keeps the operator's original identity" do
       msgs = [Message.new("user", "hi")]
 
       assert :ok =

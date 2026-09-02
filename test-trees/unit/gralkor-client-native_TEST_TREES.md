@@ -27,7 +27,7 @@ when a grouped session captures messages with agent and user names
   and nothing is logged for the turn itself, captured content becoming observable only at flush
 
 where a turn is captured through a named Lens
-  then the operator id is buffered unsanitised, so the Lens keeps the operator's original identity
+  then the operator id is buffered unchanged, so the Lens keeps the operator's original identity
   and the agent name, the user name, the Lens name and the messages are appended to the capture buffer under that session
   and the built-in ontology is not selected, a named Lens owning its own ontology
   and success is returned immediately
