@@ -219,12 +219,18 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         name: "generalisations",
         destination: Gralkor.Destination.Registry.fetch!("global"),
         ontology: Gralkor.DefaultOntology,
+        outputs: [
+          %{
+            kind: :destination,
+            destination: Gralkor.Destination.Registry.fetch!("global"),
+            ontology: Gralkor.DefaultOntology
+          }
+        ],
         chain_of_thought: nil
       }
 
-      artefact = %Gralkor.Reflection.Artefact{
+      artefact = %Gralkor.Artefact{
         id: "provenance-generalisation",
-        reflection: "generalisations",
         payload: %{
           "generalisations" => [
             %{"content" => "evolved provenance", "level" => 1, "evolves_from" => []}

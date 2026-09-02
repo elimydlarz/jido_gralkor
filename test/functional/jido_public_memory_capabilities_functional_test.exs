@@ -558,12 +558,18 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       name: "generalisations",
       destination: Gralkor.Destination.Registry.fetch!("global"),
       ontology: Gralkor.DefaultOntology,
+      outputs: [
+        %{
+          kind: :destination,
+          destination: Gralkor.Destination.Registry.fetch!("global"),
+          ontology: Gralkor.DefaultOntology
+        }
+      ],
       chain_of_thought: nil
     }
 
-    artefact = %Gralkor.Reflection.Artefact{
+    artefact = %Gralkor.Artefact{
       id: "public-generalisation-#{System.unique_integer([:positive, :monotonic])}",
-      reflection: "generalisations",
       payload: %{
         "generalisations" => [
           %{"content" => content, "level" => level, "evolves_from" => evolves_from}
