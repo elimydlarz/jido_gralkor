@@ -274,6 +274,19 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  Jason.encode!([Map.take(prior, ["content", "level"])])
     end
 
+    test "and evolution inference is directed to leave lineage empty when no eligible snapshot exists and otherwise copy only eligible snapshots exactly" do
+      directions =
+        "evolve-generalisations"
+        |> step_directions()
+        |> normalized_whitespace()
+
+      assert directions =~
+               "Copy `evolves_from` only from the eligible prior-generalisation lineage snapshots supplied separately"
+
+      assert directions =~
+               "When that list is empty, every evolution must use an empty `evolves_from`"
+    end
+
     test "and inference is directed to revisit current and related observations together with prior generalisations" do
       directions = step_directions("inspect-world")
 
