@@ -1730,6 +1730,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  test "if the retired `:reflection_storage` setting is configured then application startup fails identifying Destination outputs as the artefact memory boundary" do
+    Application.put_env(:jido_gralkor, :reflection_storage, FailingReflectionStorage)
+
+    assert_raise ArgumentError, ~r/Destination outputs.*artefact memory boundary/, fn ->
+      Gralkor.Application.children()
+    end
+  end
+
   defp assert_valid(%{root: root}) do
     assert {:ok,
             [
