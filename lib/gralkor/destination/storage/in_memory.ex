@@ -23,14 +23,19 @@ defmodule Gralkor.Destination.Storage.InMemory do
       destination
       |> Destination.graph_id(operator_id)
       |> LensStorage.episodes()
-      |> Enum.map(& &1.content)
+      |> Enum.map(&Map.take(&1, [:content, :lens]))
 
     reflection_episodes =
       if Process.whereis(ReflectionStorage) do
         {:ok, artefacts} =
           ReflectionStorage.search_destination(destination, operator_id, nil, max_results)
 
-        Enum.map(artefacts, &Jason.encode!(Map.from_struct(&1)))
+        Enum.map(artefacts, fn artefact ->
+          %{
+            content: Jason.encode!(Map.from_struct(artefact)),
+            reflection: artefact.reflection
+          }
+        end)
       else
         []
       end
