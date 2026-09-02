@@ -233,7 +233,8 @@ defmodule Gralkor.Reflection.Registry do
     return_outputs = Enum.filter(outputs, &(field(&1, :kind) == :return))
     unsupported = Enum.find(outputs, &(field(&1, :kind) not in [:destination, :return]))
     destination = List.first(destination_outputs)
-    destination_name = field(destination, :destination)
+    destination_value = field(destination, :destination)
+    destination_name = destination_name(destination_value)
     ontology = field(destination, :ontology) || Gralkor.DefaultOntology
     return_output = List.first(return_outputs)
     handler = field(return_output, :handler)
@@ -251,6 +252,9 @@ defmodule Gralkor.Reflection.Registry do
       true -> nil
     end
   end
+
+  defp destination_name(%Gralkor.Destination{name: name}), do: name
+  defp destination_name(name), do: name
 
   defp valid_return_handler?(handler) do
     is_atom(handler) and Code.ensure_loaded?(handler) and
