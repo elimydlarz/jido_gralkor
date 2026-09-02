@@ -6,7 +6,7 @@ A Destination is one named graph:
 %Gralkor.Destination{name: "global"}
 ```
 
-Lenses and Reflections reference registered Destinations by name. Multiple writers may save information to the same graph.
+Lenses and Reflection Destination outputs reference registered Destinations by name. Multiple writers may save information to the same graph.
 
 ## Graph identity
 
@@ -28,7 +28,7 @@ Most shared application memory should target the packaged `global` Destination. 
 
 ## Ontologies belong to writers
 
-Destinations do not own extraction ontologies. Each appending Lens and Reflection selects the ontology for the information it writes, defaulting to `Gralkor.DefaultOntology`:
+Destinations do not own extraction ontologies. Each appending Lens and Reflection Destination output selects the ontology for the information it writes, defaulting to `Gralkor.DefaultOntology`:
 
 ```elixir
 config :jido_gralkor,
@@ -43,14 +43,20 @@ config :jido_gralkor,
   reflections: [
     [
       name: "release-review",
-      destination: "global",
-      ontology: MyApp.ReleaseOntology,
-      chain_of_thought: "priv/reflections/release-review.yaml"
+      triggers: [:programmatic],
+      chain_of_thought: "priv/reflections/release-review.yaml",
+      outputs: [
+        [
+          kind: :destination,
+          destination: "global",
+          ontology: MyApp.ReleaseOntology
+        ]
+      ]
     ]
   ]
 ```
 
-The packaged `operator` Lens writes with `Gralkor.DefaultOntology`. The packaged generalisation Reflection writes to `global` with `Gralkor.DefaultOntology`; the packaged ERL Reflection writes to `operator` with `Gralkor.Reflection.ERLOntology`.
+The packaged `operator` Lens writes with `Gralkor.DefaultOntology`. The packaged generalisation Reflection has a `global` Destination output with `Gralkor.DefaultOntology`; packaged ERL has an `operator` Destination output with `Gralkor.Reflection.ERLOntology`.
 
 ## Replaceable Lenses
 
@@ -58,7 +64,7 @@ A replaceable Lens replaces only graph content previously written by that Lens. 
 
 The private `_gralkor_lens` ownership field identifies graph content written by a replaceable Lens. Replacing Lens `A` removes content carrying `_gralkor_lens: "A"`, then inserts the new graph carrying the same marker.
 
-Information saved through other Lenses, information saved through Reflections, and information without Lens `A`'s ownership marker remain unchanged.
+Information saved through other Lenses, information saved through Reflection outputs, and information without Lens `A`'s ownership marker remain unchanged.
 
 ## Search
 
@@ -101,7 +107,7 @@ Each distinct Destination is searched once. Multiple Destinations are searched c
 
 A Reflection-written result carries `episode.reflection` with the Reflection name and its encoded artefact in `episode.content`.
 
-Facts, nodes, and Reflection artefacts remain available as explicit advanced result types:
+Facts, nodes, and artefacts remain available as explicit advanced result types:
 
 ```elixir
 Gralkor.Client.search(%Gralkor.Search{
