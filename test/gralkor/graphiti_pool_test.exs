@@ -352,12 +352,11 @@ defmodule Gralkor.GraphitiPoolTest do
                GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
 
       assert {:error, {:episode_conflict, "episode-uuid"}} =
-               GraphitiPool.add_episode(pid, "g1", "changed", "source", nil,
-                 uuid: "episode-uuid"
-               )
+               GraphitiPool.add_episode(pid, "g1", "changed", "source", nil, uuid: "episode-uuid")
 
       assert {:ok, %{"content" => "content"}} =
                GraphitiPool.get_episode(pid, "g1", "episode-uuid")
+
       GenServer.stop(pid)
     end
   end
