@@ -481,8 +481,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
       reflection = %Gralkor.Reflection{
         name: "review",
-        destination: destination,
-        ontology: Gralkor.DefaultOntology,
         outputs: [
           %{
             kind: :destination,

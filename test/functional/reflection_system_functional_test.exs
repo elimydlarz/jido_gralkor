@@ -259,8 +259,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       Application.put_env(:jido_gralkor, :reflections, [
         %Gralkor.Reflection{
           name: " ",
-          destination: %Gralkor.Destination{name: "global"},
-          ontology: Gralkor.DefaultOntology,
+          outputs: [
+            %{
+              kind: :destination,
+              destination: %Gralkor.Destination{name: "global"},
+              ontology: Gralkor.DefaultOntology
+            }
+          ],
           chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "loaded.yaml", steps: []}
         }
       ])

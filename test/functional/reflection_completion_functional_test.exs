@@ -161,8 +161,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     reflection = %Reflection{
       name: "review",
       triggers: [{:lens_ingestion, :any}],
-      destination: %Gralkor.Destination{name: "observations"},
-      ontology: Gralkor.DefaultOntology,
       outputs: [
         %{
           kind: :destination,

@@ -556,8 +556,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   defp put_generalisation(content, level, evolves_from) do
     reflection = %Gralkor.Reflection{
       name: "generalisations",
-      destination: Gralkor.Destination.Registry.fetch!("global"),
-      ontology: Gralkor.DefaultOntology,
       outputs: [
         %{
           kind: :destination,

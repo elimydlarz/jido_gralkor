@@ -208,8 +208,6 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
 
       reflection = %Gralkor.Reflection{
         name: "review",
-        destination: Gralkor.Destination.Registry.fetch!("global"),
-        ontology: Gralkor.DefaultOntology,
         outputs: [
           %{
             kind: :destination,

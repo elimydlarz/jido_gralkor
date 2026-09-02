@@ -109,8 +109,6 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       reflection = %Reflection{
         name: "review",
         triggers: [:ingestion],
-        destination: %Destination{name: "observations"},
-        ontology: Gralkor.DefaultOntology,
         outputs: [
           %{
             kind: :destination,
