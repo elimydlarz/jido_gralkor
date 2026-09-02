@@ -124,7 +124,7 @@ when the default ERL Reflection writes its artefact through its Destination outp
   and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields
   and the stored Learning payload contains exactly its problem kind, approach, success, and reusable lesson
 
-when an ingestion successfully stores one or more representations through its intended Lenses
+when ingestion completes through its intended Lenses
   then the ingestion caller receives success without waiting for Reflection artefacts
   and no Lens-ingestion Reflection is admitted before every intended Lens ingestion succeeds
 
@@ -133,8 +133,8 @@ when an ingestion successfully stores one or more representations through its in
     and the ingestion identifier becomes its `invocation_id`
     and every completed representation is supplied to that Reflection
 
-  while a Reflection names one or more completed Lenses in a Lens-ingestion trigger
-    then that Reflection is admitted exactly once for the completed ingestion
+  while a Reflection's named-Lens trigger matches one or more completed Lenses
+    then it is admitted exactly once for the completed ingestion
     and the ingestion identifier becomes its `invocation_id`
     and every completed representation is supplied to that Reflection
     and additional matching Lenses do not admit another invocation for that ingestion
