@@ -1,15 +1,14 @@
 defmodule Gralkor.Reflection do
-  @moduledoc "A named trigger-driven synthesis process that delivers one artefact through declared outputs."
+  @moduledoc "A named synthesis process that produces one artefact from an ordered Chain of Thought."
 
   alias Gralkor.Reflection.ChainOfThought
 
   @enforce_keys [:name, :chain_of_thought, :outputs]
-  defstruct [:name, :chain_of_thought, :outputs, triggers: []]
+  defstruct [:name, :chain_of_thought, :outputs]
 
   @type t :: %__MODULE__{
           name: String.t(),
           chain_of_thought: ChainOfThought.t(),
-          outputs: [map()],
-          triggers: list()
+          outputs: [map()]
         }
 end

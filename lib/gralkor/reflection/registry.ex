@@ -10,7 +10,6 @@ defmodule Gralkor.Reflection.Registry do
   @built_in_definitions [
     [
       name: "generalisations",
-      triggers: [{:lens_ingestion, :any}],
       chain_of_thought: "priv/reflections/generalisations.yaml",
       outputs: [
         [kind: :destination, destination: "global", ontology: Gralkor.DefaultOntology]
@@ -18,7 +17,6 @@ defmodule Gralkor.Reflection.Registry do
     ],
     [
       name: "erl",
-      triggers: [{:lens_ingestion, :any}],
       chain_of_thought: "priv/reflections/erl.yaml",
       outputs: [
         [
@@ -104,13 +102,9 @@ defmodule Gralkor.Reflection.Registry do
 
   defp validate_resolved(%Reflection{} = reflection) do
     name = reflection.name
-    trigger_error = trigger_error(name, reflection.triggers)
     output_error = output_error(name, reflection.outputs)
 
     cond do
-      trigger_error ->
-        {:error, trigger_error}
-
       output_error ->
         {:error, output_error}
 
@@ -157,15 +151,10 @@ defmodule Gralkor.Reflection.Registry do
   defp load_one(definition, root) do
     name = field(definition, :name)
     outputs = field(definition, :outputs)
-    triggers = field(definition, :triggers)
     relative = field(definition, :chain_of_thought)
-    trigger_error = trigger_error(name, triggers)
     output_error = output_error(name, outputs)
 
     cond do
-      trigger_error ->
-        {:error, trigger_error}
-
       output_error ->
         {:error, output_error}
 
@@ -176,11 +165,11 @@ defmodule Gralkor.Reflection.Registry do
         {:error, {:invalid_chain_of_thought_file, name, relative}}
 
       true ->
-        load_cot(name, outputs, triggers, relative, root)
+        load_cot(name, outputs, relative, root)
     end
   end
 
-  defp load_cot(name, outputs, triggers, relative, root) do
+  defp load_cot(name, outputs, relative, root) do
     path = Path.expand(relative, root)
 
     cond do
@@ -196,8 +185,7 @@ defmodule Gralkor.Reflection.Registry do
              %Reflection{
                name: name,
                chain_of_thought: cot,
-               outputs: resolved_outputs,
-               triggers: triggers
+               outputs: resolved_outputs
              }}
 
           {:error, reason} ->
@@ -303,49 +291,6 @@ defmodule Gralkor.Reflection.Registry do
 
   defp field(keyword, key) when is_list(keyword), do: Keyword.get(keyword, key)
   defp field(_, _), do: nil
-
-  defp supported_trigger?(:programmatic), do: true
-  defp supported_trigger?({:lens_ingestion, :any}), do: true
-  defp supported_trigger?({:lens_ingestion, lenses}) when is_list(lenses), do: true
-
-  defp supported_trigger?(_trigger), do: false
-
-  defp trigger_error(name, triggers) when not is_list(triggers) or triggers == [],
-    do: {:missing_triggers, name}
-
-  defp trigger_error(name, triggers) do
-    cond do
-      invalid_trigger = Enum.find(triggers, &(not supported_trigger?(&1))) ->
-        {:invalid_trigger, name, invalid_trigger}
-
-      Enum.any?(triggers, &match?({:lens_ingestion, []}, &1)) ->
-        {:empty_lens_selection, name}
-
-      true ->
-        named_lens_error(name, triggers)
-    end
-  end
-
-  defp named_lens_error(reflection_name, triggers) do
-    triggers
-    |> Enum.flat_map(fn
-      {:lens_ingestion, lenses} when is_list(lenses) -> lenses
-      _ -> []
-    end)
-    |> Enum.find_value(fn lens_name ->
-      case resolve_lens(lens_name) do
-        {:ok, %Gralkor.Lens{}} -> nil
-        {:ok, _lens} -> {:incompatible_lens, reflection_name, lens_name}
-        :error -> {:unknown_lens, reflection_name, lens_name}
-      end
-    end)
-  end
-
-  defp resolve_lens(lens_name) do
-    {:ok, apply(Gralkor.Client, :lens!, [lens_name])}
-  rescue
-    ArgumentError -> :error
-  end
 
   defp duplicate(values) do
     values
