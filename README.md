@@ -256,7 +256,6 @@ config :jido_gralkor,
   reflections: [
     [
       name: "generalisations",
-      triggers: [{:lens_ingestion, :any}],
       chain_of_thought: "priv/reflections/generalisations.yaml",
       outputs: [
         [kind: :destination, destination: "global"]
@@ -264,7 +263,6 @@ config :jido_gralkor,
     ],
     [
       name: "erl",
-      triggers: [{:lens_ingestion, :any}],
       chain_of_thought: "priv/reflections/erl.yaml",
       outputs: [
         [
@@ -292,7 +290,7 @@ plugins: [
 ]
 ```
 
-That mount writes captured turns and `memory_add` calls through the `"observations"` Lens to `global`. Memory search independently defaults to every accessible registered Destination and may narrow each call by Destination and Lens. After a flushed ingestion has completed across its intended Lenses, each declared Reflection is scheduled independently over the completed lensed representations.
+That mount writes captured turns and `memory_add` calls through the `"observations"` Lens to `global`. Memory search independently defaults to every accessible registered Destination and may narrow each call by Destination and Lens. Ingestion does not invoke Reflections; a consumer that wants synthesis explicitly selects and runs a Reflection at the point its own workflow requires.
 
 **Ontology placement.** Appending Lenses and Reflections default to Jido Gralkor's open `Gralkor.DefaultOntology`. Packaged ERL explicitly uses `Gralkor.Reflection.ERLOntology`. Applications attach custom ontology modules to their writers. If an older deployment set `config :jido_gralkor, :ontology`, remove it and select the module on each Lens or Reflection that needs it.
 
@@ -342,7 +340,7 @@ end
 
 The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed), `:agent_name`, and the selected ingestion `:lens` on the signal's `tool_context`. Search selectors come from each `memory_search` call. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
 
-Set `tool_context[:lens]` on an individual query to override `ingestion_lens` for that turn. The plugin retains the selection on the request's Jido thread entry, making it authoritative for both `memory_add` and later completion or failure capture after ReAct has released its transient tool context. The host strategy's configured tools and complete tool context are carried into post-ingestion Reflection execution. The current operator, agent name, Lens, and session override conflicting retained values; forwarded tools receive the current `agent.id` as both `operator_id` and `agent_id`.
+Set `tool_context[:lens]` on an individual query to override `ingestion_lens` for that turn. The plugin retains the selection on the request's Jido thread entry, making it authoritative for both `memory_add` and later completion or failure capture after ReAct has released its transient tool context.
 
 The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate it before each request (for example, via `on_before_cmd/2` from the signal's `tool_context`) so distill renders user lines under the correct human identity. Missing and blank names raise; there is no generic fallback.
 
@@ -354,7 +352,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate i
 
 The physical encoding replaces the former lossy `-` and `/` to `_` normalisation. Graphs stored under old physical names are not read or migrated automatically; migrate them only from known logical Destination/operator IDs, or re-ingest their source content, because underscores cannot recover the original ID.
 
-**Post-ingestion Reflections.** Lens-aware capture requires a non-blank operator before buffering. A successful flush first completes every intended Lens ingestion and retains the actual zero, one, or many outputs each Lens stored. Every completed representation has exactly its own `id`, `lens`, `content`, and `result`. CaptureBuffer assigns that buffered ingestion one cryptographically collision-resistant ID and reuses it across flush retries; direct `Gralkor.Ingest` callers supply their own replay-stable ID. When at least one representation was stored, the declared Reflections are then scheduled asynchronously. Each Reflection runs independently, so one failure does not prevent another from completing or storing its artefact.
+**Reflection invocation.** Lens-aware capture requires a non-blank operator before buffering, and CaptureBuffer assigns each buffered ingestion one cryptographically collision-resistant ID that it reuses across flush retries. Capture and ordinary `Gralkor.Client.ingest/1` calls stop after Lens ingestion; neither invokes a Reflection. The consuming application owns the event, job, or request that selects a configured Reflection, calls `Gralkor.Reflection.Runner.run/2`, and delivers the resulting artefact to its declared outputs. Direct invocations supply their own replay-stable invocation ID and any completed lensed representations the Reflection should inspect.
 
 **First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus the configured ingestion `:lens`, but no `:session_id`; completed and failed turn capture are both skipped with a warning until a committed thread supplies that identity. `memory_search` still searches for the current operator because public Search does not depend on conversation-session identity.
 
