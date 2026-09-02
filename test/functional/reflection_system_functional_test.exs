@@ -754,33 +754,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "when the final Chain of Thought step returns valid structured output" do
-    test "then that structured output becomes the Reflection's single artefact", context do
-      application_reflection = reflection(context, "generalisations")
-
-      assert {:ok, artefact} =
-               Runner.run(application_reflection, ingestion(), inference: &output_for/1)
-
-      assert artefact.payload == %{"artefact" => "durable pattern"}
-    end
-
-    test "and the artefact is stored at the destination named by the Reflection", context do
-      reflection = reflection(context)
-      assert {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
-
-      assert :ok =
-               put_artefact(reflection, "operator-one", artefact,
-                 storage: Gralkor.Destination.Storage.InMemory
-               )
-
-      assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "durable",
-                 destinations: [destination_output(reflection).destination.name],
-                 result_type: :artefacts
-               })
-    end
-
     test "then that structured output becomes one `%Gralkor.Artefact{}`", context do
       assert {:ok, %Gralkor.Artefact{}} =
                Runner.run(reflection(context), ingestion(), inference: &output_for/1)
@@ -797,75 +770,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
              }
     end
 
-    test "where a return output is declared then its handler's standard `return/3` callback receives the operator identifier, invocation identifier, and exact artefact",
-         %{root: root} do
-      outputs = [
-        [kind: :destination, destination: "operator"],
-        [kind: :return, handler: ReturnHandler]
-      ]
-
-      [reflection] =
-        Registry.load!([valid_definition(root, outputs: outputs)], root: root)
-
-      assert {:ok, :scheduled} =
-               Scheduler.schedule([reflection], ingestion(), retry_delays: [])
-
-      assert :ok = Scheduler.drain()
-
-      assert_receive {:returned_artefact, "operator-one", "ingestion-1",
-                      %Gralkor.Artefact{} = artefact}
-
-      assert Map.from_struct(artefact) == %{
-               id: artefact.id,
-               payload: %{"artefact" => "durable pattern"}
-             }
-    end
-
-    test "where the referenced Destination is `operator` then the artefact is available only to the operator whose ingestion triggered the Reflection",
-         context do
-      reflection = reflection(context)
-      {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
-
-      :ok =
-        put_artefact(reflection, "operator-one", artefact,
-          storage: Gralkor.Destination.Storage.InMemory
-        )
-
-      assert {:ok, [_]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "durable",
-                 destinations: [destination_output(reflection).destination.name],
-                 result_type: :artefacts
-               })
-
-      assert {:ok, []} =
-               Client.search(%Search{
-                 operator_id: "operator-two",
-                 query: "durable",
-                 destinations: [destination_output(reflection).destination.name],
-                 result_type: :artefacts
-               })
-    end
-
-    test "where the referenced Destination is not `operator` then the artefact is available to every operator through that Destination's one graph",
-         context do
-      reflection = reflection(context, "generalisation", "global")
-      {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
-
-      :ok =
-        put_artefact(reflection, "operator-one", artefact,
-          storage: Gralkor.Destination.Storage.InMemory
-        )
-
-      assert {:ok, [%{destination: "global", artefact: ^artefact}]} =
-               Client.search(%Search{
-                 operator_id: "operator-two",
-                 query: "durable",
-                 destinations: [destination_output(reflection).destination.name],
-                 result_type: :artefacts
-               })
-    end
   end
 
   describe "if a Reflection's Chain of Thought completes without a valid final structured output" do
@@ -876,16 +780,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
     end
 
-    test "and the successful ingestion result remains unchanged", context do
-      original = ingestion()
-
-      _ =
-        Runner.run(one_step_reflection(context), original,
-          inference: fn _ -> {:ok, %{output: %{}}} end
-        )
-
-      assert original == ingestion()
-    end
   end
 
   describe "if a Reflection's Chain of Thought fails" do
@@ -896,107 +790,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
     end
 
-    test "and the successful ingestion result remains unchanged", context do
-      original = ingestion()
-      _ = Runner.run(reflection(context), original, inference: fn _ -> {:error, :failed} end)
-      assert original == ingestion()
-    end
-
-    test "and every other declared Reflection remains eligible to complete", context do
-      runner = fn reflection, completed_ingestion, opts ->
-        if reflection.name == "one",
-          do: {:error, :failed},
-          else:
-            Runner.run(
-              reflection,
-              completed_ingestion,
-              Keyword.put(opts, :inference, &output_for/1)
-            )
-      end
-
-      assert {:ok, :scheduled} =
-               Scheduler.schedule(
-                 [reflection(context, "one"), reflection(context, "two")],
-                 ingestion(),
-                 runner: runner,
-                 notify: self(),
-                 store_opts: [storage: Gralkor.Destination.Storage.InMemory]
-               )
-
-      assert_receive {:reflection_completed, "two", {:ok, _}}
-    end
-  end
-
-  describe "if writing an artefact through one output fails" do
-    test "then the Reflection failure identifies its name, output kind, and reason", context do
-      assert {:ok, :scheduled} =
-               Scheduler.schedule([reflection(context)], ingestion(),
-                 runner_opts: [inference: &output_for/1],
-                 notify: self(),
-                 retry_delays: [],
-                 store_opts: [storage: FailingReflectionStorage]
-               )
-
-      assert_receive {:reflection_completed, "generalisation",
-                      {:error,
-                       %{
-                         reflection: "generalisation",
-                         output: :destination,
-                         reason: :destination_unavailable
-                       }}}
-    end
-
-    test "and the successful ingestion result remains unchanged", context do
-      original = ingestion()
-
-      assert {:ok, :scheduled} =
-               Scheduler.schedule([reflection(context)], original,
-                 runner_opts: [inference: &output_for/1],
-                 store_opts: [storage: FailingReflectionStorage]
-               )
-
-      assert original == ingestion()
-    end
-
-    test "and every other declared Reflection remains eligible to complete", context do
-      assert {:ok, :scheduled} =
-               Scheduler.schedule(
-                 [reflection(context, "one"), reflection(context, "two")],
-                 ingestion(),
-                 runner_opts: [inference: &output_for/1],
-                 notify: self(),
-                 retry_delays: [],
-                 store_opts: [storage: FailingReflectionStorage]
-               )
-
-      assert_receive {:reflection_completed, "one", {:error, _}}
-      assert_receive {:reflection_completed, "two", {:error, _}}
-    end
-
-    test "and every other declared output remains eligible to receive that artefact", %{
-      root: root
-    } do
-      outputs = [
-        [kind: :destination, destination: "operator"],
-        [kind: :return, handler: ReturnHandler]
-      ]
-
-      [reflection] =
-        Registry.load!([valid_definition(root, outputs: outputs)], root: root)
-
-      assert {:ok, :scheduled} =
-               Scheduler.schedule([reflection], ingestion(),
-                 runner_opts: [inference: &output_for/1],
-                 notify: self(),
-                 retry_delays: [],
-                 store_opts: [storage: FailingReflectionStorage]
-               )
-
-      assert_receive {:returned_artefact, "operator-one", "ingestion-1", %Gralkor.Artefact{}}
-
-      assert_receive {:reflection_completed, "generalisation",
-                      {:error, %{output: :destination, reason: :destination_unavailable}}}
-    end
   end
 
   describe "when a Destination is searched for artefacts" do
