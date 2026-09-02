@@ -10,15 +10,21 @@ defmodule Gralkor.Reflection.Registry do
       name: "generalisations",
       triggers: [{:lens_ingestion, :any}],
       chain_of_thought: "priv/reflections/generalisations.yaml",
-      destination: "global",
-      ontology: Gralkor.DefaultOntology
+      outputs: [
+        [kind: :destination, destination: "global", ontology: Gralkor.DefaultOntology]
+      ]
     ],
     [
       name: "erl",
       triggers: [{:lens_ingestion, :any}],
       chain_of_thought: "priv/reflections/erl.yaml",
-      destination: "operator",
-      ontology: Gralkor.Reflection.ERLOntology
+      outputs: [
+        [
+          kind: :destination,
+          destination: "operator",
+          ontology: Gralkor.Reflection.ERLOntology
+        ]
+      ]
     ]
   ]
 
@@ -135,14 +141,11 @@ defmodule Gralkor.Reflection.Registry do
 
   defp load_one(definition, root) do
     name = field(definition, :name)
-    destination = field(definition, :destination)
-    ontology = field(definition, :ontology) || Gralkor.DefaultOntology
     outputs = field(definition, :outputs)
     triggers = field(definition, :triggers)
     relative = field(definition, :chain_of_thought)
     lens_error = named_lens_error(name, triggers)
-    unsupported_output = unsupported_output(outputs)
-    invalid_return_handler = invalid_return_handler(outputs)
+    output_error = output_error(name, outputs)
 
     cond do
       not is_list(triggers) or triggers == [] ->
@@ -157,23 +160,8 @@ defmodule Gralkor.Reflection.Registry do
       lens_error ->
         {:error, lens_error}
 
-      not is_nil(outputs) and not is_list(outputs) ->
-        {:error, {:invalid_outputs, name, outputs}}
-
-      is_list(outputs) and Enum.count(outputs, &(field(&1, :kind) == :destination)) == 0 ->
-        {:error, {:missing_destination_output, name}}
-
-      is_list(outputs) and Enum.count(outputs, &(field(&1, :kind) == :destination)) > 1 ->
-        {:error, {:duplicate_output, name, :destination}}
-
-      is_list(outputs) and Enum.count(outputs, &(field(&1, :kind) == :return)) > 1 ->
-        {:error, {:duplicate_output, name, :return}}
-
-      unsupported_output ->
-        {:error, {:unsupported_output, name, unsupported_output}}
-
-      invalid_return_handler ->
-        {:error, {:invalid_return_handler, name, invalid_return_handler}}
+      output_error ->
+        {:error, output_error}
 
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
@@ -181,26 +169,12 @@ defmodule Gralkor.Reflection.Registry do
       not non_blank?(relative) ->
         {:error, {:invalid_chain_of_thought_file, name, relative}}
 
-      not non_blank?(destination) ->
-        {:error, {:missing_destination, name, destination}}
-
-      not valid_ontology?(ontology) ->
-        {:error, {:invalid_ontology, name, ontology}}
-
       true ->
-        load_cot(
-          name,
-          destination,
-          ontology,
-          outputs,
-          triggers,
-          relative,
-          root
-        )
+        load_cot(name, outputs, triggers, relative, root)
     end
   end
 
-  defp load_cot(name, destination_name, ontology, outputs, triggers, relative, root) do
+  defp load_cot(name, outputs, triggers, relative, root) do
     path = Path.expand(relative, root)
 
     cond do
@@ -210,13 +184,16 @@ defmodule Gralkor.Reflection.Registry do
       true ->
         case ChainOfThought.load(path) do
           {:ok, cot} ->
+            resolved_outputs = resolve_outputs(name, outputs)
+            destination = Enum.find(resolved_outputs, &(&1.kind == :destination))
+
             {:ok,
              %Reflection{
                name: name,
-               destination: fetch_destination!(name, destination_name),
-               ontology: ontology,
+               destination: destination.destination,
+               ontology: destination.ontology,
                chain_of_thought: cot,
-               outputs: resolve_outputs(name, outputs, destination_name, ontology),
+               outputs: resolved_outputs,
                triggers: triggers
              }}
 
@@ -226,11 +203,7 @@ defmodule Gralkor.Reflection.Registry do
     end
   end
 
-  defp resolve_outputs(name, nil, destination_name, ontology) do
-    [destination_output(name, destination_name, ontology)]
-  end
-
-  defp resolve_outputs(name, outputs, _destination_name, _ontology) do
+  defp resolve_outputs(name, outputs) do
     Enum.map(outputs, fn output ->
       case field(output, :kind) do
         :destination ->
@@ -254,31 +227,39 @@ defmodule Gralkor.Reflection.Registry do
     }
   end
 
-  defp unsupported_output(outputs) when is_list(outputs) do
-    Enum.find_value(outputs, fn output ->
-      kind = field(output, :kind)
-      if kind not in [:destination, :return], do: kind
-    end)
+  defp output_error(name, outputs) when not is_list(outputs),
+    do: {:invalid_outputs, name, outputs}
+
+  defp output_error(name, outputs) do
+    destination_outputs = Enum.filter(outputs, &(field(&1, :kind) == :destination))
+    return_outputs = Enum.filter(outputs, &(field(&1, :kind) == :return))
+    unsupported = Enum.find(outputs, &(field(&1, :kind) not in [:destination, :return]))
+    destination = List.first(destination_outputs)
+    destination_name = field(destination, :destination)
+    ontology = field(destination, :ontology) || Gralkor.DefaultOntology
+    return_output = List.first(return_outputs)
+    handler = field(return_output, :handler)
+
+    cond do
+      destination_outputs == [] -> {:missing_destination_output, name}
+      length(destination_outputs) > 1 -> {:duplicate_output, name, :destination}
+      length(return_outputs) > 1 -> {:duplicate_output, name, :return}
+      unsupported -> {:unsupported_output, name, field(unsupported, :kind)}
+      not non_blank?(destination_name) -> {:missing_destination, name, destination_name}
+      not valid_ontology?(ontology) -> {:invalid_ontology, name, ontology}
+      return_output && not valid_return_handler?(handler) ->
+        {:invalid_return_handler, name, handler}
+
+      true -> nil
+    end
   end
 
-  defp unsupported_output(_outputs), do: nil
-
-  defp invalid_return_handler(outputs) when is_list(outputs) do
-    Enum.find_value(outputs, fn output ->
-      if field(output, :kind) == :return do
-        handler = field(output, :handler)
-
-        unless is_atom(handler) and Code.ensure_loaded?(handler) and
-                 Gralkor.Artefact.ReturnHandler in
-                   Keyword.get(handler.module_info(:attributes), :behaviour, []) and
-                 function_exported?(handler, :return, 3) do
-          handler
-        end
-      end
-    end)
+  defp valid_return_handler?(handler) do
+    is_atom(handler) and Code.ensure_loaded?(handler) and
+      Gralkor.Artefact.ReturnHandler in
+        Keyword.get(handler.module_info(:attributes), :behaviour, []) and
+      function_exported?(handler, :return, 3)
   end
-
-  defp invalid_return_handler(_outputs), do: nil
 
   defp repository_path?(path, root), do: path == root or String.starts_with?(path, root <> "/")
 
