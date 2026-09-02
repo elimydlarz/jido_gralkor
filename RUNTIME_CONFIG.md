@@ -179,11 +179,11 @@ The consumer owns:
 
 The consumer supplies a non-blank operator identifier, a replay-stable invocation identifier, input context, host tools, and tool context for each invocation. Artefact identity remains deterministic from the operator identifier, invocation identifier, and Reflection name so repeated canonical storage can converge on one immutable artefact.
 
-## Scheduling removal
+## Scheduling baseline
 
-Gralkor-owned Reflection scheduling is removed rather than retained behind a compatibility path.
+Gralkor-owned Reflection scheduling was removed rather than retained behind a compatibility path.
 
-Remove:
+The completed removal covered:
 
 - Reflection trigger fields and validation;
 - automatic Reflection admission after direct or buffered Lens ingestion;
@@ -200,7 +200,7 @@ Remove:
 
 CaptureBuffer's own ingestion-flush retry behaviour remains. It is unrelated to Reflection scheduling and stays owned by CaptureBuffer.
 
-There is no current `Gralkor.Reflection.Schedule` cron process to remove. The remaining scheduling implementation is the durable `Gralkor.Reflection.Scheduler` and its integrations.
+There was no `Gralkor.Reflection.Schedule` cron process. `Gralkor.Reflection.Scheduler`, its durable journal, its supervisor, and their integrations are now absent from the production and test surfaces. This scheduling-free ownership boundary is the starting point for the future runtime-configuration work described here.
 
 ## YAML removal
 
@@ -217,33 +217,28 @@ No YAML fallback remains. Consumers must install every Reflection they intend to
 
 ## Verified current-state gap
 
-The worktree was clean when inspected. The scheduling removal has not yet happened.
+The scheduling baseline is complete and verified: the Scheduler, Journal, and Reflection Supervisor modules and their dedicated tests are absent, and production/test searches find no Reflection trigger, scheduler-journal configuration, automatic-admission context, or Scheduler API references.
 
-Current production code still contains:
+The runtime-configuration work remains intentionally unimplemented for a future session. Current production code still:
 
-- `lib/gralkor/reflection/scheduler.ex`;
-- `lib/gralkor/reflection/journal.ex`;
-- `lib/gralkor/reflection/supervisor.ex`;
-- automatic post-ingestion scheduling in `Gralkor.Client` and `Gralkor.CaptureBuffer`;
-- programmatic admission through the Scheduler;
-- retry, recovery, journal, and drain behaviour;
-- Reflection supervision in `Gralkor.Application`;
-- plugin and native-client forwarding for automatically triggered Reflections.
-
-Current contracts and tests still cover those behaviours in the Reflection system, Reflection completion, retry ownership, CaptureBuffer, application lifecycle, Scheduler, Journal, and plugin suites.
+- has no `Gralkor.RuntimeConfig.replace/1` operation or atomic in-memory snapshot;
+- resolves Destination, Lens, and Reflection definitions from application configuration and their existing registries;
+- loads Reflection Chain-of-Thought definitions from YAML using `:reflection_root`;
+- supplies packaged YAML Reflection definitions implicitly;
+- exposes the Runner primitive without the proposed public synchronous boundary that resolves a named Reflection and delivers all declared outputs.
 
 ## Outside-in implementation sequence
 
-1. Change the Functional test-tree contract to describe atomic runtime configuration and direct Reflection execution, and remove automatic-trigger and scheduling behaviour.
+The scheduling-free baseline above is already complete. A future session should implement only the runtime-configuration and direct-execution design in this sequence:
+
+1. Change the Functional test-tree contract to describe atomic runtime configuration and direct synchronous Reflection execution.
 2. Add failing Functional coverage for complete configuration replacement, invalid replacement preservation, current-definition resolution, and invocation snapshot isolation.
 3. Add failing Functional coverage for direct synchronous Reflection execution and immediate Runner or output failures without retries.
 4. Implement the smallest runtime configuration owner and route Destination, Lens, and Reflection resolution through its active snapshot.
 5. Replace YAML-backed Reflection parsing with validation of inline structured steps.
-6. Replace Scheduler admission with the direct execution boundary.
-7. Remove automatic Reflection work from direct ingestion, CaptureBuffer, plugin capture, and application supervision.
-8. Delete Scheduler, Journal, and their dedicated trees and tests; simplify the remaining affected trees and tests to their surviving subjects.
-9. Remove obsolete configuration keys, YAML assets, direct dependencies, documentation, and mental-model statements.
-10. Run the focused Functional test during RED and GREEN, then the complete Functional and Journey commands required by `TEST_STRATEGY.md` for this substantive public orchestration change.
+6. Add the public synchronous execution boundary that resolves one accepted Reflection snapshot, makes one Runner attempt, attempts each declared output once, and returns completion or failure to the consumer.
+7. Remove obsolete Reflection configuration keys, YAML assets, direct dependencies, documentation, and mental-model statements.
+8. Run the focused Functional test during RED and GREEN, then the complete Functional and Journey commands required by `TEST_STRATEGY.md` for this substantive public orchestration change.
 
 TDD may reveal a substantive inner runtime-configuration subject. Its Integration or Unit tree should be introduced only when consumer-test pressure reveals that subject, not in advance.
 
