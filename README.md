@@ -108,7 +108,7 @@ Lens tests should also start a fresh storage process in setup so state is isolat
 ```elixir
 setup do
   start_supervised!(Gralkor.Lens.Storage.InMemory)
-  start_supervised!(Gralkor.Reflection.Storage.InMemory)
+  start_supervised!(Gralkor.Destination.Storage.InMemory)
   :ok
 end
 ```
