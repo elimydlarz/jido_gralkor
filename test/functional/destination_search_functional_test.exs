@@ -173,8 +173,58 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
+  describe "when a caller searches memory > where one or more Destinations are supplied > while the Lens selector is omitted or empty" do
+    test "then results from any supplied Destination can contribute" do
+      Application.put_env(:jido_gralkor, :destination_search_responses, %{
+        "first" => {:ok, ["selected"]},
+        "second" => {:ok, ["also selected"]}
+      })
+
+      assert {:ok,
+              [
+                %{destination: "first", fact: "selected"},
+                %{destination: "second", fact: "also selected"}
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "question",
+                 destinations: ["first", "second"],
+                 result_type: :facts
+               })
+    end
+
+    test "but no result from another Destination can contribute" do
+      Application.put_env(:jido_gralkor, :destination_search_responses, %{
+        "first" => {:ok, ["selected"]},
+        "second" => {:ok, ["unselected"]}
+      })
+
+      assert {:ok, [%{destination: "first", fact: "selected"}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "question",
+                 destinations: ["first"],
+                 result_type: :facts
+               })
+
+      refute_receive {:destination_search, "second", _, _, _, _, _}
+    end
+  end
+
   describe "where the selected Destinations include `operator`" do
-    test "then another operator's graph cannot contribute a result" do
+    test "then only the current operator's `operator/<operator id>` graph is searched" do
+      use_in_memory_storage()
+      assert :ok = add_episode("operator", "operator-one", "private memory")
+
+      assert {:ok, [%{destination: "operator", episode: %{content: "private memory"}}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "private",
+                 destinations: ["operator"]
+               })
+    end
+
+    test "and another operator's graph cannot contribute a result" do
       use_in_memory_storage()
       assert :ok = add_episode("operator", "operator-one", "private memory")
 
@@ -253,7 +303,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "when a caller searches memory > where the Destination selector is omitted or empty > while one or more Lenses are supplied" do
+  describe "when a caller searches memory > where one or more Lenses are supplied > while the Destination selector is omitted or empty" do
     test "then every accessible registered Destination is selected" do
       assert {:ok, _results} =
                Client.search(%Search{
