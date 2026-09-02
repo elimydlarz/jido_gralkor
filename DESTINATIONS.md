@@ -45,7 +45,6 @@ config :jido_gralkor,
   reflections: [
     [
       name: "release-review",
-      triggers: [:programmatic],
       chain_of_thought: "priv/reflections/release-review.yaml",
       outputs: [
         [
