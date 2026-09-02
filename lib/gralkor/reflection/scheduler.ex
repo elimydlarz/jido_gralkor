@@ -336,6 +336,19 @@ defmodule Gralkor.Reflection.Scheduler do
     {:storage_confirmation, outcome}
   end
 
+  defp execute(%{stage: :return} = job) do
+    %{handler: handler} = return_output(job.reflection)
+
+    outcome =
+      handler.return(
+        field(job.ingestion, :operator_id),
+        field(job.ingestion, :id),
+        job.artefact
+      )
+
+    {:return, outcome}
+  end
+
   defp handle_outcome(state, key, :lookup, {:ok, artefact}),
     do: finish_success(state, key, artefact)
 
@@ -372,7 +385,17 @@ defmodule Gralkor.Reflection.Scheduler do
     end
   end
 
-  defp handle_outcome(state, key, :storage, :ok),
+  defp handle_outcome(state, key, :storage, :ok) do
+    job = Map.fetch!(state.jobs, key)
+
+    if return_output(job.reflection) do
+      transition(state, key, :return, job.artefact)
+    else
+      finish_success(state, key, job.artefact)
+    end
+  end
+
+  defp handle_outcome(state, key, :return, :ok),
     do: finish_success(state, key, Map.fetch!(state.jobs, key).artefact)
 
   defp handle_outcome(state, key, :storage_confirmation, {:ok, artefact}),
@@ -660,6 +683,10 @@ defmodule Gralkor.Reflection.Scheduler do
     representations != [] and
       Enum.all?(representations, &(field(&1, :result) in [nil, :ok])) and
       Enum.all?(intended, &(&1 in completed))
+  end
+
+  defp return_output(reflection) do
+    Enum.find(reflection.outputs, &(&1.kind == :return))
   end
 
   defp field(map, key), do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
