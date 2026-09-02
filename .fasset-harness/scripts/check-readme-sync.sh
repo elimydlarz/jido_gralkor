@@ -19,6 +19,9 @@ surface_files=(
   lib/gralkor/ingest.ex
   lib/gralkor/ingested_representation.ex
   lib/gralkor/search.ex
+  lib/gralkor/destination/storage.ex
+  lib/gralkor/destination/storage/graphiti.ex
+  lib/gralkor/destination/storage/in_memory.ex
   lib/gralkor/lens.ex
   lib/gralkor/lens/ingestion.ex
   lib/gralkor/lens/ingestion/store.ex
@@ -31,8 +34,6 @@ surface_files=(
   lib/gralkor/reflection/runner.ex
   lib/gralkor/reflection/scheduler.ex
   lib/gralkor/reflection/store.ex
-  lib/gralkor/reflection/storage/graphiti.ex
-  lib/gralkor/reflection/storage/in_memory.ex
   lib/gralkor/ontology.ex
   lib/gralkor/python.ex
   priv/reflections/generalisations.yaml
