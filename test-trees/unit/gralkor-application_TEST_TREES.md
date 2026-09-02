@@ -25,6 +25,7 @@ if the remote FalkorDB configuration is not a keyword list carrying a host and a
 when a capture flush runs
   then the transcript episode is rendered from the user and assistant text of every captured turn only, with no agent reasoning and no inference call
   and the rendered transcript is written as a captured episode
+  and the trusted originating Lens is recorded as `operator`
   while no episode-writing dependency is supplied
     then default writes name the graph pool server explicitly and reach it without shifted arguments
 

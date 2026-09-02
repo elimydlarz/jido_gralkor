@@ -85,19 +85,20 @@ if a flush-and-await is requested with a missing or non-positive timeout
 when memory is added with a group and content
   then the group is sanitised before the write
   and the content is written to the graph as a plain-text episode scoped to the sanitised group
+  and the trusted originating Lens is recorded as `operator`
   and the generated name combines the millisecond timestamp with a positive monotonic integer
   and success is returned once the graph accepts the write
   if the graph fails
     then that failure is returned unchanged
   then jido_gralkor's built-in ontology is applied, so a caller neither supplies nor configures one
   where a source description is supplied
-    then it is the source recorded on the episode
+    then it is retained as the source beneath trusted `operator` Lens provenance
   where a source kind is supplied
     then the declared source kind is forwarded to the graph write
     while the source kind is structured record
       then the supplied map or list is forwarded as its JSON encoding
   where no source description is supplied
-    then the source recorded on the episode is "manual"
+    then the source retained beneath trusted `operator` Lens provenance is "manual"
   and generic entity and relationship extraction remains enabled without an application-owned schema
 
 when an index and constraint rebuild is requested

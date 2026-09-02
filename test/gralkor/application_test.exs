@@ -561,7 +561,7 @@ defmodule Gralkor.ApplicationTest do
 
       {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
       rec = Pythonx.decode(rec)
-      assert rec["source_description"] == "captured"
+      assert rec["source_description"] == "captured [lens: operator]"
       assert rec["group_id"] == "flush_group"
       assert rec["episode_body"] =~ "vacuum"
     end

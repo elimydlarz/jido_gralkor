@@ -549,7 +549,7 @@ defmodule Gralkor.Client.NativeTest do
       assert [episode] = episodes(g)
       assert episode["group_id"] == "operator_with_hyphens"
       assert episode["body"] == "Eli works at Anthropic"
-      assert episode["source_description"] == "manual"
+      assert episode["source_description"] == "manual [lens: operator]"
     end
 
     test "and the generated name combines the millisecond timestamp with a positive monotonic integer",
@@ -628,7 +628,7 @@ defmodule Gralkor.Client.NativeTest do
 
     test "then it is the source recorded on the episode", %{g: g} do
       assert :ok = Native.memory_add("g1", "content", "captured")
-      assert [%{"source_description" => "captured"}] = episodes(g)
+      assert [%{"source_description" => "captured [lens: operator]"}] = episodes(g)
     end
   end
 
@@ -638,7 +638,7 @@ defmodule Gralkor.Client.NativeTest do
 
     test "then the source recorded on the episode is \"manual\"", %{g: g} do
       assert :ok = Native.memory_add("g1", "content", nil)
-      assert [%{"source_description" => "manual"}] = episodes(g)
+      assert [%{"source_description" => "manual [lens: operator]"}] = episodes(g)
     end
   end
 
