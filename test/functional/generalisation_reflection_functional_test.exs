@@ -340,7 +340,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert [%{"level" => 5}] = artefact.payload["generalisations"]
     end
 
-    test "and `evolves_from` records the content and level of every influencing prior generalisation" do
+    test "and each `evolves_from` snapshot exactly matches the content and level of an influencing prior generalisation returned in a generalisations Reflection episode" do
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(),
                  inference: &ancestry_preserving_output_for/1
@@ -356,6 +356,55 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       assert [%{"evolves_from" => snapshots}] = artefact.payload["generalisations"]
       refute contains_content?(snapshots, "Prefer abstractions everywhere")
+    end
+  end
+
+  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while an evolution's lineage does not exactly match a prior generalisation returned in a generalisations Reflection episode" do
+    test "then the Reflection fails explicitly without producing an artefact" do
+      put_stored_generalisation_response(influencing_generalisations())
+
+      for invalid_snapshot <- [
+            %{"content" => "Fabricated prior generalisation", "level" => 1},
+            %{"content" => "Prefer explicit APIs", "level" => 2}
+          ] do
+        assert {:error,
+                %{
+                  reflection: "generalisations",
+                  step: "evolve-generalisations",
+                  reason: {:invalid_generalisation_lineage, ^invalid_snapshot}
+                }} =
+                 Runner.run(generalisation(), ingestion(),
+                   inference: &invalid_lineage_output_for(&1, invalid_snapshot)
+                 )
+      end
+
+      malformed_snapshot = %{"content" => "Prefer explicit APIs"}
+
+      assert {:error,
+              %{
+                reflection: "generalisations",
+                step: "evolve-generalisations",
+                reason: {:output_type_mismatch, "evolutions", _declaration}
+              }} =
+               Runner.run(generalisation(), ingestion(),
+                 inference: &invalid_lineage_output_for(&1, malformed_snapshot)
+               )
+
+      put_observation_generalisation_response([
+        %{"content" => "Observation-shaped impostor", "level" => 3}
+      ])
+
+      observation_snapshot = %{"content" => "Observation-shaped impostor", "level" => 3}
+
+      assert {:error,
+              %{
+                reflection: "generalisations",
+                step: "evolve-generalisations",
+                reason: {:invalid_generalisation_lineage, ^observation_snapshot}
+              }} =
+               Runner.run(generalisation(), ingestion(),
+                 inference: &invalid_lineage_output_for(&1, observation_snapshot)
+               )
     end
   end
 
@@ -422,7 +471,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert MapSet.new(Map.keys(stored)) == MapSet.new(["content", "level", "evolves_from"])
     end
 
-    test "and each stored `evolves_from` snapshot contains exactly the content and level returned by related-memory search" do
+    test "and each stored `evolves_from` snapshot is the exact content-and-level snapshot of a prior generalisation decoded from related-memory" do
       put_stored_generalisation_response(influencing_generalisations())
 
       assert {:ok, artefact} =
@@ -432,6 +481,23 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert snapshots == influencing_generalisations()
 
       assert exact_snapshot_shapes?(snapshots)
+    end
+
+    test "and final synthesis cannot change any preceding evolution's content or `evolves_from`" do
+      put_stored_generalisation_response(influencing_generalisations())
+
+      assert {:ok, artefact} =
+               Runner.run(generalisation(), ingestion(), inference: &final_tampering_output_for/1)
+
+      assert [
+               %{
+                 "content" => "Prefer the smallest explicit interface",
+                 "level" => 5,
+                 "evolves_from" => snapshots
+               }
+             ] = artefact.payload["generalisations"]
+
+      assert snapshots == influencing_generalisations()
     end
 
     test "and later evolution leaves every earlier stored lineage snapshot unchanged" do
@@ -513,6 +579,29 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     )
   end
 
+  defp invalid_lineage_output_for(request, snapshot) do
+    evolved_output(request, "Prefer the smallest explicit interface", [snapshot])
+  end
+
+  defp final_tampering_output_for(%{step: %{label: "synthesise-artefact"}}) do
+    {:ok,
+     %{
+       output: %{
+         "generalisations" => [
+           %{
+             "content" => "Final synthesis tried to replace the evolution",
+             "level" => 100,
+             "evolves_from" => [
+               %{"content" => "Fabricated final ancestor", "level" => 99}
+             ]
+           }
+         ]
+       }
+     }}
+  end
+
+  defp final_tampering_output_for(request), do: higher_level_output_for(request)
+
   defp evolved_output(%{step: %{label: "inspect-world"}}, _content, _snapshots) do
     {:ok,
      %{
@@ -580,10 +669,31 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
            %{
              content:
                Jason.encode!(%{
+                 id: "stored-generalisation-artefact",
                  reflection: "generalisations",
                  payload: %{generalisations: stored}
                }),
              source_description: "reflection:generalisations"
+           }
+         ]}
+    })
+  end
+
+  defp put_observation_generalisation_response(generalisations) do
+    stored = Enum.map(generalisations, &Map.put(&1, "evolves_from", []))
+
+    Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
+      "observations-memory" =>
+        {:ok,
+         [
+           %{
+             content:
+               Jason.encode!(%{
+                 id: "observation-shaped-impostor",
+                 reflection: "generalisations",
+                 payload: %{generalisations: stored}
+               }),
+             source_description: "observation-shaped JSON [lens: observations]"
            }
          ]}
     })
