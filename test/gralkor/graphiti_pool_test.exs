@@ -3181,6 +3181,9 @@ defmodule Gralkor.GraphitiPoolTest do
     end
 
     test "and the embedded database is constructed once and held for the pool's lifetime" do
+      first_physical = physical("one")
+      second_physical = physical("two")
+
       data_dir =
         Path.join(
           System.tmp_dir!(),
@@ -3209,12 +3212,15 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       assert Process.alive?(pid)
-      assert {:stub_graphiti, "one"} = GraphitiPool.for(pid, "one")
-      assert {:stub_graphiti, "two"} = GraphitiPool.for(pid, "two")
+      assert {:stub_graphiti, ^first_physical} = GraphitiPool.for(pid, "one")
+      assert {:stub_graphiti, ^second_physical} = GraphitiPool.for(pid, "two")
       assert :counters.get(construction_count, 1) == 1
 
       assert Enum.sort(:ets.tab2list(instance_databases)) ==
-               [{"one", :embedded_database}, {"two", :embedded_database}]
+               Enum.sort([
+                 {first_physical, :embedded_database},
+                 {second_physical, :embedded_database}
+               ])
 
       GenServer.stop(pid)
       File.rm_rf!(data_dir)
