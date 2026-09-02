@@ -1200,13 +1200,16 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         %{"graphiti" => graphiti, "conflicting_content" => conflicting_content}
       )
 
-      assert {:error, {:artefact_conflict, ^artefact_id}} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "stored",
-                 destinations: ["observations"],
-                 result_type: :artefacts
-               })
+      conflict_result =
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "stored",
+          destinations: ["observations"],
+          result_type: :artefacts
+        })
+
+      IO.inspect(conflict_result, label: "CONFLICT_RESULT")
+      assert {:error, {:artefact_conflict, ^artefact_id}} = conflict_result
 
       {proof, _} =
         Pythonx.eval(
