@@ -320,8 +320,8 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  describe "when an agent turn begins > where the plugin was mounted with Lens and Destination selections > while a thread has committed to agent state" do
-    test "then the Lens and Destination selections and committed session id are planted on the tool context beside the agent name" do
+  describe "when an agent turn begins > where the plugin was mounted with an ingestion Lens > while a thread has committed to agent state" do
+    test "then the Lens selection and committed session id are planted on the tool context beside the agent name" do
       plugin_state = lens_plugin_state()
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
@@ -335,14 +335,13 @@ defmodule JidoGralkor.PluginTest do
       assert tool_context == %{
                agent_name: "Susu",
                lens: "observations",
-               search_destinations: ["memory", "global"],
                session_id: "thread-one"
              }
     end
   end
 
-  describe "when an agent turn begins > where the plugin was mounted with Lens and Destination selections > while no thread has committed to agent state" do
-    test "then the Lens and Destination selections are planted on the tool context beside the agent name without a session id" do
+  describe "when an agent turn begins > where the plugin was mounted with an ingestion Lens > while no thread has committed to agent state" do
+    test "then the Lens selection is planted on the tool context beside the agent name without a session id" do
       plugin_state = lens_plugin_state()
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
@@ -355,8 +354,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert tool_context == %{
                agent_name: "Susu",
-               lens: "observations",
-               search_destinations: ["memory", "global"]
+               lens: "observations"
              }
     end
   end
@@ -794,8 +792,7 @@ defmodule JidoGralkor.PluginTest do
     {:ok, plugin_state} =
       Plugin.mount(%{id: "operator-one", state: %{}},
         agent_name: "Susu",
-        ingestion_lens: "observations",
-        search_destinations: ["memory", "global"]
+        ingestion_lens: "observations"
       )
 
     plugin_state
