@@ -446,7 +446,7 @@ defmodule Gralkor.Client.NativeTest do
 
   # The adapter's write and admin calls go through GraphitiPool, so exercising
   # them means starting the pool over a fake graphiti that records what it was
-  # asked for. Everything the adapter is supposed to decide — the sanitised
+  # asked for. Everything the adapter is supposed to decide — the physical
   # group, the source description, which ontology applies — is visible in that
   # recording.
   defp start_recording_pool(_ctx) do

@@ -99,8 +99,8 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "when a group id contains hyphens" do
-    test "then every hyphen is replaced with an underscore before search" do
+  describe "when recall receives a logical group id" do
+    test "then it reaches the search boundary unchanged so GraphitiPool can encode it exactly once" do
       ref = make_ref()
       test_pid = self()
 
@@ -118,7 +118,7 @@ defmodule Gralkor.RecallTest do
           default_opts(search_fn: search_fn)
         )
 
-      assert_receive {^ref, "with_some_hyphens"}
+      assert_receive {^ref, "with-some-hyphens"}
     end
   end
 

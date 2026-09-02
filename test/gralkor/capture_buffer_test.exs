@@ -76,13 +76,13 @@ defmodule Gralkor.CaptureBufferTest do
       assert_receive {:flushed, "g", "Susu", "Eli", FakeOntologyA, _turns}
     end
 
-    test "and the group it binds is the sanitised form of the group supplied" do
+    test "and the group it binds is the logical group supplied, leaving physical encoding to GraphitiPool" do
       :ok =
         CaptureBuffer.append("s", "with-hyphens", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       :ok = CaptureBuffer.flush("s")
 
-      assert_receive {:flushed, "with_hyphens", "Susu", "Eli", nil, _turns}
+      assert_receive {:flushed, "with-hyphens", "Susu", "Eli", nil, _turns}
     end
 
     test "and the bound group, agent name, user name, and ontology are what the flush callback later receives" do

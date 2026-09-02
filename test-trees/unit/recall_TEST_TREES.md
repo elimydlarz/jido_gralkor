@@ -13,8 +13,8 @@ when a maximum result count is supplied
 when no maximum result count is supplied
   then the main search receives the default count of ten
 
-when a group id contains hyphens
-  then every hyphen is replaced with an underscore before search
+when recall receives a logical group id
+  then it reaches the search boundary unchanged so GraphitiPool can encode it exactly once
 
 if the agent name is missing or blank
   then an argument error is raised

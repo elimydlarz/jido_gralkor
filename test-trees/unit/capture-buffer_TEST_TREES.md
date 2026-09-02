@@ -4,7 +4,7 @@ when a turn is appended for a session that holds none
   then the turn is buffered and readable back for that session
   and it stays buffered until a flush is explicitly requested, the buffer having no idle-flush policy of its own
   and the entry binds the session to its group, agent name, user name, and ontology, the ontology being a module or nothing
-  and the group it binds is the sanitised form of the group supplied
+  and the group it binds is the logical group supplied, leaving physical encoding to GraphitiPool
   and the bound group, agent name, user name, and ontology are what the flush callback later receives
 
 when a further turn is appended for a session that already holds turns
