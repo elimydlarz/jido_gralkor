@@ -57,6 +57,41 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
+  defmodule JourneyRequestTransformer do
+    @behaviour Jido.AI.Reasoning.ReAct.RequestTransformer
+
+    @impl true
+    def transform_request(_request, state, _config, _runtime_context) do
+      overrides = %{model: Gralkor.Config.llm_model()}
+
+      overrides =
+        if state.iteration == 1 do
+          JidoGralkor.ReAct.maybe_force_memory_search(overrides, state)
+        else
+          Map.put(overrides, :tools, %{})
+        end
+
+      {:ok, overrides}
+    end
+  end
+
+  defmodule JourneyAgent do
+    use Jido.AI.Agent,
+      name: "memory_adventure_agent",
+      tools: [JidoGralkor.Actions.MemorySearch],
+      max_iterations: 3,
+      tool_timeout_ms: 90_000,
+      stream_timeout_ms: 180_000,
+      observability: %{redact_tool_args?: false},
+      system_prompt: """
+      Search long-term memory exactly once before answering, using a focused
+      query without Destination or Lens selectors. Apply the relevant evolved
+      generalisation in light of its preceding history and related observations.
+      Follow the requested answer format exactly.
+      """,
+      request_transformer: Gralkor.MemoryAdventureJourneyTest.JourneyRequestTransformer
+  end
+
   setup_all do
     keys = [
       :client,
@@ -158,6 +193,15 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          ]}
       )
 
+    {:ok, agent} =
+      start_supervised(
+        {Jido.AgentServer,
+         [
+           agent: JourneyAgent,
+           id: @operator_one
+         ]}
+      )
+
     on_exit(fn ->
       File.rm_rf!(data_dir)
 
@@ -172,7 +216,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       end
     end)
 
-    {:ok, adventure: run_adventure()}
+    {:ok, adventure: run_adventure(agent)}
   end
 
   describe "when two operators use implicit memory, Lenses, ERL, and shared-Destination replacement" do
@@ -258,18 +302,20 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when a fresh request searches evolved generalisations" do
-    test "then MemorySearch runs once without selectors", %{adventure: adventure} do
-      assert is_list(adventure.default_memory_search)
+  describe "when a fresh agent handles a request related to an evolved generalisation" do
+    test "then one MemorySearch call is made without selectors", %{adventure: adventure} do
+      assert adventure.memory_search_completion_count == 1
+      assert adventure.memory_search_arguments[:destinations] in [nil, []]
+      assert adventure.memory_search_arguments[:lenses] in [nil, []]
     end
 
-    test "and all registered Destinations contribute", %{adventure: adventure} do
+    test "and every accessible registered Destination is searched", %{adventure: adventure} do
       searched = Enum.map(adventure.default_memory_search, & &1["destination"])
 
       assert MapSet.new(searched) == MapSet.new(["operator", "global"])
     end
 
-    test "and lensed information and stored generalisations contribute",
+    test "and its results include relevant lensed information and relevant stored generalisations",
          %{adventure: adventure} do
       assert has_originating_lens?(
                adventure.default_memory_search,
@@ -282,11 +328,26 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                "global",
                "generalisations"
              )
+
+      assert has_evolved_generalisation?(
+               adventure.default_memory_search,
+               adventure.later_generalisation
+             )
     end
 
-    test "and results retain Destination and origin provenance",
+    test "and every result identifies its Destination and any originating Lens",
          %{adventure: adventure} do
       assert every_episode_has_provenance?(adventure.default_memory_search)
+    end
+
+    test "and the agent applies the relevant evolved generalisation in light of its evolution history and related observations",
+         %{adventure: adventure} do
+      answer = String.downcase(adventure.agent_answer)
+
+      assert String.trim(answer) != ""
+      assert String.contains?(answer, "harbor")
+      assert contains_any?(answer, ["deployment", "deployments", "canary", "canaries"])
+      assert contains_any?(answer, ["fault", "failure", "risk", "impact"])
     end
   end
 
@@ -379,7 +440,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  defp run_adventure do
+  defp run_adventure(agent) do
     implicit_fact =
       "The private deployment codename is Juniper and the launch city is Muscat."
 
@@ -408,12 +469,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     {first_generalisation, later_generalisation} = evolve_global_generalisation()
 
-    default_memory_search =
-      memory_search(%{
-        query:
-          later_generalisation["content"] ||
-            "reversible limited-scope trials across deployments migrations and feature releases"
-      })
+    agent_request = agent_request(agent)
+    default_memory_search = agent_request.memory_search_results
 
     selected_memory_search =
       memory_search(%{
@@ -579,6 +636,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       first_generalisation: first_generalisation,
       later_generalisation: later_generalisation,
       default_memory_search: default_memory_search,
+      memory_search_arguments: agent_request.memory_search_arguments,
+      memory_search_completion_count: agent_request.memory_search_completion_count,
+      agent_answer: agent_request.answer,
       selected_memory_search: selected_memory_search,
       post_selector_published_episodes: global_for_first,
       conversation_facts: conversation_facts,
