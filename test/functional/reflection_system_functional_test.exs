@@ -770,6 +770,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
              }
     end
 
+    test "and the artefact carries no producer identity", context do
+      assert {:ok, artefact} =
+               Runner.run(reflection(context), invocation(), inference: &output_for/1)
+
+      refute Map.has_key?(Map.from_struct(artefact), :producer)
+    end
+
+    test "and the caller receives that artefact", context do
+      assert {:ok, %Gralkor.Artefact{} = artefact} =
+               Runner.run(reflection(context), invocation(), inference: &output_for/1)
+
+      assert artefact.payload == %{"artefact" => "durable pattern"}
+    end
+
   end
 
   describe "if a Reflection's Chain of Thought completes without a valid final structured output" do
@@ -805,7 +819,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                })
     end
 
-    test "and relevant artefacts produced by any Reflection using that Destination are returned",
+    test "and relevant artefacts written through any Destination output using that Destination are returned",
          context do
       one = reflection(context, "one")
       two = reflection(context, "two")
@@ -843,18 +857,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                id: artefact.id,
                payload: %{"artefact" => "durable pattern"}
              }
-    end
-
-    test "and every result retains its structured payload", context do
-      {reflection, _} = stored_artefact(context)
-
-      assert {:ok, [%{artefact: %{payload: %{"artefact" => "durable pattern"}}}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "durable",
-                 destinations: [destination_output(reflection).destination.name],
-                 result_type: :artefacts
-               })
     end
 
     test "where the search also identifies one artefact then only that artefact is returned from the selected Destination",
@@ -944,16 +946,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     )
   end
 
-  defp get_artefact(reflection, operator_id, artefact_id, opts) do
-    Gralkor.Destination.Storage.get_artefact(
-      destination_output(reflection),
-      reflection.name,
-      operator_id,
-      artefact_id,
-      opts
-    )
-  end
-
   defp one_step_reflection(%{root: root}) do
     write_cot(
       root,
@@ -967,12 +959,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     reflection
   end
 
-  defp ingestion do
+  defp invocation do
     %{
       id: "ingestion-1",
       operator_id: "operator-one",
       invocation_context: %{source: "direct-invocation"},
-      intended_lenses: ["observations", "decisions"],
       representations: [
         %{
           id: "representation-one",
@@ -1032,7 +1023,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   defp erl_output_for(%{step: %{label: "synthesise-artefact"}}),
     do: {:ok, %{output: erl_payload()}}
 
-  defp run_and_collect_requests(reflection, ingestion) do
+  defp run_and_collect_requests(reflection, invocation) do
     parent = self()
 
     inference = fn request ->
@@ -1040,7 +1031,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       output_for(request)
     end
 
-    assert {:ok, _} = Runner.run(reflection, ingestion, inference: inference)
+    assert {:ok, _} = Runner.run(reflection, invocation, inference: inference)
     collect_requests([])
   end
 
@@ -1075,22 +1066,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  defp representation_callback(parent) do
-    fn _operator_id, _agent_name, _user_name, lens, _turns ->
-      send(parent, {:lens_stored, lens})
-
-      {:ok,
-       [
-         %{
-           id: "representation-#{lens}",
-           lens: lens,
-           content: "stored through #{lens}",
-           result: :ok
-         }
-       ]}
-    end
-  end
-
   defp stored_artefact(context) do
     reflection = reflection(context)
     {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
@@ -1121,7 +1096,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     Keyword.merge(
       [
         name: "generalisation",
-        triggers: [{:lens_ingestion, :any}],
         chain_of_thought: "valid.yaml",
         outputs: [[kind: :destination, destination: "operator"]]
       ],
@@ -1133,10 +1107,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     path = Path.join(root, name)
     File.write!(path, body)
     path
-  end
-
-  defp configure_reflections(reflections) do
-    Application.put_env(:jido_gralkor, :reflections, reflections)
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
