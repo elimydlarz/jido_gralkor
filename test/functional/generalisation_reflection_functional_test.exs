@@ -225,7 +225,11 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
 
     test "and inference is directed to carry forward, combine, broaden, narrow, split, replace, or otherwise revise generalisations as observations warrant" do
-      directions = step_directions("evolve-generalisations")
+      directions =
+        "evolve-generalisations"
+        |> step_directions()
+        |> normalized_whitespace()
+        |> String.downcase()
 
       for operation <- [
             "carry forward",
