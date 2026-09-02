@@ -1030,7 +1030,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when a consuming agent requests a named Reflection > if the named Reflection is unknown" do
+  describe "when a caller requests a named programmatic Reflection > if the named Reflection is unknown" do
     test "then the request fails identifying the unknown Reflection before durable work is admitted" do
       configure_reflections([])
 
@@ -1039,7 +1039,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when a consuming agent requests a named Reflection > if the named Reflection does not enable the agent-request trigger" do
+  describe "when a caller requests a named programmatic Reflection > if the named Reflection does not enable the programmatic trigger" do
     test "then the request fails identifying the disabled trigger before durable work is admitted",
          context do
       configure_reflections([reflection(context, "ingestion-only")])
