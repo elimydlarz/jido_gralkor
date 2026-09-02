@@ -132,6 +132,39 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert search_context.lens == "observations"
     end
 
+    test "and search selectors neither default from nor change the configured ingestion Lens" do
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+
+      mounted_agent = agent(plugin_state)
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(mounted_agent)
+      memory_context = Map.put(tool_context, :agent_id, mounted_agent.id)
+
+      assert {:ok, %{result: "[]"}} =
+               MemorySearch.run(
+                 %{query: "decision", destinations: ["decisions"], lenses: ["decisions"]},
+                 memory_context
+               )
+
+      assert {:ok, %{result: "Ingesting."}} =
+               MemoryAdd.run(
+                 %{
+                   content: "observation retained after selected search",
+                   source_kind: :document,
+                   source_description: "functional"
+                 },
+                 memory_context
+               )
+
+      assert eventually(fn ->
+               Enum.any?(destination_episodes("observations"), fn episode ->
+                 episode.content == "observation retained after selected search"
+               end)
+             end)
+
+      assert destination_episodes("decisions") == []
+    end
+
     test "where no conversation thread has been committed then memory search still runs for the current operator" do
       assert :ok =
                Client.ingest(%Ingest{
