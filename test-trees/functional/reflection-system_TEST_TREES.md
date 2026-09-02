@@ -96,15 +96,15 @@ where the packaged default Reflections are used
   and neither packaged Reflection declares a return output
 
 where an application-defined Destination output omits its ontology
-  then its artefact receives generic extraction
+  then the output selects generic extraction for a consumer-delivered artefact
 
 where an application-defined Destination output declares an application ontology
-  then its artefact is extracted through that ontology
+  then the output selects that ontology for a consumer-delivered artefact
 
-when the default ERL Reflection writes its artefact through its Destination output
+when a consumer stores the default ERL Reflection's artefact through its Destination output
   then extraction receives the built-in `Learning` entity type from that output's ontology
   and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields
-  and the stored Learning payload contains exactly its problem kind, approach, success, and reusable lesson
+  and the Runner-returned Learning payload contains exactly its problem kind, approach, success, and reusable lesson
 
 when a configured Reflection is loaded
   then its declared YAML is loaded as the programmatic Chain of Thought

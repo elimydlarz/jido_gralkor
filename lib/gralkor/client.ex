@@ -7,8 +7,9 @@ defmodule Gralkor.Client do
   Ingestion resolves an appending Lens and invokes its ingestion process with a
   Lens-bound store. Replacement validates and stores the complete graph for a
   replaceable Lens. Lenses and Reflections reference first-class Destinations,
-  each of which names one graph. Appending Lenses and Reflections select the
-  ontology for their own writes. With empty selectors, search runs every
+  each of which names one graph. Appending Lenses select the ontology for their
+  writes; Reflection Destination outputs select it for consumer-delivered
+  artefacts. With empty selectors, search runs every
   accessible registered Destination concurrently and returns episodes from
   every Lens and Reflection writer. Destination and Lens names are ORed within
   their respective selectors and ANDed across them; Lens filters are

@@ -197,7 +197,7 @@ Search selection is invocation-local, not a plugin mount option. `memory_search`
 
 Everything above, in one deployment. Three files.
 
-**Ontologies are modules referenced by writers.** Define an ontology as ordinary compiled Elixir in your own `lib/`, then select it on each appending Lens or Reflection that should extract with it. Destinations only name graphs.
+**Ontologies are modules referenced by writers.** Define an ontology as ordinary compiled Elixir in your own `lib/`, then select it on each appending Lens or Reflection Destination output that should extract with it. Destinations only name graphs.
 
 ```elixir
 # lib/my_app/ontologies.ex — compiled code. Named by writer definitions below.
@@ -292,7 +292,7 @@ plugins: [
 
 That mount writes captured turns and `memory_add` calls through the `"observations"` Lens to `global`. Memory search independently defaults to every accessible registered Destination and may narrow each call by Destination and Lens. Ingestion does not invoke Reflections; a consumer that wants synthesis explicitly selects and runs a Reflection at the point its own workflow requires.
 
-**Ontology placement.** Appending Lenses and Reflections default to Jido Gralkor's open `Gralkor.DefaultOntology`. Packaged ERL explicitly uses `Gralkor.Reflection.ERLOntology`. Applications attach custom ontology modules to their writers. If an older deployment set `config :jido_gralkor, :ontology`, remove it and select the module on each Lens or Reflection that needs it.
+**Ontology placement.** Appending Lenses and Reflection Destination outputs default to Jido Gralkor's open `Gralkor.DefaultOntology`. Packaged ERL explicitly uses `Gralkor.Reflection.ERLOntology`. Applications attach custom ontology modules to their writers. If an older deployment set `config :jido_gralkor, :ontology`, remove it and select the module on each Lens or Reflection Destination output that needs it.
 
 ## Wire it on your agent
 
@@ -581,8 +581,8 @@ Every Reflection declares exactly one `:destination` output and at most one `:re
 
 The package supplies two declarations by default:
 
-- `generalisations` uses `priv/reflections/generalisations.yaml`, writes to `global`, and uses `Gralkor.DefaultOntology`.
-- `erl` uses `priv/reflections/erl.yaml`, writes to `operator`, and uses `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
+- `generalisations` uses `priv/reflections/generalisations.yaml` and declares a `global` Destination output using `Gralkor.DefaultOntology`.
+- `erl` uses `priv/reflections/erl.yaml` and declares an `operator` Destination output using `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
 
 Before packaged generalisation inference begins, Gralkor performs one default episode search across every accessible registered Destination. Its query contains every current representation, so the same search returns related Lens-authored observations and existing Reflection-authored generalisations; inference receives those results separately from the current representations. A related-memory search failure fails that Reflection before inference without changing the completed ingestion.
 

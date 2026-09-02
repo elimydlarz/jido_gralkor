@@ -3,7 +3,7 @@ defmodule Gralkor.IngestedRepresentation do
   The successful result of storing content through one Lens.
 
   Each representation has its own `id` and retains the Lens identity and
-  content needed by post-ingestion Reflections.
+  content a consumer may supply to an explicitly invoked Reflection.
   """
 
   @enforce_keys [:id, :lens, :content, :result]

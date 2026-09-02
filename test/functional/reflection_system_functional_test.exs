@@ -435,7 +435,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "where an application-defined Reflection omits its ontology" do
-    test "then its final artefact receives generic extraction",
+    test "then the output selects generic extraction for a consumer-delivered artefact",
          %{root: root} do
       reflection = Registry.load!([valid_definition(root)], root: root) |> List.first()
       assert destination_output(reflection).ontology == Gralkor.DefaultOntology
@@ -443,7 +443,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "where an application-defined Reflection declares an application ontology" do
-    test "then its final artefact is extracted through that Reflection's ontology", %{root: root} do
+    test "then the output selects that ontology for a consumer-delivered artefact", %{root: root} do
       reflection =
         Registry.load!(
           [
@@ -465,7 +465,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when the default ERL Reflection stores its final artefact" do
+  describe "when a consumer stores the default ERL Reflection's artefact through its Destination output" do
     test "then extraction receives the built-in `Learning` entity type from ERL's ontology" do
       Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
@@ -500,7 +500,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert Enum.all?(learning.fields, &(&1.required == false))
     end
 
-    test "and the stored Learning payload contains exactly its problem kind, approach, success, and reusable lesson" do
+    test "and the Runner-returned Learning payload contains exactly its problem kind, approach, success, and reusable lesson" do
       Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
 

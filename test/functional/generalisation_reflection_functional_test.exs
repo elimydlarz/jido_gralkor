@@ -469,7 +469,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert is_list(artefact.payload["generalisations"])
     end
 
-    test "and each stored generalisation contains exactly `content`, `level`, and `evolves_from`" do
+    test "and each returned generalisation contains exactly `content`, `level`, and `evolves_from`" do
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(), inference: &output_for/1)
 
@@ -477,7 +477,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert MapSet.new(Map.keys(stored)) == MapSet.new(["content", "level", "evolves_from"])
     end
 
-    test "and each stored `evolves_from` snapshot is the exact content-and-level snapshot of a prior generalisation decoded from related-memory" do
+    test "and each returned `evolves_from` snapshot is the exact content-and-level snapshot of a prior generalisation decoded from related-memory" do
       put_stored_generalisation_response(influencing_generalisations())
 
       assert {:ok, artefact} =
@@ -489,7 +489,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert exact_snapshot_shapes?(snapshots)
     end
 
-    test "and the validated evolution is stored directly without a redundant synthesis inference" do
+    test "and the validated evolution is normalized directly into the artefact without a redundant synthesis inference" do
       put_stored_generalisation_response(influencing_generalisations())
       parent = self()
 
@@ -515,7 +515,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       refute_receive {:inference_step, "synthesise-artefact"}
     end
 
-    test "and later evolution leaves every earlier stored lineage snapshot unchanged" do
+    test "and later evolution leaves every earlier returned lineage snapshot unchanged" do
       put_stored_generalisation_response(influencing_generalisations())
 
       assert {:ok, earlier} =

@@ -1,6 +1,6 @@
 ## Core Domain Identity
 
-This repository is the canonical development and distribution home for Jido-first Gralkor. The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` layer owns memory-domain behavior. Applications register Destinations as graph identities, then reference them from Lens ingestion and repository-YAML Reflection definitions whose writers select their extraction ontologies.
+This repository is the canonical development and distribution home for Jido-first Gralkor. The `JidoGralkor.*` layer owns Jido↔Gralkor wiring; the embedded `Gralkor.*` layer owns memory-domain behavior. Applications register Destinations as graph identities, then reference them from Lens ingestion and repository-YAML Reflection Destination outputs that select their extraction ontologies.
 
 ## World-to-Code Mapping
 

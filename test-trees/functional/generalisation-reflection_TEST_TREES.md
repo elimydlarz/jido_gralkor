@@ -32,7 +32,7 @@ when the packaged generalisation Reflection synthesises an evolved generalisatio
 
 when the packaged generalisation Reflection completes
   then its artefact payload contains an array of generalisations
-  and each stored generalisation contains exactly `content`, `level`, and `evolves_from`
-  and each stored `evolves_from` snapshot is the exact content-and-level snapshot of a prior generalisation decoded from related-memory
-  and the validated evolution is stored directly without a redundant synthesis inference
-  and later evolution leaves every earlier stored lineage snapshot unchanged
+  and each returned generalisation contains exactly `content`, `level`, and `evolves_from`
+  and each returned `evolves_from` snapshot is the exact content-and-level snapshot of a prior generalisation decoded from related-memory
+  and the validated evolution is normalized directly into the artefact without a redundant synthesis inference
+  and later evolution leaves every earlier returned lineage snapshot unchanged
