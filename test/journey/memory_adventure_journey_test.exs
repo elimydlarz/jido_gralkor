@@ -135,7 +135,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :recall_deadline_ms, 90_000)
 
-    Application.put_env(:jido_gralkor, :destinations, [])
+    Application.put_env(:jido_gralkor, :destinations, [[name: "operations"]])
 
     Application.put_env(:jido_gralkor, :lenses, [
       [
@@ -166,7 +166,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
             triggers: [{:lens_ingestion, :any}],
             chain_of_thought: "priv/reflections/generalisations.yaml",
             outputs: [
-              [kind: :destination, destination: "global", ontology: Gralkor.DefaultOntology]
+              [kind: :destination, destination: "global", ontology: Gralkor.DefaultOntology],
+              [
+                kind: :destination,
+                destination: "operations",
+                ontology: Gralkor.DefaultOntology
+              ]
             ]
           ],
           [
@@ -275,7 +280,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.appended_information
     end
 
-    test "and ERL stores a structured Learning artefact", %{adventure: adventure} do
+    test "and ERL writes a structured Learning artefact through its Destination output", %{
+      adventure: adventure
+    } do
       assert adventure.erl_learning
     end
 
@@ -284,10 +291,19 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.global_for_second_operator
     end
 
-    test "and one operator's operator graph is unavailable to another operator", %{
+    test "and each operator's selector-free search returns that operator's operator-local memory", %{
       adventure: adventure
     } do
-      refute adventure.second_operator_local_information
+      assert adventure.first_operator_own_local_information
+      assert adventure.second_operator_own_local_information
+    end
+
+    test "and each operator's selector-free search excludes the other operator's operator-local memory",
+         %{
+           adventure: adventure
+         } do
+      refute adventure.first_operator_other_local_information
+      refute adventure.second_operator_other_local_information
     end
 
     test "and implicit-default memory uses the graph named `operator/<operator id>`", %{
@@ -319,7 +335,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when the Journey ingests related information through successive completed ingestions" do
+  describe "when the Journey completes successive ingestions containing related observations" do
     test "then the first resulting generalisation has evolution-depth level one and an empty `evolves_from`",
          %{adventure: adventure} do
       assert %{
@@ -408,10 +424,36 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     test "and every accessible registered Destination is searched", %{adventure: adventure} do
       searched = Enum.map(adventure.default_memory_search, & &1["destination"])
 
-      assert MapSet.new(searched) == MapSet.new(["operator", "global"])
+      assert MapSet.new(searched) == MapSet.new(["operator", "global", "operations"])
     end
 
-    test "and its results include relevant lensed information and relevant stored generalisations",
+    test "and its results include relevant memory from the `operator`, `global`, and an application Destination",
+         %{adventure: adventure} do
+      assert has_originating_lens?(
+               adventure.default_memory_search,
+               "operator",
+               "work-notes"
+             )
+
+      assert has_declaring_reflection?(
+               adventure.default_memory_search,
+               "global",
+               "generalisations"
+             )
+
+      operations_results =
+        Enum.filter(
+          adventure.default_memory_search,
+          &(&1["destination"] == "operations")
+        )
+
+      assert has_evolved_generalisation?(
+               operations_results,
+               adventure.later_generalisation
+             )
+    end
+
+    test "and its results include relevant Lens-authored memory and relevant stored generalisations",
          %{adventure: adventure} do
       assert has_originating_lens?(
                adventure.default_memory_search,
@@ -464,8 +506,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when one search selects a Destination and Lens" do
-    test "then results match the intersection", %{adventure: adventure} do
+  describe "when the agent searches with both Destination and Lens selectors" do
+    test "then relevant memory whose Destination and originating Lens both match the selectors is returned",
+         %{adventure: adventure} do
       assert adventure.selected_memory_search != []
 
       assert Enum.all?(adventure.selected_memory_search, fn result ->
@@ -473,10 +516,29 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              end)
     end
 
-    test "and later ingestion retains its Lens",
+    test "and a selected Lens does not contribute its memory from an unselected Destination",
+         %{adventure: adventure} do
+      assert adventure.cross_product_memory_search == []
+
+      assert has_originating_lens?(
+               adventure.post_selector_memory_search,
+               "global",
+               "published"
+             )
+    end
+
+    test "and a subsequent selector-free search returns relevant memory from a Destination omitted by the earlier Destination selector",
+         %{adventure: adventure} do
+      assert Enum.any?(
+               adventure.post_selector_memory_search,
+               &(&1["destination"] == "global")
+             )
+    end
+
+    test "and that search returns relevant memory from a Lens omitted by the earlier Lens selector",
          %{adventure: adventure} do
       assert has_originating_lens?(
-               adventure.post_selector_published_episodes,
+               adventure.post_selector_memory_search,
                "global",
                "published"
              )
