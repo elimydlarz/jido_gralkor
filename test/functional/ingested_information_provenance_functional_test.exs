@@ -115,6 +115,35 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                       "Q3 Roadmap — Draft"}
     end
 
+    test "and public episode search presents the originating Lens separately from episode content and source description" do
+      graphiti = use_native_boundary()
+
+      set_episode_search_fixture(graphiti, [
+        %{
+          content: "Draft launch plan",
+          source_description: "Q3 Roadmap — Draft [lens: observations]"
+        }
+      ])
+
+      assert {:ok,
+              [
+                %{
+                  destination: "observations",
+                  episode: %{
+                    content: "Draft launch plan",
+                    source_description: "Q3 Roadmap — Draft",
+                    lens: "observations"
+                  }
+                }
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "launch",
+                 destinations: ["observations"],
+                 result_type: :episodes
+               })
+    end
+
     test "and every returned fact identifies each originating episode by identifier, source kind, and source description" do
       graphiti = use_native_boundary()
 
@@ -135,7 +164,8 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "Atlas launch",
-                 destinations: ["observations"]
+                 destinations: ["observations"],
+                 result_type: :facts
                })
 
       assert recalled_fact =~ "Mina speculated that Atlas might launch Friday."
@@ -363,6 +393,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
             def __init__(self):
                 self.added = []
                 self.facts = []
+                self.episode_results = []
                 self.episodes = {}
                 self.driver = _Driver(self)
 
@@ -376,6 +407,18 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
             async def search(self, query, num_results=10, search_filter=None):
                 return self.facts[:num_results]
+
+            async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                return _SearchResult(self.episode_results)
+
+        class _SearchResult:
+            def __init__(self, episodes):
+                self.episodes = episodes
+
+        class _StoredEpisode:
+            def __init__(self, content, source_description):
+                self.content = content
+                self.source_description = source_description
 
         class _Edge:
             def __init__(self, fact, episodes):
@@ -407,6 +450,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         graphiti = _Graphiti()
         graphiti.Edge = _Edge
         graphiti.Episode = _Episode
+        graphiti.StoredEpisode = _StoredEpisode
         graphiti
         """,
         %{}
@@ -455,6 +499,20 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
           g.facts.append(g.Edge(_dec(item['fact']), episode_ids))
       """,
       %{"g" => graphiti, "facts" => facts}
+    )
+  end
+
+  defp set_episode_search_fixture(graphiti, episodes) do
+    Pythonx.eval(
+      """
+      def _dec(value):
+          return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
+      g.episode_results = [
+          g.StoredEpisode(_dec(item['content']), _dec(item['source_description']))
+          for item in episodes
+      ]
+      """,
+      %{"g" => graphiti, "episodes" => episodes}
     )
   end
 
