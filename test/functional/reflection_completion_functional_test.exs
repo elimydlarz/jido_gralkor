@@ -1149,7 +1149,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       Pythonx.eval(
         """
-        original = next(iter(graphiti.driver.episodes.values()))
+        original = graphiti.driver.episodes[artefact_id]
         partials = {
             f'legacy-unmarked-{index}': original.model_copy(
                 update={'uuid': f'legacy-unmarked-{index}'}
@@ -1171,7 +1171,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       Pythonx.eval(
         """
-        original = next(iter(graphiti.driver.episodes.values()))
+        original = graphiti.driver.episodes[artefact_id]
         duplicate = original.model_copy(update={'uuid': 'legacy-equal-duplicate'})
         graphiti.driver.episodes[duplicate.uuid] = duplicate
         graphiti.driver._gralkor_completed_episode_uuids.add(duplicate.uuid)
@@ -1196,7 +1196,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Pythonx.eval(
         """
         body = conflicting_content.decode('utf-8') if isinstance(conflicting_content, (bytes, bytearray)) else conflicting_content
-        original = next(iter(graphiti.driver.episodes.values()))
+        original = graphiti.driver.episodes[artefact_id]
         conflict = original.model_copy(
             update={'uuid': 'legacy-conflicting-duplicate', 'content': body}
         )
