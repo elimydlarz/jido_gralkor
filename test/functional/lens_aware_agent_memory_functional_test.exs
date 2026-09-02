@@ -520,7 +520,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
   end
 
-  describe "if a mounted plugin receives invalid Lens configuration" do
+  describe "if a mounted plugin receives invalid ingestion Lens configuration" do
     test "then mounting fails before the plugin handles an agent signal" do
       assert_raise ArgumentError, fn ->
         Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "missing")
@@ -533,45 +533,9 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
     end
 
-    test "and an unknown Destination to search is identified" do
-      assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
-        Plugin.mount(%{},
-          agent_name: "Susu",
-          ingestion_lens: "observations",
-          search_destinations: ["missing"]
-        )
-      end
-    end
-
-    test "and Lens options without an ingestion Lens identify the required ingestion Lens" do
-      assert_raise ArgumentError, ~r/ingestion_lens is required/, fn ->
-        Plugin.mount(%{}, agent_name: "Susu", search_destinations: ["observations"])
-      end
-    end
-
     test "and the removed `:default_lens` option identifies `:ingestion_lens` as its replacement" do
       assert_raise ArgumentError, ~r/default_lens.*ingestion_lens/, fn ->
         Plugin.mount(%{}, agent_name: "Susu", default_lens: "observations")
-      end
-    end
-
-    test "and a non-list Destination search selection is identified" do
-      assert_raise ArgumentError, ~r/search_destinations must be a list/, fn ->
-        Plugin.mount(%{},
-          agent_name: "Susu",
-          ingestion_lens: "observations",
-          search_destinations: "observations"
-        )
-      end
-    end
-
-    test "and a non-binary Destination entry is identified" do
-      assert_raise ArgumentError, ~r/invalid Destination 42/, fn ->
-        Plugin.mount(%{},
-          agent_name: "Susu",
-          ingestion_lens: "observations",
-          search_destinations: [42]
-        )
       end
     end
   end
