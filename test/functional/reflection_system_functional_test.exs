@@ -1281,19 +1281,18 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                })
     end
 
-    test "and the artefact identifies its declaring Reflection", context do
-      assert {:ok, %{reflection: "generalisation"}} =
+    test "then that structured output becomes one `%Gralkor.Artefact{}`", context do
+      assert {:ok, %Gralkor.Artefact{}} =
                Runner.run(reflection(context), ingestion(), inference: &output_for/1)
     end
 
-    test "and the artefact consists of its stable identifier, declaring Reflection, and structured payload",
+    test "and the artefact contains exactly its stable identifier and structured payload",
          context do
       assert {:ok, artefact} =
                Runner.run(reflection(context), ingestion(), inference: &output_for/1)
 
       assert Map.from_struct(artefact) == %{
                id: artefact.id,
-               reflection: "generalisation",
                payload: %{"artefact" => "durable pattern"}
              }
     end
