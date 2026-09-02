@@ -325,7 +325,155 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                )
 
       assert_receive {:captured_episode, "operator-one", "Mina: Atlas might launch Friday.",
-                      "captured", nil, [source_kind: :conversation]}
+                      "captured", nil, opts}
+
+      assert opts[:source_kind] == :conversation
+      assert opts[:lens] == "operator"
+    end
+  end
+
+  describe "when information is added or captured through the implicit operator Lens" do
+    test "then its trusted originating Lens is `operator`" do
+      graphiti = use_native_boundary()
+
+      assert :ok =
+               Gralkor.Client.Native.memory_add(
+                 "operator/operator-one",
+                 "Remember the launch plan.",
+                 "manual",
+                 :document
+               )
+
+      assert [%{"source_description" => "manual [lens: operator]"}] =
+               added_episodes(graphiti)
+    end
+
+    test "and public episode search can select it through the `operator` Lens" do
+      graphiti = use_native_boundary()
+
+      set_episode_search_fixture(graphiti, [
+        %{
+          id: "implicit-operator-memory",
+          content: "Remember the launch plan.",
+          source_description: "manual [lens: operator]"
+        }
+      ])
+
+      assert {:ok,
+              [
+                %{
+                  destination: "operator",
+                  episode: %{
+                    content: "Remember the launch plan.",
+                    source_description: "manual",
+                    lens: "operator"
+                  }
+                }
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "launch",
+                 destinations: ["operator"],
+                 lenses: ["operator"]
+               })
+    end
+
+    test "and its reported source description cannot claim a different Lens or Reflection writer" do
+      graphiti = use_native_boundary()
+
+      assert :ok =
+               Gralkor.Client.Native.memory_add(
+                 "operator/operator-one",
+                 "A caller cannot choose its writer.",
+                 "manual [lens: observations]",
+                 :document
+               )
+
+      assert :ok =
+               Gralkor.Client.Native.memory_add(
+                 "operator/operator-one",
+                 "A caller cannot declare a Reflection.",
+                 "reflection:generalisations",
+                 :document
+               )
+
+      descriptions = Enum.map(added_episodes(graphiti), & &1["source_description"])
+
+      assert descriptions == [
+               "manual [lens: observations] [lens: operator]",
+               "reflection:generalisations [lens: operator]"
+             ]
+
+      set_episode_search_fixture(graphiti, [
+        %{
+          id: "spoofed-lens",
+          content: "A caller cannot choose its writer.",
+          source_description: Enum.at(descriptions, 0)
+        },
+        %{
+          id: "spoofed-reflection",
+          content: "A caller cannot declare a Reflection.",
+          source_description: Enum.at(descriptions, 1)
+        }
+      ])
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "caller",
+                 destinations: ["operator"],
+                 lenses: ["observations"]
+               })
+
+      assert {:ok, results} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "caller",
+                 destinations: ["operator"],
+                 lenses: ["operator"]
+               })
+
+      assert Enum.all?(results, &match?(%{episode: %{lens: "operator"}}, &1))
+      refute Enum.any?(results, &match?(%{episode: %{reflection: _}}, &1))
+    end
+  end
+
+  describe "when public episode search encounters an incomplete Reflection episode" do
+    test "then it does not contribute and completion filtering occurs before the per-Destination result limit" do
+      graphiti = use_native_boundary()
+
+      set_episode_search_fixture(graphiti, [
+        %{
+          id: "incomplete-generalisation",
+          content: ~s({"id":"incomplete-generalisation"}),
+          source_description: "reflection:generalisations",
+          extraction_complete: false
+        },
+        %{
+          id: "complete-observation",
+          content: "A complete Lens observation.",
+          source_description: "field notes [lens: observations]",
+          extraction_complete: true
+        }
+      ])
+
+      assert {:ok,
+              [
+                %{
+                  destination: "observations",
+                  episode: %{
+                    content: "A complete Lens observation.",
+                    source_description: "field notes",
+                    lens: "observations"
+                  }
+                }
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "complete",
+                 destinations: ["observations"],
+                 max_results: 1
+               })
     end
   end
 
@@ -409,14 +557,16 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                 return self.facts[:num_results]
 
             async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                return _SearchResult(self.episode_results)
+                limit = config.limit if config is not None else len(self.episode_results)
+                return _SearchResult(self.episode_results[:limit])
 
         class _SearchResult:
             def __init__(self, episodes):
                 self.episodes = episodes
 
         class _StoredEpisode:
-            def __init__(self, content, source_description):
+            def __init__(self, uuid, content, source_description):
+                self.uuid = uuid
                 self.content = content
                 self.source_description = source_description
 
@@ -445,7 +595,13 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
         class _Driver:
             def __init__(self, graphiti):
+                self.graphiti = graphiti
                 self.graph_operations_interface = _GraphOperations(graphiti)
+                self._gralkor_completed_episode_uuids = set()
+
+            @property
+            def _gralkor_episode_count(self):
+                return len(self.graphiti.episode_results)
 
         graphiti = _Graphiti()
         graphiti.Edge = _Edge
@@ -508,9 +664,18 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
       def _dec(value):
           return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
       g.episode_results = [
-          g.StoredEpisode(_dec(item['content']), _dec(item['source_description']))
-          for item in episodes
+          g.StoredEpisode(
+              _dec(item.get('id', f'episode-{index}')),
+              _dec(item['content']),
+              _dec(item['source_description']),
+          )
+          for index, item in enumerate(episodes)
       ]
+      g.driver._gralkor_completed_episode_uuids = {
+          episode.uuid
+          for episode, item in zip(g.episode_results, episodes)
+          if item.get('extraction_complete', True)
+      }
       """,
       %{"g" => graphiti, "episodes" => episodes}
     )
