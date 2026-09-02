@@ -104,9 +104,13 @@ defmodule Gralkor.Reflection.Registry do
 
   defp validate_resolved(%Reflection{} = reflection) do
     name = reflection.name
+    trigger_error = trigger_error(name, reflection.triggers)
     output_error = output_error(name, reflection.outputs)
 
     cond do
+      trigger_error ->
+        {:error, trigger_error}
+
       output_error ->
         {:error, output_error}
 
@@ -155,21 +159,12 @@ defmodule Gralkor.Reflection.Registry do
     outputs = field(definition, :outputs)
     triggers = field(definition, :triggers)
     relative = field(definition, :chain_of_thought)
-    lens_error = named_lens_error(name, triggers)
+    trigger_error = trigger_error(name, triggers)
     output_error = output_error(name, outputs)
 
     cond do
-      not is_list(triggers) or triggers == [] ->
-        {:error, {:missing_triggers, name}}
-
-      invalid_trigger = Enum.find(triggers, &(not supported_trigger?(&1))) ->
-        {:error, {:invalid_trigger, name, invalid_trigger}}
-
-      Enum.any?(triggers, &match?({:lens_ingestion, []}, &1)) ->
-        {:error, {:empty_lens_selection, name}}
-
-      lens_error ->
-        {:error, lens_error}
+      trigger_error ->
+        {:error, trigger_error}
 
       output_error ->
         {:error, output_error}
@@ -315,7 +310,21 @@ defmodule Gralkor.Reflection.Registry do
 
   defp supported_trigger?(_trigger), do: false
 
-  defp named_lens_error(_reflection_name, triggers) when not is_list(triggers), do: nil
+  defp trigger_error(name, triggers) when not is_list(triggers) or triggers == [],
+    do: {:missing_triggers, name}
+
+  defp trigger_error(name, triggers) do
+    cond do
+      invalid_trigger = Enum.find(triggers, &(not supported_trigger?(&1))) ->
+        {:invalid_trigger, name, invalid_trigger}
+
+      Enum.any?(triggers, &match?({:lens_ingestion, []}, &1)) ->
+        {:empty_lens_selection, name}
+
+      true ->
+        named_lens_error(name, triggers)
+    end
+  end
 
   defp named_lens_error(reflection_name, triggers) do
     triggers
