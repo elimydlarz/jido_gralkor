@@ -24,6 +24,9 @@ steps:
       prior-generalisation lineage snapshots supplied separately, preserving
       their content and level exactly. When that list is empty, every evolution
       must use an empty `evolves_from`. Exclude eligible prior generalisations
-      that do not influence the evolution.
+      that do not influence the evolution. When a current representation
+      explicitly says it extends an eligible prior generalisation and repeats
+      that prior's content, that prior influences the evolution and must be
+      copied into `evolves_from`.
     output:
       evolutions: "Array<{ content: string; evolves_from: Array<{ content: string; level: integer }>; reasoning: string }>"
