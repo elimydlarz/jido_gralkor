@@ -619,6 +619,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     implicit_fact =
       "The private deployment codename is Juniper and the launch city is Muscat."
 
+    second_operator_fact =
+      "The private incident codename is Kestrel and the review city is Quito."
+
     appended_fact =
       "The Backup job overlaps the Vacuum job at 02:00. Moving the Vacuum job to 04:00 prevents the Backup job from failing."
 
@@ -642,18 +645,32 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                %{agent_id: @operator_one}
              )
 
+    assert {:ok, %{result: "Ingesting."}} =
+             MemoryAdd.run(
+               %{
+                 content: second_operator_fact,
+                 source_kind: :document,
+                 source_description: "manual"
+               },
+               %{agent_id: @operator_two}
+             )
+
     {first_generalisation, later_generalisation, work_notes_generalisation_artefact} =
       evolve_global_generalisation()
 
+    assert %Artefact{} =
+             destination_artefact_until(
+               @operator_one,
+               "operations",
+               Artefact.id_for(
+                 @operator_one,
+                 "journey-generalisation-level-two",
+                 "generalisations"
+               )
+             )
+
     agent_request = agent_request(agent)
     default_memory_search = agent_request.memory_search_results
-
-    selected_memory_search =
-      memory_search(%{
-        query: "reversible canary configuration faults deployments",
-        destinations: ["operator"],
-        lenses: ["work-notes"]
-      })
 
     implicit_episodes =
       search_until(
@@ -753,6 +770,25 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         &(&1 != [])
       )
 
+    selector_query = "reversible canary configuration faults deployments"
+
+    cross_product_memory_search =
+      memory_search(@operator_one, %{
+        query: selector_query,
+        destinations: ["operator"],
+        lenses: ["published"]
+      })
+
+    selected_memory_search =
+      memory_search(@operator_one, %{
+        query: selector_query,
+        destinations: ["operator"],
+        lenses: ["work-notes"]
+      })
+
+    post_selector_memory_search =
+      memory_search(@operator_one, %{query: selector_query})
+
     work_notes_input =
       search_until(
         @operator_one,
@@ -762,7 +798,25 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         &contains_episode?(&1, "aurora")
       )
 
-    local_for_second = search(@operator_two, ["operator"], :episodes, "backup vacuum")
+    private_memory_query = "private codename Juniper Muscat Kestrel Quito"
+
+    private_for_first =
+      search_until(
+        @operator_one,
+        [],
+        :episodes,
+        private_memory_query,
+        &contains_episode?(&1, "juniper")
+      )
+
+    private_for_second =
+      search_until(
+        @operator_two,
+        [],
+        :episodes,
+        private_memory_query,
+        &contains_episode?(&1, "kestrel")
+      )
 
     erl_artefacts =
       search_until(
@@ -821,7 +875,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       erl_learning: learning_artefact?(erl_artefacts),
       global_for_first_operator: contains_episode?(global_for_first, "rollback"),
       global_for_second_operator: contains_episode?(global_for_second, "rollback"),
-      second_operator_local_information: contains_episode?(local_for_second, "backup"),
+      first_operator_own_local_information: contains_episode?(private_for_first, "juniper"),
+      second_operator_own_local_information: contains_episode?(private_for_second, "kestrel"),
+      first_operator_other_local_information: contains_episode?(private_for_first, "kestrel"),
+      second_operator_other_local_information: contains_episode?(private_for_second, "juniper"),
       implicit_default_operator_graph: contains_episode?(implicit_episodes, "juniper"),
       appending_operator_graph: contains_episode?(shared_episodes, "backup"),
       replaceable_operator_graph: contains_fact?(current_graph, "Clearing"),
@@ -842,7 +899,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       memory_search_completion_count: agent_request.memory_search_completion_count,
       agent_answer: agent_request.answer,
       selected_memory_search: selected_memory_search,
-      post_selector_published_episodes: global_for_first,
+      cross_product_memory_search: cross_product_memory_search,
+      post_selector_memory_search: post_selector_memory_search,
       conversation_facts: conversation_facts,
       document_facts: document_facts,
       structured_record_facts: structured_record_facts
