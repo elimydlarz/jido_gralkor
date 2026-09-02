@@ -84,7 +84,7 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
     end
   end
 
-  describe "when Graphiti Reflection storage looks up an artefact identifier > while the matching episode contains that artefact but durable extraction completion is absent" do
+  describe "while the matching episode contains that artefact but durable extraction completion is absent" do
     test "then lookup returns the incomplete artefact for Destination storage to resume without rerunning the Runner" do
       artefact = artefact()
 
