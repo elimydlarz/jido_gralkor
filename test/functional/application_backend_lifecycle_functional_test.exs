@@ -2,23 +2,10 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Application, as: GralkorApplication
-  alias Gralkor.CaptureBuffer
-  alias Gralkor.Destination
   alias Gralkor.GraphitiPool
-  alias Gralkor.Reflection
-  alias Gralkor.Artefact
-  alias Gralkor.Reflection.ChainOfThought
-  alias Gralkor.Reflection.Scheduler
 
   @moduletag :functional
   @moduletag timeout: 120_000
-
-  defmodule EmptyReflectionStore do
-    def get_artefact(_output, _reflection_name, _operator_id, _artefact_id),
-      do: {:error, :not_found}
-
-    def put_artefact(_output, _reflection_name, _operator_id, _artefact), do: :ok
-  end
 
   setup do
     previous_falkordb = Application.get_env(:jido_gralkor, :falkordb)
@@ -44,101 +31,12 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       assert [
                {Gralkor.Python, [reap_orphans: false]},
                {GraphitiPool, pool_options},
-               {Gralkor.Reflection.Supervisor, reflection_options},
                {Gralkor.CaptureBuffer, _capture_options}
              ] = GralkorApplication.children()
 
       assert Keyword.fetch!(pool_options, :falkordb_spec) ==
                {:remote, [host: "memory.example", port: 6379]}
 
-      scheduler_options = Keyword.fetch!(reflection_options, :scheduler_opts)
-
-      assert Keyword.fetch!(scheduler_options, :journal_path) =~
-               "jido_gralkor/reflection_scheduler.dets"
-    end
-
-    test "then its production child order can replace Scheduler while CaptureBuffer drains" do
-      test_pid = self()
-      Application.put_env(:jido_gralkor, :falkordb, host: "memory.example", port: 6379)
-      attempts = :atomics.new(1, [])
-
-      [
-        _python,
-        _pool,
-        {Gralkor.Reflection.Supervisor, reflection_options},
-        {CaptureBuffer, capture_options}
-      ] = GralkorApplication.children()
-
-      journal_path =
-        Path.join(
-          System.tmp_dir!(),
-          "application-reflection-drain-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}.dets"
-        )
-
-      on_exit(fn -> File.rm(journal_path) end)
-
-      runner = fn _reflection, _ingestion, opts ->
-        attempt = :atomics.add_get(attempts, 1, 1)
-        send(test_pid, {:application_drain_runner, attempt})
-
-        if attempt == 1 do
-          receive do
-            :never -> {:error, :unexpected}
-          end
-        else
-          {:ok, Artefact.new(opts[:artefact_id], %{"done" => true})}
-        end
-      end
-
-      scheduler_options =
-        reflection_options
-        |> Keyword.fetch!(:scheduler_opts)
-        |> Keyword.merge(
-          runner: runner,
-          store_opts: [storage: EmptyReflectionStore],
-          notify: test_pid,
-          retry_delays: [0],
-          journal_path: journal_path
-        )
-
-      children = [
-        {Gralkor.Reflection.Supervisor, scheduler_opts: scheduler_options},
-        {CaptureBuffer, Keyword.put(capture_options, :reflections, [])}
-      ]
-
-      reflection = %Reflection{
-        name: "review",
-        triggers: [{:lens_ingestion, :any}],
-        outputs: [
-          %{
-            kind: :destination,
-            destination: %Destination{name: "observations"},
-            ontology: Gralkor.DefaultOntology
-          }
-        ],
-        chain_of_thought: %ChainOfThought{path: "test", steps: []}
-      }
-
-      ingestion = %{
-        id: "application-drain",
-        operator_id: "operator-one",
-        intended_lenses: ["observations"],
-        completed_lenses: ["observations"],
-        representations: [%{lens: "observations", result: :ok}]
-      }
-
-      {:ok, supervisor} = Supervisor.start_link(children, strategy: :one_for_one)
-      assert {:ok, :scheduled} = Scheduler.schedule([reflection], ingestion)
-      assert_receive {:application_drain_runner, 1}
-
-      first_scheduler = Process.whereis(Scheduler)
-      stopper = Task.async(fn -> Supervisor.stop(supervisor, :normal, :infinity) end)
-      assert eventually(fn -> :sys.get_state(Scheduler).draining end)
-      Process.exit(first_scheduler, :kill)
-
-      assert_receive {:application_drain_runner, 2}
-      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
-      assert :ok = Task.await(stopper)
     end
   end
 
@@ -152,14 +50,8 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       assert [
                _python,
                _pool,
-               {Gralkor.Reflection.Supervisor, reflection_options},
                _capture
              ] = GralkorApplication.children()
-
-      scheduler_options = Keyword.fetch!(reflection_options, :scheduler_opts)
-
-      assert Keyword.fetch!(scheduler_options, :journal_path) ==
-               Path.join(data_dir, "reflection_scheduler.dets")
 
       GenServer.stop(pool)
       File.rm_rf!(data_dir)
@@ -240,16 +132,4 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
   defp restore_system_env(key, nil), do: System.delete_env(key)
   defp restore_system_env(key, value), do: System.put_env(key, value)
 
-  defp eventually(assertion, attempts \\ 100)
-
-  defp eventually(assertion, attempts) when attempts > 0 do
-    if assertion.() do
-      true
-    else
-      Process.sleep(10)
-      eventually(assertion, attempts - 1)
-    end
-  end
-
-  defp eventually(_assertion, 0), do: false
 end
