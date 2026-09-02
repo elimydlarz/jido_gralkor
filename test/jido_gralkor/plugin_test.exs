@@ -107,15 +107,14 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  describe "when mount selects an ingestion Lens and Destinations to search" do
-    test "then those selections are resolved against their application registries and stored on the plugin state" do
+  describe "when mount selects an ingestion Lens" do
+    test "then that selection is resolved against the application Lens registry and stored on the plugin state" do
       configure_lenses()
 
       assert {:ok,
               %{
                 agent_name: "Susu",
                 ingestion_lens: "observations",
-                search_destinations: ["memory", "global"],
                 lens: %Gralkor.Lens{
                   name: "observations",
                   destination: %Gralkor.Destination{name: "memory"},
@@ -125,8 +124,7 @@ defmodule JidoGralkor.PluginTest do
               }} =
                Plugin.mount(%{id: "operator-one", state: %{}},
                  agent_name: "Susu",
-                 ingestion_lens: "observations",
-                 search_destinations: ["memory", "global"]
+                 ingestion_lens: "observations"
                )
     end
 
@@ -141,17 +139,6 @@ defmodule JidoGralkor.PluginTest do
              }
     end
 
-    test "if Lens options are supplied without an ingestion Lens then mounting raises an ArgumentError identifying that the ingestion Lens is required" do
-      configure_lenses()
-
-      assert_raise ArgumentError, ~r/ingestion_lens is required/, fn ->
-        Plugin.mount(%{id: "operator-one", state: %{}},
-          agent_name: "Susu",
-          search_destinations: ["memory"]
-        )
-      end
-    end
-
     test "if the ingestion Lens is unknown then mounting raises an ArgumentError identifying the unknown Lens" do
       configure_lenses()
 
@@ -159,42 +146,6 @@ defmodule JidoGralkor.PluginTest do
         Plugin.mount(%{id: "operator-one", state: %{}},
           agent_name: "Susu",
           ingestion_lens: "missing"
-        )
-      end
-    end
-
-    test "if a search Destination is unknown then mounting raises an ArgumentError identifying the unknown Destination" do
-      configure_lenses()
-
-      assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
-        Plugin.mount(%{id: "operator-one", state: %{}},
-          agent_name: "Susu",
-          ingestion_lens: "observations",
-          search_destinations: ["missing"]
-        )
-      end
-    end
-
-    test "if the search Destination selection is not a list then mounting raises an ArgumentError identifying the invalid selection" do
-      configure_lenses()
-
-      assert_raise ArgumentError, ~r/search_destinations must be a list/, fn ->
-        Plugin.mount(%{id: "operator-one", state: %{}},
-          agent_name: "Susu",
-          ingestion_lens: "observations",
-          search_destinations: "memory"
-        )
-      end
-    end
-
-    test "if a search Destination entry is not binary then mounting raises an ArgumentError identifying the invalid Destination" do
-      configure_lenses()
-
-      assert_raise ArgumentError, ~r/invalid Destination 42/, fn ->
-        Plugin.mount(%{id: "operator-one", state: %{}},
-          agent_name: "Susu",
-          ingestion_lens: "observations",
-          search_destinations: [42]
         )
       end
     end
@@ -208,6 +159,19 @@ defmodule JidoGralkor.PluginTest do
           default_lens: "observations"
         )
       end
+    end
+  end
+
+  describe "if mount receives the removed `:search_destinations` option" do
+    test "then mounting raises an ArgumentError identifying MemorySearch's per-search `destinations` selector as its replacement" do
+      assert_raise ArgumentError,
+                   ~r/search_destinations.*MemorySearch.*per-search.*destinations/,
+                   fn ->
+                     Plugin.mount(%{id: "operator-one", state: %{}},
+                       agent_name: "Susu",
+                       search_destinations: ["memory"]
+                     )
+                   end
     end
   end
 
