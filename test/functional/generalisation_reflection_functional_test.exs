@@ -150,10 +150,12 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       {stored_generalisation, stored_information} = stored_information_from_real_memory()
 
       assert Enum.any?(stored_information, fn
-               %{destination: "global", episode: episode} ->
+               %{
+                 destination: "global",
+                 episode: %{reflection: "generalisations"} = episode
+               } ->
                  decode_episode(episode) == %{
                    "id" => "generalisation-artefact",
-                   "reflection" => "generalisations",
                    "payload" => stored_generalisation.payload
                  }
 
@@ -413,15 +415,11 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       use_real_memory()
 
       prior =
-        Gralkor.Reflection.Artefact.new(
-          "prior-generalisation",
-          "generalisations",
-          %{
-            "generalisations" => [
-              %{"content" => "Use one API everywhere", "level" => 1, "evolves_from" => []}
-            ]
-          }
-        )
+        Gralkor.Artefact.new("prior-generalisation", %{
+          "generalisations" => [
+            %{"content" => "Use one API everywhere", "level" => 1, "evolves_from" => []}
+          ]
+        })
 
       assert :ok = Gralkor.Reflection.Store.put(generalisation(), "operator-one", prior)
 
@@ -672,7 +670,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  id: "stored-generalisation-artefact",
                  payload: %{generalisations: stored}
                }),
-             source_description: "reflection:generalisations"
+            reflection: "generalisations"
            }
          ]}
     })
@@ -691,7 +689,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  id: "observation-shaped-impostor",
                  payload: %{generalisations: stored}
                }),
-             source_description: "observation-shaped JSON [lens: observations]"
+            lens: "observations"
            }
          ]}
     })
@@ -766,19 +764,15 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
              )
 
     stored_generalisation =
-      Gralkor.Reflection.Artefact.new(
-        "generalisation-artefact",
-        "generalisations",
-        %{
-          "generalisations" => [
-            %{
-              "content" => "Prefer small public APIs",
-              "level" => 1,
-              "evolves_from" => []
-            }
-          ]
-        }
-      )
+      Gralkor.Artefact.new("generalisation-artefact", %{
+        "generalisations" => [
+          %{
+            "content" => "Prefer small public APIs",
+            "level" => 1,
+            "evolves_from" => []
+          }
+        ]
+      })
 
     assert :ok =
              Gralkor.Reflection.Store.put(
