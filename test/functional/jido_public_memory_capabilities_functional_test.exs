@@ -222,6 +222,28 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                }
              ]
     end
+
+    test "and returned results obey the optional `destinations` and `lenses` selectors supplied for that invocation" do
+      assert :ok = ingest_memory("observations", "selected observation")
+      assert :ok = ingest_memory("decisions", "selected decision")
+
+      assert {:ok, %{result: result}} =
+               memory_search(
+                 %{
+                   query: "selected",
+                   destinations: ["observations", "decisions"],
+                   lenses: ["decisions"]
+                 },
+                 []
+               )
+
+      assert Jason.decode!(result) == [
+               %{
+                 "destination" => "decisions",
+                 "episode" => %{"content" => "selected decision", "lens" => "decisions"}
+               }
+             ]
+    end
   end
 
   describe "if an agent invokes memory search without a usable query" do
