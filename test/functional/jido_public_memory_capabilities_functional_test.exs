@@ -290,6 +290,25 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                %{"episode" => %{"reflection" => "generalisations"}}
              ] = Jason.decode!(result)
     end
+
+    test "and each returned generalisation exposes its exact content, evolution-depth level, and `evolves_from` history" do
+      evolves_from = [%{"content" => "earlier rollout guidance", "level" => 1}]
+      artefact = put_generalisation("current rollout guidance", 2, evolves_from)
+
+      assert {:ok, %{result: result}} =
+               memory_search(%{query: "rollout guidance", destinations: ["global"]}, [])
+
+      assert [
+               %{
+                 "episode" => %{
+                   "content" => encoded_artefact,
+                   "reflection" => "generalisations"
+                 }
+               }
+             ] = Jason.decode!(result)
+
+      assert Jason.decode!(encoded_artefact)["payload"] == artefact.payload
+    end
   end
 
   describe "if an agent invokes memory search without a usable query" do
