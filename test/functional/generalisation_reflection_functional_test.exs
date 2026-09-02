@@ -218,14 +218,14 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
 
     test "and inference is directed to revisit current and related observations together with prior generalisations" do
-      directions = first_step_directions()
+      directions = step_directions("inspect-world")
 
-      assert directions =~
+      assert normalized_whitespace(directions) =~
                "Revisit current and related observations together with prior generalisations"
     end
 
     test "and inference is directed to carry forward, combine, broaden, narrow, split, replace, or otherwise revise generalisations as observations warrant" do
-      directions = first_step_directions()
+      directions = step_directions("evolve-generalisations")
 
       for operation <- [
             "carry forward",
@@ -550,8 +550,10 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
   defp ancestry_preserving_output_for(request) do
     if request.step.label == "synthesise-artefact" do
-      assert request.directions =~ "Preserve each evolution's exact"
-      assert request.directions =~ "`evolves_from` content and level snapshots"
+      directions = normalized_whitespace(request.directions)
+
+      assert directions =~ "Preserve each evolution's exact"
+      assert directions =~ "`evolves_from` content and level snapshots"
     end
 
     higher_level_output_for(request)
@@ -618,21 +620,21 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
   end
 
-  defp first_step_directions do
+  defp step_directions(label) do
     parent = self()
 
     assert {:ok, _artefact} =
              Runner.run(generalisation(), ingestion(),
                inference: fn request ->
-                 if request.step.label == "inspect-world" do
-                   send(parent, {:first_step_directions, request.directions})
+                 if request.step.label == label do
+                   send(parent, {:step_directions, label, request.directions})
                  end
 
                  output_for(request)
                end
              )
 
-    assert_receive {:first_step_directions, directions}
+    assert_receive {:step_directions, ^label, directions}
     directions
   end
 
@@ -720,6 +722,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       MapSet.new(Map.keys(item)) == MapSet.new(["content", "level"])
     end)
   end
+
+  defp normalized_whitespace(value), do: String.replace(value, ~r/\s+/, " ")
 
   defp restore_env({key, nil}), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env({key, value}), do: Application.put_env(:jido_gralkor, key, value)
