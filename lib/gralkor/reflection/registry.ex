@@ -147,6 +147,9 @@ defmodule Gralkor.Reflection.Registry do
       invalid_trigger = Enum.find(triggers, &(not supported_trigger?(&1))) ->
         {:error, {:invalid_trigger, name, invalid_trigger}}
 
+      Enum.any?(triggers, &match?({:lens_ingestion, []}, &1)) ->
+        {:error, {:empty_lens_selection, name}}
+
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
 
