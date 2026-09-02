@@ -387,12 +387,12 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert is_list(artefact.payload["generalisations"])
     end
 
-    test "and each stored generalisation contains exactly its content, level, and preceding generalisations" do
+    test "and each stored generalisation contains exactly `content`, `level`, and `evolves_from`" do
       assert {:ok, artefact} =
-               Runner.run(generalisation(), ingestion(), inference: &output_for/1)
+               Runner.run(generalisation(), ingestion(), inference: &evolves_from_output_for/1)
 
       assert [stored] = artefact.payload["generalisations"]
-      assert MapSet.new(Map.keys(stored)) == MapSet.new(["content", "level", "generalises_over"])
+      assert MapSet.new(Map.keys(stored)) == MapSet.new(["content", "level", "evolves_from"])
     end
 
     test "and each stored preceding generalisation contains exactly the content and level returned by the related-memory search" do
@@ -475,6 +475,23 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
        output: %{
          "generalisations" => [
            %{"content" => "Prefer direct APIs", "level" => 99, "generalises_over" => []}
+         ]
+       }
+     }}
+  end
+
+  defp evolves_from_output_for(%{step: %{label: "inspect-related-information"}}),
+    do: output_for(%{step: %{label: "inspect-related-information"}})
+
+  defp evolves_from_output_for(%{step: %{label: "evaluate-durability"}}),
+    do: output_for(%{step: %{label: "evaluate-durability"}})
+
+  defp evolves_from_output_for(%{step: %{label: "synthesise-artefact"}}) do
+    {:ok,
+     %{
+       output: %{
+         "generalisations" => [
+           %{"content" => "Prefer direct APIs", "level" => 99, "evolves_from" => []}
          ]
        }
      }}
