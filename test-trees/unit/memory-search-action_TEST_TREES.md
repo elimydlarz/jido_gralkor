@@ -1,33 +1,33 @@
 Unit: memory-search-action (src: lib/jido_gralkor/actions/memory_search.ex; unit: test/jido_gralkor/actions/memory_search_test.exs)
 
-when the memory search tool runs with a query and a committed session
-  then the graph named `operator/<operator id>` is passed to the memory backend
-  and the agent name is passed to the memory backend
-  and the session id is passed to the memory backend
-  and the query is passed to the memory backend
-  while the backend returns a memory block
-    then the action result carries that block
-  if the backend fails
+when the memory search tool runs with a usable query
+  then the existing public Search capability is invoked once
+  and the Search request carries the current operator
+  and the Search request carries the usable query unchanged
+  and the Search request asks for stored episodes
+  where the tool call supplies no Destination selector
+  and the tool call supplies no Lens selector
+    then the Search request leaves both selector dimensions unrestricted
+  where the tool call supplies Destinations
+    then the Search request carries the same Destination list
+  where the tool call supplies Lenses
+    then the Search request carries the same Lens list
+  where the tool call supplies Destinations and Lenses
+    then the Search request carries both lists unchanged
+  while Search returns results
+    then the action result is their JSON encoding
+    and every returned episode's Destination and originating Lens or declaring Reflection remain identifiable
+  if Search fails
     then the failure reason is returned to the caller unchanged
-  where the tool context selects Destinations to search
-    then Destination search is used in place of the legacy recall
-    and every selected Destination is searched
-    and the action result is JSON identifying every fact's Destination
-    if a Destination backend fails
-      then the failure reason is returned to the caller unchanged
+
+when a consumer reads the memory search tool description
+  then it directs the agent to search related observations and generalisations
+  and it directs the agent to apply relevant generalisations in light of their evolution histories and related observations
 
 if the memory search tool runs without a usable query
-  then no search is issued against any backend
+  then no Search is issued
   and the result explicitly states that no query was provided
   and the result explicitly states that it is a non-result
   and a warning naming the short-circuit is logged
   while the query is only whitespace
     then it counts as no query
-
-if the memory search tool runs with no usable session id in its tool context
-  then no search is issued against any backend
-  and the result explicitly states that long-term memory was not queried
-  and the result explicitly states that it is a non-result
-  and a warning naming the operator is logged
-  while the session id is only whitespace
-    then it counts as no session id
