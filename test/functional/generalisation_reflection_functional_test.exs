@@ -220,7 +220,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     test "and inference is directed to revisit current and related observations together with prior generalisations" do
       directions = first_step_directions()
 
-      assert directions =~ "Revisit current and related observations together with prior generalisations"
+      assert directions =~
+               "Revisit current and related observations together with prior generalisations"
     end
 
     test "and inference is directed to carry forward, combine, broaden, narrow, split, replace, or otherwise revise generalisations as observations warrant" do
@@ -438,6 +439,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
 
       earlier_payload = earlier.payload
+
       [%{"content" => earlier_content, "level" => earlier_level}] =
         earlier.payload["generalisations"]
 
@@ -513,8 +515,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     {:ok,
      %{
        output: %{
-         "inspection" =>
-           "Current and related observations qualify the prior generalisations."
+         "inspection" => "Current and related observations qualify the prior generalisations."
        }
      }}
   end
