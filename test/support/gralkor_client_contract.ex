@@ -302,7 +302,7 @@ defmodule Gralkor.ClientContract do
           configure_flush(:ok)
 
           assert :ok = client().flush("session-1")
-          assert Gralkor.Client.InMemory.flushes() == ["session-1"]
+          assert Gralkor.Client.InMemory.flushes() == [["session-1"]]
         end
 
         test "and success is returned before the flush completes" do
