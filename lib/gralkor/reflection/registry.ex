@@ -142,6 +142,7 @@ defmodule Gralkor.Reflection.Registry do
     relative = field(definition, :chain_of_thought)
     lens_error = named_lens_error(name, triggers)
     unsupported_output = unsupported_output(outputs)
+    invalid_return_handler = invalid_return_handler(outputs)
 
     cond do
       not is_list(triggers) or triggers == [] ->
@@ -170,6 +171,9 @@ defmodule Gralkor.Reflection.Registry do
 
       unsupported_output ->
         {:error, {:unsupported_output, name, unsupported_output}}
+
+      invalid_return_handler ->
+        {:error, {:invalid_return_handler, name, invalid_return_handler}}
 
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
@@ -258,6 +262,23 @@ defmodule Gralkor.Reflection.Registry do
   end
 
   defp unsupported_output(_outputs), do: nil
+
+  defp invalid_return_handler(outputs) when is_list(outputs) do
+    Enum.find_value(outputs, fn output ->
+      if field(output, :kind) == :return do
+        handler = field(output, :handler)
+
+        unless is_atom(handler) and Code.ensure_loaded?(handler) and
+                 Gralkor.Artefact.ReturnHandler in
+                   Keyword.get(handler.module_info(:attributes), :behaviour, []) and
+                 function_exported?(handler, :return, 3) do
+          handler
+        end
+      end
+    end)
+  end
+
+  defp invalid_return_handler(_outputs), do: nil
 
   defp repository_path?(path, root), do: path == root or String.starts_with?(path, root <> "/")
 
