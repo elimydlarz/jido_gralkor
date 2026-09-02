@@ -351,7 +351,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
 
       assert [%{"evolves_from" => snapshots}] = artefact.payload["generalisations"]
-      refute Enum.any?(snapshots, &(&1["content"] == "Prefer abstractions everywhere"))
+      refute contains_content?(snapshots, "Prefer abstractions everywhere")
     end
   end
 
@@ -427,9 +427,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert [%{"evolves_from" => snapshots}] = artefact.payload["generalisations"]
       assert snapshots == influencing_generalisations()
 
-      assert Enum.all?(snapshots, fn item ->
-               MapSet.new(Map.keys(item)) == MapSet.new(["content", "level"])
-             end)
+      assert exact_snapshot_shapes?(snapshots)
     end
 
     test "and later evolution leaves every earlier stored lineage snapshot unchanged" do
@@ -713,6 +711,15 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
   defp decode_episode(%{content: content}), do: Jason.decode!(content)
   defp decode_episode(content) when is_binary(content), do: Jason.decode!(content)
+
+  defp contains_content?(snapshots, content),
+    do: Enum.any?(snapshots, &(&1["content"] == content))
+
+  defp exact_snapshot_shapes?(snapshots) do
+    Enum.all?(snapshots, fn item ->
+      MapSet.new(Map.keys(item)) == MapSet.new(["content", "level"])
+    end)
+  end
 
   defp restore_env({key, nil}), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env({key, value}), do: Application.put_env(:jido_gralkor, key, value)
