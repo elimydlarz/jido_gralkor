@@ -178,6 +178,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       end
     end
 
+    test "if a Reflection's `outputs` value is not a list then validation fails identifying that Reflection and outputs value",
+         %{root: root} do
+      definition = valid_definition(root, outputs: :invalid)
+
+      assert {:error, {:invalid_outputs, "generalisation", :invalid}} =
+               Registry.load([definition], root: root)
+    end
+
     test "if a Reflection name is blank then validation fails identifying the blank name", %{
       root: root
     } do
