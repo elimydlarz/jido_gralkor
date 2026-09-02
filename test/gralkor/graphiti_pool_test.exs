@@ -148,6 +148,18 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
+
+    test "and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps" do
+      assert_fact_timestamps()
+    end
+
+    test "and each returned edge identifies its originating episodes by identifier, source kind, and source description" do
+      assert_fact_sources()
+    end
+
+    test "and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints" do
+      assert_fact_excludes_standalone_node()
+    end
   end
 
   describe "when an episode is added > while an episode identifier is supplied > when that identifier does not exist" do
@@ -1703,7 +1715,9 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps" do
+  end
+
+  defp assert_fact_timestamps do
       {g, _} =
         Pythonx.eval(
           """
@@ -1746,7 +1760,7 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "and each returned edge identifies its originating episodes by identifier, source kind, and source description" do
+  defp assert_fact_sources do
       {g, _} =
         Pythonx.eval(
           """
@@ -1828,10 +1842,9 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints" do
-      assert {:ok, [%{fact: "X is a thing"} = fact]} = fact_search_result()
-      refute Map.has_key?(fact, :name)
-    end
+  defp assert_fact_excludes_standalone_node do
+    assert {:ok, [%{fact: "X is a thing"} = fact]} = fact_search_result()
+    refute Map.has_key?(fact, :name)
   end
 
   describe "if running a fact search raises inside the graph library" do
@@ -1859,6 +1872,18 @@ defmodule Gralkor.GraphitiPoolTest do
       assert message =~ "boom"
 
       GenServer.stop(pid)
+    end
+
+    test "and it is restricted to the physically encoded group id the episodes were written under" do
+      assert_episode_group_restriction()
+    end
+
+    test "and each returned episode is rendered with the body that was written and its source description" do
+      assert_episode_rendering()
+    end
+
+    test "and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned" do
+      assert_episode_without_extraction()
     end
   end
 
@@ -2179,21 +2204,22 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "and it is restricted to the physically encoded group id the episodes were written under" do
-      {_episode, recorded} = episode_search_result()
-      assert recorded["group_ids"] == [physical("group-with-hyphens")]
-    end
+  end
 
-    test "and each returned episode is rendered with the body that was written and its source description" do
-      {episode, _recorded} = episode_search_result()
-      assert episode.content == "GEN|v1|{}\nEli consistently prefers dark mode"
-      assert episode.source_description == "generalisation"
-    end
+  defp assert_episode_group_restriction do
+    {_episode, recorded} = episode_search_result()
+    assert recorded["group_ids"] == [physical("group-with-hyphens")]
+  end
 
-    test "and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned" do
-      {episode, _recorded} = episode_search_result()
-      assert episode.content =~ "Eli consistently prefers dark mode"
-    end
+  defp assert_episode_rendering do
+    {episode, _recorded} = episode_search_result()
+    assert episode.content == "GEN|v1|{}\nEli consistently prefers dark mode"
+    assert episode.source_description == "generalisation"
+  end
+
+  defp assert_episode_without_extraction do
+    {episode, _recorded} = episode_search_result()
+    assert episode.content =~ "Eli consistently prefers dark mode"
   end
 
   defp community_graph do
