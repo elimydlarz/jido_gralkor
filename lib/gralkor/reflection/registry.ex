@@ -155,6 +155,9 @@ defmodule Gralkor.Reflection.Registry do
       lens_error ->
         {:error, lens_error}
 
+      not is_nil(outputs) and not is_list(outputs) ->
+        {:error, {:invalid_outputs, name, outputs}}
+
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
 
