@@ -20,7 +20,7 @@ defmodule Gralkor.Reflection.Storage.InMemoryTest do
       assert {:ok, ^artefact} = InMemory.get(reflection, "operator-one", "new-id")
 
       assert {:ok, [^artefact]} =
-               InMemory.search_destination(reflection.destination, "operator-one", "", 20)
+               InMemory.search_destination(destination(reflection), "operator-one", "", 20)
     end
   end
 
@@ -38,7 +38,7 @@ defmodule Gralkor.Reflection.Storage.InMemoryTest do
 
       assert {:ok, [^first, ^second]} =
                InMemory.search_destination(
-                 reflection.destination,
+                 destination(reflection),
                  "operator-one",
                  "",
                  20
@@ -58,7 +58,7 @@ defmodule Gralkor.Reflection.Storage.InMemoryTest do
       assert {:ok, ^original} = InMemory.get(reflection, "operator-one", "stable-id")
 
       assert {:ok, [^original]} =
-               InMemory.search_destination(reflection.destination, "operator-one", "", 20)
+               InMemory.search_destination(destination(reflection), "operator-one", "", 20)
     end
   end
 
@@ -78,4 +78,7 @@ defmodule Gralkor.Reflection.Storage.InMemoryTest do
 
   defp artefact(id, payload),
     do: %Artefact{id: id, payload: payload}
+
+  defp destination(reflection),
+    do: Enum.find(reflection.outputs, &(&1.kind == :destination)).destination
 end

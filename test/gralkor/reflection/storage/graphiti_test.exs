@@ -23,8 +23,7 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
 
       assert Jason.decode!(content) == %{
                "id" => "stable-id",
-               "payload" => %{"summary" => "stored"},
-               "reflection" => "review"
+               "payload" => %{"summary" => "stored"}
              }
     end
 
