@@ -670,7 +670,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  id: "stored-generalisation-artefact",
                  payload: %{generalisations: stored}
                }),
-            reflection: "generalisations"
+             reflection: "generalisations"
            }
          ]}
     })
@@ -689,7 +689,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  id: "observation-shaped-impostor",
                  payload: %{generalisations: stored}
                }),
-            lens: "observations"
+             lens: "observations"
            }
          ]}
     })
