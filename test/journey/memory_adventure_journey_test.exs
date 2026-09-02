@@ -344,15 +344,31 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert every_episode_has_provenance?(adventure.default_memory_search)
     end
 
-    test "and the agent applies the relevant evolved generalisation in light of its evolution history and related observations",
+    test "and the answer identifies the retrieved level-one deployment predecessor and level-two newly covered feature-release scope",
          %{adventure: adventure} do
-      answer = String.downcase(adventure.agent_answer)
+      predecessor = answer_field!(adventure.agent_answer, "PREDECESSOR")
+      evolved = answer_field!(adventure.agent_answer, "EVOLVED")
 
-      assert String.trim(answer) != ""
-      assert Regex.match?(~r/choice:\s*harbor/i, answer)
-      assert contains_any?(answer, ["deployment", "deployments", "canary", "canaries"])
-      assert contains_any?(answer, ["migration", "migrations", "schema"])
-      assert contains_any?(answer, ["fault", "failure", "risk", "impact"])
+      assert Regex.match?(~r/\blevel\s*(?:1|one)\b/i, predecessor)
+      assert Regex.match?(~r/\bdeploy\w*\b/i, predecessor)
+      assert Regex.match?(~r/\blevel\s*(?:2|two)\b/i, evolved)
+      assert Regex.match?(~r/\bfeatures?(?:[-\s]+(?:releases?|rollouts?))?\b/i, evolved)
+    end
+
+    test "and the recommendation applies their reversible limited-scope lesson to the requested migration",
+         %{adventure: adventure} do
+      recommendation = answer_field!(adventure.agent_answer, "RECOMMENDATION")
+      rationale = answer_field!(adventure.agent_answer, "RATIONALE")
+      application = recommendation <> " " <> rationale
+
+      assert Regex.match?(~r/\breversib\w*\b/i, application)
+
+      assert Regex.match?(
+               ~r/\b(?:limited[-\s]+scope|trial|pilot|canar(?:y|ies)|staged|phased|incremental|progressive)\b/i,
+               application
+             )
+
+      assert Regex.match?(~r/\b(?:fault|fail|risk|impact)\w*\b/i, rationale)
     end
   end
 
@@ -827,20 +843,16 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
   defp agent_request(agent) do
     prompt = """
-    Choose exactly one option for a Payments schema migration:
+    A Payments database migration needs a rollout recommendation.
+    Search related memory first. Base the recommendation on the most relevant
+    evolved generalisation, its evolves_from history, and the related observations;
+    do not rely on generic rollout advice alone.
 
-    * Harbor — begin with a reversible limited-scope trial.
-    * Summit — apply the change to every customer immediately.
-
-    Search related memory before deciding. Name the narrower predecessor scope,
-    name a different scope covered by the evolved generalisation, and explain
-    why that evolution history supports the choice.
-
-    Answer as:
-    CHOICE: <Harbor or Summit>
-    PREDECESSOR SCOPE: <scope>
-    EVOLVED SCOPE: <scope>
-    REASON: <application of the generalisation>
+    Answer with exactly these fields:
+    RECOMMENDATION: <the rollout approach>
+    PREDECESSOR: level <integer>; scope <the predecessor's scope>
+    EVOLVED: level <integer>; newly covered scope <a scope other than this migration>
+    RATIONALE: <how the observations and evolution history support the recommendation>
     """
 
     assert {:ok, %{request: request, events: event_stream}} =
@@ -968,6 +980,26 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   defp has_evolved_generalisation?(_results, _generalisation), do: false
+
+  defp answer_field!(answer, label) do
+    labels = "RECOMMENDATION|PREDECESSOR|EVOLVED|RATIONALE"
+
+    pattern =
+      Regex.compile!(
+        "(?ims)^#{Regex.escape(label)}:\\s*(.*?)(?=^(?:#{labels}):|\\z)"
+      )
+
+    case Regex.run(pattern, answer, capture: :all_but_first) do
+      [value] ->
+        case String.trim(value) do
+          "" -> flunk("expected #{label} to contain a value, got: #{inspect(answer)}")
+          value -> value
+        end
+
+      _ ->
+        flunk("expected answer field #{label}, got: #{inspect(answer)}")
+    end
+  end
 
   defp every_episode_has_provenance?([]), do: false
 

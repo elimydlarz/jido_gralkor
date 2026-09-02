@@ -27,7 +27,8 @@ when a fresh agent handles a request related to an evolved generalisation
   and every accessible registered Destination is searched
   and its results include relevant lensed information and relevant stored generalisations
   and every result identifies its Destination and any originating Lens
-  and the agent applies the relevant evolved generalisation in light of its evolution history and related observations
+  and the answer identifies the retrieved level-one deployment predecessor and level-two newly covered feature-release scope
+  and the recommendation applies their reversible limited-scope lesson to the requested migration
 
 when the agent searches with both Destination and Lens selectors
   then only memory in the intersection is returned
