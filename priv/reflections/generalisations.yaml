@@ -20,10 +20,10 @@ steps:
 
       Carry forward, combine, broaden, narrow, split, replace, or otherwise
       revise generalisations as observations warrant. Each evolution is one
-      current generalisation. Include the exact content and level of every
-      prior generalisation that influences it in `evolves_from`. Use an empty
-      `evolves_from` for a new generalisation that no prior generalisation
-      influences. Exclude prior generalisations that do not influence the
-      evolution.
+      current generalisation. Copy `evolves_from` only from the eligible
+      prior-generalisation lineage snapshots supplied separately, preserving
+      their content and level exactly. When that list is empty, every evolution
+      must use an empty `evolves_from`. Exclude eligible prior generalisations
+      that do not influence the evolution.
     output:
       evolutions: "Array<{ content: string; evolves_from: Array<{ content: string; level: integer }>; reasoning: string }>"
