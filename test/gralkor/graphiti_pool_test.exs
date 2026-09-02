@@ -2002,6 +2002,65 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
+    test "then a Lens selector is applied before the requested result count" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _Episode:
+              def __init__(self, content, source_description):
+                  self.content = content
+                  self.source_description = source_description
+
+          class _Results:
+              def __init__(self, episodes):
+                  self.episodes = episodes
+                  self.nodes = []
+                  self.edges = []
+
+          class _Driver:
+              async def execute_query(self, query, **kwargs):
+                  return ([{'count': 3}], None, None)
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.driver = _Driver()
+                  self.limit = None
+                  self.episodes = [
+                      _Episode("unselected", "source [lens: other]"),
+                      _Episode("selected one", "source one [lens: selected]"),
+                      _Episode("selected two", "source two [lens: selected]"),
+                  ]
+
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  self.limit = config.limit
+                  return _Results(self.episodes[:config.limit])
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:ok,
+              [
+                %{content: "selected one"},
+                %{content: "selected two"}
+              ]} =
+               GraphitiPool.search_episodes(pid, "g1", "selected", 2,
+                 lenses: ["selected"]
+               )
+
+      {limit, _} = Pythonx.eval("g.limit", %{"g" => g})
+      assert Pythonx.decode(limit) == 3
+      GenServer.stop(pid)
+    end
+
     test "and it is restricted to the sanitised group id the episodes were written under" do
       {_episode, recorded} = episode_search_result()
       assert recorded["group_ids"] == ["group_with_hyphens"]
