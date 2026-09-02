@@ -1560,8 +1560,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "if storing a Reflection artefact at its destination fails" do
-    test "then the Reflection failure identifies its name, destination, and reason", context do
+  describe "if writing an artefact through one output fails" do
+    test "then the Reflection failure identifies its name, output kind, and reason", context do
       assert {:ok, :scheduled} =
                Scheduler.schedule([reflection(context)], ingestion(),
                  runner_opts: [inference: &output_for/1],
@@ -1574,7 +1574,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                       {:error,
                        %{
                          reflection: "generalisation",
-                         destination: "operator",
+                         output: :destination,
                          reason: :destination_unavailable
                        }}}
     end
