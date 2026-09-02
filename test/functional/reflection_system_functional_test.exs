@@ -102,26 +102,19 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "and every Reflection declares one or more triggers", %{root: root} do
       [reflection] = Registry.load!([valid_definition(root)], root: root)
 
-      assert Map.fetch!(reflection, :triggers) == [:ingestion]
+      assert Map.fetch!(reflection, :triggers) == [{:lens_ingestion, :any}]
     end
 
-    test "and every declared trigger is ingestion, agent request, or a schedule", %{root: root} do
+    test "and every trigger is `:programmatic`, `{:lens_ingestion, :any}`, or `{:lens_ingestion, [lens_name]}`", %{
+      root: root
+    } do
       definition =
         valid_definition(root,
-          triggers: [
-            :ingestion,
-            :agent_request,
-            [schedule: "0 * * * *", operator_id: "operator-one"]
-          ]
+          triggers: [:programmatic, {:lens_ingestion, :any}]
         )
 
       assert {:ok, [reflection]} = Registry.load([definition], root: root)
-
-      assert reflection.triggers == [
-               :ingestion,
-               :agent_request,
-               %{type: :schedule, expression: "0 * * * *", operator_id: "operator-one"}
-             ]
+      assert reflection.triggers == [:programmatic, {:lens_ingestion, :any}]
     end
 
     test("and every Reflection references a repository YAML Chain of Thought", context,
@@ -1697,7 +1690,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     Keyword.merge(
       [
         name: "generalisation",
-        triggers: [:ingestion],
+        triggers: [{:lens_ingestion, :any}],
         chain_of_thought: "valid.yaml",
         destination: "operator"
       ],
