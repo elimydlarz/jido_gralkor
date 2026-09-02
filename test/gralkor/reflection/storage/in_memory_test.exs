@@ -67,5 +67,4 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
 
   defp artefact(id, payload),
     do: %Artefact{id: id, payload: payload}
-
 end

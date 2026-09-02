@@ -15,7 +15,8 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
         :ok
       end
 
-      assert :ok = Graphiti.put_artefact(output(), "review", "operator-one", artefact, add_episode)
+      assert :ok =
+               Graphiti.put_artefact(output(), "review", "operator-one", artefact, add_episode)
 
       assert_receive {:add_episode, "observations", content, "reflection:review",
                       Gralkor.DefaultOntology, [uuid: "stable-id"]}

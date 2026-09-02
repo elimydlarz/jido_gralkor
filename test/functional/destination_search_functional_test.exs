@@ -503,6 +503,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  "operator-one",
                  artefact
                )
+
       content = Jason.encode!(Map.from_struct(artefact))
 
       assert {:ok,
