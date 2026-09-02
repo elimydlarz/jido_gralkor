@@ -2,7 +2,7 @@ Journey: memory-adventure (journey: test/journey/memory_adventure_journey_test.e
 
 # Adventure: one operator adds ontology-free implicit memory, captures and flushes completed turns through an appending Lens, receives an ERL Learning, evolves a shared generalisation, and publishes global memory.
 # The same operator's appending and replaceable Lenses save to one Destination before the replaceable Lens replaces its earlier graph.
-# Fresh sessions then search and recall every Destination; another operator checks that global memory is shared while operator-local memory remains isolated.
+# Fresh sessions then use default and selected memory search; another operator checks that shared memory remains visible while operator-local memory remains isolated.
 
 when two operators use implicit memory, Lenses, ERL, and shared-Destination replacement
   then ontology-free implicit operator memory remains recallable
@@ -17,10 +17,21 @@ when two operators use implicit memory, Lenses, ERL, and shared-Destination repl
   and fresh retrieval returns the current replacement graph
   and fresh retrieval omits the superseded replacement graph
 
-when the Journey ingests related information through successive completed ingestions
-  then the first resulting generalisation has level one and no preceding generalisations
-  and the later generalisation that generalises over the first has level two
-  and the later generalisation records the first generalisation's content and level
+when the Journey completes successive ingestions containing related observations
+  then the first resulting generalisation has evolution-depth level one and an empty `evolves_from`
+  and the later generalisation that evolves from the first has evolution-depth level two
+  and the later generalisation's `evolves_from` records the first generalisation's content and level
+
+when a fresh agent handles a request related to an evolved generalisation
+  then one MemorySearch call is made without selectors
+  and every accessible registered Destination is searched
+  and its results include relevant lensed information and relevant stored generalisations
+  and every result identifies its Destination and originating Lens or declaring Reflection
+  and the agent applies the relevant evolved generalisation in light of its evolution history and related observations
+
+when the agent searches with both Destination and Lens selectors
+  then only memory in the intersection is returned
+  and those search selectors do not change the Lens used for later ingestion or capture
 
 when the Journey ingests conversation, document, and structured-record episodes
   then every retrieved conversation fact identifies every originating episode
