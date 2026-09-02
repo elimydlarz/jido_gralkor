@@ -76,11 +76,10 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
                Graphiti.get(reflection(), "operator-one", "missing", get_episode)
     end
 
-    test "then a mismatched artefact identifier or Reflection reports a conflict" do
+    test "then a mismatched artefact identifier reports a conflict" do
       mismatched_id = %{artefact() | id: "another-id"}
-      mismatched_reflection = %{artefact() | reflection: "another-reflection"}
 
-      for stored <- [mismatched_id, mismatched_reflection] do
+      for stored <- [mismatched_id] do
         get_episode = fn "observations", "stable-id" ->
           {:ok,
            %{

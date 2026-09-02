@@ -268,12 +268,12 @@ defmodule Gralkor.Reflection.SchedulerTest do
                           reason:
                             {:artefact_identity_mismatch,
                              %{
-                               expected: %{id: ^expected_id, reflection: "review"},
+                               expected: ^expected_id,
                                actual: actual
                              }}
                         }}
 
-        assert actual != %{id: expected_id, reflection: "review"}
+        assert actual != expected_id
         assert_receive {:mismatched_runner, ^mismatch, 2, ^expected_id}
 
         assert_receive {:reflection_completed, "review",
