@@ -359,8 +359,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
   end
 
-  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while an evolution's lineage does not exactly match a prior generalisation returned in a generalisations Reflection episode" do
-    test "then the Reflection fails explicitly without producing an artefact" do
+  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while evolution lineage is absent from returned generalisations Reflection episodes" do
+    test "then it fails explicitly without an artefact" do
       put_stored_generalisation_response(influencing_generalisations())
 
       for invalid_snapshot <- [

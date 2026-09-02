@@ -25,8 +25,8 @@ when the packaged generalisation Reflection synthesises an evolved generalisatio
     then the evolved generalisation's evolution-depth level is one greater than the highest influencing level
     and each `evolves_from` snapshot exactly matches the content and level of an influencing prior generalisation returned in a generalisations Reflection episode
     but `evolves_from` records no returned generalisation that did not influence the evolution
-  while an evolution's lineage does not exactly match a prior generalisation returned in a generalisations Reflection episode
-    then the Reflection fails explicitly without producing an artefact
+  while evolution lineage is absent from returned generalisations Reflection episodes
+    then it fails explicitly without an artefact
   while the evolved generalisation replaces a prior generalisation
     then the replaced generalisation remains searchable as historical lineage
 
