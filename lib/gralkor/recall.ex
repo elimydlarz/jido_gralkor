@@ -11,8 +11,6 @@ defmodule Gralkor.Recall do
 
   require Logger
 
-  alias Gralkor.Client
-
   @memory_envelope_open ~s(<gralkor-memory trust="untrusted">)
   @memory_envelope_close "</gralkor-memory>"
   @further_querying_instruction "Search memory (up to 3 times, diverse queries) if you need more detail."
@@ -37,16 +35,15 @@ defmodule Gralkor.Recall do
   def recall(group_id, agent_name, session_id, query, opts)
       when is_binary(group_id) and is_binary(query) and is_list(opts) do
     raise_if_blank_agent!(agent_name)
-    sanitized = Client.sanitize_group_id(group_id)
     max_results = Keyword.get(opts, :max_results, @default_max_results)
     deadline_ms = Keyword.get(opts, :deadline_ms, @default_deadline_ms)
 
-    log_call(session_id, sanitized, query, max_results)
+    log_call(session_id, group_id, query, max_results)
     if test_mode?(), do: Logger.info("[gralkor] [test] recall query: #{query}")
 
     task =
       Task.async(fn ->
-        {:result, do_recall(sanitized, query, max_results, opts)}
+        {:result, do_recall(group_id, query, max_results, opts)}
       end)
 
     case Task.yield(task, deadline_ms) || Task.shutdown(task, :brutal_kill) do
@@ -63,7 +60,7 @@ defmodule Gralkor.Recall do
 
       nil ->
         Logger.warning(
-          "[gralkor] recall deadline expired — session:#{session_id} group:#{sanitized} after:#{deadline_ms}ms"
+          "[gralkor] recall deadline expired — session:#{session_id} group:#{group_id} after:#{deadline_ms}ms"
         )
 
         {:error, :recall_deadline_expired}
@@ -72,11 +69,11 @@ defmodule Gralkor.Recall do
 
   # ── internal ────────────────────────────────────────────────
 
-  defp do_recall(sanitized_group, query, max_results, opts) do
+  defp do_recall(group_id, query, max_results, opts) do
     search_fn = Keyword.fetch!(opts, :search_fn)
 
     t0 = System.monotonic_time(:millisecond)
-    {search_result, search_ms} = time(fn -> search_fn.(sanitized_group, query, max_results) end)
+    {search_result, search_ms} = time(fn -> search_fn.(group_id, query, max_results) end)
 
     case search_result do
       {:error, reason} ->

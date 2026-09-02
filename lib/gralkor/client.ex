@@ -690,8 +690,6 @@ defmodule Gralkor.Client do
 
   @spec sanitize_group_id(String.t()) :: String.t()
   def sanitize_group_id(id) when is_binary(id) do
-    id
-    |> String.replace("-", "_")
-    |> String.replace("/", "_")
+    "g_" <> Base.encode16(id, case: :lower)
   end
 end

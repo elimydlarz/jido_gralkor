@@ -16,7 +16,6 @@ defmodule Gralkor.CaptureBuffer do
 
   require Logger
 
-  alias Gralkor.Client
   alias Gralkor.Reflection.Scheduler
 
   @default_retries [1_000, 2_000, 4_000]
@@ -54,10 +53,10 @@ defmodule Gralkor.CaptureBuffer do
       :ok ->
         :ok
 
-      {:group_mismatch, sanitized, other_group} ->
+      {:group_mismatch, group_id, other_group} ->
         raise ArgumentError,
               "session #{inspect(session_id)} is bound to group #{inspect(other_group)}; " <>
-                "refusing to append under group #{inspect(sanitized)}"
+                "refusing to append under group #{inspect(group_id)}"
 
       {:agent_mismatch, new_agent, bound_agent} ->
         raise ArgumentError,
@@ -218,8 +217,6 @@ defmodule Gralkor.CaptureBuffer do
         _from,
         state
       ) do
-    sanitized = Client.sanitize_group_id(group_id)
-
     case {Map.has_key?(state.lens_entries, session_id), Map.get(state.entries, session_id)} do
       {true, _entry} ->
         {:reply, {:capture_mode_mismatch, :lens, :legacy}, state}
@@ -229,34 +226,34 @@ defmodule Gralkor.CaptureBuffer do
           Map.put(
             state.entries,
             session_id,
-            {sanitized, agent_name, user_name, ontology, [msgs]}
+            {group_id, agent_name, user_name, ontology, [msgs]}
           )
 
         {:reply, :ok, %{state | entries: entries}}
 
-      {false, {^sanitized, ^agent_name, ^user_name, ^ontology, turns}} ->
+      {false, {^group_id, ^agent_name, ^user_name, ^ontology, turns}} ->
         entries =
           Map.put(
             state.entries,
             session_id,
-            {sanitized, agent_name, user_name, ontology, turns ++ [msgs]}
+            {group_id, agent_name, user_name, ontology, turns ++ [msgs]}
           )
 
         {:reply, :ok, %{state | entries: entries}}
 
       {false, {other_group, _bound_agent, _bound_user, _bound_ontology, _turns}}
-      when other_group != sanitized ->
-        {:reply, {:group_mismatch, sanitized, other_group}, state}
+      when other_group != group_id ->
+        {:reply, {:group_mismatch, group_id, other_group}, state}
 
-      {false, {^sanitized, bound_agent, _bound_user, _bound_ontology, _turns}}
+      {false, {^group_id, bound_agent, _bound_user, _bound_ontology, _turns}}
       when bound_agent != agent_name ->
         {:reply, {:agent_mismatch, agent_name, bound_agent}, state}
 
-      {false, {^sanitized, ^agent_name, bound_user, _bound_ontology, _turns}}
+      {false, {^group_id, ^agent_name, bound_user, _bound_ontology, _turns}}
       when bound_user != user_name ->
         {:reply, {:user_mismatch, user_name, bound_user}, state}
 
-      {false, {^sanitized, ^agent_name, ^user_name, bound_ontology, _turns}} ->
+      {false, {^group_id, ^agent_name, ^user_name, bound_ontology, _turns}} ->
         {:reply, {:ontology_mismatch, ontology, bound_ontology}, state}
     end
   end

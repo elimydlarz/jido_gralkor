@@ -9,7 +9,6 @@ defmodule Gralkor.Client.Native do
   @behaviour Gralkor.Client
 
   alias Gralkor.CaptureBuffer
-  alias Gralkor.Client
   alias Gralkor.DefaultOntology
   alias Gralkor.Format
   alias Gralkor.GraphitiPool
@@ -155,8 +154,7 @@ defmodule Gralkor.Client.Native do
 
   @impl Gralkor.Client
   def build_communities(group_id) do
-    sanitized = Client.sanitize_group_id(group_id)
-    GraphitiPool.build_communities(sanitized)
+    GraphitiPool.build_communities(group_id)
   end
 
   # ── Wiring ──────────────────────────────────────────────────
