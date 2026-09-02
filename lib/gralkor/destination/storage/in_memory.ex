@@ -8,7 +8,12 @@ defmodule Gralkor.Destination.Storage.InMemory do
 
   @impl true
   def put_artefact(output, _reflection_name, operator_id, artefact) do
-    ReflectionStorage.put_destination(output.destination, operator_id, artefact)
+    ReflectionStorage.put_destination(
+      output.destination,
+      _reflection_name,
+      operator_id,
+      artefact
+    )
   end
 
   @impl true
@@ -41,13 +46,12 @@ defmodule Gralkor.Destination.Storage.InMemory do
 
     reflection_episodes =
       if lenses == [] and Process.whereis(ReflectionStorage) do
-        {:ok, artefacts} =
-          ReflectionStorage.search_destination(destination, operator_id, nil, max_results)
-
-        Enum.map(artefacts, fn artefact ->
+        destination
+        |> ReflectionStorage.search_episodes(operator_id, max_results)
+        |> Enum.map(fn %{artefact: artefact, reflection: reflection} ->
           %{
             content: Jason.encode!(Map.from_struct(artefact)),
-            reflection: artefact.reflection
+            reflection: reflection
           }
         end)
       else
