@@ -250,13 +250,13 @@ defmodule Gralkor.Client do
     if Process.whereis(ReflectionScheduler) do
       eligible_reflections =
         ReflectionRegistry.configured!()
-        |> Enum.filter(&(:ingestion in &1.triggers))
+        |> Enum.filter(&lens_ingestion_trigger?(&1, [request.lens]))
 
       ingestion = %{
         id: request.id,
         operator_id: request.operator_id,
-        trigger: :ingestion,
-        trigger_context: %{},
+        trigger: :lens_ingestion,
+        trigger_context: %{lenses: [request.lens]},
         intended_lenses: [request.lens],
         completed_lenses: [request.lens],
         representations: representations
@@ -290,6 +290,17 @@ defmodule Gralkor.Client do
           "[gralkor] direct-ingestion Reflection scheduling failed — #{inspect(reason)}"
         )
     end
+  end
+
+  defp lens_ingestion_trigger?(reflection, completed_lenses) do
+    Enum.any?(reflection.triggers, fn
+      {:lens_ingestion, :any} -> true
+      {:lens_ingestion, names} when is_list(names) ->
+        Enum.any?(completed_lenses, &(&1 in names))
+
+      _ ->
+        false
+    end)
   end
 
   @spec replace(Replace.t()) :: :ok | {:error, term()}
