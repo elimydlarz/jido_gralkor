@@ -18,15 +18,19 @@ defmodule Gralkor.Destination.Storage.InMemory do
     {:ok, results}
   end
 
-  def search(destination, operator_id, _query, :episodes, max_results, _opts) do
+  def search(destination, operator_id, _query, :episodes, max_results, opts) do
+    lenses = Keyword.get(opts, :lenses, [])
+
     lens_episodes =
       destination
       |> Destination.graph_id(operator_id)
       |> LensStorage.episodes()
+      |> Enum.filter(&(lenses == [] or &1.lens in lenses))
+      |> Enum.take(max_results)
       |> Enum.map(&Map.take(&1, [:content, :lens]))
 
     reflection_episodes =
-      if Process.whereis(ReflectionStorage) do
+      if lenses == [] and Process.whereis(ReflectionStorage) do
         {:ok, artefacts} =
           ReflectionStorage.search_destination(destination, operator_id, nil, max_results)
 

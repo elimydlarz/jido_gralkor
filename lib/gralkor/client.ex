@@ -378,6 +378,9 @@ defmodule Gralkor.Client do
     validate_max_results!(request.max_results)
     validate_result_type!(request.result_type)
 
+    lenses = resolve_search_lenses!(request.lenses)
+    validate_lens_result_type!(lenses, request.result_type)
+
     destinations =
       case request.destinations do
         [] -> DestinationRegistry.configured!()
@@ -389,6 +392,7 @@ defmodule Gralkor.Client do
       |> put_search_option(:entity_types, request.entity_types)
       |> put_search_option(:edge_types, request.edge_types)
       |> put_search_option(:artefact_id, request.artefact_id)
+      |> put_search_option(:lenses, lenses)
 
     destinations
     |> Enum.map(fn destination ->
@@ -439,6 +443,33 @@ defmodule Gralkor.Client do
 
   defp validate_result_type!(type),
     do: raise(ArgumentError, "unsupported search result type #{inspect(type)}")
+
+  defp resolve_search_lenses!(names) when is_list(names) do
+    names
+    |> Enum.map(fn
+      name when is_binary(name) ->
+        if String.trim(name) == "" do
+          raise ArgumentError, "invalid Lens name #{inspect(name)}"
+        end
+
+        lens!(name).name
+
+      name ->
+        raise ArgumentError, "invalid Lens name #{inspect(name)}"
+    end)
+    |> Enum.uniq()
+  end
+
+  defp resolve_search_lenses!(names),
+    do: raise(ArgumentError, "search lenses must be a list, got #{inspect(names)}")
+
+  defp validate_lens_result_type!([], _result_type), do: :ok
+  defp validate_lens_result_type!(_lenses, :episodes), do: :ok
+
+  defp validate_lens_result_type!(_lenses, result_type) do
+    raise ArgumentError,
+          "Lens selection requires episode results, got #{inspect(result_type)}"
+  end
 
   @spec validate_max_results!(term()) :: :ok
   defp validate_max_results!(max_results) when is_integer(max_results) and max_results > 0,
