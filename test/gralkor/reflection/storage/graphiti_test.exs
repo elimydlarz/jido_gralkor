@@ -5,8 +5,8 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
   alias Gralkor.Artefact
   alias Gralkor.Destination.Storage.Graphiti
 
-  describe "when Graphiti Reflection storage receives an artefact" do
-    test "then it supplies the artefact identifier as the requested episode UUID" do
+  describe "when Graphiti Destination storage receives an artefact" do
+    test "then it uses the output Destination group, serialized producer-independent artefact content, Reflection source provenance, and output ontology" do
       artefact = artefact()
       test_pid = self()
 
@@ -26,8 +26,28 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                "payload" => %{"summary" => "stored"}
              }
     end
+  end
 
-    test "then an episode conflict becomes the corresponding artefact conflict" do
+  describe "when Graphiti Destination storage receives an artefact" do
+    test "and it supplies the artefact identifier as the requested episode UUID" do
+      artefact = artefact()
+      test_pid = self()
+
+      add_episode = fn group, content, source, ontology, opts ->
+        send(test_pid, {:add_episode, group, content, source, ontology, opts})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.put_artefact(output(), "review", "operator-one", artefact, add_episode)
+
+      assert_receive {:add_episode, "observations", _content, "reflection:review",
+                      Gralkor.DefaultOntology, [uuid: "stable-id"]}
+    end
+  end
+
+  describe "when Graphiti reports an episode conflict for an artefact output" do
+    test "then Destination storage reports the corresponding artefact conflict" do
       add_episode = fn _group, _content, _source, _ontology, _opts ->
         {:error, {:episode_conflict, "stable-id"}}
       end
@@ -43,7 +63,7 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
     end
   end
 
-  describe "when Graphiti Reflection storage looks up an artefact identifier" do
+  describe "when Graphiti Reflection storage looks up an artefact identifier > while the matching episode contains that artefact and durable extraction completion is recorded" do
     test "then it returns the matching deserialized artefact" do
       artefact = artefact()
 
@@ -65,7 +85,10 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                )
     end
 
-    test "then an unmarked matching episode returns its artefact as incomplete" do
+  end
+
+  describe "when Graphiti Reflection storage looks up an artefact identifier > while the matching episode contains that artefact but durable extraction completion is absent" do
+    test "then lookup returns the incomplete artefact for Destination storage to resume without rerunning the Runner" do
       artefact = artefact()
 
       get_episode = fn "observations", "stable-id" ->
@@ -86,7 +109,10 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                )
     end
 
-    test "then a missing episode reports not found" do
+  end
+
+  describe "when Graphiti Reflection storage looks up an artefact identifier > while the episode is missing" do
+    test "then lookup reports not found" do
       get_episode = fn "observations", "missing" -> {:error, :not_found} end
 
       assert {:error, :not_found} =
@@ -99,7 +125,10 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                )
     end
 
-    test "then a mismatched artefact identifier reports a conflict" do
+  end
+
+  describe "when Graphiti Reflection storage looks up an artefact identifier > while the episode body identifies another artefact" do
+    test "then lookup reports an artefact conflict" do
       mismatched_id = %{artefact() | id: "another-id"}
 
       for stored <- [mismatched_id] do

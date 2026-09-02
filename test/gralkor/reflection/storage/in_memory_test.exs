@@ -10,21 +10,42 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
     :ok
   end
 
-  describe "when in-memory storage receives a new artefact" do
-    test "then exact lookup and Destination search return it" do
+  describe "when in-memory Destination storage receives a new artefact" do
+    test "then it stores the artefact at the declared Destination output" do
+      output = output()
+      artefact = artefact("new-id", %{"summary" => "new"})
+
+      assert :ok = InMemory.put_artefact(output, "review", "operator-one", artefact)
+    end
+
+    test "and exact lookup returns that artefact" do
       output = output()
       artefact = artefact("new-id", %{"summary" => "new"})
 
       assert :ok = InMemory.put_artefact(output, "review", "operator-one", artefact)
       assert {:ok, ^artefact} = InMemory.get_artefact(output, "review", "operator-one", "new-id")
+    end
 
+    test "and Destination search returns it in insertion order" do
+      output = output()
+      artefact = artefact("new-id", %{"summary" => "new"})
+
+      assert :ok = InMemory.put_artefact(output, "review", "operator-one", artefact)
       assert {:ok, [^artefact]} =
                InMemory.search(output.destination, "operator-one", "", :artefacts, 20, [])
     end
   end
 
-  describe "when in-memory storage receives the same artefact identifier repeatedly" do
-    test "then equal writes converge on one copy in its original position" do
+  describe "when in-memory Destination storage receives the same artefact identifier and immutable content repeatedly" do
+    test "then every write succeeds" do
+      output = output()
+      artefact = artefact("stable-id", %{"summary" => "first"})
+
+      assert :ok = InMemory.put_artefact(output, "review", "operator-one", artefact)
+      assert :ok = InMemory.put_artefact(output, "review", "operator-one", artefact)
+    end
+
+    test "and exact lookup and Destination search retain exactly one copy at its original position" do
       output = output()
       first = artefact("stable-id", %{"summary" => "first"})
       second = artefact("other-id", %{"summary" => "second"})
@@ -39,8 +60,21 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
       assert {:ok, [^first, ^second]} =
                InMemory.search(output.destination, "operator-one", "", :artefacts, 20, [])
     end
+  end
 
-    test "then conflicting immutable content is rejected and leaves the original unchanged" do
+  describe "when in-memory Destination storage receives an existing artefact identifier with different immutable content" do
+    test "then the write returns an artefact conflict" do
+      output = output()
+      original = artefact("stable-id", %{"summary" => "original"})
+      conflict = artefact("stable-id", %{"summary" => "changed"})
+
+      assert :ok = InMemory.put_artefact(output, "review", "operator-one", original)
+
+      assert {:error, {:artefact_conflict, "stable-id"}} =
+               InMemory.put_artefact(output, "review", "operator-one", conflict)
+    end
+
+    test "and exact lookup and Destination search retain the original unchanged" do
       output = output()
       original = artefact("stable-id", %{"summary" => "original"})
       conflict = artefact("stable-id", %{"summary" => "changed"})
