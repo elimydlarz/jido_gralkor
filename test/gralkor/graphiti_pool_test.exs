@@ -435,350 +435,350 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   defp assert_independent_pool_admission do
-      {graphs, _} =
-        Pythonx.eval(
-          """
-          import asyncio
-          from graphiti_core.errors import NodeNotFoundError
-
-          class _GraphOperations:
-              async def episodic_node_get_by_uuid(self, cls, driver, uuid):
-                  if uuid not in driver.episodes:
-                      raise NodeNotFoundError(uuid)
-                  return driver.episodes[uuid]
-
-              async def episodic_node_save(self, episode, driver):
-                  driver.episodes[episode.uuid] = episode
-                  if episode.uuid in driver.steal_after_save:
-                      claim = driver.claims[episode.uuid]
-                      claim['owner'] = 'replacement-after-save'
-                      claim['generation'] += 1
-
-          class _Driver:
-              def __init__(self):
-                  self.graph_operations_interface = _GraphOperations()
-                  self.episodes = {}
-                  self.claims = {}
-                  self.completed = set()
-                  self.lock = asyncio.Lock()
-                  self.server_time_ms = 1_000_000
-                  self.steal_after_save = set()
-                  self.reject_renewals = set()
-                  self.query_calls = []
-
-              async def execute_query(self, query, **params):
-                  async with self.lock:
-                      self.query_calls.append({'query': query, 'params': dict(params)})
-                      if 'MERGE (c:_GralkorEpisodeClaim' in query:
-                          claim = self.claims.setdefault(params['uuid'], {
-                              'group_id': params['group_id'],
-                              'content': params['content'],
-                              'source': params['source'],
-                              'source_description': params['source_description'],
-                              'owner': params['owner'],
-                              'generation': 1,
-                              'lease_until_ms': self.server_time_ms + params['lease_ms'],
-                          })
-                          return [dict(claim)], None, None
-                      if 'WHERE c.owner IS NULL' in query:
-                          claim = self.claims[params['uuid']]
-                          self.server_time_ms += 1
-                          if (
-                              claim['owner'] is None
-                              or claim['owner'] == params['owner']
-                              or claim['lease_until_ms'] <= self.server_time_ms
-                          ):
-                              claim['owner'] = params['owner']
-                              claim['generation'] += 1
-                              claim['lease_until_ms'] = self.server_time_ms + params['lease_ms']
-                              return [{
-                                  'owner': params['owner'],
-                                  'generation': claim['generation'],
-                              }], None, None
-                          return [], None, None
-                      if 'SET c.owner = NULL' in query:
-                          claim = self.claims[params['uuid']]
-                          if (
-                              claim['owner'] == params['owner']
-                              and claim['generation'] == params['generation']
-                          ):
-                              claim['owner'] = None
-                              claim['lease_until_ms'] = 0
-                          return [{'uuid': params['uuid']}], None, None
-                      if 'SET c.lease_until_ms' in query:
-                          claim = self.claims[params['uuid']]
-                          if params['uuid'] in self.reject_renewals:
-                              return [], None, None
-                          if (
-                              claim['owner'] == params['owner']
-                              and claim['generation'] == params['generation']
-                          ):
-                              claim['lease_until_ms'] = self.server_time_ms + params['lease_ms']
-                              return [{'generation': claim['generation']}], None, None
-                          return [], None, None
-                      if '_gralkor_extraction_complete = true' in query:
-                          claim = self.claims[params['uuid']]
-                          if (
-                              claim['owner'] == params['owner']
-                              and claim['generation'] == params['generation']
-                              and params['uuid'] in self.episodes
-                          ):
-                              self.completed.add(params['uuid'])
-                              return [{'uuid': params['uuid']}], None, None
-                          return [], None, None
-                      if 'coalesce(e._gralkor_extraction_complete' in query:
-                          return [
-                              {'complete': params['uuid'] in self.completed}
-                          ], None, None
-                      if 'gralkor_claim_fence_check' in query:
-                          claim = self.claims[params['claim_uuid']]
-                          if (
-                              claim['owner'] == params['owner']
-                              and claim['generation'] == params['generation']
-                          ):
-                              return [{'generation': claim['generation']}], None, None
-                          return [], None, None
-                      return [], None, None
-
-          class _FakeGraphiti:
-              def __init__(self, driver):
-                  self.driver = driver
-                  self.extractions = 0
-
-              async def add_episode(self, **kwargs):
-                  from graphiti_core.nodes import EpisodicNode
-                  self.extractions += 1
-                  await asyncio.sleep(0.05)
-                  episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
-                  await episode.save(self.driver)
-
-          driver = _Driver()
-          [_FakeGraphiti(driver), _FakeGraphiti(driver)]
-          """,
-          %{}
-        )
-
-      {first_graph, _} = Pythonx.eval("graphs[0]", %{"graphs" => graphs})
-      {second_graph, _} = Pythonx.eval("graphs[1]", %{"graphs" => graphs})
-
-      %{pid: first_pool} =
-        start_pool(
-          construct_instance: fn _db, _shared, _group_id -> first_graph end,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      %{pid: second_pool} =
-        start_pool(
-          construct_instance: fn _db, _shared, _group_id -> second_graph end,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      equal_writes = [
-        Task.async(fn ->
-          GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil, uuid: "shared-equal")
-        end),
-        Task.async(fn ->
-          GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil, uuid: "shared-equal")
-        end)
-      ]
-
-      assert [:ok, :ok] = Task.await_many(equal_writes)
-
-      conflicting_writes = [
-        Task.async(fn ->
-          GraphitiPool.add_episode(first_pool, "g1", "first", "source", nil,
-            uuid: "shared-conflict"
-          )
-        end),
-        Task.async(fn ->
-          GraphitiPool.add_episode(second_pool, "g1", "second", "source", nil,
-            uuid: "shared-conflict"
-          )
-        end)
-      ]
-
-      outcomes = Task.await_many(conflicting_writes)
-      assert Enum.count(outcomes, &(&1 == :ok)) == 1
-
-      assert Enum.count(
-               outcomes,
-               &(&1 == {:error, {:episode_conflict, "shared-conflict"}})
-             ) == 1
-
-      {proof, _} =
-        Pythonx.eval(
-          "[sum(g.extractions for g in graphs), len(graphs[0].driver.episodes)]",
-          %{"graphs" => graphs}
-        )
-
-      assert Pythonx.decode(proof) == [2, 2]
-
-      stale_write =
-        Task.async(fn ->
-          GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil, uuid: "stolen-claim")
-        end)
-
-      assert eventually(fn ->
-               {present, _} =
-                 Pythonx.eval("'stolen-claim' in graphs[0].driver.claims", %{"graphs" => graphs})
-
-               Pythonx.decode(present)
-             end)
-
+    {graphs, _} =
       Pythonx.eval(
         """
-        claim = graphs[0].driver.claims['stolen-claim']
-        claim['owner'] = 'replacement-owner'
-        claim['generation'] += 1
+        import asyncio
+        from graphiti_core.errors import NodeNotFoundError
+
+        class _GraphOperations:
+            async def episodic_node_get_by_uuid(self, cls, driver, uuid):
+                if uuid not in driver.episodes:
+                    raise NodeNotFoundError(uuid)
+                return driver.episodes[uuid]
+
+            async def episodic_node_save(self, episode, driver):
+                driver.episodes[episode.uuid] = episode
+                if episode.uuid in driver.steal_after_save:
+                    claim = driver.claims[episode.uuid]
+                    claim['owner'] = 'replacement-after-save'
+                    claim['generation'] += 1
+
+        class _Driver:
+            def __init__(self):
+                self.graph_operations_interface = _GraphOperations()
+                self.episodes = {}
+                self.claims = {}
+                self.completed = set()
+                self.lock = asyncio.Lock()
+                self.server_time_ms = 1_000_000
+                self.steal_after_save = set()
+                self.reject_renewals = set()
+                self.query_calls = []
+
+            async def execute_query(self, query, **params):
+                async with self.lock:
+                    self.query_calls.append({'query': query, 'params': dict(params)})
+                    if 'MERGE (c:_GralkorEpisodeClaim' in query:
+                        claim = self.claims.setdefault(params['uuid'], {
+                            'group_id': params['group_id'],
+                            'content': params['content'],
+                            'source': params['source'],
+                            'source_description': params['source_description'],
+                            'owner': params['owner'],
+                            'generation': 1,
+                            'lease_until_ms': self.server_time_ms + params['lease_ms'],
+                        })
+                        return [dict(claim)], None, None
+                    if 'WHERE c.owner IS NULL' in query:
+                        claim = self.claims[params['uuid']]
+                        self.server_time_ms += 1
+                        if (
+                            claim['owner'] is None
+                            or claim['owner'] == params['owner']
+                            or claim['lease_until_ms'] <= self.server_time_ms
+                        ):
+                            claim['owner'] = params['owner']
+                            claim['generation'] += 1
+                            claim['lease_until_ms'] = self.server_time_ms + params['lease_ms']
+                            return [{
+                                'owner': params['owner'],
+                                'generation': claim['generation'],
+                            }], None, None
+                        return [], None, None
+                    if 'SET c.owner = NULL' in query:
+                        claim = self.claims[params['uuid']]
+                        if (
+                            claim['owner'] == params['owner']
+                            and claim['generation'] == params['generation']
+                        ):
+                            claim['owner'] = None
+                            claim['lease_until_ms'] = 0
+                        return [{'uuid': params['uuid']}], None, None
+                    if 'SET c.lease_until_ms' in query:
+                        claim = self.claims[params['uuid']]
+                        if params['uuid'] in self.reject_renewals:
+                            return [], None, None
+                        if (
+                            claim['owner'] == params['owner']
+                            and claim['generation'] == params['generation']
+                        ):
+                            claim['lease_until_ms'] = self.server_time_ms + params['lease_ms']
+                            return [{'generation': claim['generation']}], None, None
+                        return [], None, None
+                    if '_gralkor_extraction_complete = true' in query:
+                        claim = self.claims[params['uuid']]
+                        if (
+                            claim['owner'] == params['owner']
+                            and claim['generation'] == params['generation']
+                            and params['uuid'] in self.episodes
+                        ):
+                            self.completed.add(params['uuid'])
+                            return [{'uuid': params['uuid']}], None, None
+                        return [], None, None
+                    if 'coalesce(e._gralkor_extraction_complete' in query:
+                        return [
+                            {'complete': params['uuid'] in self.completed}
+                        ], None, None
+                    if 'gralkor_claim_fence_check' in query:
+                        claim = self.claims[params['claim_uuid']]
+                        if (
+                            claim['owner'] == params['owner']
+                            and claim['generation'] == params['generation']
+                        ):
+                            return [{'generation': claim['generation']}], None, None
+                        return [], None, None
+                    return [], None, None
+
+        class _FakeGraphiti:
+            def __init__(self, driver):
+                self.driver = driver
+                self.extractions = 0
+
+            async def add_episode(self, **kwargs):
+                from graphiti_core.nodes import EpisodicNode
+                self.extractions += 1
+                await asyncio.sleep(0.05)
+                episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                await episode.save(self.driver)
+
+        driver = _Driver()
+        [_FakeGraphiti(driver), _FakeGraphiti(driver)]
+        """,
+        %{}
+      )
+
+    {first_graph, _} = Pythonx.eval("graphs[0]", %{"graphs" => graphs})
+    {second_graph, _} = Pythonx.eval("graphs[1]", %{"graphs" => graphs})
+
+    %{pid: first_pool} =
+      start_pool(
+        construct_instance: fn _db, _shared, _group_id -> first_graph end,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0
+      )
+
+    %{pid: second_pool} =
+      start_pool(
+        construct_instance: fn _db, _shared, _group_id -> second_graph end,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0
+      )
+
+    equal_writes = [
+      Task.async(fn ->
+        GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil, uuid: "shared-equal")
+      end),
+      Task.async(fn ->
+        GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil, uuid: "shared-equal")
+      end)
+    ]
+
+    assert [:ok, :ok] = Task.await_many(equal_writes)
+
+    conflicting_writes = [
+      Task.async(fn ->
+        GraphitiPool.add_episode(first_pool, "g1", "first", "source", nil,
+          uuid: "shared-conflict"
+        )
+      end),
+      Task.async(fn ->
+        GraphitiPool.add_episode(second_pool, "g1", "second", "source", nil,
+          uuid: "shared-conflict"
+        )
+      end)
+    ]
+
+    outcomes = Task.await_many(conflicting_writes)
+    assert Enum.count(outcomes, &(&1 == :ok)) == 1
+
+    assert Enum.count(
+             outcomes,
+             &(&1 == {:error, {:episode_conflict, "shared-conflict"}})
+           ) == 1
+
+    {proof, _} =
+      Pythonx.eval(
+        "[sum(g.extractions for g in graphs), len(graphs[0].driver.episodes)]",
+        %{"graphs" => graphs}
+      )
+
+    assert Pythonx.decode(proof) == [2, 2]
+
+    stale_write =
+      Task.async(fn ->
+        GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil, uuid: "stolen-claim")
+      end)
+
+    assert eventually(fn ->
+             {present, _} =
+               Pythonx.eval("'stolen-claim' in graphs[0].driver.claims", %{"graphs" => graphs})
+
+             Pythonx.decode(present)
+           end)
+
+    Pythonx.eval(
+      """
+      claim = graphs[0].driver.claims['stolen-claim']
+      claim['owner'] = 'replacement-owner'
+      claim['generation'] += 1
+      """,
+      %{"graphs" => graphs}
+    )
+
+    assert {:error, {:python, stale_error}} = Task.await(stale_write)
+    assert stale_error =~ "episode claim lost"
+
+    {stale_proof, _} =
+      Pythonx.eval(
+        "['stolen-claim' in graphs[0].driver.episodes, 'stolen-claim' in graphs[0].driver.completed]",
+        %{"graphs" => graphs}
+      )
+
+    assert Pythonx.decode(stale_proof) == [false, false]
+
+    Pythonx.eval(
+      """
+      claim = graphs[0].driver.claims['stolen-claim']
+      claim['owner'] = None
+      claim['lease_until_ms'] = 0
+      """,
+      %{"graphs" => graphs}
+    )
+
+    assert :ok =
+             GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil,
+               uuid: "stolen-claim"
+             )
+
+    {recovered_proof, _} =
+      Pythonx.eval(
+        "['stolen-claim' in graphs[0].driver.episodes, 'stolen-claim' in graphs[0].driver.completed, graphs[0].driver.claims['stolen-claim']['generation']]",
+        %{"graphs" => graphs}
+      )
+
+    assert Pythonx.decode(recovered_proof) == [true, true, 3]
+
+    Pythonx.eval(
+      "graphs[0].driver.steal_after_save.add('marker-stolen')",
+      %{"graphs" => graphs}
+    )
+
+    assert {:error, {:python, marker_error}} =
+             GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
+               uuid: "marker-stolen"
+             )
+
+    assert marker_error =~ "episode claim lost before completion"
+
+    {marker_proof, _} =
+      Pythonx.eval(
+        "['marker-stolen' in graphs[0].driver.episodes, 'marker-stolen' in graphs[0].driver.completed]",
+        %{"graphs" => graphs}
+      )
+
+    assert Pythonx.decode(marker_proof) == [true, false]
+
+    Pythonx.eval(
+      """
+      graphs[0].driver.steal_after_save.remove('marker-stolen')
+      claim = graphs[0].driver.claims['marker-stolen']
+      claim['owner'] = None
+      claim['lease_until_ms'] = 0
+      """,
+      %{"graphs" => graphs}
+    )
+
+    assert :ok =
+             GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil,
+               uuid: "marker-stolen"
+             )
+
+    {marker_recovery, _} =
+      Pythonx.eval(
+        "['marker-stolen' in graphs[0].driver.completed, graphs[0].driver.claims['marker-stolen']['generation']]",
+        %{"graphs" => graphs}
+      )
+
+    assert Pythonx.decode(marker_recovery) == [true, 3]
+
+    Pythonx.eval(
+      """
+      template = dict(graphs[0].driver.claims['shared-equal'])
+      template['owner'] = 'expired-owner'
+      template['generation'] = 7
+      template['lease_until_ms'] = graphs[0].driver.server_time_ms - 1
+      graphs[0].driver.claims['server-expired'] = template
+      """,
+      %{"graphs" => graphs}
+    )
+
+    assert :ok =
+             GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
+               uuid: "server-expired"
+             )
+
+    {clock_proof, _} =
+      Pythonx.eval(
+        """
+        driver = graphs[0].driver
+        lease_calls = [
+            call for call in driver.query_calls
+            if '$lease_ms' in call['query']
+        ]
+        [
+            driver.claims['server-expired']['generation'],
+            all('timestamp()' in call['query'] for call in lease_calls),
+            all('now_ms' not in call['params'] and 'lease_until_ms' not in call['params'] for call in lease_calls),
+        ]
         """,
         %{"graphs" => graphs}
       )
 
-      assert {:error, {:python, stale_error}} = Task.await(stale_write)
-      assert stale_error =~ "episode claim lost"
+    assert Pythonx.decode(clock_proof) == [8, true, true]
 
-      {stale_proof, _} =
-        Pythonx.eval(
-          "['stolen-claim' in graphs[0].driver.episodes, 'stolen-claim' in graphs[0].driver.completed]",
-          %{"graphs" => graphs}
-        )
+    Pythonx.eval(
+      """
+      graphs[0]._gralkor_claim_lease_ms = 30
+      graphs[0].driver.reject_renewals.add('renewal-lost')
+      """,
+      %{"graphs" => graphs}
+    )
 
-      assert Pythonx.decode(stale_proof) == [false, false]
+    assert {:error, {:python, renewal_error}} =
+             GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
+               uuid: "renewal-lost"
+             )
 
+    assert renewal_error =~ "episode claim renewal lost"
+
+    Pythonx.eval(
+      "graphs[0].driver.reject_renewals.remove('renewal-lost')",
+      %{"graphs" => graphs}
+    )
+
+    assert :ok =
+             GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil,
+               uuid: "renewal-lost"
+             )
+
+    {renewal_proof, _} =
       Pythonx.eval(
-        """
-        claim = graphs[0].driver.claims['stolen-claim']
-        claim['owner'] = None
-        claim['lease_until_ms'] = 0
-        """,
+        "['renewal-lost' in graphs[0].driver.completed, sum(g.extractions for g in graphs)]",
         %{"graphs" => graphs}
       )
 
-      assert :ok =
-               GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil,
-                 uuid: "stolen-claim"
-               )
-
-      {recovered_proof, _} =
-        Pythonx.eval(
-          "['stolen-claim' in graphs[0].driver.episodes, 'stolen-claim' in graphs[0].driver.completed, graphs[0].driver.claims['stolen-claim']['generation']]",
-          %{"graphs" => graphs}
-        )
-
-      assert Pythonx.decode(recovered_proof) == [true, true, 3]
-
-      Pythonx.eval(
-        "graphs[0].driver.steal_after_save.add('marker-stolen')",
-        %{"graphs" => graphs}
-      )
-
-      assert {:error, {:python, marker_error}} =
-               GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
-                 uuid: "marker-stolen"
-               )
-
-      assert marker_error =~ "episode claim lost before completion"
-
-      {marker_proof, _} =
-        Pythonx.eval(
-          "['marker-stolen' in graphs[0].driver.episodes, 'marker-stolen' in graphs[0].driver.completed]",
-          %{"graphs" => graphs}
-        )
-
-      assert Pythonx.decode(marker_proof) == [true, false]
-
-      Pythonx.eval(
-        """
-        graphs[0].driver.steal_after_save.remove('marker-stolen')
-        claim = graphs[0].driver.claims['marker-stolen']
-        claim['owner'] = None
-        claim['lease_until_ms'] = 0
-        """,
-        %{"graphs" => graphs}
-      )
-
-      assert :ok =
-               GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil,
-                 uuid: "marker-stolen"
-               )
-
-      {marker_recovery, _} =
-        Pythonx.eval(
-          "['marker-stolen' in graphs[0].driver.completed, graphs[0].driver.claims['marker-stolen']['generation']]",
-          %{"graphs" => graphs}
-        )
-
-      assert Pythonx.decode(marker_recovery) == [true, 3]
-
-      Pythonx.eval(
-        """
-        template = dict(graphs[0].driver.claims['shared-equal'])
-        template['owner'] = 'expired-owner'
-        template['generation'] = 7
-        template['lease_until_ms'] = graphs[0].driver.server_time_ms - 1
-        graphs[0].driver.claims['server-expired'] = template
-        """,
-        %{"graphs" => graphs}
-      )
-
-      assert :ok =
-               GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
-                 uuid: "server-expired"
-               )
-
-      {clock_proof, _} =
-        Pythonx.eval(
-          """
-          driver = graphs[0].driver
-          lease_calls = [
-              call for call in driver.query_calls
-              if '$lease_ms' in call['query']
-          ]
-          [
-              driver.claims['server-expired']['generation'],
-              all('timestamp()' in call['query'] for call in lease_calls),
-              all('now_ms' not in call['params'] and 'lease_until_ms' not in call['params'] for call in lease_calls),
-          ]
-          """,
-          %{"graphs" => graphs}
-        )
-
-      assert Pythonx.decode(clock_proof) == [8, true, true]
-
-      Pythonx.eval(
-        """
-        graphs[0]._gralkor_claim_lease_ms = 30
-        graphs[0].driver.reject_renewals.add('renewal-lost')
-        """,
-        %{"graphs" => graphs}
-      )
-
-      assert {:error, {:python, renewal_error}} =
-               GraphitiPool.add_episode(first_pool, "g1", "same", "source", nil,
-                 uuid: "renewal-lost"
-               )
-
-      assert renewal_error =~ "episode claim renewal lost"
-
-      Pythonx.eval(
-        "graphs[0].driver.reject_renewals.remove('renewal-lost')",
-        %{"graphs" => graphs}
-      )
-
-      assert :ok =
-               GraphitiPool.add_episode(second_pool, "g1", "same", "source", nil,
-                 uuid: "renewal-lost"
-               )
-
-      {renewal_proof, _} =
-        Pythonx.eval(
-          "['renewal-lost' in graphs[0].driver.completed, sum(g.extractions for g in graphs)]",
-          %{"graphs" => graphs}
-        )
-
-      assert Pythonx.decode(renewal_proof) == [true, 8]
-      GenServer.stop(first_pool)
-      GenServer.stop(second_pool)
+    assert Pythonx.decode(renewal_proof) == [true, 8]
+    GenServer.stop(first_pool)
+    GenServer.stop(second_pool)
   end
 
   describe "when an episode is added" do
