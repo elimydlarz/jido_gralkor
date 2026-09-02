@@ -150,8 +150,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when an episode is added > while an episode identifier is supplied" do
-    test "then missing, equal, and conflicting writes use create-or-confirm semantics" do
+  describe "when an episode is added > while an episode identifier is supplied > when that identifier does not exist" do
+    test "then one episode is created under that identifier through the normal extraction path" do
       {g, _} =
         Pythonx.eval(
           """
@@ -225,7 +225,21 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "then an episode-only partial commit resumes extraction before confirmation" do
+    test "and durable extraction completion is recorded after the normal path succeeds" do
+      {pid, g} = start_episode_identity_pool()
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
+
+      assert {:ok, %{extraction_complete: true}} =
+               GraphitiPool.get_episode(pid, "g1", "episode-uuid")
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "when an episode is added > while an episode identifier is supplied > when that identifier exists with equal immutable episode content > while durable extraction completion is absent" do
+    test "then the normal extraction path runs again" do
       {g, _} =
         Pythonx.eval(
           """
@@ -292,7 +306,63 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "then concurrent equal writes serialize and extract once" do
+    test "and durable extraction completion is recorded after it succeeds" do
+      {pid, g} = start_episode_identity_pool()
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
+
+      {_, _} =
+        Pythonx.eval(
+          "g.driver._gralkor_completed_episode_uuids.discard('episode-uuid')",
+          %{"g" => g}
+        )
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
+
+      assert {:ok, %{extraction_complete: true}} =
+               GraphitiPool.get_episode(pid, "g1", "episode-uuid")
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "when an episode is added > while an episode identifier is supplied > when that identifier exists with equal immutable episode content > while durable extraction completion is recorded" do
+    test "then the add succeeds without invoking extraction again" do
+      {pid, g} = start_episode_identity_pool()
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
+
+      {count, _} = Pythonx.eval("g.extractions", %{"g" => g})
+      assert Pythonx.decode(count) == 1
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "when an episode is added > while an episode identifier is supplied > when that identifier exists with conflicting immutable episode content" do
+    test "then the add returns an episode conflict and leaves the original unchanged" do
+      {pid, _g} = start_episode_identity_pool()
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
+
+      assert {:error, {:episode_conflict, "episode-uuid"}} =
+               GraphitiPool.add_episode(pid, "g1", "changed", "source", nil,
+                 uuid: "episode-uuid"
+               )
+
+      assert {:ok, %{content: "content"}} = GraphitiPool.get_episode(pid, "g1", "episode-uuid")
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "when an episode is added > while an episode identifier is supplied" do
+    test "and concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent" do
       {g, _} =
         Pythonx.eval(
           """
@@ -362,7 +432,7 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "then independent pools use graph-backed admission for equal and conflicting concurrent writes" do
+    test "and concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent" do
       {graphs, _} =
         Pythonx.eval(
           """
