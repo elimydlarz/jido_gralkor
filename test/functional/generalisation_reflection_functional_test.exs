@@ -618,6 +618,23 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
      }}
   end
 
+  defp evolved_output(
+         %{step: %{label: "synthesise-artefact"}},
+         content,
+         snapshots
+       ) do
+    level = snapshots |> Enum.map(& &1["level"]) |> Enum.max(fn -> 0 end) |> Kernel.+(1)
+
+    {:ok,
+     %{
+       output: %{
+         "generalisations" => [
+           %{"content" => content, "level" => level, "evolves_from" => snapshots}
+         ]
+       }
+     }}
+  end
+
   defp ancestry_preserving_output_for(request), do: higher_level_output_for(request)
 
   defp influencing_generalisations do
