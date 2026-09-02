@@ -161,13 +161,12 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
   end
 
-  describe "when a mounted memory plugin has a configured ingestion Lens and optional Destinations to search" do
+  describe "when a mounted memory plugin has a configured ingestion Lens" do
     test "then automatic capture and memory addition use the registered ingestion Lens" do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 ingestion_lens: "observations",
-                 search_destinations: []
+                 ingestion_lens: "observations"
                )
 
       agent = agent(plugin_state)
@@ -198,70 +197,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert [[_, _, _, _, _, "observations", [], _reflection_context]] = InMemory.captures()
     end
 
-    test "and memory search uses the configured Destinations" do
-      assert :ok =
-               Client.ingest(%Ingest{
-                 id: "lens-aware-baseline",
-                 operator_id: "operator-one",
-                 lens: "operator",
-                 source_kind: :document,
-                 content: "baseline memory",
-                 source_description: "legacy"
-               })
-
-      assert {:ok, plugin_state} =
-               Plugin.mount(%{},
-                 agent_name: "Susu",
-                 ingestion_lens: "observations",
-                 search_destinations: ["operator"]
-               )
-
-      agent = agent(plugin_state)
-      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(agent)
-
-      assert {:ok, %{result: result}} =
-               MemorySearch.run(
-                 %{query: "memory"},
-                 Map.put(tool_context, :agent_id, agent.id)
-               )
-
-      assert Jason.decode!(result) == [
-               %{"destination" => "operator", "fact" => "baseline memory"}
-             ]
-    end
-
-    test "and every returned fact identifies its Destination" do
-      assert :ok =
-               Client.ingest(%Ingest{
-                 id: "lens-aware-attributed-observation",
-                 operator_id: "operator-one",
-                 lens: "observations",
-                 source_kind: :document,
-                 content: "attributed observation",
-                 source_description: "functional"
-               })
-
-      assert {:ok, plugin_state} =
-               Plugin.mount(%{},
-                 agent_name: "Susu",
-                 ingestion_lens: "observations",
-                 search_destinations: ["observations"]
-               )
-
-      agent = agent(plugin_state)
-      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(agent)
-
-      assert {:ok, %{result: result}} =
-               MemorySearch.run(
-                 %{query: "attributed"},
-                 Map.put(tool_context, :agent_id, agent.id)
-               )
-
-      assert Jason.decode!(result) == [
-               %{"destination" => "observations", "fact" => "attributed observation"}
-             ]
-    end
-
     test "and the plugin does not redefine the selected Lens's Destination or ingestion process" do
       assert {:ok, %{lens: lens}} =
                Plugin.mount(%{},
@@ -275,113 +210,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                ontology: MemoryOntology,
                ingestion: StoreIngestion
              } = lens
-    end
-  end
-
-  describe "where a mounted memory plugin has no Destinations to search" do
-    test "then memory search uses the packaged operator-memory Destination" do
-      for {lens, content} <- [
-            {"operator", "baseline memory"},
-            {"observations", "unselected local memory"},
-            {"decisions", "unselected decision memory"}
-          ] do
-        assert :ok =
-                 Client.ingest(%Ingest{
-                   id: "lens-aware-#{lens}",
-                   operator_id: "operator-one",
-                   lens: lens,
-                   source_kind: :document,
-                   content: content,
-                   source_description: "functional"
-                 })
-      end
-
-      assert {:ok, plugin_state} =
-               Plugin.mount(%{},
-                 agent_name: "Susu",
-                 ingestion_lens: "observations"
-               )
-
-      query_signal = %Jido.Signal{
-        id: "query-signal",
-        source: "/functional",
-        type: "ai.react.query",
-        data: %{query: "baseline"}
-      }
-
-      agent = %{
-        id: "operator-one",
-        state: %{__memory__: plugin_state, __thread__: %{id: "session-one"}}
-      }
-
-      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
-               Plugin.handle_signal(query_signal, %{agent: agent})
-
-      assert {:ok, %{result: result}} =
-               MemorySearch.run(
-                 %{query: "baseline"},
-                 Map.put(tool_context, :agent_id, agent.id)
-               )
-
-      assert Jason.decode!(result) == [
-               %{"destination" => "operator", "fact" => "baseline memory"}
-             ]
-    end
-
-    test "and memory search uses the packaged `global` Destination" do
-      assert :ok =
-               Client.ingest(%Ingest{
-                 id: "lens-aware-shared-generalisation",
-                 operator_id: "operator-two",
-                 lens: "shared-generalisations",
-                 source_kind: :document,
-                 content: "shared generalisation",
-                 source_description: "functional"
-               })
-
-      assert {:ok, plugin_state} =
-               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
-
-      agent = agent(plugin_state)
-      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(agent)
-
-      assert {:ok, %{result: result}} =
-               MemorySearch.run(
-                 %{query: "shared"},
-                 Map.put(tool_context, :agent_id, agent.id)
-               )
-
-      assert Jason.decode!(result) == [
-               %{"destination" => "global", "fact" => "shared generalisation"}
-             ]
-    end
-
-    test "and every returned fact identifies its Destination" do
-      assert :ok =
-               Client.ingest(%Ingest{
-                 id: "lens-aware-attributed-baseline",
-                 operator_id: "operator-one",
-                 lens: "operator",
-                 source_kind: :document,
-                 content: "attributed baseline",
-                 source_description: "functional"
-               })
-
-      assert {:ok, plugin_state} =
-               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
-
-      agent = agent(plugin_state)
-      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(agent)
-
-      assert {:ok, %{result: result}} =
-               MemorySearch.run(
-                 %{query: "attributed"},
-                 Map.put(tool_context, :agent_id, agent.id)
-               )
-
-      assert Jason.decode!(result) == [
-               %{"destination" => "operator", "fact" => "attributed baseline"}
-             ]
     end
   end
 
