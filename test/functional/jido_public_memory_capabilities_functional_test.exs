@@ -1,7 +1,9 @@
 defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   use ExUnit.Case, async: false
 
+  alias Gralkor.Client
   alias Gralkor.Client.InMemory
+  alias Gralkor.Ingest
   alias JidoGralkor.Actions.MemoryAdd
   alias JidoGralkor.Actions.MemoryBuildCommunities
   alias JidoGralkor.Actions.MemoryBuildIndices
@@ -13,8 +15,63 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   @moduletag :functional
 
+  defmodule FailingSearchStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_destination, _operator_id, _query, _result_type, _max_results, _opts),
+      do: {:error, :unavailable}
+  end
+
   setup do
+    previous =
+      for key <- [:destinations, :destination_storage, :lenses, :lens_storage], into: %{} do
+        {key, Application.get_env(:jido_gralkor, key)}
+      end
+
+    start_supervised!(Gralkor.Lens.Storage.InMemory)
+    start_supervised!(Gralkor.Reflection.Storage.InMemory)
+
+    Application.put_env(:jido_gralkor, :destinations, [
+      [name: "observations"],
+      [name: "decisions"]
+    ])
+
+    Application.put_env(
+      :jido_gralkor,
+      :destination_storage,
+      Gralkor.Destination.Storage.InMemory
+    )
+
+    Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+    Application.put_env(:jido_gralkor, :lenses, [
+      [
+        name: "observations",
+        destination: "observations",
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ],
+      [
+        name: "decisions",
+        destination: "decisions",
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ],
+      [
+        name: "shared-notes",
+        destination: "global",
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ]
+    ])
+
     InMemory.reset()
+
+    on_exit(fn ->
+      Enum.each(previous, fn
+        {key, nil} -> Application.delete_env(:jido_gralkor, key)
+        {key, value} -> Application.put_env(:jido_gralkor, key, value)
+      end)
+    end)
+
     :ok
   end
 
