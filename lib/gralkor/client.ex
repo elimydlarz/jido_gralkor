@@ -4,9 +4,9 @@ defmodule Gralkor.Client do
 
   Named Lens operations use `ingest/1` and `replace/1`; `search/1` reads
   registered Destinations and may filter episode writers by Lens.
-  `request_reflection/4` admits one named
-  request-triggered Reflection with the requesting operator's content, tools,
-  and tool context. Ingestion
+  `request_reflection/4` or `/5` admits one named programmatic Reflection with
+  the requesting operator's caller-supplied replay-stable invocation ID,
+  content, tools, and tool context. Ingestion
   resolves an appending Lens and invokes its ingestion process with a
   Lens-bound store. Replacement validates and stores the complete graph for a
   replaceable Lens. Lenses and Reflections reference first-class Destinations,
