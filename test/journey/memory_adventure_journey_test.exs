@@ -291,9 +291,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.global_for_second_operator
     end
 
-    test "and each operator's selector-free search returns that operator's operator-local memory", %{
-      adventure: adventure
-    } do
+    test "and each operator's selector-free search returns that operator's operator-local memory",
+         %{
+           adventure: adventure
+         } do
       assert adventure.first_operator_own_local_information
       assert adventure.second_operator_own_local_information
     end
