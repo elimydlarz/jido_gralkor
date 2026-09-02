@@ -1,4 +1,4 @@
-Unit: python-runtime (src: lib/gralkor/python.ex; integration: test/gralkor/python_test.exs; unit: test/gralkor/python_test.exs)
+Unit: python-runtime (src: lib/gralkor/python.ex, priv/python/pyproject.toml; integration: test/gralkor/python_test.exs; unit: test/gralkor/python_test.exs)
 
 when the Python runtime initialises
   then the call blocks until the runtime is ready

@@ -63,7 +63,7 @@ defmodule Gralkor.Reflection.Runner do
         }
 
         request =
-          if packaged_generalisation?(reflection) do
+          if packaged_generalisation?(reflection) and step.label == "evolve-generalisations" do
             Map.put(
               request,
               :eligible_generalisation_lineage,
