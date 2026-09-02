@@ -280,6 +280,7 @@ defmodule Gralkor.GraphitiPool do
     instance = __MODULE__.for(server, group_id)
     require_extraction_complete = Keyword.get(opts, :require_extraction_complete, false)
     converge_by_identity = Keyword.get(opts, :converge_by_identity, false)
+    lenses = Keyword.get(opts, :lenses, [])
 
     {raw, _} =
       Pythonx.eval(
@@ -295,8 +296,12 @@ defmodule Gralkor.GraphitiPool do
 
         q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
         gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+        lens_names = [
+          name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name
+          for name in lenses
+        ]
         search_limit = max_results
-        if converge_by_identity:
+        if converge_by_identity or lens_names:
           if hasattr(g.driver, 'execute_query'):
             records, _, _ = asyncio._gralkor_run(
               g.driver.execute_query(
@@ -335,6 +340,14 @@ defmodule Gralkor.GraphitiPool do
               getattr(g.driver, '_gralkor_completed_episode_uuids', set())
             )
           episodes = [e for e in episodes if e.uuid in completed_ids]
+
+        if lens_names:
+          lens_suffixes = tuple(f" [lens: {name}]" for name in lens_names)
+          episodes = [
+            episode
+            for episode in episodes
+            if (episode.source_description or '').endswith(lens_suffixes)
+          ]
 
         def artefact_id_for(content):
           try:
@@ -414,7 +427,7 @@ defmodule Gralkor.GraphitiPool do
             for candidate in candidates_by_id.get(identifier, [])
           ]
         else:
-          episode_results = [episode_result(episode) for episode in episodes]
+          episode_results = [episode_result(episode) for episode in episodes[:max_results]]
 
         episode_results
         """,
@@ -424,7 +437,8 @@ defmodule Gralkor.GraphitiPool do
           "group_id" => Client.sanitize_group_id(group_id),
           "max_results" => max_results,
           "require_extraction_complete" => require_extraction_complete,
-          "converge_by_identity" => converge_by_identity
+          "converge_by_identity" => converge_by_identity,
+          "lenses" => lenses
         }
       )
 

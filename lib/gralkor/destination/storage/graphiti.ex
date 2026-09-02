@@ -27,13 +27,17 @@ defmodule Gralkor.Destination.Storage.Graphiti do
     )
   end
 
-  def search(destination, operator_id, query, :episodes, max_results, _opts) do
-    GraphitiPool.search_episodes(
-      GraphitiPool,
-      Destination.graph_id(destination, operator_id),
-      query,
-      max_results
-    )
+  def search(destination, operator_id, query, :episodes, max_results, opts) do
+    case GraphitiPool.search_episodes(
+           GraphitiPool,
+           Destination.graph_id(destination, operator_id),
+           query,
+           max_results,
+           lenses: Keyword.get(opts, :lenses, [])
+         ) do
+      {:ok, episodes} -> {:ok, Enum.map(episodes, &episode_provenance/1)}
+      {:error, _} = error -> error
+    end
   end
 
   def search(destination, operator_id, query, :artefacts, max_results, opts) do
@@ -77,4 +81,20 @@ defmodule Gralkor.Destination.Storage.Graphiti do
       {:ok, artefacts |> Enum.uniq_by(& &1.id) |> Enum.take(max_results)}
     end
   end
+
+  defp episode_provenance(%{content: content, source_description: source_description}) do
+    case Regex.run(~r/^(.*) \[lens: ([^\]]+)\]$/s, source_description) do
+      [_, source_description, lens] ->
+        %{content: content, source_description: source_description, lens: lens}
+
+      _ ->
+        reflection_episode(content, source_description)
+    end
+  end
+
+  defp reflection_episode(content, "reflection:" <> reflection),
+    do: %{content: content, reflection: reflection}
+
+  defp reflection_episode(content, source_description),
+    do: %{content: content, source_description: source_description}
 end
