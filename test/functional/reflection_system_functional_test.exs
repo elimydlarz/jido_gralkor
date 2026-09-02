@@ -516,8 +516,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when an admitted Reflection runs" do
-    test "then its programmatic Chain of Thought runner starts its first step for the operator and triggering invocation",
+  describe "when a Reflection Runner is invoked" do
+    test "then its programmatic Chain of Thought runner starts its first step for the supplied operator and invocation",
          context do
       parent = self()
 
@@ -530,18 +530,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_receive {:first, "operator-one", "ingestion-1", "gather"}
     end
 
-    test "and makes the trigger type and trigger context available to every step", context do
+    test "and makes the consumer-supplied invocation context available to every step", context do
       requests = run_and_collect_requests(reflection(context), ingestion())
 
       assert Enum.all?(requests, fn request ->
-               request.trigger == :lens_ingestion and
-                 request.trigger_context == %{source: "direct-ingestion"}
+               request.invocation_context == %{source: "direct-invocation"}
              end)
     end
   end
 
-  describe "when an admitted Reflection runs > where the Reflection was triggered by ingestion" do
-    test "then every ingested representation is available with its identifier, Lens identity, content, and storage result",
+  describe "when a Reflection Runner is invoked > where the invocation supplies ingested representations" do
+    test "then every representation is available with its identifier, Lens identity, content, and storage result",
          context do
       parent = self()
 
@@ -1179,8 +1178,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     %{
       id: "ingestion-1",
       operator_id: "operator-one",
-      trigger: :lens_ingestion,
-      trigger_context: %{source: "direct-ingestion"},
+      invocation_context: %{source: "direct-invocation"},
       intended_lenses: ["observations", "decisions"],
       representations: [
         %{
