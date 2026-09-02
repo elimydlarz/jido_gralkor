@@ -381,11 +381,7 @@ defmodule Gralkor.Client do
     lenses = resolve_search_lenses!(request.lenses)
     validate_lens_result_type!(lenses, request.result_type)
 
-    destinations =
-      case request.destinations do
-        [] -> DestinationRegistry.configured!()
-        names -> names |> Enum.uniq() |> Enum.map(&DestinationRegistry.fetch!/1)
-      end
+    destinations = resolve_search_destinations!(request.destinations)
 
     opts =
       []
@@ -443,6 +439,27 @@ defmodule Gralkor.Client do
 
   defp validate_result_type!(type),
     do: raise(ArgumentError, "unsupported search result type #{inspect(type)}")
+
+  defp resolve_search_destinations!([]), do: DestinationRegistry.configured!()
+
+  defp resolve_search_destinations!(names) when is_list(names) do
+    names
+    |> Enum.map(fn
+      name when is_binary(name) ->
+        if String.trim(name) == "" do
+          raise ArgumentError, "invalid Destination name #{inspect(name)}"
+        end
+
+        DestinationRegistry.fetch!(name)
+
+      name ->
+        raise ArgumentError, "invalid Destination name #{inspect(name)}"
+    end)
+    |> Enum.uniq_by(& &1.name)
+  end
+
+  defp resolve_search_destinations!(names),
+    do: raise(ArgumentError, "search destinations must be a list, got #{inspect(names)}")
 
   defp resolve_search_lenses!(names) when is_list(names) do
     names
