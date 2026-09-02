@@ -865,7 +865,7 @@ defmodule Gralkor.Client.NativeTest do
       assert recorded["fact_queries"] == ["raw query"]
 
       assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
-               group == "operator_group"
+               group == Client.sanitize_group_id("operator-group")
              end)
     end
   end
