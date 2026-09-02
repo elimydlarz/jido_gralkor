@@ -1,5 +1,5 @@
 defmodule Gralkor.Artefact.ReturnHandler do
-  @moduledoc "Receives an artefact returned at least once to the consuming application."
+  @moduledoc "Consumer callback contract for delivering a Reflection artefact."
 
   @callback return(String.t(), String.t(), Gralkor.Artefact.t()) ::
               :ok | {:error, term()}
