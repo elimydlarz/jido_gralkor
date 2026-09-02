@@ -477,6 +477,62 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
+  describe "when public episode search encounters an episode without a trusted Lens suffix or Reflection prefix" do
+    test "then the unprovenanced episode does not contribute" do
+      graphiti = use_native_boundary()
+
+      set_episode_search_fixture(graphiti, [
+        %{
+          id: "unprovenanced",
+          content: "An unprovenanced episode.",
+          source_description: "legacy source"
+        }
+      ])
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "episode",
+                 destinations: ["observations"]
+               })
+    end
+
+    test "and provenance filtering occurs before the per-Destination result limit" do
+      graphiti = use_native_boundary()
+
+      set_episode_search_fixture(graphiti, [
+        %{
+          id: "unprovenanced",
+          content: "An unprovenanced episode.",
+          source_description: "legacy source"
+        },
+        %{
+          id: "trusted-observation",
+          content: "A trusted observation.",
+          source_description: "field notes [lens: observations]"
+        }
+      ])
+
+      assert {:ok,
+              [
+                %{
+                  destination: "observations",
+                  episode: %{
+                    content: "A trusted observation.",
+                    source_description: "field notes",
+                    lens: "observations"
+                  }
+                }
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "episode",
+                 destinations: ["observations"],
+                 max_results: 1
+               })
+    end
+  end
+
   describe "if public ingestion omits or supplies an unsupported source kind" do
     test "then ingestion raises an argument error identifying the rejected source kind" do
       for source_kind <- [nil, :rumour] do
