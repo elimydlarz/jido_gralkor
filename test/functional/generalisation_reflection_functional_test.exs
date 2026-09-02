@@ -429,7 +429,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
           ]
         })
 
-      assert :ok = Gralkor.Reflection.Store.put(generalisation(), "operator-one", prior)
+      assert :ok = put_artefact(generalisation(), "operator-one", prior)
 
       assert {:ok, replacement} =
                Runner.run(generalisation(), ingestion(),
@@ -446,7 +446,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
              ] = replacement.payload["generalisations"]
 
       assert :ok =
-               Gralkor.Reflection.Store.put(generalisation(), "operator-one", replacement)
+               put_artefact(generalisation(), "operator-one", replacement)
 
       assert {:ok, results} =
                Gralkor.Client.search(%Gralkor.Search{
@@ -770,11 +770,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       })
 
     assert :ok =
-             Gralkor.Reflection.Store.put(
-               generalisation(),
-               "operator-one",
-               stored_generalisation
-             )
+             put_artefact(generalisation(), "operator-one", stored_generalisation)
 
     parent = self()
 

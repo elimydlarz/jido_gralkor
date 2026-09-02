@@ -496,7 +496,13 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         payload: %{"lesson" => "keep it simple"}
       }
 
-      assert :ok = Gralkor.Reflection.Store.put(reflection, "operator-one", artefact)
+      assert :ok =
+               Gralkor.Destination.Storage.put_artefact(
+                 Enum.find(reflection.outputs, &(&1.kind == :destination)),
+                 reflection.name,
+                 "operator-one",
+                 artefact
+               )
       content = Jason.encode!(Map.from_struct(artefact))
 
       assert {:ok,

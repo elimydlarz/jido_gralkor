@@ -224,7 +224,11 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       }
 
       assert :ok =
-               Gralkor.Reflection.Store.put(reflection, "operator-one", artefact,
+               Gralkor.Destination.Storage.put_artefact(
+                 Enum.find(reflection.outputs, &(&1.kind == :destination)),
+                 reflection.name,
+                 "operator-one",
+                 artefact,
                  storage: Gralkor.Destination.Storage.InMemory
                )
 
