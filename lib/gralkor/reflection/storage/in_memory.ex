@@ -1,13 +1,10 @@
 defmodule Gralkor.Reflection.Storage.InMemory do
   @moduledoc false
-  @behaviour Gralkor.Reflection.Store
-
   use Agent
 
   def start_link(opts \\ []),
     do: Agent.start_link(fn -> %{} end, name: Keyword.get(opts, :name, __MODULE__))
 
-  @impl true
   def put(reflection, operator_id, artefact) do
     put_destination(
       destination_output(reflection).destination,
@@ -42,7 +39,6 @@ defmodule Gralkor.Reflection.Storage.InMemory do
     end)
   end
 
-  @impl true
   def get(reflection, operator_id, artefact_id) do
     get_destination(destination_output(reflection).destination, operator_id, artefact_id)
   end
