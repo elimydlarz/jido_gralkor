@@ -4,7 +4,7 @@ when Reflection declarations are validated
   while every Reflection has a non-blank name
   and every Reflection name is unique
   and every Reflection declares one or more triggers
-  and every trigger is `:programmatic`, `{:lens_ingestion, :all}`, or `{:lens_ingestion, [lens_name]}`
+  and every trigger is `:programmatic`, `{:lens_ingestion, :any}`, or `{:lens_ingestion, [lens_name]}`
   and every Lens list is non-empty
   and every named Lens is a registered appending Lens
   and every Reflection references a repository YAML Chain of Thought
@@ -85,9 +85,9 @@ when Reflection declarations are validated
 where the packaged default Reflections are used
   then ERL references the packaged `operator` Destination
   and ERL carries jido_gralkor's built-in experiential-learning ontology
-  and ERL declares `{:lens_ingestion, :all}`
+  and ERL declares `{:lens_ingestion, :any}`
   and generalisation references the packaged `global` Destination
-  and generalisation declares `{:lens_ingestion, :all}`
+  and generalisation declares `{:lens_ingestion, :any}`
 
 where an application-defined Reflection omits its ontology
   then its final artefact receives generic extraction
@@ -104,7 +104,7 @@ when an ingestion successfully stores one or more representations through its in
   then the ingestion caller receives success without waiting for Reflection completion
   and no Lens-ingestion Reflection is admitted before every intended Lens ingestion succeeds
 
-  while a Reflection declares `{:lens_ingestion, :all}`
+  while a Reflection declares `{:lens_ingestion, :any}`
     then that Reflection is admitted exactly once for the completed ingestion
     and the ingestion identifier becomes its `invocation_id`
     and every completed representation is supplied to that Reflection
