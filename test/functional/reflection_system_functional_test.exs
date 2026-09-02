@@ -783,8 +783,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when a consumer programmatically requests a named Reflection with a non-blank `operator_id` and replay-stable `invocation_id` > while that Reflection declares `:programmatic`" do
-    test "then the consumer receives successful admission without waiting for its artefact",
+  describe "when a valid programmatic Reflection request is admitted" do
+    test "then admission returns without waiting for its artefact",
          context do
       requested = %{reflection(context, "requested") | triggers: [:programmatic]}
       configure_reflections([requested])
@@ -803,7 +803,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert System.monotonic_time(:millisecond) - started < 100
     end
 
-    test "and only the requested Reflection begins one logical completion flow for that agent request",
+    test "and only the named Reflection begins one completion flow",
          context do
       requested = %{reflection(context, "requested") | triggers: [:agent_request]}
       other = %{reflection(context, "other") | triggers: [:agent_request]}
@@ -830,7 +830,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
     end
 
-    test "and the Reflection receives the requesting operator, request content, host tools, and tool context",
+    test "and request context reaches the Reflection",
          context do
       requested = %{reflection(context, "requested") | triggers: [:agent_request]}
       configure_reflections([requested])
@@ -871,7 +871,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert runner_opts[:tool_context] == %{session_id: "session-one"}
     end
 
-    test "and the agent request receives one stable invocation identifier", context do
+    test "and the invocation identifier is stable", context do
       requested = %{reflection(context, "requested") | triggers: [:agent_request]}
       configure_reflections([requested])
       parent = self()
