@@ -984,6 +984,15 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         _ -> "Deployments that begin with reversible canaries expose faults before broad impact."
       end
 
+    assert @operator_one
+           |> search_until(
+             ["operations"],
+             :episodes,
+             first_content,
+             &contains_episode?(&1, first_content)
+           )
+           |> contains_episode?(first_content)
+
     later_ingestion_id = "journey-generalisation-level-two"
 
     later_report = """
