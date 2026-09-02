@@ -474,106 +474,68 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     }
   end
 
-  defp output_for(%{step: %{label: "inspect-related-information"}}) do
+  defp output_for(request),
+    do: evolved_output(request, "Prefer direct APIs", [])
+
+  defp higher_level_output_for(request) do
+    evolved_output(
+      request,
+      "Prefer the smallest explicit interface",
+      selected_influences(request.stored_information)
+    )
+  end
+
+  defp all_prior_output_for(request) do
+    evolved_output(
+      request,
+      "Apply the smallest explicit interface at each boundary",
+      prior_generalisation_snapshots(request.stored_information)
+    )
+  end
+
+  defp replacement_output_for(request) do
+    evolved_output(
+      request,
+      "Use one explicit API for each distinct boundary",
+      prior_generalisation_snapshots(request.stored_information)
+    )
+  end
+
+  defp evolved_output(%{step: %{label: "inspect-world"}}, _content, _snapshots) do
     {:ok,
      %{
        output: %{
-         "candidates" => [
+         "inspection" =>
+           "Current and related observations qualify the prior generalisations."
+       }
+     }}
+  end
+
+  defp evolved_output(
+         %{step: %{label: "evolve-generalisations"}},
+         content,
+         snapshots
+       ) do
+    {:ok,
+     %{
+       output: %{
+         "evolutions" => [
            %{
-             "content" => "Prefer direct APIs",
-             "generalises_over" => [],
-             "rationale" => "Both representations support it"
+             "content" => content,
+             "evolves_from" => snapshots,
+             "reasoning" => "The observations warrant this current generalisation."
            }
          ]
        }
      }}
   end
 
-  defp output_for(%{step: %{label: "evaluate-durability"}}) do
-    {:ok,
-     %{
-       output: %{
-         "assessments" => [
-           %{
-             "content" => "Prefer direct APIs",
-             "generalises_over" => [],
-             "durable" => true,
-             "reasoning" => "It applies repeatedly"
-           }
-         ]
-       }
-     }}
-  end
-
-  defp output_for(%{step: %{label: "synthesise-artefact"}}) do
+  defp evolved_output(%{step: %{label: "synthesise-artefact"}}, content, snapshots) do
     {:ok,
      %{
        output: %{
          "generalisations" => [
-           %{"content" => "Prefer direct APIs", "level" => 99, "generalises_over" => []}
-         ]
-       }
-     }}
-  end
-
-  defp evolves_from_output_for(%{step: %{label: "inspect-related-information"}}),
-    do: output_for(%{step: %{label: "inspect-related-information"}})
-
-  defp evolves_from_output_for(%{step: %{label: "evaluate-durability"}}),
-    do: output_for(%{step: %{label: "evaluate-durability"}})
-
-  defp evolves_from_output_for(%{step: %{label: "synthesise-artefact"}}) do
-    {:ok,
-     %{
-       output: %{
-         "generalisations" => [
-           %{"content" => "Prefer direct APIs", "level" => 99, "evolves_from" => []}
-         ]
-       }
-     }}
-  end
-
-  defp higher_level_output_for(%{step: %{label: "inspect-related-information"}} = request) do
-    {:ok,
-     %{
-       output: %{
-         "candidates" => [
-           %{
-             "content" => "Prefer the smallest explicit interface",
-             "generalises_over" => selected_influences(request.stored_information),
-             "rationale" => "It generalises both earlier interface lessons"
-           }
-         ]
-       }
-     }}
-  end
-
-  defp higher_level_output_for(%{step: %{label: "evaluate-durability"}} = request) do
-    {:ok,
-     %{
-       output: %{
-         "assessments" => [
-           %{
-             "content" => "Prefer the smallest explicit interface",
-             "generalises_over" => selected_influences(request.stored_information),
-             "durable" => true,
-             "reasoning" => "It remains useful across interface designs"
-           }
-         ]
-       }
-     }}
-  end
-
-  defp higher_level_output_for(%{step: %{label: "synthesise-artefact"}} = request) do
-    {:ok,
-     %{
-       output: %{
-         "generalisations" => [
-           %{
-             "content" => "Prefer the smallest explicit interface",
-             "level" => 99,
-             "generalises_over" => selected_influences(request.stored_information)
-           }
+           %{"content" => content, "level" => 99, "evolves_from" => snapshots}
          ]
        }
      }}
@@ -581,8 +543,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
   defp ancestry_preserving_output_for(request) do
     if request.step.label == "synthesise-artefact" do
-      assert request.directions =~ "Preserve each selected assessment's exact"
-      assert request.directions =~ "`generalises_over` content and level entries"
+      assert request.directions =~ "Preserve each evolution's exact"
+      assert request.directions =~ "`evolves_from` content and level snapshots"
     end
 
     higher_level_output_for(request)
@@ -596,7 +558,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
   end
 
   defp put_stored_generalisation_response(generalisations) do
-    stored = Enum.map(generalisations, &Map.put(&1, "generalises_over", []))
+    stored = Enum.map(generalisations, &Map.put(&1, "evolves_from", []))
 
     Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
       "global" =>
@@ -618,6 +580,13 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     selected_contents = MapSet.new(Enum.map(influencing_generalisations(), & &1["content"]))
 
     stored_information
+    |> prior_generalisation_snapshots()
+    |> Enum.filter(&MapSet.member?(selected_contents, &1["content"]))
+    |> Enum.map(&Map.take(&1, ["content", "level"]))
+  end
+
+  defp prior_generalisation_snapshots(stored_information) do
+    stored_information
     |> Enum.flat_map(fn
       %{destination: "global", episode: %{content: content}} ->
         stored_generalisations(content)
@@ -628,7 +597,6 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       _ ->
         []
     end)
-    |> Enum.filter(&MapSet.member?(selected_contents, &1["content"]))
     |> Enum.map(&Map.take(&1, ["content", "level"]))
   end
 
@@ -642,6 +610,100 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
         []
     end
   end
+
+  defp first_step_directions do
+    parent = self()
+
+    assert {:ok, _artefact} =
+             Runner.run(generalisation(), ingestion(),
+               inference: fn request ->
+                 if request.step.label == "inspect-world" do
+                   send(parent, {:first_step_directions, request.directions})
+                 end
+
+                 output_for(request)
+               end
+             )
+
+    assert_receive {:first_step_directions, directions}
+    directions
+  end
+
+  defp stored_information_from_real_memory do
+    use_real_memory()
+
+    observation_store = %Gralkor.Lens.Store{
+      operator_id: "operator-one",
+      lens: Gralkor.Client.lens!("observations")
+    }
+
+    assert :ok =
+             Gralkor.Lens.Store.add(
+               observation_store,
+               "A related observation",
+               "observations"
+             )
+
+    stored_generalisation =
+      Gralkor.Reflection.Artefact.new(
+        "generalisation-artefact",
+        "generalisations",
+        %{
+          "generalisations" => [
+            %{
+              "content" => "Prefer small public APIs",
+              "level" => 1,
+              "evolves_from" => []
+            }
+          ]
+        }
+      )
+
+    assert :ok =
+             Gralkor.Reflection.Store.put(
+               generalisation(),
+               "operator-one",
+               stored_generalisation
+             )
+
+    parent = self()
+
+    assert {:ok, _artefact} =
+             Runner.run(generalisation(), ingestion(),
+               inference: fn request ->
+                 if request.step.label == "inspect-world" do
+                   send(parent, {:stored_information, request.stored_information})
+                 end
+
+                 output_for(request)
+               end
+             )
+
+    assert_receive {:stored_information, stored_information}
+    {stored_generalisation, stored_information}
+  end
+
+  defp use_real_memory do
+    start_supervised!(Gralkor.Lens.Storage.InMemory)
+    start_supervised!(Gralkor.Reflection.Storage.InMemory)
+
+    Application.put_env(
+      :jido_gralkor,
+      :destination_storage,
+      Gralkor.Destination.Storage.InMemory
+    )
+
+    Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+    Application.put_env(
+      :jido_gralkor,
+      :reflection_storage,
+      Gralkor.Reflection.Storage.InMemory
+    )
+  end
+
+  defp decode_episode(%{content: content}), do: Jason.decode!(content)
+  defp decode_episode(content) when is_binary(content), do: Jason.decode!(content)
 
   defp restore_env({key, nil}), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env({key, value}), do: Application.put_env(:jido_gralkor, key, value)
