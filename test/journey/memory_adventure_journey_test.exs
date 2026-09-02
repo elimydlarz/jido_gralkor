@@ -18,6 +18,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   alias Gralkor.Message
   alias Gralkor.Artefact
   alias Gralkor.Reflection.Registry
+  alias Gralkor.Reflection.Runner
   alias Gralkor.Replace
   alias Gralkor.Search
   alias JidoGralkor.Actions.MemoryAdd
@@ -163,20 +164,13 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         [
           [
             name: "generalisations",
-            triggers: [{:lens_ingestion, :any}],
             chain_of_thought: "priv/reflections/generalisations.yaml",
             outputs: [
-              [kind: :destination, destination: "global", ontology: Gralkor.DefaultOntology],
-              [
-                kind: :destination,
-                destination: "operations",
-                ontology: Gralkor.DefaultOntology
-              ]
+              [kind: :destination, destination: "global", ontology: Gralkor.DefaultOntology]
             ]
           ],
           [
             name: "erl",
-            triggers: [{:lens_ingestion, :any}],
             chain_of_thought: "priv/reflections/erl.yaml",
             outputs: [
               [
@@ -195,7 +189,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         [
           [
             name: "published-policy-review",
-            triggers: [{:lens_ingestion, ["published"]}],
             chain_of_thought: "test/journey/consumer_reflection.yaml",
             outputs: [
               [kind: :destination, destination: "global"],
@@ -227,21 +220,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          ]}
       )
 
-    {:ok, _reflection_supervisor} =
-      start_supervised(
-        {Gralkor.Reflection.Supervisor,
-         scheduler_opts: [
-           journal_path: Path.join(data_dir, "reflection_scheduler.dets")
-         ]}
-      )
-
     {:ok, _buffer} =
       start_supervised(
         {CaptureBuffer,
          [
            flush_callback: GralkorApplication.build_flush_callback({:embedded, data_dir}),
-           lens_flush_callback: GralkorApplication.build_lens_flush_callback(),
-           reflections: Registry.configured!()
+           lens_flush_callback: GralkorApplication.build_lens_flush_callback()
          ]}
       )
 
@@ -271,7 +255,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     {:ok, adventure: run_adventure(agent)}
   end
 
-  describe "when two operators use implicit memory, Lenses, ERL, and shared-Destination replacement" do
+  describe "when two operators use implicit memory, Lenses, explicitly invoked Reflections, and shared-Destination replacement" do
     test "then ontology-free implicit operator memory remains recallable", %{adventure: adventure} do
       assert adventure.implicit_memory
     end
@@ -336,7 +320,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when the Journey completes successive ingestions containing related observations" do
+  describe "when the Journey consumer invokes generalisation after successive ingestions containing related observations" do
     test "then the first resulting generalisation has evolution-depth level one and an empty `evolves_from`",
          %{adventure: adventure} do
       assert %{
@@ -379,7 +363,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.published_input_at_global
     end
 
-    test "and each stable ingestion identifier resolves a completed `generalisations` artefact",
+    test "and each consumer-supplied invocation identifier resolves a completed `generalisations` artefact",
          %{
            adventure: adventure
          } do
@@ -398,7 +382,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when a completed ingestion triggers a consumer-defined Reflection with Destination and return outputs" do
+  describe "when the Journey consumer invokes a consumer-defined Reflection with Destination and return outputs" do
     test "then its artefact is searchable through its Destination", %{adventure: adventure} do
       assert %Artefact{id: artefact_id} = adventure.consumer_destination_artefact
 
