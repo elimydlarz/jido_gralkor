@@ -226,7 +226,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
 
     test "and durable extraction completion is recorded after the normal path succeeds" do
-      {pid, g} = start_episode_identity_pool()
+      {pid, _g} = start_episode_identity_pool()
 
       assert :ok =
                GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
@@ -3056,7 +3056,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when the pool starts > while both configured model specs name a supported inference provider > and each provider credential is passed explicitly from the BEAM side > where the credential exists only in the BEAM environment" do
+  describe "where the credential exists only in the BEAM environment" do
     test "then the credential still reaches the provider client" do
       var = "GRALKOR_CREDENTIAL_DELIVERY_PROBE_#{System.unique_integer([:positive])}"
       on_exit(fn -> System.delete_env(var) end)
