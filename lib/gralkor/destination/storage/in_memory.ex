@@ -2,23 +2,45 @@ defmodule Gralkor.Destination.Storage.InMemory do
   @moduledoc false
   @behaviour Gralkor.Destination.Storage
 
+  use Agent
+
   alias Gralkor.Destination
   alias Gralkor.Lens.Storage.InMemory, as: LensStorage
-  alias Gralkor.Reflection.Storage.InMemory, as: ReflectionStorage
+
+  def start_link(opts \\ []),
+    do: Agent.start_link(fn -> %{} end, name: Keyword.get(opts, :name, __MODULE__))
 
   @impl true
   def put_artefact(output, reflection_name, operator_id, artefact) do
-    ReflectionStorage.put_destination(
-      output.destination,
-      reflection_name,
-      operator_id,
-      artefact
-    )
+    graph_id = Destination.graph_id(output.destination, operator_id)
+
+    Agent.get_and_update(__MODULE__, fn state ->
+      entries = Map.get(state, graph_id, [])
+
+      case Enum.find(entries, &(&1.artefact.id == artefact.id)) do
+        nil ->
+          entry = %{artefact: artefact, reflection: reflection_name}
+          {:ok, Map.put(state, graph_id, entries ++ [entry])}
+
+        %{artefact: ^artefact} ->
+          {:ok, state}
+
+        _entry ->
+          {{:error, {:artefact_conflict, artefact.id}}, state}
+      end
+    end)
   end
 
   @impl true
   def get_artefact(output, _reflection_name, operator_id, artefact_id) do
-    ReflectionStorage.get_destination(output.destination, operator_id, artefact_id)
+    graph_id = Destination.graph_id(output.destination, operator_id)
+
+    Agent.get(__MODULE__, fn state ->
+      case Enum.find(Map.get(state, graph_id, []), &(&1.artefact.id == artefact_id)) do
+        nil -> {:error, :not_found}
+        entry -> {:ok, entry.artefact}
+      end
+    end)
   end
 
   @impl true
@@ -45,9 +67,10 @@ defmodule Gralkor.Destination.Storage.InMemory do
       |> Enum.map(&Map.take(&1, [:content, :lens]))
 
     reflection_episodes =
-      if lenses == [] and Process.whereis(ReflectionStorage) do
+      if lenses == [] and Process.whereis(__MODULE__) do
         destination
-        |> ReflectionStorage.search_episodes(operator_id, max_results)
+        |> artefact_entries(operator_id)
+        |> Enum.take(max_results)
         |> Enum.map(fn %{artefact: artefact, reflection: reflection} ->
           %{
             content: Jason.encode!(Map.from_struct(artefact)),
@@ -78,12 +101,27 @@ defmodule Gralkor.Destination.Storage.InMemory do
   end
 
   def search(destination, operator_id, query, :artefacts, max_results, opts) do
-    Gralkor.Reflection.Storage.InMemory.search_destination(
-      destination,
-      operator_id,
-      query,
-      max_results,
-      Keyword.get(opts, :artefact_id)
-    )
+    artefact_id = Keyword.get(opts, :artefact_id)
+
+    results =
+      destination
+      |> artefact_entries(operator_id)
+      |> Enum.map(& &1.artefact)
+      |> Enum.filter(fn artefact ->
+        (is_nil(artefact_id) or artefact.id == artefact_id) and
+          (query in [nil, ""] or
+             String.contains?(
+               String.downcase(Jason.encode!(artefact.payload)),
+               String.downcase(query)
+             ))
+      end)
+      |> Enum.take(max_results)
+
+    {:ok, results}
+  end
+
+  defp artefact_entries(destination, operator_id) do
+    graph_id = Destination.graph_id(destination, operator_id)
+    Agent.get(__MODULE__, &Map.get(&1, graph_id, []))
   end
 end
