@@ -400,7 +400,8 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
                  destinations: ["operator"],
-                 query: "How does settlement work?"
+                 query: "How does settlement work?",
+                 result_type: :facts
                })
 
       assert_receive {:searched_destination, %Gralkor.Destination{name: "operator"},

@@ -193,7 +193,8 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
     Client.search(%Search{
       operator_id: operator,
       query: "memory",
-      destinations: destinations
+      destinations: destinations,
+      result_type: :facts
     })
   end
 
