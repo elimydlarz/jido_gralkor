@@ -4,7 +4,7 @@ when Reflection declarations are validated
   while every Reflection has a non-blank name
   and every Reflection name is unique
   and every Reflection declares one or more triggers
-  and every declared trigger is Lens ingestion or programmatic
+  and every declared trigger is `:programmatic` or `{:lens_ingestion, :all | [lens_name]}`
   and every Lens-ingestion trigger selects all Lenses or a non-empty list of registered appending Lenses
   and every Reflection references a repository YAML Chain of Thought
   and every referenced Chain of Thought contains one or more ordered steps
