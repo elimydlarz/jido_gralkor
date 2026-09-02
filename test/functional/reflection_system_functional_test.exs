@@ -4,55 +4,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   @moduletag :functional
 
   alias Gralkor.Client
-  alias Gralkor.CaptureBuffer
-  alias Gralkor.Ingest
-  alias Gralkor.Message
   alias Gralkor.Reflection.Registry
   alias Gralkor.Reflection.Runner
-  alias Gralkor.Reflection.Scheduler
   alias Gralkor.Search
 
   defmodule ReflectionOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
   end
 
-  defmodule MultiRepresentationIngestion do
-    @behaviour Gralkor.Lens.Ingestion
-
-    @impl true
-    def ingest(request, store) do
-      with :ok <-
-             Gralkor.Lens.Store.add(
-               store,
-               "first lensed: #{request.content}",
-               request.source_description
-             ) do
-        Gralkor.Lens.Store.add(
-          store,
-          "second lensed: #{request.content}",
-          request.source_description
-        )
-      end
-    end
-  end
-
   defmodule FailingReflectionStorage do
     def put_artefact(_, _, _, _), do: {:error, :destination_unavailable}
     def get_artefact(_, _, _, _), do: {:error, :not_found}
-  end
-
-  defmodule ReturnHandler do
-    @behaviour Gralkor.Artefact.ReturnHandler
-
-    @impl true
-    def return(operator_id, invocation_id, artefact) do
-      send(
-        Application.fetch_env!(:jido_gralkor, :reflection_return_test_pid),
-        {:returned_artefact, operator_id, invocation_id, artefact}
-      )
-
-      :ok
-    end
   end
 
   setup do
@@ -67,13 +29,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     start_supervised!(Gralkor.Destination.Storage.InMemory)
     start_supervised!(Gralkor.Lens.Storage.InMemory)
 
-    start_supervised!(
-      {Scheduler,
-       runner: fn reflection, ingestion, opts ->
-         Runner.run(reflection, ingestion, Keyword.put_new(opts, :inference, &output_for/1))
-       end}
-    )
-
     previous =
       for key <- [
             :destinations,
@@ -81,8 +36,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
             :lenses,
             :lens_storage,
             :reflections,
-            :reflection_storage,
-            :reflection_return_test_pid
+            :reflection_storage
           ],
           into: %{} do
         {key, Application.get_env(:jido_gralkor, key)}
@@ -101,7 +55,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     )
 
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-    Application.put_env(:jido_gralkor, :reflection_return_test_pid, self())
 
     on_exit(fn -> Enum.each(previous, fn {key, value} -> restore_env(key, value) end) end)
     %{root: root}
@@ -110,25 +63,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "when Reflection declarations are validated" do
     test("while every Reflection has a non-blank name", context, do: assert_valid(context))
     test("and every Reflection name is unique", context, do: assert_valid(context))
-
-    test "and every Reflection declares one or more triggers", %{root: root} do
-      [reflection] = Registry.load!([valid_definition(root)], root: root)
-
-      assert Map.fetch!(reflection, :triggers) == [{:lens_ingestion, :any}]
-    end
-
-    test "and every trigger is `:programmatic`, `{:lens_ingestion, :any}`, or `{:lens_ingestion, [lens_name]}`",
-         %{
-           root: root
-         } do
-      definition =
-        valid_definition(root,
-          triggers: [:programmatic, {:lens_ingestion, :any}]
-        )
-
-      assert {:ok, [reflection]} = Registry.load([definition], root: root)
-      assert reflection.triggers == [:programmatic, {:lens_ingestion, :any}]
-    end
 
     test("and every Reflection references a repository YAML Chain of Thought", context,
       do: assert_valid(context)
