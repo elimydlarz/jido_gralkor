@@ -47,9 +47,10 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
     Application.put_env(:jido_gralkor, :reflections, [
       [
         name: "review",
-        triggers: [:ingestion],
-        destination: "shared",
-        ontology: MemoryOntology,
+        triggers: [{:lens_ingestion, :any}],
+        outputs: [
+          [kind: :destination, destination: "shared", ontology: MemoryOntology]
+        ],
         chain_of_thought: "priv/reflections/erl.yaml"
       ]
     ])
@@ -69,8 +70,8 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       assert %Gralkor.Lens{destination: %Gralkor.Destination{name: "shared"}} =
                Client.lens!("observations")
 
-      assert [%Gralkor.Reflection{destination: %Gralkor.Destination{name: "shared"}}] =
-               ReflectionRegistry.configured!()
+      assert [%Gralkor.Reflection{outputs: [output]}] = ReflectionRegistry.configured!()
+      assert output.destination == %Gralkor.Destination{name: "shared"}
     end
 
     test "and the Destination name identifies the graph where their results are saved" do

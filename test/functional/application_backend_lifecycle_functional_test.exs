@@ -77,7 +77,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
 
       on_exit(fn -> File.rm(journal_path) end)
 
-      runner = fn reflection, _ingestion, opts ->
+      runner = fn _reflection, _ingestion, opts ->
         attempt = :atomics.add_get(attempts, 1, 1)
         send(test_pid, {:application_drain_runner, attempt})
 
