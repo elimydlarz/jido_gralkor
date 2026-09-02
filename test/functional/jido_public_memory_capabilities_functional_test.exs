@@ -244,6 +244,36 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                }
              ]
     end
+
+    test "and the action returns results as JSON with their Destination and originating Lens or declaring Reflection" do
+      assert :ok = ingest_memory("observations", "provenance observation")
+      artefact = put_generalisation("provenance generalisation", 1, [])
+
+      assert {:ok, %{result: result}} =
+               memory_search(
+                 %{query: "provenance", destinations: ["observations", "global"]},
+                 []
+               )
+
+      assert [
+               %{
+                 "destination" => "observations",
+                 "episode" => %{
+                   "content" => "provenance observation",
+                   "lens" => "observations"
+                 }
+               },
+               %{
+                 "destination" => "global",
+                 "episode" => %{
+                   "content" => encoded_artefact,
+                   "reflection" => "generalisations"
+                 }
+               }
+             ] = Jason.decode!(result)
+
+      assert Jason.decode!(encoded_artefact)["id"] == artefact.id
+    end
   end
 
   describe "if an agent invokes memory search without a usable query" do
@@ -375,6 +405,30 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       content: content,
       source_description: "functional"
     })
+  end
+
+  defp put_generalisation(content, level, evolves_from) do
+    reflection = %Gralkor.Reflection{
+      name: "generalisations",
+      destination: Gralkor.Destination.Registry.fetch!("global"),
+      ontology: Gralkor.DefaultOntology,
+      chain_of_thought: nil
+    }
+
+    artefact = %Gralkor.Reflection.Artefact{
+      id: "public-generalisation-#{System.unique_integer([:positive, :monotonic])}",
+      reflection: "generalisations",
+      payload: %{
+        "generalisations" => [
+          %{"content" => content, "level" => level, "evolves_from" => evolves_from}
+        ]
+      }
+    }
+
+    assert :ok =
+             Gralkor.Reflection.Storage.InMemory.put(reflection, "operator-one", artefact)
+
+    artefact
   end
 
   defp complete_plugin_turn(extra_state, capture_result) do
