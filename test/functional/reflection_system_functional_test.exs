@@ -205,6 +205,47 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Registry.load([definition], root: root)
     end
 
+    test "and every named Lens is a registered appending Lens", %{root: root} do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          destination: "observations",
+          ingestion: MultiRepresentationIngestion
+        ]
+      ])
+
+      definition =
+        valid_definition(root, triggers: [{:lens_ingestion, ["observations"]}])
+
+      assert {:ok, [reflection]} = Registry.load([definition], root: root)
+      assert reflection.triggers == [{:lens_ingestion, ["observations"]}]
+    end
+
+    test "if a Lens-ingestion trigger names an unknown Lens then validation fails identifying that Reflection and unknown Lens",
+         %{root: root} do
+      definition = valid_definition(root, triggers: [{:lens_ingestion, ["missing"]}])
+
+      assert {:error, {:unknown_lens, "generalisation", "missing"}} =
+               Registry.load([definition], root: root)
+    end
+
+    test "if a Lens-ingestion trigger names a Lens that does not support appending ingestion then validation fails identifying that Reflection and incompatible Lens",
+         %{root: root} do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "decisions",
+          destination: "decisions",
+          write: :replace_graph,
+          graph_format: :property_graph
+        ]
+      ])
+
+      definition = valid_definition(root, triggers: [{:lens_ingestion, ["decisions"]}])
+
+      assert {:error, {:incompatible_lens, "generalisation", "decisions"}} =
+               Registry.load([definition], root: root)
+    end
+
     test "if a Reflection has no Chain of Thought then validation fails identifying that Reflection",
          %{root: root} do
       definition = valid_definition(root) |> Keyword.delete(:chain_of_thought)
