@@ -131,73 +131,27 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       refute_receive {:related_memory_search, _, _, _, _, _, _}
     end
 
-    test "and stored generalisation artefacts returned from `global` are included alongside other related episodes" do
-      start_supervised!(Gralkor.Lens.Storage.InMemory)
-      start_supervised!(Gralkor.Reflection.Storage.InMemory)
-
-      Application.put_env(
-        :jido_gralkor,
-        :destination_storage,
-        Gralkor.Destination.Storage.InMemory
-      )
-
-      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-
-      Application.put_env(
-        :jido_gralkor,
-        :reflection_storage,
-        Gralkor.Reflection.Storage.InMemory
-      )
-
-      observation_store = %Gralkor.Lens.Store{
-        operator_id: "operator-one",
-        lens: Gralkor.Client.lens!("observations")
-      }
-
-      assert :ok =
-               Gralkor.Lens.Store.add(
-                 observation_store,
-                 "A related observation",
-                 "observations"
-               )
-
-      stored_generalisation =
-        Gralkor.Reflection.Artefact.new(
-          "generalisation-artefact",
-          "generalisations",
-          %{
-            "generalisations" => [
-              %{
-                "content" => "Prefer small public APIs",
-                "level" => 1,
-                "generalises_over" => []
-              }
-            ]
-          }
-        )
-
-      assert :ok =
-               Gralkor.Reflection.Store.put(
-                 generalisation(),
-                 "operator-one",
-                 stored_generalisation
-               )
-
-      parent = self()
-
-      assert {:ok, _artefact} =
-               Runner.run(generalisation(), ingestion(),
-                 inference: fn request ->
-                   send(parent, {:stored_information, request.stored_information})
-                   output_for(request)
-                 end
-               )
-
-      assert_receive {:stored_information, stored_information}
+    test "and every related observation identifies its originating Lens" do
+      {_stored_generalisation, stored_information} = stored_information_from_real_memory()
 
       assert Enum.any?(stored_information, fn
-               %{destination: "global", episode: encoded} when is_binary(encoded) ->
-                 Jason.decode!(encoded) == %{
+               %{
+                 destination: "observations-memory",
+                 episode: %{content: "A related observation", lens: "observations"}
+               } ->
+                 true
+
+               _ ->
+                 false
+             end)
+    end
+
+    test "and every related generalisation identifies its declaring Reflection" do
+      {stored_generalisation, stored_information} = stored_information_from_real_memory()
+
+      assert Enum.any?(stored_information, fn
+               %{destination: "global", episode: episode} ->
+                 decode_episode(episode) == %{
                    "id" => "generalisation-artefact",
                    "reflection" => "generalisations",
                    "payload" => stored_generalisation.payload
@@ -206,17 +160,9 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                _ ->
                  false
              end)
-
-      assert Enum.any?(stored_information, fn
-               %{destination: "observations-memory", episode: "A related observation"} ->
-                 true
-
-               _ ->
-                 false
-             end)
     end
 
-    test "and inference receives every current representation separately from the returned stored information" do
+    test "and inference receives every current representation separately from related observations and generalisations" do
       Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
         "global" => {:ok, [%{content: "stored", source_description: "global"}]}
       })
@@ -248,7 +194,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
         operator_id: "operator-one",
         output_schema: %{
           "generalisations" =>
-            "Array<{ content: string; level: integer; generalises_over: Array<{ content: string; level: integer }> }>"
+            "Array<{ content: string; level: integer; evolves_from: Array<{ content: string; level: integer }> }>"
         },
         representations: ingestion().representations,
         stored_information: prompt_stored_information,
@@ -270,10 +216,32 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert prompt =~ "Related stored information available"
       assert prompt =~ "A prior generalisation"
     end
+
+    test "and inference is directed to revisit current and related observations together with prior generalisations" do
+      directions = first_step_directions()
+
+      assert directions =~ "Revisit current and related observations together with prior generalisations"
+    end
+
+    test "and inference is directed to carry forward, combine, broaden, narrow, split, replace, or otherwise revise generalisations as observations warrant" do
+      directions = first_step_directions()
+
+      for operation <- [
+            "carry forward",
+            "combine",
+            "broaden",
+            "narrow",
+            "split",
+            "replace",
+            "otherwise revise"
+          ] do
+        assert directions =~ operation
+      end
+    end
   end
 
-  describe "when the packaged generalisation Reflection's related-memory search returns no stored information" do
-    test "then generalisation inference still processes every current representation" do
+  describe "when the packaged generalisation Reflection's default related-memory search returns no stored information" do
+    test "then generalisation inference still inspects every current representation" do
       parent = self()
 
       assert {:ok, _artefact} =
@@ -294,7 +262,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
   end
 
-  describe "if the packaged generalisation Reflection's related-memory search fails" do
+  describe "if the packaged generalisation Reflection's default related-memory search fails" do
     test "then the Reflection fails before generalisation inference begins and identifies the search failure" do
       Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
         "global" => {:error, :memory_unavailable}
