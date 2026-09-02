@@ -1213,7 +1213,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       raw_search =
         GraphitiPool.search_episodes(
           GraphitiPool,
-          Gralkor.Destination.graph_id("observations", "operator-one"),
+          Gralkor.Destination.graph_id(%Gralkor.Destination{name: "observations"}, "operator-one"),
           "stored",
           10,
           require_extraction_complete: true,
