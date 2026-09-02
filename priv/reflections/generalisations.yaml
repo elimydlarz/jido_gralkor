@@ -1,37 +1,43 @@
 steps:
-  - label: inspect-related-information
+  - label: inspect-world
     directions: |-
       Inspect every current lensed representation and all related stored
-      information supplied to this Reflection. Identify candidate patterns that
-      remain useful beyond this completed ingestion. For each candidate, include
-      the exact content and level of every stored generalisation that it
-      generalises over. Exclude stored generalisations that do not influence the
-      candidate.
+      information supplied to this Reflection. Treat current representations
+      and Lens-authored stored episodes as observations. Treat stored artefacts
+      declaring the generalisations Reflection as prior generalisations.
+      Revisit current and related observations together with prior
+      generalisations. Describe how the observations reinforce, qualify,
+      conflict with, or connect the prior generalisations, and where they call
+      for a new generalisation.
     output:
-      candidates: "Array<{ content: string; generalises_over: Array<{ content: string; level: integer }>; rationale: string }>"
+      inspection: "string"
 
-  - label: evaluate-durability
+  - label: evolve-generalisations
     directions: |-
-      Evaluate these candidate patterns for durability and usefulness:
+      Evolve the generalisations in light of this inspection:
 
-      {{candidates}}
+      {{inspection}}
 
-      Select only patterns that are sufficiently supported and durable. Preserve
-      the exact preceding generalisations for each assessment and explain the
-      selection decision.
+      Carry forward, combine, broaden, narrow, split, replace, or otherwise
+      revise generalisations as observations warrant. Each evolution is one
+      current generalisation. Include the exact content and level of every
+      prior generalisation that influences it in `evolves_from`. Use an empty
+      `evolves_from` for a new generalisation that no prior generalisation
+      influences. Exclude prior generalisations that do not influence the
+      evolution.
     output:
-      assessments: "Array<{ content: string; generalises_over: Array<{ content: string; level: integer }>; durable: boolean; reasoning: string }>"
+      evolutions: "Array<{ content: string; evolves_from: Array<{ content: string; level: integer }>; reasoning: string }>"
 
   - label: synthesise-artefact
     directions: |-
-      Synthesize the final generalisation artefact from these assessments:
+      Synthesize the final generalisation artefact from these evolutions:
 
-      {{assessments}}
+      {{evolutions}}
 
-      Include every selected durable generalisation. A generalisation with no
-      preceding generalisations has level 1. Otherwise its level is one greater
-      than the highest level among the generalisations it generalises over. Do
-      not include rejected candidates. Preserve each selected assessment's exact
-      `generalises_over` content and level entries in the final result.
+      Include every evolved generalisation. A generalisation with an empty
+      `evolves_from` has evolution-depth level 1. Otherwise its level is one
+      greater than the highest level in `evolves_from`. Preserve each
+      evolution's exact `evolves_from` content and level snapshots in the final
+      result.
     output:
-      generalisations: "Array<{ content: string; level: integer; generalises_over: Array<{ content: string; level: integer }> }>"
+      generalisations: "Array<{ content: string; level: integer; evolves_from: Array<{ content: string; level: integer }> }>"
