@@ -203,7 +203,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       test_pid = self()
       name = scheduler_name()
 
-      runner = fn reflection, _ingestion, opts ->
+      runner = fn _reflection, _ingestion, opts ->
         attempt = :atomics.add_get(attempts, 1, 1)
         send(test_pid, {:timed_runner, attempt, self(), opts[:artefact_id]})
 
