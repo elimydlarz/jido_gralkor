@@ -157,7 +157,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       refute_receive {:destination_search, _, _, _, _, _, _}
     end
 
-    test "while Search returns results then the action JSON preserves Destination and writer provenance" do
+    test "while Search returns results then the action result is their JSON encoding" do
       assert {:ok, %{result: result}} =
                run_search(%{
                  query: "launch",
@@ -180,6 +180,25 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                  }
                }
              ]
+    end
+
+    test "while Search returns results every returned episode's Destination and originating Lens or declaring Reflection remain identifiable" do
+      assert {:ok, %{result: result}} =
+               run_search(%{
+                 query: "launch",
+                 destinations: ["observations", "global"]
+               })
+
+      assert [
+               %{
+                 "destination" => "observations",
+                 "episode" => %{"lens" => "observations"}
+               },
+               %{
+                 "destination" => "global",
+                 "episode" => %{"reflection" => "generalisations"}
+               }
+             ] = Jason.decode!(result)
     end
 
     test "if Search fails then the failure reason is returned to the caller unchanged" do
