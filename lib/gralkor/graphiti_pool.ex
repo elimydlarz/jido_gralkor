@@ -330,13 +330,8 @@ defmodule Gralkor.GraphitiPool do
         )
 
         episodes = res.episodes
-        def reflection_episode(episode):
-          return (episode.source_description or '').startswith('reflection:')
-
-        def trusted_writer_provenance(episode):
+        def lens_episode(episode):
           source_description = episode.source_description or ''
-          if source_description.startswith('reflection:'):
-            return bool(source_description[len('reflection:'):])
           lens_marker = ' [lens: '
           lens_start = source_description.rfind(lens_marker)
           return (
@@ -344,6 +339,17 @@ defmodule Gralkor.GraphitiPool do
             and source_description.endswith(']')
             and bool(source_description[lens_start + len(lens_marker):-1])
           )
+
+        def reflection_episode(episode):
+          source_description = episode.source_description or ''
+          return (
+            not lens_episode(episode)
+            and source_description.startswith('reflection:')
+            and bool(source_description[len('reflection:'):])
+          )
+
+        def trusted_writer_provenance(episode):
+          return lens_episode(episode) or reflection_episode(episode)
 
         if require_extraction_complete or require_reflection_complete:
           episode_ids = [
