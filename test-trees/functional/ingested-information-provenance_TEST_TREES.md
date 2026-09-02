@@ -30,7 +30,7 @@ when captured conversation turns are ingested automatically
 when information is added or captured through the implicit operator Lens
   then its trusted originating Lens is `operator`
   and public episode search can select it through the `operator` Lens
-  and its reported source description cannot claim a different Lens or Reflection writer
+  and trusted trailing `operator` Lens provenance governs public writer attribution and completion handling despite writer-like source text
 
 when public episode search encounters an incomplete Reflection episode
   then the incomplete Reflection episode does not contribute
