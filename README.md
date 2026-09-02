@@ -749,8 +749,8 @@ The embedded Gralkor adapter (under `lib/gralkor/`):
 - `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, `Gralkor.Ingest`, `Gralkor.IngestedRepresentation`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Search` — resolved ingestion models, completed-ingestion representation, and consumer request values.
 - `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — append, replacement, and search capabilities for exact Destination graph identities.
 - `Gralkor.Lens.Ingestion.Store` — the built-in straight-through ingestion process.
-- `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, `Gralkor.Reflection.Runner`, `Gralkor.Reflection.Supervisor`, `Gralkor.Reflection.Scheduler`, and `Gralkor.Reflection.Journal` — validated YAML declarations plus restartable, durable, bounded, phase-aware asynchronous execution after completed Lens ingestion.
-- `Gralkor.Artefact`, `Gralkor.Artefact.ReturnHandler`, and `Gralkor.Destination.Storage` — producer-independent artefacts, standard consumer return delivery, and deterministic create-or-confirm persistence at Destination outputs.
+- `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, and `Gralkor.Reflection.Runner` — validated YAML declarations and synchronous, consumer-invoked synthesis.
+- `Gralkor.Artefact`, `Gralkor.Artefact.ReturnHandler`, and `Gralkor.Destination.Storage` — producer-independent artefacts plus primitives the consumer uses to deliver return and Destination outputs.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
 - `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Format`, `Gralkor.Config`, and `Gralkor.Message` — the embedded capture, recall, and Graphiti pipelines.
 
