@@ -484,7 +484,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, :continue} =
                Plugin.handle_signal(completion_signal, %{agent: completion_agent})
 
-      assert [["session-one", "operator-one", "Susu", "Eli", _messages, "decisions", [], _]] =
+      assert [["session-one", "operator-one", "Susu", "Eli", _messages, "decisions", []]] =
                InMemory.captures()
     end
 
