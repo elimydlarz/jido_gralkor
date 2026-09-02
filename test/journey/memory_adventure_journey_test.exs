@@ -92,6 +92,21 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       request_transformer: Gralkor.MemoryAdventureJourneyTest.JourneyRequestTransformer
   end
 
+  defmodule JourneyReturnHandler do
+    @behaviour Gralkor.Artefact.ReturnHandler
+
+    use Agent
+
+    def start_link(_opts), do: Agent.start_link(fn -> [] end, name: __MODULE__)
+
+    def artefacts, do: Agent.get(__MODULE__, & &1)
+
+    @impl true
+    def return(_operator_id, _invocation_id, %Gralkor.Artefact{} = artefact) do
+      Agent.update(__MODULE__, &[artefact | &1])
+    end
+  end
+
   setup_all do
     keys = [
       :client,
@@ -100,6 +115,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       :lenses,
       :lens_storage,
       :recall_deadline_ms,
+      :reflection_root,
       :reflections
     ]
 
@@ -119,6 +135,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :recall_deadline_ms, 90_000)
+    Application.put_env(:jido_gralkor, :reflection_root, File.cwd!())
 
     Application.put_env(:jido_gralkor, :destinations, [])
 
@@ -163,8 +180,19 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
             ontology: Gralkor.Reflection.ERLOntology
           ]
         ]
+      ],
+      [
+        name: "published-policy-review",
+        triggers: [{:lens_ingestion, ["published"]}],
+        chain_of_thought: "test/journey/consumer_reflection.yaml",
+        outputs: [
+          [kind: :destination, destination: "global"],
+          [kind: :return, handler: JourneyReturnHandler]
+        ]
       ]
     ])
+
+    {:ok, _return_handler} = start_supervised(JourneyReturnHandler)
 
     {:ok, _python} = start_supervised(Gralkor.Python)
 
@@ -303,6 +331,17 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                adventure.later_generalisation
 
       assert %{"content" => first_content, "level" => 1} in preceding_generalisations
+    end
+  end
+
+  describe "when a completed ingestion triggers a consumer-defined Reflection with Destination and return outputs" do
+    test "then its artefact is searchable through its Destination", %{adventure: adventure} do
+      assert %Artefact{id: "a0ea900d-5a9a-560d-8991-eebcf555ceac"} =
+               adventure.consumer_destination_artefact
+    end
+
+    test "and its consumer return handler receives that exact artefact", %{adventure: adventure} do
+      assert adventure.consumer_returned_artefact == adventure.consumer_destination_artefact
     end
   end
 
@@ -539,6 +578,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         source_description: "deployment policy"
       })
 
+    consumer_artefact_id =
+      Artefact.id_for(@operator_one, "journey-published-policy", "published-policy-review")
+
+    consumer_destination_artefact =
+      destination_artefact_until(@operator_one, "global", consumer_artefact_id)
+
+    consumer_returned_artefact = return_artefact_until(consumer_artefact_id)
+
     :ok =
       Client.ingest(%Ingest{
         id: "journey-work-notes-registry",
@@ -656,6 +703,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         contains_fact?(superseded_graph, "Payments settles through Ledger."),
       first_generalisation: first_generalisation,
       later_generalisation: later_generalisation,
+      consumer_destination_artefact: consumer_destination_artefact,
+      consumer_returned_artefact: consumer_returned_artefact,
       default_memory_search: default_memory_search,
       memory_search_arguments: agent_request.memory_search_arguments,
       memory_search_completion_count: agent_request.memory_search_completion_count,
@@ -764,6 +813,46 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
       %{artefact: artefact} ->
         artefact
+    end
+  end
+
+  defp destination_artefact_until(operator_id, destination, artefact_id, attempts \\ 120)
+
+  defp destination_artefact_until(_operator_id, _destination, _artefact_id, 0), do: nil
+
+  defp destination_artefact_until(operator_id, destination, artefact_id, attempts) do
+    assert {:ok, results} =
+             Client.search(%Search{
+               operator_id: operator_id,
+               query: artefact_id,
+               destinations: [destination],
+               result_type: :artefacts,
+               artefact_id: artefact_id,
+               max_results: 1
+             })
+
+    case Enum.find(results, &match?(%{artefact: %{id: ^artefact_id}}, &1)) do
+      %{artefact: artefact} ->
+        artefact
+
+      nil ->
+        Process.sleep(1_000)
+        destination_artefact_until(operator_id, destination, artefact_id, attempts - 1)
+    end
+  end
+
+  defp return_artefact_until(artefact_id, attempts \\ 120)
+
+  defp return_artefact_until(_artefact_id, 0), do: nil
+
+  defp return_artefact_until(artefact_id, attempts) do
+    case Enum.find(JourneyReturnHandler.artefacts(), &(&1.id == artefact_id)) do
+      %Artefact{} = artefact ->
+        artefact
+
+      nil ->
+        Process.sleep(1_000)
+        return_artefact_until(artefact_id, attempts - 1)
     end
   end
 

@@ -1,0 +1,7 @@
+steps:
+  - label: summarise-published-policy
+    directions: |-
+      Summarise the completed published-policy representation supplied to this
+      Reflection as one concise operational statement.
+    output:
+      summary: "string"
