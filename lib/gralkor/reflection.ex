@@ -1,5 +1,5 @@
 defmodule Gralkor.Reflection do
-  @moduledoc "A named trigger-driven synthesis process that saves to a Destination."
+  @moduledoc "A named trigger-driven synthesis process that delivers one artefact through declared outputs."
 
   alias Gralkor.Reflection.ChainOfThought
 
