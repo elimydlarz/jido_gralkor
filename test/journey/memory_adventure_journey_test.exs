@@ -1112,9 +1112,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     results
   end
 
-  defp memory_search(params) do
+  defp memory_search(operator_id, params) do
     assert {:ok, %{result: result}} =
-             MemorySearch.run(params, %{agent_id: @operator_one})
+             MemorySearch.run(params, %{agent_id: operator_id})
 
     decoded = Jason.decode!(result)
     assert is_list(decoded)
