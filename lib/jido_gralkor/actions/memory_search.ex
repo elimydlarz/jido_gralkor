@@ -2,33 +2,32 @@ defmodule JidoGralkor.Actions.MemorySearch do
   @moduledoc """
   ReAct tool the LLM can call to search long-term memory.
 
-  In Lens-aware mode, calls `Gralkor.Client.search/1` with the operator id and
-  `context[:search_destinations]`. Otherwise it calls the configured
-  client's legacy `recall/4`, using a group id sanitised from
-  `context[:agent_id]` and the configured agent name.
-
-  `session_id` is read from `context[:session_id]` (planted by
-  `JidoGralkor.Plugin` on `ai.react.query`) and is required before either mode
-  searches.
+  Calls `Gralkor.Client.search/1` with the current operator and the optional
+  Destination and Lens selectors supplied for this invocation. Search does not
+  depend on the ingestion Lens or on a committed conversation thread.
 
   Short-circuits with an explicit non-result message when:
 
-    * `session_id` is absent or blank (first query of a fresh agent,
-      before the ReAct strategy committed a thread), or
     * `query` is blank — defensive against forced-tool-call paths
       (`tool_choice: memory_search`) where the LLM is required to
       invoke the tool but has nothing meaningful to search for.
 
-  Destination results are returned as JSON carrying the searched Destination
-  and fact for every match; legacy recall returns its memory block unchanged.
-  Errors propagate.
+  Results are returned as JSON with their Destination and originating Lens or
+  declaring Reflection. Errors propagate.
   """
 
   use Jido.Action,
     name: "memory_search",
-    description: "Search long-term memory for relevant context. Use specific, focused queries.",
+    description:
+      "Search related stored observations and generalisations. Apply relevant generalisations in light of their evolution histories and related observations. Use a specific, focused query.",
     schema: [
-      query: [type: :string, default: "", doc: "The search query"]
+      query: [type: :string, default: "", doc: "The search query"],
+      destinations: [
+        type: {:list, :string},
+        default: [],
+        doc: "Optional Destination names to search"
+      ],
+      lenses: [type: {:list, :string}, default: [], doc: "Optional originating Lens names"]
     ]
 
   require Logger
@@ -36,59 +35,30 @@ defmodule JidoGralkor.Actions.MemorySearch do
   alias Gralkor.Client
   alias Gralkor.Search
 
-  @no_session_result "Memory search did not run: this conversation's session has not been established yet. This is a NON-RESULT, not an empty result — long-term memory was NOT queried. Do not claim you have no memory of prior interactions; either tell the user you cannot check memory right now, or answer without relying on prior context."
-
   @no_query_result "Memory search did not run: no query was provided. Pick a focused query (a concrete episode, behaviour, or topic) and call memory_search again. This is a NON-RESULT, not an empty result — long-term memory was NOT queried."
-
-  @no_session_warning_hint "jido_ai commits state.thread on :request_completed, not at :ai.react.query"
 
   @impl true
   def run(params, context) do
     query = params |> Map.get(:query, "") |> to_string() |> String.trim()
-    session_id = Map.get(context, :session_id)
 
-    cond do
-      query == "" ->
-        Logger.warning(
-          "[jido_gralkor] memory_search short-circuited — blank query for agent #{inspect(Map.get(context, :agent_id))}"
-        )
+    if query == "" do
+      Logger.warning(
+        "[jido_gralkor] memory_search short-circuited — blank query for agent #{inspect(Map.get(context, :agent_id))}"
+      )
 
-        {:ok, %{result: @no_query_result}}
+      {:ok, %{result: @no_query_result}}
+    else
+      request = %Search{
+        operator_id: Map.fetch!(context, :agent_id),
+        query: query,
+        destinations: Map.get(params, :destinations, []),
+        result_type: :episodes
+      }
 
-      blank_session_id?(session_id) ->
-        Logger.warning(
-          "[jido_gralkor] memory_search short-circuited — no session_id in ReAct tool context for agent #{inspect(Map.get(context, :agent_id))} (#{@no_session_warning_hint})"
-        )
-
-        {:ok, %{result: @no_session_result}}
-
-      true ->
-        case Map.get(context, :search_destinations) do
-          destinations when is_list(destinations) ->
-            request = %Search{
-              operator_id: Map.fetch!(context, :agent_id),
-              query: query,
-              destinations: destinations
-            }
-
-            case Client.search(request) do
-              {:ok, results} -> {:ok, %{result: Jason.encode!(results)}}
-              {:error, reason} -> {:error, reason}
-            end
-
-          _ ->
-            group_id = context |> Map.fetch!(:agent_id) |> Client.operator_graph_id()
-            agent_name = Map.fetch!(context, :agent_name)
-
-            case Client.impl().recall(group_id, agent_name, session_id, query) do
-              {:ok, memory_block} -> {:ok, %{result: memory_block}}
-              {:error, reason} -> {:error, reason}
-            end
-        end
+      case Client.search(request) do
+        {:ok, results} -> {:ok, %{result: Jason.encode!(results)} }
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
-
-  defp blank_session_id?(nil), do: true
-  defp blank_session_id?(session_id) when is_binary(session_id), do: String.trim(session_id) == ""
-  defp blank_session_id?(_session_id), do: false
 end
