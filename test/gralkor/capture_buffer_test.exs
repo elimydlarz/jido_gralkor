@@ -232,8 +232,7 @@ defmodule Gralkor.CaptureBufferTest do
           "Susu",
           "Eli",
           ["observations"],
-          [Message.new("user", "x")],
-          %{tool_context: %{source: :test}}
+          [Message.new("user", "x")]
         )
       end
 
