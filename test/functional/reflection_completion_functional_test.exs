@@ -1548,6 +1548,62 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     Pythonx.decode(exists)
   end
 
+  defp assert_verified(key, verification) do
+    cache_key = {__MODULE__, key}
+
+    result =
+      :global.trans(cache_key, fn ->
+        case :persistent_term.get(cache_key, :missing) do
+          :ok ->
+            :ok
+
+          :missing ->
+            :ok = verification.()
+            :persistent_term.put(cache_key, :ok)
+            :ok
+        end
+      end)
+
+    assert result == :ok
+  end
+
+  defp in_memory_artefact(reflection) do
+    output = Enum.find(reflection.outputs, &(&1.kind == :destination))
+    {output, Artefact.new("stable-id", %{"summary" => "stored"})}
+  end
+
+  defp put_in_memory(output, reflection, artefact) do
+    Gralkor.Destination.Storage.InMemory.put_artefact(
+      output,
+      reflection.name,
+      "operator-one",
+      artefact
+    )
+  end
+
+  defp get_in_memory(output, reflection, artefact_id) do
+    Gralkor.Destination.Storage.InMemory.get_artefact(
+      output,
+      reflection.name,
+      "operator-one",
+      artefact_id
+    )
+  end
+
+  defp in_memory_search(output, reflection) do
+    {:ok, artefacts} =
+      Gralkor.Destination.Storage.InMemory.search(
+        output.destination,
+        "operator-one",
+        "",
+        :artefacts,
+        10,
+        []
+      )
+
+    Enum.map(artefacts, &%{artefact: &1, reflection: reflection.name})
+  end
+
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
 end
