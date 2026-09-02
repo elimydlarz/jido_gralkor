@@ -804,6 +804,15 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
   defp decode_episode(%{content: content}), do: Jason.decode!(content)
 
+  defp put_artefact(reflection, operator_id, artefact) do
+    Gralkor.Destination.Storage.put_artefact(
+      Enum.find(reflection.outputs, &(&1.kind == :destination)),
+      reflection.name,
+      operator_id,
+      artefact
+    )
+  end
+
   defp contains_content?(snapshots, content),
     do: Enum.any?(snapshots, &(&1["content"] == content))
 
