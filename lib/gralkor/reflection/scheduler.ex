@@ -68,6 +68,7 @@ defmodule Gralkor.Reflection.Scheduler do
             |> Map.put(:retry_timer, nil)
             |> Map.put_new(:retry_at_ms, nil)
             |> Map.put_new(:active, false)
+            |> Map.put_new(:output_failure, nil)
 
           {job.key, job}
         end)
@@ -246,6 +247,7 @@ defmodule Gralkor.Reflection.Scheduler do
       stage: :lookup,
       attempt: 1,
       artefact: nil,
+      output_failure: nil,
       retry_timer: nil,
       retry_at_ms: nil,
       active: false
@@ -395,8 +397,15 @@ defmodule Gralkor.Reflection.Scheduler do
     end
   end
 
-  defp handle_outcome(state, key, :return, :ok),
-    do: finish_success(state, key, Map.fetch!(state.jobs, key).artefact)
+  defp handle_outcome(state, key, :return, :ok) do
+    job = Map.fetch!(state.jobs, key)
+
+    if job.output_failure do
+      finish_recorded_failure(state, key, job.output_failure)
+    else
+      finish_success(state, key, job.artefact)
+    end
+  end
 
   defp handle_outcome(state, key, :storage_confirmation, {:ok, artefact}),
     do: finish_success(state, key, artefact)
@@ -442,7 +451,7 @@ defmodule Gralkor.Reflection.Scheduler do
 
     case Enum.at(delays, job.attempt - 1) do
       nil ->
-        finish_failure(state, key, reason)
+        finish_output_failure(state, key, reason)
 
       delay ->
         notify(job, {:reflection_retrying, job.reflection.name, failure(job, reason)})
@@ -476,6 +485,25 @@ defmodule Gralkor.Reflection.Scheduler do
   defp finish_failure(state, key, reason) do
     job = Map.fetch!(state.jobs, key)
     error = failure(job, reason)
+    notify(job, {:reflection_completed, job.reflection.name, {:error, error}})
+    release_job(state, key)
+  end
+
+  defp finish_output_failure(state, key, reason) do
+    job = Map.fetch!(state.jobs, key)
+
+    if output_kind(job.stage) == :destination and return_output(job.reflection) do
+      error = failure(job, reason)
+      job = %{job | stage: :return, attempt: 1, active: false, output_failure: error}
+      :ok = Journal.put_all(state.journal, [durable_job(job)])
+      launch(%{state | jobs: Map.put(state.jobs, key, job)}, key)
+    else
+      finish_failure(state, key, reason)
+    end
+  end
+
+  defp finish_recorded_failure(state, key, error) do
+    job = Map.fetch!(state.jobs, key)
     notify(job, {:reflection_completed, job.reflection.name, {:error, error}})
     release_job(state, key)
   end
@@ -620,6 +648,7 @@ defmodule Gralkor.Reflection.Scheduler do
       stage: job.stage,
       attempt: job.attempt,
       artefact: job.artefact,
+      output_failure: job.output_failure,
       retry_at_ms: job.retry_at_ms,
       active: job.active
     }
