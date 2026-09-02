@@ -430,9 +430,11 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Pythonx.decode(proof) == [1, 1, 1]
 
       GenServer.stop(pid)
+      assert_independent_pool_admission()
     end
+  end
 
-    test "and concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent" do
+  defp assert_independent_pool_admission do
       {graphs, _} =
         Pythonx.eval(
           """
@@ -777,7 +779,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Pythonx.decode(renewal_proof) == [true, 8]
       GenServer.stop(first_pool)
       GenServer.stop(second_pool)
-    end
   end
 
   describe "when an episode is added" do
