@@ -479,52 +479,68 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
     end
 
-    test "if a Reflection has no Destination name then validation fails identifying that Reflection",
+    test "if a Destination output has no Destination name then validation fails identifying that Reflection and missing Destination",
          %{root: root} do
-      definition = valid_definition(root) |> Keyword.delete(:destination)
+      definition = valid_definition(root, outputs: [[kind: :destination]])
 
       assert {:error, {:missing_destination, "generalisation", nil}} =
                Registry.load([definition], root: root)
     end
 
-    test "if a Reflection references an unknown Destination then validation fails identifying that Reflection and Destination",
+    test "if a Destination output references an unknown Destination then validation fails identifying that Reflection and Destination",
          %{root: root} do
       assert_raise ArgumentError,
                    ~r/Reflection "generalisation" references unknown Destination "missing"/,
                    fn ->
-                     Registry.load([valid_definition(root, destination: "missing")], root: root)
+                     Registry.load(
+                       [
+                         valid_definition(root,
+                           outputs: [[kind: :destination, destination: "missing"]]
+                         )
+                       ],
+                       root: root
+                     )
                    end
     end
 
-    test "if a Reflection declares an invalid ontology then validation fails identifying that Reflection and ontology",
+    test "if a Destination output declares an invalid ontology then validation fails identifying that Reflection and ontology",
          %{root: root} do
       assert {:error, {:invalid_ontology, "generalisation", String}} =
-               Registry.load([valid_definition(root, ontology: String)], root: root)
+               Registry.load(
+                 [
+                   valid_definition(root,
+                     outputs: [
+                       [kind: :destination, destination: "operator", ontology: String]
+                     ]
+                   )
+                 ],
+                 root: root
+               )
     end
   end
 
   describe "where the packaged default Reflections are used" do
-    test "then ERL references the packaged `operator` Destination" do
+    test "then ERL declares one Destination output referencing the packaged `operator` Destination" do
       Application.delete_env(:jido_gralkor, :reflections)
 
-      assert %Gralkor.Reflection{
-               name: "erl",
-               destination: %Gralkor.Destination{name: "operator"}
-             } = Enum.find(Registry.configured!(), &(&1.name == "erl"))
+      erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
+
+      assert [%{kind: :destination, destination: %Gralkor.Destination{name: "operator"}}] =
+               erl.outputs
     end
 
-    test "and ERL carries jido_gralkor's built-in experiential-learning ontology" do
+    test "and ERL's Destination output carries jido_gralkor's built-in experiential-learning ontology" do
       Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
 
-      assert erl.ontology == Gralkor.Reflection.ERLOntology
+      assert destination_output(erl).ontology == Gralkor.Reflection.ERLOntology
     end
 
-    test "and generalisation references the packaged `global` Destination" do
+    test "and generalisation declares one Destination output referencing the packaged `global` Destination" do
       Application.delete_env(:jido_gralkor, :reflections)
       generalisation = Enum.find(Registry.configured!(), &(&1.name == "generalisations"))
 
-      assert generalisation.destination.name == "global"
+      assert destination_output(generalisation).destination.name == "global"
     end
   end
 
@@ -532,7 +548,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then its final artefact receives generic extraction",
          %{root: root} do
       reflection = Registry.load!([valid_definition(root)], root: root) |> List.first()
-      assert reflection.ontology == Gralkor.DefaultOntology
+      assert destination_output(reflection).ontology == Gralkor.DefaultOntology
     end
   end
 
@@ -542,15 +558,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         Registry.load!(
           [
             valid_definition(root,
-              destination: "observations",
-              ontology: ReflectionOntology
+              outputs: [
+                [
+                  kind: :destination,
+                  destination: "observations",
+                  ontology: ReflectionOntology
+                ]
+              ]
             )
           ],
           root: root
         )
         |> List.first()
 
-      assert reflection.ontology == ReflectionOntology
+      assert destination_output(reflection).ontology == ReflectionOntology
     end
   end
 
@@ -567,8 +588,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       end
 
       assert :ok =
-               Gralkor.Reflection.Storage.Graphiti.put(
-                 erl,
+               Gralkor.Reflection.Storage.Graphiti.put_output(
+                 destination_output(erl),
+                 erl.name,
                  "operator-one",
                  artefact,
                  add_episode
@@ -1688,7 +1710,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
             [
               %Gralkor.Reflection{
                 name: "generalisation",
-                destination: %Gralkor.Destination{name: "operator"}
+                outputs: [
+                  %{kind: :destination, destination: %Gralkor.Destination{name: "operator"}}
+                ]
               }
             ]} =
              Registry.load([valid_definition(root)], root: root)
@@ -1700,7 +1724,15 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
          destination \\ "operator"
        ) do
     [reflection] =
-      Registry.load!([valid_definition(root, name: name, destination: destination)], root: root)
+      Registry.load!(
+        [
+          valid_definition(root,
+            name: name,
+            outputs: [[kind: :destination, destination: destination]]
+          )
+        ],
+        root: root
+      )
 
     reflection
   end
@@ -1875,7 +1907,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         name: "generalisation",
         triggers: [{:lens_ingestion, :any}],
         chain_of_thought: "valid.yaml",
-        destination: "operator"
+        outputs: [[kind: :destination, destination: "operator"]]
       ],
       overrides
     )
@@ -1889,6 +1921,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   defp configure_reflections(reflections) do
     Application.put_env(:jido_gralkor, :reflections, reflections)
+  end
+
+  defp destination_output(reflection) do
+    Enum.find(reflection.outputs, &(&1.kind == :destination))
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
