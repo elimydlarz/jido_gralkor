@@ -65,7 +65,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     File.mkdir_p!(root)
     on_exit(fn -> File.rm_rf!(root) end)
-    start_supervised!(Gralkor.Reflection.Storage.InMemory)
+    start_supervised!(Gralkor.Destination.Storage.InMemory)
     start_supervised!(Gralkor.Lens.Storage.InMemory)
 
     start_supervised!(

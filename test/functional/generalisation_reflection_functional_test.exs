@@ -795,7 +795,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
   defp use_real_memory do
     start_supervised!(Gralkor.Lens.Storage.InMemory)
-    start_supervised!(Gralkor.Reflection.Storage.InMemory)
+    start_supervised!(Gralkor.Destination.Storage.InMemory)
 
     Application.put_env(
       :jido_gralkor,

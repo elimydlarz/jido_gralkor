@@ -142,7 +142,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     on_exit(fn -> Enum.each(previous, fn {key, value} -> restore_env(key, value) end) end)
 
     start_supervised!(Gralkor.Lens.Storage.InMemory)
-    start_supervised!(Gralkor.Reflection.Storage.InMemory)
+    start_supervised!(Gralkor.Destination.Storage.InMemory)
 
     Application.put_env(:jido_gralkor, :destinations, [[name: "observations"]])
 

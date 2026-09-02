@@ -743,7 +743,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
   defp use_in_memory_storage do
     start_supervised!(Gralkor.Lens.Storage.InMemory)
-    start_supervised!(Gralkor.Reflection.Storage.InMemory)
+    start_supervised!(Gralkor.Destination.Storage.InMemory)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
 
     Application.put_env(
