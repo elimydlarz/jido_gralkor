@@ -502,7 +502,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when an ingestion operation successfully stores information through one or more Lenses" do
+  describe "when an ingestion successfully stores one or more representations through its intended Lenses" do
     test "while Reflections are declared then every stored representation retains its own identifier, Lens identity, content, and storage result" do
       Application.put_env(:jido_gralkor, :lenses, [
         [
@@ -582,7 +582,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert System.monotonic_time(:millisecond) - started < 100
     end
 
-    test "and every declared Reflection is scheduled once for the completed ingestion operation",
+    test "while a Reflection declares `{:lens_ingestion, :any}` then that Reflection is admitted exactly once for the completed ingestion",
          context do
       reflections = [reflection(context, "one"), reflection(context, "two")]
       parent = self()
@@ -604,8 +604,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         {CaptureBuffer,
          flush_callback: fn _, _, _, _, _ -> :ok end,
          lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
-         reflection_callback: fn _reflections, ingestion ->
-           send(parent, {:scheduled, Enum.map(reflections, & &1.name), ingestion})
+         reflection_callback: fn eligible_reflections, ingestion ->
+           send(parent, {:scheduled, Enum.map(eligible_reflections, & &1.name), ingestion})
            :ok
          end,
          reflections: reflections,
@@ -638,10 +638,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       refute_receive {:scheduled, _, _}
     end
 
-    test "and every Reflection without the ingestion trigger remains uninvoked", context do
+    test "while a Reflection declares only `:programmatic` then that Reflection is not admitted",
+         context do
       parent = self()
       ingestion_reflection = reflection(context, "ingestion")
-      request_reflection = %{reflection(context, "request") | triggers: [:agent_request]}
+      request_reflection = %{reflection(context, "request") | triggers: [:programmatic]}
 
       start_supervised!(
         {CaptureBuffer,
@@ -667,6 +668,80 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert :ok = CaptureBuffer.flush_and_await("session-trigger-filter", 1_000)
       assert_receive {:eligible_reflections, ["ingestion"]}
+    end
+
+    test "while a Reflection names one or more completed Lenses in a Lens-ingestion trigger then that Reflection is admitted exactly once for the completed ingestion",
+         context do
+      parent = self()
+
+      named = %{
+        reflection(context, "named")
+        | triggers: [{:lens_ingestion, ["observations", "decisions"]}]
+      }
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: representation_callback(parent),
+         reflection_callback: fn reflections, invocation ->
+           send(parent, {:named_lens_admission, Enum.map(reflections, & &1.name), invocation})
+           :ok
+         end,
+         reflections: [named],
+         retries: []}
+      )
+
+      :ok =
+        CaptureBuffer.append_lenses(
+          "session-named-trigger",
+          "operator-one",
+          "Susu",
+          "Eli",
+          ["observations", "decisions"],
+          [Message.new("user", "remember")]
+        )
+
+      assert :ok = CaptureBuffer.flush_and_await("session-named-trigger", 1_000)
+
+      assert_receive {:named_lens_admission, ["named"],
+                      %{completed_lenses: ["observations", "decisions"]}}
+
+      refute_receive {:named_lens_admission, _, _}
+    end
+
+    test "while none of a Reflection's named Lenses completed then that Reflection is not admitted",
+         context do
+      parent = self()
+
+      named = %{
+        reflection(context, "named")
+        | triggers: [{:lens_ingestion, ["decisions"]}]
+      }
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: representation_callback(parent),
+         reflection_callback: fn reflections, _invocation ->
+           send(parent, {:unexpected_admission, reflections})
+           :ok
+         end,
+         reflections: [named],
+         retries: []}
+      )
+
+      :ok =
+        CaptureBuffer.append_lens(
+          "session-no-match",
+          "operator-one",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "remember")]
+        )
+
+      assert :ok = CaptureBuffer.flush_and_await("session-no-match", 1_000)
+      refute_receive {:unexpected_admission, _}
     end
 
     test "and no Reflection begins before every intended Lens ingestion has completed", context do
