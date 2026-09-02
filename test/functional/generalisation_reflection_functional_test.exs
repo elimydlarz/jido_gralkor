@@ -278,6 +278,9 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       assert directions =~
                "When that list is empty, every evolution must use an empty `evolves_from`"
+
+      assert directions =~
+               "When a current representation explicitly says it extends an eligible prior generalisation and repeats that prior's content, that prior influences the evolution and must be copied into `evolves_from`"
     end
 
     test "and inference is directed to revisit current and related observations together with prior generalisations" do
