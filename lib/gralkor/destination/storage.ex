@@ -2,6 +2,7 @@ defmodule Gralkor.Destination.Storage do
   @moduledoc false
 
   alias Gralkor.Destination
+  alias Gralkor.Artefact
 
   @callback search(
               Destination.t(),
@@ -11,6 +12,12 @@ defmodule Gralkor.Destination.Storage do
               max_results :: pos_integer(),
               keyword()
             ) :: {:ok, [term()]} | {:error, term()}
+
+  @callback put_artefact(map(), String.t(), String.t(), Artefact.t()) ::
+              :ok | {:error, term()}
+
+  @callback get_artefact(map(), String.t(), String.t(), Artefact.t()) ::
+              {:ok, Artefact.t()} | {:error, term()}
 
   def search(destination, operator_id, query, result_type, max_results, opts) do
     storage().search(destination, operator_id, query, result_type, max_results, opts)

@@ -7,6 +7,16 @@ defmodule Gralkor.Destination.Storage.InMemory do
   alias Gralkor.Reflection.Storage.InMemory, as: ReflectionStorage
 
   @impl true
+  def put_artefact(output, _reflection_name, operator_id, artefact) do
+    ReflectionStorage.put_destination(output.destination, operator_id, artefact)
+  end
+
+  @impl true
+  def get_artefact(output, _reflection_name, operator_id, artefact_id) do
+    ReflectionStorage.get_destination(output.destination, operator_id, artefact_id)
+  end
+
+  @impl true
   def search(destination, operator_id, _query, :facts, max_results, _opts) do
     results =
       destination

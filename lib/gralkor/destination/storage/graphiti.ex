@@ -7,6 +7,26 @@ defmodule Gralkor.Destination.Storage.Graphiti do
   alias Gralkor.GraphitiPool
 
   @impl true
+  def put_artefact(output, reflection_name, operator_id, artefact) do
+    Gralkor.Reflection.Storage.Graphiti.put_output(
+      output,
+      reflection_name,
+      operator_id,
+      artefact
+    )
+  end
+
+  @impl true
+  def get_artefact(output, reflection_name, operator_id, artefact_id) do
+    Gralkor.Reflection.Storage.Graphiti.get_output(
+      output,
+      reflection_name,
+      operator_id,
+      artefact_id
+    )
+  end
+
+  @impl true
   def search(destination, operator_id, query, :facts, max_results, opts) do
     graph_id = Destination.graph_id(destination, operator_id)
     search_opts = Keyword.take(opts, [:edge_types])

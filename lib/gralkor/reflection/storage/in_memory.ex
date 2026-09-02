@@ -11,7 +11,11 @@ defmodule Gralkor.Reflection.Storage.InMemory do
 
   @impl true
   def put(reflection, operator_id, artefact) do
-    destination = Store.destination(reflection, operator_id)
+    put_destination(reflection.destination, operator_id, artefact)
+  end
+
+  def put_destination(destination, operator_id, artefact) do
+    destination = Gralkor.Destination.graph_id(destination, operator_id)
 
     Agent.get_and_update(__MODULE__, fn state ->
       artefacts = Map.get(state, destination, [])
@@ -31,7 +35,11 @@ defmodule Gralkor.Reflection.Storage.InMemory do
 
   @impl true
   def get(reflection, operator_id, artefact_id) do
-    destination = Store.destination(reflection, operator_id)
+    get_destination(reflection.destination, operator_id, artefact_id)
+  end
+
+  def get_destination(destination, operator_id, artefact_id) do
+    destination = Gralkor.Destination.graph_id(destination, operator_id)
 
     Agent.get(__MODULE__, fn state ->
       case Enum.find(Map.get(state, destination, []), &(&1.id == artefact_id)) do

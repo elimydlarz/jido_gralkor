@@ -27,21 +27,39 @@ defmodule Gralkor.Reflection.Store do
                  | term()}
 
   def put(%Reflection{} = reflection, operator_id, %Artefact{} = artefact, opts \\ []) do
-    storage(opts).put(reflection, operator_id, artefact)
+    storage(opts).put_artefact(
+      destination_output(reflection),
+      reflection.name,
+      operator_id,
+      artefact
+    )
   end
 
   def get(%Reflection{} = reflection, operator_id, artefact_id, opts \\ []) do
-    storage(opts).get(reflection, operator_id, artefact_id)
+    storage(opts).get_artefact(
+      destination_output(reflection),
+      reflection.name,
+      operator_id,
+      artefact_id
+    )
   end
 
-  def destination(%Reflection{destination: destination}, operator_id),
-    do: Gralkor.Destination.graph_id(destination, operator_id)
+  def destination(%Reflection{} = reflection, operator_id),
+    do: Gralkor.Destination.graph_id(destination_output(reflection).destination, operator_id)
+
+  defp destination_output(reflection) do
+    Enum.find(reflection.outputs, &(&1.kind == :destination))
+  end
 
   defp storage(opts) do
     Keyword.get(
       opts,
       :storage,
-      Application.get_env(:jido_gralkor, :reflection_storage, Gralkor.Reflection.Storage.Graphiti)
+      Application.get_env(
+        :jido_gralkor,
+        :destination_storage,
+        Gralkor.Destination.Storage.Graphiti
+      )
     )
   end
 end
