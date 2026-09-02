@@ -1339,12 +1339,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                  artefact_id: artefact_id
                })
 
-      Application.put_env(
-        :jido_gralkor,
-        :reflection_storage,
-        Gralkor.Reflection.Storage.Graphiti
-      )
-
       assert {:ok, :scheduled} =
                Scheduler.schedule([reflection], scheduler_ingestion())
 
@@ -1565,12 +1559,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                "lease_until_ms" => nil,
                "owner" => nil
              }
-
-      Application.put_env(
-        :jido_gralkor,
-        :reflection_storage,
-        Gralkor.Reflection.Storage.Graphiti
-      )
 
       assert {:ok, :scheduled} = Scheduler.schedule([reflection], scheduler_ingestion())
       assert_receive {:reflection_completed, "review", {:ok, ^artefact}}, 1_000
