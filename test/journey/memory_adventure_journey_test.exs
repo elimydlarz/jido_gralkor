@@ -938,17 +938,30 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     canaries exposes configuration faults before broad customer impact.
     """
 
-    :ok =
-      Client.ingest(%Ingest{
-        id: first_ingestion_id,
-        operator_id: @operator_one,
-        lens: "work-notes",
-        source_kind: :document,
-        content: first_report,
-        source_description: "cross-team canary deployment review"
-      })
+    assert {:ok, first_representations} =
+             Client.ingest_with_representation(%Ingest{
+               id: first_ingestion_id,
+               operator_id: @operator_one,
+               lens: "work-notes",
+               source_kind: :document,
+               content: first_report,
+               source_description: "cross-team canary deployment review"
+             })
 
-    first_generalisation_artefact = generalisation_artefact_until(first_ingestion_id)
+    first_generalisation_artefact =
+      invoke_reflection!(
+        "generalisations",
+        @operator_one,
+        first_ingestion_id,
+        first_representations
+      )
+
+    store_artefact!(
+      first_generalisation_artefact,
+      "generalisations",
+      @operator_one,
+      "operations"
+    )
 
     first_generalisation =
       first_generalisation_artefact
@@ -975,20 +988,33 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     exposes faults before broad impact.
     """
 
-    :ok =
-      Client.ingest(%Ingest{
-        id: later_ingestion_id,
-        operator_id: @operator_one,
-        lens: "work-notes",
-        source_kind: :document,
-        content: later_report,
-        source_description: "cross-domain reversible change review"
-      })
+    assert {:ok, later_representations} =
+             Client.ingest_with_representation(%Ingest{
+               id: later_ingestion_id,
+               operator_id: @operator_one,
+               lens: "work-notes",
+               source_kind: :document,
+               content: later_report,
+               source_description: "cross-domain reversible change review"
+             })
+
+    later_generalisation_artefact =
+      invoke_reflection!(
+        "generalisations",
+        @operator_one,
+        later_ingestion_id,
+        later_representations
+      )
+
+    store_artefact!(
+      later_generalisation_artefact,
+      "generalisations",
+      @operator_one,
+      "operations"
+    )
 
     later_generalisation =
-      later_ingestion_id
-      |> generalisation_artefact_until()
-      |> find_generalisation(fn generalisation ->
+      find_generalisation(later_generalisation_artefact, fn generalisation ->
         generalisation["level"] == 2 and
           %{"content" => first_content, "level" => 1} in generalisation["evolves_from"]
       end)
