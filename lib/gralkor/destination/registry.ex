@@ -38,6 +38,11 @@ defmodule Gralkor.Destination.Registry do
       raise ArgumentError, "invalid Destination name #{inspect(name)}"
     end
 
+    if String.starts_with?(name, "operator/") do
+      raise ArgumentError,
+            "invalid Destination #{inspect(name)}: name uses reserved \"operator/\" graph namespace"
+    end
+
     validate_fields!(name, definition)
     %Destination{name: name}
   end

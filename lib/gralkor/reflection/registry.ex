@@ -5,6 +5,8 @@ defmodule Gralkor.Reflection.Registry do
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Destination.Registry, as: DestinationRegistry
 
+  @lens_provenance_delimiter " [lens: "
+
   @built_in_definitions [
     [
       name: "generalisations",
@@ -126,6 +128,9 @@ defmodule Gralkor.Reflection.Registry do
 
     cond do
       invalid = Enum.find(names, &(not non_blank?(&1))) -> {:error, {:blank_name, invalid}}
+      reserved = Enum.find(names, &String.contains?(&1, @lens_provenance_delimiter)) ->
+        {:error, {:reserved_provenance_syntax, reserved, @lens_provenance_delimiter}}
+
       duplicate = duplicate(names) -> {:error, {:duplicate_name, duplicate}}
       true -> :ok
     end
