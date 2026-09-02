@@ -2288,9 +2288,11 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a graph instance is requested for a group" do
-    test "then the instance is looked up from a cache shared across callers" do
+    test "then the logical identifier is encoded into its collision-free physical identifier at this boundary" do
       counter = :counters.new(1, [])
       test_pid = self()
+      first_physical = physical("with-hyphens")
+      second_physical = physical("another")
 
       construct_instance = fn _db, _shared, group ->
         :counters.add(counter, 1, 1)
@@ -2301,24 +2303,24 @@ defmodule Gralkor.GraphitiPoolTest do
       %{pid: pid, table: table} = start_pool(construct_instance: construct_instance)
 
       a1 = GraphitiPool.for(pid, "with-hyphens")
-      assert_receive {:constructed, "with_hyphens"}
+      assert_receive {:constructed, ^first_physical}
       assert :counters.get(counter, 1) == 1
-      assert a1 == {:stub_graphiti, "with_hyphens"}
+      assert a1 == {:stub_graphiti, first_physical}
 
-      assert [{"with_hyphens", {:stub_graphiti, "with_hyphens"}}] =
-               :ets.lookup(table, "with_hyphens")
+      assert [{^first_physical, {:stub_graphiti, ^first_physical}}] =
+               :ets.lookup(table, first_physical)
 
       a2 = GraphitiPool.for(pid, "with-hyphens")
       assert a2 == a1
       assert :counters.get(counter, 1) == 1
 
       b = GraphitiPool.for(pid, "another")
-      assert_receive {:constructed, "another"}
+      assert_receive {:constructed, ^second_physical}
       assert :counters.get(counter, 1) == 2
       refute b == a1
 
       assert Enum.sort(Enum.map(:ets.tab2list(table), fn {k, _} -> k end)) ==
-               ["another", "with_hyphens"]
+               Enum.sort([first_physical, second_physical])
     end
   end
 
@@ -2332,13 +2334,15 @@ defmodule Gralkor.GraphitiPoolTest do
 
       %{pid: pid} = start_pool(construct_instance: slow_construct)
 
-      assert {:stub_graphiti, "slowgroup"} = GraphitiPool.for(pid, "slowgroup")
+      assert {:stub_graphiti, physical_group} = GraphitiPool.for(pid, "slowgroup")
+      assert physical_group == physical("slowgroup")
     end
   end
 
   describe "when a graph instance is requested for a group > while no instance is cached for that group" do
     test "then the instance is constructed, cached, and held for the pool's lifetime" do
       construction_count = :counters.new(1, [])
+      physical_group = physical("operator-one")
 
       %{pid: pid, table: table} =
         start_pool(
@@ -2348,9 +2352,11 @@ defmodule Gralkor.GraphitiPoolTest do
           end
         )
 
-      assert {:instance, "operator_one"} = GraphitiPool.for(pid, "operator-one")
-      assert [{"operator_one", {:instance, "operator_one"}}] = :ets.lookup(table, "operator_one")
-      assert {:instance, "operator_one"} = GraphitiPool.for(pid, "operator-one")
+      assert {:instance, ^physical_group} = GraphitiPool.for(pid, "operator-one")
+      assert [{^physical_group, {:instance, ^physical_group}}] =
+               :ets.lookup(table, physical_group)
+
+      assert {:instance, ^physical_group} = GraphitiPool.for(pid, "operator-one")
       assert :counters.get(construction_count, 1) == 1
     end
 
@@ -2377,8 +2383,9 @@ defmodule Gralkor.GraphitiPoolTest do
           install_loop_fn: &Gralkor.Python.install_async_runtime/0
         )
 
+      physical_group = physical("indexed")
       assert ^instance = GraphitiPool.for(pid, "indexed")
-      assert [{"indexed", ^instance}] = :ets.lookup(table, "indexed")
+      assert [{^physical_group, ^instance}] = :ets.lookup(table, physical_group)
 
       {count, _} = Pythonx.eval("g.initialisation_count", %{"g" => instance})
       assert Pythonx.decode(count) == 1
@@ -2412,8 +2419,9 @@ defmodule Gralkor.GraphitiPoolTest do
               install_loop_fn: &Gralkor.Python.install_async_runtime/0
             )
 
+          physical_group = physical("best-effort")
           assert ^instance = GraphitiPool.for(pid, "best-effort")
-          assert [{"best_effort", ^instance}] = :ets.lookup(table, "best_effort")
+          assert [{^physical_group, ^instance}] = :ets.lookup(table, physical_group)
           assert ^instance = GraphitiPool.for(pid, "best-effort")
         end)
 
@@ -2422,6 +2430,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
 
     test "and the instance is still cached and returned" do
+      physical_group = physical("best-effort")
+
       %{pid: pid, table: table} =
         start_pool(
           construct_instance: fn _db, _shared, group -> {:instance, group} end,
@@ -2429,11 +2439,11 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       capture_log(fn ->
-        assert {:instance, "best_effort"} = GraphitiPool.for(pid, "best-effort")
+        assert {:instance, ^physical_group} = GraphitiPool.for(pid, "best-effort")
       end)
 
-      assert [{"best_effort", {:instance, "best_effort"}}] =
-               :ets.lookup(table, "best_effort")
+      assert [{^physical_group, {:instance, ^physical_group}}] =
+               :ets.lookup(table, physical_group)
     end
   end
 
@@ -2479,6 +2489,8 @@ defmodule Gralkor.GraphitiPoolTest do
     test "then the remote database is constructed once and held for the pool's lifetime" do
       falkor_db_count = :counters.new(1, [])
       instance_count = :counters.new(1, [])
+      first_physical = physical("with-hyphens")
+      second_physical = physical("another")
 
       construct_falkor_db = fn {:remote, _} ->
         :counters.add(falkor_db_count, 1, 1)
@@ -2503,9 +2515,9 @@ defmodule Gralkor.GraphitiPoolTest do
 
       a = GraphitiPool.for(pid, "with-hyphens")
       assert :counters.get(instance_count, 1) == 1
-      assert match?({:stub_graphiti, "with_hyphens", {:stub_falkor_db, 1}, _}, a)
+      assert match?({:stub_graphiti, ^first_physical, {:stub_falkor_db, 1}, _}, a)
 
-      assert [{"with_hyphens", ^a}] = :ets.lookup(table, "with_hyphens")
+      assert [{^first_physical, ^a}] = :ets.lookup(table, first_physical)
 
       b = GraphitiPool.for(pid, "with-hyphens")
       assert b == a
@@ -2518,7 +2530,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert :counters.get(falkor_db_count, 1) == 1
 
       assert Enum.sort(Enum.map(:ets.tab2list(table), fn {k, _} -> k end)) ==
-               ["another", "with_hyphens"]
+               Enum.sort([first_physical, second_physical])
     end
   end
 
