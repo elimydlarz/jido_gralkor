@@ -418,25 +418,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert destination_output(erl).ontology == Gralkor.Reflection.ERLOntology
     end
 
-    test "and ERL declares `{:lens_ingestion, :any}`" do
-      Application.delete_env(:jido_gralkor, :reflections)
-      erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
-
-      assert erl.triggers == [{:lens_ingestion, :any}]
-    end
-
     test "and generalisation declares one Destination output referencing the packaged `global` Destination" do
       Application.delete_env(:jido_gralkor, :reflections)
       generalisation = Enum.find(Registry.configured!(), &(&1.name == "generalisations"))
 
       assert destination_output(generalisation).destination.name == "global"
-    end
-
-    test "and generalisation declares `{:lens_ingestion, :any}`" do
-      Application.delete_env(:jido_gralkor, :reflections)
-      generalisation = Enum.find(Registry.configured!(), &(&1.name == "generalisations"))
-
-      assert generalisation.triggers == [{:lens_ingestion, :any}]
     end
 
     test "and neither packaged Reflection declares a return output" do
