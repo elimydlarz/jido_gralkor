@@ -27,6 +27,9 @@ when Reflection declarations are validated
   if a Reflection name is blank
     then validation fails identifying the blank name
 
+  if a Reflection name contains the reserved provenance delimiter ` [lens: `
+    then validation fails identifying the Reflection and reserved provenance syntax
+
   if Reflection names are duplicated
     then validation fails identifying the duplicate name
 

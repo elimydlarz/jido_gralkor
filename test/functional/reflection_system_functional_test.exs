@@ -273,6 +273,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_raise ArgumentError, ~r/blank_name.*" "/, fn -> Registry.configured!() end
     end
 
+    test "if a Reflection name contains the reserved provenance delimiter ` [lens: ` then validation fails identifying the Reflection and reserved provenance syntax",
+         %{root: root} do
+      name = "review [lens: observations]"
+
+      assert {:error, {:reserved_provenance_syntax, ^name, " [lens: "}} =
+               Registry.load([valid_definition(root, name: name)], root: root)
+    end
+
     test "if Reflection names are duplicated then validation fails identifying the duplicate name",
          %{root: root} do
       definition = valid_definition(root)

@@ -21,6 +21,7 @@ if the Destination registry is not a list
 if an application registers an invalid Destination
   then configuration resolution raises `ArgumentError` before ingestion, Reflection, or search begins
   and a blank Destination name is identified
+  and a Destination name beginning `operator/` is identified as reserved
   and a duplicate Destination name is identified
   and an invalid Destination definition shape is identified
   and an address setting is identified as unsupported with its Destination

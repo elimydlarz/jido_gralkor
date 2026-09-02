@@ -180,6 +180,15 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       assert_raise ArgumentError, ~r/invalid Lens name " "/, fn -> Client.lens!(" ") end
     end
 
+    test "and a Lens name containing the reserved provenance delimiter ` [lens: ` is identified" do
+      name = "review [lens: observations]"
+      Application.put_env(:jido_gralkor, :lenses, [valid_lens(name)])
+
+      assert_raise ArgumentError,
+                   ~r/invalid Lens "review \[lens: observations\]".*reserved provenance syntax.*" \[lens: "/,
+                   fn -> Client.lens!(name) end
+    end
+
     test "and a duplicate Lens name is identified" do
       Application.put_env(:jido_gralkor, :lenses, [
         valid_lens("observations"),

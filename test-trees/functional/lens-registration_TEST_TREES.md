@@ -20,6 +20,7 @@ if an application's Lens registry is not a list
 if an application registers an invalid Lens
   then configuration resolution raises `ArgumentError` before ingestion or search begins
   and a blank Lens name is identified
+  and a Lens name containing the reserved provenance delimiter ` [lens: ` is identified
   and a duplicate Lens name is identified
   and a reserved `operator` or `global` Lens name is identified
   and the retired `default` Lens name identifies `operator` as its replacement

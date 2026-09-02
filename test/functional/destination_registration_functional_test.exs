@@ -214,6 +214,16 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       end
     end
 
+    test "and a Destination name beginning `operator/` is identified as reserved" do
+      Application.put_env(:jido_gralkor, :destinations, [
+        [name: "operator/shared"]
+      ])
+
+      assert_raise ArgumentError,
+                   ~r/invalid Destination "operator\/shared".*reserved.*"operator\/"/,
+                   fn -> Client.lens!("observations") end
+    end
+
     test "and a duplicate Destination name is identified" do
       Application.put_env(:jido_gralkor, :destinations, [
         [name: "shared"],
