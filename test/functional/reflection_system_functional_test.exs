@@ -186,6 +186,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Registry.load([definition], root: root)
     end
 
+    test "if a Reflection declares no Destination output then validation fails identifying that Reflection and missing Destination output",
+         %{root: root} do
+      definition = valid_definition(root, outputs: [])
+
+      assert {:error, {:missing_destination_output, "generalisation"}} =
+               Registry.load([definition], root: root)
+    end
+
     test "if a Reflection name is blank then validation fails identifying the blank name", %{
       root: root
     } do
