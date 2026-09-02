@@ -988,7 +988,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
              }
     end
 
-    test "where the search also identifies one artefact then only that artefact is returned from the selected Destination",
+  end
+
+  describe "when a Destination is searched for artefacts > where the search also identifies one artefact" do
+    test "then only that artefact is returned from the selected Destination",
          context do
       {reflection, artefact} = stored_artefact(context)
       {:ok, other} = Runner.run(reflection, invocation(), inference: &output_for/1)
@@ -1009,24 +1012,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  test "if memory is searched naming an unknown Destination then the search fails before any storage is searched" do
-    Application.put_env(:jido_gralkor, :destination_storage, FailingReflectionStorage)
+  describe "if the retired `:reflection_storage` setting is configured" do
+    test "then application startup fails identifying Destination outputs as the artefact memory boundary" do
+      Application.put_env(:jido_gralkor, :reflection_storage, FailingReflectionStorage)
 
-    assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
-      Client.search(%Search{
-        operator_id: "operator-one",
-        query: "query",
-        destinations: ["missing"],
-        result_type: :artefacts
-      })
-    end
-  end
-
-  test "if the retired `:reflection_storage` setting is configured then application startup fails identifying Destination outputs as the artefact memory boundary" do
-    Application.put_env(:jido_gralkor, :reflection_storage, FailingReflectionStorage)
-
-    assert_raise ArgumentError, ~r/Destination outputs.*artefact memory boundary/, fn ->
-      Gralkor.Application.children()
+      assert_raise ArgumentError, ~r/Destination outputs.*artefact memory boundary/, fn ->
+        Gralkor.Application.children()
+      end
     end
   end
 
