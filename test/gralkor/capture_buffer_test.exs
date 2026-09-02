@@ -1179,59 +1179,31 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  defp append_reflection_turn(context) do
+  defp append_lens_turn do
     CaptureBuffer.append_lens(
       "reflection-session",
       "operator-one",
       "Susu",
       "Eli",
       "observations",
-      [Message.new("user", "remember this")],
-      context
+      [Message.new("user", "remember this")]
     )
   end
 
-  defp restart_with_reflection_capture do
+  defp restart_with_ingestion_id_capture do
     test_pid = self()
 
-    restart_with_scheduling_callback(fn reflections, ingestion ->
-      send(test_pid, {:reflections_scheduled, reflections, ingestion})
-      :ok
-    end)
-  end
-
-  defp restart_with_invalid_representation do
-    test_pid = self()
-
-    lens_flush_callback = fn _, _, _, _lens, _, _ingestion_id ->
-      {:ok, %{id: "representation-one", lens: "wrong-lens"}}
-    end
-
-    reflection_callback = fn reflections, ingestion ->
-      send(test_pid, {:reflections_scheduled, reflections, ingestion})
+    lens_flush_callback = fn _, _, _, _, _, ingestion_id ->
+      send(test_pid, {:lens_flushed, ingestion_id})
       :ok
     end
 
-    restart_reflection_buffer(lens_flush_callback, reflection_callback)
-  end
-
-  defp restart_with_scheduling_callback(reflection_callback) do
-    lens_flush_callback = fn _, _, _, lens, _, _ingestion_id ->
-      {:ok, %{id: "representation-#{lens}", lens: lens, result: :ok}}
-    end
-
-    restart_reflection_buffer(lens_flush_callback, reflection_callback)
-  end
-
-  defp restart_reflection_buffer(lens_flush_callback, reflection_callback) do
     :ok = stop_supervised(CaptureBuffer)
 
     start_supervised!(
       {CaptureBuffer,
        flush_callback: fn _, _, _, _, _ -> :ok end,
        lens_flush_callback: lens_flush_callback,
-       reflections: [:daily_summary, :erl],
-       reflection_callback: reflection_callback,
        retries: []}
     )
   end
@@ -1286,13 +1258,9 @@ defmodule Gralkor.CaptureBufferTest do
 
         receive do
           :finish_flush ->
+            send(test_pid, :fire_and_forget_finished)
             {:ok, %{id: "representation-one", lens: lens, result: :ok}}
         end
-      end
-
-      reflection_callback = fn _reflections, _ingestion ->
-        send(test_pid, :reflection_admitted)
-        {:ok, :scheduled}
       end
 
       :ok = stop_supervised(CaptureBuffer)
@@ -1302,8 +1270,6 @@ defmodule Gralkor.CaptureBufferTest do
           {CaptureBuffer,
            flush_callback: fn _, _, _, _, _ -> :ok end,
            lens_flush_callback: lens_flush_callback,
-           reflections: [:review],
-           reflection_callback: reflection_callback,
            retries: []}
         )
 
@@ -1323,143 +1289,8 @@ defmodule Gralkor.CaptureBufferTest do
       stopper = Task.async(fn -> GenServer.stop(pid, :normal, :infinity) end)
       assert Task.yield(stopper, 25) == nil
       send(worker, :finish_flush)
-      assert_receive :reflection_admitted
+      assert_receive :fire_and_forget_finished
       assert :ok = Task.await(stopper)
-    end
-
-    test "then a buffer started without Reflections still drains directly admitted work" do
-      test_pid = self()
-      :ok = stop_supervised(CaptureBuffer)
-
-      runner = fn _reflection, _ingestion, opts ->
-        send(test_pid, :empty_registry_runner_started)
-        Process.sleep(100)
-        {:ok, Artefact.new(opts[:artefact_id], %{"done" => true})}
-      end
-
-      children = [
-        {Gralkor.Reflection.Supervisor,
-         scheduler_opts: [
-           runner: runner,
-           store_opts: [storage: EmptyReflectionStore],
-           notify: test_pid,
-           retry_delays: []
-         ]},
-        {CaptureBuffer,
-         flush_callback: fn _, _, _, _, _ -> :ok end,
-         lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
-         reflections: [],
-         retries: []}
-      ]
-
-      {:ok, supervisor} = Supervisor.start_link(children, strategy: :one_for_one)
-      buffer = Process.whereis(CaptureBuffer)
-
-      assert :sys.get_state(buffer).reflection_scheduler == {:shared, Scheduler}
-
-      assert {:ok, :scheduled} =
-               Scheduler.schedule([reflection()], completed_ingestion())
-
-      assert_receive :empty_registry_runner_started
-      stopper = Task.async(fn -> Supervisor.terminate_child(supervisor, CaptureBuffer) end)
-      assert Task.yield(stopper, 25) == nil
-      assert :ok = Task.await(stopper)
-      assert_receive {:reflection_completed, "review", {:ok, _artefact}}
-      assert :ok = Supervisor.stop(supervisor)
-    end
-
-    test "then a Scheduler crash during drain waits for and drains its supervised replacement" do
-      test_pid = self()
-      :ok = stop_supervised(CaptureBuffer)
-      attempts = :atomics.new(1, [])
-
-      journal_path =
-        Path.join(
-          System.tmp_dir!(),
-          "capture-drain-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}.dets"
-        )
-
-      on_exit(fn -> File.rm(journal_path) end)
-
-      runner = fn _reflection, _ingestion, opts ->
-        attempt = :atomics.add_get(attempts, 1, 1)
-        send(test_pid, {:replacement_drain_runner, attempt, self()})
-
-        if attempt == 1 do
-          receive do
-            :never -> {:error, :unexpected}
-          end
-        else
-          {:ok, Artefact.new(opts[:artefact_id], %{"done" => true})}
-        end
-      end
-
-      children = [
-        {Gralkor.Reflection.Supervisor,
-         scheduler_opts: [
-           runner: runner,
-           store_opts: [storage: EmptyReflectionStore],
-           retry_delays: [0],
-           journal_path: journal_path
-         ]},
-        {CaptureBuffer,
-         flush_callback: fn _, _, _, _, _ -> :ok end,
-         lens_flush_callback: fn _, _, _, _, _, _ -> :ok end,
-         reflections: [],
-         retries: []}
-      ]
-
-      {:ok, supervisor} = Supervisor.start_link(children, strategy: :one_for_one)
-
-      assert {:ok, :scheduled} =
-               Scheduler.schedule([reflection()], completed_ingestion())
-
-      assert_receive {:replacement_drain_runner, 1, _first_runner}
-      first_scheduler = Process.whereis(Scheduler)
-      stopper = Task.async(fn -> Supervisor.terminate_child(supervisor, CaptureBuffer) end)
-      assert eventually(fn -> :sys.get_state(Scheduler).draining end)
-      Process.exit(first_scheduler, :kill)
-
-      assert eventually(fn -> Process.whereis(Scheduler) not in [nil, first_scheduler] end)
-      assert_receive {:replacement_drain_runner, 2, _second_runner}
-      assert :ok = Task.await(stopper)
-      assert :ok = Supervisor.stop(supervisor)
-    end
-  end
-
-  defp reflection do
-    %Reflection{
-      name: "review",
-      outputs: [
-        %{
-          kind: :destination,
-          destination: %Destination{name: "observations"},
-          ontology: Gralkor.DefaultOntology
-        }
-      ],
-      chain_of_thought: %ChainOfThought{path: "test", steps: []}
-    }
-  end
-
-  defp completed_ingestion do
-    %{
-      id: "capture-buffer-ingestion",
-      operator_id: "operator-one",
-      intended_lenses: ["observations"],
-      completed_lenses: ["observations"],
-      representations: [%{lens: "observations", result: :ok}]
-    }
-  end
-
-  defp eventually(fun, attempts \\ 100)
-  defp eventually(fun, 0), do: fun.()
-
-  defp eventually(fun, attempts) do
-    if fun.() do
-      true
-    else
-      Process.sleep(10)
-      eventually(fun, attempts - 1)
     end
   end
 end
