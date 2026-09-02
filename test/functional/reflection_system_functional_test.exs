@@ -1667,7 +1667,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "",
-                 destinations: [one.destination.name],
+                 destinations: [destination_output(one).destination.name],
                  result_type: :artefacts
                })
     end
@@ -1962,10 +1962,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   defp configure_reflections(reflections) do
     Application.put_env(:jido_gralkor, :reflections, reflections)
-  end
-
-  defp destination_output(reflection) do
-    Enum.find(reflection.outputs, &(&1.kind == :destination))
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
