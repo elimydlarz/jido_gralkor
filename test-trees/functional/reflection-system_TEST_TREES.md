@@ -1,11 +1,11 @@
-Functional: reflection-system (src: lib/gralkor/reflection.ex, lib/gralkor/reflection/registry.ex, lib/gralkor/reflection/erl_ontology.ex, lib/gralkor/default_ontology.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/schedule.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/store.ex, lib/gralkor/reflection/storage/in_memory.ex, lib/gralkor/reflection/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex, priv/reflections/erl.yaml, priv/reflections/generalisations.yaml; functional: test/functional/reflection_system_functional_test.exs)
+Functional: reflection-system (src: lib/gralkor/reflection.ex, lib/gralkor/reflection/registry.ex, lib/gralkor/reflection/erl_ontology.ex, lib/gralkor/default_ontology.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/store.ex, lib/gralkor/reflection/storage/in_memory.ex, lib/gralkor/reflection/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex, priv/reflections/erl.yaml, priv/reflections/generalisations.yaml; functional: test/functional/reflection_system_functional_test.exs)
 
 when Reflection declarations are validated
   while every Reflection has a non-blank name
   and every Reflection name is unique
   and every Reflection declares one or more triggers
-  and every declared trigger is ingestion, agent request, or a schedule
-  and every schedule declares a valid schedule expression and non-blank operator identifier
+  and every declared trigger is post-ingestion or programmatic
+  and every post-ingestion trigger selects all Lenses or a non-empty list of registered appending Lenses
   and every Reflection references a repository YAML Chain of Thought
   and every referenced Chain of Thought contains one or more ordered steps
   and every step has a non-blank label and natural-language directions
@@ -30,8 +30,8 @@ when Reflection declarations are validated
   if a Reflection declares an unsupported trigger
     then validation fails identifying that Reflection and trigger
 
-  if a Reflection schedule has an invalid expression or missing operator identifier
-    then validation fails identifying that Reflection and invalid schedule
+  if a post-ingestion trigger selects no Lenses, an unknown Lens, or a Lens that does not support ingestion
+    then validation fails identifying that Reflection and invalid Lens selection
 
   if a Reflection has no Chain of Thought
     then validation fails identifying that Reflection
@@ -78,9 +78,9 @@ when Reflection declarations are validated
 where the packaged default Reflections are used
   then ERL references the packaged `operator` Destination
   and ERL carries jido_gralkor's built-in experiential-learning ontology
-  and ERL enables the ingestion trigger
+  and ERL enables post-ingestion triggering for every Lens
   and generalisation references the packaged `global` Destination
-  and generalisation enables the ingestion trigger
+  and generalisation enables post-ingestion triggering for every Lens
 
 where an application-defined Reflection omits its ontology
   then its final artefact receives generic extraction
@@ -94,33 +94,38 @@ when the default ERL Reflection stores its final artefact
   and the stored Learning payload contains exactly its problem kind, approach, success, and reusable lesson
 
 when an ingestion operation successfully stores information through one or more Lenses
-  while one or more declared Reflections enable the ingestion trigger
-    then every stored representation retains its own identifier, Lens identity, content, and storage result
-    and the ingestion caller receives success without waiting for Reflection
-    and every ingestion-triggered Reflection begins one logical completion flow for the completed ingestion operation
-    and the ingestion identifier becomes the Reflection `invocation_id`
-    and every Reflection without the ingestion trigger remains uninvoked
-    and no Reflection begins before every intended Lens ingestion has completed
+  then every stored representation retains its own identifier, Lens identity, content, and storage result
+  and the ingestion caller receives success without waiting for Reflection
+  and no post-ingestion Reflection begins before every intended Lens ingestion has completed
 
-when a consuming agent requests a named Reflection
-  while that Reflection enables the agent-request trigger
-    then the agent receives admission without waiting for Reflection completion
-    and only the requested Reflection begins one logical completion flow for that agent request
+  while a Reflection enables post-ingestion triggering for every Lens
+    then that Reflection begins exactly one logical completion flow for the completed ingestion operation
+    and the ingestion identifier becomes the Reflection `invocation_id`
+
+  while a Reflection enables post-ingestion triggering for named Lenses
+  and at least one completed Lens is selected by that Reflection
+    then that Reflection begins exactly one logical completion flow for the completed ingestion operation
+    and the ingestion identifier becomes the Reflection `invocation_id`
+    and completing additional selected Lenses does not admit another flow for that ingestion
+
+  while a Reflection enables post-ingestion triggering for named Lenses
+  and no completed Lens is selected by that Reflection
+    then that Reflection remains uninvoked
+
+when a consumer programmatically requests a named Reflection
+  while that Reflection enables the programmatic trigger
+    then the consumer receives admission without waiting for Reflection completion
+    and only the requested Reflection begins one logical completion flow for that request
     and the Reflection receives the requesting operator, request content, host tools, and tool context
-    and the agent request supplies the replay-stable Reflection `invocation_id`
+    and the consumer supplies the replay-stable Reflection `invocation_id`
 
   if the named Reflection is unknown
     then the request fails identifying the unknown Reflection before durable work is admitted
 
-  if the named Reflection does not enable the agent-request trigger
+  if the named Reflection does not enable the programmatic trigger
     then the request fails identifying the disabled trigger before durable work is admitted
 
-when a configured Reflection schedule becomes due
-  then that Reflection begins one logical completion flow for the configured operator and due occurrence
-  and the Reflection receives the configured operator and scheduled occurrence time
-  and the configured schedule expression and due occurrence time determine the Reflection `invocation_id`
-
-when an ingestion completes with no Reflection enabling the ingestion trigger
+when an ingestion completes with no eligible post-ingestion Reflection
   then ingestion succeeds without admitting Reflection work
 
 when a configured Reflection is loaded
@@ -129,7 +134,7 @@ when a configured Reflection is loaded
 when an admitted Reflection runs
   then its programmatic Chain of Thought runner starts its first step for the operator and triggering invocation
   and makes the trigger type and trigger context available to every step
-  where the Reflection was triggered by ingestion
+  where the Reflection was triggered after ingestion
     then every ingested representation is available with its identifier, Lens identity, content, and storage result
 
 when a Chain of Thought step begins
@@ -180,7 +185,7 @@ when multiple eligible Reflections process one triggering invocation
   and retry or terminal failure of one Reflection does not prevent another Reflection from completing
 
 if any intended Lens ingestion fails
-  then no ingestion-triggered Reflection is admitted for the incomplete ingestion operation
+  then no post-ingestion Reflection is admitted for the incomplete ingestion operation
 
 if a Reflection's Chain of Thought completes without a valid final structured output
   then the Reflection fails identifying its name and missing artefact
