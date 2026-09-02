@@ -40,6 +40,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     previous =
       for key <- [
             :destinations,
+            :lenses,
             :destination_storage,
             :lens_storage,
             :reflection_storage,
@@ -54,6 +55,24 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     Application.put_env(:jido_gralkor, :destinations, [
       [name: "first"],
       [name: "second"]
+    ])
+
+    Application.put_env(:jido_gralkor, :lenses, [
+      [
+        name: "first-alpha",
+        destination: "first",
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ],
+      [
+        name: "first-beta",
+        destination: "first",
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ],
+      [
+        name: "second-beta",
+        destination: "second",
+        ingestion: Gralkor.Lens.Ingestion.Store
+      ]
     ])
 
     Application.put_env(:jido_gralkor, :destination_storage, SearchStorage)
@@ -209,6 +228,32 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         assert_receive {:destination_search, ^destination, "operator-one", "question", :episodes,
                         20, []}
       end
+    end
+  end
+
+  describe "where a caller supplies only Lenses" do
+    test "then every selected Lens can contribute from its Destination" do
+      use_in_memory_storage()
+      assert :ok = add_episode("first", "operator-one", "alpha memory", "first-alpha")
+      assert :ok = add_episode("first", "operator-one", "unselected memory", "first-beta")
+      assert :ok = add_episode("second", "operator-one", "beta memory", "second-beta")
+
+      assert {:ok,
+              [
+                %{
+                  destination: "first",
+                  episode: %{content: "alpha memory", lens: "first-alpha"}
+                },
+                %{
+                  destination: "second",
+                  episode: %{content: "beta memory", lens: "second-beta"}
+                }
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 lenses: ["first-alpha", "second-beta"]
+               })
     end
   end
 
@@ -563,13 +608,13 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     )
   end
 
-  defp add_episode(destination_name, operator_id, content) do
+  defp add_episode(destination_name, operator_id, content, lens_name \\ "writer") do
     destination = Gralkor.Destination.Registry.fetch!(destination_name)
 
     store = %Gralkor.Lens.Store{
       operator_id: operator_id,
       lens: %Gralkor.Lens{
-        name: "writer",
+        name: lens_name,
         destination: destination,
         ontology: Gralkor.DefaultOntology,
         ingestion: String
