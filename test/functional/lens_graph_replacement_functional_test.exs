@@ -210,18 +210,24 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
         name: "review",
         destination: Gralkor.Destination.Registry.fetch!("global"),
         ontology: Gralkor.DefaultOntology,
+        outputs: [
+          %{
+            kind: :destination,
+            destination: Gralkor.Destination.Registry.fetch!("global"),
+            ontology: Gralkor.DefaultOntology
+          }
+        ],
         chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "review.yaml", steps: []}
       }
 
-      artefact = %Gralkor.Reflection.Artefact{
+      artefact = %Gralkor.Artefact{
         id: "review-one",
-        reflection: "review",
         payload: %{"lesson" => "keep this"}
       }
 
       assert :ok =
                Gralkor.Reflection.Store.put(reflection, "operator-one", artefact,
-                 storage: Gralkor.Reflection.Storage.InMemory
+                 storage: Gralkor.Destination.Storage.InMemory
                )
 
       assert :ok = Client.replace(request(graph("systems")))

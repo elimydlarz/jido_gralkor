@@ -6,7 +6,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
   alias Gralkor.Destination
   alias Gralkor.GraphitiPool
   alias Gralkor.Reflection
-  alias Gralkor.Reflection.Artefact
+  alias Gralkor.Artefact
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Reflection.Scheduler
 
@@ -14,13 +14,10 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
   @moduletag timeout: 120_000
 
   defmodule EmptyReflectionStore do
-    @behaviour Gralkor.Reflection.Store
+    def get_artefact(_output, _reflection_name, _operator_id, _artefact_id),
+      do: {:error, :not_found}
 
-    @impl true
-    def get(_reflection, _operator_id, _artefact_id), do: {:error, :not_found}
-
-    @impl true
-    def put(_reflection, _operator_id, _artefact), do: :ok
+    def put_artefact(_output, _reflection_name, _operator_id, _artefact), do: :ok
   end
 
   setup do
@@ -89,7 +86,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
             :never -> {:error, :unexpected}
           end
         else
-          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"done" => true})}
+          {:ok, Artefact.new(opts[:artefact_id], %{"done" => true})}
         end
       end
 
@@ -114,6 +111,13 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
         triggers: [:ingestion],
         destination: %Destination{name: "observations"},
         ontology: Gralkor.DefaultOntology,
+        outputs: [
+          %{
+            kind: :destination,
+            destination: %Destination{name: "observations"},
+            ontology: Gralkor.DefaultOntology
+          }
+        ],
         chain_of_thought: %ChainOfThought{path: "test", steps: []}
       }
 

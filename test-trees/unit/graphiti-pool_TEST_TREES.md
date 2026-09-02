@@ -156,6 +156,8 @@ if running a fact search raises inside the graph library
 
 when an episode search is run for a group
   then the graph library is asked for episodes only, with the requested result count
+  when Lens names are supplied
+    then writer filtering occurs before the requested result count
   and it is restricted to the sanitised group id the episodes were written under
   and each returned episode is rendered with the body that was written and its source description
   and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned

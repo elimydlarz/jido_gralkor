@@ -96,7 +96,8 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       lens_destination = Client.lens!("observations").destination
       [reflection] = ReflectionRegistry.configured!()
 
-      assert reflection.destination == lens_destination
+      destination_output = Enum.find(reflection.outputs, &(&1.kind == :destination))
+      assert destination_output.destination == lens_destination
     end
   end
 
@@ -140,15 +141,14 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       reflection = ReflectionRegistry.configured!() |> List.first()
 
-      artefact = %Gralkor.Reflection.Artefact{
+      artefact = %Gralkor.Artefact{
         id: "review-one",
-        reflection: "review",
         payload: %{"lesson" => "preserve"}
       }
 
       assert :ok =
                Gralkor.Reflection.Store.put(reflection, "operator-one", artefact,
-                 storage: Gralkor.Reflection.Storage.InMemory
+                 storage: Gralkor.Destination.Storage.InMemory
                )
 
       assert :ok = Client.replace(replacement("systems", "systems"))
