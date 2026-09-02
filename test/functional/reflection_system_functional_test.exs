@@ -777,7 +777,15 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert :ok = CaptureBuffer.flush_and_await("session-once", 1_000)
 
       assert_receive {:scheduled, ["one", "two"],
-                      %{intended_lenses: ["observations", "decisions"], representations: reps}}
+                      %{
+                        id: ingestion_id,
+                        trigger: :lens_ingestion,
+                        trigger_context: %{lenses: ["observations", "decisions"]},
+                        intended_lenses: ["observations", "decisions"],
+                        representations: reps
+                      }}
+
+      assert is_binary(ingestion_id) and ingestion_id != ""
 
       assert Enum.map(reps, & &1.lens) == [
                "observations",
@@ -1028,7 +1036,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert runner_opts[:tool_context] == %{session_id: "session-one"}
     end
 
-    test "and the invocation identifier is stable", context do
+    test "and repeated requests with the same `{operator_id, invocation_id, reflection_name}` do not produce another artefact",
+         context do
       requested = %{reflection(context, "requested") | triggers: [:programmatic]}
       configure_reflections([requested])
       parent = self()
@@ -1055,7 +1064,16 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  "Review this"
                )
 
+      assert {:ok, "request-one"} =
+               Client.request_reflection(
+                 "requested",
+                 "operator-one",
+                 "request-one",
+                 "Review this"
+               )
+
       assert_receive {:runner_invocation_id, "request-one"}
+      refute_receive {:runner_invocation_id, "request-one"}
     end
   end
 
@@ -1080,6 +1098,22 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  "request-one",
                  "Review this"
                )
+    end
+  end
+
+  describe "when a programmatic Reflection request has invalid identity" do
+    test "if the `operator_id` or `invocation_id` is missing or blank then the request fails identifying the invalid identity before durable work is admitted",
+         context do
+      requested = %{reflection(context, "requested") | triggers: [:programmatic]}
+      configure_reflections([requested])
+
+      assert_raise ArgumentError, ~r/operator_id must be a non-blank string/, fn ->
+        Client.request_reflection("requested", " ", "request-one", "Review this")
+      end
+
+      assert_raise ArgumentError, ~r/invocation_id must be a non-blank string/, fn ->
+        Client.request_reflection("requested", "operator-one", " ", "Review this")
+      end
     end
   end
 
