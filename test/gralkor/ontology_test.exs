@@ -399,7 +399,8 @@ defmodule Gralkor.OntologyTest do
           """)
         end
 
-      assert Exception.message(error) =~ "from Source"
+      assert Exception.message(error) =~ "`from` requires an alias"
+      assert Exception.message(error) =~ "`from User do"
     end
   end
 
