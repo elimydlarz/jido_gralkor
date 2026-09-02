@@ -84,7 +84,6 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                  get_episode
                )
     end
-
   end
 
   describe "when Graphiti Reflection storage looks up an artefact identifier > while the matching episode contains that artefact but durable extraction completion is absent" do
@@ -108,7 +107,6 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                  get_episode
                )
     end
-
   end
 
   describe "when Graphiti Reflection storage looks up an artefact identifier > while the episode is missing" do
@@ -124,7 +122,6 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                  get_episode
                )
     end
-
   end
 
   describe "when Graphiti Reflection storage looks up an artefact identifier > while the episode body identifies another artefact" do

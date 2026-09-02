@@ -137,7 +137,6 @@ defmodule JidoGralkor.PluginTest do
                ingestion: Gralkor.Lens.Ingestion.Store
              }
     end
-
   end
 
   describe "when mount selects an ingestion Lens > if the ingestion Lens is unknown" do
@@ -302,7 +301,6 @@ defmodule JidoGralkor.PluginTest do
       assert {:ok, :continue} = Plugin.handle_signal(failed, context(completion_agent))
       assert [[_, _, _, _, _, "observations", []]] = InMemory.captures()
     end
-
   end
 
   describe "when an agent turn begins > while a thread has committed to agent state > where the incoming tool context selects a Lens > if the selected Lens is unknown or non-binary" do

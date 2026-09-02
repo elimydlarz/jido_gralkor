@@ -103,7 +103,6 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       assert_receive {:destination_search, "observations", "operator-one", "launch", :episodes,
                       20, []}
     end
-
   end
 
   describe "when the memory search tool runs with a usable query > where the tool call supplies no Destination selector > and the tool call supplies no Lens selector" do
@@ -266,7 +265,6 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       assert log =~ "[jido_gralkor] memory_search short-circuited"
       assert log =~ "blank query"
     end
-
   end
 
   describe "if the memory search tool runs without a usable query > while the query is only whitespace" do

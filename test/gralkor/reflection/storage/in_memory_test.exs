@@ -31,6 +31,7 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
       artefact = artefact("new-id", %{"summary" => "new"})
 
       assert :ok = InMemory.put_artefact(output, "review", "operator-one", artefact)
+
       assert {:ok, [^artefact]} =
                InMemory.search(output.destination, "operator-one", "", :artefacts, 20, [])
     end
