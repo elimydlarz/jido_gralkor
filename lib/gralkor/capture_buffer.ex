@@ -526,7 +526,9 @@ defmodule Gralkor.CaptureBuffer do
       end)
 
     case first_error do
-      nil -> :ok
+      nil ->
+        :ok
+
       {:error, _} = error ->
         error
     end

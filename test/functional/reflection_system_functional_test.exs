@@ -783,7 +783,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert artefact.payload == %{"artefact" => "durable pattern"}
     end
-
   end
 
   describe "if a Reflection's Chain of Thought completes without a valid final structured output" do
@@ -793,7 +792,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  inference: fn _ -> {:ok, %{output: %{}}} end
                )
     end
-
   end
 
   describe "if a Reflection's Chain of Thought fails" do
@@ -803,7 +801,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  inference: fn _ -> {:error, :inference_failed} end
                )
     end
-
   end
 
   describe "when a Destination is searched for artefacts" do

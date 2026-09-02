@@ -113,7 +113,8 @@ defmodule Gralkor.Client do
   @spec ingest(Ingest.t()) :: :ok | {:error, term()}
   def ingest(%Ingest{} = request) do
     case ingest_with_representation(request) do
-      {:ok, _representations} -> :ok
+      {:ok, _representations} ->
+        :ok
 
       {:error, _} = error ->
         error

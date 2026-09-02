@@ -36,7 +36,6 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
 
       assert Keyword.fetch!(pool_options, :falkordb_spec) ==
                {:remote, [host: "memory.example", port: 6379]}
-
     end
   end
 
@@ -131,5 +130,4 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
 
   defp restore_system_env(key, nil), do: System.delete_env(key)
   defp restore_system_env(key, value), do: System.put_env(key, value)
-
 end
