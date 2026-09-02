@@ -231,7 +231,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert :ok =
                GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
 
-      assert {:ok, %{extraction_complete: true}} =
+      assert {:ok, %{"extraction_complete" => true}} =
                GraphitiPool.get_episode(pid, "g1", "episode-uuid")
 
       GenServer.stop(pid)
@@ -321,7 +321,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert :ok =
                GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
 
-      assert {:ok, %{extraction_complete: true}} =
+      assert {:ok, %{"extraction_complete" => true}} =
                GraphitiPool.get_episode(pid, "g1", "episode-uuid")
 
       GenServer.stop(pid)
@@ -356,7 +356,8 @@ defmodule Gralkor.GraphitiPoolTest do
                  uuid: "episode-uuid"
                )
 
-      assert {:ok, %{content: "content"}} = GraphitiPool.get_episode(pid, "g1", "episode-uuid")
+      assert {:ok, %{"content" => "content"}} =
+               GraphitiPool.get_episode(pid, "g1", "episode-uuid")
       GenServer.stop(pid)
     end
   end
@@ -826,10 +827,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert {:ok,
               %{
-                uuid: "episode-uuid",
-                content: "content",
-                source: "text",
-                source_description: "source"
+                "uuid" => "episode-uuid",
+                "content" => "content",
+                "source" => "text",
+                "source_description" => "source"
               }} = GraphitiPool.get_episode(pid, "g1", "episode-uuid")
 
       GenServer.stop(pid)
@@ -841,7 +842,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert :ok =
                GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
 
-      assert {:ok, %{extraction_complete: true}} =
+      assert {:ok, %{"extraction_complete" => true}} =
                GraphitiPool.get_episode(pid, "g1", "episode-uuid")
 
       GenServer.stop(pid)
