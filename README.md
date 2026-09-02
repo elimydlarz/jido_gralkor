@@ -2,7 +2,7 @@
 
 Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One Hex package: the Jido plugin and ReAct tools on top of an embedded Gralkor memory adapter — Graphiti driven directly from the BEAM via [Pythonx](https://github.com/livebook-dev/pythonx), with no separate Gralkor service to deploy. Storage uses either an embedded FalkorDB child or a remote FalkorDB deployment.
 
-You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Destinations** for named graphs, **Lenses** for ingestion, and **Reflections** for asynchronous synthesis triggered by ingestion, an agent request, or a schedule.
+You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Destinations** for named graphs, **Lenses** for ingestion, and **Reflections** for asynchronous synthesis triggered by completed Lens ingestion or an explicit programmatic request.
 
 This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 8.0"}` for the whole memory stack.
 
@@ -93,8 +93,7 @@ The setting is passed to the embedded Redis client as `socket_timeout`; it is ig
 config :jido_gralkor,
   client: Gralkor.Client.InMemory,
   destination_storage: Gralkor.Destination.Storage.InMemory,
-  lens_storage: Gralkor.Lens.Storage.InMemory,
-  reflection_storage: Gralkor.Reflection.Storage.InMemory
+  lens_storage: Gralkor.Lens.Storage.InMemory
 ```
 
 Start the legacy client twin once in `test/test_helper.exs`:
@@ -145,9 +144,8 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → Reflection supervisor/Scheduler → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
 | `:destination_storage` | module | `Gralkor.Destination.Storage.Graphiti` | Search storage behind `Client.search/1`. Set to `Gralkor.Destination.Storage.InMemory` in tests. |
-| `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, one or more `:triggers`, a registered `:destination`, a repository-relative YAML `:chain_of_thought` path, and optional `:ontology` (default `Gralkor.DefaultOntology`). Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
+| `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name`, one or more `:triggers`, a repository-relative YAML `:chain_of_thought` path, and an `:outputs` list containing exactly one Destination output plus at most one return output. Supported triggers are `:programmatic`, `{:lens_ingestion, :any}`, and `{:lens_ingestion, [lens_names]}`. Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
 | `:reflection_root` | path | application package root | Root used to resolve Reflection YAML paths. The default makes the packaged `priv/reflections/*.yaml` files work after installation; set it when an application keeps custom CoTs under another repository directory. |
-| `:reflection_storage` | module implementing `Gralkor.Reflection.Store` | `Gralkor.Reflection.Storage.Graphiti` | Canonical artefact storage. Custom implementations must create-or-confirm by `artefact.id`: an equal repeat returns `:ok` without another searchable artefact, conflicting immutable content returns `{:error, {:artefact_conflict, id}}`, and `get/3` exposes only completed artefacts (or returns `{:incomplete_artefact, artefact}` for resumable partial state). Tests can use `Gralkor.Reflection.Storage.InMemory`; Destination search should then use its in-memory adapter too. |
 | `:reflection_scheduler_journal_path` | path | `GRALKOR_DATA_DIR/reflection_scheduler.dets` for embedded storage; the platform user-data directory otherwise | Durable DETS journal for admitted Reflection phase state. Set an explicit writable path unique to each BEAM node when several nodes share a filesystem. |
 | `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall search and presentation. On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. |
 | `:test` | boolean | `false` | Verbose diagnostic logging: recall queries, returned facts, and flushed capture bodies are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
@@ -158,6 +156,8 @@ config :jido_gralkor,
   embedded_falkordb_socket_timeout_ms: 60_000,
   recall_deadline_ms: 12_000
 ```
+
+`:reflection_storage` is retired and causes startup to fail. A Reflection's required Destination output routes artefacts through `:destination_storage`, which is the single memory boundary for both search and Reflection output.
 
 The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `recall/4` need no ontology configuration. The Lens uses the packaged operator Destination and the library-owned `Gralkor.DefaultOntology`. Application-specific extraction schemas belong on appending Lenses or Reflections.
 
@@ -257,16 +257,23 @@ config :jido_gralkor,
   reflections: [
     [
       name: "generalisations",
-      triggers: [:ingestion],
-      destination: "global",
-      chain_of_thought: "priv/reflections/generalisations.yaml"
+      triggers: [{:lens_ingestion, :any}],
+      chain_of_thought: "priv/reflections/generalisations.yaml",
+      outputs: [
+        [kind: :destination, destination: "global"]
+      ]
     ],
     [
       name: "erl",
-      triggers: [:ingestion],
-      destination: "operator",
-      ontology: Gralkor.Reflection.ERLOntology,
-      chain_of_thought: "priv/reflections/erl.yaml"
+      triggers: [{:lens_ingestion, :any}],
+      chain_of_thought: "priv/reflections/erl.yaml",
+      outputs: [
+        [
+          kind: :destination,
+          destination: "operator",
+          ontology: Gralkor.Reflection.ERLOntology
+        ]
+      ]
     ]
   ],
 
