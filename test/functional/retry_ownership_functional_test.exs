@@ -237,7 +237,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         chain_of_thought: %ChainOfThought{path: "test", steps: []}
       }
 
-      runner = fn current_reflection, _ingestion, opts ->
+      runner = fn _reflection, _ingestion, opts ->
         attempt = :atomics.add_get(runner_attempts, 1, 1)
         send(test_pid, {:reflection_runner_attempt, attempt})
 
