@@ -1779,6 +1779,26 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   defp destination_output(reflection),
     do: Enum.find(reflection.outputs, &(&1.kind == :destination))
 
+  defp put_artefact(reflection, operator_id, artefact, opts) do
+    Gralkor.Destination.Storage.put_artefact(
+      destination_output(reflection),
+      reflection.name,
+      operator_id,
+      artefact,
+      opts
+    )
+  end
+
+  defp get_artefact(reflection, operator_id, artefact_id, opts) do
+    Gralkor.Destination.Storage.get_artefact(
+      destination_output(reflection),
+      reflection.name,
+      operator_id,
+      artefact_id,
+      opts
+    )
+  end
+
   defp one_step_reflection(%{root: root}) do
     write_cot(
       root,
