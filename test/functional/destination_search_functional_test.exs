@@ -42,6 +42,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
             :destinations,
             :destination_storage,
             :lens_storage,
+            :reflection_storage,
             :destination_search_test_pid,
             :destination_search_responses,
             :destination_search_barrier
@@ -337,6 +338,41 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  result_type: :episodes
                })
     end
+
+    test "then a Reflection episode identifies the Reflection that wrote it" do
+      use_in_memory_storage()
+
+      destination = Gralkor.Destination.Registry.fetch!("first")
+
+      reflection = %Gralkor.Reflection{
+        name: "review",
+        destination: destination,
+        ontology: Gralkor.DefaultOntology,
+        chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "functional", steps: []}
+      }
+
+      artefact = %Gralkor.Reflection.Artefact{
+        id: "review-one",
+        reflection: "review",
+        payload: %{"lesson" => "keep it simple"}
+      }
+
+      assert :ok = Gralkor.Reflection.Store.put(reflection, "operator-one", artefact)
+      content = Jason.encode!(Map.from_struct(artefact))
+
+      assert {:ok,
+              [
+                %{
+                  destination: "first",
+                  episode: %{content: ^content, reflection: "review"}
+                }
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "simple",
+                 destinations: ["first"]
+               })
+    end
   end
 
   describe "where a caller selects artefacts" do
@@ -512,7 +548,13 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
   defp use_in_memory_storage do
     start_supervised!(Gralkor.Lens.Storage.InMemory)
+    start_supervised!(Gralkor.Reflection.Storage.InMemory)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+    Application.put_env(
+      :jido_gralkor,
+      :reflection_storage,
+      Gralkor.Reflection.Storage.InMemory
+    )
 
     Application.put_env(
       :jido_gralkor,
