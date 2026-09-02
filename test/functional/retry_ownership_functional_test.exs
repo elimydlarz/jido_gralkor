@@ -216,7 +216,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     end
   end
 
-  describe "when a Reflection Runner or canonical write fails after completed Lens ingestion" do
+  describe "when a Reflection Runner or Destination output write fails after completed Lens ingestion" do
     test "then only the Reflection Scheduler retries those phases" do
       test_pid = self()
       runner_attempts = :atomics.new(1, [])

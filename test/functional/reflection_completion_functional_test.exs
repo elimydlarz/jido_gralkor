@@ -66,7 +66,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           :ok
 
         :crash ->
-          raise "canonical storage crashed"
+          raise "Destination storage crashed"
 
         :hang ->
           receive do
@@ -414,7 +414,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                })
     end
 
-    test "then canonical storage failure retries the exact artefact without rerunning the Runner" do
+    test "then Destination output failure retries the exact artefact without rerunning the Runner" do
       start_supervised!({FailOnceStore, self()})
       Application.put_env(:jido_gralkor, :destination_storage, FailOnceStore)
 
@@ -433,7 +433,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert_receive {:reflection_completed, "review", {:ok, ^first_artefact}}
     end
 
-    test "then a canonical storage task crash retries the exact artefact without rerunning the Runner" do
+    test "then a Destination output task crash retries the exact artefact without rerunning the Runner" do
       start_supervised!({ControlledCompletionStore, {self(), [:crash, :ok]}})
       Application.put_env(:jido_gralkor, :destination_storage, ControlledCompletionStore)
 
@@ -892,7 +892,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
-  describe "where Graphiti is the canonical Reflection store" do
+  describe "where Graphiti is the Destination artefact store" do
     test "then a fresh requested UUID is created once and equal retry confirms it without extraction" do
       {graphiti, _} =
         Pythonx.eval(
@@ -1014,7 +1014,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
-  describe "when canonical storage commits an artefact but its response is lost" do
+  describe "when Destination storage commits an artefact but its response is lost" do
     test "then a committed write whose response is lost retries to one searchable artefact" do
       {graphiti, _} =
         Pythonx.eval(
@@ -1218,7 +1218,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
-  describe "where Graphiti is the canonical Reflection store > when graph extraction fails before its claim-fenced transaction commits" do
+  describe "where Graphiti is the Destination artefact store > when graph extraction fails before its claim-fenced transaction commits" do
     test "then canonical lookup and public search expose no episode and a later equal write retries extraction",
          %{
            reflection: reflection
@@ -1394,7 +1394,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
-  describe "where Graphiti is the canonical Reflection store > when a deterministic episode predates graph-backed claim admission" do
+  describe "where Graphiti is the Destination artefact store > when a deterministic episode predates graph-backed claim admission" do
     test "then a completed episode rejects conflicting immutable content and remains unchanged" do
       {pool, graphiti} = start_preclaim_graphiti_pool(:reflection_preclaim_complete_graphiti)
 
@@ -1672,7 +1672,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     {pool, GraphitiPool.for(pool, "observations")}
   end
 
-  describe "where Graphiti is the canonical Reflection store > when independent pools share one Falkor graph" do
+  describe "where Graphiti is the Destination artefact store > when independent pools share one Falkor graph" do
     @tag timeout: 120_000
     test "then server-timed generational claims serialize, reject conflicts, and fence a stale owner" do
       data_dir =

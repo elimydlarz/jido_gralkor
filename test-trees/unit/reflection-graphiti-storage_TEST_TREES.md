@@ -8,7 +8,7 @@ when Graphiti Reflection storage looks up an artefact identifier
   while the matching episode contains that artefact and durable extraction completion is recorded
     then it returns the matching deserialized artefact
   while the matching episode contains that artefact but durable extraction completion is absent
-    then lookup returns the incomplete artefact for canonical storage to resume without rerunning the Runner
+    then lookup returns the incomplete artefact for Destination storage to resume without rerunning the Runner
   while the episode is missing
     then lookup reports not found
   while the episode body identifies another artefact

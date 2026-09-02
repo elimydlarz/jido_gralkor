@@ -18,7 +18,7 @@ when several Reflections share one ingestion
   and adding a new Reflection name admits it without disturbing completed siblings
 
 when a Runner attempt succeeds
-  then its artefact is durably retained before canonical storage begins
+  then its artefact is durably retained before Destination output begins
   and the Destination output receives that exact artefact without rerunning the Runner
   and Destination output success completes and releases the logical work
 
