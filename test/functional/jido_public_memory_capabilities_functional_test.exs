@@ -153,7 +153,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   end
 
   describe "when an agent invokes memory addition and its background write fails" do
-    test "then the background failure is logged and the agent's immediate acknowledgement remains unchanged" do
+    test "then the background failure is logged" do
       InMemory.set_memory_add({:error, :unavailable})
 
       log =
@@ -174,6 +174,22 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert log =~ "memory_add failed"
       assert log =~ "unavailable"
+    end
+
+    test "and the agent's immediate acknowledgement remains unchanged" do
+      InMemory.set_memory_add({:error, :unavailable})
+
+      assert {:ok, %{result: "Ingesting."}} =
+               MemoryAdd.run(
+                 %{
+                   content: "remember this",
+                   source_kind: :conversation,
+                   source_description: "functional"
+                 },
+                 %{agent_id: "operator-one"}
+               )
+
+      assert eventually(fn -> InMemory.adds() != [] end)
     end
   end
 
@@ -315,7 +331,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert Jason.decode!(encoded_artefact)["payload"] == artefact.payload
     end
 
-    test "where both selectors are omitted or empty then every accessible registered Destination can contribute" do
+  end
+
+  describe "when an agent invokes memory search with a usable query > where both selectors are omitted or empty" do
+    test "then every accessible registered Destination can contribute" do
       assert :ok = ingest_memory("operator", "operator default")
       assert :ok = ingest_memory("shared-notes", "global default")
       assert :ok = ingest_memory("observations", "observation default")
@@ -331,7 +350,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
              ]
     end
 
-    test "where only Destinations are supplied then only results from any supplied Destination can contribute" do
+  end
+
+  describe "when an agent invokes memory search with a usable query > where only Destinations are supplied" do
+    test "then only results from any supplied Destination can contribute" do
       assert :ok = ingest_memory("observations", "destination-only observation")
       assert :ok = ingest_memory("decisions", "destination-only decision")
 
@@ -352,7 +374,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
              ]
     end
 
-    test "where only Lenses are supplied then only results originating in any supplied Lens can contribute" do
+  end
+
+  describe "when an agent invokes memory search with a usable query > where only Lenses are supplied" do
+    test "then only results originating in any supplied Lens can contribute" do
       assert :ok = ingest_memory("observations", "lens-only observation")
       assert :ok = ingest_memory("decisions", "lens-only decision")
 
@@ -370,7 +395,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
              ]
     end
 
-    test "where Destinations and Lenses are supplied then only results matching both selections can contribute" do
+  end
+
+  describe "when an agent invokes memory search with a usable query > where Destinations and Lenses are supplied" do
+    test "then only results matching both selections can contribute" do
       assert :ok = ingest_memory("observations", "intersection observation")
       assert :ok = ingest_memory("decisions", "intersection decision")
 
@@ -387,7 +415,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert Jason.decode!(result) == []
     end
 
-    test "where no conversation thread has been committed then search still runs for the current operator" do
+  end
+
+  describe "when an agent invokes memory search with a usable query > where no conversation thread has been committed" do
+    test "then search still runs for the current operator" do
       assert :ok = ingest_memory("observations", "thread-independent search")
 
       assert {:ok, %{result: result}} =
@@ -407,7 +438,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
              ]
     end
 
-    test "if Search fails then the failure is returned unchanged" do
+  end
+
+  describe "when an agent invokes memory search with a usable query > if Search fails" do
+    test "then the failure is returned unchanged" do
       Application.put_env(:jido_gralkor, :destination_storage, FailingSearchStorage)
 
       assert {:error, :unavailable} =
@@ -452,14 +486,17 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
-  describe "when a mounted plugin completes a memory-worthy turn with a committed thread" do
-    test "if agent state has no non-blank user name then completion raises an ArgumentError naming the missing user name" do
+  describe "when a mounted plugin completes a memory-worthy turn with a committed thread > if agent state has no non-blank user name" do
+    test "then completion raises an ArgumentError naming the missing user name" do
       assert_raise ArgumentError, ~r/user_name/, fn ->
         complete_plugin_turn(%{}, :ok)
       end
     end
 
-    test "if capture fails then completion raises reporting the capture failure" do
+  end
+
+  describe "when a mounted plugin completes a memory-worthy turn with a committed thread > if capture fails" do
+    test "then completion raises reporting the capture failure" do
       assert_raise RuntimeError, ~r/capture failed.*unavailable/, fn ->
         complete_plugin_turn(%{user_name: "Eli"}, {:error, :unavailable})
       end
