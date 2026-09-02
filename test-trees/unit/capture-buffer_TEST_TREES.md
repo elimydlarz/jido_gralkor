@@ -1,4 +1,4 @@
-Unit: capture-buffer (src: lib/gralkor/capture_buffer.ex, lib/gralkor/reflection/supervisor.ex, lib/gralkor/reflection/scheduler.ex; unit: test/gralkor/capture_buffer_test.exs)
+Unit: capture-buffer (src: lib/gralkor/capture_buffer.ex; unit: test/gralkor/capture_buffer_test.exs)
 
 when a turn is appended for a session that holds none
   then the turn is buffered and readable back for that session
@@ -57,40 +57,12 @@ where captured turns select a Lens
   when one captured turn is routed through a primary Lens and an additional Lens
     then every routed Lens receives that turn in its own batch
     but the session's buffered turns contain that turn only once
-  when later turns contribute Reflection context
-    then nested tool context is merged key by key
-    and later context outside tool context replaces earlier context
   when Lens-selected turns begin a new buffered ingestion
     then one ingestion identifier is minted and retained for every retry of that buffered ingestion
     and identifiers remain collision-resistant across process and VM restarts
   if one Lens's flush fails
     then every other Lens's batch is still attempted
     and an awaited flush reports the first failure only after every Lens has been attempted
-  when every Lens batch for a completed ingestion succeeds and Reflections are declared
-    then every completed representation retains its own identifier and the Lens identity supplied by its batch
-    and every declared Reflection is scheduled exactly once
-    and each scheduled Reflection receives the completed representations
-    and each scheduled Reflection receives the ingestion context
-  if a completed representation does not carry its own identifier and its batch's Lens identity
-    then the awaited flush reports the representation validation failure
-    and no Reflection is scheduled
-  if Reflection scheduling returns a failure or raises
-    then the scheduling failure is logged
-    and the successfully completed flush still reports success
-
-when Reflection scheduling needs a scheduler
-  while one is already running
-    then that scheduler's registered identity is retained rather than duplicating it
-    and a supervised replacement remains reachable through that identity
-  while the scheduler is shared rather than owned by the buffer
-    then stopping the buffer leaves it running
-  while declared Reflections use default scheduling and no scheduler is registered
-    then startup fails identifying the required dedicated Reflection supervisor
-  while no Reflections are declared and no scheduler is registered
-    then the buffer starts without creating a scheduler
-  while a custom Reflection scheduling callback is supplied and no scheduler is registered
-    then the buffer starts without creating a scheduler
-
 when a session's turns are read back before anything has been appended for it
   then nothing is returned
 
@@ -171,9 +143,4 @@ if any other unexpected message arrives, a linked process exiting abnormally inc
 
 when the supervision tree stops the buffer
   then every pending entry is drained through the flush callback before termination returns
-  and every already-started fire-and-forget flush worker finishes before Reflection draining begins
-  and every Reflection admitted by those workers finishes before termination returns
-  while the buffer started with no declared Reflections
-    then work admitted directly or by a later Reflection registry is still drained
-  while the Scheduler exits during its drain call
-    then the buffer waits for its supervised replacement and drains that replacement before returning
+  and every already-started fire-and-forget flush worker finishes before termination returns

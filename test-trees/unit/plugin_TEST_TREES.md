@@ -64,10 +64,6 @@ when an agent turn completes
       then no capture is sent at all
     where the plugin was mounted with Lens selections
       then the capture carries the selected Lens
-      and the host agent's configured tools are forwarded for Reflection processing
-      and retained request tool context overrides conflicting configured tool context
-      and the current operator, agent name, Lens, and session id override conflicting configured or retained context
-      and the current operator is supplied as the host agent identifier expected by forwarded tools
     if agent state holds no user name
       then the callback raises ArgumentError naming the missing user name
     if agent state holds a blank user name

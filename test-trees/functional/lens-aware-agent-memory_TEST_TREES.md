@@ -25,12 +25,6 @@ if an agent turn selects an unknown or non-binary Lens
   then handling the turn fails before memory addition or capture
   and the invalid Lens is identified
 
-when a mounted memory plugin captures through a Lens for an agent request
-  then the host agent's configured tools reach every scheduled Reflection
-  and the retained request tool context reaches every scheduled Reflection
-  and the current operator, agent name, Lens, and session id override conflicting configured or retained context
-  and the current operator is supplied as the host agent identifier expected by forwarded tools
-
 when turns in one session select different Lenses
   then each Lens retains only the turns selected for it
   and no flushed episode combines turns governed by different ontologies or ingestion processes

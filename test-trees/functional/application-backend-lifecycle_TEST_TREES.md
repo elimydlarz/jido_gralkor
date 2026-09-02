@@ -1,13 +1,10 @@
-Functional: application-backend-lifecycle (src: lib/gralkor/application.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/graphiti_pool.ex, lib/gralkor/reflection/supervisor.ex, lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/journal.ex; functional: test/functional/application_backend_lifecycle_functional_test.exs)
+Functional: application-backend-lifecycle (src: lib/gralkor/application.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/application_backend_lifecycle_functional_test.exs)
 
 when an application starts with a remote memory backend
   then the native memory runtime starts without owning an embedded server
-  and a dedicated Reflection supervisor owns the durable Scheduler before capture begins
-  and it remains responsive to Scheduler crashes while CaptureBuffer drains
 
 when an application starts with an embedded memory backend
   then the native memory runtime starts with an embedded server owned for that application's lifetime
-  and the durable Reflection Scheduler journals unfinished work inside the configured data directory
   when the application stops
     then the owned embedded server exits before shutdown completes
 
