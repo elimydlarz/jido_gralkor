@@ -22,6 +22,11 @@ when the Journey completes successive ingestions containing related observations
   and the later generalisation that evolves from the first has evolution-depth level two
   and the later generalisation's `evolves_from` records the first generalisation's content and level
 
+when distinct ingestions use Lenses backed by different Destinations
+  then the `work-notes` input is searchable through the `operator` Destination
+  and the `published` input is searchable through the `global` Destination
+  and each stable ingestion identifier resolves a completed `generalisations` artefact
+
 when a completed ingestion triggers a consumer-defined Reflection with Destination and return outputs
   then its artefact is searchable through its Destination
   and its consumer return handler receives that exact artefact
