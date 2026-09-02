@@ -24,6 +24,8 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   @moduletag :functional
   @moduletag timeout: 120_000
 
+  @captured_source "captured [lens: operator]"
+
   setup do
     {g, _} =
       Pythonx.eval(
@@ -193,13 +195,14 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       assert :ok = Native.flush("session-immediate")
       assert System.monotonic_time(:millisecond) - started_at < 250
       assert episodes(g) == []
-      assert await_episode(g, "captured")
+      assert await_episode(g, @captured_source)
     end
 
-    test "and the rendered transcript eventually reaches the session's group", %{g: g} do
+    test "and the rendered transcript eventually reaches the session's group with trusted `operator` Lens provenance",
+         %{g: g} do
       capture("session-transcript")
       assert :ok = Native.flush("session-transcript")
-      episode = await_episode(g, "captured")
+      episode = await_episode(g, @captured_source)
       assert episode, "expected a captured episode to reach the graph"
       assert episode["group_id"] == "operator_one"
       assert episode["body"] =~ "teal"
@@ -208,11 +211,11 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
     test "and a second flush writes no duplicate transcript", %{g: g} do
       capture("session-consumed")
       assert :ok = Native.flush("session-consumed")
-      assert await_episode(g, "captured")
+      assert await_episode(g, @captured_source)
       assert :ok = Native.flush("session-consumed")
       Process.sleep(200)
 
-      assert Enum.count(episodes(g), &(&1["source_description"] == "captured")) == 1
+      assert Enum.count(episodes(g), &(&1["source_description"] == @captured_source)) == 1
     end
   end
 
