@@ -69,4 +69,3 @@ when a consumer programmatically requests a named Reflection with a non-blank `o
 
 when an ingestion completes with no eligible Lens-ingestion Reflection
   then ingestion succeeds without admitting Reflection work
-
