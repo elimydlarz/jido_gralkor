@@ -1200,6 +1200,16 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         %{"graphiti" => graphiti, "conflicting_content" => conflicting_content}
       )
 
+      {debug_episodes, _} =
+        Pythonx.eval(
+          """
+          [(key, episode.uuid, episode.content, episode.uuid in getattr(graphiti.driver, '_gralkor_completed_episode_uuids', set())) for key, episode in graphiti.driver.episodes.items()]
+          """,
+          %{"graphiti" => graphiti}
+        )
+
+      IO.inspect(Pythonx.decode(debug_episodes), label: "CONFLICT_EPISODES")
+
       conflict_result =
         Client.search(%Search{
           operator_id: "operator-one",
