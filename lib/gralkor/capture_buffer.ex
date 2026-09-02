@@ -699,13 +699,14 @@ defmodule Gralkor.CaptureBuffer do
 
   defp schedule_after_ingestion(entry, representations, reflections, callback)
        when is_function(callback, 2) do
-    eligible_reflections = Enum.filter(reflections, &ingestion_trigger?/1)
+    eligible_reflections =
+      Enum.filter(reflections, &lens_ingestion_trigger?(&1, entry.lens_order))
 
     ingestion = %{
       id: entry.ingestion_id,
       operator_id: entry.operator_id,
-      trigger: :ingestion,
-      trigger_context: %{},
+      trigger: :lens_ingestion,
+      trigger_context: %{lenses: entry.lens_order},
       intended_lenses: entry.lens_order,
       completed_lenses: entry.lens_order,
       representations: representations,
@@ -738,10 +739,18 @@ defmodule Gralkor.CaptureBuffer do
       )
   end
 
-  defp ingestion_trigger?(%Gralkor.Reflection{triggers: triggers}),
-    do: :ingestion in triggers
+  defp lens_ingestion_trigger?(%Gralkor.Reflection{triggers: triggers}, completed_lenses) do
+    Enum.any?(triggers, fn
+      {:lens_ingestion, :any} -> true
+      {:lens_ingestion, names} when is_list(names) ->
+        Enum.any?(completed_lenses, &(&1 in names))
 
-  defp ingestion_trigger?(_reflection), do: true
+      _ ->
+        false
+    end)
+  end
+
+  defp lens_ingestion_trigger?(_reflection, _completed_lenses), do: true
 
   defp schedule_reflections(reflections, ingestion) do
     runner_opts = [
