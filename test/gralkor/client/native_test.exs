@@ -321,7 +321,7 @@ defmodule Gralkor.Client.NativeTest do
 
     test "then an argument error names the operator identifier and no turn is buffered" do
       for operator_id <- [nil, "", "  "],
-          lens_args <- [["observations"], ["observations", []], ["observations", [], %{}]] do
+          lens_args <- [["observations"], ["observations", []]] do
         assert_raise ArgumentError, ~r/operator_id/, fn ->
           apply(Native, :capture, [
             "s1",

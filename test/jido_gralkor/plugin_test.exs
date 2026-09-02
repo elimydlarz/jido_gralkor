@@ -287,8 +287,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert {:ok, :continue} = Plugin.handle_signal(completed, context(completion_agent))
 
-      assert [[_, _, _, _, _, "observations", [], reflection_context]] = InMemory.captures()
-      assert reflection_context.tool_context.request_token == "retained"
+      assert [[_, _, _, _, _, "observations", []]] = InMemory.captures()
 
       InMemory.reset()
       InMemory.set_capture(:ok)
@@ -297,7 +296,7 @@ defmodule JidoGralkor.PluginTest do
         Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
 
       assert {:ok, :continue} = Plugin.handle_signal(failed, context(completion_agent))
-      assert [[_, _, _, _, _, "observations", [], _reflection_context]] = InMemory.captures()
+      assert [[_, _, _, _, _, "observations", []]] = InMemory.captures()
     end
 
     test "if the selected Lens is unknown or non-binary then the callback raises identifying the invalid Lens" do
@@ -518,29 +517,9 @@ defmodule JidoGralkor.PluginTest do
                  "Eli",
                  _messages,
                  "observations",
-                 [],
-                 reflection_context
+                 []
                ]
              ] = lens_capture()
-
-      assert reflection_context.tools == [
-               JidoGralkor.Actions.MemorySearch,
-               JidoGralkor.Actions.MemoryAdd
-             ]
-
-      assert reflection_context.tool_context == %{
-               tenant: "tenant-one",
-               agent_id: "operator-one",
-               operator_id: "operator-one",
-               agent_name: "Susu",
-               lens: "observations",
-               session_id: "thread-one"
-             }
-    end
-
-    test "and the current operator is supplied as the host agent identifier expected by forwarded tools" do
-      [[_, _, _, _, _, _, _, reflection_context]] = lens_capture()
-      assert reflection_context.tool_context.agent_id == "operator-one"
     end
   end
 
@@ -741,10 +720,6 @@ defmodule JidoGralkor.PluginTest do
       agent("operator-one",
         agent_name: "Susu",
         thread_id: "thread-one",
-        strategy_config: %{
-          tools: [JidoGralkor.Actions.MemorySearch, JidoGralkor.Actions.MemoryAdd],
-          tool_context: %{tenant: "tenant-one"}
-        },
         request_traces: %{
           request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
         },
