@@ -39,7 +39,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   defmodule FailingReflectionStorage do
     def put_artefact(_, _, _, _), do: {:error, :destination_unavailable}
-    def get_artefact(_, _, _, _), do: {:error, :destination_unavailable}
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
   defmodule ReturnHandler do
