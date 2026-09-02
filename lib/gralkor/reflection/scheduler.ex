@@ -648,7 +648,7 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp restart_safe?(_value), do: false
 
-  defp completed?(_ingestion, trigger) when trigger in [:agent_request, :schedule], do: true
+  defp completed?(_ingestion, :programmatic), do: true
 
   defp completed?(ingestion, trigger) when trigger in [:ingestion, :lens_ingestion] do
     representations = field(ingestion, :representations) || []

@@ -805,12 +805,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "and only the named Reflection begins one completion flow",
          context do
-      requested = %{reflection(context, "requested") | triggers: [:agent_request]}
-      other = %{reflection(context, "other") | triggers: [:agent_request]}
+      requested = %{reflection(context, "requested") | triggers: [:programmatic]}
+      other = %{reflection(context, "other") | triggers: [:programmatic]}
       configure_reflections([requested, other])
 
       assert {:ok, invocation_id} =
-               Client.request_reflection("requested", "operator-one", "Review this")
+               Client.request_reflection(
+                 "requested",
+                 "operator-one",
+                 "request-one",
+                 "Review this"
+               )
 
       assert :ok = Scheduler.drain()
 
@@ -832,7 +837,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "and request context reaches the Reflection",
          context do
-      requested = %{reflection(context, "requested") | triggers: [:agent_request]}
+      requested = %{reflection(context, "requested") | triggers: [:programmatic]}
       configure_reflections([requested])
       parent = self()
       stop_supervised(Scheduler)
@@ -855,6 +860,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Client.request_reflection(
                  "requested",
                  "operator-one",
+                 "request-one",
                  "Review the current situation",
                  tools: [:memory_search],
                  tool_context: %{session_id: "session-one"}
@@ -863,7 +869,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_receive {:request_invocation, ^requested,
                       %{
                         operator_id: "operator-one",
-                        trigger: :agent_request,
+                        trigger: :programmatic,
                         trigger_context: %{request_content: "Review the current situation"}
                       }, runner_opts}
 
@@ -872,7 +878,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
 
     test "and the invocation identifier is stable", context do
-      requested = %{reflection(context, "requested") | triggers: [:agent_request]}
+      requested = %{reflection(context, "requested") | triggers: [:programmatic]}
       configure_reflections([requested])
       parent = self()
       stop_supervised(Scheduler)
@@ -891,10 +897,15 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
          end}
       )
 
-      assert {:ok, invocation_id} =
-               Client.request_reflection("requested", "operator-one", "Review this")
+      assert {:ok, "request-one"} =
+               Client.request_reflection(
+                 "requested",
+                 "operator-one",
+                 "request-one",
+                 "Review this"
+               )
 
-      assert_receive {:runner_invocation_id, ^invocation_id}
+      assert_receive {:runner_invocation_id, "request-one"}
     end
   end
 
@@ -903,7 +914,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       configure_reflections([])
 
       assert {:error, {:unknown_reflection, "missing"}} =
-               Client.request_reflection("missing", "operator-one", "Review this")
+               Client.request_reflection("missing", "operator-one", "request-one", "Review this")
     end
   end
 
@@ -912,8 +923,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
          context do
       configure_reflections([reflection(context, "ingestion-only")])
 
-      assert {:error, {:trigger_disabled, "ingestion-only", :agent_request}} =
-               Client.request_reflection("ingestion-only", "operator-one", "Review this")
+      assert {:error, {:trigger_disabled, "ingestion-only", :programmatic}} =
+               Client.request_reflection(
+                 "ingestion-only",
+                 "operator-one",
+                 "request-one",
+                 "Review this"
+               )
     end
   end
 

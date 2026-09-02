@@ -141,11 +141,12 @@ defmodule Gralkor.Client do
     end
   end
 
-  @spec request_reflection(String.t(), String.t(), term(), keyword()) ::
+  @spec request_reflection(String.t(), String.t(), String.t(), term(), keyword()) ::
           {:ok, String.t()} | {:error, term()}
-  def request_reflection(reflection_name, operator_id, content, opts \\ []) do
+  def request_reflection(reflection_name, operator_id, invocation_id, content, opts \\ []) do
     validate_non_blank!(:reflection_name, reflection_name)
     Ingest.validate_operator_id!(operator_id)
+    validate_non_blank!(:invocation_id, invocation_id)
 
     reflections = ReflectionRegistry.configured!()
 
@@ -154,18 +155,16 @@ defmodule Gralkor.Client do
         {:error, {:unknown_reflection, reflection_name}}
 
       reflection ->
-        request_agent_reflection(reflection, operator_id, content, opts)
+        request_programmatic_reflection(reflection, operator_id, invocation_id, content, opts)
     end
   end
 
-  defp request_agent_reflection(reflection, operator_id, content, opts) do
-    if :agent_request in reflection.triggers do
-      invocation_id = new_invocation_id()
-
+  defp request_programmatic_reflection(reflection, operator_id, invocation_id, content, opts) do
+    if :programmatic in reflection.triggers do
       invocation = %{
         id: invocation_id,
         operator_id: operator_id,
-        trigger: :agent_request,
+        trigger: :programmatic,
         trigger_context: %{request_content: content},
         representations: []
       }
@@ -180,12 +179,8 @@ defmodule Gralkor.Client do
         {:error, _reason} = error -> error
       end
     else
-      {:error, {:trigger_disabled, reflection.name, :agent_request}}
+      {:error, {:trigger_disabled, reflection.name, :programmatic}}
     end
-  end
-
-  defp new_invocation_id do
-    Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
   end
 
   defp validate_non_blank!(field, value) when is_binary(value) do
