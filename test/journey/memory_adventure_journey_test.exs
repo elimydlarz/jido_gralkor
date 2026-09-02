@@ -229,6 +229,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          ]}
       )
 
+    {:ok, _jido} = start_supervised({Jido, name: Jido})
+
     {:ok, agent} =
       start_supervised(
         {Jido.AgentServer,
