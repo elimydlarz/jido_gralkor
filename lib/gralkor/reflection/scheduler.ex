@@ -574,7 +574,7 @@ defmodule Gralkor.Reflection.Scheduler do
   defp validate_invocation(ingestion) do
     id = field(ingestion, :id)
     operator_id = field(ingestion, :operator_id)
-    trigger = field(ingestion, :trigger) || :ingestion
+    trigger = field(ingestion, :trigger) || :lens_ingestion
 
     cond do
       not valid_identity?(operator_id) -> {:error, {:invalid_operator_id, operator_id}}
@@ -584,7 +584,7 @@ defmodule Gralkor.Reflection.Scheduler do
     end
   end
 
-  defp invalid_invocation_id(:ingestion, id), do: {:error, {:invalid_ingestion_id, id}}
+  defp invalid_invocation_id(:lens_ingestion, id), do: {:error, {:invalid_ingestion_id, id}}
   defp invalid_invocation_id(_trigger, id), do: {:error, {:invalid_invocation_id, id}}
 
   defp validate_reflections(reflections) when is_list(reflections) do
@@ -708,7 +708,7 @@ defmodule Gralkor.Reflection.Scheduler do
 
   defp completed?(_ingestion, :programmatic), do: true
 
-  defp completed?(ingestion, trigger) when trigger in [:ingestion, :lens_ingestion] do
+  defp completed?(ingestion, :lens_ingestion) do
     representations = field(ingestion, :representations) || []
     intended = field(ingestion, :intended_lenses) || Enum.map(representations, &field(&1, :lens))
 

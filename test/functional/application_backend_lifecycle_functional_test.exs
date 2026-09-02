@@ -108,7 +108,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
 
       reflection = %Reflection{
         name: "review",
-        triggers: [:ingestion],
+        triggers: [{:lens_ingestion, :any}],
         outputs: [
           %{
             kind: :destination,

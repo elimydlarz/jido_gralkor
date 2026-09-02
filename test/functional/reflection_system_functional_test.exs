@@ -1072,7 +1072,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       requests = run_and_collect_requests(reflection(context), ingestion())
 
       assert Enum.all?(requests, fn request ->
-               request.trigger == :ingestion and
+               request.trigger == :lens_ingestion and
                  request.trigger_context == %{source: "direct-ingestion"}
              end)
     end
@@ -1797,7 +1797,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     %{
       id: "ingestion-1",
       operator_id: "operator-one",
-      trigger: :ingestion,
+      trigger: :lens_ingestion,
       trigger_context: %{source: "direct-ingestion"},
       intended_lenses: ["observations", "decisions"],
       representations: [
