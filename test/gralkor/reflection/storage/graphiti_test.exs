@@ -26,9 +26,7 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                "payload" => %{"summary" => "stored"}
              }
     end
-  end
 
-  describe "when Graphiti Destination storage receives an artefact" do
     test "and it supplies the artefact identifier as the requested episode UUID" do
       artefact = artefact()
       test_pid = self()
