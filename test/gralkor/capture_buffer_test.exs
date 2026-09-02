@@ -1578,7 +1578,7 @@ defmodule Gralkor.CaptureBufferTest do
       runner = fn reflection, _ingestion, opts ->
         send(test_pid, :empty_registry_runner_started)
         Process.sleep(100)
-        {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"done" => true})}
+        {:ok, Artefact.new(opts[:artefact_id], %{"done" => true})}
       end
 
       children = [
@@ -1634,7 +1634,7 @@ defmodule Gralkor.CaptureBufferTest do
             :never -> {:error, :unexpected}
           end
         else
-          {:ok, Artefact.new(opts[:artefact_id], reflection.name, %{"done" => true})}
+          {:ok, Artefact.new(opts[:artefact_id], %{"done" => true})}
         end
       end
 
