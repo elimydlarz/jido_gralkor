@@ -820,6 +820,63 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     decoded
   end
 
+  defp agent_request(agent) do
+    prompt = """
+    Choose exactly one option for a Payments schema migration:
+
+    * Harbor — begin with a reversible limited-scope trial.
+    * Summit — apply the change to every customer immediately.
+
+    Search related memory before deciding. Name the narrower predecessor scope,
+    name a different scope covered by the evolved generalisation, and explain
+    why that evolution history supports the choice.
+
+    Answer as:
+    CHOICE: <Harbor or Summit>
+    PREDECESSOR SCOPE: <scope>
+    EVOLVED SCOPE: <scope>
+    REASON: <application of the generalisation>
+    """
+
+    assert {:ok, %{request: request, events: event_stream}} =
+             JourneyAgent.ask_stream(agent, prompt,
+               stream_event_timeout_ms: 180_000,
+               tool_heartbeat_ms: 5_000
+             )
+
+    events = Enum.to_list(event_stream)
+    assert {:ok, answer} = JourneyAgent.await(request, timeout: 180_000)
+
+    memory_search_started =
+      Enum.filter(events, &match?(%{kind: :tool_started, tool_name: "memory_search"}, &1))
+
+    memory_search_completed =
+      Enum.filter(events, &match?(%{kind: :tool_completed, tool_name: "memory_search"}, &1))
+
+    assert [%{data: %{arguments: arguments}}] = memory_search_started
+    assert [completed] = memory_search_completed
+
+    results = decode_memory_search_result(completed)
+
+    %{
+      answer: answer,
+      memory_search_arguments: %{
+        destinations: Map.get(arguments, :destinations, Map.get(arguments, "destinations")),
+        lenses: Map.get(arguments, :lenses, Map.get(arguments, "lenses"))
+      },
+      memory_search_completion_count: length(memory_search_completed),
+      memory_search_results: results
+    }
+  end
+
+  defp decode_memory_search_result(%{
+         data: %{result: {:ok, %{result: encoded_results}, _effects}}
+       }) do
+    decoded = Jason.decode!(encoded_results)
+    assert is_list(decoded)
+    decoded
+  end
+
   defp search_until(operator_id, destinations, result_type, query, predicate, attempts \\ 60)
 
   defp search_until(operator_id, destinations, result_type, query, predicate, attempts) do
@@ -869,6 +926,43 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         false
     end)
   end
+
+  defp has_evolved_generalisation?(results, %{
+         "content" => expected_content,
+         "level" => expected_level
+       }) do
+    Enum.any?(results, fn
+      %{
+        "episode" => %{
+          "content" => content,
+          "reflection" => "generalisations"
+        }
+      } ->
+        case Jason.decode(content) do
+          {:ok, %{"payload" => %{"generalisations" => generalisations}}}
+          when is_list(generalisations) ->
+            Enum.any?(generalisations, fn
+              %{
+                "content" => ^expected_content,
+                "level" => ^expected_level,
+                "evolves_from" => [_ | _]
+              } ->
+                true
+
+              _ ->
+                false
+            end)
+
+          _ ->
+            false
+        end
+
+      _ ->
+        false
+    end)
+  end
+
+  defp has_evolved_generalisation?(_results, _generalisation), do: false
 
   defp every_episode_has_provenance?([]), do: false
 
@@ -957,6 +1051,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   defp contains_all?(text, expected) do
     text = String.downcase(text)
     Enum.all?(expected, &String.contains?(text, &1))
+  end
+
+  defp contains_any?(text, expected) do
+    Enum.any?(expected, &String.contains?(text, &1))
   end
 
   defp learning_artefact?(results) do
