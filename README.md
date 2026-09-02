@@ -662,7 +662,7 @@ end)
 
 Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the invocation ID, invocation context, completed lensed representations, host tools, and tool context. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one `%Gralkor.Artefact{}` whose fields are exactly `id` and `payload`. Producer identity remains execution provenance and is not embedded in the artefact.
 
-Registry-backed client operations resolve current application configuration per call. Mounted plugins retain their resolved ingestion Lens and each MemorySearch invocation carries its own selectors. Restart the application after changing mounted-plugin, capture, Reflection, or backend configuration.
+Registry-backed client operations resolve current application configuration per call, and `Registry.configured!/0` resolves the current Reflection declarations each time the consumer calls it. Mounted plugins retain their resolved ingestion Lens and each MemorySearch invocation carries its own selectors. Remount a plugin to change its mount settings; restart the application after changing startup-owned capture or backend configuration.
 
 Multiple Reflections and Lenses may save to the same Destination. Search selects Destinations directly:
 
