@@ -17,6 +17,14 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
+    def put_artefact(_output, _reflection_name, _operator_id, _artefact),
+      do: {:error, :unsupported}
+
+    @impl true
+    def get_artefact(_output, _reflection_name, _operator_id, _artefact_id),
+      do: {:error, :unsupported}
+
+    @impl true
     def search(destination, operator_id, query, result_type, max_results, opts) do
       test_pid = Application.fetch_env!(:jido_gralkor, :generalisation_test_pid)
 
@@ -805,7 +813,6 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
   end
 
   defp decode_episode(%{content: content}), do: Jason.decode!(content)
-  defp decode_episode(content) when is_binary(content), do: Jason.decode!(content)
 
   defp contains_content?(snapshots, content),
     do: Enum.any?(snapshots, &(&1["content"] == content))
