@@ -103,7 +103,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
       test_pid = self()
       name = Module.concat(__MODULE__, "Scheduler#{System.unique_integer([:positive])}")
 
-      runner = fn _reflection, _ingestion, opts ->
+      runner = fn reflection, _ingestion, opts ->
         send(test_pid, {:runner, reflection.name, opts[:artefact_id], self()})
 
         receive do
