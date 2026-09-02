@@ -683,12 +683,12 @@ Functional tests require their documented provider credentials and can send test
 
 The Jido glue:
 
-- `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (planting session, agent, selected Lens, and Destinations to search) and `ai.request.completed` / `ai.request.failed` (capture).
+- `JidoGralkor.Plugin` — `use Jido.Plugin, state_key: :__memory__, singleton: true`. Handles `ai.react.query` (planting session, agent, and selected ingestion Lens) and `ai.request.completed` / `ai.request.failed` (capture).
 - `JidoGralkor.ReAct` — `maybe_force_memory_search/2` helper. Folds `tool_choice: %{type: "function", function: %{name: "memory_search"}}` into ReAct overrides on iteration 1; passes through unchanged on iterations 2+.
 - `JidoGralkor.Canonical` — normalises a Jido/ReAct turn into the canonical `[%Gralkor.Message{role, content}]` shape.
 - `JidoGralkor.Lifecycle` — `Jido.AgentServer.Lifecycle` impl whose sole job is the death-triggered flush.
 - `JidoGralkor.ContextRotator` — synchronous `rotate_now/2` for in-life context consolidation.
-- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls `Gralkor.Client.search/1` for configured Destinations and falls back to legacy `recall/4` in implicit-operator plugin mode. It short-circuits when no thread is committed or the query is blank.
+- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that always calls `Gralkor.Client.search/1` for the current operator, using optional Destination and Lens selectors from that invocation. It works before a thread is committed and short-circuits only a blank query.
 - `JidoGralkor.Actions.MemoryAdd` — fire-and-forget ReAct tool.
 - `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
 - `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's `operator/<operator id>` graph.
