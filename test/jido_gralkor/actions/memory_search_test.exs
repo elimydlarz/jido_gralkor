@@ -104,7 +104,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                       20, []}
     end
 
-    test "where neither selector is supplied then both selector dimensions remain unrestricted" do
+  end
+
+  describe "when the memory search tool runs with a usable query > where the tool call supplies no Destination selector > and the tool call supplies no Lens selector" do
+    test "then the Search request leaves both selector dimensions unrestricted" do
       assert {:ok, _result} = run_search(%{query: "launch"})
 
       for destination <- ["operator", "global", "observations", "decisions"] do
@@ -114,8 +117,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
       refute_receive {:destination_search, _, _, _, _, _, _}
     end
+  end
 
-    test "where the tool call supplies Destinations then the Search request carries the same Destination list" do
+  describe "when the memory search tool runs with a usable query > where the tool call supplies Destinations" do
+    test "then the Search request carries the same Destination list" do
       assert {:ok, _result} =
                run_search(%{
                  query: "launch",
@@ -129,8 +134,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
       refute_receive {:destination_search, _, _, _, _, _, _}
     end
+  end
 
-    test "where the tool call supplies Lenses then the Search request carries the same Lens list" do
+  describe "when the memory search tool runs with a usable query > where the tool call supplies Lenses" do
+    test "then the Search request carries the same Lens list" do
       assert {:ok, _result} = run_search(%{query: "launch", lenses: ["decisions"]})
 
       for destination <- ["operator", "global", "observations", "decisions"] do
@@ -140,8 +147,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
       refute_receive {:destination_search, _, _, _, _, _, _}
     end
+  end
 
-    test "where the tool call supplies Destinations and Lenses then the Search request carries both lists unchanged" do
+  describe "when the memory search tool runs with a usable query > where the tool call supplies Destinations and Lenses" do
+    test "then the Search request carries both lists unchanged" do
       assert {:ok, _result} =
                run_search(%{
                  query: "launch",
@@ -156,8 +165,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
       refute_receive {:destination_search, _, _, _, _, _, _}
     end
+  end
 
-    test "while Search returns results then the action result is their JSON encoding" do
+  describe "when the memory search tool runs with a usable query > while Search returns results" do
+    test "then the action result is their JSON encoding" do
       assert {:ok, %{result: result}} =
                run_search(%{
                  query: "launch",
@@ -182,7 +193,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
              ]
     end
 
-    test "while Search returns results every returned episode's Destination and originating Lens or declaring Reflection remain identifiable" do
+    test "and every returned episode's Destination and originating Lens or declaring Reflection remain identifiable" do
       assert {:ok, %{result: result}} =
                run_search(%{
                  query: "launch",
@@ -200,8 +211,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                }
              ] = Jason.decode!(result)
     end
+  end
 
-    test "if Search fails then the failure reason is returned to the caller unchanged" do
+  describe "when the memory search tool runs with a usable query > if Search fails" do
+    test "then the failure reason is returned to the caller unchanged" do
       Application.put_env(
         :jido_gralkor,
         :destination_storage,
@@ -254,7 +267,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       assert log =~ "blank query"
     end
 
-    test "while the query is only whitespace then it counts as no query" do
+  end
+
+  describe "if the memory search tool runs without a usable query > while the query is only whitespace" do
+    test "then it counts as no query" do
       assert {:ok, %{result: result}} = run_search(%{query: "   "})
 
       assert result =~ "no query was provided"
