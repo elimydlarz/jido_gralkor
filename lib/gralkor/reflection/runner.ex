@@ -69,7 +69,18 @@ defmodule Gralkor.Reflection.Runner do
           {:ok, output} ->
             case validate_output(output, step.output) do
               {:ok, normalized} ->
-                {:cont, {:ok, Map.merge(outputs, normalized)}}
+                case validate_generalisation_lineage(
+                       reflection,
+                       step,
+                       normalized,
+                       stored_information
+                     ) do
+                  :ok ->
+                    {:cont, {:ok, Map.merge(outputs, normalized)}}
+
+                  {:error, reason} ->
+                    {:halt, failure(reflection, step, reason)}
+                end
 
               {:error, {:missing_output, _}} when final_step? ->
                 {:halt, {:error, %{reflection: reflection.name, reason: :missing_artefact}}}
@@ -123,7 +134,7 @@ defmodule Gralkor.Reflection.Runner do
   end
 
   defp build_artefact(reflection, ingestion, outputs, final, opts) do
-    payload = outputs |> Map.take(Map.keys(final.output)) |> normalize_payload(reflection)
+    payload = artefact_payload(reflection, outputs, final)
 
     if map_size(payload) == 0 do
       {:error, %{reflection: reflection.name, reason: :missing_artefact}}
@@ -141,13 +152,16 @@ defmodule Gralkor.Reflection.Runner do
     end
   end
 
-  defp normalize_payload(payload, %Reflection{} = reflection) do
+  defp artefact_payload(%Reflection{} = reflection, outputs, final) do
     if packaged_generalisation?(reflection) do
-      Map.update!(payload, "generalisations", fn generalisations ->
-        Enum.map(generalisations, &normalize_generalisation/1)
-      end)
+      %{
+        "generalisations" =>
+          outputs
+          |> Map.fetch!("evolutions")
+          |> Enum.map(&normalize_generalisation/1)
+      }
     else
-      payload
+      Map.take(outputs, Map.keys(final.output))
     end
   end
 
@@ -160,13 +174,86 @@ defmodule Gralkor.Reflection.Runner do
 
   defp packaged_generalisation?(%Reflection{}), do: false
 
+  defp validate_generalisation_lineage(
+         %Reflection{} = reflection,
+         %{label: "evolve-generalisations"},
+         %{"evolutions" => evolutions},
+         stored_information
+       ) do
+    if packaged_generalisation?(reflection) do
+      allowed = allowed_generalisation_lineage(stored_information)
+
+      evolutions
+      |> Enum.flat_map(&field(&1, :evolves_from))
+      |> Enum.reduce_while(:ok, fn snapshot, :ok ->
+        normalized = lineage_snapshot(snapshot)
+
+        if MapSet.member?(allowed, lineage_identity(normalized)) do
+          {:cont, :ok}
+        else
+          {:halt, {:error, {:invalid_generalisation_lineage, normalized}}}
+        end
+      end)
+    else
+      :ok
+    end
+  end
+
+  defp validate_generalisation_lineage(_reflection, _step, _output, _stored_information),
+    do: :ok
+
+  defp allowed_generalisation_lineage(stored_information) do
+    stored_information
+    |> Enum.flat_map(&prior_generalisations/1)
+    |> Enum.reduce(MapSet.new(), fn generalisation, allowed ->
+      snapshot = lineage_snapshot(generalisation)
+
+      if valid_lineage_snapshot?(snapshot) do
+        MapSet.put(allowed, lineage_identity(snapshot))
+      else
+        allowed
+      end
+    end)
+  end
+
+  defp prior_generalisations(stored_information) do
+    episode = field(stored_information, :episode)
+
+    if is_map(episode) and field(episode, :reflection) == "generalisations" do
+      decode_generalisation_artefact(field(episode, :content))
+    else
+      []
+    end
+  end
+
+  defp decode_generalisation_artefact(content) when is_binary(content) do
+    case Jason.decode(content) do
+      {:ok, %{"id" => id, "payload" => %{"generalisations" => generalisations}} = artefact}
+      when map_size(artefact) == 2 and is_binary(id) and is_list(generalisations) ->
+        generalisations
+
+      _ ->
+        []
+    end
+  end
+
+  defp decode_generalisation_artefact(_content), do: []
+
+  defp lineage_snapshot(item) do
+    %{"content" => field(item, :content), "level" => field(item, :level)}
+  end
+
+  defp lineage_identity(%{"content" => content, "level" => level}), do: {content, level}
+
+  defp valid_lineage_snapshot?(%{"content" => content, "level" => level}) do
+    is_binary(content) and String.trim(content) != "" and is_integer(level) and level > 0
+  end
+
   defp normalize_generalisation(generalisation) do
     snapshots =
       generalisation
       |> field(:evolves_from)
-      |> Enum.map(fn item ->
-        %{"content" => field(item, :content), "level" => field(item, :level)}
-      end)
+      |> Enum.map(&lineage_snapshot/1)
 
     level =
       case snapshots do
