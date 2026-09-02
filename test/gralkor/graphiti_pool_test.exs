@@ -1984,7 +1984,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
-
   end
 
   describe "if community building raises inside the graph library" do
