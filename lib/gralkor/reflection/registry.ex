@@ -137,6 +137,7 @@ defmodule Gralkor.Reflection.Registry do
     name = field(definition, :name)
     destination = field(definition, :destination)
     ontology = field(definition, :ontology) || Gralkor.DefaultOntology
+    outputs = field(definition, :outputs)
     triggers = field(definition, :triggers)
     relative = field(definition, :chain_of_thought)
     lens_error = named_lens_error(name, triggers)
@@ -171,6 +172,7 @@ defmodule Gralkor.Reflection.Registry do
           name,
           destination,
           ontology,
+          outputs,
           triggers,
           relative,
           root
@@ -178,7 +180,7 @@ defmodule Gralkor.Reflection.Registry do
     end
   end
 
-  defp load_cot(name, destination_name, ontology, triggers, relative, root) do
+  defp load_cot(name, destination_name, ontology, outputs, triggers, relative, root) do
     path = Path.expand(relative, root)
 
     cond do
@@ -194,6 +196,7 @@ defmodule Gralkor.Reflection.Registry do
                destination: fetch_destination!(name, destination_name),
                ontology: ontology,
                chain_of_thought: cot,
+               outputs: resolve_outputs(name, outputs, destination_name, ontology),
                triggers: triggers
              }}
 
@@ -201,6 +204,34 @@ defmodule Gralkor.Reflection.Registry do
             {:error, {:invalid_chain_of_thought, name, relative, reason}}
         end
     end
+  end
+
+  defp resolve_outputs(name, nil, destination_name, ontology) do
+    [destination_output(name, destination_name, ontology)]
+  end
+
+  defp resolve_outputs(name, outputs, _destination_name, _ontology) do
+    Enum.map(outputs, fn output ->
+      case field(output, :kind) do
+        :destination ->
+          destination_output(
+            name,
+            field(output, :destination),
+            field(output, :ontology) || Gralkor.DefaultOntology
+          )
+
+        :return ->
+          %{kind: :return, handler: field(output, :handler)}
+      end
+    end)
+  end
+
+  defp destination_output(name, destination_name, ontology) do
+    %{
+      kind: :destination,
+      destination: fetch_destination!(name, destination_name),
+      ontology: ontology
+    }
   end
 
   defp repository_path?(path, root), do: path == root or String.starts_with?(path, root <> "/")
