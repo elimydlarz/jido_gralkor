@@ -2,6 +2,7 @@ defmodule Gralkor.ApplicationTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Application, as: App
+  alias Gralkor.Client
 
   setup do
     original_env = System.get_env("GRALKOR_DATA_DIR")
@@ -578,7 +579,7 @@ defmodule Gralkor.ApplicationTest do
       {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
       rec = Pythonx.decode(rec)
       assert rec["source_description"] == "captured [lens: operator]"
-      assert rec["group_id"] == "flush_group"
+      assert rec["group_id"] == Client.sanitize_group_id("flush_group")
       assert rec["episode_body"] =~ "vacuum"
     end
   end

@@ -28,6 +28,7 @@ when a capture flush runs
   and the trusted originating Lens is recorded as `operator`
   while no episode-writing dependency is supplied
     then default writes name the graph pool server explicitly and reach it without shifted arguments
+    and the logical group is encoded exactly once by that graph pool boundary
 
 when a capture flush writes its captured episode successfully
   then a single line reporting the group, the transcript size, and the duration is logged
