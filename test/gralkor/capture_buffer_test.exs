@@ -4,27 +4,7 @@ defmodule Gralkor.CaptureBufferTest do
   import ExUnit.CaptureLog
 
   alias Gralkor.CaptureBuffer
-  alias Gralkor.Destination
   alias Gralkor.Message
-  alias Gralkor.Reflection
-  alias Gralkor.Artefact
-  alias Gralkor.Reflection.ChainOfThought
-  alias Gralkor.Reflection.Scheduler
-
-  defmodule EmptyReflectionStore do
-    @behaviour Gralkor.Destination.Storage
-
-    @impl true
-    def get_artefact(_output, _reflection_name, _operator_id, _artefact_id),
-      do: {:error, :not_found}
-
-    @impl true
-    def put_artefact(_output, _reflection_name, _operator_id, _artefact), do: :ok
-
-    @impl true
-    def search(_destination, _operator_id, _query, _result_type, _max_results, _opts),
-      do: {:ok, []}
-  end
 
   setup do
     test_pid = self()
