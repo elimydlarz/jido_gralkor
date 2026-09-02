@@ -985,9 +985,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     labels = "RECOMMENDATION|PREDECESSOR|EVOLVED|RATIONALE"
 
     pattern =
-      Regex.compile!(
-        "(?ims)^#{Regex.escape(label)}:\\s*(.*?)(?=^(?:#{labels}):|\\z)"
-      )
+      Regex.compile!("(?ims)^#{Regex.escape(label)}:\\s*(.*?)(?=^(?:#{labels}):|\\z)")
 
     case Regex.run(pattern, answer, capture: :all_but_first) do
       [value] ->
