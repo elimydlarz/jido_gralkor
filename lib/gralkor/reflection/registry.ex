@@ -158,6 +158,9 @@ defmodule Gralkor.Reflection.Registry do
       not is_nil(outputs) and not is_list(outputs) ->
         {:error, {:invalid_outputs, name, outputs}}
 
+      is_list(outputs) and Enum.count(outputs, &(field(&1, :kind) == :destination)) == 0 ->
+        {:error, {:missing_destination_output, name}}
+
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
 
