@@ -1102,6 +1102,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         |> Map.from_struct()
         |> Jason.encode!()
 
+      graph_group_id = Client.sanitize_group_id("observations")
+
       Pythonx.eval(
         """
         from datetime import datetime, timezone
@@ -1110,7 +1112,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         graphiti.driver.episodes['legacy-pre-marker'] = EpisodicNode(
             uuid='legacy-pre-marker',
             name='legacy-reflection',
-            group_id='observations',
+            group_id=group_id,
             labels=[],
             source=EpisodeType.text,
             content=body,
@@ -1119,7 +1121,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             valid_at=datetime.now(timezone.utc),
         )
         """,
-        %{"graphiti" => graphiti, "legacy_content" => legacy_content}
+        %{
+          "graphiti" => graphiti,
+          "legacy_content" => legacy_content,
+          "group_id" => graph_group_id
+        }
       )
 
       assert :ok = Client.ingest(ingestion())
@@ -1200,38 +1206,13 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         %{"graphiti" => graphiti, "conflicting_content" => conflicting_content}
       )
 
-      {debug_episodes, _} =
-        Pythonx.eval(
-          """
-          [(key, episode.uuid, episode.content, episode.uuid in getattr(graphiti.driver, '_gralkor_completed_episode_uuids', set())) for key, episode in graphiti.driver.episodes.items()]
-          """,
-          %{"graphiti" => graphiti}
-        )
-
-      IO.inspect(Pythonx.decode(debug_episodes), label: "CONFLICT_EPISODES")
-
-      raw_search =
-        GraphitiPool.search_episodes(
-          GraphitiPool,
-          Gralkor.Destination.graph_id(%Gralkor.Destination{name: "observations"}, "operator-one"),
-          "stored",
-          10,
-          require_extraction_complete: true,
-          converge_by_identity: true
-        )
-
-      IO.inspect(raw_search, label: "RAW_SEARCH")
-
-      conflict_result =
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "stored",
-          destinations: ["observations"],
-          result_type: :artefacts
-        })
-
-      IO.inspect(conflict_result, label: "CONFLICT_RESULT")
-      assert {:error, {:artefact_conflict, ^artefact_id}} = conflict_result
+      assert {:error, {:artefact_conflict, ^artefact_id}} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "stored",
+                 destinations: ["observations"],
+                 result_type: :artefacts
+               })
 
       {proof, _} =
         Pythonx.eval(

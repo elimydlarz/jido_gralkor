@@ -471,7 +471,6 @@ defmodule Gralkor.GraphitiPool do
             for identifier in selected_ids
             for candidate in candidates_by_id.get(identifier, [])
           ]
-          print('DBG_CONVERGE', converge_by_identity, selected_ids, len(candidates), len(episode_results))
         else:
           episode_results = [episode_result(episode) for episode in episodes[:max_results]]
 
