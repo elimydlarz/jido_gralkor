@@ -1158,7 +1158,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         }
         graphiti.driver.episodes = {**partials, **graphiti.driver.episodes}
         """,
-        %{"graphiti" => graphiti}
+        %{"graphiti" => graphiti, "artefact_id" => artefact_id}
       )
 
       assert {:ok, [%{destination: "observations", artefact: ^first}]} =
@@ -1176,7 +1176,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         graphiti.driver.episodes[duplicate.uuid] = duplicate
         graphiti.driver._gralkor_completed_episode_uuids.add(duplicate.uuid)
         """,
-        %{"graphiti" => graphiti}
+        %{"graphiti" => graphiti, "artefact_id" => artefact_id}
       )
 
       assert {:ok, [%{destination: "observations", artefact: ^first}]} =
@@ -1203,7 +1203,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         graphiti.driver.episodes[conflict.uuid] = conflict
         graphiti.driver._gralkor_completed_episode_uuids.add(conflict.uuid)
         """,
-        %{"graphiti" => graphiti, "conflicting_content" => conflicting_content}
+        %{
+          "graphiti" => graphiti,
+          "artefact_id" => artefact_id,
+          "conflicting_content" => conflicting_content
+        }
       )
 
       assert {:error, {:artefact_conflict, ^artefact_id}} =
@@ -1403,6 +1407,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   describe "where Graphiti is the Destination artefact store > when a deterministic episode predates graph-backed claim admission" do
     test "then a completed episode rejects conflicting immutable content and remains unchanged" do
       {pool, graphiti} = start_preclaim_graphiti_pool(:reflection_preclaim_complete_graphiti)
+      graph_group_id = Client.sanitize_group_id("observations")
 
       Pythonx.eval(
         """
@@ -1414,7 +1419,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             CREATE (episode:Episodic {
               uuid: $uuid,
               name: 'legacy deterministic episode',
-              group_id: 'observations',
+              group_id: $group_id,
               source: 'text',
               source_description: 'reflection:review',
               content: $content,
@@ -1429,9 +1434,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             content='original',
             created_at=now,
             valid_at=now,
+            group_id=group_id,
         ))
         """,
-        %{"graphiti" => graphiti}
+        %{"graphiti" => graphiti, "group_id" => graph_group_id}
       )
 
       assert {:error, {:episode_conflict, "preclaim-complete"}} =
@@ -1476,6 +1482,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
       artefact = Artefact.new(artefact_id, %{"summary" => "stored"})
       content = Jason.encode!(Map.from_struct(artefact))
+      graph_group_id = Client.sanitize_group_id("observations")
 
       Pythonx.eval(
         """
@@ -1489,7 +1496,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             CREATE (episode:Episodic {
               uuid: $uuid,
               name: 'legacy deterministic episode',
-              group_id: 'observations',
+              group_id: $group_id,
               source: 'text',
               source_description: 'reflection:review',
               content: $content,
@@ -1504,9 +1511,15 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             content=body,
             created_at=now,
             valid_at=now,
+            group_id=group_id,
         ))
         """,
-        %{"graphiti" => graphiti, "uuid" => artefact_id, "content" => content}
+        %{
+          "graphiti" => graphiti,
+          "uuid" => artefact_id,
+          "content" => content,
+          "group_id" => graph_group_id
+        }
       )
 
       assert {:error, {:episode_conflict, ^artefact_id}} =
