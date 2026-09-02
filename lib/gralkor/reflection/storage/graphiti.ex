@@ -2,8 +2,8 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
   @moduledoc false
   @behaviour Gralkor.Reflection.Store
 
+  alias Gralkor.Artefact
   alias Gralkor.GraphitiPool
-  alias Gralkor.Reflection.Artefact
   alias Gralkor.Reflection.Store
 
   @impl true
@@ -48,8 +48,7 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
     case get_episode.(group_id(reflection, operator_id), artefact_id) do
       {:ok, episode} ->
         case decode(episode) do
-          [%Artefact{id: ^artefact_id, reflection: reflection_name} = artefact]
-          when reflection_name == reflection.name ->
+          [%Artefact{id: ^artefact_id} = artefact] ->
             if extraction_complete?(episode) do
               {:ok, artefact}
             else
@@ -81,11 +80,10 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
       {:ok,
        %{
          "id" => id,
-         "reflection" => reflection,
          "payload" => payload
        } = decoded}
-      when map_size(decoded) == 3 ->
-        [%Artefact{id: id, reflection: reflection, payload: payload}]
+      when map_size(decoded) == 2 ->
+        [%Artefact{id: id, payload: payload}]
 
       _ ->
         []

@@ -5,7 +5,7 @@ defmodule Gralkor.Reflection.Scheduler do
 
   require Logger
 
-  alias Gralkor.Reflection.Artefact
+  alias Gralkor.Artefact
   alias Gralkor.Reflection.Journal
   alias Gralkor.Reflection.Runner
   alias Gralkor.Reflection.Store
@@ -358,8 +358,8 @@ defmodule Gralkor.Reflection.Scheduler do
   defp handle_outcome(state, key, :runner, {:ok, %Artefact{} = artefact}) do
     job = Map.fetch!(state.jobs, key)
 
-    expected = %{id: artefact_id(job), reflection: job.reflection.name}
-    actual = %{id: artefact.id, reflection: artefact.reflection}
+    expected = artefact_id(job)
+    actual = artefact.id
 
     if actual == expected do
       transition(state, key, :storage, artefact)

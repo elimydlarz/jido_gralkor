@@ -12,8 +12,8 @@ defmodule Gralkor.Reflection.Store do
   rerunning the Runner.
   """
 
+  alias Gralkor.Artefact
   alias Gralkor.Reflection
-  alias Gralkor.Reflection.Artefact
 
   @callback put(Reflection.t(), String.t(), Artefact.t()) ::
               :ok | {:error, {:artefact_conflict, String.t()} | term()}
