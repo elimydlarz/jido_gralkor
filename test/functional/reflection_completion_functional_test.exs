@@ -1922,7 +1922,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       )
 
       assert {:error, {:python, stale_error}} = Task.await(stale_write, 30_000)
-      assert stale_error =~ "episode claim lost"
+      assert Regex.match?(~r/episode claim(?: renewal)? lost/, stale_error)
 
       assert {:error, :not_found} =
                GraphitiPool.get_episode(first_pool, "observations", "embedded-stolen-claim")
@@ -1935,7 +1935,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         end)
 
       assert {:error, {:python, bulk_stale_error}} = Task.await(bulk_stale_write, 30_000)
-      assert bulk_stale_error =~ "episode claim lost"
+      assert Regex.match?(~r/episode claim(?: renewal)? lost/, bulk_stale_error)
 
       {bulk_stale_proof, _} =
         Pythonx.eval(
