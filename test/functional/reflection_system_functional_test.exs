@@ -545,7 +545,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then extraction receives the built-in `Learning` entity type from ERL's ontology" do
       Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
-      artefact = Gralkor.Reflection.Artefact.new("erl", erl_payload())
+      artefact = Gralkor.Artefact.new("erl-artefact", erl_payload())
       caller = self()
 
       add_episode = fn group_id, content, source, ontology, opts ->
@@ -902,9 +902,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert :ok = Scheduler.drain()
 
       requested_id =
-        Gralkor.Reflection.Artefact.id_for("operator-one", invocation_id, "requested")
+        Gralkor.Artefact.id_for("operator-one", invocation_id, "requested")
 
-      other_id = Gralkor.Reflection.Artefact.id_for("operator-one", invocation_id, "other")
+      other_id = Gralkor.Artefact.id_for("operator-one", invocation_id, "other")
 
       assert {:ok, _artefact} =
                Store.get(requested, "operator-one", requested_id,
@@ -930,9 +930,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
            send(parent, {:request_invocation, reflection, invocation, opts})
 
            {:ok,
-            Gralkor.Reflection.Artefact.new(
+            Gralkor.Artefact.new(
               opts[:artefact_id],
-              "requested",
               %{"artefact" => "done"}
             )}
          end}
@@ -971,9 +970,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
            send(parent, {:runner_invocation_id, invocation.id})
 
            {:ok,
-            Gralkor.Reflection.Artefact.new(
+            Gralkor.Artefact.new(
               opts[:artefact_id],
-              "requested",
               %{"artefact" => "done"}
             )}
          end}
@@ -1585,16 +1583,21 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                })
     end
 
-    test "and every result identifies its declaring Reflection", context do
+    test "and every artefact contains exactly its stable identifier and structured payload", context do
       {reflection, _} = stored_artefact(context)
 
-      assert {:ok, [%{artefact: %{reflection: "generalisation"}}]} =
+      assert {:ok, [%{artefact: artefact}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
                  destinations: [reflection.destination.name],
                  result_type: :artefacts
                })
+
+      assert Map.from_struct(artefact) == %{
+               id: artefact.id,
+               payload: %{"artefact" => "durable pattern"}
+             }
     end
 
     test "and every result retains its structured payload", context do
