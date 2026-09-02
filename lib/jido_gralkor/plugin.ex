@@ -27,8 +27,7 @@ defmodule JidoGralkor.Plugin do
   `JidoGralkor.Canonical.to_messages/3` into Gralkor's canonical
   `[%Gralkor.Message{role, content}]` shape and submitted to the configured
   client. Implicit-operator capture uses `capture/5`; Lens-aware capture uses
-  the selected ordinary Lens and carries the host agent's tools and tool context
-  for asynchronous Reflection processing after ingestion.
+  the selected ordinary Lens.
   The capture buffer keeps turn order by `session_id` and flushes Lens batches
   independently.
   Capture is skipped if the thread isn't present (first-turn failure
@@ -199,8 +198,7 @@ defmodule JidoGralkor.Plugin do
                     user_name,
                     messages,
                     lens_name,
-                    [],
-                    reflection_context(agent, lens_name, request_id)
+                    []
                   )
               end
 
@@ -271,58 +269,6 @@ defmodule JidoGralkor.Plugin do
 
   defp plugin_state(agent), do: Map.get(agent.state, :__memory__)
 
-  defp reflection_context(agent, lens, request_id) do
-    strategy = Map.get(agent.state, :__strategy__, %{})
-    config = Map.get(strategy, :config, %{})
-    configured_tool_context = config_value(config, :tool_context, %{})
-
-    configured_tool_context =
-      if is_map(configured_tool_context), do: configured_tool_context, else: %{}
-
-    retained_tool_context = request_tool_context(agent, request_id)
-
-    tool_context =
-      configured_tool_context
-      |> Map.merge(retained_tool_context)
-      |> Map.merge(%{
-        agent_id: agent.id,
-        operator_id: agent.id,
-        agent_name: agent_name(agent),
-        lens: lens
-      })
-      |> maybe_put_context(:session_id, thread_id(agent))
-
-    %{
-      tools: config_value(config, :tools, []),
-      tool_context: tool_context
-    }
-  end
-
-  defp config_value(config, key, default) when is_map(config), do: Map.get(config, key, default)
-
-  defp config_value(config, key, default) when is_list(config),
-    do: Keyword.get(config, key, default)
-
-  defp config_value(_config, _key, default), do: default
-
-  defp maybe_put_context(context, _key, nil), do: context
-  defp maybe_put_context(context, key, value), do: Map.put(context, key, value)
-
-  defp request_tool_context(agent, request_id) do
-    agent.state
-    |> Map.get(:__thread__, %{})
-    |> Map.get(:entries, [])
-    |> Enum.find_value(%{}, fn
-      %{refs: refs} when is_map(refs) ->
-        if ref_value(refs, :request_id) == request_id,
-          do: ref_value(refs, :jido_gralkor_tool_context)
-
-      _entry ->
-        nil
-    end)
-    |> then(fn context -> if is_map(context), do: context, else: %{} end)
-  end
-
   defp thread_id(agent) do
     case Map.get(agent.state, :__thread__) do
       %{id: id} when is_binary(id) -> id
@@ -351,7 +297,6 @@ defmodule JidoGralkor.Plugin do
     refs =
       data
       |> Map.get(:extra_refs, %{})
-      |> Map.put(:jido_gralkor_tool_context, tool_context)
       |> maybe_put_lens_ref(Map.get(tool_context, :lens))
 
     %{signal | data: Map.put(data, :extra_refs, refs)}

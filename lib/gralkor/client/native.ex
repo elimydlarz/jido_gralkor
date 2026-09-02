@@ -76,20 +76,6 @@ defmodule Gralkor.Client.Native do
 
   @impl Gralkor.Client
   def capture(session_id, operator_id, agent_name, user_name, msgs, lens, additional_lenses) do
-    capture(session_id, operator_id, agent_name, user_name, msgs, lens, additional_lenses, %{})
-  end
-
-  @impl Gralkor.Client
-  def capture(
-        session_id,
-        operator_id,
-        agent_name,
-        user_name,
-        msgs,
-        lens,
-        additional_lenses,
-        reflection_context
-      ) do
     raise_if_blank!(:session_id, session_id)
     raise_if_blank!(:operator_id, operator_id)
     raise_if_blank!(:agent_name, agent_name)
@@ -101,8 +87,7 @@ defmodule Gralkor.Client.Native do
       agent_name,
       user_name,
       [lens | additional_lenses],
-      msgs,
-      reflection_context
+      msgs
     )
   end
 
