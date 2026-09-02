@@ -698,7 +698,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       test_pid = self()
       assert :ok = stop_supervised(Scheduler)
 
-      runner = fn current_reflection, _ingestion, opts ->
+      runner = fn _current_reflection, _ingestion, opts ->
         send(test_pid, :shutdown_runner_started)
         Process.sleep(100)
 
@@ -802,7 +802,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       test_pid = self()
       assert :ok = stop_supervised(Scheduler)
 
-      runner = fn current_reflection, _ingestion, opts ->
+      runner = fn _current_reflection, _ingestion, opts ->
         send(test_pid, :empty_registry_functional_runner_started)
         Process.sleep(100)
 
@@ -847,7 +847,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       on_exit(fn -> File.rm(journal_path) end)
 
-      runner = fn current_reflection, _ingestion, opts ->
+      runner = fn _current_reflection, _ingestion, opts ->
         attempt = :atomics.add_get(attempts, 1, 1)
         send(test_pid, {:drain_restart_functional_runner, attempt, self()})
 
