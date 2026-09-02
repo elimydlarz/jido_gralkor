@@ -261,7 +261,7 @@ defmodule Gralkor.ClientContract do
           configure_capture(:ok)
 
           for operator_id <- [nil, "", "  "],
-              lens_args <- [["observations"], ["observations", []], ["observations", [], %{}]] do
+              lens_args <- [["observations"], ["observations", []]] do
             assert_raise ArgumentError, ~r/operator_id/, fn ->
               apply(client(), :capture, [
                 "session-1",

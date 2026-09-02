@@ -26,13 +26,12 @@ defmodule JidoGralkor.PluginTest do
     thread_id = Keyword.get(opts, :thread_id, "thr-default")
     request_traces = Keyword.get(opts, :request_traces, %{})
     requests = Keyword.get(opts, :requests, %{})
-    strategy_config = Keyword.get(opts, :strategy_config, %{})
     agent_name = Keyword.get(opts, :agent_name, "TestAgent")
     user_name = Keyword.get(opts, :user_name, "Eli")
 
     state =
       %{
-        __strategy__: %{request_traces: request_traces, config: strategy_config},
+        __strategy__: %{request_traces: request_traces, config: %{}},
         requests: requests,
         __memory__: %{agent_name: agent_name},
         user_name: user_name
@@ -235,7 +234,7 @@ defmodule JidoGralkor.PluginTest do
       signal =
         Signal.new!(
           "ai.react.query",
-          %{query: "hi", tool_context: %{lens: "observations", request_token: "retained"}},
+          %{query: "hi", tool_context: %{lens: "observations"}},
           source: "/test"
         )
 
@@ -259,7 +258,7 @@ defmodule JidoGralkor.PluginTest do
       signal =
         Signal.new!(
           "ai.react.query",
-          %{query: "hi", tool_context: %{lens: "observations", request_token: "retained"}},
+          %{query: "hi", tool_context: %{lens: "observations"}},
           source: "/test"
         )
 
