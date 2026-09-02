@@ -254,6 +254,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
         output_schema: %{"evolutions" => "Array<{ content: string }>"},
         representations: ingestion().representations,
         stored_information: stored_information,
+        eligible_generalisation_lineage: [Map.take(prior, ["content", "level"])],
         tool_context: %{},
         tools: []
       }

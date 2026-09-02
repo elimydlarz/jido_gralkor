@@ -62,6 +62,17 @@ defmodule Gralkor.Reflection.Runner do
           tool_results: []
         }
 
+        request =
+          if packaged_generalisation?(reflection) do
+            Map.put(
+              request,
+              :eligible_generalisation_lineage,
+              eligible_generalisation_lineage(stored_information)
+            )
+          else
+            request
+          end
+
         final_step? = step == List.last(reflection.chain_of_thought.steps)
 
         case infer_step(request, inference, tool_executor) do
@@ -180,7 +191,11 @@ defmodule Gralkor.Reflection.Runner do
          stored_information
        ) do
     if packaged_generalisation?(reflection) do
-      allowed = allowed_generalisation_lineage(stored_information)
+      allowed =
+        stored_information
+        |> eligible_generalisation_lineage()
+        |> Enum.map(&lineage_identity/1)
+        |> MapSet.new()
 
       evolutions
       |> Enum.flat_map(&field(&1, :evolves_from))
@@ -201,18 +216,12 @@ defmodule Gralkor.Reflection.Runner do
   defp validate_generalisation_lineage(_reflection, _step, _output, _stored_information),
     do: :ok
 
-  defp allowed_generalisation_lineage(stored_information) do
+  defp eligible_generalisation_lineage(stored_information) do
     stored_information
     |> Enum.flat_map(&prior_generalisations/1)
-    |> Enum.reduce(MapSet.new(), fn generalisation, allowed ->
-      snapshot = lineage_snapshot(generalisation)
-
-      if valid_lineage_snapshot?(snapshot) do
-        MapSet.put(allowed, lineage_identity(snapshot))
-      else
-        allowed
-      end
-    end)
+    |> Enum.map(&lineage_snapshot/1)
+    |> Enum.filter(&valid_lineage_snapshot?/1)
+    |> Enum.uniq()
   end
 
   defp prior_generalisations(stored_information) do
@@ -370,6 +379,8 @@ defmodule Gralkor.Reflection.Runner do
     Related stored information available to this Reflection step:
     #{Jason.encode!(request.stored_information)}
 
+    #{eligible_generalisation_lineage_prompt(request)}
+
     Return only one JSON object satisfying this exact output contract:
     #{Jason.encode!(request.output_schema)}
 
@@ -405,6 +416,14 @@ defmodule Gralkor.Reflection.Runner do
       Map.take(representation, [:id, :lens, :content, :result])
     end)
   end
+
+  defp eligible_generalisation_lineage_prompt(%{
+         eligible_generalisation_lineage: snapshots
+       }) do
+    "Eligible prior-generalisation lineage snapshots:\n#{Jason.encode!(snapshots)}"
+  end
+
+  defp eligible_generalisation_lineage_prompt(_request), do: ""
 
   defp decode_final_output(result) do
     text = Map.get(result, :text) || Map.get(result, :content) || Map.get(result, "text")
