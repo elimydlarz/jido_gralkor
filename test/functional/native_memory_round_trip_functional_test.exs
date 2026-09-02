@@ -27,6 +27,8 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   @captured_source "captured [lens: operator]"
 
   setup do
+    test_pid = self()
+
     {g, _} =
       Pythonx.eval(
         """
@@ -88,7 +90,10 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
         construct_shared_clients: fn _llm, _embedder ->
           %{llm_client: nil, embedder: nil, cross_encoder: nil}
         end,
-        construct_instance: fn _db, _shared, _group_id -> g end,
+        construct_instance: fn _db, _shared, group_id ->
+          send(test_pid, {:constructed_graph, group_id})
+          g
+        end,
         warmup: false,
         install_loop_fn: &Gralkor.Python.install_async_runtime/0
       )
@@ -148,6 +153,38 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
       assert [episode] = episodes(g)
       assert episode["group_id"] == Client.sanitize_group_id(graph_id)
+    end
+  end
+
+  describe "when facts are written for logical operator graphs that previously normalised to the same name" do
+    test "then each logical graph identifier is encoded exactly once at the physical Graphiti boundary" do
+      first_logical = Client.operator_graph_id("a-b")
+      second_logical = Client.operator_graph_id("a_b")
+      first_physical = "g_" <> Base.encode16(first_logical, case: :lower)
+      second_physical = "g_" <> Base.encode16(second_logical, case: :lower)
+
+      assert :ok = Native.memory_add(first_logical, "first operator fact", "manual")
+      assert :ok = Native.memory_add(second_logical, "second operator fact", "manual")
+
+      assert_receive {:constructed_graph, ^first_physical}
+      assert_receive {:constructed_graph, ^second_physical}
+    end
+
+    test "and the pool constructs and caches a distinct physical graph instance for each logical graph" do
+      first_logical = Client.operator_graph_id("a-b")
+      second_logical = Client.operator_graph_id("a_b")
+      first_physical = "g_" <> Base.encode16(first_logical, case: :lower)
+      second_physical = "g_" <> Base.encode16(second_logical, case: :lower)
+
+      assert :ok = Native.memory_add(first_logical, "first operator fact", "manual")
+      assert :ok = Native.memory_add(second_logical, "second operator fact", "manual")
+
+      refute first_physical == second_physical
+      assert [{^first_physical, _instance}] =
+               :ets.lookup(:gralkor_graphiti_instances, first_physical)
+
+      assert [{^second_physical, _instance}] =
+               :ets.lookup(:gralkor_graphiti_instances, second_physical)
     end
   end
 
