@@ -274,6 +274,22 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert Jason.decode!(encoded_artefact)["id"] == artefact.id
     end
+
+    test "and relevant stored generalisations can contribute beside related ingested information" do
+      assert :ok = ingest_memory("observations", "related rollout observation")
+      _artefact = put_generalisation("related rollout generalisation", 1, [])
+
+      assert {:ok, %{result: result}} =
+               memory_search(
+                 %{query: "related rollout", destinations: ["observations", "global"]},
+                 []
+               )
+
+      assert [
+               %{"episode" => %{"lens" => "observations"}},
+               %{"episode" => %{"reflection" => "generalisations"}}
+             ] = Jason.decode!(result)
+    end
   end
 
   describe "if an agent invokes memory search without a usable query" do
