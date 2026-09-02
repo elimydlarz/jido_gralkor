@@ -3,8 +3,11 @@ defmodule Gralkor.GraphitiPoolTest do
 
   import ExUnit.CaptureLog
 
+  alias Gralkor.Client
   alias Gralkor.GraphitiPool
   alias Gralkor.GraphitiPoolTest.StrictOntologyForGraphitiTest
+
+  defp physical(logical_group_id), do: Client.sanitize_group_id(logical_group_id)
 
   def start_pool(opts) do
     table = :"pool_table_#{System.unique_integer([:positive])}"
@@ -1814,9 +1817,10 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when community building is requested for a group" do
-    test "then the group is sanitised before its graph instance is selected" do
+    test "then the logical group is physically encoded before its graph instance is selected" do
       test_pid = self()
       instance = community_graph()
+      physical_group = physical("operator-one")
 
       %{pid: pid} =
         start_pool(
@@ -1827,11 +1831,11 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       assert {:ok, _counts} = GraphitiPool.build_communities(pid, "operator-one")
-      assert_receive {:constructed_for, "operator_one"}
+      assert_receive {:constructed_for, ^physical_group}
       GenServer.stop(pid)
     end
 
-    test "and the graph library builds communities for that sanitised group's instance" do
+    test "and the graph library builds communities for that physical group's instance" do
       instance = community_graph()
 
       %{pid: pid} =
@@ -1943,7 +1947,7 @@ defmodule Gralkor.GraphitiPoolTest do
       {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
       rec = Pythonx.decode(rec)
       assert rec["query"] == "dark mode"
-      assert rec["group_ids"] == ["group_with_hyphens"]
+      assert rec["group_ids"] == [physical("group-with-hyphens")]
       assert rec["limit"] == 5
       assert rec["episode_methods"] == ["bm25"]
       refute rec["edge_config"]
@@ -2059,9 +2063,9 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "and it is restricted to the sanitised group id the episodes were written under" do
+    test "and it is restricted to the physically encoded group id the episodes were written under" do
       {_episode, recorded} = episode_search_result()
-      assert recorded["group_ids"] == ["group_with_hyphens"]
+      assert recorded["group_ids"] == [physical("group-with-hyphens")]
     end
 
     test "and each returned episode is rendered with the body that was written and its source description" do
@@ -2125,9 +2129,9 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a node search is run for a group" do
-    test "then it is restricted to the sanitised group id the episodes were written under, so a group id carrying hyphens still matches" do
+    test "then it is restricted to the physically encoded group id the episodes were written under, so a group id carrying hyphens still matches" do
       {_node, recorded} = node_search_result()
-      assert recorded["group_ids"] == ["group_with_hyphens"]
+      assert recorded["group_ids"] == [physical("group-with-hyphens")]
     end
   end
 
@@ -2198,7 +2202,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert rec["query"] == "how do I resolve a scheduling conflict"
       assert rec["limit"] == 5
       assert rec["node_labels"] == ["Learning"]
-      assert rec["group_ids"] == ["group_with_hyphens"]
+      assert rec["group_ids"] == [physical("group-with-hyphens")]
 
       GenServer.stop(pid)
     end
