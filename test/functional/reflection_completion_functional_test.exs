@@ -107,6 +107,24 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
+  defmodule FailOnceReturnHandler do
+    @behaviour Gralkor.Artefact.ReturnHandler
+
+    use Agent
+
+    def start_link(test_pid), do: Agent.start_link(fn -> {test_pid, 0} end, name: __MODULE__)
+
+    @impl true
+    def return(operator_id, invocation_id, artefact) do
+      Agent.get_and_update(__MODULE__, fn {test_pid, attempts} ->
+        send(test_pid, {:return_attempt, operator_id, invocation_id, artefact})
+
+        outcome = if attempts == 0, do: {:error, :response_lost}, else: :ok
+        {outcome, {test_pid, attempts + 1}}
+      end)
+    end
+  end
+
   setup do
     previous =
       for key <- [
@@ -362,6 +380,42 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   describe "when a Reflection Runner produces an artefact" do
+    test "then a lost return response retries only that output with the exact artefact", %{
+      reflection: reflection
+    } do
+      start_supervised!({FailOnceReturnHandler, self()})
+
+      reflection = %{
+        reflection
+        | outputs:
+            reflection.outputs ++ [%{kind: :return, handler: FailOnceReturnHandler}]
+      }
+
+      Application.put_env(:jido_gralkor, :reflections, [reflection])
+
+      assert :ok = Client.ingest(ingestion())
+      assert_receive {:runner_started, "review", "ingestion-one", _artefact_id, runner}
+      send(runner, :finish_reflection)
+
+      assert_receive {:return_attempt, "operator-one", "ingestion-one", first_artefact}
+
+      assert_receive {:reflection_retrying, "review",
+                      %{stage: :return, output: :return, reason: :response_lost}}
+
+      assert_receive {:return_attempt, "operator-one", "ingestion-one", second_artefact}
+      assert second_artefact == first_artefact
+      refute_receive {:runner_started, "review", "ingestion-one", _artefact_id, _runner}
+      assert_receive {:reflection_completed, "review", {:ok, ^first_artefact}}
+
+      assert {:ok, [%{artefact: ^first_artefact}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "stored",
+                 destinations: ["observations"],
+                 result_type: :artefacts
+               })
+    end
+
     test "then canonical storage failure retries the exact artefact without rerunning the Runner" do
       start_supervised!({FailOnceStore, self()})
       Application.put_env(:jido_gralkor, :destination_storage, FailOnceStore)
