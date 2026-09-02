@@ -154,7 +154,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
              end)
     end
 
-    test "and every related generalisation identifies its declaring Reflection" do
+    test "and related-memory results distinguish prior generalisations from Lens-authored observations" do
       {stored_generalisation, stored_information} = stored_information_from_real_memory()
 
       assert Enum.any?(stored_information, fn

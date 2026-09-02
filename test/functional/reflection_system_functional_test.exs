@@ -17,6 +17,40 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
+  defmodule OutputProbeStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_, _, _, _, _, _), do: {:ok, []}
+
+    @impl true
+    def put_artefact(output, reflection_name, operator_id, artefact) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
+        {:destination_output_delivered, output, reflection_name, operator_id, artefact}
+      )
+
+      :ok
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+  end
+
+  defmodule OutputProbeReturnHandler do
+    @behaviour Gralkor.Artefact.ReturnHandler
+
+    @impl true
+    def return(operator_id, invocation_id, artefact) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
+        {:return_output_delivered, operator_id, invocation_id, artefact}
+      )
+
+      :ok
+    end
+  end
+
   setup do
     root =
       Path.join(
@@ -36,7 +70,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
             :lenses,
             :lens_storage,
             :reflections,
-            :reflection_storage
+            :reflection_storage,
+            :reflection_output_test_pid
           ],
           into: %{} do
         {key, Application.get_env(:jido_gralkor, key)}
@@ -55,6 +90,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     )
 
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+    Application.put_env(:jido_gralkor, :reflection_output_test_pid, self())
 
     on_exit(fn -> Enum.each(previous, fn {key, value} -> restore_env(key, value) end) end)
     %{root: root}
@@ -434,7 +470,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "where an application-defined Reflection omits its ontology" do
+  describe "where an application-defined Destination output omits its ontology" do
     test "then the output selects generic extraction for a consumer-delivered artefact",
          %{root: root} do
       reflection = Registry.load!([valid_definition(root)], root: root) |> List.first()
@@ -442,7 +478,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "where an application-defined Reflection declares an application ontology" do
+  describe "where an application-defined Destination output declares an application ontology" do
     test "then the output selects that ontology for a consumer-delivered artefact", %{root: root} do
       reflection =
         Registry.load!(
@@ -466,7 +502,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "when a consumer stores the default ERL Reflection's artefact through its Destination output" do
-    test "then extraction receives the built-in `Learning` entity type from ERL's ontology" do
+    test "then extraction receives the built-in `Learning` entity type from that output's ontology" do
       Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
       artefact = Gralkor.Artefact.new("erl-artefact", erl_payload())
@@ -782,6 +818,24 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Runner.run(reflection(context), invocation(), inference: &output_for/1)
 
       assert artefact.payload == %{"artefact" => "durable pattern"}
+    end
+
+    test "and the Runner does not deliver any declared Destination or return output", context do
+      reflection = reflection(context)
+
+      reflection = %{
+        reflection
+        | outputs:
+            reflection.outputs ++ [%{kind: :return, handler: OutputProbeReturnHandler}]
+      }
+
+      Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
+
+      assert {:ok, %Gralkor.Artefact{}} =
+               Runner.run(reflection, invocation(), inference: &output_for/1)
+
+      refute_receive {:destination_output_delivered, _, _, _, _}
+      refute_receive {:return_output_delivered, _, _, _}
     end
   end
 

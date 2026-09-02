@@ -99,6 +99,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     previous_destinations = Application.get_env(:jido_gralkor, :destinations)
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
+    previous_reflections = Application.get_env(:jido_gralkor, :reflections)
 
     Application.put_env(:jido_gralkor, :lens_storage, RecordingStorage)
 
@@ -112,6 +113,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       restore_env(:destinations, previous_destinations)
       restore_env(:lenses, previous_lenses)
       restore_env(:lens_storage, previous_storage)
+      restore_env(:reflections, previous_reflections)
     end)
 
     :ok
@@ -193,6 +195,14 @@ defmodule Gralkor.LensIngestionFunctionalTest do
 
       Application.put_env(:jido_gralkor, :lenses, [lens(FailingIngestion)])
       assert {:error, :rejected} = Client.ingest(request("rejected"))
+    end
+
+    test "and completed ingestion neither resolves nor invokes configured Reflections" do
+      Application.put_env(:jido_gralkor, :lenses, [lens(VariableIngestion)])
+      Application.put_env(:jido_gralkor, :reflections, :invalid_if_resolved)
+
+      assert :ok = Client.ingest(request("one"))
+      assert_receive {:episode_added, _, "first", "functional"}
     end
   end
 
