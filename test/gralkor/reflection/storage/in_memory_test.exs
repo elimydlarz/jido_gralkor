@@ -3,7 +3,7 @@ defmodule Gralkor.Reflection.Storage.InMemoryTest do
 
   alias Gralkor.Destination
   alias Gralkor.Reflection
-  alias Gralkor.Reflection.Artefact
+  alias Gralkor.Artefact
   alias Gralkor.Reflection.Storage.InMemory
 
   setup do
@@ -65,12 +65,17 @@ defmodule Gralkor.Reflection.Storage.InMemoryTest do
   defp reflection do
     %Reflection{
       name: "review",
-      destination: %Destination{name: "observations"},
-      ontology: Gralkor.DefaultOntology,
+      outputs: [
+        %{
+          kind: :destination,
+          destination: %Destination{name: "observations"},
+          ontology: Gralkor.DefaultOntology
+        }
+      ],
       chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "test", steps: []}
     }
   end
 
   defp artefact(id, payload),
-    do: %Artefact{id: id, reflection: "review", payload: payload}
+    do: %Artefact{id: id, payload: payload}
 end

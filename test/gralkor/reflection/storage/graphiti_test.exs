@@ -3,7 +3,7 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
 
   alias Gralkor.Destination
   alias Gralkor.Reflection
-  alias Gralkor.Reflection.Artefact
+  alias Gralkor.Artefact
   alias Gralkor.Reflection.Storage.Graphiti
 
   describe "when Graphiti Reflection storage receives an artefact" do
@@ -98,8 +98,13 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
   defp reflection do
     %Reflection{
       name: "review",
-      destination: %Destination{name: "observations"},
-      ontology: Gralkor.DefaultOntology,
+      outputs: [
+        %{
+          kind: :destination,
+          destination: %Destination{name: "observations"},
+          ontology: Gralkor.DefaultOntology
+        }
+      ],
       chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "test", steps: []}
     }
   end
@@ -107,7 +112,6 @@ defmodule Gralkor.Reflection.Storage.GraphitiTest do
   defp artefact do
     %Artefact{
       id: "stable-id",
-      reflection: "review",
       payload: %{"summary" => "stored"}
     }
   end

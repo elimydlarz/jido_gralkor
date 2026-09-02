@@ -7,7 +7,7 @@ defmodule Gralkor.CaptureBufferTest do
   alias Gralkor.Destination
   alias Gralkor.Message
   alias Gralkor.Reflection
-  alias Gralkor.Reflection.Artefact
+  alias Gralkor.Artefact
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Reflection.Scheduler
 
@@ -1674,8 +1674,13 @@ defmodule Gralkor.CaptureBufferTest do
   defp reflection do
     %Reflection{
       name: "review",
-      destination: %Destination{name: "observations"},
-      ontology: Gralkor.DefaultOntology,
+      outputs: [
+        %{
+          kind: :destination,
+          destination: %Destination{name: "observations"},
+          ontology: Gralkor.DefaultOntology
+        }
+      ],
       chain_of_thought: %ChainOfThought{path: "test", steps: []}
     }
   end

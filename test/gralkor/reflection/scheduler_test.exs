@@ -5,7 +5,7 @@ defmodule Gralkor.Reflection.SchedulerTest do
 
   alias Gralkor.Destination
   alias Gralkor.Reflection
-  alias Gralkor.Reflection.Artefact
+  alias Gralkor.Artefact
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Reflection.Journal
   alias Gralkor.Reflection.Scheduler
@@ -1081,8 +1081,13 @@ defmodule Gralkor.Reflection.SchedulerTest do
   defp reflection(name) do
     %Reflection{
       name: name,
-      destination: %Destination{name: "observations"},
-      ontology: Gralkor.DefaultOntology,
+      outputs: [
+        %{
+          kind: :destination,
+          destination: %Destination{name: "observations"},
+          ontology: Gralkor.DefaultOntology
+        }
+      ],
       chain_of_thought: %ChainOfThought{path: "test", steps: []}
     }
   end
