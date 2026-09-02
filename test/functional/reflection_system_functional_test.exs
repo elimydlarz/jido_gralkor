@@ -504,7 +504,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
 
-      assert {:ok, artefact} = Runner.run(erl, ingestion(), inference: &erl_output_for/1)
+      assert {:ok, artefact} = Runner.run(erl, invocation(), inference: &erl_output_for/1)
       assert artefact.payload == erl_payload()
     end
   end
@@ -526,12 +526,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         output_for(request)
       end
 
-      assert {:ok, _} = Runner.run(reflection(context), ingestion(), inference: inference)
+      assert {:ok, _} = Runner.run(reflection(context), invocation(), inference: inference)
       assert_receive {:first, "operator-one", "ingestion-1", "gather"}
     end
 
     test "and makes the consumer-supplied invocation context available to every step", context do
-      requests = run_and_collect_requests(reflection(context), ingestion())
+      requests = run_and_collect_requests(reflection(context), invocation())
 
       assert Enum.all?(requests, fn request ->
                request.invocation_context == %{source: "direct-invocation"}
@@ -549,7 +549,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         output_for(request)
       end
 
-      assert {:ok, _} = Runner.run(reflection(context), ingestion(), inference: inference)
+      assert {:ok, _} = Runner.run(reflection(context), invocation(), inference: inference)
 
       assert_receive {:available, representations}
 
@@ -573,12 +573,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "when a Chain of Thought step begins" do
     test "then built-in inference receives that step's interpolated natural-language directions",
          context do
-      requests = run_and_collect_requests(reflection(context), ingestion())
+      requests = run_and_collect_requests(reflection(context), invocation())
       assert Enum.at(requests, 1).directions == "Synthesise [\"fact one\"]"
     end
 
     test "and receives that step's declared structured-output contract", context do
-      assert [first | _] = run_and_collect_requests(reflection(context), ingestion())
+      assert [first | _] = run_and_collect_requests(reflection(context), invocation())
       assert first.output_schema == %{"facts" => "Array<string>"}
     end
 
@@ -621,14 +621,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
 
     test "and the current step is the only step exposed to inference", context do
-      assert [first | _] = run_and_collect_requests(reflection(context), ingestion())
+      assert [first | _] = run_and_collect_requests(reflection(context), invocation())
       assert first.step == %{label: "gather", directions: "Gather facts."}
       refute Map.has_key?(first, :steps)
     end
 
     test "where the directions reference outputs from earlier steps then every referenced value is interpolated from the Chain of Thought's shared output space",
          context do
-      assert [_first, second] = run_and_collect_requests(reflection(context), ingestion())
+      assert [_first, second] = run_and_collect_requests(reflection(context), invocation())
       assert second.directions =~ "fact one"
       refute second.directions =~ "{{facts}}"
     end
@@ -645,7 +645,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       end
 
       assert {:ok, _} =
-               Runner.run(one_step_reflection(context), ingestion(),
+               Runner.run(one_step_reflection(context), invocation(),
                  inference: inference,
                  tool_executor: executor
                )
@@ -659,7 +659,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       executor = fn _, _ -> {:ok, "found"} end
 
       assert {:ok, _} =
-               Runner.run(one_step_reflection(context), ingestion(),
+               Runner.run(one_step_reflection(context), invocation(),
                  inference: inference,
                  tool_executor: executor
                )
@@ -674,7 +674,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       inference = tool_calling_inference(parent, 1)
 
       assert {:ok, _} =
-               Runner.run(one_step_reflection(context), ingestion(),
+               Runner.run(one_step_reflection(context), invocation(),
                  inference: inference,
                  tools: tools,
                  tool_executor: fn _, _ -> :ok end
@@ -694,7 +694,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       end
 
       assert {:ok, _} =
-               Runner.run(one_step_reflection(context), ingestion(),
+               Runner.run(one_step_reflection(context), invocation(),
                  inference: inference,
                  tool_executor: executor
                )
@@ -707,12 +707,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "when inference returns a structured output for the current step" do
     test "while its keys and values satisfy that step's declared output contract then the output is added to the Chain of Thought's shared output space",
          context do
-      assert [_first, second] = run_and_collect_requests(reflection(context), ingestion())
+      assert [_first, second] = run_and_collect_requests(reflection(context), invocation())
       assert second.directions =~ "fact one"
     end
 
     test "and the next step begins with those outputs available for interpolation", context do
-      assert [_first, second] = run_and_collect_requests(reflection(context), ingestion())
+      assert [_first, second] = run_and_collect_requests(reflection(context), invocation())
       assert second.step.label == "synthesise"
       assert second.directions == "Synthesise [\"fact one\"]"
     end
@@ -721,7 +721,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
          context do
       assert {:error,
               %{reflection: "generalisation", step: "gather", reason: {:missing_output, "facts"}}} =
-               Runner.run(reflection(context), ingestion(),
+               Runner.run(reflection(context), invocation(),
                  inference: fn _ -> {:ok, %{output: %{}}} end
                )
     end
@@ -734,7 +734,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                 step: "gather",
                 reason: {:unexpected_output, "extra"}
               }} =
-               Runner.run(reflection(context), ingestion(),
+               Runner.run(reflection(context), invocation(),
                  inference: fn _ -> {:ok, %{output: %{"facts" => [], "extra" => true}}} end
                )
     end
@@ -747,7 +747,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                 step: "gather",
                 reason: {:output_type_mismatch, "facts", "Array<string>"}
               }} =
-               Runner.run(reflection(context), ingestion(),
+               Runner.run(reflection(context), invocation(),
                  inference: fn _ -> {:ok, %{output: %{"facts" => "not a list"}}} end
                )
     end
@@ -756,13 +756,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "when the final Chain of Thought step returns valid structured output" do
     test "then that structured output becomes one `%Gralkor.Artefact{}`", context do
       assert {:ok, %Gralkor.Artefact{}} =
-               Runner.run(reflection(context), ingestion(), inference: &output_for/1)
+               Runner.run(reflection(context), invocation(), inference: &output_for/1)
     end
 
     test "and the artefact contains exactly its stable identifier and structured payload",
          context do
       assert {:ok, artefact} =
-               Runner.run(reflection(context), ingestion(), inference: &output_for/1)
+               Runner.run(reflection(context), invocation(), inference: &output_for/1)
 
       assert Map.from_struct(artefact) == %{
                id: artefact.id,
@@ -789,7 +789,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "if a Reflection's Chain of Thought completes without a valid final structured output" do
     test "then the Reflection fails identifying its name and missing artefact", context do
       assert {:error, %{reflection: "generalisation", reason: :missing_artefact}} =
-               Runner.run(one_step_reflection(context), ingestion(),
+               Runner.run(one_step_reflection(context), invocation(),
                  inference: fn _ -> {:ok, %{output: %{}}} end
                )
     end
@@ -799,7 +799,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "if a Reflection's Chain of Thought fails" do
     test "then the Reflection failure identifies its name and reason", context do
       assert {:error, %{reflection: "generalisation", reason: :inference_failed}} =
-               Runner.run(reflection(context), ingestion(),
+               Runner.run(reflection(context), invocation(),
                  inference: fn _ -> {:error, :inference_failed} end
                )
     end
@@ -823,8 +823,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
          context do
       one = reflection(context, "one")
       two = reflection(context, "two")
-      {:ok, a1} = Runner.run(one, ingestion(), inference: &output_for/1)
-      {:ok, a2} = Runner.run(two, ingestion(), inference: &output_for/1)
+      {:ok, a1} = Runner.run(one, invocation(), inference: &output_for/1)
+      {:ok, a2} = Runner.run(two, invocation(), inference: &output_for/1)
       :ok = put_artefact(one, "operator-one", a1, storage: Gralkor.Destination.Storage.InMemory)
       :ok = put_artefact(two, "operator-one", a2, storage: Gralkor.Destination.Storage.InMemory)
 
@@ -862,7 +862,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "where the search also identifies one artefact then only that artefact is returned from the selected Destination",
          context do
       {reflection, artefact} = stored_artefact(context)
-      {:ok, other} = Runner.run(reflection, ingestion(), inference: &output_for/1)
+      {:ok, other} = Runner.run(reflection, invocation(), inference: &output_for/1)
 
       :ok =
         put_artefact(reflection, "operator-one", other,
@@ -1068,7 +1068,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   defp stored_artefact(context) do
     reflection = reflection(context)
-    {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
+    {:ok, artefact} = Runner.run(reflection, invocation(), inference: &output_for/1)
 
     :ok =
       put_artefact(reflection, "operator-one", artefact,
