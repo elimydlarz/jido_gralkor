@@ -305,6 +305,13 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   end
 
   describe "when an agent with a mounted memory plugin invokes memory search > where the Destination selector is omitted or empty > and the Lens selector is omitted or empty" do
+    test "and the Lens selector is omitted or empty" do
+      assert {:ok, %{result: result}} =
+               MemorySearch.run(%{query: "memory"}, %{agent_id: "operator-one"})
+
+      assert is_list(Jason.decode!(result))
+    end
+
     test "then memory search uses every accessible registered Destination" do
       for {lens, content} <- [
             {"operator", "operator memory"},
