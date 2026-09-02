@@ -502,7 +502,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when an ingestion successfully stores one or more representations through its intended Lenses" do
+  describe "when ingestion completes through its intended Lenses" do
     test "while Reflections are declared then every stored representation retains its own identifier, Lens identity, content, and storage result" do
       Application.put_env(:jido_gralkor, :lenses, [
         [
@@ -670,7 +670,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_receive {:eligible_reflections, ["ingestion"]}
     end
 
-    test "while a Reflection names one or more completed Lenses in a Lens-ingestion trigger then that Reflection is admitted exactly once for the completed ingestion",
+    test "while a Reflection's named-Lens trigger matches one or more completed Lenses then it is admitted exactly once for the completed ingestion",
          context do
       parent = self()
 
