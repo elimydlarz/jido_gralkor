@@ -59,9 +59,9 @@ Incremental register, update, and delete operations are intentionally absent. Th
 - accepts empty consumer collections;
 - rejects blank or duplicate names and malformed definitions;
 - rejects names reserved by packaged definitions;
-- rejects every Lens or Reflection whose Destination is absent from the candidate plus packaged Destinations;
+- rejects every Lens or Reflection Destination output whose Destination is absent from the candidate plus packaged Destinations;
 - validates Lens write behaviour, ontology, ingestion module, and graph format;
-- validates every Reflection ontology and inline Chain of Thought completely.
+- validates every Reflection output and inline Chain of Thought completely.
 
 Reads observe either the complete previous snapshot or the complete replacement. They never observe a mixture.
 
@@ -88,8 +88,17 @@ An illustrative complete value is:
   reflections: [
     %{
       name: "release-review",
-      destination: "project",
-      ontology: MyApp.ReleaseOntology,
+      outputs: [
+        %{
+          kind: :destination,
+          destination: "project",
+          ontology: MyApp.ReleaseOntology
+        },
+        %{
+          kind: :return,
+          handler: MyApp.ReleaseReviewHandler
+        }
+      ],
       chain_of_thought: %{
         steps: [
           %{
@@ -108,6 +117,8 @@ An illustrative complete value is:
 ```
 
 Reflection definitions have no trigger declaration. Lens definitions have no configurable default designation.
+
+Every Reflection declares exactly one Destination output and at most one return-handler output. Its Destination output selects the extraction ontology, defaulting to `Gralkor.DefaultOntology`. A return handler implements the existing `Gralkor.Artefact.ReturnHandler.return/3` contract.
 
 The existing Chain-of-Thought rules remain: steps are ordered and non-empty; labels and directions are non-blank; output contracts are non-empty and typed; output names are unique across steps; and interpolation can reference only an output declared by an earlier step.
 
@@ -129,7 +140,8 @@ For Reflections:
 - a subsequent invocation resolves the current Reflection definition by name;
 - removing a Reflection makes subsequent invocation of that name fail;
 - an invocation already underway retains the resolved Reflection definition with which it began;
-- changing or removing a Reflection does not alter an artefact already stored.
+- every declared output receives the same producer-independent artefact;
+- changing or removing a Reflection does not alter an artefact already delivered.
 
 For Destinations:
 
@@ -150,9 +162,9 @@ Search selection is invocation data, not a configurable default.
 
 ## Reflection execution ownership
 
-The consumer explicitly invokes a named Reflection. Gralkor resolves its current definition, executes its ordered steps, validates the final structured output, stores the resulting artefact at the referenced Destination, and returns completion or failure to the caller.
+The consumer explicitly invokes a named Reflection. Gralkor resolves its current definition, executes its ordered steps, validates the final structured output, delivers the resulting artefact once to each declared output, and returns completion or failure to the caller.
 
-Reflection execution is synchronous from Gralkor's public boundary. Each call makes at most one Runner attempt and at most one canonical storage attempt. Gralkor does not enqueue, retry, recover, drain, or schedule the invocation.
+Reflection execution is synchronous from Gralkor's public boundary. Each call makes at most one Runner attempt and one attempt for each declared output. Gralkor does not enqueue, retry, recover, drain, or schedule the invocation.
 
 The consumer owns:
 
@@ -162,7 +174,8 @@ The consumer owns:
 - asynchronous jobs and concurrency limits;
 - retry and timeout policy;
 - durable job state and crash recovery;
-- preventing overlapping execution when that matters.
+- preventing overlapping execution when that matters;
+- deciding how to retry partially delivered outputs.
 
 The consumer supplies a non-blank operator identifier, a replay-stable invocation identifier, input context, host tools, and tool context for each invocation. Artefact identity remains deterministic from the operator identifier, invocation identifier, and Reflection name so repeated canonical storage can converge on one immutable artefact.
 
@@ -223,7 +236,7 @@ Current contracts and tests still cover those behaviours in the Reflection syste
 
 1. Change the Functional test-tree contract to describe atomic runtime configuration and direct Reflection execution, and remove automatic-trigger and scheduling behaviour.
 2. Add failing Functional coverage for complete configuration replacement, invalid replacement preservation, current-definition resolution, and invocation snapshot isolation.
-3. Add failing Functional coverage for direct synchronous Reflection execution and immediate Runner or storage failures without retries.
+3. Add failing Functional coverage for direct synchronous Reflection execution and immediate Runner or output failures without retries.
 4. Implement the smallest runtime configuration owner and route Destination, Lens, and Reflection resolution through its active snapshot.
 5. Replace YAML-backed Reflection parsing with validation of inline structured steps.
 6. Replace Scheduler admission with the direct execution boundary.
@@ -246,6 +259,6 @@ The work is complete when:
 - no Gralkor-owned Reflection scheduling, retry, recovery, journal, or drain code remains;
 - no Reflection YAML configuration or implicit Reflection registry remains;
 - Lens and search defaults are not consumer-configurable;
-- stored information and artefacts survive configuration replacement unchanged;
+- stored information and delivered artefacts survive configuration replacement unchanged;
 - test trees, tests, implementation, mental model, README, and package contents describe the same ownership model;
 - focused, complete Functional, and Journey verification pass.
