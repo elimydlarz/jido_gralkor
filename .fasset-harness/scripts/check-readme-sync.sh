@@ -23,8 +23,9 @@ surface_files=(
   lib/gralkor/lens/ingestion.ex
   lib/gralkor/lens/ingestion/store.ex
   lib/gralkor/lens/store.ex
+  lib/gralkor/artefact.ex
+  lib/gralkor/artefact/return_handler.ex
   lib/gralkor/reflection.ex
-  lib/gralkor/reflection/artefact.ex
   lib/gralkor/reflection/chain_of_thought.ex
   lib/gralkor/reflection/registry.ex
   lib/gralkor/reflection/runner.ex
