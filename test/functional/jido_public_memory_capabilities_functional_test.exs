@@ -344,6 +344,17 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     MemorySearch.run(params, context)
   end
 
+  defp ingest_memory(lens, content, operator_id \\ "operator-one") do
+    Client.ingest(%Ingest{
+      id: "public-search-#{System.unique_integer([:positive, :monotonic])}",
+      operator_id: operator_id,
+      lens: lens,
+      source_kind: :document,
+      content: content,
+      source_description: "functional"
+    })
+  end
+
   defp complete_plugin_turn(extra_state, capture_result) do
     request_id = "functional-completion"
     InMemory.set_capture(capture_result)
