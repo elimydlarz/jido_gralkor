@@ -1117,6 +1117,38 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when an ingestion completes with no eligible Lens-ingestion Reflection" do
+    test "then ingestion succeeds without admitting Reflection work", context do
+      parent = self()
+      programmatic = %{reflection(context, "programmatic") | triggers: [:programmatic]}
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: representation_callback(parent),
+         reflection_callback: fn reflections, _invocation ->
+           send(parent, {:unexpected_reflection_work, reflections})
+           :ok
+         end,
+         reflections: [programmatic],
+         retries: []}
+      )
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 "session-no-eligible-reflection",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 [Message.new("user", "remember")]
+               )
+
+      assert :ok = CaptureBuffer.flush_and_await("session-no-eligible-reflection", 1_000)
+      refute_receive {:unexpected_reflection_work, _}
+    end
+  end
+
   describe "when an admitted Reflection runs" do
     test "then its programmatic Chain of Thought runner starts its first step for the operator and triggering invocation",
          context do
