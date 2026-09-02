@@ -105,7 +105,9 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
 
-      search_context = %{agent_id: "operator-one", lens: "observations"}
+      mounted_agent = agent(plugin_state)
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(mounted_agent)
+      search_context = Map.put(tool_context, :agent_id, mounted_agent.id)
 
       assert {:ok, %{result: result}} =
                MemorySearch.run(
