@@ -377,6 +377,14 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  artefact_id: "replacement-generalisation"
                )
 
+      assert [
+               %{
+                 "evolves_from" => [
+                   %{"content" => "Use one API everywhere", "level" => 1}
+                 ]
+               }
+             ] = replacement.payload["generalisations"]
+
       assert :ok =
                Gralkor.Reflection.Store.put(generalisation(), "operator-one", replacement)
 
