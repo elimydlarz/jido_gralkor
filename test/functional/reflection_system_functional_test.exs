@@ -10,7 +10,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   alias Gralkor.Reflection.Registry
   alias Gralkor.Reflection.Runner
   alias Gralkor.Reflection.Scheduler
-  alias Gralkor.Reflection.Store
   alias Gralkor.Search
 
   defmodule ReflectionOntology do
@@ -948,12 +947,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       other_id = Gralkor.Artefact.id_for("operator-one", invocation_id, "other")
 
       assert {:ok, _artefact} =
-               Store.get(requested, "operator-one", requested_id,
+               get_artefact(requested, "operator-one", requested_id,
                  storage: Gralkor.Destination.Storage.InMemory
                )
 
       assert {:error, :not_found} =
-               Store.get(other, "operator-one", other_id,
+               get_artefact(other, "operator-one", other_id,
                  storage: Gralkor.Destination.Storage.InMemory
                )
     end
@@ -1307,7 +1306,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
 
       assert :ok =
-               Store.put(reflection, "operator-one", artefact,
+               put_artefact(reflection, "operator-one", artefact,
                  storage: Gralkor.Destination.Storage.InMemory
                )
 
@@ -1366,7 +1365,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
 
       :ok =
-        Store.put(reflection, "operator-one", artefact,
+        put_artefact(reflection, "operator-one", artefact,
           storage: Gralkor.Destination.Storage.InMemory
         )
 
@@ -1393,7 +1392,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
 
       :ok =
-        Store.put(reflection, "operator-one", artefact,
+        put_artefact(reflection, "operator-one", artefact,
           storage: Gralkor.Destination.Storage.InMemory
         )
 
@@ -1657,8 +1656,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       two = reflection(context, "two")
       {:ok, a1} = Runner.run(one, ingestion(), inference: &output_for/1)
       {:ok, a2} = Runner.run(two, ingestion(), inference: &output_for/1)
-      :ok = Store.put(one, "operator-one", a1, storage: Gralkor.Destination.Storage.InMemory)
-      :ok = Store.put(two, "operator-one", a2, storage: Gralkor.Destination.Storage.InMemory)
+      :ok = put_artefact(one, "operator-one", a1, storage: Gralkor.Destination.Storage.InMemory)
+      :ok = put_artefact(two, "operator-one", a2, storage: Gralkor.Destination.Storage.InMemory)
 
       assert {:ok,
               [
@@ -1709,7 +1708,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       {:ok, other} = Runner.run(reflection, ingestion(), inference: &output_for/1)
 
       :ok =
-        Store.put(reflection, "operator-one", other,
+        put_artefact(reflection, "operator-one", other,
           storage: Gralkor.Destination.Storage.InMemory
         )
 
@@ -1923,7 +1922,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     {:ok, artefact} = Runner.run(reflection, ingestion(), inference: &output_for/1)
 
     :ok =
-      Store.put(reflection, "operator-one", artefact,
+      put_artefact(reflection, "operator-one", artefact,
         storage: Gralkor.Destination.Storage.InMemory
       )
 
