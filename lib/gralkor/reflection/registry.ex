@@ -8,14 +8,14 @@ defmodule Gralkor.Reflection.Registry do
   @built_in_definitions [
     [
       name: "generalisations",
-      triggers: [:ingestion],
+      triggers: [{:lens_ingestion, :any}],
       chain_of_thought: "priv/reflections/generalisations.yaml",
       destination: "global",
       ontology: Gralkor.DefaultOntology
     ],
     [
       name: "erl",
-      triggers: [:ingestion],
+      triggers: [{:lens_ingestion, :any}],
       chain_of_thought: "priv/reflections/erl.yaml",
       destination: "operator",
       ontology: Gralkor.Reflection.ERLOntology
@@ -147,11 +147,6 @@ defmodule Gralkor.Reflection.Registry do
       invalid_trigger = Enum.find(triggers, &(not supported_trigger?(&1))) ->
         {:error, {:invalid_trigger, name, invalid_trigger}}
 
-      invalid_schedule = Enum.find(triggers, &invalid_schedule?/1) ->
-        {:error,
-         {:invalid_schedule, name, Keyword.get(invalid_schedule, :schedule),
-          Keyword.get(invalid_schedule, :operator_id)}}
-
       is_nil(relative) ->
         {:error, {:missing_chain_of_thought, name}}
 
@@ -169,7 +164,7 @@ defmodule Gralkor.Reflection.Registry do
           name,
           destination,
           ontology,
-          Enum.map(triggers, &normalize_trigger/1),
+          triggers,
           relative,
           root
         )
@@ -221,39 +216,11 @@ defmodule Gralkor.Reflection.Registry do
   defp field(keyword, key) when is_list(keyword), do: Keyword.get(keyword, key)
   defp field(_, _), do: nil
 
-  defp normalize_trigger(trigger) when trigger in [:ingestion, :agent_request], do: trigger
-
-  defp normalize_trigger(trigger) when is_list(trigger) do
-    %{
-      type: :schedule,
-      expression: Keyword.get(trigger, :schedule),
-      operator_id: Keyword.get(trigger, :operator_id)
-    }
-  end
-
-  defp supported_trigger?(trigger) when trigger in [:ingestion, :agent_request], do: true
-
-  defp supported_trigger?(trigger) when is_list(trigger) do
-    Keyword.keyword?(trigger) and Keyword.has_key?(trigger, :schedule)
-  end
+  defp supported_trigger?(:programmatic), do: true
+  defp supported_trigger?({:lens_ingestion, :any}), do: true
+  defp supported_trigger?({:lens_ingestion, lenses}) when is_list(lenses), do: true
 
   defp supported_trigger?(_trigger), do: false
-
-  defp invalid_schedule?(trigger) when is_list(trigger) do
-    expression = Keyword.get(trigger, :schedule)
-    operator_id = Keyword.get(trigger, :operator_id)
-
-    not non_blank?(operator_id) or not valid_schedule_expression?(expression)
-  end
-
-  defp invalid_schedule?(_trigger), do: false
-
-  defp valid_schedule_expression?(expression) when is_binary(expression) do
-    extended = expression |> String.split(~r/\s+/, trim: true) |> length() |> Kernel.>(5)
-    match?({:ok, _}, Crontab.CronExpression.Parser.parse(expression, extended))
-  end
-
-  defp valid_schedule_expression?(_expression), do: false
 
   defp duplicate(values) do
     values
