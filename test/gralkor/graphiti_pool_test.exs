@@ -747,7 +747,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when an episode is added > while an embedded connection is configured > and another episode addition is in progress" do
+  describe "when an episode is added > while an embedded connection is configured > while another episode addition is in progress" do
     test "then the graph library receives the episode only after the in-progress addition finishes" do
       {g, _} =
         Pythonx.eval(
@@ -843,7 +843,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when an episode is added > where a supported source kind is supplied" do
+  describe "when one episode is requested by exact identifier > where a supported source kind is supplied" do
     test "then conversation, document, and structured-record sources reach the graph library as message, text, and JSON episodes respectively" do
       {g, _} =
         Pythonx.eval(
@@ -1552,7 +1552,10 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "where edge types are supplied then the graph library's edge search is restricted to those ontology relationship types" do
+  end
+
+  describe "when a fact search is run for a group > where edge types are supplied" do
+    test "then the graph library's edge search is restricted to those ontology relationship types" do
       {g, _} =
         Pythonx.eval(
           """
@@ -1956,7 +1959,10 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "then completion-only search excludes every episode without a durable extraction marker" do
+  end
+
+  describe "when an episode search is run for a group > when only durably extraction-complete episodes are requested" do
+    test "then every unmarked episode is excluded" do
       {g, _} =
         Pythonx.eval(
           """
@@ -2006,7 +2012,10 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "then a Lens selector is applied before the requested result count" do
+  end
+
+  describe "when an episode search is run for a group > when Lens names are supplied" do
+    test "then writer filtering occurs before the requested result count" do
       {g, _} =
         Pythonx.eval(
           """
@@ -2940,7 +2949,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when the pool starts > while both configured model specs name a supported inference provider > where the credential exists only in the BEAM environment" do
+  describe "when the pool starts > while both configured model specs name a supported inference provider > and each provider credential is passed explicitly from the BEAM side > where the credential exists only in the BEAM environment" do
     test "then the credential still reaches the provider client" do
       var = "GRALKOR_CREDENTIAL_DELIVERY_PROBE_#{System.unique_integer([:positive])}"
       on_exit(fn -> System.delete_env(var) end)
