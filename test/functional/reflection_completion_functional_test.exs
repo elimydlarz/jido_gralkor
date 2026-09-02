@@ -163,11 +163,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     test "then canonical lookup and public artefact search report no episode", %{
       reflection: reflection
     } do
-      assert_verified(:failed_extraction, fn -> assert_failed_extraction_contract(reflection) end)
+      assert_verified(:failed_extraction, &assert_failed_extraction_contract/1, [reflection])
     end
 
     test "and a later equal write retries extraction from scratch", %{reflection: reflection} do
-      assert_verified(:failed_extraction, fn -> assert_failed_extraction_contract(reflection) end)
+      assert_verified(:failed_extraction, &assert_failed_extraction_contract/1, [reflection])
     end
   end
 
@@ -1556,7 +1556,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     Pythonx.decode(exists)
   end
 
-  defp assert_verified(key, verification) do
+  defp assert_verified(key, verification, arguments \\ []) do
     cache_key = {__MODULE__, key}
 
     result =
@@ -1566,7 +1566,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             :ok
 
           :missing ->
-            :ok = verification.()
+            :ok = apply(verification, arguments)
             :persistent_term.put(cache_key, :ok)
             :ok
         end
