@@ -1,4 +1,4 @@
-Unit: reflection-scheduler (src: lib/gralkor/reflection/scheduler.ex, lib/gralkor/reflection/artefact.ex, lib/gralkor/reflection/journal.ex; unit: test/gralkor/reflection/scheduler_test.exs)
+Unit: reflection-scheduler (src: lib/gralkor/reflection/scheduler.ex, lib/gralkor/artefact.ex, lib/gralkor/destination/storage.ex, lib/gralkor/reflection/journal.ex; unit: test/gralkor/reflection/scheduler_test.exs)
 
 when the Scheduler starts without execution overrides
   then retry delays are one, two, and four seconds
@@ -19,12 +19,12 @@ when several Reflections share one ingestion
 
 when a Runner attempt succeeds
   then its artefact is durably retained before canonical storage begins
-  and canonical storage receives that exact artefact without rerunning the Runner
-  and canonical storage success completes and releases the logical work
+  and the Destination output receives that exact artefact without rerunning the Runner
+  and Destination output success completes and releases the logical work
 
-if a Runner returns an artefact whose identifier or Reflection name does not match the logical completion
+if a Runner returns an artefact whose identifier does not match the logical completion
   then the Runner phase treats the response as invalid and follows its bounded retry schedule
-  and canonical storage never receives the mismatched artefact
+  and the Destination output never receives the mismatched artefact
 
 when a Runner attempt returns an error, crashes, or exceeds its execution timeout
   then only that Runner phase is retried after each configured bounded delay
@@ -34,11 +34,11 @@ when a Runner attempt returns an error, crashes, or exceeds its execution timeou
 when a Runner, lookup, or storage task cannot start
   then that phase consumes one attempt and follows the configured bounded retry schedule
 
-when canonical lookup returns an error, crashes, or exceeds its execution timeout
+when Destination lookup returns an error, crashes, or exceeds its execution timeout
   then lookup follows the configured bounded storage retry schedule
   and an immutable-content conflict ends without retry
 
-when a canonical storage attempt returns an error, crashes, or exceeds its execution timeout
+when a Destination output attempt returns an error, crashes, or exceeds its execution timeout
   then only that storage phase is retried after each configured bounded delay
   and every attempt receives the exact artefact retained from the successful Runner
   and an expired attempt is stopped before its replacement begins
@@ -48,22 +48,22 @@ when a retryable phase consumes every configured retry
   and the notification identifies the Reflection name, failed phase, attempt count, and final reason
   and the logical work's in-memory admission and durable unfinished record are released
 
-when canonical storage reports an artefact conflict
+when Destination storage reports an artefact conflict
   then the conflict ends without retry
   and terminal failure identifies the storage phase and conflict
 
 when the Scheduler process starts with durable unfinished work
   then every retained Runner or storage phase resumes with its retained retry state
   and retained storage work uses its exact retained artefact
-  and already canonical work is confirmed complete without rerunning its Runner
+  and already stored Destination output is confirmed complete without rerunning its Runner
   and a newly started Scheduler can reopen and resume work after the prior Scheduler fully closes its journal
   while the previous Scheduler stopped during an active attempt
     then that interrupted attempt consumes the durable retry budget before work resumes
   while the previous Scheduler stopped during an active storage attempt
-    then canonical lookup first confirms whether that uncertain attempt completed
+    then Destination lookup first confirms whether that uncertain attempt completed
     and a confirmed artefact completes even when no storage retry remains
   while a replacement Scheduler stops during canonical confirmation
-    then the next replacement confirms canonical storage again
+    then the next replacement confirms Destination storage again
     and confirmation restart does not consume the storage retry budget
 
 when durable work survives a VM restart
