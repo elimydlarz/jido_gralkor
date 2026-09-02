@@ -16,7 +16,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   alias Gralkor.GraphitiPool
   alias Gralkor.Ingest
   alias Gralkor.Message
-  alias Gralkor.Reflection.Artefact
+  alias Gralkor.Artefact
   alias Gralkor.Reflection.Registry
   alias Gralkor.Replace
   alias Gralkor.Search
@@ -100,8 +100,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       :lenses,
       :lens_storage,
       :recall_deadline_ms,
-      :reflections,
-      :reflection_storage
+      :reflections
     ]
 
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
@@ -119,7 +118,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Application.put_env(:jido_gralkor, :client, Native)
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
-    Application.put_env(:jido_gralkor, :reflection_storage, Gralkor.Reflection.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :recall_deadline_ms, 90_000)
 
     Application.put_env(:jido_gralkor, :destinations, [])
@@ -148,17 +146,23 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Application.put_env(:jido_gralkor, :reflections, [
       [
         name: "generalisations",
-        triggers: [:ingestion],
+        triggers: [{:lens_ingestion, :any}],
         chain_of_thought: "priv/reflections/generalisations.yaml",
-        destination: "global",
-        ontology: Gralkor.DefaultOntology
+        outputs: [
+          [kind: :destination, destination: "global", ontology: Gralkor.DefaultOntology]
+        ]
       ],
       [
         name: "erl",
-        triggers: [:ingestion],
+        triggers: [{:lens_ingestion, :any}],
         chain_of_thought: "priv/reflections/erl.yaml",
-        destination: "operator",
-        ontology: Gralkor.Reflection.ERLOntology
+        outputs: [
+          [
+            kind: :destination,
+            destination: "operator",
+            ontology: Gralkor.Reflection.ERLOntology
+          ]
+        ]
       ]
     ])
 
@@ -735,7 +739,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              })
 
     case Enum.find(results, fn
-           %{artefact: %{id: ^artefact_id, reflection: "generalisations"}} -> true
+           %{artefact: %{id: ^artefact_id}} -> true
            _ -> false
          end) do
       nil ->
@@ -1060,7 +1064,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
   defp learning_artefact?(results) do
     Enum.any?(results, fn
-      %{artefact: %{reflection: "erl", payload: payload}} ->
+      %{artefact: %{payload: payload}} ->
         is_binary(payload["problem_kind"]) and
           is_binary(payload["approach"]) and
           is_boolean(payload["success"]) and
