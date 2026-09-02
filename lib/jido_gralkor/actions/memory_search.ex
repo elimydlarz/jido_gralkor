@@ -39,9 +39,9 @@ defmodule JidoGralkor.Actions.MemorySearch do
 
   @impl true
   def run(params, context) do
-    query = params |> Map.get(:query, "") |> to_string() |> String.trim()
+    query = params |> Map.get(:query, "") |> to_string()
 
-    if query == "" do
+    if String.trim(query) == "" do
       Logger.warning(
         "[jido_gralkor] memory_search short-circuited — blank query for agent #{inspect(Map.get(context, :agent_id))}"
       )
