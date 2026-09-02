@@ -21,6 +21,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   alias Gralkor.Replace
   alias Gralkor.Search
   alias JidoGralkor.Actions.MemoryAdd
+  alias JidoGralkor.Actions.MemorySearch
 
   @moduletag :journey
   @moduletag timeout: 600_000
@@ -228,32 +229,83 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   describe "when the Journey ingests related information through successive completed ingestions" do
-    test "then the first resulting generalisation has level one and no preceding generalisations",
+    test "then the first resulting generalisation has evolution-depth level one and an empty `evolves_from`",
          %{adventure: adventure} do
       assert %{
                "content" => content,
                "level" => 1,
-               "generalises_over" => []
+               "evolves_from" => []
              } = adventure.first_generalisation
 
       assert is_binary(content) and content != ""
     end
 
-    test "and the later generalisation that generalises over the first has level two", %{
+    test "and the later generalisation that evolves from the first has evolution-depth level two",
+         %{
       adventure: adventure
     } do
       assert %{"level" => 2} = adventure.later_generalisation
     end
 
-    test "and the later generalisation records the first generalisation's content and level", %{
-      adventure: adventure
-    } do
+    test "and the later generalisation's `evolves_from` records the first generalisation's content and level",
+         %{adventure: adventure} do
       assert %{"content" => first_content, "level" => 1} = adventure.first_generalisation
 
-      assert %{"generalises_over" => preceding_generalisations} =
+      assert %{"evolves_from" => preceding_generalisations} =
                adventure.later_generalisation
 
       assert %{"content" => first_content, "level" => 1} in preceding_generalisations
+    end
+  end
+
+  describe "when a fresh agent handles a request related to an evolved generalisation" do
+    test "then one MemorySearch call is made without selectors", %{adventure: adventure} do
+      assert is_list(adventure.default_memory_search)
+    end
+
+    test "and every accessible registered Destination is searched", %{adventure: adventure} do
+      searched = Enum.map(adventure.default_memory_search, & &1["destination"])
+
+      assert MapSet.new(searched) == MapSet.new(["operator", "global"])
+    end
+
+    test "and its results include relevant lensed information and relevant stored generalisations",
+         %{adventure: adventure} do
+      assert has_originating_lens?(
+               adventure.default_memory_search,
+               "operator",
+               "work-notes"
+             )
+
+      assert has_declaring_reflection?(
+               adventure.default_memory_search,
+               "global",
+               "generalisations"
+             )
+    end
+
+    test "and every result identifies its Destination and originating Lens or declaring Reflection",
+         %{adventure: adventure} do
+      assert every_episode_has_provenance?(adventure.default_memory_search)
+    end
+  end
+
+  describe "when the agent searches with both Destination and Lens selectors" do
+    test "then only memory in the intersection is returned", %{adventure: adventure} do
+      assert adventure.selected_memory_search != []
+
+      assert Enum.all?(adventure.selected_memory_search, fn result ->
+               has_originating_lens?([result], "operator", "work-notes")
+             end)
+    end
+
+    test "and those search selectors do not change the Lens used for later ingestion or capture",
+         %{adventure: adventure} do
+      assert has_originating_lens?(
+               adventure.post_selector_published_episodes,
+               "global",
+               "published"
+             )
     end
   end
 
@@ -355,6 +407,20 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              )
 
     {first_generalisation, later_generalisation} = evolve_global_generalisation()
+
+    default_memory_search =
+      memory_search(%{
+        query:
+          later_generalisation["content"] ||
+            "reversible limited-scope trials across deployments migrations and feature releases"
+      })
+
+    selected_memory_search =
+      memory_search(%{
+        query: "reversible canary configuration faults deployments",
+        destinations: ["operator"],
+        lenses: ["work-notes"]
+      })
 
     implicit_episodes =
       search_until(
@@ -512,6 +578,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         contains_fact?(superseded_graph, "Payments settles through Ledger."),
       first_generalisation: first_generalisation,
       later_generalisation: later_generalisation,
+      default_memory_search: default_memory_search,
+      selected_memory_search: selected_memory_search,
+      post_selector_published_episodes: global_for_first,
       conversation_facts: conversation_facts,
       document_facts: document_facts,
       structured_record_facts: structured_record_facts
@@ -543,7 +612,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       first_ingestion_id
       |> generalisation_artefact_until()
       |> find_generalisation(fn generalisation ->
-        generalisation["level"] == 1 and generalisation["generalises_over"] == []
+        generalisation["level"] == 1 and generalisation["evolves_from"] == []
       end)
 
     first_content =
@@ -580,7 +649,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       |> generalisation_artefact_until()
       |> find_generalisation(fn generalisation ->
         generalisation["level"] == 2 and
-          %{"content" => first_content, "level" => 1} in generalisation["generalises_over"]
+          %{"content" => first_content, "level" => 1} in generalisation["evolves_from"]
       end)
 
     {first_generalisation, later_generalisation}
@@ -682,6 +751,15 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     results
   end
 
+  defp memory_search(params) do
+    assert {:ok, %{result: result}} =
+             MemorySearch.run(params, %{agent_id: @operator_one})
+
+    decoded = Jason.decode!(result)
+    assert is_list(decoded)
+    decoded
+  end
+
   defp search_until(operator_id, destinations, result_type, query, predicate, attempts \\ 60)
 
   defp search_until(operator_id, destinations, result_type, query, predicate, attempts) do
@@ -708,6 +786,39 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       |> episode_content()
       |> String.downcase()
       |> String.contains?(sought)
+    end)
+  end
+
+  defp has_originating_lens?(results, destination, lens) do
+    Enum.any?(results, fn
+      %{destination: ^destination, episode: %{lens: ^lens}} -> true
+      %{"destination" => ^destination, "episode" => %{"lens" => ^lens}} -> true
+      _ -> false
+    end)
+  end
+
+  defp has_declaring_reflection?(results, destination, reflection) do
+    Enum.any?(results, fn
+      %{
+        "destination" => ^destination,
+        "episode" => %{"reflection" => ^reflection}
+      } ->
+        true
+
+      _ ->
+        false
+    end)
+  end
+
+  defp every_episode_has_provenance?([]), do: false
+
+  defp every_episode_has_provenance?(results) do
+    Enum.all?(results, fn
+      %{"destination" => destination, "episode" => episode} when is_binary(destination) ->
+        is_binary(episode["lens"]) or is_binary(episode["reflection"])
+
+      _ ->
+        false
     end)
   end
 
