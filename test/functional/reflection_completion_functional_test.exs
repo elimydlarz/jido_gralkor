@@ -1210,6 +1210,18 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
       IO.inspect(Pythonx.decode(debug_episodes), label: "CONFLICT_EPISODES")
 
+      raw_search =
+        GraphitiPool.search_episodes(
+          GraphitiPool,
+          Gralkor.Destination.graph_id("observations", "operator-one"),
+          "stored",
+          10,
+          require_extraction_complete: true,
+          converge_by_identity: true
+        )
+
+      IO.inspect(raw_search, label: "RAW_SEARCH")
+
       conflict_result =
         Client.search(%Search{
           operator_id: "operator-one",
