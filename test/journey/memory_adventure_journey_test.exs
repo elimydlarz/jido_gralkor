@@ -115,7 +115,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       :lenses,
       :lens_storage,
       :recall_deadline_ms,
-      :reflection_root,
       :reflections
     ]
 
@@ -135,7 +134,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :recall_deadline_ms, 90_000)
-    Application.put_env(:jido_gralkor, :reflection_root, File.cwd!())
 
     Application.put_env(:jido_gralkor, :destinations, [])
 
@@ -160,37 +158,54 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       ]
     ])
 
-    Application.put_env(:jido_gralkor, :reflections, [
-      [
-        name: "generalisations",
-        triggers: [{:lens_ingestion, :any}],
-        chain_of_thought: "priv/reflections/generalisations.yaml",
-        outputs: [
-          [kind: :destination, destination: "global", ontology: Gralkor.DefaultOntology]
-        ]
-      ],
-      [
-        name: "erl",
-        triggers: [{:lens_ingestion, :any}],
-        chain_of_thought: "priv/reflections/erl.yaml",
-        outputs: [
+    packaged_reflections =
+      Registry.load!(
+        [
           [
-            kind: :destination,
-            destination: "operator",
-            ontology: Gralkor.Reflection.ERLOntology
+            name: "generalisations",
+            triggers: [{:lens_ingestion, :any}],
+            chain_of_thought: "priv/reflections/generalisations.yaml",
+            outputs: [
+              [kind: :destination, destination: "global", ontology: Gralkor.DefaultOntology]
+            ]
+          ],
+          [
+            name: "erl",
+            triggers: [{:lens_ingestion, :any}],
+            chain_of_thought: "priv/reflections/erl.yaml",
+            outputs: [
+              [
+                kind: :destination,
+                destination: "operator",
+                ontology: Gralkor.Reflection.ERLOntology
+              ]
+            ]
           ]
-        ]
-      ],
-      [
-        name: "published-policy-review",
-        triggers: [{:lens_ingestion, ["published"]}],
-        chain_of_thought: "test/journey/consumer_reflection.yaml",
-        outputs: [
-          [kind: :destination, destination: "global"],
-          [kind: :return, handler: JourneyReturnHandler]
-        ]
-      ]
-    ])
+        ],
+        root: Application.app_dir(:jido_gralkor)
+      )
+
+    consumer_reflections =
+      Registry.load!(
+        [
+          [
+            name: "published-policy-review",
+            triggers: [{:lens_ingestion, ["published"]}],
+            chain_of_thought: "test/journey/consumer_reflection.yaml",
+            outputs: [
+              [kind: :destination, destination: "global"],
+              [kind: :return, handler: JourneyReturnHandler]
+            ]
+          ]
+        ],
+        root: File.cwd!()
+      )
+
+    Application.put_env(
+      :jido_gralkor,
+      :reflections,
+      packaged_reflections ++ consumer_reflections
+    )
 
     {:ok, _return_handler} = start_supervised(JourneyReturnHandler)
 
