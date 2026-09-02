@@ -191,23 +191,17 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "where no Destination is supplied" do
-    test "then the packaged operator-memory Destination is searched" do
+  describe "where neither Destinations nor Lenses are supplied" do
+    test "then every accessible registered Destination is searched" do
       assert {:ok, results} =
                Client.search(%Search{operator_id: "operator-one", query: "question"})
 
-      assert Enum.any?(results, &match?(%{destination: "operator"}, &1))
+      assert Enum.map(results, & &1.destination) == ["operator", "global", "first", "second"]
 
-      assert_receive {:destination_search, "operator", "operator-one", _, _, _, _}
-    end
-
-    test "and the packaged `global` Destination is searched" do
-      assert {:ok, results} =
-               Client.search(%Search{operator_id: "operator-one", query: "question"})
-
-      assert Enum.any?(results, &match?(%{destination: "global"}, &1))
-
-      assert_receive {:destination_search, "global", "operator-one", _, _, _, _}
+      for destination <- ["operator", "global", "first", "second"] do
+        assert_receive {:destination_search, ^destination, "operator-one", "question", :episodes,
+                        20, []}
+      end
     end
   end
 
