@@ -243,8 +243,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  })
              }
            ]},
-        "observations-memory" =>
-          {:ok, [%{lens: "observations", content: "Prefer explicit APIs"}]}
+        "observations-memory" => {:ok, [%{lens: "observations", content: "Prefer explicit APIs"}]}
       })
 
       parent = self()
