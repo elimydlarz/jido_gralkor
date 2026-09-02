@@ -748,6 +748,18 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
   end
 
+  describe "if a mounted plugin receives the removed `:search_destinations` option" do
+    test "then mounting fails before the plugin handles an agent signal and the error identifies MemorySearch's per-search `destinations` selector as its replacement" do
+      assert_raise ArgumentError, ~r/search_destinations.*MemorySearch.*destinations/s, fn ->
+        Plugin.mount(%{},
+          agent_name: "Susu",
+          ingestion_lens: "observations",
+          search_destinations: ["observations"]
+        )
+      end
+    end
+  end
+
   defp agent(plugin_state) do
     %{
       id: "operator-one",
