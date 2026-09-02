@@ -54,8 +54,7 @@ when the pool terminates
     and finalising the async wrapper emits no unawaited-coroutine warning
 
 when a graph instance is requested for a group
-  then the logical identifier is encoded into its collision-free physical identifier at this boundary
-  and the instance is looked up from a cache shared across callers by that physical identifier
+  then the instance is looked up from a cache shared across callers by the collision-free physical identifier encoded at this boundary
   while instances are already cached for their groups
     then concurrent callers read those instances in parallel without passing through the pool process
   while no instance is cached for that group

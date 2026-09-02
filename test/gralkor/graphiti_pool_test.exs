@@ -2288,7 +2288,7 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a graph instance is requested for a group" do
-    test "then the logical identifier is encoded into its collision-free physical identifier at this boundary" do
+    test "then the instance is looked up from a cache shared across callers by the collision-free physical identifier encoded at this boundary" do
       counter = :counters.new(1, [])
       test_pid = self()
       first_physical = physical("with-hyphens")
