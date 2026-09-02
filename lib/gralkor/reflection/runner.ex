@@ -2,8 +2,8 @@ defmodule Gralkor.Reflection.Runner do
   @moduledoc "Runs a repository-defined Chain of Thought as an ordered, tool-capable inference sequence."
 
   alias Gralkor.Client
+  alias Gralkor.Artefact
   alias Gralkor.Reflection
-  alias Gralkor.Reflection.Artefact
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Search
 
@@ -90,7 +90,7 @@ defmodule Gralkor.Reflection.Runner do
             {:error, %{reflection: reflection.name, reason: :missing_artefact}}
 
           final ->
-            build_artefact(reflection, outputs, final, opts)
+            build_artefact(reflection, ingestion, outputs, final, opts)
         end
 
       {:error, _} = error ->
@@ -122,19 +122,22 @@ defmodule Gralkor.Reflection.Runner do
     })
   end
 
-  defp build_artefact(reflection, outputs, final, opts) do
+  defp build_artefact(reflection, ingestion, outputs, final, opts) do
     payload = outputs |> Map.take(Map.keys(final.output)) |> normalize_payload(reflection)
 
     if map_size(payload) == 0 do
       {:error, %{reflection: reflection.name, reason: :missing_artefact}}
     else
-      artefact =
-        case Keyword.get(opts, :artefact_id) do
-          nil -> Artefact.new(reflection.name, payload)
-          id -> Artefact.new(id, reflection.name, payload)
-        end
+      id =
+        Keyword.get_lazy(opts, :artefact_id, fn ->
+          Artefact.id_for(
+            field(ingestion, :operator_id),
+            field(ingestion, :id),
+            reflection.name
+          )
+        end)
 
-      {:ok, artefact}
+      {:ok, Artefact.new(id, payload)}
     end
   end
 
