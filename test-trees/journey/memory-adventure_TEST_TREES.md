@@ -7,7 +7,7 @@ Journey: memory-adventure (journey: test/journey/memory_adventure_journey_test.e
 when two operators use implicit memory, Lenses, ERL, and shared-Destination replacement
   then ontology-free implicit operator memory remains recallable
   and captured appending-Lens information remains searchable
-  and ERL stores a structured Learning artefact
+  and ERL writes a structured Learning artefact through its Destination output
   and the global graph is visible to both operators
   and one operator's operator graph is unavailable to another operator
   and implicit-default memory uses the graph named `operator/<operator id>`
@@ -26,7 +26,7 @@ when a fresh agent handles a request related to an evolved generalisation
   then one MemorySearch call is made without selectors
   and every accessible registered Destination is searched
   and its results include relevant lensed information and relevant stored generalisations
-  and every result identifies its Destination and originating Lens or declaring Reflection
+  and every result identifies its Destination and any originating Lens
   and the agent applies the relevant evolved generalisation in light of its evolution history and related observations
 
 when the agent searches with both Destination and Lens selectors

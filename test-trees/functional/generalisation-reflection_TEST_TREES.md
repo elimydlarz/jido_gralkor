@@ -5,7 +5,7 @@ when the packaged generalisation Reflection inspects a completed ingestion
   and the search query contains the content of every completed representation
   and the same search reads every accessible registered Destination
   and every related observation identifies its originating Lens
-  and every related generalisation identifies its declaring Reflection
+  and related-memory results distinguish prior generalisations from Lens-authored observations
   and inference receives every current representation separately from related observations and generalisations
   and inference is directed to revisit current and related observations together with prior generalisations
   and inference is directed to carry forward, combine, broaden, narrow, split, replace, or otherwise revise generalisations as observations warrant

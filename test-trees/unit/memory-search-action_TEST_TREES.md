@@ -16,7 +16,7 @@ when the memory search tool runs with a usable query
     then the Search request carries both lists unchanged
   while Search returns results
     then the action result is their JSON encoding
-    and every returned episode's Destination and originating Lens or declaring Reflection remain identifiable
+    and every returned episode's Destination, originating Lens, or artefact identifier remains identifiable
   if Search fails
     then the failure reason is returned to the caller unchanged
 

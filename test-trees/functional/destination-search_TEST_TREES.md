@@ -10,7 +10,7 @@ when a caller searches memory
   where the Destination selector is omitted or empty
   and the Lens selector is omitted or empty
     then every accessible registered Destination is selected
-    and results written by every Lens or Reflection can contribute
+    and results written by every Lens or Destination artefact output can contribute
 
   where one or more Destinations are supplied
     while the Lens selector is omitted or empty
@@ -21,7 +21,7 @@ when a caller searches memory
     while the Destination selector is omitted or empty
       then every accessible registered Destination is selected
       and results originating in any supplied Lens can contribute
-      but no result from another Lens or from a Reflection can contribute
+      but no result from another Lens or from a Destination artefact output can contribute
 
   where one or more Destinations are supplied
   and one or more Lenses are supplied
@@ -47,7 +47,7 @@ where a caller supplies no maximum result count
 when a caller omits the result type or explicitly selects episodes
   then relevant stored episode content is returned
   and every episode written through a Lens identifies that originating Lens
-  and every episode written through a Reflection identifies only its declaring Reflection as its writer
+  and every episode written through a Destination artefact output retains its artefact identifier
 
 where a caller explicitly selects facts
   then relevant relationships extracted in the selected Destinations are returned
@@ -56,8 +56,8 @@ where a caller explicitly selects nodes
   then relevant entities extracted in the selected Destinations are returned
 
 where a caller explicitly selects artefacts
-  then relevant Reflection artefacts from the selected Destinations are returned
-  and every artefact identifies its declaring Reflection
+  then relevant artefacts from the selected Destinations are returned
+  and every artefact contains exactly its stable identifier and structured payload
 
 where a caller filters nodes by entity type
   then only nodes carrying a selected ontology label are returned
