@@ -11,19 +11,15 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
       reflection.name,
       operator_id,
       artefact,
-      fn group_id,
-                                              content,
-                                              source_description,
-                                              ontology,
-                                              opts ->
-      GraphitiPool.add_episode(
-        GraphitiPool,
-        group_id,
-        content,
-        source_description,
-        ontology,
-        opts
-      )
+      fn group_id, content, source_description, ontology, opts ->
+        GraphitiPool.add_episode(
+          GraphitiPool,
+          group_id,
+          content,
+          source_description,
+          ontology,
+          opts
+        )
       end
     )
   end
@@ -78,7 +74,6 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
       artefact_id
     )
   end
-
 
   def get_output(output, reflection_name, operator_id, artefact_id) do
     get_output(output, reflection_name, operator_id, artefact_id, &GraphitiPool.get_episode/2)
@@ -142,7 +137,6 @@ defmodule Gralkor.Reflection.Storage.Graphiti do
   defp extraction_complete?(episode) do
     Map.get(episode, :extraction_complete, Map.get(episode, "extraction_complete", false)) == true
   end
-
 
   defp destination_output(reflection),
     do: Enum.find(reflection.outputs, &(&1.kind == :destination))

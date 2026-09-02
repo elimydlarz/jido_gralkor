@@ -240,16 +240,29 @@ defmodule Gralkor.Reflection.Registry do
     handler = field(return_output, :handler)
 
     cond do
-      destination_outputs == [] -> {:missing_destination_output, name}
-      length(destination_outputs) > 1 -> {:duplicate_output, name, :destination}
-      length(return_outputs) > 1 -> {:duplicate_output, name, :return}
-      unsupported -> {:unsupported_output, name, field(unsupported, :kind)}
-      not non_blank?(destination_name) -> {:missing_destination, name, destination_name}
-      not valid_ontology?(ontology) -> {:invalid_ontology, name, ontology}
+      destination_outputs == [] ->
+        {:missing_destination_output, name}
+
+      length(destination_outputs) > 1 ->
+        {:duplicate_output, name, :destination}
+
+      length(return_outputs) > 1 ->
+        {:duplicate_output, name, :return}
+
+      unsupported ->
+        {:unsupported_output, name, field(unsupported, :kind)}
+
+      not non_blank?(destination_name) ->
+        {:missing_destination, name, destination_name}
+
+      not valid_ontology?(ontology) ->
+        {:invalid_ontology, name, ontology}
+
       return_output && not valid_return_handler?(handler) ->
         {:invalid_return_handler, name, handler}
 
-      true -> nil
+      true ->
+        nil
     end
   end
 
@@ -258,8 +271,11 @@ defmodule Gralkor.Reflection.Registry do
 
   defp valid_return_handler?(handler) do
     is_atom(handler) and Code.ensure_loaded?(handler) and
-      Gralkor.Artefact.ReturnHandler in
-        Keyword.get(handler.module_info(:attributes), :behaviour, []) and
+      Gralkor.Artefact.ReturnHandler in Keyword.get(
+        handler.module_info(:attributes),
+        :behaviour,
+        []
+      ) and
       function_exported?(handler, :return, 3)
   end
 

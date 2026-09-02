@@ -9,7 +9,12 @@ defmodule Gralkor.Reflection.Storage.InMemory do
 
   @impl true
   def put(reflection, operator_id, artefact) do
-    put_destination(destination_output(reflection).destination, reflection.name, operator_id, artefact)
+    put_destination(
+      destination_output(reflection).destination,
+      reflection.name,
+      operator_id,
+      artefact
+    )
   end
 
   def put_destination(destination, operator_id, artefact) do
