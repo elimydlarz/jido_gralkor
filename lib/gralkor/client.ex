@@ -4,10 +4,7 @@ defmodule Gralkor.Client do
 
   Named Lens operations use `ingest/1` and `replace/1`; `search/1` reads
   registered Destinations and may filter episode writers by Lens.
-  `request_reflection/4` or `/5` admits one named programmatic Reflection with
-  the requesting operator's caller-supplied replay-stable invocation ID,
-  content, tools, and tool context. Ingestion
-  resolves an appending Lens and invokes its ingestion process with a
+  Ingestion resolves an appending Lens and invokes its ingestion process with a
   Lens-bound store. Replacement validates and stores the complete graph for a
   replaceable Lens. Lenses and Reflections reference first-class Destinations,
   each of which names one graph. Appending Lenses and Reflections select the
@@ -23,9 +20,7 @@ defmodule Gralkor.Client do
   The compatibility surface remains `recall/4`, `capture/5`, `flush/1`,
   `flush_and_await/2`, and `memory_add/3` or `/4`. Lens-aware capture uses
   `capture/6`, or `capture/7` when the same turn is also routed through
-  additional Lenses. The internal `capture/8` form also carries the host tools
-  and tool context made available to subsequent Reflections. Logical graph IDs
-  are encoded exactly once at the physical graph boundary as `g_` plus the
+  additional Lenses. Logical graph IDs are encoded exactly once at the physical graph boundary as `g_` plus the
   lowercase hexadecimal encoding of every original byte (`sanitize_group_id/1`).
   The `operator` Destination resolves to `operator/<operator id>`, so search
   reads only the current operator's operator graph; every other Destination
@@ -45,8 +40,6 @@ defmodule Gralkor.Client do
   `Application.start/2` returns; runtime failures surface from the next call.
   """
 
-  require Logger
-
   @type group_id :: String.t()
   @type session_id :: String.t()
   @type agent_name :: String.t()
@@ -62,8 +55,6 @@ defmodule Gralkor.Client do
   alias Gralkor.Lens.Replaceable, as: ReplaceableLens
   alias Gralkor.Lens.Store
   alias Gralkor.Replace
-  alias Gralkor.Reflection.Registry, as: ReflectionRegistry
-  alias Gralkor.Reflection.Scheduler, as: ReflectionScheduler
   alias Gralkor.Destination.Storage, as: DestinationStorage
   alias Gralkor.Search
 
@@ -75,17 +66,6 @@ defmodule Gralkor.Client do
               agent_name(),
               user_name(),
               messages()
-            ) ::
-              :ok | {:error, term()}
-  @callback capture(
-              session_id(),
-              group_id(),
-              agent_name(),
-              user_name(),
-              messages(),
-              lens :: String.t(),
-              additional_lenses :: [String.t()],
-              reflection_context :: map()
             ) ::
               :ok | {:error, term()}
   @callback capture(
@@ -133,67 +113,11 @@ defmodule Gralkor.Client do
   @spec ingest(Ingest.t()) :: :ok | {:error, term()}
   def ingest(%Ingest{} = request) do
     case ingest_with_representation(request) do
-      {:ok, representations} when is_list(representations) ->
-        schedule_direct_reflections(request, representations)
-        :ok
+      {:ok, _representations} -> :ok
 
       {:error, _} = error ->
         error
     end
-  end
-
-  @spec request_reflection(String.t(), String.t(), String.t(), term(), keyword()) ::
-          {:ok, String.t()} | {:error, term()}
-  def request_reflection(reflection_name, operator_id, invocation_id, content, opts \\ []) do
-    validate_non_blank!(:reflection_name, reflection_name)
-    Ingest.validate_operator_id!(operator_id)
-    validate_non_blank!(:invocation_id, invocation_id)
-
-    reflections = ReflectionRegistry.configured!()
-
-    case Enum.find(reflections, &(&1.name == reflection_name)) do
-      nil ->
-        {:error, {:unknown_reflection, reflection_name}}
-
-      reflection ->
-        request_programmatic_reflection(reflection, operator_id, invocation_id, content, opts)
-    end
-  end
-
-  defp request_programmatic_reflection(reflection, operator_id, invocation_id, content, opts) do
-    if :programmatic in reflection.triggers do
-      invocation = %{
-        id: invocation_id,
-        operator_id: operator_id,
-        trigger: :programmatic,
-        trigger_context: %{request_content: content},
-        representations: []
-      }
-
-      runner_opts = [
-        tools: Keyword.get(opts, :tools, []),
-        tool_context: Keyword.get(opts, :tool_context, %{})
-      ]
-
-      case ReflectionScheduler.schedule([reflection], invocation, runner_opts: runner_opts) do
-        {:ok, _status} -> {:ok, invocation_id}
-        {:error, _reason} = error -> error
-      end
-    else
-      {:error, {:trigger_disabled, reflection.name, :programmatic}}
-    end
-  end
-
-  defp validate_non_blank!(field, value) when is_binary(value) do
-    if String.trim(value) == "" do
-      raise ArgumentError, "#{field} must be a non-blank string, got #{inspect(value)}"
-    end
-
-    :ok
-  end
-
-  defp validate_non_blank!(field, value) do
-    raise ArgumentError, "#{field} must be a non-blank string, got #{inspect(value)}"
   end
 
   @doc false
@@ -238,67 +162,6 @@ defmodule Gralkor.Client do
     after
       0 -> Enum.reverse(representations)
     end
-  end
-
-  defp schedule_direct_reflections(_request, []), do: :ok
-
-  defp schedule_direct_reflections(request, representations) do
-    if Process.whereis(ReflectionScheduler) do
-      eligible_reflections =
-        ReflectionRegistry.configured!()
-        |> Enum.filter(&lens_ingestion_trigger?(&1, [request.lens]))
-
-      ingestion = %{
-        id: request.id,
-        operator_id: request.operator_id,
-        trigger: :lens_ingestion,
-        trigger_context: %{lenses: [request.lens]},
-        intended_lenses: [request.lens],
-        completed_lenses: [request.lens],
-        representations: representations
-      }
-
-      case eligible_reflections do
-        [] ->
-          :ok
-
-        _ ->
-          schedule_direct_reflection_invocation(eligible_reflections, ingestion)
-      end
-    end
-  rescue
-    exception ->
-      Logger.warning(
-        "[gralkor] direct-ingestion Reflection scheduling raised — " <>
-          Exception.format(:error, exception, __STACKTRACE__)
-      )
-
-      :ok
-  end
-
-  defp schedule_direct_reflection_invocation(reflections, ingestion) do
-    case ReflectionScheduler.schedule(reflections, ingestion) do
-      {:ok, _} ->
-        :ok
-
-      {:error, reason} ->
-        Logger.warning(
-          "[gralkor] direct-ingestion Reflection scheduling failed — #{inspect(reason)}"
-        )
-    end
-  end
-
-  defp lens_ingestion_trigger?(reflection, completed_lenses) do
-    Enum.any?(reflection.triggers, fn
-      {:lens_ingestion, :any} ->
-        true
-
-      {:lens_ingestion, names} when is_list(names) ->
-        Enum.any?(completed_lenses, &(&1 in names))
-
-      _ ->
-        false
-    end)
   end
 
   @spec replace(Replace.t()) :: :ok | {:error, term()}
