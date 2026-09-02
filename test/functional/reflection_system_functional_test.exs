@@ -226,6 +226,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Registry.load([valid_definition(root, outputs: outputs)], root: root)
     end
 
+    test "if a return output has no loaded handler implementing `Gralkor.Artefact.ReturnHandler` then validation fails identifying that Reflection and handler",
+         %{root: root} do
+      outputs = [
+        [kind: :destination, destination: "operator"],
+        [kind: :return, handler: String]
+      ]
+
+      assert {:error, {:invalid_return_handler, "generalisation", String}} =
+               Registry.load([valid_definition(root, outputs: outputs)], root: root)
+    end
+
     test "if a Reflection name is blank then validation fails identifying the blank name", %{
       root: root
     } do
