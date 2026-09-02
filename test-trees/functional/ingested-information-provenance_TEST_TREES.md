@@ -1,4 +1,4 @@
-Functional: ingested-information-provenance (src: lib/gralkor/ingest.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/lens/store.ex, lib/gralkor/lens/storage/graphiti.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/ingested_information_provenance_functional_test.exs)
+Functional: ingested-information-provenance (src: lib/gralkor/ingest.ex, lib/gralkor/client.ex, lib/gralkor/client/native.ex, lib/gralkor/application.ex, lib/gralkor/search.ex, lib/gralkor/lens/store.ex, lib/gralkor/lens/storage/graphiti.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/ingested_information_provenance_functional_test.exs)
 
 when information is submitted through public ingestion with a supported source kind
   then its stored episode retains the declared source kind
@@ -26,6 +26,15 @@ when information is submitted through public ingestion with a supported source k
 when captured conversation turns are ingested automatically
   then Gralkor supplies conversation as their source kind
   and their rendered speaker-attributed transcript is submitted as a conversational-message episode
+
+when information is added or captured through the implicit operator Lens
+  then its trusted originating Lens is `operator`
+  and public episode search can select it through the `operator` Lens
+  and its reported source description cannot claim a different Lens or Reflection writer
+
+when public episode search encounters an incomplete Reflection episode
+  then the incomplete Reflection episode does not contribute
+  and completion filtering occurs before the per-Destination result limit
 
 if public ingestion omits or supplies an unsupported source kind
   then ingestion raises an argument error identifying the rejected source kind

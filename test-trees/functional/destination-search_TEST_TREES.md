@@ -57,7 +57,7 @@ where a caller explicitly selects nodes
 
 where a caller explicitly selects artefacts
   then relevant artefacts from the selected Destinations are returned
-  and every artefact contains exactly its stable identifier and structured payload
+  and every artefact contains exactly its stable identifier, declaring Reflection, and structured payload
 
 where a caller filters nodes by entity type
   then only nodes carrying a selected ontology label are returned
