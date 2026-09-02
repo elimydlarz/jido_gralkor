@@ -90,6 +90,194 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     {:ok, reflection: reflection}
   end
 
+  setup_all do
+    keys =
+      Enum.map(
+        [:fresh, :uncertain, :failed_extraction, :preclaim_complete, :preclaim_incomplete, :shared],
+        &{__MODULE__, &1}
+      )
+
+    Enum.each(keys, &:persistent_term.erase/1)
+    on_exit(fn -> Enum.each(keys, &:persistent_term.erase/1) end)
+    :ok
+  end
+
+  describe "when repeated Destination writes use the same artefact identifier and immutable payload" do
+    test "then the first write creates the artefact", %{reflection: reflection} do
+      {output, artefact} = in_memory_artefact(reflection)
+      assert :ok = put_in_memory(output, reflection, artefact)
+      assert {:ok, ^artefact} = get_in_memory(output, reflection, artefact.id)
+    end
+
+    test "and every later write reports success without creating another artefact", %{
+      reflection: reflection
+    } do
+      {output, artefact} = in_memory_artefact(reflection)
+      assert :ok = put_in_memory(output, reflection, artefact)
+      assert :ok = put_in_memory(output, reflection, artefact)
+      assert [%{artefact: ^artefact}] = in_memory_search(output, reflection)
+    end
+  end
+
+  describe "if repeated Destination writes use the same artefact identifier with a conflicting immutable payload" do
+    test "then the repeated write is rejected as an artefact conflict", %{reflection: reflection} do
+      {output, artefact} = in_memory_artefact(reflection)
+      conflicting = %{artefact | payload: %{"summary" => "changed"}}
+      assert :ok = put_in_memory(output, reflection, artefact)
+      assert {:error, {:artefact_conflict, "stable-id"}} =
+               put_in_memory(output, reflection, conflicting)
+    end
+
+    test "and the original canonical artefact remains unchanged", %{reflection: reflection} do
+      {output, artefact} = in_memory_artefact(reflection)
+      conflicting = %{artefact | payload: %{"summary" => "changed"}}
+      assert :ok = put_in_memory(output, reflection, artefact)
+      assert {:error, _} = put_in_memory(output, reflection, conflicting)
+      assert {:ok, ^artefact} = get_in_memory(output, reflection, artefact.id)
+    end
+  end
+
+  describe "where Graphiti stores a Destination artefact output > when a new artefact is written with its stable identifier" do
+    test "then Graphiti creates one episode under a deterministic UUID derived from that artefact identifier" do
+      assert_verified(:fresh, &assert_fresh_graphiti_contract/0)
+    end
+
+    test "and the episode body contains exactly the artefact identifier and payload" do
+      assert_verified(:fresh, &assert_fresh_graphiti_contract/0)
+    end
+
+    test "and Graphiti records durable extraction completion only after every graph effect succeeds" do
+      assert_verified(:fresh, &assert_fresh_graphiti_contract/0)
+    end
+  end
+
+  describe "where Graphiti stores a Destination artefact output > when a new artefact is written with its stable identifier > if graph extraction fails before its claim-fenced transaction commits" do
+    test "then canonical lookup and public artefact search report no episode", %{
+      reflection: reflection
+    } do
+      assert_verified(:failed_extraction, fn -> assert_failed_extraction_contract(reflection) end)
+    end
+
+    test "and a later equal write retries extraction from scratch", %{reflection: reflection} do
+      assert_verified(:failed_extraction, fn -> assert_failed_extraction_contract(reflection) end)
+    end
+  end
+
+  describe "where Graphiti stores a Destination artefact output > when that artefact is written again after an uncertain response > while durable extraction completion was recorded" do
+    test "then Graphiti confirms the existing episode without repeating extraction" do
+      assert_verified(:uncertain, &assert_uncertain_response_contract/0)
+    end
+  end
+
+  describe "where Graphiti stores a Destination artefact output > when that artefact is written again after an uncertain response > while the episode exists but extraction completion was not recorded" do
+    test "then canonical lookup retains the exact episode artefact as incomplete rather than reporting success" do
+      assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/0)
+    end
+
+    test "and public artefact search excludes that incomplete artefact" do
+      assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/0)
+    end
+
+    test "and Graphiti resumes the normal extraction path before reporting success" do
+      assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/0)
+    end
+  end
+
+  describe "where Graphiti stores a Destination artefact output > when that artefact is written again after an uncertain response" do
+    test "and exactly one episode carrying that artefact remains searchable" do
+      assert_verified(:uncertain, &assert_uncertain_response_contract/0)
+    end
+  end
+
+  describe "where Graphiti stores a Destination artefact output > when artefact search encounters historical complete episodes carrying the same artefact identifier > while their immutable payloads are equal" do
+    test "then search returns one artefact" do
+      assert_verified(:uncertain, &assert_uncertain_response_contract/0)
+    end
+  end
+
+  describe "where Graphiti stores a Destination artefact output > when artefact search encounters historical complete episodes carrying the same artefact identifier > while their immutable payloads conflict" do
+    test "then search reports an artefact conflict" do
+      assert_verified(:uncertain, &assert_uncertain_response_contract/0)
+    end
+  end
+
+  describe "where Graphiti stores a Destination artefact output > when incomplete or duplicate episodes outnumber the requested result window" do
+    test "then they cannot crowd completed unique artefacts out of the requested results" do
+      assert_verified(:uncertain, &assert_uncertain_response_contract/0)
+    end
+
+    test "and conflicts for selected artefact identifiers are detected beyond the ranked window" do
+      assert_verified(:uncertain, &assert_uncertain_response_contract/0)
+    end
+  end
+
+  describe "where Graphiti stores a Destination artefact output > when independent application runtimes write the same artefact UUID concurrently" do
+    @tag timeout: 120_000
+    test "then a graph uniqueness constraint exists before UUID claim admission" do
+      assert_verified(:shared, &assert_shared_graph_claim_contract/0)
+    end
+
+    @tag timeout: 120_000
+    test "and graph-backed admission serializes extraction across runtimes" do
+      assert_verified(:shared, &assert_shared_graph_claim_contract/0)
+    end
+
+    @tag timeout: 120_000
+    test "and equal payloads converge while conflicting payloads are rejected" do
+      assert_verified(:shared, &assert_shared_graph_claim_contract/0)
+    end
+  end
+
+  describe "where Graphiti stores a Destination artefact output > when independent application runtimes write the same artefact UUID concurrently > while a claim lease changes owner" do
+    @tag timeout: 120_000
+    test "then graph-server time determines expiry" do
+      assert_verified(:shared, &assert_shared_graph_claim_contract/0)
+    end
+
+    @tag timeout: 120_000
+    test "and the episode plus every derived node and edge persist in one claim-fenced graph transaction" do
+      assert_verified(:shared, &assert_shared_graph_claim_contract/0)
+    end
+
+    @tag timeout: 120_000
+    test "and loss of ownership aborts that transaction before any graph effect commits" do
+      assert_verified(:shared, &assert_shared_graph_claim_contract/0)
+    end
+
+    @tag timeout: 120_000
+    test "and the completion marker is fenced by the current claim generation" do
+      assert_verified(:shared, &assert_shared_graph_claim_contract/0)
+    end
+
+    @tag timeout: 120_000
+    test "and a stale owner cannot mutate or finish the artefact output" do
+      assert_verified(:shared, &assert_shared_graph_claim_contract/0)
+    end
+  end
+
+  describe "where Graphiti stores a Destination artefact output > when upgrading from an unmarked pre-completion-marker artefact" do
+    test "then it remains hidden until an explicit replay or migration establishes durable extraction completion" do
+      assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/0)
+    end
+
+    test "and upgrade behavior does not expose a possibly partial episode as completed" do
+      assert_verified(:preclaim_complete, &assert_preclaim_complete_contract/0)
+    end
+  end
+
+  describe "where in-memory Destination storage receives an artefact output > when the same artefact is written repeatedly" do
+    test "then exactly one copy remains searchable in its original insertion position", %{
+      reflection: reflection
+    } do
+      {output, artefact} = in_memory_artefact(reflection)
+      other = Artefact.new("other-id", %{"summary" => "other"})
+      assert :ok = put_in_memory(output, reflection, artefact)
+      assert :ok = put_in_memory(output, reflection, other)
+      assert :ok = put_in_memory(output, reflection, artefact)
+      assert [%{artefact: ^artefact}, %{artefact: ^other}] = in_memory_search(output, reflection)
+    end
+  end
+
   defp assert_fresh_graphiti_contract do
       {graphiti, _} =
         Pythonx.eval(
