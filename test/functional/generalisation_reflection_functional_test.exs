@@ -670,7 +670,6 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
              content:
                Jason.encode!(%{
                  id: "stored-generalisation-artefact",
-                 reflection: "generalisations",
                  payload: %{generalisations: stored}
                }),
              source_description: "reflection:generalisations"
@@ -690,7 +689,6 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
              content:
                Jason.encode!(%{
                  id: "observation-shaped-impostor",
-                 reflection: "generalisations",
                  payload: %{generalisations: stored}
                }),
              source_description: "observation-shaped JSON [lens: observations]"
