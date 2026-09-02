@@ -181,10 +181,11 @@ The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `reca
 | Option | Required | Default | What it does |
 | --- | --- | --- | --- |
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
-| `:ingestion_lens` | no | unset (implicit-operator mode) | Registered Lens name receiving `memory_add` and automatic capture. Required as soon as any other Lens option is given. The removed `:default_lens` option raises and identifies this replacement. |
-| `:search_destinations` | no | `[]` | Registered Destination names searched by `memory_search`. An empty list selects the packaged `operator` and `global` Destinations. |
+| `:ingestion_lens` | no | unset (implicit-operator mode) | Registered Lens name receiving `memory_add` and automatic capture. The removed `:default_lens` option raises and identifies this replacement. |
 
 Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
+
+Search selection is invocation-local, not a plugin mount option. `memory_search` accepts optional `destinations` and `lenses`; the removed `:search_destinations` mount option raises with migration guidance.
 
 ### `JidoGralkor.ContextRotator.rotate_now/2`
 
@@ -280,13 +281,12 @@ plugins: [
   {JidoGralkor.Plugin,
    %{
      agent_name: "Susu",
-     ingestion_lens: "observations",
-     search_destinations: ["operator", "global"]
+     ingestion_lens: "observations"
    }}
 ]
 ```
 
-That mount writes captured turns and `memory_add` calls through the `"observations"` Lens to `global`, and concurrently searches `operator` and `global`. After a flushed ingestion has completed across its intended Lenses, each declared Reflection is scheduled independently over the completed lensed representations.
+That mount writes captured turns and `memory_add` calls through the `"observations"` Lens to `global`. Memory search independently defaults to every accessible registered Destination and may narrow each call by Destination and Lens. After a flushed ingestion has completed across its intended Lenses, each declared Reflection is scheduled independently over the completed lensed representations.
 
 **Ontology placement.** Appending Lenses and Reflections default to Jido Gralkor's open `Gralkor.DefaultOntology`. Packaged ERL explicitly uses `Gralkor.Reflection.ERLOntology`. Applications attach custom ontology modules to their writers. If an older deployment set `config :jido_gralkor, :ontology`, remove it and select the module on each Lens or Reflection that needs it.
 
@@ -317,8 +317,7 @@ defmodule MyApp.ChatAgent do
       {JidoGralkor.Plugin,
        %{
          agent_name: "Susu",
-         ingestion_lens: "observations",
-         search_destinations: ["operator", "global"]
+         ingestion_lens: "observations"
        }}
     ]
 
@@ -335,7 +334,7 @@ defmodule MyApp.ChatAgent do
 end
 ```
 
-The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed), `:agent_name`, the selected `:lens`, and `:search_destinations` on the signal's `tool_context`. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
+The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed), `:agent_name`, and the selected ingestion `:lens` on the signal's `tool_context`. Search selectors come from each `memory_search` call. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
 
 Set `tool_context[:lens]` on an individual query to override `ingestion_lens` for that turn. The plugin retains the selection on the request's Jido thread entry, making it authoritative for both `memory_add` and later completion or failure capture after ReAct has released its transient tool context. The host strategy's configured tools and complete tool context are carried into post-ingestion Reflection execution. The current operator, agent name, Lens, and session override conflicting retained values; forwarded tools receive the current `agent.id` as both `operator_id` and `agent_id`.
 
@@ -349,7 +348,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate i
 
 **Post-ingestion Reflections.** Lens-aware capture requires a non-blank operator before buffering. A successful flush first completes every intended Lens ingestion and retains the actual zero, one, or many outputs each Lens stored. Every completed representation has exactly its own `id`, `lens`, `content`, and `result`. CaptureBuffer assigns that buffered ingestion one cryptographically collision-resistant ID and reuses it across flush retries; direct `Gralkor.Ingest` callers supply their own replay-stable ID. When at least one representation was stored, the declared Reflections are then scheduled asynchronously. Each Reflection runs independently, so one failure does not prevent another from completing or storing its artefact.
 
-**First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus configured `:lens` and `:search_destinations`, but no `:session_id`; completed and failed turn capture are both skipped with a warning until a committed thread supplies that identity. `memory_search` called in that same first turn short-circuits with an explicit "did not run" non-result so the LLM cannot read an empty payload as "no memory exists" and confidently lie.
+**First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus the configured ingestion `:lens`, but no `:session_id`; completed and failed turn capture are both skipped with a warning until a committed thread supplies that identity. `memory_search` still searches for the current operator because public Search does not depend on conversation-session identity.
 
 **Death-triggered flush.** `JidoGralkor.Lifecycle` is an optional `Jido.AgentServer.Lifecycle` implementation. When wired as `lifecycle_mod:` on the agent, graceful termination of the AgentServer calls the configured client's `flush/1` callback for the active thread so an orphaned agent doesn't strand its capture buffer. The plugin mount alone does not enable this lifecycle. No idle-timer machinery — Jido's `AgentServer` owns `:idle_timeout` directly.
 
