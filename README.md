@@ -465,13 +465,23 @@ The plugin mount chooses how an agent uses the registered Lenses:
 {JidoGralkor.Plugin,
  %{
    agent_name: "Susu",
-   ingestion_lens: "observations",
-   search_destinations: ["operator", "global"]
+   ingestion_lens: "observations"
  }}
 ```
 
 - `ingestion_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
-- `search_destinations` is an optional list of registered Destination names. An empty list searches the packaged `"operator"` and `"global"` Destinations.
+
+Search is independent of that mount. With only a query, `memory_search` searches episodes in every accessible registered Destination. Optional selectors narrow one invocation; names are ORed within each list and the two lists intersect:
+
+```elixir
+%{
+  query: "What did earlier rollouts teach us?",
+  destinations: ["global", "release-notes"],
+  lenses: ["observations", "decisions"]
+}
+```
+
+This includes episodes only when their Destination is either selected Destination and their originating Lens is either selected Lens. Selecting a Lens never adds its Destination. A Lens selector applies only to episode results; direct callers may still explicitly request facts, nodes, or Reflection artefacts without a Lens selector.
 
 Consumers that ingest, replace, or search outside an agent call the same public boundary directly:
 
@@ -490,7 +500,8 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   Gralkor.Client.search(%Gralkor.Search{
     operator_id: "operator-42",
     query: "When should we release?",
-    destinations: ["operator", "global"],
+    destinations: ["global"],
+    lenses: ["decisions"],
     max_results: 20
   })
 
