@@ -278,39 +278,48 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-    test "if a Reflection name contains the reserved provenance delimiter ` [lens: ` then validation fails identifying the Reflection and reserved provenance syntax",
+  describe "when Reflection declarations are validated > if a Reflection name contains the reserved provenance delimiter ` [lens: `" do
+    test "then validation fails identifying the Reflection and reserved provenance syntax",
          %{root: root} do
       name = "review [lens: observations]"
 
       assert {:error, {:reserved_provenance_syntax, ^name, " [lens: "}} =
                Registry.load([valid_definition(root, name: name)], root: root)
     end
+  end
 
-    test "if Reflection names are duplicated then validation fails identifying the duplicate name",
+  describe "when Reflection declarations are validated > if Reflection names are duplicated" do
+    test "then validation fails identifying the duplicate name",
          %{root: root} do
       definition = valid_definition(root)
 
       assert {:error, {:duplicate_name, "generalisation"}} =
                Registry.load([definition, definition], root: root)
     end
+  end
 
-    test "if a Reflection has no Chain of Thought then validation fails identifying that Reflection",
+  describe "when Reflection declarations are validated > if a Reflection has no Chain of Thought" do
+    test "then validation fails identifying that Reflection",
          %{root: root} do
       definition = valid_definition(root) |> Keyword.delete(:chain_of_thought)
 
       assert {:error, {:missing_chain_of_thought, "generalisation"}} =
                Registry.load([definition], root: root)
     end
+  end
 
-    test "if a Reflection's Chain of Thought does not identify a repository YAML file then validation fails identifying that Reflection and file",
+  describe "when Reflection declarations are validated > if a Reflection's Chain of Thought does not identify a repository YAML file" do
+    test "then validation fails identifying that Reflection and file",
          %{root: root} do
       assert {:error, {:invalid_chain_of_thought_file, "generalisation", "../outside.yaml"}} =
                Registry.load([valid_definition(root, chain_of_thought: "../outside.yaml")],
                  root: root
                )
     end
+  end
 
-    test "if a Reflection's Chain of Thought YAML cannot be loaded or parsed then validation fails identifying that Reflection, file, and parse failure",
+  describe "when Reflection declarations are validated > if a Reflection's Chain of Thought YAML cannot be loaded or parsed" do
+    test "then validation fails identifying that Reflection, file, and parse failure",
          %{root: root} do
       write_cot(root, "broken.yaml", "steps: [")
 
@@ -319,16 +328,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  root: root
                )
     end
+  end
 
-    test "if a Chain of Thought has no steps then validation fails identifying that Reflection and Chain of Thought",
+  describe "when Reflection declarations are validated > if a Chain of Thought has no steps" do
+    test "then validation fails identifying that Reflection and Chain of Thought",
          %{root: root} do
       write_cot(root, "empty.yaml", "steps: []")
 
       assert {:error, {:invalid_chain_of_thought, "generalisation", "empty.yaml", :missing_steps}} =
                Registry.load([valid_definition(root, chain_of_thought: "empty.yaml")], root: root)
     end
+  end
 
-    test "if a Chain of Thought step has no non-blank label then validation fails identifying that Reflection and step",
+  describe "when Reflection declarations are validated > if a Chain of Thought step has no non-blank label" do
+    test "then validation fails identifying that Reflection and step",
          %{root: root} do
       write_cot(
         root,
@@ -343,8 +356,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  root: root
                )
     end
+  end
 
-    test "if a Chain of Thought step has no natural-language directions then validation fails identifying that Reflection and step",
+  describe "when Reflection declarations are validated > if a Chain of Thought step has no natural-language directions" do
+    test "then validation fails identifying that Reflection and step",
          %{root: root} do
       write_cot(
         root,
@@ -359,8 +374,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  root: root
                )
     end
+  end
 
-    test "if a Chain of Thought step has no structured-output declaration then validation fails identifying that Reflection and step",
+  describe "when Reflection declarations are validated > if a Chain of Thought step has no structured-output declaration" do
+    test "then validation fails identifying that Reflection and step",
          %{root: root} do
       write_cot(root, "no-output.yaml", "steps:\n  - label: think\n    directions: Think.\n")
 
@@ -371,8 +388,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  root: root
                )
     end
+  end
 
-    test "if a Chain of Thought step is not a map then validation fails identifying that Reflection and step",
+  describe "when Reflection declarations are validated > if a Chain of Thought step is not a map" do
+    test "then validation fails identifying that Reflection and step",
          %{root: root} do
       write_cot(root, "invalid-step.yaml", "steps:\n  - not-a-step\n")
 
@@ -383,8 +402,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  root: root
                )
     end
+  end
 
-    test "if a Chain of Thought step declares an unsupported structured-output type then validation fails identifying that Reflection, step, and type",
+  describe "when Reflection declarations are validated > if a Chain of Thought step declares an unsupported structured-output type" do
+    test "then validation fails identifying that Reflection, step, and type",
          %{root: root} do
       write_cot(
         root,
@@ -399,8 +420,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  root: root
                )
     end
+  end
 
-    test "if an output name is declared by more than one step then validation fails identifying that Reflection, output name, and steps",
+  describe "when Reflection declarations are validated > if an output name is declared by more than one step" do
+    test "then validation fails identifying that Reflection, output name, and steps",
          %{root: root} do
       write_cot(
         root,
@@ -415,8 +438,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  root: root
                )
     end
+  end
 
-    test "if an interpolation references an output not declared by an earlier step then validation fails identifying that Reflection, step, and interpolation",
+  describe "when Reflection declarations are validated > if an interpolation references an output not declared by an earlier step" do
+    test "then validation fails identifying that Reflection, step, and interpolation",
          %{root: root} do
       write_cot(
         root,
@@ -431,16 +456,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  root: root
                )
     end
+  end
 
-    test "if a Destination output has no Destination name then validation fails identifying that Reflection and missing Destination",
+  describe "when Reflection declarations are validated > if a Destination output has no Destination name" do
+    test "then validation fails identifying that Reflection and missing Destination",
          %{root: root} do
       definition = valid_definition(root, outputs: [[kind: :destination]])
 
       assert {:error, {:missing_destination, "generalisation", nil}} =
                Registry.load([definition], root: root)
     end
+  end
 
-    test "if a Destination output references an unknown Destination then validation fails identifying that Reflection and Destination",
+  describe "when Reflection declarations are validated > if a Destination output references an unknown Destination" do
+    test "then validation fails identifying that Reflection and Destination",
          %{root: root} do
       assert_raise ArgumentError,
                    ~r/Reflection "generalisation" references unknown Destination "missing"/,
@@ -455,8 +484,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                      )
                    end
     end
+  end
 
-    test "if a Destination output declares an invalid ontology then validation fails identifying that Reflection and ontology",
+  describe "when Reflection declarations are validated > if a Destination output declares an invalid ontology" do
+    test "then validation fails identifying that Reflection and ontology",
          %{root: root} do
       assert {:error, {:invalid_ontology, "generalisation", String}} =
                Registry.load(
