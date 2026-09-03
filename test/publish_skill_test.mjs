@@ -155,12 +155,12 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
   );
 
   await context.test(
-    "and remote inspection proves the branch and release tag resolve to the release commit",
+    "and remote inspection proves the release tag resolves to the synchronized release commit",
     async () => {
       const skill = await readFile(skillUrl, "utf8");
 
       assert.match(skill, /git ls-remote origin refs\/heads\/<current-branch> refs\/tags\/jido-gralkor-v<version>/);
-      assert.match(skill, /Require both remote refs to resolve to the synchronized release commit\./);
+      assert.match(skill, /Require the release tag to resolve to the synchronized release commit\./);
     },
   );
 
