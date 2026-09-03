@@ -165,6 +165,19 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
   );
 
   await context.test(
+    "and the remote branch contains the synchronized release commit even if trunk-sync bookkeeping advances the branch after publication",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(
+        skill,
+        /gh api --method GET 'repos\/\{owner\}\/\{repo\}\/compare\/<release-commit>\.\.\.<remote-branch-tip>'/,
+      );
+      assert.match(skill, /Require the comparison status to be `identical` or `ahead`\./);
+    },
+  );
+
+  await context.test(
     "and completion reports the version, commit, tag, tests, Hex package, and remote branch",
     async () => {
       const skill = await readFile(skillUrl, "utf8");
