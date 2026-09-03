@@ -156,6 +156,8 @@ if running a fact search raises inside the graph library
 
 when an episode search is run for a group
   then the graph library is asked for episodes only, with the requested result count
+  when the query exceeds the graph library's full-text limit
+    then the graph library receives a bounded non-empty query containing the earliest supported terms
   when Lens names are supplied
     then writer filtering occurs before the requested result count
   and it is restricted to the physically encoded group id the episodes were written under

@@ -2093,6 +2093,53 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when an episode search is run for a group > when the query exceeds the graph library's full-text limit" do
+    test "then the graph library receives a bounded non-empty query containing the earliest supported terms" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          class _Results:
+              def __init__(self):
+                  self.episodes = []
+                  self.nodes = []
+                  self.edges = []
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.recorded_query = None
+
+              async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                  self.recorded_query = query
+                  return _Results()
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      query = Enum.map_join(1..100, " ", &"term#{&1}")
+
+      assert {:ok, []} = GraphitiPool.search_episodes(pid, "group", query, 5)
+
+      {recorded_query, _} = Pythonx.eval("g.recorded_query", %{"g" => g})
+      recorded_query = Pythonx.decode(recorded_query)
+
+      assert recorded_query != ""
+      assert recorded_query =~ "term1 term2 term3"
+      assert length(String.split(recorded_query)) <= 63
+      refute recorded_query =~ "term100"
+
+      GenServer.stop(pid)
+    end
+  end
+
   describe "when an episode search is run for a group > when only durably extraction-complete episodes are requested" do
     test "then every unmarked episode is excluded" do
       {g, _} =
