@@ -73,6 +73,14 @@ git ls-remote origin refs/heads/<current-branch> refs/tags/jido-gralkor-v<versio
 
 Require the release tag to resolve to the synchronized release commit.
 
+Record the remote branch tip returned by `git ls-remote`, then prove it contains the synchronized release commit through GitHub's comparison API:
+
+```sh
+gh api --method GET 'repos/{owner}/{repo}/compare/<release-commit>...<remote-branch-tip>'
+```
+
+Require the comparison status to be `identical` or `ahead`. This keeps the immutable release tag on the code published to Hex while accepting later trunk-sync bookkeeping commits on the remote branch.
+
 Report the version, release commit, release tag, test commands, Hex package, and remote branch only after remote verification succeeds.
 
 ## Failure handling
