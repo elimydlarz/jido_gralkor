@@ -13,7 +13,8 @@ when an operator asks to publish jido_gralkor with a semantic-version change kin
   and every repository-relative document linked from the published README is included in the Hex package
   and every repository-relative document linked from the published README is included in the ExDoc extras
   and GitHub receives a new lightweight release tag for the synchronized release commit
-  and remote inspection proves the branch and release tag resolve to the release commit
+  and remote inspection proves the release tag resolves to the synchronized release commit
+  and the remote branch contains the synchronized release commit even if trunk-sync bookkeeping advances the branch after publication
   and completion reports the version, commit, tag, tests, Hex package, and remote branch
 
 when the operator selects the current version
