@@ -59,8 +59,16 @@ HEX_HOME="<temporary-hex-home>" HEX_API_KEY="$HEX_TOKEN" mix hex.publish --yes
 
 After Hex succeeds, create `jido-gralkor-v<version>` at the synchronized release commit through GitHub's create-reference API:
 
+Write `<temporary-reference-request>` with exactly this JSON request body:
+
+```json
+{"ref":"refs/tags/jido-gralkor-v<version>","sha":"<release-commit>"}
+```
+
+Submit that explicit JSON body rather than form fields:
+
 ```sh
-gh api --method POST 'repos/{owner}/{repo}/git/refs' -f 'ref=refs/tags/jido-gralkor-v<version>' -f 'sha=<release-commit>'
+gh api --method POST 'repos/{owner}/{repo}/git/refs' --input "<temporary-reference-request>"
 ```
 
 Create only a lightweight reference. Never update or replace an existing release tag.
