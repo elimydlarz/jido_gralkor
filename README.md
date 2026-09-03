@@ -764,7 +764,7 @@ The behavioural contract lives in [`test-trees/`](https://github.com/elimydlarz/
 $publish patch   # or minor | major | current
 ```
 
-The skill runs the full suite before changing release state, verifies or transfers the package to personal ownership, lets trunk-sync synchronize the version commit and default branch, publishes through the personal Hex token, creates the lightweight `jido-gralkor-v<version>` tag through GitHub's API, and verifies both remote refs. Copy `.env.example` to `.env` and provide `HEX_TOKEN` plus a repository-scoped `GH_TOKEN` with Contents write permission.
+The skill loads `.env` and runs the full suite before changing release state, verifies or transfers the package to personal ownership, lets trunk-sync synchronize the version commit and default branch, publishes through the personal Hex token, and creates the lightweight `jido-gralkor-v<version>` tag through GitHub's API. Final verification requires that immutable tag to resolve to the published commit and the remote default branch to contain it, so later trunk-sync bookkeeping commits do not invalidate a completed release. Copy `.env.example` to `.env` and provide the configured inference credential, `HEX_TOKEN`, and a repository-scoped `GH_TOKEN` with Contents write permission.
 
 ## License
 
