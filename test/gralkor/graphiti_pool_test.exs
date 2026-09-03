@@ -3083,7 +3083,12 @@ defmodule Gralkor.GraphitiPoolTest do
   describe "where the credential exists only in the BEAM environment" do
     test "then the credential still reaches the provider client" do
       var = "GRALKOR_CREDENTIAL_DELIVERY_PROBE_#{System.unique_integer([:positive])}"
-      on_exit(fn -> System.delete_env(var) end)
+      previous_openai = System.get_env("OPENAI_API_KEY")
+
+      on_exit(fn ->
+        System.delete_env(var)
+        restore_env("OPENAI_API_KEY", previous_openai)
+      end)
 
       System.put_env(var, "set-from-elixir")
       assert System.get_env(var) == "set-from-elixir"
