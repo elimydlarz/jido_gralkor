@@ -40,6 +40,10 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
       const skill = await readFile(skillUrl, "utf8");
 
       assert.match(skill, /Run `mix test\.all` before editing the version\./);
+      assert.match(
+        skill,
+        /Shell-source `<repo-root>\/\.env` before running `mix test\.all` so configured provider credentials override ambient test placeholders\./,
+      );
     },
   );
 
