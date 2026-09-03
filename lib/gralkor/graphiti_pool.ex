@@ -292,6 +292,11 @@ defmodule Gralkor.GraphitiPool do
         """
         import asyncio
         import json
+        from graphiti_core.driver.falkordb import STOPWORDS
+        from graphiti_core.driver.falkordb.fulltext import (
+          MAX_QUERY_LENGTH,
+          sanitize_falkor_fulltext_query,
+        )
         from graphiti_core.search.search_config import (
           EpisodeSearchConfig,
           EpisodeSearchMethod,
@@ -305,6 +310,15 @@ defmodule Gralkor.GraphitiPool do
           name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name
           for name in lenses
         ]
+        supported_query_terms = [
+          word
+          for word in sanitize_falkor_fulltext_query(q).split()
+          if word.lower() not in STOPWORDS
+        ]
+        fulltext_token_count = max(0, len(supported_query_terms) * 2 - 1)
+        if fulltext_token_count + 1 >= MAX_QUERY_LENGTH:
+          max_supported_terms = (MAX_QUERY_LENGTH - 1) // 2
+          q = ' '.join(supported_query_terms[:max_supported_terms])
         search_limit = max_results
         if converge_by_identity or lens_names or require_reflection_complete or require_trusted_provenance:
           if hasattr(g.driver, 'execute_query'):
