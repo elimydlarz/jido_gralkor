@@ -71,7 +71,7 @@ Verify the remote state with this standalone inspection:
 git ls-remote origin refs/heads/<current-branch> refs/tags/jido-gralkor-v<version>
 ```
 
-Require both remote refs to resolve to the synchronized release commit.
+Require the release tag to resolve to the synchronized release commit.
 
 Report the version, release commit, release tag, test commands, Hex package, and remote branch only after remote verification succeeds.
 
