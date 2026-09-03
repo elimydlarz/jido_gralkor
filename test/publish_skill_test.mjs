@@ -151,8 +151,10 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
 
       assert.match(skill, /jido-gralkor-v<version>/);
       assert.match(skill, /gh api --method POST 'repos\/\{owner\}\/\{repo\}\/git\/refs'/);
-      assert.match(skill, /-f 'ref=refs\/tags\/jido-gralkor-v<version>'/);
-      assert.match(skill, /-f 'sha=<release-commit>'/);
+      assert.match(skill, /"ref":"refs\/tags\/jido-gralkor-v<version>"/);
+      assert.match(skill, /"sha":"<release-commit>"/);
+      assert.match(skill, /--input "<temporary-reference-request>"/);
+      assert.doesNotMatch(skill, /-f 'ref=refs\/tags\/jido-gralkor-v<version>'/);
       assert.match(skill, /Create only a lightweight reference/);
       assert.match(skill, /Never update or replace an existing release tag\./);
     },
