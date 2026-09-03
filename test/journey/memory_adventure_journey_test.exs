@@ -984,8 +984,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         _ -> "Deployments that begin with reversible canaries expose faults before broad impact."
       end
 
-    serialized_first_content = Jason.encode!(first_content)
-
     later_ingestion_id = "journey-generalisation-level-two"
 
     later_report = """
@@ -999,14 +997,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     exposes faults before broad impact.
     """
 
-    assert @operator_one
-           |> search_until(
-             [],
-             :episodes,
-             later_report,
-             &contains_episode?(&1, serialized_first_content)
-           )
-           |> contains_episode?(serialized_first_content)
+    assert first_generalisation_artefact ==
+             destination_artefact_until(
+               @operator_one,
+               "operations",
+               first_generalisation_artefact.id
+             )
 
     assert {:ok, later_representations} =
              Client.ingest_with_representation(%Ingest{
