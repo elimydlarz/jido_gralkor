@@ -483,7 +483,7 @@ defmodule MyApp.DecisionIngestion do
 end
 ```
 
-The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The selected Destination supplies the graph; the Lens supplies the ontology. `Client.ingest/1` accepts appending Lenses and raises for replaceable Lenses; `Client.replace/1` accepts replaceable Lenses and raises for appending Lenses.
+The callback receives the original `%Gralkor.Ingest{}` request and a Lens-bound `%Gralkor.Lens.Store{}`. It decides whether to make zero, one, or many writes and can use `Gralkor.Lens.Store.add/3` and `search/3`. The selected Destination supplies the graph; the Lens supplies the ontology. Runtime-targeted `Client.ingest/2` accepts appending Lenses and raises for replaceable Lenses; `Client.replace/2` accepts replaceable Lenses and raises for appending Lenses.
 
 The plugin mount chooses how an agent uses the registered Lenses:
 
@@ -491,7 +491,8 @@ The plugin mount chooses how an agent uses the registered Lenses:
 {JidoGralkor.Plugin,
  %{
    agent_name: "Susu",
-   ingestion_lens: "observations"
+   ingestion_lens: "observations",
+   runtime_config: runtime_config
  }}
 ```
 
