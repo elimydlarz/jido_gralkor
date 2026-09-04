@@ -819,6 +819,59 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       assert_receive {:runtime_search, "agent-memory"}
     end
+
+    test "then packaged generalisation related-memory search uses the targeted agent's Destinations" do
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        RecordingDestinationStorage
+      )
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-generalisation-search",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 destination_configuration("agent-memory")
+               )
+
+      callback = fn result -> send(self(), {:generalisation_callback, result}) end
+
+      inference = fn
+        %{step: %{label: "inspect-world"}} ->
+          {:ok, %{output: %{"inspection" => "inspected"}}}
+
+        %{step: %{label: "evolve-generalisations"}} ->
+          {:ok, %{output: %{"generalisations" => []}}}
+      end
+
+      assert {:ok, "generalisation-search"} =
+               Gralkor.Client.reflect(
+                 agent_server,
+                 "generalisations",
+                 %{
+                   id: "generalisation-search",
+                   operator_id: "operator-one",
+                   representations: []
+                 },
+                 callback,
+                 inference: inference
+               )
+
+      searched =
+        for _ <- 1..3 do
+          assert_receive {:runtime_search, destination}
+          destination
+        end
+
+      assert MapSet.new(searched) == MapSet.new(["operator", "global", "agent-memory"])
+    end
   end
 
   describe "when an agentic memory addition begins" do
