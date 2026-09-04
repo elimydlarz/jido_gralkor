@@ -123,12 +123,22 @@ defmodule JidoGralkor.Runtime do
         }
       ] ++
         Enum.map(configuration.lenses, fn definition ->
-          %Lens{
-            name: field(definition, :name),
-            destination: Map.fetch!(destination_index, field(definition, :destination)),
-            ontology: field(definition, :ontology) || Gralkor.DefaultOntology,
-            ingestion: field(definition, :ingestion)
-          }
+          case field(definition, :write) do
+            :replace_graph ->
+              %Gralkor.Lens.Replaceable{
+                name: field(definition, :name),
+                destination: Map.fetch!(destination_index, field(definition, :destination)),
+                graph_format: :property_graph
+              }
+
+            _ ->
+              %Lens{
+                name: field(definition, :name),
+                destination: Map.fetch!(destination_index, field(definition, :destination)),
+                ontology: field(definition, :ontology) || Gralkor.DefaultOntology,
+                ingestion: field(definition, :ingestion)
+              }
+          end
         end)
 
     reflections =
