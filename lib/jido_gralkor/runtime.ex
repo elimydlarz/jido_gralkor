@@ -101,6 +101,7 @@ defmodule JidoGralkor.Runtime do
     reply =
       with :ok <- validate_invocation_callback(callback),
            {:ok, invocation_id} <- invocation_id(invocation),
+           :ok <- validate_operator_id(invocation),
            {:ok, reflection} <- Map.fetch(state.definitions.reflections, name),
            {:ok, _task} <-
              Task.Supervisor.start_child(state.reflection_supervisor, fn ->
@@ -615,6 +616,14 @@ defmodule JidoGralkor.Runtime do
   end
 
   defp invocation_id(invocation), do: {:error, {:invalid_invocation, invocation}}
+
+  defp validate_operator_id(invocation) do
+    operator_id = field(invocation, :operator_id)
+
+    if non_blank?(operator_id),
+      do: :ok,
+      else: {:error, {:invalid_operator_id, operator_id}}
+  end
 
   defp process_reflection(reflection, invocation, callback, opts) do
     production = fn -> Runner.run(reflection, invocation, opts) end
