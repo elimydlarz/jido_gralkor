@@ -1520,7 +1520,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  defp assert_valid(%{root: root}) do
+  defp assert_valid(_context) do
     assert {:ok,
             [
               %Gralkor.Reflection{
@@ -1530,23 +1530,22 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                 ]
               }
             ]} =
-             Registry.load([valid_definition(root)], root: root)
+             Registry.load([valid_definition()])
   end
 
   defp reflection(
-         %{root: root},
+         _context,
          name \\ "generalisation",
          destination \\ "operator"
        ) do
     [reflection] =
       Registry.load!(
         [
-          valid_definition(root,
+          valid_definition(
             name: name,
             outputs: [[kind: :destination, destination: destination]]
           )
-        ],
-        root: root
+        ]
       )
 
     reflection
@@ -1565,15 +1564,21 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     )
   end
 
-  defp one_step_reflection(%{root: root}) do
-    write_cot(
-      root,
-      "one-step.yaml",
-      "steps:\n  - label: reflect\n    directions: Reflect.\n    output: {artefact: string}\n"
-    )
-
+  defp one_step_reflection(_context) do
     [reflection] =
-      Registry.load!([valid_definition(root, chain_of_thought: "one-step.yaml")], root: root)
+      Registry.load!([
+        valid_definition(
+          chain_of_thought: %{
+            steps: [
+              %{
+                label: "reflect",
+                directions: "Reflect.",
+                output: %{"artefact" => "string"}
+              }
+            ]
+          }
+        )
+      ])
 
     reflection
   end
@@ -1728,35 +1733,28 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     {reflection, artefact}
   end
 
-  defp valid_definition(root, overrides \\ []) do
-    unless File.exists?(Path.join(root, "valid.yaml")) do
-      write_cot(root, "valid.yaml", """
-      steps:
-        - label: gather
-          directions: Gather facts.
-          output:
-            facts: Array<string>
-        - label: synthesise
-          directions: "Synthesise {{facts}}"
-          output:
-            artefact: string
-      """)
-    end
-
+  defp valid_definition(overrides \\ []) do
     Keyword.merge(
       [
         name: "generalisation",
-        chain_of_thought: "valid.yaml",
+        chain_of_thought: %{
+          steps: [
+            %{
+              label: "gather",
+              directions: "Gather facts.",
+              output: %{"facts" => "Array<string>"}
+            },
+            %{
+              label: "synthesise",
+              directions: "Synthesise {{facts}}",
+              output: %{"artefact" => "string"}
+            }
+          ]
+        },
         outputs: [[kind: :destination, destination: "operator"]]
       ],
       overrides
     )
-  end
-
-  defp write_cot(root, name, body) do
-    path = Path.join(root, name)
-    File.write!(path, body)
-    path
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
