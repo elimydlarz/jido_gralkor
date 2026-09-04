@@ -990,6 +990,42 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "when a selected-Lens turn is buffered for capture" do
+    test "then its eventual ingestion resolves the Lens through the targeted agent's runtime configuration" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+
+      start_supervised!(
+        {Gralkor.CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
+         retries: []}
+      )
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: CustomLensConsumerAgent,
+           id: "runtime-configuration-captured-ingestion",
+           register_global: false}
+        )
+
+      assert :ok =
+               Gralkor.Client.capture(
+                 agent_server,
+                 "runtime-capture-session",
+                 "operator-one",
+                 "Runtime Configuration Consumer",
+                 "Eli",
+                 [Gralkor.Message.new("user", "Remember this runtime-configured fact.")],
+                 "runtime-observations",
+                 []
+               )
+
+      assert :ok = Gralkor.Client.Native.flush_and_await("runtime-capture-session", 1_000)
+      assert_receive {:runtime_ingestion, "runtime-memory"}
+    end
+  end
+
   describe "when named graph replacement begins" do
     test "then it uses the replaceable Lens definition active for the targeted agent" do
       Application.put_env(:jido_gralkor, :lens_storage, RecordingLensStorage)

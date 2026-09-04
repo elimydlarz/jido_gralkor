@@ -53,6 +53,9 @@ when named ingestion begins
   then it retains the Lens definition active when ingestion began
   and later named ingestion uses any subsequently installed Lens definition
 
+when a selected-Lens turn is buffered for capture
+  then its eventual ingestion resolves the Lens through the targeted agent's runtime configuration
+
 when a named Reflection submission is admitted
   then its background work retains the Reflection definition active at admission
   and later submission uses any subsequently installed Reflection definition
