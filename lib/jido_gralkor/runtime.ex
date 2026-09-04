@@ -320,14 +320,51 @@ defmodule JidoGralkor.Runtime do
   end
 
   defp validate_lens_shapes(lenses) do
-    case Enum.find(lenses, fn definition ->
-           field(definition, :write) == :replace_graph and
-             (has_field?(definition, :ingestion) or has_field?(definition, :ontology))
-         end) do
-      nil -> :ok
-      definition -> {:error, {:incompatible_lens_definition, field(definition, :name)}}
-    end
+    Enum.reduce_while(lenses, :ok, fn definition, :ok ->
+      name = field(definition, :name)
+
+      result =
+        case field(definition, :write) do
+          :append ->
+            ingestion = field(definition, :ingestion)
+            ontology = field(definition, :ontology) || Gralkor.DefaultOntology
+
+            cond do
+              not valid_ingestion?(ingestion) ->
+                {:error, {:invalid_lens_ingestion, name, ingestion}}
+
+              not valid_ontology?(ontology) ->
+                {:error, {:invalid_lens_ontology, name, ontology}}
+
+              true ->
+                :ok
+            end
+
+          :replace_graph ->
+            if has_field?(definition, :ingestion) or has_field?(definition, :ontology),
+              do: {:error, {:incompatible_lens_definition, name}},
+              else: :ok
+
+          write ->
+            {:error, {:invalid_lens_write, name, write}}
+        end
+
+      case result do
+        :ok -> {:cont, :ok}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
   end
+
+  defp valid_ingestion?(ingestion),
+    do:
+      is_atom(ingestion) and Code.ensure_loaded?(ingestion) and
+        function_exported?(ingestion, :ingest, 2)
+
+  defp valid_ontology?(ontology),
+    do:
+      is_atom(ontology) and Code.ensure_loaded?(ontology) and
+        function_exported?(ontology, :__ontology__, 0)
 
   defp validate_destination_references(configuration) do
     destination_names =
