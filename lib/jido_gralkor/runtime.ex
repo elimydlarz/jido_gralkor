@@ -7,6 +7,7 @@ defmodule JidoGralkor.Runtime do
   alias Gralkor.Lens
   alias Gralkor.Reflection
   alias Gralkor.Reflection.ChainOfThought
+  alias Gralkor.Reflection.Runner
 
   def start_link(opts) do
     owner = Keyword.fetch!(opts, :owner)
@@ -32,6 +33,11 @@ defmodule JidoGralkor.Runtime do
     GenServer.call(via(owner), {:all, :destinations})
   end
 
+  def submit_reflection(owner, name, invocation, callback, opts) do
+    ensure_started(owner)
+    GenServer.call(via(owner), {:submit_reflection, name, invocation, callback, opts})
+  end
+
   def validate(configuration) do
     with :ok <- validate_configuration(configuration),
          {:ok, _definitions} <- resolve_configuration(configuration) do
@@ -45,11 +51,14 @@ defmodule JidoGralkor.Runtime do
 
     with :ok <- validate_configuration(configuration),
          {:ok, definitions} <- resolve_configuration(configuration) do
+      {:ok, reflection_supervisor} = Task.Supervisor.start_link()
+
       {:ok,
        %{
          owner: Keyword.fetch!(opts, :owner),
          configuration: configuration,
-         definitions: definitions
+         definitions: definitions,
+         reflection_supervisor: reflection_supervisor
        }}
     else
       {:error, reason} -> {:stop, reason}
@@ -80,6 +89,24 @@ defmodule JidoGralkor.Runtime do
 
   def handle_call({:all, :destinations}, _from, state) do
     {:reply, state.definitions.destination_list, state}
+  end
+
+  def handle_call({:submit_reflection, name, invocation, callback, opts}, _from, state) do
+    reply =
+      with :ok <- validate_invocation_callback(callback),
+           {:ok, invocation_id} <- invocation_id(invocation),
+           {:ok, reflection} <- Map.fetch(state.definitions.reflections, name),
+           {:ok, _task} <-
+             Task.Supervisor.start_child(state.reflection_supervisor, fn ->
+               Runner.run(reflection, invocation, opts)
+             end) do
+        {:ok, invocation_id}
+      else
+        :error -> {:error, {:unknown_definition, :reflections, name}}
+        {:error, _reason} = error -> error
+      end
+
+    {:reply, reply, state}
   end
 
   defp ensure_started(owner) do
@@ -242,6 +269,20 @@ defmodule JidoGralkor.Runtime do
       {:error, reason} -> raise ArgumentError, inspect(reason)
     end
   end
+
+  defp validate_invocation_callback(callback) when is_function(callback, 1), do: :ok
+
+  defp validate_invocation_callback(callback),
+    do: {:error, {:invalid_invocation_callback, callback}}
+
+  defp invocation_id(invocation) when is_map(invocation) do
+    case field(invocation, :id) do
+      id when is_binary(id) and byte_size(String.trim(id)) > 0 -> {:ok, id}
+      id -> {:error, {:invalid_invocation_id, id}}
+    end
+  end
+
+  defp invocation_id(invocation), do: {:error, {:invalid_invocation, invocation}}
 
   defp field(map, key) when is_map(map),
     do: Map.get(map, key) || Map.get(map, Atom.to_string(key))

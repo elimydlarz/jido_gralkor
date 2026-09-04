@@ -134,6 +134,12 @@ defmodule Gralkor.Client do
     end
   end
 
+  @spec reflect(GenServer.server(), String.t(), map(), (term() -> any()), keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def reflect(runtime_owner, reflection_name, invocation, callback, opts \\ []) do
+    Runtime.submit_reflection(runtime_owner, reflection_name, invocation, callback, opts)
+  end
+
   @doc false
   @spec ingest_with_representation(Ingest.t()) ::
           {:ok, [IngestedRepresentation.t()]} | {:error, term()}
