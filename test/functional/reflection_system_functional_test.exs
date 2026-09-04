@@ -942,7 +942,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       release = make_ref()
 
       inference = fn _request ->
-        send(test_pid, :reflection_inference_started)
+        send(test_pid, {:reflection_inference_started, self()})
 
         receive do
           {^release, :continue} -> {:ok, %{output: %{"summary" => "complete"}}}
@@ -962,11 +962,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
           )
         end)
 
-      assert_receive :reflection_inference_started
+      assert_receive {:reflection_inference_started, inference_process}
       assert {:ok, {:ok, "reflection-invocation-one"}} = Task.yield(submission, 100)
       refute_receive {:reflection_callback, _}
 
-      send(Process.whereis(JidoGralkor.Runtime), {release, :continue})
+      send(inference_process, {release, :continue})
     end
   end
 
