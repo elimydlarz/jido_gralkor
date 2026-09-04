@@ -79,6 +79,7 @@ defmodule JidoGralkor.Plugin do
   @impl Jido.Plugin
   def mount(_agent, opts) do
     agent_name = fetch_opt(opts, :agent_name)
+
     runtime_config =
       fetch_opt(opts, :runtime_config) || %{destinations: [], lenses: [], reflections: []}
 
