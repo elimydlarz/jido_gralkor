@@ -110,6 +110,38 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
              } = JidoGralkor.Runtime.snapshot(agent_server)
     end
 
+    test "and it installs package-owned structured definitions for the `operator` and `global` Destinations" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-packaged-destinations",
+           register_global: false}
+        )
+
+      assert Enum.map(JidoGralkor.Runtime.destinations(agent_server), & &1.name) == [
+               "operator",
+               "global"
+             ]
+    end
+
+    test "and it installs the package-owned `operator` Lens" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-packaged-lens",
+           register_global: false}
+        )
+
+      assert %Gralkor.Lens{
+               name: "operator",
+               destination: %Gralkor.Destination{name: "operator"},
+               ontology: Gralkor.DefaultOntology,
+               ingestion: Gralkor.Lens.Ingestion.Store
+             } = JidoGralkor.Runtime.lens!(agent_server, "operator")
+    end
+
     test "and it installs package-owned structured definitions for the generalisations and ERL Reflections" do
       agent_server =
         start_supervised!(
