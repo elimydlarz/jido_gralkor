@@ -19,11 +19,15 @@ defmodule Gralkor.Reflection.ChainOfThought do
       |> case do
         definitions when is_list(definitions) ->
           Enum.map(definitions, fn definition ->
-            %{
-              "label" => field(definition, :label),
-              "directions" => field(definition, :directions),
-              "output" => field(definition, :output)
-            }
+            if is_map(definition) or is_list(definition) do
+              %{
+                "label" => field(definition, :label),
+                "directions" => field(definition, :directions),
+                "output" => field(definition, :output)
+              }
+            else
+              definition
+            end
           end)
 
         invalid ->
