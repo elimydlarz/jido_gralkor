@@ -322,7 +322,20 @@ defmodule MyApp.ChatAgent do
       {JidoGralkor.Plugin,
        %{
          agent_name: "Susu",
-         ingestion_lens: "observations"
+         ingestion_lens: "observations",
+         runtime_config: %{
+           destinations: [],
+           lenses: [
+             %{
+               name: "observations",
+               destination: "global",
+               write: :append,
+               ontology: MyApp.Ontology,
+               ingestion: Gralkor.Lens.Ingestion.Store
+             }
+           ],
+           reflections: []
+         }
        }}
     ]
 
