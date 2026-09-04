@@ -105,72 +105,88 @@ defmodule JidoGralkor.Runtime do
     do: {:error, {:invalid_configuration, configuration}}
 
   defp resolve_configuration(configuration) do
-    destinations =
-      [%Destination{name: "operator"}, %Destination{name: "global"}] ++
-        Enum.map(configuration.destinations, fn definition ->
-          %Destination{name: field(definition, :name)}
-        end)
-
-    destination_index = Map.new(destinations, &{&1.name, &1})
-
-    lenses =
-      [
-        %Lens{
-          name: "operator",
-          destination: Map.fetch!(destination_index, "operator"),
-          ontology: Gralkor.DefaultOntology,
-          ingestion: Gralkor.Lens.Ingestion.Store
-        }
-      ] ++
-        Enum.map(configuration.lenses, fn definition ->
-          case field(definition, :write) do
-            :replace_graph ->
-              %Gralkor.Lens.Replaceable{
-                name: field(definition, :name),
-                destination: Map.fetch!(destination_index, field(definition, :destination)),
-                graph_format: :property_graph
-              }
-
-            _ ->
-              %Lens{
-                name: field(definition, :name),
-                destination: Map.fetch!(destination_index, field(definition, :destination)),
-                ontology: field(definition, :ontology) || Gralkor.DefaultOntology,
-                ingestion: field(definition, :ingestion)
-              }
-          end
-        end)
-
-    reflections =
-      Enum.map(Gralkor.Reflection.Packaged.definitions() ++ configuration.reflections, fn definition ->
-        {:ok, chain_of_thought} = ChainOfThought.from_config(field(definition, :chain_of_thought))
-
-        outputs =
-          Enum.map(field(definition, :outputs), fn output ->
-            %{
-              kind: :destination,
-              destination: Map.fetch!(destination_index, field(output, :destination)),
-              ontology: field(output, :ontology) || Gralkor.DefaultOntology
-            }
+    with :ok <- validate_lens_shapes(configuration.lenses) do
+      destinations =
+        [%Destination{name: "operator"}, %Destination{name: "global"}] ++
+          Enum.map(configuration.destinations, fn definition ->
+            %Destination{name: field(definition, :name)}
           end)
 
-        %Reflection{
-          name: field(definition, :name),
-          outputs: outputs,
-          chain_of_thought: chain_of_thought
-        }
-      end)
+      destination_index = Map.new(destinations, &{&1.name, &1})
 
-    {:ok,
-     %{
-       destinations: Map.new(destinations, &{&1.name, &1}),
-       destination_list: destinations,
-       lenses: Map.new(lenses, &{&1.name, &1}),
-       reflections: Map.new(reflections, &{&1.name, &1})
-     }}
+      lenses =
+        [
+          %Lens{
+            name: "operator",
+            destination: Map.fetch!(destination_index, "operator"),
+            ontology: Gralkor.DefaultOntology,
+            ingestion: Gralkor.Lens.Ingestion.Store
+          }
+        ] ++
+          Enum.map(configuration.lenses, fn definition ->
+            case field(definition, :write) do
+              :replace_graph ->
+                %Gralkor.Lens.Replaceable{
+                  name: field(definition, :name),
+                  destination: Map.fetch!(destination_index, field(definition, :destination)),
+                  graph_format: :property_graph
+                }
+
+              _ ->
+                %Lens{
+                  name: field(definition, :name),
+                  destination: Map.fetch!(destination_index, field(definition, :destination)),
+                  ontology: field(definition, :ontology) || Gralkor.DefaultOntology,
+                  ingestion: field(definition, :ingestion)
+                }
+            end
+          end)
+
+      reflections =
+        Enum.map(
+          Gralkor.Reflection.Packaged.definitions() ++ configuration.reflections,
+          fn definition ->
+            {:ok, chain_of_thought} =
+              ChainOfThought.from_config(field(definition, :chain_of_thought))
+
+            outputs =
+              Enum.map(field(definition, :outputs), fn output ->
+                %{
+                  kind: :destination,
+                  destination: Map.fetch!(destination_index, field(output, :destination)),
+                  ontology: field(output, :ontology) || Gralkor.DefaultOntology
+                }
+              end)
+
+            %Reflection{
+              name: field(definition, :name),
+              outputs: outputs,
+              chain_of_thought: chain_of_thought
+            }
+          end
+        )
+
+      {:ok,
+       %{
+         destinations: Map.new(destinations, &{&1.name, &1}),
+         destination_list: destinations,
+         lenses: Map.new(lenses, &{&1.name, &1}),
+         reflections: Map.new(reflections, &{&1.name, &1})
+       }}
+    end
   rescue
     error ->
       {:error, {:invalid_runtime_configuration, Exception.message(error)}}
+  end
+
+  defp validate_lens_shapes(lenses) do
+    case Enum.find(lenses, fn definition ->
+           field(definition, :write) == :replace_graph and
+             (has_field?(definition, :ingestion) or has_field?(definition, :ontology))
+         end) do
+      nil -> :ok
+      definition -> {:error, {:incompatible_lens_definition, field(definition, :name)}}
+    end
   end
 
   defp fetch_definition!(owner, collection, name) do
@@ -187,6 +203,12 @@ defmodule JidoGralkor.Runtime do
 
   defp field(keyword, key) when is_list(keyword), do: Keyword.get(keyword, key)
   defp field(_, _), do: nil
+
+  defp has_field?(map, key) when is_map(map),
+    do: Map.has_key?(map, key) or Map.has_key?(map, Atom.to_string(key))
+
+  defp has_field?(keyword, key) when is_list(keyword), do: Keyword.has_key?(keyword, key)
+  defp has_field?(_, _), do: false
 
   defp via(owner), do: {:global, {__MODULE__, owner}}
 end
