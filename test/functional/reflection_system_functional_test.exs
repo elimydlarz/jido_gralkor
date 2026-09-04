@@ -1290,6 +1290,54 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "if Reflection production reports a non-retryable client failure" do
+    test "then no retry or Destination output is attempted and the callback receives immediate production abandonment" do
+      Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent,
+           id: "reflection-non-retryable-production-failure",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+      callback = fn result -> send(test_pid, {:reflection_callback, result}) end
+
+      assert {:ok, "reflection-invocation-one"} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 async_reflection_invocation(),
+                 callback,
+                 inference: fn _ -> {:error, %{status: 422, reason: :invalid_request}} end,
+                 sleep: fn delay -> send(test_pid, {:unexpected_retry_sleep, delay}) end
+               )
+
+      assert_receive {:reflection_callback,
+                      %{
+                        invocation_id: "reflection-invocation-one",
+                        outcome:
+                          {:abandoned,
+                           %{
+                             stage: :production,
+                             reason: %{
+                               reflection: "review",
+                               step: "review",
+                               reason: %{status: 422, reason: :invalid_request}
+                             }
+                           }}
+                      }}
+
+      refute_receive {:unexpected_retry_sleep, _}
+      refute_receive {:destination_output_delivered, _, _, _, _}
+    end
+  end
+
   describe "if a produced artefact cannot be delivered before delivery is abandoned" do
     test "then the callback eventually receives the artefact and non-retryable abandonment outcome" do
       Application.put_env(:jido_gralkor, :destination_storage, NonRetryableOutputStorage)

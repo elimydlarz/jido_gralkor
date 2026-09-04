@@ -162,6 +162,10 @@ if Reflection production fails
   then no Destination output is attempted
   and the invocation callback eventually receives the production failure
 
+if Reflection production reports a non-retryable client failure
+  then no retry or Destination output is attempted
+  and the invocation callback eventually receives immediate production abandonment
+
 when packaged generalisation related-memory retrieval reports a retryable server failure
   then that invocation retries retrieval with exponential backoff
   and successful retrieval allows the invocation to complete normally
