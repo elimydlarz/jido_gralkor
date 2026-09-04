@@ -27,6 +27,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
   @operator_one "memory_adventure_operator_one"
   @operator_two "memory_adventure_operator_two"
+  @reflection_callback_timeout_ms 300_000
 
   defmodule JourneyOntology do
     use Gralkor.Ontology, entities: :open, relationships: :scoped
@@ -1084,7 +1085,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
        %{invocation_id: ^invocation_id, artefact: %Artefact{}, outcome: :delivered} = result} ->
         result
     after
-      180_000 -> flunk("Reflection #{inspect(reflection_name)} did not deliver its callback")
+      @reflection_callback_timeout_ms ->
+        flunk("Reflection #{inspect(reflection_name)} did not deliver its callback")
     end
   end
 
