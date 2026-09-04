@@ -123,7 +123,7 @@ defmodule JidoGralkor.Runtime do
         end)
 
     reflections =
-      Enum.map(configuration.reflections, fn definition ->
+      Enum.map(Gralkor.Reflection.Packaged.definitions() ++ configuration.reflections, fn definition ->
         {:ok, chain_of_thought} = ChainOfThought.from_config(field(definition, :chain_of_thought))
 
         outputs =
