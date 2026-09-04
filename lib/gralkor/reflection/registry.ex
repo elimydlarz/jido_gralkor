@@ -28,8 +28,11 @@ defmodule Gralkor.Reflection.Registry do
   @doc false
   def load!(definitions) do
     case load(definitions) do
-      {:ok, reflections} -> reflections
-      {:error, reason} -> raise ArgumentError, "invalid Reflection declaration: #{inspect(reason)}"
+      {:ok, reflections} ->
+        reflections
+
+      {:error, reason} ->
+        raise ArgumentError, "invalid Reflection declaration: #{inspect(reason)}"
     end
   end
 

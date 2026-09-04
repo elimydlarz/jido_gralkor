@@ -195,7 +195,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     )
 
     test "and every Reflection declares an `outputs` list" do
-      definition = valid_definition(outputs: [[kind: :destination, destination: "operator", ontology: ReflectionOntology]])
+      definition =
+        valid_definition(
+          outputs: [[kind: :destination, destination: "operator", ontology: ReflectionOntology]]
+        )
 
       assert {:ok, [reflection]} = Registry.load([definition])
 
@@ -223,7 +226,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   describe "when Reflection declarations are validated > if the configured Reflection registry is not a list" do
     test "then validation fails identifying the configured value" do
-      assert {:error, {:invalid_reflections, :invalid_registry}} = Registry.load(:invalid_registry)
+      assert {:error, {:invalid_reflections, :invalid_registry}} =
+               Registry.load(:invalid_registry)
     end
   end
 
@@ -328,7 +332,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then validation fails identifying that Reflection and step" do
       cot = %{steps: [%{label: "think", output: %{"result" => "string"}}]}
 
-      assert {:error, {:invalid_chain_of_thought, "generalisation", {:invalid_step_directions, "think"}}} =
+      assert {:error,
+              {:invalid_chain_of_thought, "generalisation", {:invalid_step_directions, "think"}}} =
                Registry.load([valid_definition(chain_of_thought: cot)])
     end
   end
@@ -337,14 +342,16 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then validation fails identifying that Reflection and step" do
       cot = %{steps: [%{label: "think", directions: "Think."}]}
 
-      assert {:error, {:invalid_chain_of_thought, "generalisation", {:invalid_step_output, "think"}}} =
+      assert {:error,
+              {:invalid_chain_of_thought, "generalisation", {:invalid_step_output, "think"}}} =
                Registry.load([valid_definition(chain_of_thought: cot)])
     end
   end
 
   describe "when Reflection declarations are validated > if a Chain of Thought step is not a map" do
     test "then validation fails identifying that Reflection and step" do
-      assert {:error, {:invalid_chain_of_thought, "generalisation", {:invalid_step, "not-a-step"}}} =
+      assert {:error,
+              {:invalid_chain_of_thought, "generalisation", {:invalid_step, "not-a-step"}}} =
                Registry.load([valid_definition(chain_of_thought: %{steps: ["not-a-step"]})])
     end
   end
@@ -353,31 +360,41 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then validation fails identifying that Reflection, step, and type" do
       cot = %{steps: [%{label: "think", directions: "Think.", output: %{"result" => "mystery"}}]}
 
-      assert {:error, {:invalid_chain_of_thought, "generalisation", {:invalid_output_type, "think", "mystery"}}} =
+      assert {:error,
+              {:invalid_chain_of_thought, "generalisation",
+               {:invalid_output_type, "think", "mystery"}}} =
                Registry.load([valid_definition(chain_of_thought: cot)])
     end
   end
 
   describe "when Reflection declarations are validated > if an output name is declared by more than one step" do
     test "then validation fails identifying that Reflection, output name, and steps" do
-      cot = %{steps: [
-        %{label: "one", directions: "First.", output: %{"result" => "string"}},
-        %{label: "two", directions: "Second.", output: %{"result" => "string"}}
-      ]}
+      cot = %{
+        steps: [
+          %{label: "one", directions: "First.", output: %{"result" => "string"}},
+          %{label: "two", directions: "Second.", output: %{"result" => "string"}}
+        ]
+      }
 
-      assert {:error, {:invalid_chain_of_thought, "generalisation", {:duplicate_output, "result", "one", "two"}}} =
+      assert {:error,
+              {:invalid_chain_of_thought, "generalisation",
+               {:duplicate_output, "result", "one", "two"}}} =
                Registry.load([valid_definition(chain_of_thought: cot)])
     end
   end
 
   describe "when Reflection declarations are validated > if an interpolation references an output not declared by an earlier step" do
     test "then validation fails identifying that Reflection, step, and interpolation" do
-      cot = %{steps: [
-        %{label: "one", directions: "Use {{later}}.", output: %{"first" => "string"}},
-        %{label: "two", directions: "Later.", output: %{"later" => "string"}}
-      ]}
+      cot = %{
+        steps: [
+          %{label: "one", directions: "Use {{later}}.", output: %{"first" => "string"}},
+          %{label: "two", directions: "Later.", output: %{"later" => "string"}}
+        ]
+      }
 
-      assert {:error, {:invalid_chain_of_thought, "generalisation", {:unknown_interpolation, "later", "one"}}} =
+      assert {:error,
+              {:invalid_chain_of_thought, "generalisation",
+               {:unknown_interpolation, "later", "one"}}} =
                Registry.load([valid_definition(chain_of_thought: cot)])
     end
   end
@@ -405,15 +422,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "when Reflection declarations are validated > if a Destination output declares an invalid ontology" do
     test "then validation fails identifying that Reflection and ontology" do
       assert {:error, {:invalid_ontology, "generalisation", String}} =
-               Registry.load(
-                 [
-                   valid_definition(
-                     outputs: [
-                       [kind: :destination, destination: "operator", ontology: String]
-                     ]
-                   )
-                 ]
-               )
+               Registry.load([
+                 valid_definition(
+                   outputs: [
+                     [kind: :destination, destination: "operator", ontology: String]
+                   ]
+                 )
+               ])
     end
   end
 
@@ -448,19 +463,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "where an application-defined Destination output declares an application ontology" do
     test "then the output selects that ontology for a consumer-delivered artefact" do
       reflection =
-        Registry.load!(
-          [
-            valid_definition(
-              outputs: [
-                [
-                  kind: :destination,
-                  destination: "observations",
-                  ontology: ReflectionOntology
-                ]
+        Registry.load!([
+          valid_definition(
+            outputs: [
+              [
+                kind: :destination,
+                destination: "observations",
+                ontology: ReflectionOntology
               ]
-            )
-          ]
-        )
+            ]
+          )
+        ])
         |> List.first()
 
       assert destination_output(reflection).ontology == ReflectionOntology
@@ -542,7 +555,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                 }
               ]} = Registry.load([definition])
     end
-
   end
 
   describe "when a Reflection Runner is invoked" do
@@ -1539,14 +1551,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
          destination \\ "operator"
        ) do
     [reflection] =
-      Registry.load!(
-        [
-          valid_definition(
-            name: name,
-            outputs: [[kind: :destination, destination: destination]]
-          )
-        ]
-      )
+      Registry.load!([
+        valid_definition(
+          name: name,
+          outputs: [[kind: :destination, destination: destination]]
+        )
+      ])
 
     reflection
   end

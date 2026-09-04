@@ -90,10 +90,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       Supervisor.init(
         [
-          {Jido.AgentServer,
-           agent: DurableConsumerAgent,
-           id: id,
-           register_global: false}
+          {Jido.AgentServer, agent: DurableConsumerAgent, id: id, register_global: false}
         ],
         strategy: :one_for_one
       )
@@ -738,9 +735,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   describe "when a consuming agent is restarted under consumer supervision" do
     test "then the replacement agent installs the consumer's durable configuration before accepting memory work" do
       supervisor =
-        start_supervised!(
-          {ConsumerSupervisor, id: "runtime-configuration-consumer-restart"}
-        )
+        start_supervised!({ConsumerSupervisor, id: "runtime-configuration-consumer-restart"})
 
       original_agent = supervised_agent(supervisor)
       Process.exit(original_agent, :kill)
@@ -761,9 +756,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   describe "if the Gralkor plugin runtime terminates unexpectedly" do
     test "then its linked AgentServer terminates and consumer supervision starts a replacement with durable configuration" do
       supervisor =
-        start_supervised!(
-          {ConsumerSupervisor, id: "runtime-configuration-runtime-restart"}
-        )
+        start_supervised!({ConsumerSupervisor, id: "runtime-configuration-runtime-restart"})
 
       original_agent = supervised_agent(supervisor)
       original_monitor = Process.monitor(original_agent)
