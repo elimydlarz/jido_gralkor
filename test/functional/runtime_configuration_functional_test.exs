@@ -593,6 +593,34 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "if a Reflection does not declare exactly one valid Destination output" do
+    test "then runtime validation identifies the Reflection output failure" do
+      base = valid_runtime_definition(:reflections, "review")
+
+      for {outputs, expected} <- [
+            {:invalid, {:invalid_reflection_outputs, "review", :invalid}},
+            {[], {:missing_destination_output, "review"}},
+            {[
+               %{kind: :destination, destination: "global"},
+               %{kind: :destination, destination: "operator"}
+             ], {:duplicate_destination_output, "review"}},
+            {[%{kind: :return}], {:unsupported_reflection_output, "review", :return}},
+            {[%{kind: :destination}], {:missing_reflection_destination, "review", nil}},
+            {[%{kind: :destination, destination: "global", ontology: String}],
+             {:invalid_reflection_ontology, "review", String}},
+            {[%{kind: :destination, destination: "global", callback: __MODULE__}],
+             {:unknown_reflection_output_fields, "review", [:callback]}}
+          ] do
+        assert {:error, ^expected} =
+                 JidoGralkor.Runtime.validate(%{
+                   destinations: [],
+                   lenses: [],
+                   reflections: [%{base | outputs: outputs}]
+                 })
+      end
+    end
+  end
+
   describe "if the consumer supplies invalid durable configuration while starting an agent" do
     test "then the Gralkor plugin fails to start for that agent" do
       previous = Process.flag(:trap_exit, true)
