@@ -474,6 +474,13 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   end
 
   describe "if complete runtime configuration contains malformed or unknown definition fields" do
+    test "then unknown top-level configuration fields are rejected" do
+      assert {:error, {:unknown_configuration_fields, [:defaults]}} =
+               JidoGralkor.Runtime.validate(
+                 Map.put(empty_runtime_configuration(), :defaults, %{destination: "global"})
+               )
+    end
+
     test "then replacement fails identifying the definition and unknown fields" do
       agent_server =
         start_supervised!(
