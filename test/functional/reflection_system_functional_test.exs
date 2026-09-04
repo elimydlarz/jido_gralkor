@@ -1062,6 +1062,45 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "if a consumer triggers a Reflection without valid invocation identity" do
+    test "then submission fails before Reflection work begins" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent, id: "reflection-invalid-identity", register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+      callback = fn result -> send(test_pid, {:reflection_callback, result}) end
+
+      for invalid <- [nil, " "] do
+        assert {:error, {:invalid_invocation_id, ^invalid}} =
+                 Client.reflect(
+                   agent_server,
+                   "review",
+                   %{async_reflection_invocation() | id: invalid},
+                   callback,
+                   inference: fn _ -> send(test_pid, :invalid_identity_work_started) end
+                 )
+      end
+
+      assert {:error, {:invalid_operator_id, nil}} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 Map.delete(async_reflection_invocation(), :operator_id),
+                 callback,
+                 inference: fn _ -> send(test_pid, :invalid_identity_work_started) end
+               )
+
+      refute_receive :invalid_identity_work_started
+      refute_receive {:reflection_callback, _}
+    end
+  end
+
   describe "when an admitted Reflection completes successfully" do
     test "then its artefact is delivered and the invocation callback eventually receives that success" do
       Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
