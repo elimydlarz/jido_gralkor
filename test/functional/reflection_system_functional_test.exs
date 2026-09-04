@@ -1320,7 +1320,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         :counters.add(clock_calls, 1, 1)
 
         case :counters.get(clock_calls, 1) do
-          1 -> 0
+          call when call <= 2 -> 0
           _ -> 86_400_000
         end
       end
