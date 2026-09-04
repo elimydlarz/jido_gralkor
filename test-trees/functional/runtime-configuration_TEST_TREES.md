@@ -28,7 +28,7 @@ if the consumer supplies invalid durable configuration while starting an agent
   and no part of the invalid configuration becomes active
 
 if the Gralkor plugin runtime terminates unexpectedly
-  while that AgentServer runs under consumer supervision
+  while its linked AgentServer runs under consumer supervision
     then its linked AgentServer terminates
     and the consumer supervisor starts a replacement AgentServer
     and the replacement agent receives the consumer's current durable configuration
