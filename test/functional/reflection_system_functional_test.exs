@@ -50,6 +50,26 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
+  defmodule NonRetryableOutputStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_, _, _, _, _, _), do: {:ok, []}
+
+    @impl true
+    def put_artefact(_, _, _, artefact) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
+        {:non_retryable_destination_attempt, artefact}
+      )
+
+      {:error, %{status: 422, reason: :invalid_output}}
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+  end
+
   defmodule OutputProbeReturnHandler do
     @behaviour Gralkor.Artefact.ReturnHandler
 
@@ -1081,6 +1101,51 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                       }}
 
       refute_receive {:destination_output_delivered, _, _, _, _}
+    end
+  end
+
+  describe "if a produced artefact cannot be delivered before delivery is abandoned" do
+    test "then the callback eventually receives the artefact and non-retryable abandonment outcome" do
+      Application.put_env(:jido_gralkor, :destination_storage, NonRetryableOutputStorage)
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent,
+           id: "reflection-async-delivery-abandonment",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+      callback = fn result -> send(test_pid, {:reflection_callback, result}) end
+
+      assert {:ok, "reflection-invocation-one"} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 async_reflection_invocation(),
+                 callback,
+                 inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end
+               )
+
+      assert_receive {:non_retryable_destination_attempt, artefact}
+
+      assert_receive {:reflection_callback,
+                      %{
+                        invocation_id: "reflection-invocation-one",
+                        artefact: ^artefact,
+                        outcome:
+                          {:abandoned,
+                           %{
+                             stage: :delivery,
+                             reason: %{status: 422, reason: :invalid_output}
+                           }}
+                      }}
+
+      refute_receive {:non_retryable_destination_attempt, _}
     end
   end
 
