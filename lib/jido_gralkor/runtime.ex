@@ -277,7 +277,11 @@ defmodule JidoGralkor.Runtime do
 
   defp invocation_id(invocation) when is_map(invocation) do
     case field(invocation, :id) do
-      id when is_binary(id) and byte_size(String.trim(id)) > 0 -> {:ok, id}
+      id when is_binary(id) ->
+        if String.trim(id) == "",
+          do: {:error, {:invalid_invocation_id, id}},
+          else: {:ok, id}
+
       id -> {:error, {:invalid_invocation_id, id}}
     end
   end
