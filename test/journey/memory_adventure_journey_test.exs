@@ -17,7 +17,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   alias Gralkor.Ingest
   alias Gralkor.Message
   alias Gralkor.Artefact
-  alias Gralkor.Reflection.Registry
   alias Gralkor.Reflection.Runner
   alias Gralkor.Replace
   alias Gralkor.Search
@@ -79,6 +78,49 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   defmodule JourneyAgent do
     use Jido.AI.Agent,
       name: "memory_adventure_agent",
+      default_plugins: %{__memory__: false},
+      plugins: [
+        {JidoGralkor.Plugin,
+         %{
+           agent_name: "Memory Adventure Agent",
+           runtime_config: %{
+             destinations: [%{name: "operations"}],
+             lenses: [
+               %{
+                 name: "work-notes",
+                 destination: "operator",
+                 write: :append,
+                 ontology: Gralkor.MemoryAdventureJourneyTest.JourneyOntology,
+                 ingestion: Gralkor.Lens.Ingestion.Store
+               },
+               %{name: "systems", destination: "operator", write: :replace_graph},
+               %{
+                 name: "published",
+                 destination: "global",
+                 write: :append,
+                 ontology: Gralkor.MemoryAdventureJourneyTest.JourneyOntology,
+                 ingestion: Gralkor.Lens.Ingestion.Store
+               }
+             ],
+             reflections: [
+               %{
+                 name: "published-policy-review",
+                 outputs: [%{kind: :destination, destination: "global"}],
+                 chain_of_thought: %{
+                   steps: [
+                     %{
+                       label: "summarise-published-policy",
+                       directions:
+                         "Summarise the completed published-policy representation supplied to this Reflection as one concise operational statement.",
+                       output: %{"summary" => "string"}
+                     }
+                   ]
+                 }
+               }
+             ]
+           }
+         }}
+      ],
       tools: [JidoGralkor.Actions.MemorySearch],
       max_iterations: 3,
       tool_timeout_ms: 90_000,
@@ -93,21 +135,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       request_transformer: Gralkor.MemoryAdventureJourneyTest.JourneyRequestTransformer
   end
 
-  defmodule JourneyReturnHandler do
-    @behaviour Gralkor.Artefact.ReturnHandler
-
-    use Agent
-
-    def start_link(_opts), do: Agent.start_link(fn -> [] end, name: __MODULE__)
-
-    def artefacts, do: Agent.get(__MODULE__, & &1)
-
-    @impl true
-    def return(_operator_id, _invocation_id, %Gralkor.Artefact{} = artefact) do
-      Agent.update(__MODULE__, &[artefact | &1])
-    end
-  end
-
   setup_all do
     keys = [
       :client,
@@ -115,8 +142,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       :destination_storage,
       :lenses,
       :lens_storage,
-      :recall_deadline_ms,
-      :reflections
+      :recall_deadline_ms
     ]
 
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
@@ -157,54 +183,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         ingestion: Gralkor.Lens.Ingestion.Store
       ]
     ])
-
-    packaged_reflections =
-      Registry.load!(
-        [
-          [
-            name: "generalisations",
-            chain_of_thought: "priv/reflections/generalisations.yaml",
-            outputs: [
-              [kind: :destination, destination: "global", ontology: Gralkor.DefaultOntology]
-            ]
-          ],
-          [
-            name: "erl",
-            chain_of_thought: "priv/reflections/erl.yaml",
-            outputs: [
-              [
-                kind: :destination,
-                destination: "operator",
-                ontology: Gralkor.Reflection.ERLOntology
-              ]
-            ]
-          ]
-        ],
-        root: Application.app_dir(:jido_gralkor)
-      )
-
-    consumer_reflections =
-      Registry.load!(
-        [
-          [
-            name: "published-policy-review",
-            chain_of_thought: "test/journey/consumer_reflection.yaml",
-            outputs: [
-              [kind: :destination, destination: "global"],
-              [kind: :return, handler: JourneyReturnHandler]
-            ]
-          ]
-        ],
-        root: File.cwd!()
-      )
-
-    Application.put_env(
-      :jido_gralkor,
-      :reflections,
-      packaged_reflections ++ consumer_reflections
-    )
-
-    {:ok, _return_handler} = start_supervised(JourneyReturnHandler)
 
     {:ok, _python} = start_supervised(Gralkor.Python)
 
