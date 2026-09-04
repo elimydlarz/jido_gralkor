@@ -8,8 +8,11 @@ defmodule Gralkor.Client do
   Lens-bound store. Replacement validates and stores the complete graph for a
   replaceable Lens. Lenses and Reflections reference first-class Destinations,
   each of which names one graph. Appending Lenses select the ontology for their
-  writes; Reflection Destination outputs select it for consumer-delivered
-  artefacts. With empty selectors, search runs every
+  writes; Reflection Destination outputs select it for runtime-delivered
+  artefacts. The runtime-targeted arities resolve names from one consuming
+  AgentServer's atomic configuration snapshot. `reflect/5` admits an invocation
+  without waiting for production and reports its terminal result through the
+  supplied callback. With empty selectors, search runs every
   accessible registered Destination concurrently and returns episodes from
   every Lens and Reflection writer. Destination and Lens names are ORed within
   their respective selectors and ANDed across them; Lens filters are

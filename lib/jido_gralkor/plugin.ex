@@ -16,7 +16,8 @@ defmodule JidoGralkor.Plugin do
     * `:agent_name` — the value supplied at mount.
 
   The plugin does **not** search memory on its own. Search is the LLM's job,
-  invoked through `MemorySearch`, which calls `Gralkor.Client.search/1` with
+  invoked through `MemorySearch`, which calls runtime-targeted
+  `Gralkor.Client.search/2` with
   selectors supplied for that search invocation.
   Consumers force it on the first ReAct iteration via
   `JidoGralkor.ReAct.maybe_force_memory_search/2` from their

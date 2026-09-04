@@ -469,14 +469,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "where an application-defined Destination output omits its ontology" do
-    test "then the output selects generic extraction for a consumer-delivered artefact" do
+    test "then the output selects generic extraction for a runtime-delivered artefact" do
       reflection = Registry.load!([valid_definition()]) |> List.first()
       assert destination_output(reflection).ontology == Gralkor.DefaultOntology
     end
   end
 
   describe "where an application-defined Destination output declares an application ontology" do
-    test "then the output selects that ontology for a consumer-delivered artefact" do
+    test "then the output selects that ontology for a runtime-delivered artefact" do
       reflection =
         Registry.load!([
           valid_definition(

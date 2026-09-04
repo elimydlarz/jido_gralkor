@@ -84,10 +84,10 @@ when an agent's Gralkor runtime installs its package-owned Reflection definition
   and generalisation declares one Destination output referencing the packaged `global` Destination
 
 where an application-defined Destination output omits its ontology
-  then the output selects generic extraction for a consumer-delivered artefact
+  then the output selects generic extraction for a runtime-delivered artefact
 
 where an application-defined Destination output declares an application ontology
-  then the output selects that ontology for a consumer-delivered artefact
+  then the output selects that ontology for a runtime-delivered artefact
 
 when a consumer stores the default ERL Reflection's artefact through its Destination output
   then extraction receives the built-in `Learning` entity type from that output's ontology

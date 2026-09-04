@@ -366,7 +366,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate i
 
 The physical encoding replaces the former lossy `-` and `/` to `_` normalisation. Graphs stored under old physical names are not read or migrated automatically; migrate them only from known logical Destination/operator IDs, or re-ingest their source content, because underscores cannot recover the original ID.
 
-**Reflection invocation.** Lens-aware capture requires a non-blank operator before buffering, and CaptureBuffer assigns each buffered ingestion one cryptographically collision-resistant ID that it reuses across flush retries. Capture and ordinary `Gralkor.Client.ingest/1` calls stop after Lens ingestion; neither invokes a Reflection. The consuming application owns the event, job, or request that selects a configured Reflection, calls `Gralkor.Reflection.Runner.run/2`, and delivers the resulting artefact to its declared outputs. Direct invocations supply their own replay-stable invocation ID and any completed lensed representations the Reflection should inspect.
+**Reflection invocation.** Lens-aware capture requires a non-blank operator before buffering, and CaptureBuffer assigns each buffered ingestion one cryptographically collision-resistant ID that it reuses across flush retries. Capture and ordinary ingestion stop after Lens ingestion; neither invokes a Reflection. The consuming application owns the event, job, or schedule that selects a configured Reflection and submits it with `Gralkor.Client.reflect/5`. Submission returns its replay-stable invocation ID immediately; the agent-owned runtime independently produces and delivers the artefact and reports the terminal outcome through the invocation callback.
 
 **First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus the configured ingestion `:lens`, but no `:session_id`; completed and failed turn capture are both skipped with a warning until a committed thread supplies that identity. `memory_search` still searches for the current operator because public Search does not depend on conversation-session identity.
 
@@ -384,7 +384,7 @@ The physical encoding replaces the former lossy `-` and `/` to `_` normalisation
 
 **Context rotation.** `JidoGralkor.ContextRotator.rotate_now/2` synchronously flushes the active session via `flush_and_await/2`, installs a fresh Jido thread, and seeds the rotated thread with the most-recent `:keep_last_n` pre-flush entries plus any turns that landed during the flush. It returns `:ok` when there is no committed thread and `{:error, reason}` when state reading, flushing, or thread installation fails. The agent process is never stopped. Use it from a `/new` chat command or a small wrapper GenServer that fires on an interval.
 
-**Error contracts.** Invalid configuration, invalid Lens requests, and automatic plugin-capture failures raise. Valid explicit `Gralkor.Client.ingest/1`, `replace/1`, `search/1`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
+**Error contracts.** Invalid configuration, invalid Lens requests, and automatic plugin-capture failures raise. Valid runtime-targeted `Gralkor.Client.ingest/2`, `replace/2`, `search/2`, `reflect/5`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
 
 **`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 
@@ -737,7 +737,7 @@ The Jido glue:
 - `JidoGralkor.Canonical` — normalises a Jido/ReAct turn into the canonical `[%Gralkor.Message{role, content}]` shape.
 - `JidoGralkor.Lifecycle` — `Jido.AgentServer.Lifecycle` impl whose sole job is the death-triggered flush.
 - `JidoGralkor.ContextRotator` — synchronous `rotate_now/2` for in-life context consolidation.
-- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that always calls `Gralkor.Client.search/1` for the current operator, using optional Destination and Lens selectors from that invocation. It works before a thread is committed and short-circuits only a blank query.
+- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that always calls runtime-targeted `Gralkor.Client.search/2` for the current operator, using optional Destination and Lens selectors from that invocation. It works before a thread is committed and short-circuits only a blank query.
 - `JidoGralkor.Actions.MemoryAdd` — fire-and-forget ReAct tool.
 - `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
 - `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's `operator/<operator id>` graph.
