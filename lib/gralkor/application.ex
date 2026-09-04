@@ -112,6 +112,7 @@ defmodule Gralkor.Application do
   @doc false
   def build_lens_flush_callback(deps \\ []) do
     ingest_fn = Keyword.get(deps, :ingest_fn, &Gralkor.Client.ingest_with_representation/1)
+
     runtime_ingest_fn =
       Keyword.get(deps, :runtime_ingest_fn, &Gralkor.Client.ingest_with_representation/2)
 
