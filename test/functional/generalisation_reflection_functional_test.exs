@@ -312,8 +312,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
   end
 
-  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while its content, level, and evolves_from values satisfy the declared structured-output types" do
-    test "then those model-produced values become the generalisation without comparison to related memory" do
+  describe "when packaged generalisation inference returns typed values" do
+    test "then model-produced content, level, and lineage are preserved without comparison" do
       put_stored_generalisation_response([
         %{"content" => "A stored but unrelated generalisation", "level" => 8}
       ])
