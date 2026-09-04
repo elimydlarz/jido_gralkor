@@ -110,4 +110,23 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert configuration == JidoGralkor.Runtime.snapshot(agent_server)
     end
   end
+
+  describe "if a replacement is invalid" do
+    test "then the call returns the validation failure" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-invalid-replacement",
+           register_global: false}
+        )
+
+      assert {:error, {:invalid_collection, :destinations, :not_a_list}} =
+               JidoGralkor.Runtime.replace(agent_server, %{
+                 destinations: :not_a_list,
+                 lenses: [],
+                 reflections: []
+               })
+    end
+  end
 end
