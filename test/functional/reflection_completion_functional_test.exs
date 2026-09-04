@@ -75,7 +75,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         }
       ],
       chain_of_thought: %ChainOfThought{
-        path: "reflection-completion.yaml",
         steps: [
           %ChainOfThought.Step{
             label: "review",
