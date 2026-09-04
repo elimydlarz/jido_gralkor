@@ -256,6 +256,17 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
         assert directions =~ operation
       end
     end
+
+    test "and inference is directed to give a new generalisation level one and an evolved generalisation one level above its highest lineage snapshot" do
+      directions =
+        "evolve-generalisations"
+        |> step_directions()
+        |> normalized_whitespace()
+        |> String.downcase()
+
+      assert directions =~ "new generalisation with no lineage uses level 1"
+      assert directions =~ "one greater than the highest level in its evolves_from snapshots"
+    end
   end
 
   describe "when the packaged generalisation Reflection's default related-memory search returns no stored information" do
