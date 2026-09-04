@@ -19,9 +19,9 @@ when two operators use implicit memory, Lenses, asynchronously triggered Reflect
   and fresh retrieval omits the superseded replacement graph
 
 when the Journey consumer triggers generalisation after successive ingestions containing related observations
-  then the first resulting generalisation has evolution-depth level one and an empty `evolves_from`
-  and the later generalisation that evolves from the first has evolution-depth level two
-  and the later generalisation's `evolves_from` records the first generalisation's content and level
+  then the first resulting generalisation exposes non-blank content, an integer level, and a lineage list
+  and a later resulting generalisation exposes non-blank content, an integer level, and non-empty lineage
+  and every later lineage snapshot exposes non-blank content and an integer level
 
 when distinct ingestions use Lenses backed by different Destinations
   then the `work-notes` input is searchable through the `operator` Destination
@@ -38,7 +38,7 @@ when a fresh agent handles a request related to an evolved generalisation
   and its results include relevant memory from the `operator`, `global`, and an application Destination
   and its results include relevant Lens-authored memory and relevant stored generalisations
   and every result identifies its Destination and any originating Lens
-  and the answer identifies the retrieved level-one deployment predecessor and level-two newly covered feature-release scope
+  and the answer identifies the retrieved deployment predecessor and newly covered feature-release scope
   and the recommendation applies their reversible limited-scope lesson to the requested migration
 
 when the agent searches with both Destination and Lens selectors

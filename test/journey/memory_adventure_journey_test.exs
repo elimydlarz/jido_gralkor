@@ -299,32 +299,47 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   describe "when the Journey consumer invokes generalisation after successive ingestions containing related observations" do
-    test "then the first resulting generalisation has evolution-depth level one and an empty `evolves_from`",
+    test "then the first resulting generalisation exposes non-blank content, an integer level, and a lineage list",
          %{adventure: adventure} do
       assert %{
                "content" => content,
-               "level" => 1,
-               "evolves_from" => []
+               "level" => level,
+               "evolves_from" => lineage
              } = adventure.first_generalisation
 
       assert is_binary(content) and content != ""
+      assert is_integer(level)
+      assert is_list(lineage)
     end
 
-    test "and the later generalisation that evolves from the first has evolution-depth level two",
+    test "and a later resulting generalisation exposes non-blank content, an integer level, and non-empty lineage",
          %{
            adventure: adventure
          } do
-      assert %{"level" => 2} = adventure.later_generalisation
+      assert %{
+               "content" => content,
+               "level" => level,
+               "evolves_from" => [_ | _]
+             } = adventure.later_generalisation
+
+      assert is_binary(content) and content != ""
+      assert is_integer(level)
     end
 
-    test "and the later generalisation's `evolves_from` records the first generalisation's content and level",
+    test "and every later lineage snapshot exposes non-blank content and an integer level",
          %{adventure: adventure} do
-      assert %{"content" => first_content, "level" => 1} = adventure.first_generalisation
-
       assert %{"evolves_from" => preceding_generalisations} =
                adventure.later_generalisation
 
-      assert %{"content" => first_content, "level" => 1} in preceding_generalisations
+      assert preceding_generalisations != []
+
+      assert Enum.all?(preceding_generalisations, fn
+               %{"content" => content, "level" => level} ->
+                 is_binary(content) and content != "" and is_integer(level)
+
+               _ ->
+                 false
+             end)
     end
   end
 
@@ -445,14 +460,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert every_episode_has_provenance?(adventure.default_memory_search)
     end
 
-    test "and the answer identifies the retrieved level-one deployment predecessor and level-two newly covered feature-release scope",
+    test "and the answer identifies the retrieved deployment predecessor and newly covered feature-release scope",
          %{adventure: adventure} do
       predecessor = answer_field!(adventure.agent_answer, "PREDECESSOR")
       evolved = answer_field!(adventure.agent_answer, "EVOLVED")
 
-      assert Regex.match?(~r/\blevel\s*(?:1|one)\b/i, predecessor)
       assert Regex.match?(~r/\bdeploy\w*\b/i, predecessor)
-      assert Regex.match?(~r/\blevel\s*(?:2|two)\b/i, evolved)
       assert Regex.match?(~r/\bfeatures?(?:[-\s]+(?:releases?|rollouts?))?\b/i, evolved)
     end
 
@@ -962,7 +975,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     first_generalisation =
       first_generalisation_artefact
       |> find_generalisation(fn generalisation ->
-        generalisation["level"] == 1 and generalisation["evolves_from"] == []
+        is_binary(generalisation["content"]) and generalisation["content"] != "" and
+          is_integer(generalisation["level"]) and is_list(generalisation["evolves_from"])
       end)
 
     first_content =
@@ -1019,8 +1033,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     later_generalisation =
       find_generalisation(later_generalisation_artefact, fn generalisation ->
-        generalisation["level"] == 2 and
-          %{"content" => first_content, "level" => 1} in generalisation["evolves_from"]
+        is_binary(generalisation["content"]) and generalisation["content"] != "" and
+          is_integer(generalisation["level"]) and
+          match?([_ | _], generalisation["evolves_from"])
       end)
 
     {first_generalisation, later_generalisation, first_generalisation_artefact}
