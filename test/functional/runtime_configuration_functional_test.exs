@@ -621,6 +621,56 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "if a Reflection's Chain of Thought is missing, unstructured, or malformed" do
+    test "then runtime validation identifies the Reflection and structured configuration failure" do
+      base = valid_runtime_definition(:reflections, "review")
+
+      for {chain_of_thought, expected} <- [
+            {nil, {:missing_chain_of_thought, "review"}},
+            {"legacy.yaml", {:invalid_chain_of_thought, "review", "legacy.yaml"}},
+            {%{steps: []}, {:invalid_chain_of_thought, "review", :missing_steps}},
+            {%{steps: [%{label: " ", directions: "Review.", output: %{"summary" => "string"}}]},
+             {:invalid_chain_of_thought, "review", {:invalid_step_label, " "}}},
+            {%{steps: [%{label: "review", directions: " ", output: %{"summary" => "string"}}]},
+             {:invalid_chain_of_thought, "review", {:invalid_step_directions, "review"}}},
+            {%{steps: [%{label: "review", directions: "Review.", output: %{}}]},
+             {:invalid_chain_of_thought, "review", {:invalid_step_output, "review"}}}
+          ] do
+        assert {:error, ^expected} =
+                 JidoGralkor.Runtime.validate(%{
+                   destinations: [],
+                   lenses: [],
+                   reflections: [%{base | chain_of_thought: chain_of_thought}]
+                 })
+      end
+    end
+
+    test "and unknown nested fields are rejected" do
+      base = valid_runtime_definition(:reflections, "review")
+
+      assert {:error, {:unknown_chain_of_thought_fields, "review", [:path]}} =
+               JidoGralkor.Runtime.validate(%{
+                 destinations: [],
+                 lenses: [],
+                 reflections: [
+                   %{base | chain_of_thought: %{steps: base.chain_of_thought.steps, path: "legacy.yaml"}}
+                 ]
+               })
+
+      [step] = base.chain_of_thought.steps
+
+      assert {:error,
+              {:unknown_chain_of_thought_step_fields, "review", "review", [:model]}} =
+               JidoGralkor.Runtime.validate(%{
+                 destinations: [],
+                 lenses: [],
+                 reflections: [
+                   %{base | chain_of_thought: %{steps: [Map.put(step, :model, "configured")]}}
+                 ]
+               })
+    end
+  end
+
   describe "if the consumer supplies invalid durable configuration while starting an agent" do
     test "then the Gralkor plugin fails to start for that agent" do
       previous = Process.flag(:trap_exit, true)
