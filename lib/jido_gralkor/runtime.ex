@@ -294,19 +294,26 @@ defmodule JidoGralkor.Runtime do
       {:ok, artefact} ->
         output = Enum.find(reflection.outputs, &(&1.kind == :destination))
 
-        with :ok <-
-               DestinationStorage.put_artefact(
-                 output,
-                 reflection.name,
-                 field(invocation, :operator_id),
-                 artefact,
-                 opts
-               ) do
-          callback.(%{
-            invocation_id: field(invocation, :id),
-            artefact: artefact,
-            outcome: :delivered
-          })
+        case DestinationStorage.put_artefact(
+               output,
+               reflection.name,
+               field(invocation, :operator_id),
+               artefact,
+               opts
+             ) do
+          :ok ->
+            callback.(%{
+              invocation_id: field(invocation, :id),
+              artefact: artefact,
+              outcome: :delivered
+            })
+
+          {:error, reason} ->
+            callback.(%{
+              invocation_id: field(invocation, :id),
+              artefact: artefact,
+              outcome: {:abandoned, %{stage: :delivery, reason: reason}}
+            })
         end
 
       {:error, failure} ->
