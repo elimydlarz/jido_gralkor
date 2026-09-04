@@ -110,14 +110,8 @@ defmodule JidoGralkor.Plugin do
         {:ok, %{agent_name: agent_name}}
 
       ingestion_lens ->
-        lens = Client.lens!(ingestion_lens)
-
-        {:ok,
-         %{
-           agent_name: agent_name,
-           ingestion_lens: ingestion_lens,
-           lens: lens
-         }}
+        Client.lens!(ingestion_lens)
+        {:ok, %{agent_name: agent_name, ingestion_lens: ingestion_lens}}
     end
   end
 
