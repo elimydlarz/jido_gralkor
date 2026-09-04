@@ -239,62 +239,59 @@ config :jido_gralkor,
     ssl: System.get_env("FALKORDB_SSL") == "true"
   ],
 
-  # The Lens registry selects ingestion behavior and a Destination.
-  lenses: [
-    [
-      name: "observations",
-      destination: "global",
-      ontology: MyApp.Ontology,
-      ingestion: Gralkor.Lens.Ingestion.Store
-    ],
-    [
-      name: "decisions",
-      destination: "global",
-      ontology: MyApp.Ontology,
-      ingestion: MyApp.DecisionIngestion
-    ]
-  ],
-
-  # Optional custom Reflection declarations. Omit this key to use the two
-  # packaged declarations shown here.
-  reflections: [
-    [
-      name: "generalisations",
-      chain_of_thought: "priv/reflections/generalisations.yaml",
-      outputs: [
-        [kind: :destination, destination: "global"]
-      ]
-    ],
-    [
-      name: "erl",
-      chain_of_thought: "priv/reflections/erl.yaml",
-      outputs: [
-        [
-          kind: :destination,
-          destination: "operator",
-          ontology: Gralkor.Reflection.ERLOntology
-        ]
-      ]
-    ]
-  ],
-
   # Tuning — optional, shown at its default.
   recall_deadline_ms: 12_000
 
 ```
 
 ```elixir
-# lib/my_app/chat_agent.ex — the mount selects among the registered names.
+# lib/my_app/chat_agent.ex — the mount owns this agent's complete domain configuration.
 plugins: [
   {JidoGralkor.Plugin,
    %{
      agent_name: "Susu",
-     ingestion_lens: "observations"
+     ingestion_lens: "observations",
+     runtime_config: %{
+       destinations: [],
+       lenses: [
+         %{
+           name: "observations",
+           destination: "global",
+           write: :append,
+           ontology: MyApp.Ontology,
+           ingestion: Gralkor.Lens.Ingestion.Store
+         },
+         %{
+           name: "decisions",
+           destination: "global",
+           write: :append,
+           ontology: MyApp.Ontology,
+           ingestion: MyApp.DecisionIngestion
+         }
+       ],
+       reflections: [
+         %{
+           name: "release-review",
+           outputs: [
+             %{kind: :destination, destination: "global"}
+           ],
+           chain_of_thought: %{
+             steps: [
+               %{
+                 label: "review",
+                 directions: "Review the supplied release evidence.",
+                 output: %{"assessment" => "string", "approved" => "boolean"}
+               }
+             ]
+           }
+         }
+       ]
+     }
    }}
 ]
 ```
 
-That mount writes captured turns and `memory_add` calls through the `"observations"` Lens to `global`. Memory search independently defaults to every accessible registered Destination and may narrow each call by Destination and Lens. Ingestion does not invoke Reflections; a consumer that wants synthesis explicitly selects and runs a Reflection at the point its own workflow requires.
+That mount writes captured turns and `memory_add` calls through the `"observations"` Lens to `global`. Memory search independently defaults to every accessible Destination registered for this agent and may narrow each call by Destination and Lens. Ingestion does not invoke Reflections; a consumer or consumer-owned scheduled job submits a named Reflection asynchronously when its workflow requires synthesis.
 
 **Ontology placement.** Appending Lenses and Reflection Destination outputs default to Jido Gralkor's open `Gralkor.DefaultOntology`. Packaged ERL explicitly uses `Gralkor.Reflection.ERLOntology`. Applications attach custom ontology modules to their writers. If an older deployment set `config :jido_gralkor, :ontology`, remove it and select the module on each Lens or Reflection Destination output that needs it.
 
