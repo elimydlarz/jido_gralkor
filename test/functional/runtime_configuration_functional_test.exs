@@ -208,6 +208,55 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                }
              } = JidoGralkor.Runtime.reflection!(agent_server, "review")
     end
+
+    test "and another agent's runtime configuration remains unchanged" do
+      first_agent =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-first-agent",
+           register_global: false}
+        )
+
+      second_agent =
+        start_supervised!(
+          Supervisor.child_spec(
+            {Jido.AgentServer,
+             agent: ConsumerAgent,
+             id: "runtime-configuration-second-agent",
+             register_global: false},
+            id: :runtime_configuration_second_agent
+          )
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 first_agent,
+                 destination_configuration("first-memory")
+               )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 second_agent,
+                 destination_configuration("second-memory")
+               )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 first_agent,
+                 destination_configuration("replacement-memory")
+               )
+
+      assert %Gralkor.Destination{name: "replacement-memory"} =
+               JidoGralkor.Runtime.destination!(first_agent, "replacement-memory")
+
+      assert %Gralkor.Destination{name: "second-memory"} =
+               JidoGralkor.Runtime.destination!(second_agent, "second-memory")
+
+      assert_raise ArgumentError, ~r/unknown_definition.*second-memory/, fn ->
+        JidoGralkor.Runtime.destination!(first_agent, "second-memory")
+      end
+    end
   end
 
   describe "if a replacement is invalid" do
