@@ -4,7 +4,7 @@ defmodule Gralkor.Lens.Store do
 
   The Store is already bound to an operator and resolved Lens. Additions use
   an appending Lens's ontology and Destination; complete replacements use a
-  replaceable Lens's graph format and ownership; searches use its Destination.
+  replaceable Lens's fixed graph representation and ownership; searches use its Destination.
   Ingestion processes should use this capability rather than choose Graphiti
   group IDs themselves.
 
