@@ -970,6 +970,37 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "if a consumer triggers a Reflection without a valid invocation callback" do
+    test "then submission fails before the Reflection is admitted" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent,
+           id: "reflection-invalid-callback",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+
+      assert {:error, {:invalid_invocation_callback, :not_a_callback}} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 async_reflection_invocation(),
+                 :not_a_callback,
+                 inference: fn _ ->
+                   send(test_pid, :invalid_callback_inference_started)
+                   {:ok, %{output: %{"summary" => "complete"}}}
+                 end
+               )
+
+      refute_receive :invalid_callback_inference_started
+    end
+  end
+
   describe "when an admitted Reflection completes successfully" do
     test "then its artefact is delivered and the invocation callback eventually receives that success" do
       Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
