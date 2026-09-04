@@ -156,7 +156,8 @@ defmodule Gralkor.Client do
       ) do
     client = impl()
 
-    if Code.ensure_loaded?(client) and function_exported?(client, :capture, 8) do
+    if Runtime.started?(runtime_owner) and Code.ensure_loaded?(client) and
+         function_exported?(client, :capture, 8) do
       client.capture(
         runtime_owner,
         session_id,
