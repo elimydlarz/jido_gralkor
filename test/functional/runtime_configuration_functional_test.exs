@@ -673,7 +673,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       for {chain_of_thought, expected} <- [
             {nil, {:missing_chain_of_thought, "review"}},
-            {"legacy.yaml", {:invalid_chain_of_thought, "review", "legacy.yaml"}},
+            {"external-definition", {:invalid_chain_of_thought, "review", "external-definition"}},
             {%{steps: []}, {:invalid_chain_of_thought, "review", :missing_steps}},
             {%{steps: [%{label: " ", directions: "Review.", output: %{"summary" => "string"}}]},
              {:invalid_chain_of_thought, "review", {:invalid_step_label, " "}}},
