@@ -712,7 +712,6 @@ defmodule JidoGralkor.Runtime do
   defp retryable_server_failure?(_result), do: false
 
   defp non_retryable_client_failure?({:error, reason}), do: server_status(reason) in 400..499
-  defp non_retryable_client_failure?(_result), do: false
 
   defp server_status(%{status: status}), do: normalize_status(status)
   defp server_status(%{"status" => status}), do: normalize_status(status)
