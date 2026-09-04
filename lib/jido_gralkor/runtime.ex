@@ -661,7 +661,8 @@ defmodule JidoGralkor.Runtime do
 
       {:abandoned, {:error, failure}} ->
         outcome =
-          if retryable_server_failure?({:error, failure}) do
+          if retryable_server_failure?({:error, failure}) or
+               non_retryable_client_failure?({:error, failure}) do
             {:abandoned, %{stage: :production, reason: failure}}
           else
             {:production_failed, failure}
@@ -709,6 +710,9 @@ defmodule JidoGralkor.Runtime do
 
   defp retryable_server_failure?({:error, reason}), do: server_status(reason) in 500..599
   defp retryable_server_failure?(_result), do: false
+
+  defp non_retryable_client_failure?({:error, reason}), do: server_status(reason) in 400..499
+  defp non_retryable_client_failure?(_result), do: false
 
   defp server_status(%{status: status}), do: normalize_status(status)
   defp server_status(%{"status" => status}), do: normalize_status(status)
