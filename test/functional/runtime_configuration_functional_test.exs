@@ -37,6 +37,31 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       ]
   end
 
+  defmodule CustomLensConsumerAgent do
+    use Jido.Agent,
+      name: "custom_lens_runtime_configuration_consumer",
+      default_plugins: false,
+      plugins: [
+        {JidoGralkor.Plugin,
+         %{
+           agent_name: "Custom Lens Runtime Configuration Consumer",
+           ingestion_lens: "runtime-observations",
+           runtime_config: %{
+             destinations: [%{name: "runtime-memory"}],
+             lenses: [
+               %{
+                 name: "runtime-observations",
+                 destination: "runtime-memory",
+                 write: :append,
+                 ingestion: RecordingIngestion
+               }
+             ],
+             reflections: []
+           }
+         }}
+      ]
+  end
+
   defmodule ConsumerOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
   end
@@ -223,6 +248,22 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  }
                } = JidoGralkor.Runtime.reflection!(agent_server, name)
       end
+    end
+
+    test "and it accepts an ingestion Lens defined only by that agent's runtime configuration" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: CustomLensConsumerAgent,
+           id: "runtime-configuration-custom-ingestion-lens",
+           register_global: false}
+        )
+
+      assert %Gralkor.Lens{
+               name: "runtime-observations",
+               destination: %Gralkor.Destination{name: "runtime-memory"},
+               ingestion: RecordingIngestion
+             } = JidoGralkor.Runtime.lens!(agent_server, "runtime-observations")
     end
   end
 
