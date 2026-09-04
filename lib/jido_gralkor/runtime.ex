@@ -32,6 +32,13 @@ defmodule JidoGralkor.Runtime do
     GenServer.call(via(owner), {:all, :destinations})
   end
 
+  def validate(configuration) do
+    with :ok <- validate_configuration(configuration),
+         {:ok, _definitions} <- resolve_configuration(configuration) do
+      :ok
+    end
+  end
+
   @impl GenServer
   def init(opts) do
     configuration = Keyword.fetch!(opts, :configuration)

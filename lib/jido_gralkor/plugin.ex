@@ -79,10 +79,20 @@ defmodule JidoGralkor.Plugin do
   @impl Jido.Plugin
   def mount(_agent, opts) do
     agent_name = fetch_opt(opts, :agent_name)
+    runtime_config =
+      fetch_opt(opts, :runtime_config) || %{destinations: [], lenses: [], reflections: []}
 
     unless is_binary(agent_name) and String.trim(agent_name) != "" do
       raise ArgumentError,
             "JidoGralkor.Plugin requires :agent_name (non-blank string), got #{inspect(agent_name)}"
+    end
+
+    case Runtime.validate(runtime_config) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        raise ArgumentError, "invalid Gralkor runtime configuration: #{inspect(reason)}"
     end
 
     if fetch_opt(opts, :default_lens) != nil do
