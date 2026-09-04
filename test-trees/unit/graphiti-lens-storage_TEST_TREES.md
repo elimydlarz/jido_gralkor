@@ -30,17 +30,20 @@ when a Lens store adds an episode to an application Destination
 
 when a replaceable Lens store using the `operator` Destination replaces a complete graph
   then graph replacement receives the same resolved group used by existing Lens operations
-  and graph replacement receives the selected Lens name, configured graph format, and supplied graph data
+  and graph replacement receives the selected Lens name
+  and graph replacement receives the supplied nodes and relationships
   and the graph replacement result is returned to the caller
 
 when a replaceable Lens store using the `global` Destination replaces a complete graph
   then graph replacement receives the group named `global` for every operator
-  and graph replacement receives the selected Lens name, configured graph format, and supplied graph data
+  and graph replacement receives the selected Lens name
+  and graph replacement receives the supplied nodes and relationships
   and the graph replacement result is returned to the caller
 
 when a replaceable Lens store using an application Destination replaces a complete graph
   then graph replacement receives the group named for that Destination for every operator
-  and graph replacement receives the selected Lens name, configured graph format, and supplied graph data
+  and graph replacement receives the selected Lens name
+  and graph replacement receives the supplied nodes and relationships
   and the graph replacement result is returned to the caller
 
 when a replaceable Lens store is searched

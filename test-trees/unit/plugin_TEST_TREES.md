@@ -22,8 +22,9 @@ if mount is given a blank agent name
   then it raises ArgumentError
 
 when mount selects an ingestion Lens
-  then that selection is resolved against the application Lens registry and stored on the plugin state
-  and the resolved Lens keeps the Destination and ingestion the registry declared for it, redefining neither
+  then the selected Lens name is stored on the plugin state without copying its definition
+  and each ingestion resolves that name from the agent's current runtime-configuration snapshot when ingestion begins
+  and the resolved Lens keeps the Destination and ingestion the snapshot declared for it, redefining neither
   if the ingestion Lens is unknown
     then mounting raises an ArgumentError identifying the unknown Lens
   if the removed `:default_lens` option is supplied
