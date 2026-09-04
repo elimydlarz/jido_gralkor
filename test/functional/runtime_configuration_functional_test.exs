@@ -461,6 +461,32 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "if a Lens definition combines appending and replacement fields" do
+    test "then replacement fails identifying the incompatible Lens definition" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-incompatible-lens",
+           register_global: false}
+        )
+
+      assert {:error, {:incompatible_lens_definition, "project-topology"}} =
+               JidoGralkor.Runtime.replace(agent_server, %{
+                 destinations: [%{name: "project"}],
+                 lenses: [
+                   %{
+                     name: "project-topology",
+                     destination: "project",
+                     write: :replace_graph,
+                     ingestion: RecordingIngestion
+                   }
+                 ],
+                 reflections: []
+               })
+    end
+  end
+
   defp ingestion_configuration(destination) do
     %{
       destinations: [%{name: destination}],
