@@ -105,7 +105,8 @@ defmodule JidoGralkor.Runtime do
     do: {:error, {:invalid_configuration, configuration}}
 
   defp resolve_configuration(configuration) do
-    with :ok <- validate_lens_shapes(configuration.lenses) do
+    with :ok <- validate_lens_shapes(configuration.lenses),
+         :ok <- validate_reserved_entity_kinds(configuration) do
       destinations =
         [%Destination{name: "operator"}, %Destination{name: "global"}] ++
           Enum.map(configuration.destinations, fn definition ->
@@ -188,6 +189,43 @@ defmodule JidoGralkor.Runtime do
       definition -> {:error, {:incompatible_lens_definition, field(definition, :name)}}
     end
   end
+
+  defp validate_reserved_entity_kinds(configuration) do
+    lens_ontologies =
+      Enum.map(configuration.lenses, &(field(&1, :ontology) || Gralkor.DefaultOntology))
+
+    reflection_ontologies =
+      Enum.flat_map(configuration.reflections, fn reflection ->
+        case field(reflection, :outputs) do
+          outputs when is_list(outputs) ->
+            Enum.map(outputs, &(field(&1, :ontology) || Gralkor.DefaultOntology))
+
+          _ ->
+            []
+        end
+      end)
+
+    Enum.reduce_while(lens_ontologies ++ reflection_ontologies, :ok, fn ontology, :ok ->
+      case reserved_entity_kind(ontology) do
+        nil -> {:cont, :ok}
+        kind -> {:halt, {:error, {:reserved_entity_kind, kind}}}
+      end
+    end)
+  end
+
+  defp reserved_entity_kind(ontology)
+       when is_atom(ontology) do
+    if Code.ensure_loaded?(ontology) and function_exported?(ontology, :__ontology__, 0) do
+      ontology.__ontology__()
+      |> Map.get(:entity_types, [])
+      |> Enum.find_value(fn
+        %{name: name} when name in ["Entity", "Episodic", "Community"] -> name
+        _ -> nil
+      end)
+    end
+  end
+
+  defp reserved_entity_kind(_ontology), do: nil
 
   defp fetch_definition!(owner, collection, name) do
     ensure_started(owner)
