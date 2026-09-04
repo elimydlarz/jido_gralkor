@@ -58,6 +58,7 @@ defmodule Gralkor.Client do
   alias Gralkor.Replace
   alias Gralkor.Destination.Storage, as: DestinationStorage
   alias Gralkor.Search
+  alias JidoGralkor.Runtime
 
   @callback recall(group_id(), agent_name(), session_id() | nil, query :: String.t()) ::
               {:ok, String.t()} | {:error, term()}
@@ -122,15 +123,37 @@ defmodule Gralkor.Client do
     end
   end
 
+  @spec ingest(GenServer.server(), Ingest.t()) :: :ok | {:error, term()}
+  def ingest(runtime_owner, %Ingest{} = request) do
+    case ingest_with_representation(runtime_owner, request) do
+      {:ok, _representations} ->
+        :ok
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
   @doc false
   @spec ingest_with_representation(Ingest.t()) ::
           {:ok, [IngestedRepresentation.t()]} | {:error, term()}
   def ingest_with_representation(%Ingest{lens: lens_name} = request) do
+    ingest_with_resolved_lens(request, lens!(lens_name))
+  end
+
+  @doc false
+  @spec ingest_with_representation(GenServer.server(), Ingest.t()) ::
+          {:ok, [IngestedRepresentation.t()]} | {:error, term()}
+  def ingest_with_representation(runtime_owner, %Ingest{lens: lens_name} = request) do
+    ingest_with_resolved_lens(request, Runtime.lens!(runtime_owner, lens_name))
+  end
+
+  defp ingest_with_resolved_lens(request, lens) do
     Ingest.validate_operator_id!(request.operator_id)
     Ingest.validate_id!(request.id)
     Ingest.validate_source!(request.source_kind, request.content)
 
-    case lens!(lens_name) do
+    case lens do
       %Lens{} = lens ->
         collection_ref = make_ref()
         caller = self()
@@ -153,7 +176,7 @@ defmodule Gralkor.Client do
 
       %ReplaceableLens{} ->
         raise ArgumentError,
-              "Lens #{inspect(lens_name)} accepts only whole-graph replacement"
+              "Lens #{inspect(request.lens)} accepts only whole-graph replacement"
     end
   end
 
