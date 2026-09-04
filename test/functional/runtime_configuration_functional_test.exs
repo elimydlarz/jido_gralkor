@@ -24,6 +24,34 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
   end
 
+  defmodule RecordingIngestion do
+    @behaviour Gralkor.Lens.Ingestion
+
+    @impl true
+    def ingest(_request, store) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid),
+        {:runtime_ingestion, store.lens.destination.name}
+      )
+
+      :ok
+    end
+  end
+
+  setup do
+    previous = Application.get_env(:jido_gralkor, :runtime_configuration_test_pid)
+    Application.put_env(:jido_gralkor, :runtime_configuration_test_pid, self())
+
+    on_exit(fn ->
+      case previous do
+        nil -> Application.delete_env(:jido_gralkor, :runtime_configuration_test_pid)
+        pid -> Application.put_env(:jido_gralkor, :runtime_configuration_test_pid, pid)
+      end
+    end)
+
+    :ok
+  end
+
   describe "when a consumer starts a Jido agent with the Gralkor plugin" do
     test "then the plugin starts one Gralkor runtime under that agent" do
       agent_server =
@@ -205,5 +233,71 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       assert active == JidoGralkor.Runtime.snapshot(agent_server)
     end
+  end
+
+  describe "when named ingestion begins" do
+    test "and later named ingestion uses any subsequently installed Lens definition" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-current-ingestion",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 ingestion_configuration("first-memory")
+               )
+
+      assert :ok =
+               Gralkor.Client.ingest(
+                 agent_server,
+                 ingestion_request("first-ingestion")
+               )
+
+      assert_receive {:runtime_ingestion, "first-memory"}
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 ingestion_configuration("second-memory")
+               )
+
+      assert :ok =
+               Gralkor.Client.ingest(
+                 agent_server,
+                 ingestion_request("second-ingestion")
+               )
+
+      assert_receive {:runtime_ingestion, "second-memory"}
+    end
+  end
+
+  defp ingestion_configuration(destination) do
+    %{
+      destinations: [%{name: destination}],
+      lenses: [
+        %{
+          name: "observations",
+          destination: destination,
+          write: :append,
+          ingestion: RecordingIngestion
+        }
+      ],
+      reflections: []
+    }
+  end
+
+  defp ingestion_request(id) do
+    %Gralkor.Ingest{
+      id: id,
+      operator_id: "operator-one",
+      lens: "observations",
+      source_kind: :document,
+      content: "runtime-configured memory",
+      source_description: "functional"
+    }
   end
 end
