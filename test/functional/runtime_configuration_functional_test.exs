@@ -20,6 +20,10 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       ]
   end
 
+  defmodule ConsumerOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+  end
+
   describe "when a consumer starts a Jido agent with the Gralkor plugin" do
     test "then the plugin starts one Gralkor runtime under that agent" do
       agent_server =
@@ -55,6 +59,55 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                lenses: [],
                reflections: []
              } = JidoGralkor.Runtime.snapshot(agent_server)
+    end
+  end
+
+  describe "when a consumer replaces one agent's runtime configuration with complete valid Destination, Lens, and Reflection collections" do
+    test "then the complete consumer configuration becomes active as one snapshot for that agent" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-replacement",
+           register_global: false}
+        )
+
+      configuration = %{
+        destinations: [%{name: "project"}],
+        lenses: [
+          %{
+            name: "observations",
+            destination: "project",
+            write: :append,
+            ingestion: Gralkor.Lens.Ingestion.Store,
+            ontology: ConsumerOntology
+          }
+        ],
+        reflections: [
+          %{
+            name: "review",
+            outputs: [
+              %{
+                kind: :destination,
+                destination: "project",
+                ontology: ConsumerOntology
+              }
+            ],
+            chain_of_thought: %{
+              steps: [
+                %{
+                  label: "review",
+                  directions: "Review the supplied evidence.",
+                  output: %{"summary" => "string"}
+                }
+              ]
+            }
+          }
+        ]
+      }
+
+      assert :ok = JidoGralkor.Runtime.replace(agent_server, configuration)
+      assert configuration == JidoGralkor.Runtime.snapshot(agent_server)
     end
   end
 end
