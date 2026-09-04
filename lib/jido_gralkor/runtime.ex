@@ -13,6 +13,11 @@ defmodule JidoGralkor.Runtime do
     GenServer.call(via(owner), :snapshot)
   end
 
+  def replace(owner, configuration) do
+    ensure_started(owner)
+    GenServer.call(via(owner), {:replace, configuration})
+  end
+
   @impl GenServer
   def init(opts) do
     {:ok,
@@ -24,6 +29,10 @@ defmodule JidoGralkor.Runtime do
 
   @impl GenServer
   def handle_call(:snapshot, _from, state), do: {:reply, state.configuration, state}
+
+  def handle_call({:replace, configuration}, _from, state) do
+    {:reply, :ok, %{state | configuration: configuration}}
+  end
 
   defp ensure_started(owner) do
     case :global.whereis_name({__MODULE__, owner}) do
