@@ -1437,10 +1437,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Enum.all?(expected, &String.contains?(text, &1))
   end
 
-  defp contains_any?(text, expected) do
-    Enum.any?(expected, &String.contains?(text, &1))
-  end
-
   defp learning_artefact?(results) do
     Enum.any?(results, fn
       %{artefact: %{payload: payload}} ->
