@@ -1041,6 +1041,49 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "if Reflection production fails" do
+    test "then no Destination output is attempted and the callback eventually receives the failure" do
+      Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent,
+           id: "reflection-async-production-failure",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+      callback = fn result -> send(test_pid, {:reflection_callback, result}) end
+
+      assert {:ok, "reflection-invocation-one"} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 async_reflection_invocation(),
+                 callback,
+                 inference: fn _ -> {:error, :provider_unavailable} end
+               )
+
+      assert_receive {:reflection_callback,
+                      %{
+                        invocation_id: "reflection-invocation-one",
+                        outcome:
+                          {:production_failed,
+                           %{
+                             reflection: "review",
+                             step: "review",
+                             reason: :provider_unavailable
+                           }}
+                      }}
+
+      refute_receive {:destination_output_delivered, _, _, _, _}
+    end
+  end
+
   describe "if a Reflection's Chain of Thought completes without a valid final structured output" do
     test "then the Reflection fails identifying its name and missing artefact", context do
       assert {:error, %{reflection: "generalisation", reason: :missing_artefact}} =
