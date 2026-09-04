@@ -422,6 +422,26 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "if complete runtime configuration contains malformed or unknown definition fields" do
+    test "then replacement fails identifying the definition and unknown fields" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-unknown-fields",
+           register_global: false}
+        )
+
+      assert {:error,
+              {:unknown_definition_fields, :destinations, "project", [:ontology]}} =
+               JidoGralkor.Runtime.replace(agent_server, %{
+                 destinations: [%{name: "project", ontology: ConsumerOntology}],
+                 lenses: [],
+                 reflections: []
+               })
+    end
+  end
+
   describe "if the consumer supplies invalid durable configuration while starting an agent" do
     test "then the Gralkor plugin fails to start for that agent" do
       previous = Process.flag(:trap_exit, true)
