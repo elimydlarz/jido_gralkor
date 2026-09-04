@@ -372,9 +372,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                )
     end
 
-    test "and its invocation callback eventually receives that exact artefact and successful delivery outcome", %{
-      adventure: adventure
-    } do
+    test "and its invocation callback eventually receives that exact artefact and successful delivery outcome",
+         %{
+           adventure: adventure
+         } do
       assert adventure.consumer_returned_artefact == adventure.consumer_destination_artefact
       assert adventure.consumer_reflection_outcome == :delivered
     end
