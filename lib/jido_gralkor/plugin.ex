@@ -226,7 +226,7 @@ defmodule JidoGralkor.Plugin do
                   )
 
                 lens_name ->
-                  Runtime.lens!(self(), lens_name)
+                  runtime_lens!(lens_name)
 
                   Client.capture(
                     self(),
@@ -320,7 +320,7 @@ defmodule JidoGralkor.Plugin do
     new_context =
       case Map.fetch(existing_context, :lens) do
         {:ok, lens} ->
-          Runtime.lens!(self(), lens)
+          runtime_lens!(lens)
           extras |> Map.merge(existing_context) |> Map.merge(extras) |> Map.put(:lens, lens)
 
         :error ->
@@ -341,6 +341,10 @@ defmodule JidoGralkor.Plugin do
   end
 
   defp retain_request_context(signal), do: signal
+
+  defp runtime_lens!(lens) do
+    if Runtime.started?(self()), do: Runtime.lens!(self(), lens), else: Client.lens!(lens)
+  end
 
   defp maybe_put_lens_ref(refs, lens) when is_binary(lens),
     do: Map.put(refs, :jido_gralkor_lens, lens)

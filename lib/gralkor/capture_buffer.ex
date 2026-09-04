@@ -284,11 +284,11 @@ defmodule Gralkor.CaptureBuffer do
       {false, %{agent_name: bound_agent}} when bound_agent != agent_name ->
         {:reply, {:agent_mismatch, agent_name, bound_agent}, state}
 
+      {false, %{runtime_owner: bound_runtime}} when bound_runtime != runtime_owner ->
+        {:reply, {:runtime_mismatch, runtime_owner, bound_runtime}, state}
+
       {false, %{user_name: bound_user}} ->
         {:reply, {:user_mismatch, user_name, bound_user}, state}
-
-      {false, %{runtime_owner: bound_runtime}} ->
-        {:reply, {:runtime_mismatch, runtime_owner, bound_runtime}, state}
     end
   end
 
