@@ -361,7 +361,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when the Journey consumer invokes a consumer-defined Reflection with Destination and return outputs" do
+  describe "when the Journey consumer triggers a consumer-defined Reflection with a Destination output" do
     test "then its artefact is searchable through its Destination", %{adventure: adventure} do
       assert %Artefact{id: artefact_id} = adventure.consumer_destination_artefact
 
@@ -373,8 +373,11 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                )
     end
 
-    test "and its consumer return handler receives that exact artefact", %{adventure: adventure} do
+    test "and its invocation callback eventually receives that exact artefact and successful delivery outcome", %{
+      adventure: adventure
+    } do
       assert adventure.consumer_returned_artefact == adventure.consumer_destination_artefact
+      assert adventure.consumer_reflection_outcome == :delivered
     end
   end
 
@@ -606,7 +609,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                  source_kind: :document,
                  source_description: "manual"
                },
-               %{agent_id: @operator_one}
+               %{agent_id: @operator_one, gralkor_runtime: agent}
              )
 
     assert {:ok, %{result: "Ingesting."}} =
@@ -616,11 +619,11 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                  source_kind: :document,
                  source_description: "manual"
                },
-               %{agent_id: @operator_two}
+               %{agent_id: @operator_two, gralkor_runtime: agent}
              )
 
     {first_generalisation, later_generalisation, work_notes_generalisation_artefact} =
-      evolve_global_generalisation()
+      evolve_global_generalisation(agent)
 
     assert %Artefact{} =
              destination_artefact_until(
@@ -648,7 +651,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     session_id = "memory_adventure_#{System.unique_integer([:positive])}"
 
     :ok =
-      Native.capture(
+      Client.capture(
+        agent,
         session_id,
         @operator_one,
         "Susu",
@@ -666,6 +670,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     _erl_artefact =
       invoke_reflection!(
+        agent,
         "erl",
         @operator_one,
         "journey-erl-learning",
@@ -689,10 +694,11 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     }
 
     assert {:ok, published_representations} =
-             Client.ingest_with_representation(published_request)
+             Client.ingest_with_representation(agent, published_request)
 
     published_generalisation_artefact =
       invoke_reflection!(
+        agent,
         "generalisations",
         @operator_one,
         "journey-published-policy",
@@ -706,23 +712,26 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       "operations"
     )
 
-    consumer_destination_artefact =
-      invoke_reflection!(
+    consumer_reflection_result =
+      invoke_reflection_result!(
+        agent,
         "published-policy-review",
         @operator_one,
         "journey-published-policy",
         published_representations
       )
 
+    consumer_destination_artefact = consumer_reflection_result.artefact
+
     consumer_artefact_id =
       Artefact.id_for(@operator_one, "journey-published-policy", "published-policy-review")
 
     assert consumer_destination_artefact.id == consumer_artefact_id
 
-    consumer_returned_artefact = return_artefact_until(consumer_artefact_id)
+    consumer_returned_artefact = consumer_reflection_result.artefact
 
     :ok =
-      Client.ingest(%Ingest{
+      Client.ingest(agent, %Ingest{
         id: "journey-work-notes-registry",
         operator_id: @operator_one,
         lens: "work-notes",
@@ -731,8 +740,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         source_description: "system dependency registry"
       })
 
-    :ok = Client.replace(replacement("Ledger", "old"))
-    :ok = Client.replace(replacement("Clearing", "current"))
+    :ok = Client.replace(agent, replacement("Ledger", "old"))
+    :ok = Client.replace(agent, replacement("Clearing", "current"))
 
     {:ok, implicit_memory} =
       Native.recall(
@@ -900,6 +909,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       published_generalisation_artefact: published_generalisation_artefact,
       consumer_destination_artefact: consumer_destination_artefact,
       consumer_returned_artefact: consumer_returned_artefact,
+      consumer_reflection_outcome: consumer_reflection_result.outcome,
       default_memory_search: default_memory_search,
       memory_search_arguments: agent_request.memory_search_arguments,
       memory_search_completion_count: agent_request.memory_search_completion_count,
@@ -913,7 +923,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     }
   end
 
-  defp evolve_global_generalisation do
+  defp evolve_global_generalisation(agent) do
     first_ingestion_id = "journey-generalisation-level-one"
 
     first_report = """
@@ -925,7 +935,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     """
 
     assert {:ok, first_representations} =
-             Client.ingest_with_representation(%Ingest{
+             Client.ingest_with_representation(agent, %Ingest{
                id: first_ingestion_id,
                operator_id: @operator_one,
                lens: "work-notes",
@@ -936,6 +946,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     first_generalisation_artefact =
       invoke_reflection!(
+        agent,
         "generalisations",
         @operator_one,
         first_ingestion_id,
@@ -982,7 +993,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              )
 
     assert {:ok, later_representations} =
-             Client.ingest_with_representation(%Ingest{
+             Client.ingest_with_representation(agent, %Ingest{
                id: later_ingestion_id,
                operator_id: @operator_one,
                lens: "work-notes",
@@ -995,6 +1006,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     later_generalisation_artefact =
       invoke_reflection!(
+        agent,
         "generalisations",
         @operator_one,
         later_ingestion_id,
