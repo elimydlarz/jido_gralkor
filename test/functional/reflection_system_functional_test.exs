@@ -70,6 +70,30 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
+  defmodule RetryableOutputStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_, _, _, _, _, _), do: {:ok, []}
+
+    @impl true
+    def put_artefact(_, _, _, artefact) do
+      counter = Application.fetch_env!(:jido_gralkor, :reflection_retry_counter)
+      :counters.add(counter, 1, 1)
+      attempt = :counters.get(counter, 1)
+
+      send(
+        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
+        {:retryable_destination_attempt, attempt, artefact}
+      )
+
+      if attempt < 4, do: {:error, %{status: 503}}, else: :ok
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+  end
+
   defmodule OutputProbeReturnHandler do
     @behaviour Gralkor.Artefact.ReturnHandler
 
@@ -104,7 +128,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
             :lens_storage,
             :reflections,
             :reflection_storage,
-            :reflection_output_test_pid
+            :reflection_output_test_pid,
+            :reflection_retry_counter
           ],
           into: %{} do
         {key, Application.get_env(:jido_gralkor, key)}
@@ -1146,6 +1171,53 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                       }}
 
       refute_receive {:non_retryable_destination_attempt, _}
+    end
+  end
+
+  describe "when Reflection Destination delivery reports a retryable server failure" do
+    test "then delivery retries with exponential backoff and eventually reports success" do
+      Application.put_env(:jido_gralkor, :destination_storage, RetryableOutputStorage)
+      Application.put_env(:jido_gralkor, :reflection_retry_counter, :counters.new(1, []))
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent,
+           id: "reflection-async-delivery-retry",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+      callback = fn result -> send(test_pid, {:reflection_callback, result}) end
+      sleep = fn delay -> send(test_pid, {:reflection_retry_backoff, delay}) end
+
+      assert {:ok, "reflection-invocation-one"} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 async_reflection_invocation(),
+                 callback,
+                 inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end,
+                 sleep: sleep
+               )
+
+      assert_receive {:retryable_destination_attempt, 1, artefact}
+      assert_receive {:reflection_retry_backoff, 1_000}
+      assert_receive {:retryable_destination_attempt, 2, ^artefact}
+      assert_receive {:reflection_retry_backoff, 2_000}
+      assert_receive {:retryable_destination_attempt, 3, ^artefact}
+      assert_receive {:reflection_retry_backoff, 4_000}
+      assert_receive {:retryable_destination_attempt, 4, ^artefact}
+
+      assert_receive {:reflection_callback,
+                      %{
+                        invocation_id: "reflection-invocation-one",
+                        artefact: ^artefact,
+                        outcome: :delivered
+                      }}
     end
   end
 
