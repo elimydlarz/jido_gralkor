@@ -44,16 +44,6 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       ]
     ])
 
-    Application.put_env(:jido_gralkor, :reflections, [
-      [
-        name: "review",
-        outputs: [
-          [kind: :destination, destination: "shared", ontology: MemoryOntology]
-        ],
-        chain_of_thought: "priv/reflections/erl.yaml"
-      ]
-    ])
-
     on_exit(fn ->
       Enum.each(previous, fn
         {key, nil} -> Application.delete_env(:jido_gralkor, key)
@@ -69,7 +59,9 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       assert %Gralkor.Lens{destination: %Gralkor.Destination{name: "shared"}} =
                Client.lens!("observations")
 
-      assert [%Gralkor.Reflection{outputs: [output]}] = ReflectionRegistry.configured!()
+      assert [%Gralkor.Reflection{outputs: [output]}] =
+               ReflectionRegistry.load!([reflection_definition()])
+
       assert output.destination == %Gralkor.Destination{name: "shared"}
     end
 
@@ -94,7 +86,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
   describe "when multiple Lenses or Reflections reference the same Destination" do
     test "then their results are saved to the same Destination" do
       lens_destination = Client.lens!("observations").destination
-      [reflection] = ReflectionRegistry.configured!()
+      [reflection] = ReflectionRegistry.load!([reflection_definition()])
 
       destination_output = Enum.find(reflection.outputs, &(&1.kind == :destination))
       assert destination_output.destination == lens_destination
@@ -139,7 +131,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       assert :ok = Client.replace(replacement("catalogue", "catalogue"))
 
-      reflection = ReflectionRegistry.configured!() |> List.first()
+      reflection = ReflectionRegistry.load!([reflection_definition()]) |> List.first()
 
       artefact = %Gralkor.Artefact{
         id: "review-one",
@@ -196,7 +188,9 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
         })
       end
 
-      assert_raise ArgumentError, fn -> ReflectionRegistry.configured!() end
+      assert_raise ArgumentError, fn ->
+        ReflectionRegistry.load!([reflection_definition()])
+      end
 
       assert_raise ArgumentError, fn ->
         Client.search(%Gralkor.Search{operator_id: "operator-one", query: "must not run"})
@@ -293,19 +287,36 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
         Client.lens!("observations")
       end
 
-      Application.put_env(:jido_gralkor, :reflections, [
-        [
-          name: "review",
-          outputs: [
-            [kind: :destination, destination: "missing", ontology: MemoryOntology]
-          ],
-          chain_of_thought: "priv/reflections/erl.yaml"
-        ]
-      ])
-
       assert_raise ArgumentError, ~r/review.*Destination.*missing/, fn ->
-        ReflectionRegistry.configured!()
+        ReflectionRegistry.load!([
+          reflection_definition(
+            outputs: [
+              [kind: :destination, destination: "missing", ontology: MemoryOntology]
+            ]
+          )
+        ])
       end
     end
+  end
+
+  defp reflection_definition(overrides \\ []) do
+    Keyword.merge(
+      [
+        name: "review",
+        outputs: [
+          [kind: :destination, destination: "shared", ontology: MemoryOntology]
+        ],
+        chain_of_thought: %{
+          steps: [
+            %{
+              label: "review",
+              directions: "Review the supplied evidence.",
+              output: %{"summary" => "string"}
+            }
+          ]
+        }
+      ],
+      overrides
+    )
   end
 end
