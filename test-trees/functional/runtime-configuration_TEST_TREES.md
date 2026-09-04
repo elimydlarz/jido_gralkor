@@ -28,9 +28,9 @@ if the consumer supplies invalid durable configuration while starting an agent
   and no part of the invalid configuration becomes active
 
 if the Gralkor plugin runtime terminates unexpectedly
-  then its linked AgentServer terminates
   while that AgentServer runs under consumer supervision
-    then the consumer supervisor starts a replacement AgentServer
+    then its linked AgentServer terminates
+    and the consumer supervisor starts a replacement AgentServer
     and the replacement agent receives the consumer's current durable configuration
 
 when complete runtime configuration contains an appending Lens declaring `write: :append`, a Destination, an ingestion module, and an optional ontology
