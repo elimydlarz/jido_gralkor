@@ -300,11 +300,11 @@ defmodule JidoGralkor.Runtime do
 
       reserved_destination =
         if collection == :destinations,
-          do: Enum.find(names, &String.starts_with?(&1, "operator/"))
+          do: Enum.find(names, &(is_binary(&1) and String.starts_with?(&1, "operator/")))
 
       reserved_provenance =
         if collection in [:lenses, :reflections],
-          do: Enum.find(names, &String.contains?(&1, " [lens: "))
+          do: Enum.find(names, &(is_binary(&1) and String.contains?(&1, " [lens: ")))
 
       cond do
         blank = Enum.find(names, &(not non_blank?(&1))) ->
