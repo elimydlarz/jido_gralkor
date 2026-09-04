@@ -1107,7 +1107,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: AsyncConsumerAgent, id: "reflection-independent-invocations", register_global: false}
+           agent: AsyncConsumerAgent,
+           id: "reflection-independent-invocations",
+           register_global: false}
         )
 
       assert :ok =
