@@ -146,6 +146,7 @@ defmodule JidoGralkor.Runtime do
 
   defp resolve_configuration(configuration) do
     with :ok <- validate_definition_fields(configuration),
+         :ok <- validate_definition_names(configuration),
          :ok <- validate_reserved_names(configuration),
          :ok <- validate_lens_shapes(configuration.lenses),
          :ok <- validate_destination_references(configuration),
@@ -280,6 +281,23 @@ defmodule JidoGralkor.Runtime do
 
         definition ->
           {:halt, {:error, {:reserved_definition_name, collection, field(definition, :name)}}}
+      end
+    end)
+  end
+
+  defp validate_definition_names(configuration) do
+    Enum.reduce_while([:destinations, :lenses, :reflections], :ok, fn collection, :ok ->
+      names = Enum.map(Map.fetch!(configuration, collection), &field(&1, :name))
+
+      cond do
+        blank = Enum.find(names, &(not non_blank?(&1))) ->
+          {:halt, {:error, {:blank_definition_name, collection, blank}}}
+
+        duplicate = duplicate(names) ->
+          {:halt, {:error, {:duplicate_definition_name, collection, duplicate}}}
+
+        true ->
+          {:cont, :ok}
       end
     end)
   end
