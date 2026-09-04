@@ -290,21 +290,30 @@ defmodule JidoGralkor.Runtime do
   defp invocation_id(invocation), do: {:error, {:invalid_invocation, invocation}}
 
   defp process_reflection(reflection, invocation, callback, opts) do
-    with {:ok, artefact} <- Runner.run(reflection, invocation, opts),
-         output <- Enum.find(reflection.outputs, &(&1.kind == :destination)),
-         :ok <-
-           DestinationStorage.put_artefact(
-             output,
-             reflection.name,
-             field(invocation, :operator_id),
-             artefact,
-             opts
-           ) do
-      callback.(%{
-        invocation_id: field(invocation, :id),
-        artefact: artefact,
-        outcome: :delivered
-      })
+    case Runner.run(reflection, invocation, opts) do
+      {:ok, artefact} ->
+        output = Enum.find(reflection.outputs, &(&1.kind == :destination))
+
+        with :ok <-
+               DestinationStorage.put_artefact(
+                 output,
+                 reflection.name,
+                 field(invocation, :operator_id),
+                 artefact,
+                 opts
+               ) do
+          callback.(%{
+            invocation_id: field(invocation, :id),
+            artefact: artefact,
+            outcome: :delivered
+          })
+        end
+
+      {:error, failure} ->
+        callback.(%{
+          invocation_id: field(invocation, :id),
+          outcome: {:production_failed, failure}
+        })
     end
   end
 
