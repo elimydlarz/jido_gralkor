@@ -452,7 +452,11 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       name: definition.name,
       chain_of_thought: chain_of_thought,
       outputs: [
-        %{kind: :destination, destination: %Destination{name: "global"}, ontology: Gralkor.DefaultOntology}
+        %{
+          kind: :destination,
+          destination: %Destination{name: "global"},
+          ontology: Gralkor.DefaultOntology
+        }
       ]
     }
   end
@@ -532,7 +536,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
            %{
              "content" => content,
              "level" => level,
-             "evolves_from" => snapshots,
+             "evolves_from" => snapshots
            }
          ]
        }
