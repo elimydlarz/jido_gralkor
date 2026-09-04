@@ -293,7 +293,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       graph = property_graph()
       test_pid = self()
 
-      replace_graph_fn = fn group_id, _lens_name, _format, _data ->
+      replace_graph_fn = fn group_id, _lens_name, _data ->
         send(test_pid, {:graph_replaced, group_id})
         :ok
       end
@@ -303,24 +303,24 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert_receive {:graph_replaced, "operator/operator-one"}
     end
 
-    test "and graph replacement receives the selected Lens name, configured graph format, and supplied graph data" do
+    test "and graph replacement receives the selected Lens name and supplied nodes and relationships" do
       store = replaceable_store(:operator)
       graph = property_graph()
-      data = graph.data
+      data = Map.from_struct(graph)
       test_pid = self()
 
-      replace_graph_fn = fn group_id, lens_name, format, data ->
-        send(test_pid, {:graph_replaced, group_id, lens_name, format, data})
+      replace_graph_fn = fn group_id, lens_name, data ->
+        send(test_pid, {:graph_replaced, group_id, lens_name, data})
         :ok
       end
 
       assert :ok = Graphiti.replace_graph(store, graph, replace_graph_fn: replace_graph_fn)
 
-      assert_receive {:graph_replaced, _, "systems", :property_graph, ^data}
+      assert_receive {:graph_replaced, _, "systems", ^data}
     end
 
     test "and the graph replacement result is returned to the caller" do
-      replace_graph_fn = fn _group_id, _lens_name, _format, _data ->
+      replace_graph_fn = fn _group_id, _lens_name, _data ->
         {:error, :graph_unavailable}
       end
 
@@ -335,7 +335,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "then graph replacement receives the group named `global` for every operator" do
       test_pid = self()
 
-      replace_graph_fn = fn group_id, _lens_name, _format, _data ->
+      replace_graph_fn = fn group_id, _lens_name, _data ->
         send(test_pid, {:graph_replaced, group_id})
         :ok
       end
@@ -348,13 +348,13 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert_receive {:graph_replaced, "global"}
     end
 
-    test "and graph replacement receives the selected Lens name, configured graph format, and supplied graph data" do
+    test "and graph replacement receives the selected Lens name and supplied nodes and relationships" do
       graph = property_graph()
-      data = graph.data
+      data = Map.from_struct(graph)
       test_pid = self()
 
-      replace_graph_fn = fn group_id, lens_name, format, data ->
-        send(test_pid, {:graph_replaced, group_id, lens_name, format, data})
+      replace_graph_fn = fn group_id, lens_name, data ->
+        send(test_pid, {:graph_replaced, group_id, lens_name, data})
         :ok
       end
 
@@ -363,11 +363,11 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  replace_graph_fn: replace_graph_fn
                )
 
-      assert_receive {:graph_replaced, "global", "systems", :property_graph, ^data}
+      assert_receive {:graph_replaced, "global", "systems", ^data}
     end
 
     test "and the graph replacement result is returned to the caller" do
-      replace_graph_fn = fn _group_id, _lens_name, _format, _data ->
+      replace_graph_fn = fn _group_id, _lens_name, _data ->
         {:error, :graph_unavailable}
       end
 
@@ -382,7 +382,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "then graph replacement receives the group named for that Destination for every operator" do
       test_pid = self()
 
-      replace_graph_fn = fn group_id, _, _, _ ->
+      replace_graph_fn = fn group_id, _, _ ->
         send(test_pid, {:graph_replaced, group_id})
         :ok
       end
@@ -395,13 +395,13 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert_receive {:graph_replaced, "systems"}
     end
 
-    test "and graph replacement receives the selected Lens name, configured graph format, and supplied graph data" do
+    test "and graph replacement receives the selected Lens name and supplied nodes and relationships" do
       graph = property_graph()
-      data = graph.data
+      data = Map.from_struct(graph)
       test_pid = self()
 
-      replace_graph_fn = fn group_id, lens_name, format, replacement_data ->
-        send(test_pid, {:graph_replaced, group_id, lens_name, format, replacement_data})
+      replace_graph_fn = fn group_id, lens_name, replacement_data ->
+        send(test_pid, {:graph_replaced, group_id, lens_name, replacement_data})
         :ok
       end
 
@@ -410,11 +410,11 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  replace_graph_fn: replace_graph_fn
                )
 
-      assert_receive {:graph_replaced, "systems", "systems", :property_graph, ^data}
+      assert_receive {:graph_replaced, "systems", "systems", ^data}
     end
 
     test "and the graph replacement result is returned to the caller" do
-      replace_graph_fn = fn _, _, _, _ -> {:error, :graph_unavailable} end
+      replace_graph_fn = fn _, _, _ -> {:error, :graph_unavailable} end
 
       assert {:error, :graph_unavailable} =
                Graphiti.replace_graph(replaceable_store(:application), property_graph(),
@@ -451,8 +451,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       operator_id: "operator-one",
       lens: %Replaceable{
         name: "systems",
-        destination: destination(destination_name(scope)),
-        graph_format: :property_graph
+        destination: destination(destination_name(scope))
       }
     }
   end
@@ -472,11 +471,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
   defp property_graph do
     %Gralkor.Graph{
-      format: :property_graph,
-      data: %{
-        nodes: [%{id: "system", labels: ["System"], properties: %{name: "payments"}}],
-        relationships: []
-      }
+      nodes: [%{id: "system", labels: ["System"], properties: %{name: "payments"}}],
+      relationships: []
     }
   end
 
@@ -486,7 +482,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       :ok
     end
 
-    replace_graph_fn = fn _, _, _, _ ->
+    replace_graph_fn = fn _, _, _ ->
       send(test_pid, :graphiti_operation_began)
       :ok
     end
