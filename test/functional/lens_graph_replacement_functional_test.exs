@@ -273,7 +273,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
   end
 
-  describe "where the selected Lens uses the `property_graph` format" do
+  describe "when a caller supplies a complete replacement graph" do
     test "then every supplied node carries a unique identifier, labels, and properties" do
       use_in_memory(:operator)
       assert :ok = Client.replace(request(graph("systems")))
@@ -285,14 +285,19 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
   end
 
-  describe "if a `property_graph` payload is malformed or names a missing relationship endpoint" do
+  describe "if the supplied graph is malformed or names a missing relationship endpoint" do
     test "then replacement fails before graph content is removed or inserted" do
       use_in_memory(:operator)
       assert :ok = Client.replace(request(graph("existing")))
 
       for data <- malformed_graph_data() do
-        assert_raise ArgumentError, ~r/invalid property_graph data/, fn ->
-          Client.replace(request(%Graph{format: :property_graph, data: data}))
+        assert_raise ArgumentError, ~r/invalid graph data/, fn ->
+          Client.replace(
+            request(%Graph{
+              nodes: Map.get(data, :nodes),
+              relationships: Map.get(data, :relationships)
+            })
+          )
         end
       end
 
@@ -301,16 +306,13 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
 
     test "and the error identifies the invalid graph data" do
-      assert_raise ArgumentError, ~r/invalid property_graph data.*missing/, fn ->
+      assert_raise ArgumentError, ~r/invalid graph data.*missing/, fn ->
         Client.replace(
           request(%Graph{
-            format: :property_graph,
-            data: %{
-              nodes: [%{id: "source", labels: [], properties: %{}}],
-              relationships: [
-                %{from: "source", to: "missing", type: "LINKS", properties: %{}}
-              ]
-            }
+            nodes: [%{id: "source", labels: [], properties: %{}}],
+            relationships: [
+              %{from: "source", to: "missing", type: "LINKS", properties: %{}}
+            ]
           })
         )
       end
@@ -370,22 +372,6 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
   end
 
-  describe "if the supplied graph format differs from the selected Lens's configured graph format" do
-    test "then replacement fails before graph content is removed or inserted" do
-      assert_raise ArgumentError, fn ->
-        Client.replace(request(%Graph{format: :graphml, data: %{}}))
-      end
-
-      refute_receive {:replaced, _, _}
-    end
-
-    test "and the error identifies the expected and supplied graph formats" do
-      assert_raise ArgumentError, ~r/expected :property_graph.*supplied :graphml/, fn ->
-        Client.replace(request(%Graph{format: :graphml, data: %{}}))
-      end
-    end
-  end
-
   describe "if the supplied complete graph cannot be imported" do
     test "then the import failure is returned to the caller" do
       Application.put_env(:jido_gralkor, :lens_storage, FailingStorage)
@@ -393,7 +379,8 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
 
     test "and graph content already removed by the replacement is not restored" do
-      {:ok, graph_state} = Agent.start_link(fn -> graph("existing").data end)
+      existing = graph("existing")
+      {:ok, graph_state} = Agent.start_link(fn -> Map.from_struct(existing) end)
       Application.put_env(:jido_gralkor, :replacement_graph_state, graph_state)
       Application.put_env(:jido_gralkor, :lens_storage, FailingStorage)
 
@@ -430,8 +417,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     [
       name: name,
       destination: Atom.to_string(scope),
-      write: :replace_graph,
-      graph_format: :property_graph
+      write: :replace_graph
     ]
   end
 
@@ -453,36 +439,30 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
 
   defp graph(id) do
     %Graph{
-      format: :property_graph,
-      data: %{
-        nodes: [%{id: id, labels: ["System"], properties: %{name: id}}],
-        relationships: []
-      }
+      nodes: [%{id: id, labels: ["System"], properties: %{name: id}}],
+      relationships: []
     }
   end
 
   defp connected_graph(id) do
     %Graph{
-      format: :property_graph,
-      data: %{
-        nodes: [
-          %{id: id, labels: ["System"], properties: %{name: id}},
-          %{id: "#{id}-target", labels: ["System"], properties: %{name: "target"}}
-        ],
-        relationships: [
-          %{
-            from: id,
-            to: "#{id}-target",
-            type: "DEPENDS_ON",
-            properties: %{protocol: "events"}
-          }
-        ]
-      }
+      nodes: [
+        %{id: id, labels: ["System"], properties: %{name: id}},
+        %{id: "#{id}-target", labels: ["System"], properties: %{name: "target"}}
+      ],
+      relationships: [
+        %{
+          from: id,
+          to: "#{id}-target",
+          type: "DEPENDS_ON",
+          properties: %{protocol: "events"}
+        }
+      ]
     }
   end
 
   defp empty_graph do
-    %Graph{format: :property_graph, data: %{nodes: [], relationships: []}}
+    %Graph{nodes: [], relationships: []}
   end
 
   defp malformed_graph_data do
