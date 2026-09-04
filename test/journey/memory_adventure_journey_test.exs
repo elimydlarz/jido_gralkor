@@ -927,11 +927,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     first_ingestion_id = "journey-generalisation-level-one"
 
     first_report = """
-    Three independently operated services reached the same result. Aurora,
-    Borealis, and Cygnus each detected configuration faults before customers
-    were affected when a reversible canary ran before the full deployment.
-    The cross-team review concluded that starting deployments with reversible
-    canaries exposes configuration faults before broad customer impact.
+    Aurora detected a configuration fault before customers were affected when
+    a reversible canary ran before the full deployment. The incident review
+    concluded that this deployment avoided broad customer impact because it
+    began with that reversible limited-scope trial.
     """
 
     assert {:ok, first_representations} =
@@ -941,7 +940,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                lens: "work-notes",
                source_kind: :document,
                content: first_report,
-               source_description: "cross-team canary deployment review"
+               source_description: "Aurora canary deployment review"
              })
 
     first_generalisation_artefact =
