@@ -20,6 +20,23 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       ]
   end
 
+  defmodule InvalidConsumerAgent do
+    use Jido.Agent,
+      name: "invalid_runtime_configuration_consumer",
+      default_plugins: false,
+      plugins: [
+        {JidoGralkor.Plugin,
+         %{
+           agent_name: "Invalid Runtime Configuration Consumer",
+           runtime_config: %{
+             destinations: :not_a_list,
+             lenses: [],
+             reflections: []
+           }
+         }}
+      ]
+  end
+
   defmodule ConsumerOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
   end
@@ -366,6 +383,17 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                })
 
       assert active == JidoGralkor.Runtime.snapshot(agent_server)
+    end
+  end
+
+  describe "if the consumer supplies invalid durable configuration while starting an agent" do
+    test "then the Gralkor plugin fails to start for that agent" do
+      assert {:error, _reason} =
+               Jido.AgentServer.start_link(
+                 agent: InvalidConsumerAgent,
+                 id: "runtime-configuration-invalid-start",
+                 register_global: false
+               )
     end
   end
 
