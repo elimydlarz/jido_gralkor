@@ -103,7 +103,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     end
   end
 
-  describe "where an appending Lens definition provides a Destination name and ingestion process without a write mode" do
+  describe "where an appending Lens definition provides `write: :append`, a Destination name, and an ingestion process" do
     test "then the Lens remains appending with its existing ingestion behaviour" do
       assert %Gralkor.Lens{
                name: "observations",
@@ -266,36 +266,12 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-    test "and a replaceable Lens without a graph format is identified with its Lens" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        valid_replaceable_lens("systems") |> Keyword.delete(:graph_format)
-      ])
-
-      assert_raise ArgumentError, ~r/systems.*graph format.*nil/, fn ->
-        Client.lens!("systems")
-      end
-    end
-
-    test "and a replaceable Lens with an unsupported graph format is identified with its Lens" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        valid_replaceable_lens("systems") |> Keyword.put(:graph_format, :graphml)
-      ])
-
-      assert_raise ArgumentError, ~r/systems.*graph format.*graphml/, fn ->
-        Client.lens!("systems")
-      end
-    end
-
     test "and a Lens definition that combines appending and replaceable write settings is identified with its Lens" do
-      for definition <- [
-            valid_replaceable_lens("systems") |> Keyword.put(:ingestion, StoreIngestion),
-            valid_lens("systems") |> Keyword.put(:graph_format, :property_graph)
-          ] do
-        Application.put_env(:jido_gralkor, :lenses, [definition])
+      definition = valid_replaceable_lens("systems") |> Keyword.put(:ingestion, StoreIngestion)
+      Application.put_env(:jido_gralkor, :lenses, [definition])
 
-        assert_raise ArgumentError, ~r/systems.*combines.*write settings/, fn ->
-          Client.lens!("systems")
-        end
+      assert_raise ArgumentError, ~r/systems.*combines.*write settings/, fn ->
+        Client.lens!("systems")
       end
     end
   end
@@ -304,13 +280,14 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     [
       name: name,
       destination: "memory",
+      write: :append,
       ontology: MemoryOntology,
       ingestion: StoreIngestion
     ]
   end
 
   defp valid_replaceable_lens(name) do
-    [name: name, destination: "memory", write: :replace_graph, graph_format: :property_graph]
+    [name: name, destination: "memory", write: :replace_graph]
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
