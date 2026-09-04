@@ -6,7 +6,7 @@ The consumer owns the durable source of truth for Gralkor's domain configuration
 
 The consumer supplies its complete configuration when it starts the agent and replaces that complete configuration after every committed change. Gralkor does not know about the consumer's database, poll it, subscribe to it, or persist a second copy.
 
-This document describes intended behaviour. The current implementation does not yet provide it.
+This document describes the implemented runtime-configuration boundary.
 
 ## Ownership and supervision
 
@@ -235,53 +235,9 @@ Gralkor owns asynchronous execution and in-process retry only after an invocatio
 
 The previously removed `Gralkor.Reflection.Scheduler`, durable journal, trigger fields, and automatic post-ingestion admission remain absent. CaptureBuffer's ingestion-flush retry is unrelated and remains owned by CaptureBuffer.
 
-## YAML removal
+## Structured Reflection definitions
 
-Reflection definitions, including the package-owned generalisations and ERL Reflections, become structured Elixir data.
-
-Remove:
-
-- `:reflection_root`;
-- YAML paths in Reflection declarations;
-- YAML loading from `Gralkor.Reflection.ChainOfThought` and the Reflection registry;
-- packaged YAML Reflection declarations;
-- Reflection tests and documentation that create or load YAML files;
-- the direct `yaml_elixir` dependency when no package code uses it.
-
-There is no YAML fallback. Package-owned structured Reflections are always installed; consumers install only their own Reflections.
-
-## Verified current-state gap
-
-The scheduling-free baseline is complete: the old Scheduler, Journal, and Reflection Supervisor are absent.
-
-The approved runtime design remains intentionally unimplemented. Current production code still:
-
-- starts package services under `Gralkor.Application` rather than one Gralkor runtime beneath each consuming `Jido.AgentServer`;
-- has no per-agent atomic runtime-configuration snapshot or whole-state replacement boundary;
-- resolves Destination, Lens, and Reflection definitions from application configuration and existing registries;
-- represents graph format explicitly;
-- loads Reflection Chains of Thought from YAML and supplies packaged YAML Reflections;
-- exposes synchronous Runner primitives rather than the asynchronous submission and callback boundary;
-- lacks the described source-boundary retry and twenty-four-hour abandonment behaviour;
-- specially validates generalisation lineage against related memory.
-
-These are implementation gaps, not alternate supported behaviour.
-
-## Outside-in implementation sequence
-
-The approved test trees define the future contract. A future implementation session should proceed outside-in:
-
-1. Add failing Functional coverage for per-agent startup, independent snapshots, atomic replacement, invalid-start behaviour, restart, and operation snapshot isolation.
-2. Add failing Functional coverage for the two Lens shapes, fixed graph representation, reserved ontology kinds, and replacement.
-3. Add failing Functional coverage proving Reflection submission does not block and that its invocation callback eventually receives success or failure.
-4. Add failing Functional coverage for independent invocations, 5xx exponential retry, the twenty-four-hour abandonment deadline, immediate 4xx abandonment, and termination with the consuming agent.
-5. Implement the smallest plugin-owned runtime supervisor and atomic per-agent configuration owner, then route Destination, Lens, and Reflection resolution through it.
-6. Replace YAML-backed Reflections with package-owned and consumer-owned structured definitions.
-7. Add the asynchronous Reflection admission, supervised processing, Destination delivery, callback, and retry boundaries.
-8. Remove graph-format configurability and special generalisation-lineage comparison.
-9. Update package documentation and mental-model statements revealed to have drifted, then run focused Functional coverage followed by the complete Functional and Journey verification required by `TEST_STRATEGY.md`.
-
-Any inner Integration or Unit trees should be introduced only when consumer-test pressure reveals a substantive inner subject.
+Reflection definitions, including the package-owned generalisations and ERL Reflections, are structured Elixir data. There is no Reflection file root, path field, or YAML fallback. Package-owned structured Reflections are always installed; consumers install only their own Reflections.
 
 ## Completion conditions
 
