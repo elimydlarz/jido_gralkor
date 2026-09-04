@@ -7,10 +7,10 @@ defmodule Gralkor.Reflection.ChainOfThought do
     defstruct [:label, :directions, :output]
   end
 
-  @enforce_keys [:path, :steps]
-  defstruct [:path, :steps]
+  @enforce_keys [:steps]
+  defstruct [:steps]
 
-  @type t :: %__MODULE__{path: String.t(), steps: [Step.t()]}
+  @type t :: %__MODULE__{steps: [Step.t()]}
 
   def from_config(config) do
     steps =
@@ -35,7 +35,7 @@ defmodule Gralkor.Reflection.ChainOfThought do
       end
 
     case parse_steps(%{"steps" => steps}) do
-      {:ok, parsed} -> {:ok, %__MODULE__{path: nil, steps: parsed}}
+      {:ok, parsed} -> {:ok, %__MODULE__{steps: parsed}}
       {:error, reason} -> {:error, reason}
     end
   end

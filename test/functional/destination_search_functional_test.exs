@@ -611,7 +611,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
             ontology: Gralkor.DefaultOntology
           }
         ],
-        chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "functional", steps: []}
+        chain_of_thought: %Gralkor.Reflection.ChainOfThought{steps: []}
       }
 
       artefact = %Gralkor.Artefact{

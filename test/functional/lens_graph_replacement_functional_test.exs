@@ -215,7 +215,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
             ontology: Gralkor.DefaultOntology
           }
         ],
-        chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "review.yaml", steps: []}
+        chain_of_thought: %Gralkor.Reflection.ChainOfThought{steps: []}
       }
 
       artefact = %Gralkor.Artefact{

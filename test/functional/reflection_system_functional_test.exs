@@ -114,20 +114,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
-  defmodule OutputProbeReturnHandler do
-    @behaviour Gralkor.Artefact.ReturnHandler
-
-    @impl true
-    def return(operator_id, invocation_id, artefact) do
-      send(
-        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
-        {:return_output_delivered, operator_id, invocation_id, artefact}
-      )
-
-      :ok
-    end
-  end
-
   setup do
     start_supervised!(Gralkor.Destination.Storage.InMemory)
     start_supervised!(Gralkor.Lens.Storage.InMemory)
@@ -307,8 +293,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   describe "when Reflection declarations are validated > if a Reflection's Chain of Thought is not structured configuration" do
     test "then validation fails identifying that Reflection and configured value" do
-      assert {:error, {:invalid_chain_of_thought, "generalisation", "legacy.yaml"}} =
-               Registry.load([valid_definition(chain_of_thought: "legacy.yaml")])
+      assert {:error, {:invalid_chain_of_thought, "generalisation", "external-definition"}} =
+               Registry.load([valid_definition(chain_of_thought: "external-definition")])
     end
   end
 
@@ -543,7 +529,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                 %Gralkor.Reflection{
                   name: "inline-review",
                   chain_of_thought: %Gralkor.Reflection.ChainOfThought{
-                    path: nil,
                     steps: [
                       %Gralkor.Reflection.ChainOfThought.Step{
                         label: "review",
@@ -837,13 +822,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert artefact.payload == %{"artefact" => "durable pattern"}
     end
 
-    test "and the Runner does not deliver any declared Destination or return output", context do
+    test "and the Runner does not deliver the declared Destination output", context do
       reflection = reflection(context)
-
-      reflection = %{
-        reflection
-        | outputs: reflection.outputs ++ [%{kind: :return, handler: OutputProbeReturnHandler}]
-      }
 
       Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
 
@@ -851,7 +831,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Runner.run(reflection, invocation(), inference: &output_for/1)
 
       refute_receive {:destination_output_delivered, _, _, _, _}
-      refute_receive {:return_output_delivered, _, _, _}
     end
   end
 

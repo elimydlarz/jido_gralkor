@@ -276,10 +276,9 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       for name <- ["generalisations", "erl"] do
         assert %Gralkor.Reflection{
-                 name: ^name,
-                 chain_of_thought: %Gralkor.Reflection.ChainOfThought{
-                   path: nil,
-                   steps: [_ | _]
+               name: ^name,
+               chain_of_thought: %Gralkor.Reflection.ChainOfThought{
+                 steps: [_ | _]
                  }
                } = JidoGralkor.Runtime.reflection!(agent_server, name)
       end
@@ -704,7 +703,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                      base
                      | chain_of_thought: %{
                          steps: base.chain_of_thought.steps,
-                         path: "legacy.yaml"
+                         path: "external-definition"
                        }
                    }
                  ]
