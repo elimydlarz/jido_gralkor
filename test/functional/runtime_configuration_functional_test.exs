@@ -653,14 +653,19 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  destinations: [],
                  lenses: [],
                  reflections: [
-                   %{base | chain_of_thought: %{steps: base.chain_of_thought.steps, path: "legacy.yaml"}}
+                   %{
+                     base
+                     | chain_of_thought: %{
+                         steps: base.chain_of_thought.steps,
+                         path: "legacy.yaml"
+                       }
+                   }
                  ]
                })
 
       [step] = base.chain_of_thought.steps
 
-      assert {:error,
-              {:unknown_chain_of_thought_step_fields, "review", "review", [:model]}} =
+      assert {:error, {:unknown_chain_of_thought_step_fields, "review", "review", [:model]}} =
                JidoGralkor.Runtime.validate(%{
                  destinations: [],
                  lenses: [],
