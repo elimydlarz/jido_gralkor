@@ -10,6 +10,9 @@ defmodule JidoGralkor.Runtime do
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Reflection.Runner
 
+  @reflection_retry_deadline_ms 86_400_000
+  @maximum_reflection_backoff_ms 3_600_000
+
   def start_link(opts) do
     owner = Keyword.fetch!(opts, :owner)
     GenServer.start_link(__MODULE__, opts, name: via(owner))
@@ -294,21 +297,25 @@ defmodule JidoGralkor.Runtime do
       {:ok, artefact} ->
         output = Enum.find(reflection.outputs, &(&1.kind == :destination))
 
-        case DestinationStorage.put_artefact(
-               output,
-               reflection.name,
-               field(invocation, :operator_id),
-               artefact,
-               opts
-             ) do
-          :ok ->
+        delivery = fn ->
+          DestinationStorage.put_artefact(
+            output,
+            reflection.name,
+            field(invocation, :operator_id),
+            artefact,
+            opts
+          )
+        end
+
+        case retry(delivery, &(&1 == :ok), opts) do
+          {:ok, :ok} ->
             callback.(%{
               invocation_id: field(invocation, :id),
               artefact: artefact,
               outcome: :delivered
             })
 
-          {:error, reason} ->
+          {:abandoned, {:error, reason}} ->
             callback.(%{
               invocation_id: field(invocation, :id),
               artefact: artefact,
@@ -323,6 +330,63 @@ defmodule JidoGralkor.Runtime do
         })
     end
   end
+
+  defp retry(operation, success?, opts) do
+    clock = Keyword.get(opts, :clock, fn -> System.monotonic_time(:millisecond) end)
+    started_at = clock.()
+    retry(operation, success?, opts, clock, started_at, 1_000)
+  end
+
+  defp retry(operation, success?, opts, clock, started_at, delay) do
+    result = operation.()
+
+    cond do
+      success?.(result) ->
+        {:ok, result}
+
+      retryable_server_failure?(result) and
+          clock.() - started_at + delay <
+            Keyword.get(opts, :retry_deadline_ms, @reflection_retry_deadline_ms) ->
+        sleep = Keyword.get(opts, :sleep, &Process.sleep/1)
+        sleep.(delay)
+
+        retry(
+          operation,
+          success?,
+          opts,
+          clock,
+          started_at,
+          min(delay * 2, @maximum_reflection_backoff_ms)
+        )
+
+      true ->
+        {:abandoned, result}
+    end
+  end
+
+  defp retryable_server_failure?({:error, reason}), do: server_status(reason) in 500..599
+  defp retryable_server_failure?(_result), do: false
+
+  defp server_status(%{status: status}), do: normalize_status(status)
+  defp server_status(%{"status" => status}), do: normalize_status(status)
+
+  defp server_status(value) when is_tuple(value) do
+    value |> Tuple.to_list() |> Enum.find_value(&server_status/1)
+  end
+
+  defp server_status(value) when is_list(value), do: Enum.find_value(value, &server_status/1)
+  defp server_status(_value), do: nil
+
+  defp normalize_status(status) when is_integer(status), do: status
+
+  defp normalize_status(status) when is_binary(status) do
+    case Integer.parse(status) do
+      {integer, ""} -> integer
+      _ -> nil
+    end
+  end
+
+  defp normalize_status(_status), do: nil
 
   defp field(map, key) when is_map(map),
     do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
