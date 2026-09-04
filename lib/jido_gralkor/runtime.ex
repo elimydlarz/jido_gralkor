@@ -544,5 +544,13 @@ defmodule JidoGralkor.Runtime do
 
   defp has_field?(keyword, key) when is_list(keyword), do: Keyword.has_key?(keyword, key)
 
+  defp non_blank?(value), do: is_binary(value) and String.trim(value) != ""
+
+  defp duplicate(values) do
+    values
+    |> Enum.frequencies()
+    |> Enum.find_value(fn {value, count} -> if count > 1, do: value end)
+  end
+
   defp via(owner), do: {:global, {__MODULE__, owner}}
 end
