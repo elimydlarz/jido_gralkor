@@ -128,5 +128,32 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  reflections: []
                })
     end
+
+    test "and that agent's previously active snapshot remains unchanged" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-preserved-replacement",
+           register_global: false}
+        )
+
+      active = %{
+        destinations: [%{name: "active"}],
+        lenses: [],
+        reflections: []
+      }
+
+      assert :ok = JidoGralkor.Runtime.replace(agent_server, active)
+
+      assert {:error, {:invalid_collection, :lenses, :not_a_list}} =
+               JidoGralkor.Runtime.replace(agent_server, %{
+                 destinations: [],
+                 lenses: :not_a_list,
+                 reflections: []
+               })
+
+      assert active == JidoGralkor.Runtime.snapshot(agent_server)
+    end
   end
 end
