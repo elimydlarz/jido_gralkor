@@ -223,8 +223,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
         [
           name: "observations",
           destination: "observations",
-          write: :replace_graph,
-          graph_format: :property_graph
+          write: :replace_graph
         ]
       ])
 
@@ -238,8 +237,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
         [
           name: "observations",
           destination: "observations",
-          write: :replace_graph,
-          graph_format: :property_graph
+          write: :replace_graph
         ]
       ])
 

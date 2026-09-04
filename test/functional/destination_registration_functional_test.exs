@@ -264,7 +264,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
   end
 
   defp replaceable_lens(name) do
-    [name: name, destination: "shared", write: :replace_graph, graph_format: :property_graph]
+    [name: name, destination: "shared", write: :replace_graph]
   end
 
   defp replacement(node_id, lens) do
@@ -272,11 +272,8 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       operator_id: "operator-one",
       lens: lens,
       graph: %Gralkor.Graph{
-        format: :property_graph,
-        data: %{
-          nodes: [%{id: node_id, labels: ["Thing"], properties: %{}}],
-          relationships: []
-        }
+        nodes: [%{id: node_id, labels: ["Thing"], properties: %{}}],
+        relationships: []
       }
     }
   end

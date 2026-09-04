@@ -510,17 +510,13 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         operator_id: "operator-one",
         lens: %Gralkor.Lens.Replaceable{
           name: "first-graph",
-          destination: destination,
-          graph_format: :property_graph
+          destination: destination
         }
       }
 
       graph = %Gralkor.Graph{
-        format: :property_graph,
-        data: %{
-          nodes: [%{id: "atlas", labels: ["Project"], properties: %{title: "Atlas"}}],
-          relationships: []
-        }
+        nodes: [%{id: "atlas", labels: ["Project"], properties: %{title: "Atlas"}}],
+        relationships: []
       }
 
       assert :ok = Gralkor.Lens.Store.replace_graph(store, graph)

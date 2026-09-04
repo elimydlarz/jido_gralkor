@@ -148,8 +148,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       [
         name: "systems",
         destination: "operator",
-        write: :replace_graph,
-        graph_format: :property_graph
+        write: :replace_graph
       ],
       [
         name: "published",
@@ -1168,28 +1167,25 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       operator_id: @operator_one,
       lens: "systems",
       graph: %Graph{
-        format: :property_graph,
-        data: %{
-          nodes: [
-            replacement_entity("payments-#{suffix}", "Payments"),
-            replacement_entity("target-#{suffix}", target)
-          ],
-          relationships: [
-            %{
-              from: "payments-#{suffix}",
-              to: "target-#{suffix}",
-              type: "RELATES_TO",
-              properties: %{
-                uuid: "memory-adventure-settlement-#{suffix}",
-                group_id: "operator/#{@operator_one}",
-                name: "SETTLES_THROUGH",
-                fact: "Payments settles through #{target}.",
-                episodes: [],
-                created_at: "2026-08-11T00:00:00Z"
-              }
+        nodes: [
+          replacement_entity("payments-#{suffix}", "Payments"),
+          replacement_entity("target-#{suffix}", target)
+        ],
+        relationships: [
+          %{
+            from: "payments-#{suffix}",
+            to: "target-#{suffix}",
+            type: "RELATES_TO",
+            properties: %{
+              uuid: "memory-adventure-settlement-#{suffix}",
+              group_id: "operator/#{@operator_one}",
+              name: "SETTLES_THROUGH",
+              fact: "Payments settles through #{target}.",
+              episodes: [],
+              created_at: "2026-08-11T00:00:00Z"
             }
-          ]
-        }
+          }
+        ]
       }
     }
   end
