@@ -38,17 +38,20 @@ defmodule Gralkor.Reflection.Registry do
     outputs = field(definition, :outputs)
     chain_of_thought = field(definition, :chain_of_thought)
 
-    with :ok <- validate_outputs(name, outputs),
-         {:ok, chain_of_thought} <- resolve_chain_of_thought(name, chain_of_thought) do
-      {:ok,
-       %Reflection{
-         name: name,
-         chain_of_thought: chain_of_thought,
-         outputs: Enum.map(outputs, &resolve_output(name, &1))
-       }}
+    try do
+      with :ok <- validate_outputs(name, outputs),
+           {:ok, chain_of_thought} <- resolve_chain_of_thought(name, chain_of_thought) do
+        {:ok,
+         %Reflection{
+           name: name,
+           chain_of_thought: chain_of_thought,
+           outputs: Enum.map(outputs, &resolve_output(name, &1))
+         }}
+      end
+    rescue
+      error in ArgumentError ->
+        {:error, {:invalid_destination, name, Exception.message(error)}}
     end
-  rescue
-    error in ArgumentError -> {:error, {:invalid_destination, name, Exception.message(error)}}
   end
 
   defp load_one(definition), do: {:error, {:invalid_reflection, definition}}
