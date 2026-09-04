@@ -389,18 +389,14 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
 
     test "and the plugin does not redefine the selected Lens's Destination or ingestion process" do
-      assert {:ok, %{lens: lens}} =
+      assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
 
-      assert %Gralkor.Lens{
-               name: "observations",
-               destination: %Gralkor.Destination{name: "observations"},
-               ontology: MemoryOntology,
-               ingestion: StoreIngestion
-             } = lens
+      assert plugin_state.ingestion_lens == "observations"
+      refute Map.has_key?(plugin_state, :lens)
     end
   end
 
