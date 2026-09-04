@@ -670,7 +670,7 @@ Multiple Reflections and Lenses may save to the same Destination. Search selects
 
 ```elixir
 {:ok, artefacts} =
-  Gralkor.Client.search(%Gralkor.Search{
+  Gralkor.Client.search(agent_server, %Gralkor.Search{
     operator_id: "operator-42",
     query: "What release approaches have worked?",
     destinations: ["operator"],
@@ -679,7 +679,7 @@ Multiple Reflections and Lenses may save to the same Destination. Search selects
   })
 
 {:ok, [artefact]} =
-  Gralkor.Client.search(%Gralkor.Search{
+  Gralkor.Client.search(agent_server, %Gralkor.Search{
     operator_id: "operator-42",
     query: "",
     destinations: ["operator"],
@@ -744,15 +744,16 @@ The Jido glue:
 
 The embedded Gralkor adapter (under `lib/gralkor/`):
 
-- `Gralkor.Client` — adapter behaviour plus the public `ingest/1`, `replace/1`, and Destination-based `search/1` boundary.
+- `Gralkor.Client` — adapter behaviour plus runtime-targeted `ingest/2`, `replace/2`, `search/2`, capture, and asynchronous `reflect/5` boundaries; legacy application-registry arities remain compatibility surfaces.
 - `Gralkor.Client.Native` — production adapter; wires `Recall`, `CaptureBuffer`, and `GraphitiPool`.
 - `Gralkor.Client.InMemory` — test twin.
 - `Gralkor.Destination` and `Gralkor.Destination.Registry` — first-class named graphs shared by Lenses and Reflections. The full agreed model is in [DESTINATIONS.md](DESTINATIONS.md).
 - `Gralkor.Lens`, `Gralkor.Lens.Replaceable`, `Gralkor.Ingest`, `Gralkor.IngestedRepresentation`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Search` — resolved ingestion models, completed-ingestion representation, and consumer request values.
 - `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — append, replacement, and search capabilities for exact Destination graph identities.
 - `Gralkor.Lens.Ingestion.Store` — the built-in straight-through ingestion process.
-- `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, and `Gralkor.Reflection.Runner` — validated YAML declarations and synchronous, consumer-invoked synthesis.
-- `Gralkor.Artefact`, `Gralkor.Artefact.ReturnHandler`, and `Gralkor.Destination.Storage` — producer-independent artefacts plus primitives the consumer uses to deliver return and Destination outputs.
+- `JidoGralkor.Runtime` — the per-AgentServer atomic configuration snapshot and supervisor for admitted Reflection production, Destination delivery, retry, and callback.
+- `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, and `Gralkor.Reflection.Runner` — validated structured declarations and the inner ordered-inference engine.
+- `Gralkor.Artefact` and `Gralkor.Destination.Storage` — producer-independent artefacts and their canonical Destination storage boundary.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
 - `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Format`, `Gralkor.Config`, and `Gralkor.Message` — the embedded capture, recall, and Graphiti pipelines.
 
