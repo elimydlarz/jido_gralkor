@@ -7,8 +7,6 @@ defmodule Gralkor.Reflection.Runner do
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Search
 
-  @packaged_generalisation_path "priv/reflections/generalisations.yaml"
-
   def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
     inference = Keyword.get(opts, :inference, &default_inference/1)
     tool_executor = Keyword.get(opts, :tool_executor, &default_tool_executor/2)
@@ -175,12 +173,7 @@ defmodule Gralkor.Reflection.Runner do
     end
   end
 
-  defp packaged_generalisation?(%Reflection{
-         name: "generalisations",
-         chain_of_thought: %ChainOfThought{path: path}
-       }) do
-    path == Application.app_dir(:jido_gralkor, @packaged_generalisation_path)
-  end
+  defp packaged_generalisation?(%Reflection{name: "generalisations"}), do: true
 
   defp packaged_generalisation?(%Reflection{}), do: false
 
