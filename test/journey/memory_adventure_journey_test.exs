@@ -802,7 +802,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         @operator_one,
         ["operator"],
         :episodes,
-        "Aurora Borealis Cygnus reversible canary",
+        "Aurora reversible canary deployment",
         &contains_episode?(&1, "aurora")
       )
 
