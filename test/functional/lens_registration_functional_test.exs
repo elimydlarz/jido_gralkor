@@ -214,6 +214,16 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       assert_raise ArgumentError, ~r/default.*operator/, fn -> Client.lens!("default") end
     end
 
+    test "and a removed graph-format field is identified with its Lens" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        valid_replaceable_lens("systems") ++ [graph_format: :property_graph]
+      ])
+
+      assert_raise ArgumentError, ~r/systems.*graph_format.*unsupported/, fn ->
+        Client.lens!("systems")
+      end
+    end
+
     test "and an invalid Lens definition shape is identified" do
       for definition <- [%{name: "observations"}, [:not_a_keyword_entry]] do
         Application.put_env(:jido_gralkor, :lenses, [definition])
