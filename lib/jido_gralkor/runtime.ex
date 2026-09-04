@@ -293,8 +293,10 @@ defmodule JidoGralkor.Runtime do
   defp invocation_id(invocation), do: {:error, {:invalid_invocation, invocation}}
 
   defp process_reflection(reflection, invocation, callback, opts) do
-    case Runner.run(reflection, invocation, opts) do
-      {:ok, artefact} ->
+    production = fn -> Runner.run(reflection, invocation, opts) end
+
+    case retry(production, &match?({:ok, _artefact}, &1), opts) do
+      {:ok, {:ok, artefact}} ->
         output = Enum.find(reflection.outputs, &(&1.kind == :destination))
 
         delivery = fn ->
@@ -323,10 +325,17 @@ defmodule JidoGralkor.Runtime do
             })
         end
 
-      {:error, failure} ->
+      {:abandoned, {:error, failure}} ->
+        outcome =
+          if retryable_server_failure?({:error, failure}) do
+            {:abandoned, %{stage: :production, reason: failure}}
+          else
+            {:production_failed, failure}
+          end
+
         callback.(%{
           invocation_id: field(invocation, :id),
-          outcome: {:production_failed, failure}
+          outcome: outcome
         })
     end
   end
