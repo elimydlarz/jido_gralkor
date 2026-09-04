@@ -95,8 +95,13 @@ An illustrative complete consumer value is:
   reflections: [
     %{
       name: "release-review",
-      destination: "project",
-      ontology: MyApp.ReleaseOntology,
+      outputs: [
+        %{
+          kind: :destination,
+          destination: "project",
+          ontology: MyApp.ReleaseOntology
+        }
+      ],
       chain_of_thought: %{
         steps: [
           %{
@@ -127,7 +132,7 @@ A replaceable Lens declares `write: :replace_graph` and a Destination. It accept
 
 Property graph is Gralkor's only graph representation. There is no graph-format field or format selection in Lens configuration, replacement requests, or `Gralkor.Graph`.
 
-Every Reflection declares one Destination and an inline Chain of Thought. A Reflection invocation supplies its callback; callbacks are not part of the reusable Reflection definition.
+Every Reflection declares exactly one Destination output and an inline Chain of Thought. A Reflection invocation supplies its callback; callbacks are not part of the reusable Reflection definition.
 
 The existing Chain-of-Thought rules remain: steps are ordered and non-empty; labels and directions are non-blank; output contracts are non-empty and typed; output names are unique across steps; and interpolation can reference only an output declared by an earlier step.
 
