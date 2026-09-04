@@ -8,6 +8,19 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   alias Gralkor.Reflection.Runner
   alias Gralkor.Search
 
+  defmodule AsyncConsumerAgent do
+    use Jido.Agent,
+      name: "reflection_async_consumer",
+      default_plugins: false,
+      plugins: [
+        {JidoGralkor.Plugin,
+         %{
+           agent_name: "Reflection Async Consumer",
+           runtime_config: %{destinations: [], lenses: [], reflections: []}
+         }}
+      ]
+  end
+
   defmodule ReflectionOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
   end
@@ -912,6 +925,51 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when a consumer triggers a named Reflection with an invocation callback" do
+    test "then submission returns its invocation identifier without waiting for the Reflection to finish" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent,
+           id: "reflection-async-submission",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+      release = make_ref()
+
+      inference = fn _request ->
+        send(test_pid, :reflection_inference_started)
+
+        receive do
+          {^release, :continue} -> {:ok, %{output: %{"summary" => "complete"}}}
+        end
+      end
+
+      callback = fn result -> send(test_pid, {:reflection_callback, result}) end
+
+      submission =
+        Task.async(fn ->
+          Client.reflect(
+            agent_server,
+            "review",
+            async_reflection_invocation(),
+            callback,
+            inference: inference
+          )
+        end)
+
+      assert_receive :reflection_inference_started
+      assert {:ok, {:ok, "reflection-invocation-one"}} = Task.yield(submission, 100)
+      refute_receive {:reflection_callback, _}
+
+      send(Process.whereis(JidoGralkor.Runtime), {release, :continue})
+    end
+  end
+
   describe "if a Reflection's Chain of Thought completes without a valid final structured output" do
     test "then the Reflection fails identifying its name and missing artefact", context do
       assert {:error, %{reflection: "generalisation", reason: :missing_artefact}} =
@@ -1093,6 +1151,37 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
           result: :ok
         }
       ]
+    }
+  end
+
+  defp async_reflection_configuration do
+    %{
+      destinations: [%{name: "reviews"}],
+      lenses: [],
+      reflections: [
+        %{
+          name: "review",
+          outputs: [%{kind: :destination, destination: "reviews"}],
+          chain_of_thought: %{
+            steps: [
+              %{
+                label: "review",
+                directions: "Review supplied information.",
+                output: %{"summary" => "string"}
+              }
+            ]
+          }
+        }
+      ]
+    }
+  end
+
+  defp async_reflection_invocation do
+    %{
+      id: "reflection-invocation-one",
+      operator_id: "operator-one",
+      invocation_context: %{},
+      representations: []
     }
   end
 
