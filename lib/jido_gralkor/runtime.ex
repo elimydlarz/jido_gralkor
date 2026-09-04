@@ -143,7 +143,8 @@ defmodule JidoGralkor.Runtime do
     do: {:error, {:invalid_configuration, configuration}}
 
   defp resolve_configuration(configuration) do
-    with :ok <- validate_reserved_names(configuration),
+    with :ok <- validate_definition_fields(configuration),
+         :ok <- validate_reserved_names(configuration),
          :ok <- validate_lens_shapes(configuration.lenses),
          :ok <- validate_reserved_entity_kinds(configuration) do
       destinations =
@@ -218,6 +219,45 @@ defmodule JidoGralkor.Runtime do
     error ->
       {:error, {:invalid_runtime_configuration, Exception.message(error)}}
   end
+
+  defp validate_definition_fields(configuration) do
+    allowed = %{
+      destinations: [:name],
+      lenses: [:name, :destination, :write, :ingestion, :ontology],
+      reflections: [:name, :outputs, :chain_of_thought]
+    }
+
+    Enum.reduce_while(allowed, :ok, fn {collection, fields}, :ok ->
+      case Enum.find_value(Map.fetch!(configuration, collection), fn definition ->
+             case definition_keys(definition) do
+               {:ok, keys} ->
+                 case Enum.reject(keys, &known_field?(&1, fields)) do
+                   [] -> nil
+                   unknown ->
+                     {:unknown_definition_fields, collection, field(definition, :name), unknown}
+                 end
+
+               :error ->
+                 {:invalid_definition, collection, definition}
+             end
+           end) do
+        nil -> {:cont, :ok}
+        reason -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp definition_keys(definition) when is_map(definition), do: {:ok, Map.keys(definition)}
+
+  defp definition_keys(definition) when is_list(definition) do
+    if Keyword.keyword?(definition), do: {:ok, Keyword.keys(definition)}, else: :error
+  end
+
+  defp definition_keys(_definition), do: :error
+
+  defp known_field?(key, fields) when is_atom(key), do: key in fields
+  defp known_field?(key, fields) when is_binary(key), do: key in Enum.map(fields, &Atom.to_string/1)
+  defp known_field?(_key, _fields), do: false
 
   defp validate_reserved_names(configuration) do
     packaged = %{
