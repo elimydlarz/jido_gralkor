@@ -107,35 +107,14 @@ defmodule JidoGralkor.PluginTest do
   end
 
   describe "when mount selects an ingestion Lens" do
-    test "then that selection is resolved against the application Lens registry and stored on the plugin state" do
+    test "then the selected Lens name is stored on the plugin state without copying its definition" do
       configure_lenses()
 
-      assert {:ok,
-              %{
-                agent_name: "Susu",
-                ingestion_lens: "observations",
-                lens: %Gralkor.Lens{
-                  name: "observations",
-                  destination: %Gralkor.Destination{name: "memory"},
-                  ontology: LensOntology,
-                  ingestion: Gralkor.Lens.Ingestion.Store
-                }
-              }} =
+      assert {:ok, %{agent_name: "Susu", ingestion_lens: "observations"}} =
                Plugin.mount(%{id: "operator-one", state: %{}},
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
-    end
-
-    test "and the resolved Lens keeps the Destination and ingestion the registry declared for it, redefining neither" do
-      state = lens_plugin_state()
-
-      assert state.lens == %Gralkor.Lens{
-               name: "observations",
-               destination: %Gralkor.Destination{name: "memory"},
-               ontology: LensOntology,
-               ingestion: Gralkor.Lens.Ingestion.Store
-             }
     end
   end
 
@@ -338,6 +317,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert tool_context == %{
                agent_name: "Susu",
+               gralkor_runtime: self(),
                lens: "observations",
                session_id: "thread-one"
              }
@@ -358,19 +338,21 @@ defmodule JidoGralkor.PluginTest do
 
       assert tool_context == %{
                agent_name: "Susu",
+               gralkor_runtime: self(),
                lens: "observations"
              }
     end
   end
 
   describe "when an agent turn begins > while no thread has committed to agent state" do
-    test "then only the mounted agent name is planted on the tool context, with no session id" do
+    test "then the mounted agent name and Gralkor runtime target are planted on the tool context, with no session id" do
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
       assert {:ok, {:continue, %Signal{data: data}}} =
                Plugin.handle_signal(signal, context(agent("user-abc", thread_id: nil)))
 
       assert data.tool_context.agent_name == "TestAgent"
+      assert data.tool_context.gralkor_runtime == self()
       refute Map.has_key?(data.tool_context, :session_id)
     end
 

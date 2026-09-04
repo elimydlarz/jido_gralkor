@@ -24,7 +24,6 @@ if mount is given a blank agent name
 when mount selects an ingestion Lens
   then the selected Lens name is stored on the plugin state without copying its definition
   and each ingestion resolves that name from the agent's current runtime-configuration snapshot when ingestion begins
-  and the resolved Lens keeps the Destination and ingestion the snapshot declared for it, redefining neither
   if the ingestion Lens is unknown
     then mounting raises an ArgumentError identifying the unknown Lens
   if the removed `:default_lens` option is supplied
@@ -37,6 +36,7 @@ when an agent turn begins
   while a thread has committed to agent state
     then the session id planted on the signal's tool context is that committed thread's id rather than one the plugin mints
     and the mounted agent name is planted on the tool context beside it
+    and the owning AgentServer is planted as the Gralkor runtime target
     and no recall is issued on the plugin's own initiative
     and the user's query is left untouched on the signal
     and unrelated incoming tool-context fields remain alongside fields planted by the plugin
@@ -46,7 +46,7 @@ when an agent turn begins
       if the selected Lens is unknown or non-binary
         then the callback raises identifying the invalid Lens
   while no thread has committed to agent state
-    then only the mounted agent name is planted on the tool context, with no session id
+    then the mounted agent name and Gralkor runtime target are planted on the tool context, with no session id
     and no recall is issued on the plugin's own initiative
   where the plugin was mounted with an ingestion Lens
     while a thread has committed to agent state
