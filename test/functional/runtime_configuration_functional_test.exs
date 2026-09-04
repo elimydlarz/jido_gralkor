@@ -388,6 +388,9 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
   describe "if the consumer supplies invalid durable configuration while starting an agent" do
     test "then the Gralkor plugin fails to start for that agent" do
+      previous = Process.flag(:trap_exit, true)
+      on_exit(fn -> Process.flag(:trap_exit, previous) end)
+
       assert {:error, _reason} =
                Jido.AgentServer.start_link(
                  agent: InvalidConsumerAgent,
