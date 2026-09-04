@@ -24,6 +24,30 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
   end
 
+  defmodule EntityOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity Entity do
+      field :value, :string
+    end
+  end
+
+  defmodule EpisodicOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity Episodic do
+      field :value, :string
+    end
+  end
+
+  defmodule CommunityOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity Community do
+      field :value, :string
+    end
+  end
+
   defmodule RecordingIngestion do
     @behaviour Gralkor.Lens.Ingestion
 
@@ -484,6 +508,42 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  ],
                  reflections: []
                })
+    end
+  end
+
+  describe "if an ontology declares a custom entity kind named `Entity`, `Episodic`, or `Community`" do
+    test "then replacement fails identifying the entity kind reserved by Graphiti" do
+      for {kind, ontology} <- [
+            {"Entity", EntityOntology},
+            {"Episodic", EpisodicOntology},
+            {"Community", CommunityOntology}
+          ] do
+        agent_server =
+          start_supervised!(
+            Supervisor.child_spec(
+              {Jido.AgentServer,
+               agent: ConsumerAgent,
+               id: "runtime-configuration-reserved-#{kind}",
+               register_global: false},
+              id: {:runtime_configuration_reserved, kind}
+            )
+          )
+
+        assert {:error, {:reserved_entity_kind, ^kind}} =
+                 JidoGralkor.Runtime.replace(agent_server, %{
+                   destinations: [%{name: "project"}],
+                   lenses: [
+                     %{
+                       name: "observations",
+                       destination: "project",
+                       write: :append,
+                       ingestion: RecordingIngestion,
+                       ontology: ontology
+                     }
+                   ],
+                   reflections: []
+                 })
+      end
     end
   end
 
