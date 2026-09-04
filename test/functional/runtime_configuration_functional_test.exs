@@ -557,6 +557,66 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       assert_receive {:runtime_search, "second-memory"}
     end
+
+    test "then agentic memory search uses the targeted agent's Destination definitions" do
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        RecordingDestinationStorage
+      )
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent, id: "runtime-configuration-agentic-search", register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 destination_configuration("agent-memory")
+               )
+
+      assert {:ok, %{result: "[]"}} =
+               JidoGralkor.Actions.MemorySearch.run(
+                 %{query: "memory", destinations: ["agent-memory"], lenses: []},
+                 %{agent_id: "operator-one", gralkor_runtime: agent_server}
+               )
+
+      assert_receive {:runtime_search, "agent-memory"}
+    end
+  end
+
+  describe "when an agentic memory addition begins" do
+    test "then it uses the targeted agent's current ingestion Lens" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent, id: "runtime-configuration-agentic-add", register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 ingestion_configuration("agent-memory")
+               )
+
+      assert {:ok, %{result: "Ingesting."}} =
+               JidoGralkor.Actions.MemoryAdd.run(
+                 %{
+                   content: "runtime-directed insight",
+                   source_kind: :document,
+                   source_description: "functional"
+                 },
+                 %{
+                   agent_id: "operator-one",
+                   lens: "observations",
+                   gralkor_runtime: agent_server
+                 }
+               )
+
+      assert_receive {:runtime_ingestion, "agent-memory"}
+    end
   end
 
   describe "when named graph replacement begins" do
