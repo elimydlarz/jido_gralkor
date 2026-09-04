@@ -12,6 +12,30 @@ defmodule Gralkor.Reflection.ChainOfThought do
 
   @type t :: %__MODULE__{path: String.t(), steps: [Step.t()]}
 
+  def from_config(config) do
+    steps =
+      config
+      |> field(:steps)
+      |> case do
+        definitions when is_list(definitions) ->
+          Enum.map(definitions, fn definition ->
+            %{
+              "label" => field(definition, :label),
+              "directions" => field(definition, :directions),
+              "output" => field(definition, :output)
+            }
+          end)
+
+        invalid ->
+          invalid
+      end
+
+    case parse_steps(%{"steps" => steps}) do
+      {:ok, parsed} -> {:ok, %__MODULE__{path: nil, steps: parsed}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   def load(path) do
     with {:ok, yaml} <- YamlElixir.read_from_file(path),
          {:ok, steps} <- parse_steps(yaml) do
@@ -222,4 +246,10 @@ defmodule Gralkor.Reflection.ChainOfThought do
   defp matches?(_, _), do: false
 
   defp non_blank?(value), do: is_binary(value) and String.trim(value) != ""
+
+  defp field(map, key) when is_map(map),
+    do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
+
+  defp field(keyword, key) when is_list(keyword), do: Keyword.get(keyword, key)
+  defp field(_, _), do: nil
 end
