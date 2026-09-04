@@ -438,9 +438,61 @@ defmodule JidoGralkor.Runtime do
   end
 
   defp validate_chain_of_thought(name, definition) do
-    case ChainOfThought.from_config(field(definition, :chain_of_thought)) do
-      {:ok, chain_of_thought} -> {:ok, chain_of_thought}
-      {:error, reason} -> {:error, {:invalid_chain_of_thought, name, reason}}
+    configuration = field(definition, :chain_of_thought)
+
+    cond do
+      is_nil(configuration) ->
+        {:error, {:missing_chain_of_thought, name}}
+
+      not definition_shape?(configuration) ->
+        {:error, {:invalid_chain_of_thought, name, configuration}}
+
+      unknown = unknown_fields(configuration, [:steps]) ->
+        {:error, {:unknown_chain_of_thought_fields, name, unknown}}
+
+      nested = unknown_step_fields(configuration) ->
+        {label, fields} = nested
+        {:error, {:unknown_chain_of_thought_step_fields, name, label, fields}}
+
+      true ->
+        case ChainOfThought.from_config(configuration) do
+          {:ok, chain_of_thought} -> {:ok, chain_of_thought}
+          {:error, reason} -> {:error, {:invalid_chain_of_thought, name, reason}}
+        end
+    end
+  end
+
+  defp definition_shape?(value) when is_map(value), do: true
+  defp definition_shape?(value) when is_list(value), do: Keyword.keyword?(value)
+  defp definition_shape?(_value), do: false
+
+  defp unknown_fields(definition, allowed) do
+    case definition_keys(definition) do
+      {:ok, keys} ->
+        case Enum.reject(keys, &known_field?(&1, allowed)) do
+          [] -> nil
+          unknown -> unknown
+        end
+
+      :error ->
+        nil
+    end
+  end
+
+  defp unknown_step_fields(configuration) do
+    case field(configuration, :steps) do
+      steps when is_list(steps) ->
+        Enum.find_value(steps, fn step ->
+          if definition_shape?(step) do
+            case unknown_fields(step, [:label, :directions, :output]) do
+              nil -> nil
+              fields -> {field(step, :label), fields}
+            end
+          end
+        end)
+
+      _ ->
+        nil
     end
   end
 
