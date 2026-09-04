@@ -208,7 +208,6 @@ defmodule JidoGralkor.Runtime do
     do: Map.has_key?(map, key) or Map.has_key?(map, Atom.to_string(key))
 
   defp has_field?(keyword, key) when is_list(keyword), do: Keyword.has_key?(keyword, key)
-  defp has_field?(_, _), do: false
 
   defp via(owner), do: {:global, {__MODULE__, owner}}
 end
