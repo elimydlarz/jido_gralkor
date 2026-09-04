@@ -2,9 +2,11 @@ defmodule JidoGralkor.Actions.MemorySearch do
   @moduledoc """
   ReAct tool the LLM can call to search long-term memory.
 
-  Calls `Gralkor.Client.search/1` with the current operator and the optional
-  Destination and Lens selectors supplied for this invocation. Search does not
-  depend on the ingestion Lens or on a committed conversation thread.
+  Calls runtime-targeted `Gralkor.Client.search/2` with the current operator and
+  the optional Destination and Lens selectors supplied for this invocation. A
+  direct action invocation without a mounted runtime uses the compatibility
+  `Gralkor.Client.search/1` boundary. Search does not depend on the ingestion
+  Lens or on a committed conversation thread.
 
   Short-circuits with an explicit non-result message when:
 
