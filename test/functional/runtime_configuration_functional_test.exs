@@ -841,7 +841,8 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  destination_configuration("agent-memory")
                )
 
-      callback = fn result -> send(self(), {:generalisation_callback, result}) end
+      test_pid = self()
+      callback = fn result -> send(test_pid, {:generalisation_callback, result}) end
 
       inference = fn
         %{step: %{label: "inspect-world"}} ->

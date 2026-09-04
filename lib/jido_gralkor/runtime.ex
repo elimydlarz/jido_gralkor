@@ -105,7 +105,7 @@ defmodule JidoGralkor.Runtime do
            {:ok, reflection} <- Map.fetch(state.definitions.reflections, name),
            {:ok, _task} <-
              Task.Supervisor.start_child(state.reflection_supervisor, fn ->
-               process_reflection(reflection, invocation, callback, opts)
+               process_reflection(reflection, invocation, callback, opts, state.owner)
              end) do
         {:ok, invocation_id}
       else
@@ -625,8 +625,9 @@ defmodule JidoGralkor.Runtime do
       else: {:error, {:invalid_operator_id, operator_id}}
   end
 
-  defp process_reflection(reflection, invocation, callback, opts) do
-    production = fn -> Runner.run(reflection, invocation, opts) end
+  defp process_reflection(reflection, invocation, callback, opts, runtime_owner) do
+    production_opts = Keyword.put(opts, :runtime_owner, runtime_owner)
+    production = fn -> Runner.run(reflection, invocation, production_opts) end
 
     case retry(production, &match?({:ok, _artefact}, &1), opts) do
       {:ok, {:ok, artefact}} ->

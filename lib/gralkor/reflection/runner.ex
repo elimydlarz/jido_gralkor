@@ -13,7 +13,7 @@ defmodule Gralkor.Reflection.Runner do
     tools = Keyword.get(opts, :tools, [])
     tool_context = Keyword.get(opts, :tool_context, %{})
 
-    case related_memory(reflection, ingestion) do
+    case related_memory(reflection, ingestion, opts) do
       {:ok, stored_information} ->
         run_steps(
           reflection,
@@ -95,15 +95,15 @@ defmodule Gralkor.Reflection.Runner do
     end
   end
 
-  defp related_memory(%Reflection{} = reflection, ingestion) do
+  defp related_memory(%Reflection{} = reflection, ingestion, opts) do
     if packaged_generalisation?(reflection) do
-      search_related_memory(ingestion)
+      search_related_memory(ingestion, opts)
     else
       {:ok, []}
     end
   end
 
-  defp search_related_memory(ingestion) do
+  defp search_related_memory(ingestion, opts) do
     representations = representations(ingestion)
 
     query =
@@ -112,11 +112,16 @@ defmodule Gralkor.Reflection.Runner do
       |> Enum.map(&render_value/1)
       |> Enum.join("\n")
 
-    Client.search(%Search{
+    request = %Search{
       operator_id: field(ingestion, :operator_id),
       query: query,
       result_type: :episodes
-    })
+    }
+
+    case Keyword.fetch(opts, :runtime_owner) do
+      {:ok, runtime_owner} -> Client.search(runtime_owner, request)
+      :error -> Client.search(request)
+    end
   end
 
   defp build_artefact(reflection, ingestion, outputs, final, opts) do
