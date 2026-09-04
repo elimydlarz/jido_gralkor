@@ -27,18 +27,17 @@ surface_files=(
   lib/gralkor/lens/ingestion/store.ex
   lib/gralkor/lens/store.ex
   lib/gralkor/artefact.ex
-  lib/gralkor/artefact/return_handler.ex
   lib/gralkor/reflection.ex
   lib/gralkor/reflection/chain_of_thought.ex
+  lib/gralkor/reflection/packaged.ex
   lib/gralkor/reflection/registry.ex
   lib/gralkor/reflection/runner.ex
   lib/gralkor/reflection/scheduler.ex
   lib/gralkor/reflection/store.ex
   lib/gralkor/ontology.ex
   lib/gralkor/python.ex
-  priv/reflections/generalisations.yaml
-  priv/reflections/erl.yaml
   lib/jido_gralkor/plugin.ex
+  lib/jido_gralkor/runtime.ex
   lib/jido_gralkor/re_act.ex
   lib/jido_gralkor/lifecycle.ex
   lib/jido_gralkor/context_rotator.ex
