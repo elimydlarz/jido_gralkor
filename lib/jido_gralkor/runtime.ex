@@ -127,18 +127,25 @@ defmodule JidoGralkor.Runtime do
   end
 
   defp validate_configuration(configuration) when is_map(configuration) do
-    Enum.reduce_while([:destinations, :lenses, :reflections], :ok, fn collection, :ok ->
-      case Map.fetch(configuration, collection) do
-        {:ok, definitions} when is_list(definitions) ->
-          {:cont, :ok}
+    collections = [:destinations, :lenses, :reflections]
+    unknown = Map.keys(configuration) -- collections
 
-        {:ok, invalid} ->
-          {:halt, {:error, {:invalid_collection, collection, invalid}}}
+    if unknown != [] do
+      {:error, {:unknown_configuration_fields, unknown}}
+    else
+      Enum.reduce_while(collections, :ok, fn collection, :ok ->
+        case Map.fetch(configuration, collection) do
+          {:ok, definitions} when is_list(definitions) ->
+            {:cont, :ok}
 
-        :error ->
-          {:halt, {:error, {:missing_collection, collection}}}
-      end
-    end)
+          {:ok, invalid} ->
+            {:halt, {:error, {:invalid_collection, collection, invalid}}}
+
+          :error ->
+            {:halt, {:error, {:missing_collection, collection}}}
+        end
+      end)
+    end
   end
 
   defp validate_configuration(configuration),
