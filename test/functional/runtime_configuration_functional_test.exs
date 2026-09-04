@@ -38,15 +38,36 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  defmodule RecordingDestinationStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(destination, _operator_id, _query, _result_type, _max_results, _opts) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid),
+        {:runtime_search, destination.name}
+      )
+
+      {:ok, []}
+    end
+
+    @impl true
+    def put_artefact(_, _, _, _), do: {:error, :unsupported}
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :unsupported}
+  end
+
   setup do
-    previous = Application.get_env(:jido_gralkor, :runtime_configuration_test_pid)
+    keys = [:runtime_configuration_test_pid, :destination_storage]
+    previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
     Application.put_env(:jido_gralkor, :runtime_configuration_test_pid, self())
 
     on_exit(fn ->
-      case previous do
-        nil -> Application.delete_env(:jido_gralkor, :runtime_configuration_test_pid)
-        pid -> Application.put_env(:jido_gralkor, :runtime_configuration_test_pid, pid)
-      end
+      Enum.each(previous, fn
+        {key, nil} -> Application.delete_env(:jido_gralkor, key)
+        {key, value} -> Application.put_env(:jido_gralkor, key, value)
+      end)
     end)
 
     :ok
@@ -275,6 +296,60 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "when a search begins" do
+    test "and later search uses any subsequently installed Destination definitions" do
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        RecordingDestinationStorage
+      )
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-current-search",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 destination_configuration("first-memory")
+               )
+
+      assert {:ok, []} =
+               Gralkor.Client.search(
+                 agent_server,
+                 %Gralkor.Search{
+                   operator_id: "operator-one",
+                   query: "memory",
+                   destinations: ["first-memory"]
+                 }
+               )
+
+      assert_receive {:runtime_search, "first-memory"}
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 destination_configuration("second-memory")
+               )
+
+      assert {:ok, []} =
+               Gralkor.Client.search(
+                 agent_server,
+                 %Gralkor.Search{
+                   operator_id: "operator-one",
+                   query: "memory",
+                   destinations: ["second-memory"]
+                 }
+               )
+
+      assert_receive {:runtime_search, "second-memory"}
+    end
+  end
+
   defp ingestion_configuration(destination) do
     %{
       destinations: [%{name: destination}],
@@ -286,6 +361,14 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
           ingestion: RecordingIngestion
         }
       ],
+      reflections: []
+    }
+  end
+
+  defp destination_configuration(destination) do
+    %{
+      destinations: [%{name: destination}],
+      lenses: [],
       reflections: []
     }
   end
