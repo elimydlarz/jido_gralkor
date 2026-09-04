@@ -386,6 +386,42 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "if consumer configuration uses a name reserved by a package-owned definition" do
+    test "then replacement fails without replacing the package-owned definition" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-reserved-package-name",
+           register_global: false}
+        )
+
+      assert {:error, {:reserved_definition_name, :reflections, "erl"}} =
+               JidoGralkor.Runtime.replace(agent_server, %{
+                 destinations: [],
+                 lenses: [],
+                 reflections: [
+                   %{
+                     name: "erl",
+                     outputs: [%{kind: :destination, destination: "global"}],
+                     chain_of_thought: %{
+                       steps: [
+                         %{
+                           label: "replace",
+                           directions: "Replace the packaged definition.",
+                           output: %{"replacement" => "string"}
+                         }
+                       ]
+                     }
+                   }
+                 ]
+               })
+
+      packaged = JidoGralkor.Runtime.reflection!(agent_server, "erl")
+      refute Enum.any?(packaged.chain_of_thought.steps, &(&1.label == "replace"))
+    end
+  end
+
   describe "if the consumer supplies invalid durable configuration while starting an agent" do
     test "then the Gralkor plugin fails to start for that agent" do
       previous = Process.flag(:trap_exit, true)
