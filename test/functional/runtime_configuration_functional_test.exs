@@ -60,6 +60,26 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                reflections: []
              } = JidoGralkor.Runtime.snapshot(agent_server)
     end
+
+    test "and it installs package-owned structured definitions for the generalisations and ERL Reflections" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-packaged-reflections",
+           register_global: false}
+        )
+
+      for name <- ["generalisations", "erl"] do
+        assert %Gralkor.Reflection{
+                 name: ^name,
+                 chain_of_thought: %Gralkor.Reflection.ChainOfThought{
+                   path: nil,
+                   steps: [_ | _]
+                 }
+               } = JidoGralkor.Runtime.reflection!(agent_server, name)
+      end
+    end
   end
 
   describe "when a consumer replaces one agent's runtime configuration with complete valid Destination, Lens, and Reflection collections" do
