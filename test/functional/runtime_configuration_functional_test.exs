@@ -62,6 +62,44 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       ]
   end
 
+  defmodule DurableConsumerAgent do
+    use Jido.Agent,
+      name: "durable_runtime_configuration_consumer",
+      default_plugins: false,
+      plugins: [
+        {JidoGralkor.Plugin,
+         %{
+           agent_name: "Durable Runtime Configuration Consumer",
+           runtime_config: %{
+             destinations: [%{name: "durable-memory"}],
+             lenses: [],
+             reflections: []
+           }
+         }}
+      ]
+  end
+
+  defmodule ConsumerSupervisor do
+    use Supervisor
+
+    def start_link(opts), do: Supervisor.start_link(__MODULE__, opts)
+
+    @impl true
+    def init(opts) do
+      id = Keyword.fetch!(opts, :id)
+
+      Supervisor.init(
+        [
+          {Jido.AgentServer,
+           agent: DurableConsumerAgent,
+           id: id,
+           register_global: false}
+        ],
+        strategy: :one_for_one
+      )
+    end
+  end
+
   defmodule ConsumerOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
   end
@@ -697,6 +735,58 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "when a consuming agent is restarted under consumer supervision" do
+    test "then the replacement agent installs the consumer's durable configuration before accepting memory work" do
+      supervisor =
+        start_supervised!(
+          {ConsumerSupervisor, id: "runtime-configuration-consumer-restart"}
+        )
+
+      original_agent = supervised_agent(supervisor)
+      Process.exit(original_agent, :kill)
+
+      replacement_agent = await_replacement_agent(supervisor, original_agent)
+
+      assert %{
+               destinations: [%{name: "durable-memory"}],
+               lenses: [],
+               reflections: []
+             } = JidoGralkor.Runtime.snapshot(replacement_agent)
+
+      assert %Gralkor.Destination{name: "durable-memory"} =
+               JidoGralkor.Runtime.destination!(replacement_agent, "durable-memory")
+    end
+  end
+
+  describe "if the Gralkor plugin runtime terminates unexpectedly" do
+    test "then its linked AgentServer terminates and consumer supervision starts a replacement with durable configuration" do
+      supervisor =
+        start_supervised!(
+          {ConsumerSupervisor, id: "runtime-configuration-runtime-restart"}
+        )
+
+      original_agent = supervised_agent(supervisor)
+      original_monitor = Process.monitor(original_agent)
+      {:ok, state} = Jido.AgentServer.state(original_agent)
+
+      %{pid: runtime} =
+        Map.fetch!(state.children, {:plugin, JidoGralkor.Plugin, JidoGralkor.Runtime})
+
+      Process.exit(runtime, :unexpected_runtime_failure)
+
+      assert_receive {:DOWN, ^original_monitor, :process, ^original_agent,
+                      :unexpected_runtime_failure}
+
+      replacement_agent = await_replacement_agent(supervisor, original_agent)
+
+      assert %{
+               destinations: [%{name: "durable-memory"}],
+               lenses: [],
+               reflections: []
+             } = JidoGralkor.Runtime.snapshot(replacement_agent)
+    end
+  end
+
   describe "when named ingestion begins" do
     test "and later named ingestion uses any subsequently installed Lens definition" do
       agent_server =
@@ -1178,5 +1268,30 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       content: "runtime-configured memory",
       source_description: "functional"
     }
+  end
+
+  defp supervised_agent(supervisor) do
+    [{_id, agent, :worker, [Jido.AgentServer]}] = Supervisor.which_children(supervisor)
+    agent
+  end
+
+  defp await_replacement_agent(supervisor, original_agent, attempts \\ 50)
+
+  defp await_replacement_agent(supervisor, original_agent, 0) do
+    agent = supervised_agent(supervisor)
+    refute agent == original_agent
+    agent
+  end
+
+  defp await_replacement_agent(supervisor, original_agent, attempts) do
+    case Supervisor.which_children(supervisor) do
+      [{_id, agent, :worker, [Jido.AgentServer]}]
+      when is_pid(agent) and agent != original_agent ->
+        agent
+
+      _ ->
+        Process.sleep(10)
+        await_replacement_agent(supervisor, original_agent, attempts - 1)
+    end
   end
 end
