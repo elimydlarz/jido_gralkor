@@ -1048,6 +1048,59 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when a consumer-owned scheduled job triggers a Reflection" do
+    test "then the job does not wait and its callback eventually receives the normal completion outcome" do
+      Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent,
+           id: "reflection-consumer-scheduled-job",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+      release = make_ref()
+      callback = fn result -> send(test_pid, {:scheduled_reflection_callback, result}) end
+
+      inference = fn _request ->
+        send(test_pid, {:scheduled_reflection_started, self()})
+
+        receive do
+          {^release, :continue} -> {:ok, %{output: %{"summary" => "scheduled"}}}
+        end
+      end
+
+      scheduled_job =
+        Task.async(fn ->
+          Client.reflect(
+            agent_server,
+            "review",
+            async_reflection_invocation("scheduled-invocation"),
+            callback,
+            inference: inference
+          )
+        end)
+
+      assert_receive {:scheduled_reflection_started, reflection_process}
+      assert {:ok, {:ok, "scheduled-invocation"}} = Task.yield(scheduled_job, 100)
+      refute_receive {:scheduled_reflection_callback, _}
+
+      send(reflection_process, {release, :continue})
+
+      assert_receive {:scheduled_reflection_callback,
+                      %{
+                        invocation_id: "scheduled-invocation",
+                        artefact: %Gralkor.Artefact{payload: %{"summary" => "scheduled"}},
+                        outcome: :delivered
+                      }}
+    end
+  end
+
   describe "when runtime configuration is replaced after a Reflection is admitted" do
     test "then admitted work retains its Reflection and later submissions use the replacement" do
       Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
