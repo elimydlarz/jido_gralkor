@@ -33,7 +33,7 @@ defmodule JidoGralkor.Runtime do
   def handle_call({:replace, configuration}, _from, state) do
     case validate_configuration(configuration) do
       :ok -> {:reply, :ok, %{state | configuration: configuration}}
-      {:error, reason} -> {:reply, {:error, reason}, %{state | configuration: configuration}}
+      {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
