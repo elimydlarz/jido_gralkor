@@ -162,6 +162,10 @@ if Reflection production fails
   then no Destination output is attempted
   and the invocation callback eventually receives the production failure
 
+when packaged generalisation related-memory retrieval reports a retryable server failure
+  then that invocation retries retrieval with exponential backoff
+  and successful retrieval allows the invocation to complete normally
+
 if a produced artefact cannot be delivered before delivery is abandoned
   then no error artefact is written to the Reflection's Destination
   and the invocation callback eventually receives the produced artefact and abandonment outcome

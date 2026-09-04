@@ -114,6 +114,35 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
+  defmodule RetryableRelatedMemoryStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(destination, _operator_id, _query, _result_type, _max_results, _opts) do
+      counter = Application.fetch_env!(:jido_gralkor, :reflection_retry_counter)
+
+      if destination.name == "global" do
+        :counters.add(counter, 1, 1)
+        attempt = :counters.get(counter, 1)
+
+        send(
+          Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
+          {:related_memory_attempt, attempt}
+        )
+
+        if attempt == 1, do: {:error, %{status: 503}}, else: {:ok, []}
+      else
+        {:ok, []}
+      end
+    end
+
+    @impl true
+    def put_artefact(_, _, _, _), do: :ok
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+  end
+
   setup do
     start_supervised!(Gralkor.Destination.Storage.InMemory)
     start_supervised!(Gralkor.Lens.Storage.InMemory)
@@ -1457,6 +1486,58 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_receive {:retryable_production_attempt, 3}
       assert_receive {:destination_output_delivered, _, "review", "operator-one", artefact}
       assert_receive {:reflection_callback, %{artefact: ^artefact, outcome: :delivered}}
+    end
+  end
+
+  describe "when packaged generalisation related-memory retrieval reports a retryable server failure" do
+    test "then that invocation retries retrieval with exponential backoff and completes normally" do
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        RetryableRelatedMemoryStorage
+      )
+
+      Application.put_env(:jido_gralkor, :reflection_retry_counter, :counters.new(1, []))
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent,
+           id: "reflection-related-memory-retry",
+           register_global: false}
+        )
+
+      test_pid = self()
+      callback = fn result -> send(test_pid, {:reflection_callback, result}) end
+      sleep = fn delay -> send(test_pid, {:reflection_retry_backoff, delay}) end
+
+      inference = fn
+        %{step: %{label: "inspect-world"}} ->
+          {:ok, %{output: %{"inspection" => "reviewed"}}}
+
+        %{step: %{label: "evolve-generalisations"}} ->
+          {:ok, %{output: %{"generalisations" => []}}}
+      end
+
+      assert {:ok, "related-memory-retry"} =
+               Client.reflect(
+                 agent_server,
+                 "generalisations",
+                 %{
+                   id: "related-memory-retry",
+                   operator_id: "operator-one",
+                   invocation_context: %{},
+                   representations: []
+                 },
+                 callback,
+                 inference: inference,
+                 sleep: sleep
+               )
+
+      assert_receive {:related_memory_attempt, 1}
+      assert_receive {:reflection_retry_backoff, 1_000}
+      assert_receive {:related_memory_attempt, 2}
+      assert_receive {:reflection_callback, %{outcome: :delivered}}
     end
   end
 
