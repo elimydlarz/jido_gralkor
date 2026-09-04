@@ -1,6 +1,7 @@
 defmodule Gralkor.Graph do
   @moduledoc """
-  A complete graph payload supplied to `Gralkor.Client.replace/1`.
+  A complete graph payload supplied to the runtime-targeted
+  `Gralkor.Client.replace/2` boundary.
 
   Nodes have unique string identifiers, string labels, and property maps.
   Relationships identify two supplied nodes, a type, and a property map.
