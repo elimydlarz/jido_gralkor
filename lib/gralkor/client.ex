@@ -285,7 +285,23 @@ defmodule Gralkor.Client do
     validate_lens_result_type!(lenses, request.result_type)
 
     destinations = resolve_search_destinations!(request.destinations)
+    search_resolved(request, lenses, destinations)
+  end
 
+  @spec search(GenServer.server(), Search.t()) ::
+          {:ok, [search_result()]} | {:error, term()}
+  def search(runtime_owner, %Search{} = request) do
+    validate_max_results!(request.max_results)
+    validate_result_type!(request.result_type)
+
+    lenses = resolve_search_lenses!(runtime_owner, request.lenses)
+    validate_lens_result_type!(lenses, request.result_type)
+
+    destinations = resolve_search_destinations!(runtime_owner, request.destinations)
+    search_resolved(request, lenses, destinations)
+  end
+
+  defp search_resolved(request, lenses, destinations) do
     opts =
       []
       |> put_search_option(:entity_types, request.entity_types)
@@ -364,6 +380,27 @@ defmodule Gralkor.Client do
   defp resolve_search_destinations!(names),
     do: raise(ArgumentError, "search destinations must be a list, got #{inspect(names)}")
 
+  defp resolve_search_destinations!(runtime_owner, []), do: Runtime.destinations(runtime_owner)
+
+  defp resolve_search_destinations!(runtime_owner, names) when is_list(names) do
+    names
+    |> Enum.map(fn
+      name when is_binary(name) ->
+        if String.trim(name) == "" do
+          raise ArgumentError, "invalid Destination name #{inspect(name)}"
+        end
+
+        Runtime.destination!(runtime_owner, name)
+
+      name ->
+        raise ArgumentError, "invalid Destination name #{inspect(name)}"
+    end)
+    |> Enum.uniq_by(& &1.name)
+  end
+
+  defp resolve_search_destinations!(_runtime_owner, names),
+    do: raise(ArgumentError, "search destinations must be a list, got #{inspect(names)}")
+
   defp resolve_search_lenses!(names) when is_list(names) do
     names
     |> Enum.map(fn
@@ -381,6 +418,25 @@ defmodule Gralkor.Client do
   end
 
   defp resolve_search_lenses!(names),
+    do: raise(ArgumentError, "search lenses must be a list, got #{inspect(names)}")
+
+  defp resolve_search_lenses!(runtime_owner, names) when is_list(names) do
+    names
+    |> Enum.map(fn
+      name when is_binary(name) ->
+        if String.trim(name) == "" do
+          raise ArgumentError, "invalid Lens name #{inspect(name)}"
+        end
+
+        Runtime.lens!(runtime_owner, name).name
+
+      name ->
+        raise ArgumentError, "invalid Lens name #{inspect(name)}"
+    end)
+    |> Enum.uniq()
+  end
+
+  defp resolve_search_lenses!(_runtime_owner, names),
     do: raise(ArgumentError, "search lenses must be a list, got #{inspect(names)}")
 
   defp validate_lens_result_type!([], _result_type), do: :ok

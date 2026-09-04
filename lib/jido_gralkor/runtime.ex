@@ -27,6 +27,11 @@ defmodule JidoGralkor.Runtime do
   def lens!(owner, name), do: fetch_definition!(owner, :lenses, name)
   def reflection!(owner, name), do: fetch_definition!(owner, :reflections, name)
 
+  def destinations(owner) do
+    ensure_started(owner)
+    GenServer.call(via(owner), {:all, :destinations})
+  end
+
   @impl GenServer
   def init(opts) do
     configuration = Keyword.fetch!(opts, :configuration)
@@ -64,6 +69,10 @@ defmodule JidoGralkor.Runtime do
       end
 
     {:reply, reply, state}
+  end
+
+  def handle_call({:all, :destinations}, _from, state) do
+    {:reply, state.definitions.destination_list, state}
   end
 
   defp ensure_started(owner) do
@@ -145,6 +154,7 @@ defmodule JidoGralkor.Runtime do
     {:ok,
      %{
        destinations: Map.new(destinations, &{&1.name, &1}),
+       destination_list: destinations,
        lenses: Map.new(lenses, &{&1.name, &1}),
        reflections: Map.new(reflections, &{&1.name, &1})
      }}
