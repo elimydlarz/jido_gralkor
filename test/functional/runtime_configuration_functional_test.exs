@@ -40,5 +40,21 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       assert Process.alive?(runtime)
     end
+
+    test "and that runtime owns the agent's runtime configuration" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-owner",
+           register_global: false}
+        )
+
+      assert %{
+               destinations: [],
+               lenses: [],
+               reflections: []
+             } = JidoGralkor.Runtime.snapshot(agent_server)
+    end
   end
 end
