@@ -129,14 +129,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   setup do
-    root =
-      Path.join(
-        System.tmp_dir!(),
-        "gralkor-reflection-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
-      )
-
-    File.mkdir_p!(root)
-    on_exit(fn -> File.rm_rf!(root) end)
     start_supervised!(Gralkor.Destination.Storage.InMemory)
     start_supervised!(Gralkor.Lens.Storage.InMemory)
 
@@ -171,18 +163,18 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     Application.put_env(:jido_gralkor, :reflection_output_test_pid, self())
 
     on_exit(fn -> Enum.each(previous, fn {key, value} -> restore_env(key, value) end) end)
-    %{root: root}
+    :ok
   end
 
   describe "when Reflection declarations are validated" do
     test("while every Reflection has a non-blank name", context, do: assert_valid(context))
     test("and every Reflection name is unique", context, do: assert_valid(context))
 
-    test("and every Reflection references a repository YAML Chain of Thought", context,
+    test("and every Reflection contains one structured Chain of Thought", context,
       do: assert_valid(context)
     )
 
-    test("and every referenced Chain of Thought contains one or more ordered steps", context,
+    test("and every Chain of Thought contains one or more ordered steps", context,
       do: assert_valid(context)
     )
 
@@ -202,19 +194,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       do: assert_valid(context)
     )
 
-    test "and every Reflection declares an `outputs` list", %{root: root} do
-      definition =
-        valid_definition(root,
-          outputs: [
-            [
-              kind: :destination,
-              destination: "operator",
-              ontology: ReflectionOntology
-            ]
-          ]
-        )
+    test "and every Reflection declares an `outputs` list" do
+      definition = valid_definition(outputs: [[kind: :destination, destination: "operator", ontology: ReflectionOntology]])
 
-      assert {:ok, [reflection]} = Registry.load([definition], root: root)
+      assert {:ok, [reflection]} = Registry.load([definition])
 
       assert reflection.outputs == [
                %{
@@ -227,8 +210,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test("and exactly one output has kind `:destination`", context, do: assert_valid(context))
 
-    test("and at most one output has kind `:return`", context, do: assert_valid(context))
-
     test("and every Destination output references a registered Destination by name", context,
       do: assert_valid(context)
     )
@@ -237,350 +218,207 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       do: assert_valid(context)
     )
 
-    test(
-      "and every return output names a loaded handler implementing `Gralkor.Artefact.ReturnHandler`",
-      context,
-      do: assert_valid(context)
-    )
-
     test("then validation succeeds", context, do: assert_valid(context))
   end
 
   describe "when Reflection declarations are validated > if the configured Reflection registry is not a list" do
     test "then validation fails identifying the configured value" do
-      Application.put_env(:jido_gralkor, :reflections, :invalid_registry)
-
-      assert_raise ArgumentError, ~r/invalid Reflection declarations: :invalid_registry/, fn ->
-        Registry.configured!()
-      end
+      assert {:error, {:invalid_reflections, :invalid_registry}} = Registry.load(:invalid_registry)
     end
   end
 
   describe "when Reflection declarations are validated > if a Reflection's `outputs` value is not a list" do
-    test "then validation fails identifying that Reflection and outputs value",
-         %{root: root} do
-      definition = valid_definition(root, outputs: :invalid)
+    test "then validation fails identifying that Reflection and outputs value" do
+      definition = valid_definition(outputs: :invalid)
 
       assert {:error, {:invalid_outputs, "generalisation", :invalid}} =
-               Registry.load([definition], root: root)
+               Registry.load([definition])
     end
   end
 
   describe "when Reflection declarations are validated > if a Reflection declares no Destination output" do
-    test "then validation fails identifying that Reflection and missing Destination output",
-         %{root: root} do
-      definition = valid_definition(root, outputs: [])
+    test "then validation fails identifying that Reflection and missing Destination output" do
+      definition = valid_definition(outputs: [])
 
       assert {:error, {:missing_destination_output, "generalisation"}} =
-               Registry.load([definition], root: root)
+               Registry.load([definition])
     end
   end
 
   describe "when Reflection declarations are validated > if a Reflection declares more than one Destination output" do
-    test "then validation fails identifying that Reflection and duplicate Destination output kind",
-         %{root: root} do
+    test "then validation fails identifying that Reflection and duplicate Destination output kind" do
       output = [kind: :destination, destination: "operator"]
-      definition = valid_definition(root, outputs: [output, output])
+      definition = valid_definition(outputs: [output, output])
 
       assert {:error, {:duplicate_output, "generalisation", :destination}} =
-               Registry.load([definition], root: root)
-    end
-  end
-
-  describe "when Reflection declarations are validated > if a Reflection declares more than one return output" do
-    test "then validation fails identifying that Reflection and duplicate return output kind",
-         %{root: root} do
-      outputs = [
-        [kind: :destination, destination: "operator"],
-        [kind: :return, handler: __MODULE__],
-        [kind: :return, handler: __MODULE__]
-      ]
-
-      assert {:error, {:duplicate_output, "generalisation", :return}} =
-               Registry.load([valid_definition(root, outputs: outputs)], root: root)
+               Registry.load([definition])
     end
   end
 
   describe "when Reflection declarations are validated > if a Reflection declares an unsupported output kind" do
-    test "then validation fails identifying that Reflection and output kind",
-         %{root: root} do
+    test "then validation fails identifying that Reflection and output kind" do
       outputs = [
         [kind: :destination, destination: "operator"],
-        [kind: :webhook]
+        [kind: :return]
       ]
 
-      assert {:error, {:unsupported_output, "generalisation", :webhook}} =
-               Registry.load([valid_definition(root, outputs: outputs)], root: root)
-    end
-  end
-
-  describe "when Reflection declarations are validated > if a return output has no loaded handler implementing `Gralkor.Artefact.ReturnHandler`" do
-    test "then validation fails identifying that Reflection and handler",
-         %{root: root} do
-      outputs = [
-        [kind: :destination, destination: "operator"],
-        [kind: :return, handler: String]
-      ]
-
-      assert {:error, {:invalid_return_handler, "generalisation", String}} =
-               Registry.load([valid_definition(root, outputs: outputs)], root: root)
+      assert {:error, {:unsupported_output, "generalisation", :return}} =
+               Registry.load([valid_definition(outputs: outputs)])
     end
   end
 
   describe "when Reflection declarations are validated > if a Reflection name is blank" do
-    test "then validation fails identifying the blank name", %{
-      root: root
-    } do
+    test "then validation fails identifying the blank name" do
       assert {:error, {:blank_name, " "}} =
-               Registry.load([valid_definition(root, name: " ")], root: root)
-
-      Application.put_env(:jido_gralkor, :reflections, [
-        %Gralkor.Reflection{
-          name: " ",
-          outputs: [
-            %{
-              kind: :destination,
-              destination: %Gralkor.Destination{name: "global"},
-              ontology: Gralkor.DefaultOntology
-            }
-          ],
-          chain_of_thought: %Gralkor.Reflection.ChainOfThought{path: "loaded.yaml", steps: []}
-        }
-      ])
-
-      assert_raise ArgumentError, ~r/blank_name.*" "/, fn -> Registry.configured!() end
+               Registry.load([valid_definition(name: " ")])
     end
   end
 
   describe "when Reflection declarations are validated > if a Reflection name contains the reserved provenance delimiter ` [lens: `" do
-    test "then validation fails identifying the Reflection and reserved provenance syntax",
-         %{root: root} do
+    test "then validation fails identifying the Reflection and reserved provenance syntax" do
       name = "review [lens: observations]"
 
       assert {:error, {:reserved_provenance_syntax, ^name, " [lens: "}} =
-               Registry.load([valid_definition(root, name: name)], root: root)
+               Registry.load([valid_definition(name: name)])
     end
   end
 
   describe "when Reflection declarations are validated > if Reflection names are duplicated" do
-    test "then validation fails identifying the duplicate name",
-         %{root: root} do
-      definition = valid_definition(root)
+    test "then validation fails identifying the duplicate name" do
+      definition = valid_definition()
 
       assert {:error, {:duplicate_name, "generalisation"}} =
-               Registry.load([definition, definition], root: root)
+               Registry.load([definition, definition])
     end
   end
 
   describe "when Reflection declarations are validated > if a Reflection has no Chain of Thought" do
-    test "then validation fails identifying that Reflection",
-         %{root: root} do
-      definition = valid_definition(root) |> Keyword.delete(:chain_of_thought)
+    test "then validation fails identifying that Reflection" do
+      definition = valid_definition() |> Keyword.delete(:chain_of_thought)
 
       assert {:error, {:missing_chain_of_thought, "generalisation"}} =
-               Registry.load([definition], root: root)
+               Registry.load([definition])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Reflection's Chain of Thought does not identify a repository YAML file" do
-    test "then validation fails identifying that Reflection and file",
-         %{root: root} do
-      assert {:error, {:invalid_chain_of_thought_file, "generalisation", "../outside.yaml"}} =
-               Registry.load([valid_definition(root, chain_of_thought: "../outside.yaml")],
-                 root: root
-               )
-    end
-  end
-
-  describe "when Reflection declarations are validated > if a Reflection's Chain of Thought YAML cannot be loaded or parsed" do
-    test "then validation fails identifying that Reflection, file, and parse failure",
-         %{root: root} do
-      write_cot(root, "broken.yaml", "steps: [")
-
-      assert {:error, {:invalid_chain_of_thought, "generalisation", "broken.yaml", _}} =
-               Registry.load([valid_definition(root, chain_of_thought: "broken.yaml")],
-                 root: root
-               )
+  describe "when Reflection declarations are validated > if a Reflection's Chain of Thought is not structured configuration" do
+    test "then validation fails identifying that Reflection and configured value" do
+      assert {:error, {:invalid_chain_of_thought, "generalisation", "legacy.yaml"}} =
+               Registry.load([valid_definition(chain_of_thought: "legacy.yaml")])
     end
   end
 
   describe "when Reflection declarations are validated > if a Chain of Thought has no steps" do
-    test "then validation fails identifying that Reflection and Chain of Thought",
-         %{root: root} do
-      write_cot(root, "empty.yaml", "steps: []")
-
-      assert {:error, {:invalid_chain_of_thought, "generalisation", "empty.yaml", :missing_steps}} =
-               Registry.load([valid_definition(root, chain_of_thought: "empty.yaml")], root: root)
+    test "then validation fails identifying that Reflection and Chain of Thought" do
+      assert {:error, {:invalid_chain_of_thought, "generalisation", :missing_steps}} =
+               Registry.load([valid_definition(chain_of_thought: %{steps: []})])
     end
   end
 
   describe "when Reflection declarations are validated > if a Chain of Thought step has no non-blank label" do
-    test "then validation fails identifying that Reflection and step",
-         %{root: root} do
-      write_cot(
-        root,
-        "blank-label.yaml",
-        "steps:\n  - label: ' '\n    directions: Think.\n    output: {result: string}\n"
-      )
+    test "then validation fails identifying that Reflection and step" do
+      cot = %{steps: [%{label: " ", directions: "Think.", output: %{"result" => "string"}}]}
 
-      assert {:error,
-              {:invalid_chain_of_thought, "generalisation", "blank-label.yaml",
-               {:invalid_step_label, " "}}} =
-               Registry.load([valid_definition(root, chain_of_thought: "blank-label.yaml")],
-                 root: root
-               )
+      assert {:error, {:invalid_chain_of_thought, "generalisation", {:invalid_step_label, " "}}} =
+               Registry.load([valid_definition(chain_of_thought: cot)])
     end
   end
 
   describe "when Reflection declarations are validated > if a Chain of Thought step has no natural-language directions" do
-    test "then validation fails identifying that Reflection and step",
-         %{root: root} do
-      write_cot(
-        root,
-        "no-directions.yaml",
-        "steps:\n  - label: think\n    output: {result: string}\n"
-      )
+    test "then validation fails identifying that Reflection and step" do
+      cot = %{steps: [%{label: "think", output: %{"result" => "string"}}]}
 
-      assert {:error,
-              {:invalid_chain_of_thought, "generalisation", "no-directions.yaml",
-               {:invalid_step_directions, "think"}}} =
-               Registry.load([valid_definition(root, chain_of_thought: "no-directions.yaml")],
-                 root: root
-               )
+      assert {:error, {:invalid_chain_of_thought, "generalisation", {:invalid_step_directions, "think"}}} =
+               Registry.load([valid_definition(chain_of_thought: cot)])
     end
   end
 
   describe "when Reflection declarations are validated > if a Chain of Thought step has no structured-output declaration" do
-    test "then validation fails identifying that Reflection and step",
-         %{root: root} do
-      write_cot(root, "no-output.yaml", "steps:\n  - label: think\n    directions: Think.\n")
+    test "then validation fails identifying that Reflection and step" do
+      cot = %{steps: [%{label: "think", directions: "Think."}]}
 
-      assert {:error,
-              {:invalid_chain_of_thought, "generalisation", "no-output.yaml",
-               {:invalid_step_output, "think"}}} =
-               Registry.load([valid_definition(root, chain_of_thought: "no-output.yaml")],
-                 root: root
-               )
+      assert {:error, {:invalid_chain_of_thought, "generalisation", {:invalid_step_output, "think"}}} =
+               Registry.load([valid_definition(chain_of_thought: cot)])
     end
   end
 
   describe "when Reflection declarations are validated > if a Chain of Thought step is not a map" do
-    test "then validation fails identifying that Reflection and step",
-         %{root: root} do
-      write_cot(root, "invalid-step.yaml", "steps:\n  - not-a-step\n")
-
-      assert {:error,
-              {:invalid_chain_of_thought, "generalisation", "invalid-step.yaml",
-               {:invalid_step, "not-a-step"}}} =
-               Registry.load([valid_definition(root, chain_of_thought: "invalid-step.yaml")],
-                 root: root
-               )
+    test "then validation fails identifying that Reflection and step" do
+      assert {:error, {:invalid_chain_of_thought, "generalisation", {:invalid_step, "not-a-step"}}} =
+               Registry.load([valid_definition(chain_of_thought: %{steps: ["not-a-step"]})])
     end
   end
 
   describe "when Reflection declarations are validated > if a Chain of Thought step declares an unsupported structured-output type" do
-    test "then validation fails identifying that Reflection, step, and type",
-         %{root: root} do
-      write_cot(
-        root,
-        "invalid-type.yaml",
-        "steps:\n  - label: think\n    directions: Think.\n    output: {result: mystery}\n"
-      )
+    test "then validation fails identifying that Reflection, step, and type" do
+      cot = %{steps: [%{label: "think", directions: "Think.", output: %{"result" => "mystery"}}]}
 
-      assert {:error,
-              {:invalid_chain_of_thought, "generalisation", "invalid-type.yaml",
-               {:invalid_output_type, "think", "mystery"}}} =
-               Registry.load([valid_definition(root, chain_of_thought: "invalid-type.yaml")],
-                 root: root
-               )
+      assert {:error, {:invalid_chain_of_thought, "generalisation", {:invalid_output_type, "think", "mystery"}}} =
+               Registry.load([valid_definition(chain_of_thought: cot)])
     end
   end
 
   describe "when Reflection declarations are validated > if an output name is declared by more than one step" do
-    test "then validation fails identifying that Reflection, output name, and steps",
-         %{root: root} do
-      write_cot(
-        root,
-        "duplicate-output.yaml",
-        "steps:\n  - {label: one, directions: First., output: {result: string}}\n  - {label: two, directions: Second., output: {result: string}}\n"
-      )
+    test "then validation fails identifying that Reflection, output name, and steps" do
+      cot = %{steps: [
+        %{label: "one", directions: "First.", output: %{"result" => "string"}},
+        %{label: "two", directions: "Second.", output: %{"result" => "string"}}
+      ]}
 
-      assert {:error,
-              {:invalid_chain_of_thought, "generalisation", "duplicate-output.yaml",
-               {:duplicate_output, "result", "one", "two"}}} =
-               Registry.load([valid_definition(root, chain_of_thought: "duplicate-output.yaml")],
-                 root: root
-               )
+      assert {:error, {:invalid_chain_of_thought, "generalisation", {:duplicate_output, "result", "one", "two"}}} =
+               Registry.load([valid_definition(chain_of_thought: cot)])
     end
   end
 
   describe "when Reflection declarations are validated > if an interpolation references an output not declared by an earlier step" do
-    test "then validation fails identifying that Reflection, step, and interpolation",
-         %{root: root} do
-      write_cot(
-        root,
-        "forward.yaml",
-        "steps:\n  - label: one\n    directions: Use {{later}}.\n    output: {first: string}\n  - {label: two, directions: Later., output: {later: string}}\n"
-      )
+    test "then validation fails identifying that Reflection, step, and interpolation" do
+      cot = %{steps: [
+        %{label: "one", directions: "Use {{later}}.", output: %{"first" => "string"}},
+        %{label: "two", directions: "Later.", output: %{"later" => "string"}}
+      ]}
 
-      assert {:error,
-              {:invalid_chain_of_thought, "generalisation", "forward.yaml",
-               {:unknown_interpolation, "later", "one"}}} =
-               Registry.load([valid_definition(root, chain_of_thought: "forward.yaml")],
-                 root: root
-               )
+      assert {:error, {:invalid_chain_of_thought, "generalisation", {:unknown_interpolation, "later", "one"}}} =
+               Registry.load([valid_definition(chain_of_thought: cot)])
     end
   end
 
   describe "when Reflection declarations are validated > if a Destination output has no Destination name" do
-    test "then validation fails identifying that Reflection and missing Destination",
-         %{root: root} do
-      definition = valid_definition(root, outputs: [[kind: :destination]])
+    test "then validation fails identifying that Reflection and missing Destination" do
+      definition = valid_definition(outputs: [[kind: :destination]])
 
       assert {:error, {:missing_destination, "generalisation", nil}} =
-               Registry.load([definition], root: root)
+               Registry.load([definition])
     end
   end
 
   describe "when Reflection declarations are validated > if a Destination output references an unknown Destination" do
-    test "then validation fails identifying that Reflection and Destination",
-         %{root: root} do
-      assert_raise ArgumentError,
-                   ~r/Reflection "generalisation" references unknown Destination "missing"/,
-                   fn ->
-                     Registry.load(
-                       [
-                         valid_definition(root,
-                           outputs: [[kind: :destination, destination: "missing"]]
-                         )
-                       ],
-                       root: root
-                     )
-                   end
+    test "then validation fails identifying that Reflection and Destination" do
+      assert {:error, {:invalid_destination, "generalisation", message}} =
+               Registry.load([
+                 valid_definition(outputs: [[kind: :destination, destination: "missing"]])
+               ])
+
+      assert message =~ ~s(Reflection "generalisation" references unknown Destination "missing")
     end
   end
 
   describe "when Reflection declarations are validated > if a Destination output declares an invalid ontology" do
-    test "then validation fails identifying that Reflection and ontology",
-         %{root: root} do
+    test "then validation fails identifying that Reflection and ontology" do
       assert {:error, {:invalid_ontology, "generalisation", String}} =
                Registry.load(
                  [
-                   valid_definition(root,
+                   valid_definition(
                      outputs: [
                        [kind: :destination, destination: "operator", ontology: String]
                      ]
                    )
-                 ],
-                 root: root
+                 ]
                )
     end
   end
 
-  describe "where the packaged default Reflections are used" do
+  describe "when an agent's Gralkor runtime installs its package-owned Reflection definitions" do
     test "then ERL declares one Destination output referencing the packaged `operator` Destination" do
-      Application.delete_env(:jido_gralkor, :reflections)
-
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
 
       assert [%{kind: :destination, destination: %Gralkor.Destination{name: "operator"}}] =
@@ -588,42 +426,31 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
 
     test "and ERL's Destination output carries jido_gralkor's built-in experiential-learning ontology" do
-      Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
 
       assert destination_output(erl).ontology == Gralkor.Reflection.ERLOntology
     end
 
     test "and generalisation declares one Destination output referencing the packaged `global` Destination" do
-      Application.delete_env(:jido_gralkor, :reflections)
       generalisation = Enum.find(Registry.configured!(), &(&1.name == "generalisations"))
 
       assert destination_output(generalisation).destination.name == "global"
     end
-
-    test "and neither packaged Reflection declares a return output" do
-      Application.delete_env(:jido_gralkor, :reflections)
-
-      assert Enum.all?(Registry.configured!(), fn reflection ->
-               Enum.all?(reflection.outputs, &(&1.kind != :return))
-             end)
-    end
   end
 
   describe "where an application-defined Destination output omits its ontology" do
-    test "then the output selects generic extraction for a consumer-delivered artefact",
-         %{root: root} do
-      reflection = Registry.load!([valid_definition(root)], root: root) |> List.first()
+    test "then the output selects generic extraction for a consumer-delivered artefact" do
+      reflection = Registry.load!([valid_definition()]) |> List.first()
       assert destination_output(reflection).ontology == Gralkor.DefaultOntology
     end
   end
 
   describe "where an application-defined Destination output declares an application ontology" do
-    test "then the output selects that ontology for a consumer-delivered artefact", %{root: root} do
+    test "then the output selects that ontology for a consumer-delivered artefact" do
       reflection =
         Registry.load!(
           [
-            valid_definition(root,
+            valid_definition(
               outputs: [
                 [
                   kind: :destination,
@@ -632,8 +459,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                 ]
               ]
             )
-          ],
-          root: root
+          ]
         )
         |> List.first()
 
@@ -643,7 +469,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   describe "when a consumer stores the default ERL Reflection's artefact through its Destination output" do
     test "then extraction receives the built-in `Learning` entity type from that output's ontology" do
-      Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
       artefact = Gralkor.Artefact.new("erl-artefact", erl_payload())
       caller = self()
@@ -677,7 +502,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
 
     test "and the Runner-returned Learning payload contains exactly its problem kind, approach, success, and reusable lesson" do
-      Application.delete_env(:jido_gralkor, :reflections)
       erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
 
       assert {:ok, artefact} = Runner.run(erl, invocation(), inference: &erl_output_for/1)
@@ -685,7 +509,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when a configured Reflection is loaded" do
+  describe "when a consumer Reflection is installed in an agent's runtime configuration" do
     test "then its inline steps become the Reflection's Chain of Thought" do
       definition = [
         name: "inline-review",
@@ -719,10 +543,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
               ]} = Registry.load([definition])
     end
 
-    test "then its declared YAML is loaded as the Reflection's Chain of Thought", context do
-      assert %Gralkor.Reflection.ChainOfThought{path: path} = reflection(context).chain_of_thought
-      assert String.ends_with?(path, ".yaml")
-    end
   end
 
   describe "when a Reflection Runner is invoked" do
