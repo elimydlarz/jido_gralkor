@@ -143,7 +143,8 @@ defmodule JidoGralkor.Runtime do
     do: {:error, {:invalid_configuration, configuration}}
 
   defp resolve_configuration(configuration) do
-    with :ok <- validate_lens_shapes(configuration.lenses),
+    with :ok <- validate_reserved_names(configuration),
+         :ok <- validate_lens_shapes(configuration.lenses),
          :ok <- validate_reserved_entity_kinds(configuration) do
       destinations =
         [%Destination{name: "operator"}, %Destination{name: "global"}] ++
@@ -216,6 +217,23 @@ defmodule JidoGralkor.Runtime do
   rescue
     error ->
       {:error, {:invalid_runtime_configuration, Exception.message(error)}}
+  end
+
+  defp validate_reserved_names(configuration) do
+    packaged = %{
+      destinations: ["operator", "global"],
+      lenses: ["operator"],
+      reflections: Enum.map(Gralkor.Reflection.Packaged.definitions(), &field(&1, :name))
+    }
+
+    Enum.reduce_while(packaged, :ok, fn {collection, reserved}, :ok ->
+      case Enum.find(Map.fetch!(configuration, collection), &(field(&1, :name) in reserved)) do
+        nil -> {:cont, :ok}
+        definition ->
+          {:halt,
+           {:error, {:reserved_definition_name, collection, field(definition, :name)}}}
+      end
+    end)
   end
 
   defp validate_lens_shapes(lenses) do
