@@ -87,6 +87,16 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   end
 
   describe "when an agent with a mounted memory plugin invokes memory search" do
+    test "then the tool context identifies that consuming agent's Gralkor runtime" do
+      assert {:ok, plugin_state} =
+               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
+               plugin_state |> agent() |> query()
+
+      assert tool_context.gralkor_runtime == self()
+    end
+
     test "then optional Destination and Lens selectors belong only to that search invocation" do
       for {lens, content} <- [
             {"observations", "selected observation memory"},
