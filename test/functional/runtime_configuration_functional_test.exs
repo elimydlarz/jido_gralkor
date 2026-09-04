@@ -53,7 +53,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  name: "runtime-observations",
                  destination: "runtime-memory",
                  write: :append,
-                 ingestion: RecordingIngestion
+                 ingestion: Gralkor.RuntimeConfigurationFunctionalTest.RecordingIngestion
                }
              ],
              reflections: []
