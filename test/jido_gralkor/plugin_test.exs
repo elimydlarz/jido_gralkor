@@ -176,6 +176,15 @@ defmodule JidoGralkor.PluginTest do
       assert data.tool_context.agent_name == "TestAgent"
     end
 
+    test "and the owning AgentServer is planted as the Gralkor runtime target" do
+      signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
+
+      assert {:ok, {:continue, %Signal{data: data}}} =
+               Plugin.handle_signal(signal, context(agent("user-abc", thread_id: "thr-xyz")))
+
+      assert data.tool_context.gralkor_runtime == self()
+    end
+
     test "and no recall is issued on the plugin's own initiative" do
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
