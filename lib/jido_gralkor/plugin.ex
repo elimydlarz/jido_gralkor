@@ -134,8 +134,8 @@ defmodule JidoGralkor.Plugin do
 
     extras =
       case thread_id(agent) do
-        nil -> %{agent_name: agent_name}
-        id -> %{session_id: id, agent_name: agent_name}
+        nil -> %{agent_name: agent_name, gralkor_runtime: self()}
+        id -> %{session_id: id, agent_name: agent_name, gralkor_runtime: self()}
       end
       |> Map.merge(lens_context(agent))
 

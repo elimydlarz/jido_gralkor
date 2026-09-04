@@ -37,6 +37,8 @@ defmodule JidoGralkor.Runtime do
     GenServer.call(via(owner), {:all, :destinations})
   end
 
+  def started?(owner), do: :global.whereis_name({__MODULE__, owner}) != :undefined
+
   def submit_reflection(owner, name, invocation, callback, opts) do
     ensure_started(owner)
     GenServer.call(via(owner), {:submit_reflection, name, invocation, callback, opts})
