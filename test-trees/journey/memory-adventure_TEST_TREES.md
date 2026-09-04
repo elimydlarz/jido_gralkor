@@ -1,10 +1,10 @@
 Journey: memory-adventure (journey: test/journey/memory_adventure_journey_test.exs)
 
-# Adventure: one operator adds ontology-free implicit memory, captures and flushes completed turns through an appending Lens, explicitly invokes an ERL Learning, evolves a shared generalisation, and publishes global memory.
+# Adventure: one operator adds ontology-free implicit memory, captures and flushes completed turns through an appending Lens, asynchronously triggers an ERL Learning, evolves a shared generalisation, and publishes global memory.
 # The same operator's appending and replaceable Lenses save to one Destination before the replaceable Lens replaces its earlier graph.
 # Fresh sessions then use default and selected memory search across packaged and application Destinations; both operators check shared and operator-local visibility.
 
-when two operators use implicit memory, Lenses, explicitly invoked Reflections, and shared-Destination replacement
+when two operators use implicit memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement
   then ontology-free implicit operator memory remains recallable
   and captured appending-Lens information remains searchable
   and ERL writes a structured Learning artefact through its Destination output
@@ -18,7 +18,7 @@ when two operators use implicit memory, Lenses, explicitly invoked Reflections, 
   and fresh retrieval returns the current replacement graph
   and fresh retrieval omits the superseded replacement graph
 
-when the Journey consumer invokes generalisation after successive ingestions containing related observations
+when the Journey consumer triggers generalisation after successive ingestions containing related observations
   then the first resulting generalisation has evolution-depth level one and an empty `evolves_from`
   and the later generalisation that evolves from the first has evolution-depth level two
   and the later generalisation's `evolves_from` records the first generalisation's content and level
@@ -28,9 +28,9 @@ when distinct ingestions use Lenses backed by different Destinations
   and the `published` input is searchable through the `global` Destination
   and each consumer-supplied invocation identifier resolves a completed `generalisations` artefact
 
-when the Journey consumer invokes a consumer-defined Reflection with Destination and return outputs
+when the Journey consumer triggers a consumer-defined Reflection with a Destination output
   then its artefact is searchable through its Destination
-  and its consumer return handler receives that exact artefact
+  and its invocation callback eventually receives that exact artefact and successful delivery outcome
 
 when a fresh agent handles a request related to an evolved generalisation
   then one MemorySearch call is made without selectors

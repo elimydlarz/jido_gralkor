@@ -10,11 +10,11 @@ when a caller replaces the complete graph through a replaceable Lens
   and nodes and relationships without the reserved Lens ownership field at the resolved destination remain unchanged
   and the caller observes whether replacement succeeded or failed
 
-where the selected Lens uses the `property_graph` format
+when a caller supplies a complete replacement graph
   then every supplied node carries a unique identifier, labels, and properties
   and every supplied relationship carries source and destination node identifiers, a type, and properties
 
-if a `property_graph` payload is malformed or names a missing relationship endpoint
+if the supplied graph is malformed or names a missing relationship endpoint
   then replacement fails before graph content is removed or inserted
   and the error identifies the invalid graph data
 
@@ -31,10 +31,6 @@ if replacement selects an invalid Lens
 if replacement selects an appending Lens
   then replacement fails with an error identifying that the Lens accepts only episode ingestion
   and no existing graph content is removed or inserted
-
-if the supplied graph format differs from the selected Lens's configured graph format
-  then replacement fails before graph content is removed or inserted
-  and the error identifies the expected and supplied graph formats
 
 if the supplied complete graph cannot be imported
   then the import failure is returned to the caller

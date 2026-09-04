@@ -5,8 +5,8 @@ when an application registers a valid appending or replaceable Lens
   and every consumer observes the same application-owned Lens definition
   and the Lens uses its referenced registered Destination
 
-where an appending Lens definition provides a Destination name and ingestion process without a write mode
-  then the Lens remains appending with its existing ingestion behaviour
+where an appending Lens definition provides `write: :append`, a Destination name, and an ingestion process
+  then the Lens uses its declared ingestion behaviour
 
 where an appending Lens omits its ontology
   then the Lens uses jido_gralkor's built-in default ontology
@@ -29,6 +29,4 @@ if an application registers an invalid Lens
   and an invalid Lens ontology is identified with its Lens
   and an invalid Lens ingestion process is identified with its Lens
   and an invalid Lens write mode is identified with its Lens
-  and a replaceable Lens without a graph format is identified with its Lens
-  and a replaceable Lens with an unsupported graph format is identified with its Lens
   and a Lens definition that combines appending and replaceable write settings is identified with its Lens

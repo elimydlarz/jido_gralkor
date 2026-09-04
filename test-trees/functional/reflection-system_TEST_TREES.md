@@ -1,20 +1,18 @@
-Functional: reflection-system (src: lib/gralkor/reflection.ex, lib/gralkor/reflection/registry.ex, lib/gralkor/reflection/erl_ontology.ex, lib/gralkor/artefact.ex, lib/gralkor/artefact/return_handler.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex, priv/reflections/erl.yaml, priv/reflections/generalisations.yaml; functional: test/functional/reflection_system_functional_test.exs)
+Functional: reflection-system (src: lib/jido_gralkor/plugin.ex, lib/gralkor/reflection.ex, lib/gralkor/reflection/erl_ontology.ex, lib/gralkor/artefact.ex, lib/gralkor/artefact/return_handler.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex; functional: test/functional/reflection_system_functional_test.exs)
 
 when Reflection declarations are validated
   while every Reflection has a non-blank name
   and every Reflection name is unique
-  and every Reflection references a repository YAML Chain of Thought
-  and every referenced Chain of Thought contains one or more ordered steps
+  and every Reflection contains one structured Chain of Thought
+  and every Chain of Thought contains one or more ordered steps
   and every step has a non-blank label and natural-language directions
   and every step declares one or more named structured outputs and their types
   and output names are unique across the Chain of Thought
   and every interpolation references an output from an earlier step
   and every Reflection declares an `outputs` list
   and exactly one output has kind `:destination`
-  and at most one output has kind `:return`
   and every Destination output references a registered Destination by name
   and every Destination output declares a valid extraction ontology
-  and every return output names a loaded handler implementing `Gralkor.Artefact.ReturnHandler`
     then validation succeeds
 
   if the configured Reflection registry is not a list
@@ -32,11 +30,8 @@ when Reflection declarations are validated
   if a Reflection has no Chain of Thought
     then validation fails identifying that Reflection
 
-  if a Reflection's Chain of Thought does not identify a repository YAML file
-    then validation fails identifying that Reflection and file
-
-  if a Reflection's Chain of Thought YAML cannot be loaded or parsed
-    then validation fails identifying that Reflection, file, and parse failure
+  if a Reflection's Chain of Thought is not structured configuration
+    then validation fails identifying that Reflection and configured value
 
   if a Chain of Thought has no steps
     then validation fails identifying that Reflection and Chain of Thought
@@ -71,9 +66,6 @@ when Reflection declarations are validated
   if a Reflection declares more than one Destination output
     then validation fails identifying that Reflection and duplicate Destination output kind
 
-  if a Reflection declares more than one return output
-    then validation fails identifying that Reflection and duplicate return output kind
-
   if a Reflection declares an unsupported output kind
     then validation fails identifying that Reflection and output kind
 
@@ -86,14 +78,10 @@ when Reflection declarations are validated
   if a Destination output declares an invalid ontology
     then validation fails identifying that Reflection and ontology
 
-  if a return output has no loaded handler implementing `Gralkor.Artefact.ReturnHandler`
-    then validation fails identifying that Reflection and handler
-
-where the packaged default Reflections are used
+when an agent's Gralkor runtime installs its package-owned Reflection definitions
   then ERL declares one Destination output referencing the packaged `operator` Destination
   and ERL's Destination output carries jido_gralkor's built-in experiential-learning ontology
   and generalisation declares one Destination output referencing the packaged `global` Destination
-  and neither packaged Reflection declares a return output
 
 where an application-defined Destination output omits its ontology
   then the output selects generic extraction for a consumer-delivered artefact
@@ -106,8 +94,11 @@ when a consumer stores the default ERL Reflection's artefact through its Destina
   and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields
   and the Runner-returned Learning payload contains exactly its problem kind, approach, success, and reusable lesson
 
-when a configured Reflection is loaded
-  then its declared YAML is loaded as the Reflection's Chain of Thought
+when a consumer Reflection is installed in an agent's runtime configuration
+  then its inline steps become the Reflection's Chain of Thought
+
+when the package-owned generalisation Reflection is installed
+  then it retains related-memory search and normalized generalisation artefacts
 
 when a Reflection Runner is invoked
   then its ordered Chain of Thought runner starts its first step for the supplied operator and invocation
@@ -151,7 +142,33 @@ when the final Chain of Thought step returns valid structured output
   and the artefact contains exactly its stable identifier and structured payload
   and the artefact carries no producer identity
   and the caller receives that artefact
-  and the Runner does not deliver any declared Destination or return output
+  and the Runner does not deliver the declared Destination output
+
+when a consumer triggers a named Reflection with an invocation callback
+  then submission returns its invocation identifier without waiting for the Reflection to finish
+
+if a consumer triggers a Reflection without a valid invocation callback
+  then submission fails before the Reflection is admitted
+
+when an admitted Reflection completes successfully
+  then its produced artefact is delivered to its Destination
+  and the submitting consumer's callback eventually receives the same invocation identifier
+  and that callback receives the produced artefact and successful delivery outcome
+
+when independently submitted Reflection invocations are running
+  then each invocation progresses without waiting for another invocation
+
+if Reflection production fails
+  then no Destination output is attempted
+  and the invocation callback eventually receives the production failure
+
+if a produced artefact cannot be delivered before delivery is abandoned
+  then no error artefact is written to the Reflection's Destination
+  and the invocation callback eventually receives the produced artefact and abandonment outcome
+
+when a consumer-owned scheduled job triggers a Reflection
+  then the scheduled job does not wait for the Reflection to finish
+  and its invocation callback eventually receives the same completion or failure outcome as any other consumer trigger
 
 if a Reflection's Chain of Thought completes without a valid final structured output
   then the Reflection fails identifying its name and missing artefact
