@@ -169,8 +169,7 @@ defmodule JidoGralkor.Runtime do
               :replace_graph ->
                 %Gralkor.Lens.Replaceable{
                   name: field(definition, :name),
-                  destination: Map.fetch!(destination_index, field(definition, :destination)),
-                  graph_format: :property_graph
+                  destination: Map.fetch!(destination_index, field(definition, :destination))
                 }
 
               _ ->

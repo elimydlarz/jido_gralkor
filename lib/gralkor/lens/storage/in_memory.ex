@@ -37,9 +37,9 @@ defmodule Gralkor.Lens.Storage.InMemory do
   end
 
   @impl Gralkor.Lens.Storage
-  def replace_graph(
+      def replace_graph(
         %Store{lens: %Replaceable{name: lens_name}} = store,
-        %Gralkor.Graph{data: graph}
+        %Gralkor.Graph{} = graph
       ) do
     owned_graph = %{
       nodes: Enum.map(graph.nodes, &put_owner(&1, lens_name)),

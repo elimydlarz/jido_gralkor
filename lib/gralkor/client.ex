@@ -208,76 +208,65 @@ defmodule Gralkor.Client do
     end
   end
 
-  defp validate_graph!(
-         %ReplaceableLens{graph_format: expected},
-         %Gralkor.Graph{format: supplied}
-       )
-       when expected != supplied do
-    raise ArgumentError,
-          "Lens graph format mismatch: expected #{inspect(expected)}, supplied #{inspect(supplied)}"
+  defp validate_graph!(%ReplaceableLens{}, %Gralkor.Graph{} = graph) do
+    validate_graph_data!(graph)
   end
 
-  defp validate_graph!(%ReplaceableLens{graph_format: :property_graph}, %Gralkor.Graph{
-         data: data
-       }) do
-    validate_property_graph!(data)
-  end
-
-  defp validate_property_graph!(%{nodes: nodes, relationships: relationships} = data)
+  defp validate_graph_data!(%Gralkor.Graph{nodes: nodes, relationships: relationships} = graph)
        when is_list(nodes) and is_list(relationships) do
-    node_ids = validate_property_graph_nodes!(nodes, data)
-    validate_property_graph_relationships!(relationships, node_ids, data)
+    node_ids = validate_graph_nodes!(nodes, graph)
+    validate_graph_relationships!(relationships, node_ids, graph)
   end
 
-  defp validate_property_graph!(data),
-    do: invalid_property_graph!("expected node and relationship lists", data)
+  defp validate_graph_data!(graph),
+    do: invalid_graph!("expected node and relationship lists", graph)
 
-  defp validate_property_graph_nodes!(nodes, data) do
+  defp validate_graph_nodes!(nodes, graph) do
     Enum.reduce(nodes, MapSet.new(), fn node, node_ids ->
       case node do
         %{id: id, labels: labels, properties: properties}
         when is_binary(id) and is_list(labels) and is_map(properties) ->
           unless String.trim(id) != "" and
                    Enum.all?(labels, &(is_binary(&1) and String.trim(&1) != "")) do
-            invalid_property_graph!("invalid node", data)
+            invalid_graph!("invalid node", graph)
           end
 
           if MapSet.member?(node_ids, id) do
-            invalid_property_graph!("duplicate node identifier #{inspect(id)}", data)
+            invalid_graph!("duplicate node identifier #{inspect(id)}", graph)
           end
 
           MapSet.put(node_ids, id)
 
         _ ->
-          invalid_property_graph!("invalid node", data)
+          invalid_graph!("invalid node", graph)
       end
     end)
   end
 
-  defp validate_property_graph_relationships!(relationships, node_ids, data) do
+  defp validate_graph_relationships!(relationships, node_ids, graph) do
     Enum.each(relationships, fn relationship ->
       case relationship do
         %{from: source, to: destination, type: type, properties: properties}
         when is_binary(source) and is_binary(destination) and is_binary(type) and
                is_map(properties) ->
           unless String.trim(type) != "" do
-            invalid_property_graph!("invalid relationship", data)
+            invalid_graph!("invalid relationship", graph)
           end
 
           Enum.each([source, destination], fn endpoint ->
             unless MapSet.member?(node_ids, endpoint) do
-              invalid_property_graph!("missing relationship endpoint #{inspect(endpoint)}", data)
+              invalid_graph!("missing relationship endpoint #{inspect(endpoint)}", graph)
             end
           end)
 
         _ ->
-          invalid_property_graph!("invalid relationship", data)
+          invalid_graph!("invalid relationship", graph)
       end
     end)
   end
 
-  defp invalid_property_graph!(reason, data) do
-    raise ArgumentError, "invalid property_graph data: #{reason}; got #{inspect(data)}"
+  defp invalid_graph!(reason, graph) do
+    raise ArgumentError, "invalid graph data: #{reason}; got #{inspect(graph)}"
   end
 
   @spec search(Search.t()) ::
@@ -508,8 +497,7 @@ defmodule Gralkor.Client do
             fetch_lens_destination!(
               Keyword.fetch!(definition, :name),
               Keyword.get(definition, :destination)
-            ),
-          graph_format: Keyword.fetch!(definition, :graph_format)
+            )
         }
     end
   end
@@ -583,18 +571,11 @@ defmodule Gralkor.Client do
         end
 
       :replace_graph ->
-        graph_format = Keyword.get(definition, :graph_format)
-
         fetch_lens_destination!(name, Keyword.get(definition, :destination))
 
         if Keyword.has_key?(definition, :ontology) or Keyword.has_key?(definition, :ingestion) do
           raise ArgumentError,
                 "invalid Lens #{inspect(name)} combines appending and replaceable write settings"
-        end
-
-        unless graph_format == :property_graph do
-          raise ArgumentError,
-                "invalid Lens #{inspect(name)} graph format #{inspect(graph_format)}"
         end
 
       write ->

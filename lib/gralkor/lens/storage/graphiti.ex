@@ -16,8 +16,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
           (String.t(), String.t(), pos_integer() ->
              {:ok, [String.t()]} | {:error, term()})
   @type replace_graph_fn ::
-          (String.t(), String.t(), :property_graph, Gralkor.Graph.property_graph() ->
-             :ok | {:error, term()})
+          (String.t(), String.t(), :property_graph, map() -> :ok | {:error, term()})
 
   @impl true
   def add_episode(%Store{} = store, content, source_description) do
@@ -33,7 +32,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
           :ok | {:error, term()}
   def replace_graph(
         %Store{operator_id: operator_id, lens: %Replaceable{} = lens},
-        %Gralkor.Graph{data: data},
+        %Gralkor.Graph{} = graph,
         opts
       ) do
     replace_graph_fn = replace_graph_option(opts)
@@ -41,8 +40,8 @@ defmodule Gralkor.Lens.Storage.Graphiti do
     replace_graph_fn.(
       Destination.graph_id(lens.destination, operator_id),
       lens.name,
-      lens.graph_format,
-      data
+      :property_graph,
+      Map.from_struct(graph)
     )
   end
 
