@@ -107,8 +107,28 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :unsupported}
   end
 
+  defmodule RecordingLensStorage do
+    @behaviour Gralkor.Lens.Storage
+
+    @impl true
+    def add_episode(_, _, _), do: {:error, :unsupported}
+
+    @impl true
+    def search(_, _, _), do: {:error, :unsupported}
+
+    @impl true
+    def replace_graph(store, graph) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid),
+        {:runtime_graph_replacement, store.lens.destination.name, graph}
+      )
+
+      :ok
+    end
+  end
+
   setup do
-    keys = [:runtime_configuration_test_pid, :destination_storage]
+    keys = [:runtime_configuration_test_pid, :destination_storage, :lens_storage]
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
     Application.put_env(:jido_gralkor, :runtime_configuration_test_pid, self())
 
@@ -539,6 +559,52 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "when named graph replacement begins" do
+    test "then it uses the replaceable Lens definition active for the targeted agent" do
+      Application.put_env(:jido_gralkor, :lens_storage, RecordingLensStorage)
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-current-graph-replacement",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 replaceable_configuration("first-memory")
+               )
+
+      graph = %Gralkor.Graph{nodes: [], relationships: []}
+
+      assert :ok =
+               Gralkor.Client.replace(agent_server, %Gralkor.Replace{
+                 operator_id: "operator-one",
+                 lens: "topology",
+                 graph: graph
+               })
+
+      assert_receive {:runtime_graph_replacement, "first-memory", ^graph}
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 replaceable_configuration("second-memory")
+               )
+
+      assert :ok =
+               Gralkor.Client.replace(agent_server, %Gralkor.Replace{
+                 operator_id: "operator-one",
+                 lens: "topology",
+                 graph: graph
+               })
+
+      assert_receive {:runtime_graph_replacement, "second-memory", ^graph}
+    end
+  end
+
   describe "when complete runtime configuration contains a replaceable Lens declaring `write: :replace_graph` and a Destination" do
     test "then replacement accepts the Lens for complete-graph replacement" do
       agent_server =
@@ -680,6 +746,20 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     %{
       destinations: [%{name: destination}],
       lenses: [],
+      reflections: []
+    }
+  end
+
+  defp replaceable_configuration(destination) do
+    %{
+      destinations: [%{name: destination}],
+      lenses: [
+        %{
+          name: "topology",
+          destination: destination,
+          write: :replace_graph
+        }
+      ],
       reflections: []
     }
   end
