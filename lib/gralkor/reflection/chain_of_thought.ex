@@ -36,17 +36,6 @@ defmodule Gralkor.Reflection.ChainOfThought do
     end
   end
 
-  def load(path) do
-    with {:ok, yaml} <- YamlElixir.read_from_file(path),
-         {:ok, steps} <- parse_steps(yaml) do
-      {:ok, %__MODULE__{path: path, steps: steps}}
-    else
-      {:error, reason} -> {:error, reason}
-    end
-  rescue
-    error -> {:error, Exception.message(error)}
-  end
-
   @doc false
   def validate(%__MODULE__{steps: steps}) do
     raw_steps =

@@ -49,7 +49,6 @@ defmodule JidoGralkor.MixProject do
       {:jido_ai, "~> 2.3"},
       {:pythonx, "~> 0.4"},
       {:jason, "~> 1.4"},
-      {:yaml_elixir, "~> 2.12"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:muzak, git: "git@github.com:elimydlarz/muzak.git", branch: "elixir-1.19", only: :test}
     ]
