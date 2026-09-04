@@ -492,6 +492,51 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "if a Lens or Reflection references an unknown Destination" do
+    test "then replacement fails identifying the definition and Destination" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent, id: "runtime-configuration-unknown-destination", register_global: false}
+        )
+
+      assert {:error, {:unknown_destination, :lenses, "observations", "missing"}} =
+               JidoGralkor.Runtime.replace(agent_server, %{
+                 destinations: [],
+                 lenses: [
+                   %{
+                     name: "observations",
+                     destination: "missing",
+                     write: :append,
+                     ingestion: RecordingIngestion
+                   }
+                 ],
+                 reflections: []
+               })
+
+      assert {:error, {:unknown_destination, :reflections, "review", "missing"}} =
+               JidoGralkor.Runtime.replace(agent_server, %{
+                 destinations: [],
+                 lenses: [],
+                 reflections: [
+                   %{
+                     name: "review",
+                     outputs: [%{kind: :destination, destination: "missing"}],
+                     chain_of_thought: %{
+                       steps: [
+                         %{
+                           label: "review",
+                           directions: "Review.",
+                           output: %{"summary" => "string"}
+                         }
+                       ]
+                     }
+                   }
+                 ]
+               })
+    end
+  end
+
   describe "if the consumer supplies invalid durable configuration while starting an agent" do
     test "then the Gralkor plugin fails to start for that agent" do
       previous = Process.flag(:trap_exit, true)
