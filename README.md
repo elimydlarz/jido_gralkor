@@ -593,66 +593,48 @@ On each store write, graphiti receives the selected Lens or Reflection ontology'
 
 ## Configure Reflections
 
-A Reflection is a named synthesis process declared with a repository YAML Chain of Thought and an `outputs` list. The registry loads and validates declarations; it does not decide when they run.
-
-Every Reflection declares exactly one `:destination` output and at most one `:return` output. The Destination output names the memory Destination and extraction ontology. A return output names a consumer module implementing `Gralkor.Artefact.ReturnHandler`. These declarations are resolved output targets: after `Gralkor.Reflection.Runner` produces an artefact, the consumer decides when and how to call `Gralkor.Destination.Storage.put_artefact/4` and the handler's standard `return/3` callback. Jido Gralkor does not schedule, supervise, retry, or journal Reflection execution or output delivery.
+A Reflection is a named synthesis process declared in one agent's runtime configuration with an inline structured Chain of Thought and exactly one Destination output. The consumer decides when it runs; after admission, that agent's JidoGralkor runtime owns production, Destination delivery, retry, abandonment, and the invocation callback.
 
 The package supplies two declarations by default:
 
-- `generalisations` uses `priv/reflections/generalisations.yaml` and declares a `global` Destination output using `Gralkor.DefaultOntology`.
-- `erl` uses `priv/reflections/erl.yaml` and declares an `operator` Destination output using `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
+- `generalisations` declares a `global` Destination output using `Gralkor.DefaultOntology`.
+- `erl` declares an `operator` Destination output using `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
 
-Before packaged generalisation inference begins, Gralkor performs one default episode search across every accessible registered Destination. Its query contains every current representation, so the same search returns related Lens-authored observations and existing Reflection-authored generalisations; inference receives those results separately from the current representations. A related-memory search failure fails that Reflection before inference without changing the completed ingestion.
-
-The packaged process inspects current and related observations with prior generalisations, then carries forward, combines, broadens, narrows, splits, replaces, or otherwise revises generalisations as those observations warrant. Each stored generalisation contains exactly `content`, evolution-depth `level`, and `evolves_from`. `evolves_from` contains only the influencing prior generalisations, each snapshotted as exactly its `content` and `level`; historical predecessors and snapshots remain unchanged. A generalisation with no snapshots is level `1`; otherwise its level is one greater than the highest referenced level.
-
-Set `:reflections` to replace those defaults, and set `:reflection_root` when their YAML paths resolve from somewhere other than the installed application root. A Destination output's optional `:ontology` defaults to `Gralkor.DefaultOntology`.
+Package-owned definitions are always installed alongside the consumer's `runtime_config.reflections`; consumers cannot replace them. A Destination output's optional `:ontology` defaults to `Gralkor.DefaultOntology`.
 
 ```elixir
-config :jido_gralkor,
-  reflection_root: File.cwd!(),
+runtime_config = %{
+  destinations: [],
+  lenses: [],
   reflections: [
-    [
+    %{
       name: "release-review",
-      chain_of_thought: "priv/reflections/release-review.yaml",
       outputs: [
-        [
+        %{
           kind: :destination,
           destination: "global",
           ontology: MyApp.ReleaseOntology
-        ],
-        [kind: :return, handler: MyApp.ReleaseReviews]
-      ]
-    ]
+        }
+      ],
+      chain_of_thought: %{
+        steps: [
+          %{
+            label: "review",
+            directions: "Review the supplied release evidence.",
+            output: %{"assessment" => "string", "approved" => "boolean"}
+          }
+        ]
+      }
+    }
   ]
+}
 ```
 
-The return handler is intentionally small because Gralkor owns the mapping and callback name:
+A consumer submits a configured Reflection through the AgentServer that owns it. Submission returns the replay-stable invocation ID without waiting for inference, storage, or callback delivery:
 
 ```elixir
-defmodule MyApp.ReleaseReviews do
-  @behaviour Gralkor.Artefact.ReturnHandler
-
-  @impl true
-  def return(operator_id, invocation_id, %Gralkor.Artefact{} = artefact) do
-    MyApp.deliver_release_review(operator_id, invocation_id, artefact)
-  end
-end
-```
-
-A consumer selects and invokes a configured Reflection synchronously, then orchestrates each declared output explicitly:
-
-```elixir
-alias Gralkor.Destination.Storage
-alias Gralkor.Reflection.Registry
-alias Gralkor.Reflection.Runner
-
 operator_id = "operator-42"
 invocation_id = "release-2026-09-02"
-
-reflection =
-  Enum.find(Registry.configured!(), &(&1.name == "release-review")) ||
-    raise "unknown Reflection"
 
 invocation = %{
   id: invocation_id,
@@ -661,26 +643,28 @@ invocation = %{
   representations: completed_representations
 }
 
-{:ok, artefact} =
-  Runner.run(
-    reflection,
+callback = fn result -> send(review_consumer, {:release_review, result}) end
+
+{:ok, ^invocation_id} =
+  Gralkor.Client.reflect(
+    agent_server,
+    "release-review",
     invocation,
+    callback,
     tools: host_tools,
     tool_context: host_tool_context
   )
-
-Enum.each(reflection.outputs, fn
-  %{kind: :destination} = output ->
-    :ok = Storage.put_artefact(output, reflection.name, operator_id, artefact)
-
-  %{kind: :return, handler: handler} ->
-    :ok = handler.return(operator_id, invocation_id, artefact)
-end)
 ```
 
-Each YAML file contains an ordered, non-empty `steps` list. A step declares a `label`, natural-language `directions`, and an exact structured `output` schema. Later directions may interpolate prior outputs with `{{output_name}}`. At runtime each step receives the invocation ID, invocation context, completed lensed representations, host tools, and tool context. The model may direct tool calls described by the custom directions; tool results return to the same step before it produces its structured output. That output is validated exactly, made available to later interpolation, and the final step becomes one `%Gralkor.Artefact{}` whose fields are exactly `id` and `payload`. Producer identity remains execution provenance and is not embedded in the artefact.
+The callback eventually receives a map with `:invocation_id`, the terminal `:outcome`, and `:artefact` when production succeeded. A successful delivery reports `outcome: :delivered`. A non-retryable production failure reports `{:production_failed, reason}`. Abandonment reports `{:abandoned, %{stage: :production | :delivery, reason: reason}}`; delivery abandonment still includes the produced artefact.
 
-Registry-backed client operations resolve current application configuration per call, and `Registry.configured!/0` resolves the current Reflection declarations each time the consumer calls it. Mounted plugins retain their resolved ingestion Lens and each MemorySearch invocation carries its own selectors. Remount a plugin to change its mount settings; restart the application after changing startup-owned capture or backend configuration.
+Each admitted invocation progresses independently. A 5xx failure from inference, packaged-generalisation related-memory retrieval, or Destination delivery retries with exponential backoff until success or twenty-four hours from the first failed attempt. A 4xx failure is abandoned immediately. Unfinished work terminates with the agent; the consumer owns durable scheduling and may resubmit after its supervisor starts a replacement agent.
+
+Each inline Chain of Thought contains an ordered, non-empty `steps` list. A step declares a non-blank `label`, natural-language `directions`, and an exact non-empty structured `output` schema. Later directions may interpolate only prior outputs with `{{output_name}}`. Each step receives the invocation identity and context, completed lensed representations, host tools, and tool context. The final step becomes one `%Gralkor.Artefact{}` whose fields are exactly `id` and `payload`.
+
+Before packaged generalisation inference begins, Gralkor performs one default episode search through the targeted agent runtime across every accessible registered Destination. The same search supplies related Lens-authored observations and prior Reflection-authored generalisations. Generalisation lineage is validated only by the structured output contract; Gralkor does not compare model-produced lineage with the related-memory input.
+
+Programmatic requests and consumer-owned scheduled jobs use the same `Client.reflect/5` path. Gralkor does not own cron, calendar scheduling, or durable job state.
 
 Multiple Reflections and Lenses may save to the same Destination. Search selects Destinations directly:
 
