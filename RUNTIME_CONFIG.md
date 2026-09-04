@@ -214,9 +214,9 @@ Retries are supervised in memory beneath the consuming agent. If the agent termi
 
 ## Generalisation lineage
 
-The packaged generalisations Reflection retrieves related memory and asks the model for structured generalisation output, including lineage.
+The packaged generalisations Reflection retrieves related memory and asks the model for structured generalisation output, including lineage. Its prompt directs a new generalisation with no lineage to use level 1 and an evolved generalisation to use one level above its highest lineage snapshot.
 
-Lineage receives the ordinary structural and type validation declared by the Reflection's output contract. Gralkor does not compare model-produced lineage with the related-memory input and does not independently validate whether a lineage claim is eligible or fabricated.
+Lineage receives the ordinary structural and type validation declared by the Reflection's output contract. Gralkor preserves the model-produced values without comparing them with the related-memory input and does not independently validate whether a lineage claim is eligible or fabricated.
 
 Only a successfully produced generalisation artefact is delivered to its Destination. Retrieval, inference, validation, or delivery failures follow the common callback and retry rules.
 
