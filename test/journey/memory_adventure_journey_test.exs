@@ -17,7 +17,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   alias Gralkor.Ingest
   alias Gralkor.Message
   alias Gralkor.Artefact
-  alias Gralkor.Reflection.Runner
   alias Gralkor.Replace
   alias Gralkor.Search
   alias JidoGralkor.Actions.MemoryAdd
@@ -781,21 +780,21 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     selector_query = "reversible canary configuration faults deployments"
 
     cross_product_memory_search =
-      memory_search(@operator_one, %{
+      memory_search(agent, @operator_one, %{
         query: selector_query,
         destinations: ["operator"],
         lenses: ["published"]
       })
 
     selected_memory_search =
-      memory_search(@operator_one, %{
+      memory_search(agent, @operator_one, %{
         query: selector_query,
         destinations: ["operator"],
         lenses: ["work-notes"]
       })
 
     post_selector_memory_search =
-      memory_search(@operator_one, %{query: selector_query})
+      memory_search(agent, @operator_one, %{query: selector_query})
 
     work_notes_input =
       search_until(
@@ -1032,16 +1031,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          reflection_name,
          operator_id,
          invocation_id,
-         representations,
-         opts \\ []
+         representations
        ) do
     invoke_reflection_result!(
       agent,
       reflection_name,
       operator_id,
       invocation_id,
-      representations,
-      opts
+      representations
     ).artefact
   end
 
@@ -1050,8 +1047,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          reflection_name,
          operator_id,
          invocation_id,
-         representations,
-         opts \\ []
+         representations
        ) do
     test_pid = self()
     callback_ref = make_ref()
@@ -1063,24 +1059,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       representations: representations
     }
 
-    runner_opts =
-      case Keyword.get(opts, :inference_observer) do
-        observer when is_function(observer, 1) ->
-          [
-            inference: fn request ->
-              observer.(request)
-              Runner.default_inference(request)
-            end
-          ]
-
-        nil ->
-          []
-      end
-
     callback = fn result -> send(test_pid, {callback_ref, result}) end
 
     assert {:ok, ^invocation_id} =
-             Client.reflect(agent, reflection_name, invocation, callback, runner_opts)
+             Client.reflect(agent, reflection_name, invocation, callback)
 
     receive do
       {^callback_ref,
@@ -1194,9 +1176,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     results
   end
 
-  defp memory_search(operator_id, params) do
+  defp memory_search(agent, operator_id, params) do
     assert {:ok, %{result: result}} =
-             MemorySearch.run(params, %{agent_id: operator_id})
+             MemorySearch.run(params, %{agent_id: operator_id, gralkor_runtime: agent})
 
     decoded = Jason.decode!(result)
     assert is_list(decoded)
