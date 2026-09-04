@@ -183,7 +183,8 @@ defmodule Gralkor.ApplicationTest do
                  "Eli",
                  "observations",
                  turns,
-                 "ingestion-one"
+                 "ingestion-one",
+                 nil
                )
 
       assert_receive {:ingested,
@@ -219,7 +220,8 @@ defmodule Gralkor.ApplicationTest do
                  "Eli",
                  "observations",
                  turns,
-                 "ingestion-one"
+                 "ingestion-one",
+                 nil
                )
 
       assert_receive {:ingested,
@@ -273,7 +275,8 @@ defmodule Gralkor.ApplicationTest do
                  "Eli",
                  "observations",
                  [],
-                 "ingestion"
+                 "ingestion",
+                 nil
                )
     end
 
@@ -299,7 +302,8 @@ defmodule Gralkor.ApplicationTest do
                  "Eli",
                  "observations",
                  [],
-                 "ingestion"
+                 "ingestion",
+                 nil
                )
     end
   end
