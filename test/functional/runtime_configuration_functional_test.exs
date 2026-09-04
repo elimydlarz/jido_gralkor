@@ -490,6 +490,24 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  reflections: []
                })
     end
+
+    test "and every definition collection requires non-blank unique names" do
+      for collection <- [:destinations, :lenses, :reflections] do
+        blank = valid_runtime_definition(collection, " ")
+
+        assert {:error, {:blank_definition_name, ^collection, " "}} =
+                 JidoGralkor.Runtime.validate(
+                   Map.put(empty_runtime_configuration(), collection, [blank])
+                 )
+
+        duplicate = valid_runtime_definition(collection, "duplicate")
+
+        assert {:error, {:duplicate_definition_name, ^collection, "duplicate"}} =
+                 JidoGralkor.Runtime.validate(
+                   Map.put(empty_runtime_configuration(), collection, [duplicate, duplicate])
+                 )
+      end
+    end
   end
 
   describe "if a Lens or Reflection references an unknown Destination" do
@@ -889,6 +907,36 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         }
       ],
       reflections: []
+    }
+  end
+
+  defp empty_runtime_configuration,
+    do: %{destinations: [], lenses: [], reflections: []}
+
+  defp valid_runtime_definition(:destinations, name), do: %{name: name}
+
+  defp valid_runtime_definition(:lenses, name) do
+    %{
+      name: name,
+      destination: "global",
+      write: :append,
+      ingestion: RecordingIngestion
+    }
+  end
+
+  defp valid_runtime_definition(:reflections, name) do
+    %{
+      name: name,
+      outputs: [%{kind: :destination, destination: "global"}],
+      chain_of_thought: %{
+        steps: [
+          %{
+            label: "review",
+            directions: "Review.",
+            output: %{"summary" => "string"}
+          }
+        ]
+      }
     }
   end
 
