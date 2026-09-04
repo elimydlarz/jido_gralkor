@@ -431,6 +431,36 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "when complete runtime configuration contains a replaceable Lens declaring `write: :replace_graph` and a Destination" do
+    test "then replacement accepts the Lens for complete-graph replacement" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-replaceable-lens",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, %{
+                 destinations: [%{name: "project"}],
+                 lenses: [
+                   %{
+                     name: "project-topology",
+                     destination: "project",
+                     write: :replace_graph
+                   }
+                 ],
+                 reflections: []
+               })
+
+      assert %Gralkor.Lens.Replaceable{
+               name: "project-topology",
+               destination: %Gralkor.Destination{name: "project"}
+             } = JidoGralkor.Runtime.lens!(agent_server, "project-topology")
+    end
+  end
+
   defp ingestion_configuration(destination) do
     %{
       destinations: [%{name: destination}],
