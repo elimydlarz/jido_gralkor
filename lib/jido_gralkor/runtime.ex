@@ -296,7 +296,9 @@ defmodule JidoGralkor.Runtime do
 
   defp validate_destination_references(configuration) do
     destination_names =
-      MapSet.new(["operator", "global"] ++ Enum.map(configuration.destinations, &field(&1, :name)))
+      MapSet.new(
+        ["operator", "global"] ++ Enum.map(configuration.destinations, &field(&1, :name))
+      )
 
     with :ok <- validate_lens_destinations(configuration.lenses, destination_names) do
       validate_reflection_destinations(configuration.reflections, destination_names)
