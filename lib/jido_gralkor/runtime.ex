@@ -149,6 +149,7 @@ defmodule JidoGralkor.Runtime do
          :ok <- validate_definition_names(configuration),
          :ok <- validate_reserved_names(configuration),
          :ok <- validate_lens_shapes(configuration.lenses),
+         :ok <- validate_reflection_shapes(configuration.reflections),
          :ok <- validate_destination_references(configuration),
          :ok <- validate_reserved_entity_kinds(configuration) do
       destinations =
@@ -365,6 +366,83 @@ defmodule JidoGralkor.Runtime do
     do:
       is_atom(ontology) and Code.ensure_loaded?(ontology) and
         function_exported?(ontology, :__ontology__, 0)
+
+  defp validate_reflection_shapes(reflections) do
+    Enum.reduce_while(reflections, :ok, fn definition, :ok ->
+      case validate_reflection_shape(definition) do
+        :ok -> {:cont, :ok}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp validate_reflection_shape(definition) do
+    name = field(definition, :name)
+    outputs = field(definition, :outputs)
+
+    with :ok <- validate_reflection_outputs(name, outputs),
+         {:ok, _chain_of_thought} <- validate_chain_of_thought(name, definition) do
+      :ok
+    end
+  end
+
+  defp validate_reflection_outputs(name, outputs) when not is_list(outputs),
+    do: {:error, {:invalid_reflection_outputs, name, outputs}}
+
+  defp validate_reflection_outputs(name, outputs) do
+    unknown_fields =
+      Enum.find_value(outputs, fn output ->
+        case definition_keys(output) do
+          {:ok, keys} ->
+            case Enum.reject(keys, &known_field?(&1, [:kind, :destination, :ontology])) do
+              [] -> nil
+              unknown -> unknown
+            end
+
+          :error ->
+            :invalid_output
+        end
+      end)
+
+    destinations = Enum.filter(outputs, &(field(&1, :kind) == :destination))
+    unsupported = Enum.find(outputs, &(field(&1, :kind) != :destination))
+    output = List.first(destinations)
+    destination = field(output, :destination)
+    ontology = field(output, :ontology) || Gralkor.DefaultOntology
+
+    cond do
+      unknown_fields == :invalid_output ->
+        {:error, {:invalid_reflection_output, name}}
+
+      is_list(unknown_fields) ->
+        {:error, {:unknown_reflection_output_fields, name, unknown_fields}}
+
+      unsupported ->
+        {:error, {:unsupported_reflection_output, name, field(unsupported, :kind)}}
+
+      destinations == [] ->
+        {:error, {:missing_destination_output, name}}
+
+      length(destinations) > 1 ->
+        {:error, {:duplicate_destination_output, name}}
+
+      not non_blank?(destination) ->
+        {:error, {:missing_reflection_destination, name, destination}}
+
+      not valid_ontology?(ontology) ->
+        {:error, {:invalid_reflection_ontology, name, ontology}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_chain_of_thought(name, definition) do
+    case ChainOfThought.from_config(field(definition, :chain_of_thought)) do
+      {:ok, chain_of_thought} -> {:ok, chain_of_thought}
+      {:error, reason} -> {:error, {:invalid_chain_of_thought, name, reason}}
+    end
+  end
 
   defp validate_destination_references(configuration) do
     destination_names =
