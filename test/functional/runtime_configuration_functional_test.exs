@@ -48,6 +48,14 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  defmodule PersonOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity Person do
+      field :name, :string
+    end
+  end
+
   defmodule RecordingIngestion do
     @behaviour Gralkor.Lens.Ingestion
 
@@ -544,6 +552,36 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                    reflections: []
                  })
       end
+    end
+  end
+
+  describe "when an ontology declares custom entity kinds distinct from `Entity`, `Episodic`, and `Community`" do
+    test "then those entity kinds remain eligible for runtime configuration" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-person-ontology",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, %{
+                 destinations: [%{name: "project"}],
+                 lenses: [
+                   %{
+                     name: "people",
+                     destination: "project",
+                     write: :append,
+                     ingestion: RecordingIngestion,
+                     ontology: PersonOntology
+                   }
+                 ],
+                 reflections: []
+               })
+
+      assert %Gralkor.Lens{ontology: PersonOntology} =
+               JidoGralkor.Runtime.lens!(agent_server, "people")
     end
   end
 
