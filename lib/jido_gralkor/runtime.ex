@@ -270,7 +270,7 @@ defmodule JidoGralkor.Runtime do
   defp validate_reserved_names(configuration) do
     packaged = %{
       destinations: ["operator", "global"],
-      lenses: ["operator"],
+      lenses: ["operator", "global"],
       reflections: Enum.map(Gralkor.Reflection.Packaged.definitions(), &field(&1, :name))
     }
 
@@ -295,6 +295,17 @@ defmodule JidoGralkor.Runtime do
 
         duplicate = duplicate(names) ->
           {:halt, {:error, {:duplicate_definition_name, collection, duplicate}}}
+
+        collection == :destinations and
+            (reserved = Enum.find(names, &String.starts_with?(&1, "operator/"))) ->
+          {:halt, {:error, {:reserved_destination_namespace, reserved}}}
+
+        collection == :lenses and "default" in names ->
+          {:halt, {:error, {:retired_definition_name, :lenses, "default", "operator"}}}
+
+        collection in [:lenses, :reflections] and
+            (reserved = Enum.find(names, &String.contains?(&1, " [lens: "))) ->
+          {:halt, {:error, {:reserved_provenance_syntax, collection, reserved}}}
 
         true ->
           {:cont, :ok}
