@@ -56,7 +56,13 @@ defmodule JidoGralkor.Actions.MemorySearch do
         result_type: :episodes
       }
 
-      case Client.search(request) do
+      result =
+        case Map.get(context, :gralkor_runtime) do
+          nil -> Client.search(request)
+          runtime_owner -> Client.search(runtime_owner, request)
+        end
+
+      case result do
         {:ok, results} -> {:ok, %{result: Jason.encode!(results)}}
         {:error, reason} -> {:error, reason}
       end

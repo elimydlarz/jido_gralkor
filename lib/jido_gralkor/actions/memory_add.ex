@@ -42,14 +42,19 @@ defmodule JidoGralkor.Actions.MemoryAdd do
       result =
         case Map.get(context, :lens) do
           lens when is_binary(lens) ->
-            Client.ingest(%Ingest{
+            request = %Ingest{
               id: "memory-add:#{System.unique_integer([:positive, :monotonic])}",
               operator_id: operator_id,
               lens: lens,
               source_kind: params.source_kind,
               content: params.content,
               source_description: params.source_description
-            })
+            }
+
+            case Map.get(context, :gralkor_runtime) do
+              nil -> Client.ingest(request)
+              runtime_owner -> Client.ingest(runtime_owner, request)
+            end
 
           _ ->
             group_id = Client.operator_graph_id(operator_id)
