@@ -378,6 +378,7 @@ defmodule JidoGralkor.Runtime do
 
   defp server_status(%{status: status}), do: normalize_status(status)
   defp server_status(%{"status" => status}), do: normalize_status(status)
+  defp server_status(value) when is_map(value), do: value |> Map.values() |> Enum.find_value(&server_status/1)
 
   defp server_status(value) when is_tuple(value) do
     value |> Tuple.to_list() |> Enum.find_value(&server_status/1)
