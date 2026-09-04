@@ -15,11 +15,14 @@ The package registers two Destinations:
 - `global` is the single shared global graph. Its logical graph ID is exactly `global` for every operator.
 - `operator` is operator-local. Its logical graph ID is `operator/<operator id>`.
 
-An application may register another Destination with only a name:
+An agent may register another Destination with only a name in its complete runtime configuration:
 
 ```elixir
-config :jido_gralkor,
-  destinations: [[name: "product-knowledge"]]
+runtime_config = %{
+  destinations: [%{name: "product-knowledge"}],
+  lenses: [],
+  reflections: []
+}
 ```
 
 Its logical graph ID is exactly `product-knowledge`, shared by every operator. There is no address or scope syntax: `global/x` is just another literal Destination name, not part of the `global` graph. Names beginning `operator/` are reserved for operator-local logical IDs and cannot be registered as application Destinations.
@@ -33,28 +36,39 @@ Most shared application memory should target the packaged `global` Destination. 
 Destinations do not own extraction ontologies. Each appending Lens and Reflection Destination output selects the ontology for the information it writes, defaulting to `Gralkor.DefaultOntology`:
 
 ```elixir
-config :jido_gralkor,
+runtime_config = %{
+  destinations: [],
   lenses: [
-    [
+    %{
       name: "support-cases",
       destination: "global",
+      write: :append,
       ontology: MyApp.SupportOntology,
       ingestion: MyApp.SupportIngestion
-    ]
+    }
   ],
   reflections: [
-    [
+    %{
       name: "release-review",
-      chain_of_thought: "priv/reflections/release-review.yaml",
       outputs: [
-        [
+        %{
           kind: :destination,
           destination: "global",
           ontology: MyApp.ReleaseOntology
+        }
+      ],
+      chain_of_thought: %{
+        steps: [
+          %{
+            label: "review",
+            directions: "Review the supplied release evidence.",
+            output: %{"assessment" => "string"}
+          }
         ]
-      ]
-    ]
+      }
+    }
   ]
+}
 ```
 
 The packaged `operator` Lens writes with `Gralkor.DefaultOntology`. The packaged generalisation Reflection has a `global` Destination output with `Gralkor.DefaultOntology`; packaged ERL has an `operator` Destination output with `Gralkor.Reflection.ERLOntology`.
@@ -72,7 +86,7 @@ Information saved through other Lenses, information saved through Reflection out
 Search reads registered Destinations. With no selectors it searches every accessible registered Destination and returns relevant episodes:
 
 ```elixir
-Gralkor.Client.search(%Gralkor.Search{
+Gralkor.Client.search(agent_server, %Gralkor.Search{
   operator_id: operator_id,
   query: "What should I remember?"
 })
@@ -83,7 +97,7 @@ That includes the packaged `operator` and `global` Destinations and every applic
 Callers may narrow the graphs with `destinations` and may narrow episode writers with `lenses`:
 
 ```elixir
-Gralkor.Client.search(%Gralkor.Search{
+Gralkor.Client.search(agent_server, %Gralkor.Search{
   operator_id: operator_id,
   query: "What should I remember?",
   destinations: ["operator", "global"],
@@ -111,7 +125,7 @@ A Reflection-written result carries `episode.reflection` with the Reflection nam
 Facts, nodes, and artefacts remain available as explicit advanced result types:
 
 ```elixir
-Gralkor.Client.search(%Gralkor.Search{
+Gralkor.Client.search(agent_server, %Gralkor.Search{
   operator_id: operator_id,
   query: "What should I remember?",
   destinations: ["global"],
