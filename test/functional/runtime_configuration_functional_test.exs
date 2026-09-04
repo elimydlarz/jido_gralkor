@@ -880,8 +880,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
             {Map.delete(base, :ingestion), {:invalid_lens_ingestion, "observations", nil}},
             {Map.put(base, :ingestion, String),
              {:invalid_lens_ingestion, "observations", String}},
-            {Map.put(base, :ontology, String),
-             {:invalid_lens_ontology, "observations", String}}
+            {Map.put(base, :ontology, String), {:invalid_lens_ontology, "observations", String}}
           ] do
         assert {:error, ^expected} =
                  JidoGralkor.Runtime.validate(%{
