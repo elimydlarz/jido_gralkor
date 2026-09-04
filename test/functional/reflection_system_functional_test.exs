@@ -94,6 +94,26 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
+  defmodule AlwaysRetryableOutputStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_, _, _, _, _, _), do: {:ok, []}
+
+    @impl true
+    def put_artefact(_, _, _, artefact) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
+        {:retryable_destination_attempt, artefact}
+      )
+
+      {:error, %{status: 503, reason: :temporarily_unavailable}}
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+  end
+
   defmodule OutputProbeReturnHandler do
     @behaviour Gralkor.Artefact.ReturnHandler
 
@@ -1080,6 +1100,69 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when independently submitted Reflection invocations are running" do
+    test "then each invocation progresses without waiting for another invocation" do
+      Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent, id: "reflection-independent-invocations", register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+      release = make_ref()
+
+      inference = fn request ->
+        case request.invocation_id do
+          "blocked-invocation" ->
+            send(test_pid, {:blocked_reflection_started, self()})
+
+            receive do
+              {^release, :continue} -> {:ok, %{output: %{"summary" => "first"}}}
+            end
+
+          "independent-invocation" ->
+            {:ok, %{output: %{"summary" => "second"}}}
+        end
+      end
+
+      callback = fn result -> send(test_pid, {:reflection_callback, result}) end
+
+      assert {:ok, "blocked-invocation"} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 async_reflection_invocation("blocked-invocation"),
+                 callback,
+                 inference: inference
+               )
+
+      assert_receive {:blocked_reflection_started, blocked_process}
+
+      assert {:ok, "independent-invocation"} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 async_reflection_invocation("independent-invocation"),
+                 callback,
+                 inference: inference
+               )
+
+      assert_receive {:reflection_callback,
+                      %{invocation_id: "independent-invocation", outcome: :delivered}}
+
+      refute_receive {:reflection_callback, %{invocation_id: "blocked-invocation"}}
+      send(blocked_process, {release, :continue})
+
+      assert_receive {:reflection_callback,
+                      %{invocation_id: "blocked-invocation", outcome: :delivered}}
+    end
+  end
+
   describe "if Reflection production fails" do
     test "then no Destination output is attempted and the callback eventually receives the failure" do
       Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
@@ -1212,6 +1295,62 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                         artefact: ^artefact,
                         outcome: :delivered
                       }}
+    end
+  end
+
+  describe "when a retryable Reflection failure reaches twenty-four hours" do
+    test "then the invocation is abandoned without another retry and its callback receives that outcome" do
+      Application.put_env(:jido_gralkor, :destination_storage, AlwaysRetryableOutputStorage)
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent, id: "reflection-retry-deadline", register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+      clock_calls = :counters.new(1, [])
+
+      clock = fn ->
+        :counters.add(clock_calls, 1, 1)
+
+        case :counters.get(clock_calls, 1) do
+          1 -> 0
+          _ -> 86_400_000
+        end
+      end
+
+      callback = fn result -> send(test_pid, {:reflection_callback, result}) end
+
+      assert {:ok, "reflection-invocation-one"} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 async_reflection_invocation(),
+                 callback,
+                 inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end,
+                 clock: clock,
+                 sleep: fn delay -> send(test_pid, {:unexpected_retry_sleep, delay}) end
+               )
+
+      assert_receive {:retryable_destination_attempt, artefact}
+
+      assert_receive {:reflection_callback,
+                      %{
+                        artefact: ^artefact,
+                        outcome:
+                          {:abandoned,
+                           %{
+                             stage: :delivery,
+                             reason: %{status: 503, reason: :temporarily_unavailable}
+                           }}
+                      }}
+
+      refute_receive {:unexpected_retry_sleep, _}
+      refute_receive {:retryable_destination_attempt, _}
     end
   end
 
@@ -1472,9 +1611,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     }
   end
 
-  defp async_reflection_invocation do
+  defp async_reflection_invocation(id \\ "reflection-invocation-one") do
     %{
-      id: "reflection-invocation-one",
+      id: id,
       operator_id: "operator-one",
       invocation_context: %{},
       representations: []
