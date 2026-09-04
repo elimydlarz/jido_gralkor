@@ -148,6 +148,7 @@ defmodule JidoGralkor.Runtime do
     with :ok <- validate_definition_fields(configuration),
          :ok <- validate_reserved_names(configuration),
          :ok <- validate_lens_shapes(configuration.lenses),
+         :ok <- validate_destination_references(configuration),
          :ok <- validate_reserved_entity_kinds(configuration) do
       destinations =
         [%Destination{name: "operator"}, %Destination{name: "global"}] ++
@@ -291,6 +292,52 @@ defmodule JidoGralkor.Runtime do
       nil -> :ok
       definition -> {:error, {:incompatible_lens_definition, field(definition, :name)}}
     end
+  end
+
+  defp validate_destination_references(configuration) do
+    destination_names =
+      MapSet.new(["operator", "global"] ++ Enum.map(configuration.destinations, &field(&1, :name)))
+
+    with :ok <- validate_lens_destinations(configuration.lenses, destination_names) do
+      validate_reflection_destinations(configuration.reflections, destination_names)
+    end
+  end
+
+  defp validate_lens_destinations(lenses, destination_names) do
+    case Enum.find(lenses, fn definition ->
+           not MapSet.member?(destination_names, field(definition, :destination))
+         end) do
+      nil ->
+        :ok
+
+      definition ->
+        {:error,
+         {:unknown_destination, :lenses, field(definition, :name),
+          field(definition, :destination)}}
+    end
+  end
+
+  defp validate_reflection_destinations(reflections, destination_names) do
+    Enum.reduce_while(reflections, :ok, fn reflection, :ok ->
+      outputs = field(reflection, :outputs)
+
+      missing =
+        if is_list(outputs) do
+          Enum.find(outputs, fn output ->
+            field(output, :kind) == :destination and
+              not MapSet.member?(destination_names, field(output, :destination))
+          end)
+        end
+
+      if missing do
+        {:halt,
+         {:error,
+          {:unknown_destination, :reflections, field(reflection, :name),
+           field(missing, :destination)}}}
+      else
+        {:cont, :ok}
+      end
+    end)
   end
 
   defp validate_reserved_entity_kinds(configuration) do
