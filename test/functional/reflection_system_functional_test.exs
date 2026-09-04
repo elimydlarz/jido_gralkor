@@ -1165,6 +1165,52 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when the consuming agent terminates with unfinished Reflection work" do
+    test "then that unfinished work terminates with the agent and delivers no callback" do
+      previous_trap_exit = Process.flag(:trap_exit, true)
+      on_exit(fn -> Process.flag(:trap_exit, previous_trap_exit) end)
+
+      {:ok, agent_server} =
+        Jido.AgentServer.start_link(
+          agent: AsyncConsumerAgent,
+          id: "reflection-work-owned-by-agent",
+          register_global: false
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+
+      inference = fn _request ->
+        send(test_pid, {:unfinished_reflection_started, self()})
+
+        receive do
+          :never_sent -> {:ok, %{output: %{"summary" => "impossible"}}}
+        end
+      end
+
+      callback = fn result -> send(test_pid, {:reflection_callback, result}) end
+
+      assert {:ok, "reflection-invocation-one"} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 async_reflection_invocation(),
+                 callback,
+                 inference: inference
+               )
+
+      assert_receive {:unfinished_reflection_started, reflection_process}
+      monitor = Process.monitor(reflection_process)
+
+      Process.exit(agent_server, :shutdown)
+
+      assert_receive {:DOWN, ^monitor, :process, ^reflection_process, _reason}
+      refute_receive {:reflection_callback, _}
+    end
+  end
+
   describe "if Reflection production fails" do
     test "then no Destination output is attempted and the callback eventually receives the failure" do
       Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
