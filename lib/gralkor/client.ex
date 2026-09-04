@@ -197,14 +197,23 @@ defmodule Gralkor.Client do
 
   @spec replace(Replace.t()) :: :ok | {:error, term()}
   def replace(%Replace{lens: lens_name, graph: graph} = request) do
-    case lens!(lens_name) do
+    replace_with_resolved_lens(request, graph, lens!(lens_name))
+  end
+
+  @spec replace(GenServer.server(), Replace.t()) :: :ok | {:error, term()}
+  def replace(runtime_owner, %Replace{lens: lens_name, graph: graph} = request) do
+    replace_with_resolved_lens(request, graph, Runtime.lens!(runtime_owner, lens_name))
+  end
+
+  defp replace_with_resolved_lens(request, graph, lens) do
+    case lens do
       %ReplaceableLens{} = lens ->
         validate_graph!(lens, graph)
         store = %Store{operator_id: request.operator_id, lens: lens}
         Store.replace_graph(store, graph)
 
       %Lens{} ->
-        raise ArgumentError, "Lens #{inspect(lens_name)} accepts only episode ingestion"
+        raise ArgumentError, "Lens #{inspect(request.lens)} accepts only episode ingestion"
     end
   end
 
