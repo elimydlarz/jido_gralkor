@@ -535,6 +535,11 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
     test "and every definition collection requires non-blank unique names" do
       for collection <- [:destinations, :lenses, :reflections] do
+        assert {:error, {:blank_definition_name, ^collection, 7}} =
+                 JidoGralkor.Runtime.validate(
+                   Map.put(empty_runtime_configuration(), collection, [%{name: 7}])
+                 )
+
         blank = valid_runtime_definition(collection, " ")
 
         assert {:error, {:blank_definition_name, ^collection, " "}} =
