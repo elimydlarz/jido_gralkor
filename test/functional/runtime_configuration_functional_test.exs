@@ -508,6 +508,42 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  )
       end
     end
+
+    test "and reserved Destination namespaces and Lens provenance names are rejected" do
+      assert {:error, {:reserved_destination_namespace, "operator/private"}} =
+               JidoGralkor.Runtime.validate(%{
+                 destinations: [%{name: "operator/private"}],
+                 lenses: [],
+                 reflections: []
+               })
+
+      assert {:error, {:retired_definition_name, :lenses, "default", "operator"}} =
+               JidoGralkor.Runtime.validate(%{
+                 destinations: [],
+                 lenses: [valid_runtime_definition(:lenses, "default")],
+                 reflections: []
+               })
+
+      assert {:error, {:reserved_definition_name, :lenses, "global"}} =
+               JidoGralkor.Runtime.validate(%{
+                 destinations: [],
+                 lenses: [valid_runtime_definition(:lenses, "global")],
+                 reflections: []
+               })
+
+      for collection <- [:lenses, :reflections] do
+        name = "review [lens: observations]"
+
+        assert {:error, {:reserved_provenance_syntax, ^collection, ^name}} =
+                 JidoGralkor.Runtime.validate(
+                   Map.put(
+                     empty_runtime_configuration(),
+                     collection,
+                     [valid_runtime_definition(collection, name)]
+                   )
+                 )
+      end
+    end
   end
 
   describe "if a Lens or Reflection references an unknown Destination" do
