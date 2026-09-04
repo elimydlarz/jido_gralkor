@@ -686,6 +686,39 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "when a configured Reflection is loaded" do
+    test "then its inline steps become the Reflection's Chain of Thought" do
+      definition = [
+        name: "inline-review",
+        outputs: [[kind: :destination, destination: "operator"]],
+        chain_of_thought: %{
+          steps: [
+            %{
+              label: "review",
+              directions: "Review the supplied evidence.",
+              output: %{"summary" => "string"}
+            }
+          ]
+        }
+      ]
+
+      assert {:ok,
+              [
+                %Gralkor.Reflection{
+                  name: "inline-review",
+                  chain_of_thought: %Gralkor.Reflection.ChainOfThought{
+                    path: nil,
+                    steps: [
+                      %Gralkor.Reflection.ChainOfThought.Step{
+                        label: "review",
+                        directions: "Review the supplied evidence.",
+                        output: %{"summary" => "string"}
+                      }
+                    ]
+                  }
+                }
+              ]} = Registry.load([definition])
+    end
+
     test "then its declared YAML is loaded as the Reflection's Chain of Thought", context do
       assert %Gralkor.Reflection.ChainOfThought{path: path} = reflection(context).chain_of_thought
       assert String.ends_with?(path, ".yaml")
