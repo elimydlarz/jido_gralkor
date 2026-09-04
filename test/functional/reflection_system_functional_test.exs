@@ -1165,6 +1165,77 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when runtime configuration is replaced after a Reflection is admitted" do
+    test "then admitted work retains its Reflection and later submissions use the replacement" do
+      Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent, id: "reflection-admission-snapshot", register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 async_reflection_configuration("first-reviews")
+               )
+
+      test_pid = self()
+      release = make_ref()
+
+      blocked_inference = fn _request ->
+        send(test_pid, {:snapshot_reflection_started, self()})
+
+        receive do
+          {^release, :continue} -> {:ok, %{output: %{"summary" => "first"}}}
+        end
+      end
+
+      callback = fn result -> send(test_pid, {:reflection_callback, result}) end
+
+      assert {:ok, "first-submission"} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 async_reflection_invocation("first-submission"),
+                 callback,
+                 inference: blocked_inference
+               )
+
+      assert_receive {:snapshot_reflection_started, blocked_process}
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 async_reflection_configuration("second-reviews")
+               )
+
+      send(blocked_process, {release, :continue})
+
+      assert_receive {:destination_output_delivered, first_output, "review", _, first_artefact}
+      assert first_output.destination.name == "first-reviews"
+
+      assert_receive {:reflection_callback,
+                      %{invocation_id: "first-submission", artefact: ^first_artefact}}
+
+      assert {:ok, "second-submission"} =
+               Client.reflect(
+                 agent_server,
+                 "review",
+                 async_reflection_invocation("second-submission"),
+                 callback,
+                 inference: fn _ -> {:ok, %{output: %{"summary" => "second"}}} end
+               )
+
+      assert_receive {:destination_output_delivered, second_output, "review", _, second_artefact}
+      assert second_output.destination.name == "second-reviews"
+
+      assert_receive {:reflection_callback,
+                      %{invocation_id: "second-submission", artefact: ^second_artefact}}
+    end
+  end
+
   describe "when the consuming agent terminates with unfinished Reflection work" do
     test "then that unfinished work terminates with the agent and delivers no callback" do
       previous_trap_exit = Process.flag(:trap_exit, true)
@@ -1637,14 +1708,14 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     }
   end
 
-  defp async_reflection_configuration do
+  defp async_reflection_configuration(destination \\ "reviews") do
     %{
-      destinations: [%{name: "reviews"}],
+      destinations: [%{name: destination}],
       lenses: [],
       reflections: [
         %{
           name: "review",
-          outputs: [%{kind: :destination, destination: "reviews"}],
+          outputs: [%{kind: :destination, destination: destination}],
           chain_of_thought: %{
             steps: [
               %{
