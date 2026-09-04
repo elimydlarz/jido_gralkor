@@ -392,7 +392,7 @@ The physical encoding replaces the former lossy `-` and `/` to `_` normalisation
 
 A Lens is an application-owned memory ingestion channel that targets a Destination. An appending Lens selects its extraction ontology; its write mode sends content through an ingestion process. A whole-graph replacement Lens replaces its own graph content at the Destination.
 
-Appending is the default write mode. An appending Lens names its Destination and the ingestion process Gralkor invokes when content is sent through it; `write: :append` may be stated explicitly or omitted.
+An appending Lens declares `write: :append`, its Destination, and the ingestion process Gralkor invokes when content is sent through it.
 
 The ontology is a module you compile into your own application — declared once in `lib/`, then named by each appending Lens that should extract with it:
 
