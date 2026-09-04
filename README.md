@@ -22,7 +22,7 @@ Then fetch:
 mix deps.get
 ```
 
-The package requires Elixir `~> 1.18` and has runtime dependencies on `:jido`, `:jido_ai`, `:pythonx`, `:jason`, and `:yaml_elixir`. On the first native-runtime boot, Pythonx materialises a managed Python 3.12 environment with `graphiti-core` and `falkordblite`; consumers do not install Python themselves, but the boot needs package-download access and a writable cache.
+The package requires Elixir `~> 1.18` and has runtime dependencies on `:jido`, `:jido_ai`, `:pythonx`, and `:jason`. On the first native-runtime boot, Pythonx materialises a managed Python 3.12 environment with `graphiti-core` and `falkordblite`; consumers do not install Python themselves, but the boot needs package-download access and a writable cache.
 
 ## Required configuration
 
@@ -127,7 +127,7 @@ end
 
 **4. A non-blank human name in agent state.** Before any completed or failed turn is captured, populate `agent.state[:user_name]` with the current human's name (for example, from the request's tool context in `on_before_cmd/2`). The plugin deliberately has no generic `"User"` fallback: a missing or blank value raises `ArgumentError` before capture.
 
-`:jido_gralkor` auto-supervises its native runtime (Python → GraphitiPool → CaptureBuffer) when a FalkorDB backend is configured — no separate `Gralkor.Server` to wire into your supervision tree, and no readiness gate to add. By the time `Application.start/2` returns, `Gralkor.Client` is ready. Graceful application shutdown waits for active Lens flush work and flushes buffered capture before CaptureBuffer stops. Reflection execution is not supervised or scheduled by Jido Gralkor; the consuming application decides when to invoke it.
+`:jido_gralkor` auto-supervises its shared storage runtime (Python → GraphitiPool → CaptureBuffer) when a FalkorDB backend is configured — no separate `Gralkor.Server` to wire into your supervision tree, and no readiness gate to add. Each `JidoGralkor.Plugin` also contributes one linked `JidoGralkor.Runtime` child beneath its consuming `Jido.AgentServer`; that child owns the agent's domain configuration and admitted Reflection work. Graceful application shutdown waits for active Lens flush work and flushes buffered capture before CaptureBuffer stops.
 
 ## Configuration reference
 
@@ -139,13 +139,9 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
 | `:embedded_falkordb_socket_timeout_ms` | positive integer | `60_000` | Socket read timeout for the embedded FalkorDB connection, converted to seconds for `AsyncFalkorDB`. Ignored by remote FalkorDB. Invalid values raise `ArgumentError` when the embedded runtime starts. |
-| `:destinations` | list of keyword definitions | packaged `operator` and `global` Destinations | The Destination registry. Each application definition has only `:name`; its exact name is a shared logical graph ID. `global` is the single shared global graph, while `operator` resolves to `operator/<operator id>`; application names beginning `operator/` are rejected. See [Destinations](DESTINATIONS.md). |
-| `:lenses` | list of keyword definitions | `[]` | The Lens registry. Appending Lenses use `:name`, `:destination`, and `:ingestion`, with optional `:ontology` (default `Gralkor.DefaultOntology`) and `write: :append`; replaceable Lenses use `:name`, `:destination`, `write: :replace_graph`, and `:graph_format`. Blank, duplicate, reserved (`"operator"`, `"global"`), retired (`"default"`), provenance-delimiter-containing (`" [lens: "`), or malformed definitions raise. See [Configure Lenses](#configure-lenses). |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
 | `:destination_storage` | module implementing `Gralkor.Destination.Storage` | `Gralkor.Destination.Storage.Graphiti` | The single memory boundary behind `Client.search/1` and Reflection Destination outputs. Artefact writes create-or-confirm by stable `artefact.id`. Set to `Gralkor.Destination.Storage.InMemory` in tests. |
-| `:reflections` | list of keyword definitions | built-in `generalisations` and `erl` declarations | The Reflection registry. Each definition has a unique non-blank `:name` that does not contain the reserved `" [lens: "` provenance delimiter, a repository-relative YAML `:chain_of_thought` path, and an `:outputs` list containing exactly one Destination output plus at most one return output. Supplying the key replaces the built-in declarations. See [Configure Reflections](#configure-reflections). |
-| `:reflection_root` | path | application package root | Root used to resolve Reflection YAML paths. The default makes the packaged `priv/reflections/*.yaml` files work after installation; set it when an application keeps custom CoTs under another repository directory. |
 | `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall search and presentation. On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. |
 | `:test` | boolean | `false` | Verbose diagnostic logging: recall queries, returned facts, and flushed capture bodies are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
 
@@ -156,7 +152,7 @@ config :jido_gralkor,
   recall_deadline_ms: 12_000
 ```
 
-`:reflection_storage` is retired and causes startup to fail. Consumers deliver a Reflection's required Destination output through `:destination_storage`, which is the single memory boundary for both search and Reflection output.
+Destinations, Lenses, and Reflections are not application-environment registries. Supply them in each plugin mount's `:runtime_config`, described below. `:destination_storage` remains the single storage boundary for both search and Reflection output.
 
 The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `recall/4` need no ontology configuration. The Lens uses the packaged operator Destination and the library-owned `Gralkor.DefaultOntology`. Application-specific extraction schemas belong on appending Lenses or Reflections.
 
@@ -174,17 +170,25 @@ The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `reca
 ### Plugin mount options
 
 ```elixir
-{JidoGralkor.Plugin, %{agent_name: "Susu", ingestion_lens: "observations", …}}
+{JidoGralkor.Plugin,
+ %{
+   agent_name: "Susu",
+   ingestion_lens: "observations",
+   runtime_config: %{destinations: [], lenses: [], reflections: []}
+ }}
 ```
 
 | Option | Required | Default | What it does |
 | --- | --- | --- | --- |
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
 | `:ingestion_lens` | no | unset (implicit-operator mode) | Registered Lens name receiving `memory_add` and automatic capture. The removed `:default_lens` option raises and identifies this replacement. |
+| `:runtime_config` | no | empty consumer collections | The complete consumer-owned Destination, Lens, and Reflection configuration for this agent. Packaged definitions are installed alongside it. Invalid startup configuration prevents the plugin from mounting. |
 
 Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
 
 Search selection is invocation-local, not a plugin mount option. `memory_search` accepts optional `destinations` and `lenses`; the removed `:search_destinations` mount option raises with migration guidance.
+
+Replace the complete configuration for one running agent with `JidoGralkor.Runtime.replace(agent_server, runtime_config)`. Validation and resolution complete before the three collections become active as one snapshot; an error leaves the old snapshot untouched. If that runtime fails, its linked AgentServer terminates and the consumer's supervisor must start a replacement agent with the current durable configuration.
 
 ### `JidoGralkor.ContextRotator.rotate_now/2`
 
