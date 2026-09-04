@@ -497,7 +497,9 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: ConsumerAgent, id: "runtime-configuration-unknown-destination", register_global: false}
+           agent: ConsumerAgent,
+           id: "runtime-configuration-unknown-destination",
+           register_global: false}
         )
 
       assert {:error, {:unknown_destination, :lenses, "observations", "missing"}} =
