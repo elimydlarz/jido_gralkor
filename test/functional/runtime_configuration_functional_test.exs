@@ -568,7 +568,9 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: ConsumerAgent, id: "runtime-configuration-agentic-search", register_global: false}
+           agent: ConsumerAgent,
+           id: "runtime-configuration-agentic-search",
+           register_global: false}
         )
 
       assert :ok =
