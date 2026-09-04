@@ -39,7 +39,7 @@ defmodule Gralkor.Reflection.Packaged do
               revise generalisations as observations warrant. Return each current
               generalisation with its content, level, and lineage snapshots. A new
               generalisation with no lineage uses level 1. An evolved generalisation
-              uses a level one greater than the highest level in its `evolves_from`
+              uses a level one greater than the highest level in its evolves_from
               snapshots.
               """,
               output: %{
