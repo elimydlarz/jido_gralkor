@@ -3,7 +3,10 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
   @moduletag :functional
 
-  alias Gralkor.Reflection.Registry
+  alias Gralkor.Destination
+  alias Gralkor.Reflection
+  alias Gralkor.Reflection.ChainOfThought
+  alias Gralkor.Reflection.Packaged
   alias Gralkor.Reflection.Runner
 
   defmodule Ingestion do
@@ -227,62 +230,6 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert prompt =~ "A prior generalisation"
     end
 
-    test "and evolution inference receives the exact eligible prior-generalisation lineage snapshots separately from observations" do
-      prior = %{"content" => "Prefer explicit APIs", "level" => 2, "evolves_from" => []}
-
-      Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
-        "global" =>
-          {:ok,
-           [
-             %{
-               reflection: "generalisations",
-               content:
-                 Jason.encode!(%{
-                   id: "prior-generalisations",
-                   payload: %{generalisations: [prior]}
-                 })
-             }
-           ]},
-        "observations-memory" => {:ok, [%{lens: "observations", content: "Prefer explicit APIs"}]}
-      })
-
-      parent = self()
-
-      assert {:ok, _artefact} =
-               Runner.run(generalisation(), ingestion(),
-                 inference: fn request ->
-                   send(
-                     parent,
-                     {:eligible_lineage, request.step.label,
-                      Map.fetch(request, :eligible_generalisation_lineage)}
-                   )
-
-                   output_for(request)
-                 end
-               )
-
-      assert_receive {:eligible_lineage, "inspect-world", :error}
-
-      assert_receive {:eligible_lineage, "evolve-generalisations",
-                      {:ok, [%{"content" => "Prefer explicit APIs", "level" => 2}]}}
-    end
-
-    test "and evolution inference is directed to leave lineage empty when no eligible snapshot exists and otherwise copy only eligible snapshots exactly" do
-      directions =
-        "evolve-generalisations"
-        |> step_directions()
-        |> normalized_whitespace()
-
-      assert directions =~
-               "Copy `evolves_from` only from the eligible prior-generalisation lineage snapshots supplied separately"
-
-      assert directions =~
-               "When that list is empty, every evolution must use an empty `evolves_from`"
-
-      assert directions =~
-               "When a current representation explicitly says it extends an eligible prior generalisation and repeats that prior's content, that prior influences the evolution and must be copied into `evolves_from`"
-    end
-
     test "and inference is directed to revisit current and related observations together with prior generalisations" do
       directions = step_directions("inspect-world")
 
@@ -365,112 +312,26 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
   end
 
-  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while no returned prior generalisation influences the evolved generalisation" do
-    setup do
+  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while its content, level, and evolves_from values satisfy the declared structured-output types" do
+    test "then those model-produced values become the generalisation without comparison to related memory" do
       put_stored_generalisation_response([
-        %{"content" => "Prefer abstractions everywhere", "level" => 8}
+        %{"content" => "A stored but unrelated generalisation", "level" => 8}
       ])
 
-      :ok
-    end
+      produced = %{
+        "content" => "Use the narrowest sufficient boundary",
+        "level" => 73,
+        "evolves_from" => [
+          %{"content" => "A model-selected historical snapshot", "level" => 41}
+        ]
+      }
 
-    test "then the evolved generalisation has evolution-depth level one" do
-      assert {:ok, artefact} =
-               Runner.run(generalisation(), ingestion(), inference: &output_for/1)
-
-      assert [%{"level" => 1}] = artefact.payload["generalisations"]
-    end
-
-    test "and the evolved generalisation's `evolves_from` is empty" do
-      assert {:ok, artefact} =
-               Runner.run(generalisation(), ingestion(), inference: &output_for/1)
-
-      assert [%{"evolves_from" => []}] = artefact.payload["generalisations"]
-    end
-  end
-
-  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while one or more returned prior generalisations influence the evolved generalisation" do
-    setup do
-      put_stored_generalisation_response(
-        influencing_generalisations() ++
-          [%{"content" => "Prefer abstractions everywhere", "level" => 8}]
-      )
-
-      :ok
-    end
-
-    test "then the evolved generalisation's evolution-depth level is one greater than the highest influencing level" do
-      assert {:ok, artefact} =
-               Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
-
-      assert [%{"level" => 5}] = artefact.payload["generalisations"]
-    end
-
-    test "and each `evolves_from` snapshot exactly matches the content and level of an influencing prior generalisation returned in a generalisations Reflection episode" do
       assert {:ok, artefact} =
                Runner.run(generalisation(), ingestion(),
-                 inference: &ancestry_preserving_output_for/1
+                 inference: &direct_generalisation_output(&1, produced)
                )
 
-      assert [%{"evolves_from" => snapshots}] = artefact.payload["generalisations"]
-      assert snapshots == influencing_generalisations()
-    end
-
-    test "but `evolves_from` records no returned generalisation that did not influence the evolution" do
-      assert {:ok, artefact} =
-               Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
-
-      assert [%{"evolves_from" => snapshots}] = artefact.payload["generalisations"]
-      refute contains_content?(snapshots, "Prefer abstractions everywhere")
-    end
-  end
-
-  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while evolution lineage is absent from returned generalisations Reflection episodes" do
-    test "then it fails explicitly without an artefact" do
-      put_stored_generalisation_response(influencing_generalisations())
-
-      for invalid_snapshot <- [
-            %{"content" => "Fabricated prior generalisation", "level" => 1},
-            %{"content" => "Prefer explicit APIs", "level" => 2}
-          ] do
-        assert {:error,
-                %{
-                  reflection: "generalisations",
-                  step: "evolve-generalisations",
-                  reason: {:invalid_generalisation_lineage, ^invalid_snapshot}
-                }} =
-                 Runner.run(generalisation(), ingestion(),
-                   inference: &invalid_lineage_output_for(&1, invalid_snapshot)
-                 )
-      end
-
-      malformed_snapshot = %{"content" => "Prefer explicit APIs"}
-
-      assert {:error,
-              %{
-                reflection: "generalisations",
-                step: "evolve-generalisations",
-                reason: {:output_type_mismatch, "evolutions", _declaration}
-              }} =
-               Runner.run(generalisation(), ingestion(),
-                 inference: &invalid_lineage_output_for(&1, malformed_snapshot)
-               )
-
-      put_observation_generalisation_response([
-        %{"content" => "Observation-shaped impostor", "level" => 3}
-      ])
-
-      observation_snapshot = %{"content" => "Observation-shaped impostor", "level" => 3}
-
-      assert {:error,
-              %{
-                reflection: "generalisations",
-                step: "evolve-generalisations",
-                reason: {:invalid_generalisation_lineage, ^observation_snapshot}
-              }} =
-               Runner.run(generalisation(), ingestion(),
-                 inference: &invalid_lineage_output_for(&1, observation_snapshot)
-               )
+      assert artefact.payload == %{"generalisations" => [produced]}
     end
   end
 
@@ -533,19 +394,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert MapSet.new(Map.keys(stored)) == MapSet.new(["content", "level", "evolves_from"])
     end
 
-    test "and each returned `evolves_from` snapshot is the exact content-and-level snapshot of a prior generalisation decoded from related-memory" do
-      put_stored_generalisation_response(influencing_generalisations())
-
-      assert {:ok, artefact} =
-               Runner.run(generalisation(), ingestion(), inference: &higher_level_output_for/1)
-
-      assert [%{"evolves_from" => snapshots}] = artefact.payload["generalisations"]
-      assert snapshots == influencing_generalisations()
-
-      assert exact_snapshot_shapes?(snapshots)
-    end
-
-    test "and the validated evolution is normalized directly into the artefact without a redundant synthesis inference" do
+    test "and the structured evolution is normalized directly into the artefact without a redundant synthesis inference" do
       put_stored_generalisation_response(influencing_generalisations())
       parent = self()
 
@@ -596,8 +445,16 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
   end
 
   defp generalisation do
-    Registry.configured!()
-    |> Enum.find(&(&1.name == "generalisations"))
+    definition = Enum.find(Packaged.definitions(), &(&1.name == "generalisations"))
+    {:ok, chain_of_thought} = ChainOfThought.from_config(definition.chain_of_thought)
+
+    %Reflection{
+      name: definition.name,
+      chain_of_thought: chain_of_thought,
+      outputs: [
+        %{kind: :destination, destination: %Destination{name: "global"}, ontology: Gralkor.DefaultOntology}
+      ]
+    }
   end
 
   defp ingestion do
@@ -624,12 +481,13 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
   end
 
   defp output_for(request),
-    do: evolved_output(request, "Prefer direct APIs", [])
+    do: evolved_output(request, "Prefer direct APIs", 1, [])
 
   defp higher_level_output_for(request) do
     evolved_output(
       request,
       "Prefer the smallest explicit interface",
+      5,
       selected_influences(request.stored_information)
     )
   end
@@ -638,6 +496,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     evolved_output(
       request,
       "Apply the smallest explicit interface at each boundary",
+      6,
       prior_generalisation_snapshots(request.stored_information)
     )
   end
@@ -646,15 +505,12 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     evolved_output(
       request,
       "Use one explicit API for each distinct boundary",
+      2,
       prior_generalisation_snapshots(request.stored_information)
     )
   end
 
-  defp invalid_lineage_output_for(request, snapshot) do
-    evolved_output(request, "Prefer the smallest explicit interface", [snapshot])
-  end
-
-  defp evolved_output(%{step: %{label: "inspect-world"}}, _content, _snapshots) do
+  defp evolved_output(%{step: %{label: "inspect-world"}}, _content, _level, _snapshots) do
     {:ok,
      %{
        output: %{
@@ -666,40 +522,28 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
   defp evolved_output(
          %{step: %{label: "evolve-generalisations"}},
          content,
+         level,
          snapshots
        ) do
     {:ok,
      %{
        output: %{
-         "evolutions" => [
+         "generalisations" => [
            %{
              "content" => content,
+             "level" => level,
              "evolves_from" => snapshots,
-             "reasoning" => "The observations warrant this current generalisation."
            }
          ]
        }
      }}
   end
 
-  defp evolved_output(
-         %{step: %{label: "synthesise-artefact"}},
-         content,
-         snapshots
-       ) do
-    level = snapshots |> Enum.map(& &1["level"]) |> Enum.max(fn -> 0 end) |> Kernel.+(1)
+  defp direct_generalisation_output(%{step: %{label: "inspect-world"}}, _produced),
+    do: output_for(%{step: %{label: "inspect-world"}})
 
-    {:ok,
-     %{
-       output: %{
-         "generalisations" => [
-           %{"content" => content, "level" => level, "evolves_from" => snapshots}
-         ]
-       }
-     }}
-  end
-
-  defp ancestry_preserving_output_for(request), do: higher_level_output_for(request)
+  defp direct_generalisation_output(%{step: %{label: "evolve-generalisations"}}, produced),
+    do: {:ok, %{output: %{"generalisations" => [produced]}}}
 
   defp influencing_generalisations do
     [
@@ -722,25 +566,6 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  payload: %{generalisations: stored}
                }),
              reflection: "generalisations"
-           }
-         ]}
-    })
-  end
-
-  defp put_observation_generalisation_response(generalisations) do
-    stored = Enum.map(generalisations, &Map.put(&1, "evolves_from", []))
-
-    Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
-      "observations-memory" =>
-        {:ok,
-         [
-           %{
-             content:
-               Jason.encode!(%{
-                 id: "observation-shaped-impostor",
-                 payload: %{generalisations: stored}
-               }),
-             lens: "observations"
            }
          ]}
     })
@@ -867,15 +692,6 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       operator_id,
       artefact
     )
-  end
-
-  defp contains_content?(snapshots, content),
-    do: Enum.any?(snapshots, &(&1["content"] == content))
-
-  defp exact_snapshot_shapes?(snapshots) do
-    Enum.all?(snapshots, fn item ->
-      MapSet.new(Map.keys(item)) == MapSet.new(["content", "level"])
-    end)
   end
 
   defp normalized_whitespace(value), do: String.replace(value, ~r/\s+/, " ")
