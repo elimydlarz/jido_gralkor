@@ -289,6 +289,14 @@ defmodule JidoGralkor.Runtime do
     Enum.reduce_while([:destinations, :lenses, :reflections], :ok, fn collection, :ok ->
       names = Enum.map(Map.fetch!(configuration, collection), &field(&1, :name))
 
+      reserved_destination =
+        if collection == :destinations,
+          do: Enum.find(names, &String.starts_with?(&1, "operator/"))
+
+      reserved_provenance =
+        if collection in [:lenses, :reflections],
+          do: Enum.find(names, &String.contains?(&1, " [lens: "))
+
       cond do
         blank = Enum.find(names, &(not non_blank?(&1))) ->
           {:halt, {:error, {:blank_definition_name, collection, blank}}}
@@ -296,16 +304,14 @@ defmodule JidoGralkor.Runtime do
         duplicate = duplicate(names) ->
           {:halt, {:error, {:duplicate_definition_name, collection, duplicate}}}
 
-        collection == :destinations and
-            (reserved = Enum.find(names, &String.starts_with?(&1, "operator/"))) ->
-          {:halt, {:error, {:reserved_destination_namespace, reserved}}}
+        reserved_destination ->
+          {:halt, {:error, {:reserved_destination_namespace, reserved_destination}}}
 
         collection == :lenses and "default" in names ->
           {:halt, {:error, {:retired_definition_name, :lenses, "default", "operator"}}}
 
-        collection in [:lenses, :reflections] and
-            (reserved = Enum.find(names, &String.contains?(&1, " [lens: "))) ->
-          {:halt, {:error, {:reserved_provenance_syntax, collection, reserved}}}
+        reserved_provenance ->
+          {:halt, {:error, {:reserved_provenance_syntax, collection, reserved_provenance}}}
 
         true ->
           {:cont, :ok}
