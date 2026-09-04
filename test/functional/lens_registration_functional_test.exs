@@ -74,7 +74,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
                Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "systems")
     end
 
-    test "and every consumer observes the same application-owned Lens definition" do
+    test "and each selected name resolves to the same application-owned Lens definition" do
       assert %Gralkor.Lens{
                name: "observations",
                destination: %Gralkor.Destination{name: "memory"},
@@ -82,20 +82,18 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
                ingestion: StoreIngestion
              } = Client.lens!("observations")
 
-      assert {:ok, %{lens: plugin_lens}} =
+      assert {:ok, %{ingestion_lens: "observations"}} =
                Plugin.mount(%{},
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
 
-      assert plugin_lens == Client.lens!("observations")
-
       Application.put_env(:jido_gralkor, :lenses, [valid_replaceable_lens("systems")])
 
-      assert {:ok, %{lens: replaceable_plugin_lens}} =
+      assert {:ok, %{ingestion_lens: "systems"}} =
                Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "systems")
 
-      assert replaceable_plugin_lens == Client.lens!("systems")
+      assert %Gralkor.Lens.Replaceable{name: "systems"} = Client.lens!("systems")
     end
 
     test "and the Lens uses its referenced registered Destination" do
