@@ -4,6 +4,7 @@ defmodule JidoGralkor.Runtime do
   use GenServer
 
   alias Gralkor.Destination
+  alias Gralkor.Destination.Storage, as: DestinationStorage
   alias Gralkor.Lens
   alias Gralkor.Reflection
   alias Gralkor.Reflection.ChainOfThought
@@ -98,7 +99,7 @@ defmodule JidoGralkor.Runtime do
            {:ok, reflection} <- Map.fetch(state.definitions.reflections, name),
            {:ok, _task} <-
              Task.Supervisor.start_child(state.reflection_supervisor, fn ->
-               Runner.run(reflection, invocation, opts)
+               process_reflection(reflection, invocation, callback, opts)
              end) do
         {:ok, invocation_id}
       else
@@ -287,6 +288,25 @@ defmodule JidoGralkor.Runtime do
   end
 
   defp invocation_id(invocation), do: {:error, {:invalid_invocation, invocation}}
+
+  defp process_reflection(reflection, invocation, callback, opts) do
+    with {:ok, artefact} <- Runner.run(reflection, invocation, opts),
+         output <- Enum.find(reflection.outputs, &(&1.kind == :destination)),
+         :ok <-
+           DestinationStorage.put_artefact(
+             output,
+             reflection.name,
+             field(invocation, :operator_id),
+             artefact,
+             opts
+           ) do
+      callback.(%{
+        invocation_id: field(invocation, :id),
+        artefact: artefact,
+        outcome: :delivered
+      })
+    end
+  end
 
   defp field(map, key) when is_map(map),
     do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
