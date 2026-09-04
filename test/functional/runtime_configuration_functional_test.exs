@@ -108,6 +108,36 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       assert :ok = JidoGralkor.Runtime.replace(agent_server, configuration)
       assert configuration == JidoGralkor.Runtime.snapshot(agent_server)
+
+      assert %Gralkor.Destination{name: "project"} =
+               JidoGralkor.Runtime.destination!(agent_server, "project")
+
+      assert %Gralkor.Lens{
+               name: "observations",
+               destination: %Gralkor.Destination{name: "project"},
+               ontology: ConsumerOntology,
+               ingestion: Gralkor.Lens.Ingestion.Store
+             } = JidoGralkor.Runtime.lens!(agent_server, "observations")
+
+      assert %Gralkor.Reflection{
+               name: "review",
+               outputs: [
+                 %{
+                   kind: :destination,
+                   destination: %Gralkor.Destination{name: "project"},
+                   ontology: ConsumerOntology
+                 }
+               ],
+               chain_of_thought: %Gralkor.Reflection.ChainOfThought{
+                 steps: [
+                   %{
+                     label: "review",
+                     directions: "Review the supplied evidence.",
+                     output: %{"summary" => "string"}
+                   }
+                 ]
+               }
+             } = JidoGralkor.Runtime.reflection!(agent_server, "review")
     end
   end
 
