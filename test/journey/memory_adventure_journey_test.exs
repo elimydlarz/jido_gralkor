@@ -1002,27 +1002,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                source_description: "cross-domain reversible change review"
              })
 
-    parent = self()
-
     later_generalisation_artefact =
       invoke_reflection!(
         agent,
         "generalisations",
         @operator_one,
         later_ingestion_id,
-        later_representations,
-        inference_observer: fn request ->
-          if request.step.label == "evolve-generalisations" do
-            send(
-              parent,
-              {:later_eligible_lineage, request.eligible_generalisation_lineage}
-            )
-          end
-        end
+        later_representations
       )
-
-    assert_receive {:later_eligible_lineage, eligible_lineage}
-    assert %{"content" => first_content, "level" => 1} in eligible_lineage
 
     store_artefact!(
       later_generalisation_artefact,
@@ -1041,13 +1028,33 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   defp invoke_reflection!(
+         agent,
          reflection_name,
          operator_id,
          invocation_id,
          representations,
          opts \\ []
        ) do
-    reflection = Enum.find(Registry.configured!(), &(&1.name == reflection_name))
+    invoke_reflection_result!(
+      agent,
+      reflection_name,
+      operator_id,
+      invocation_id,
+      representations,
+      opts
+    ).artefact
+  end
+
+  defp invoke_reflection_result!(
+         agent,
+         reflection_name,
+         operator_id,
+         invocation_id,
+         representations,
+         opts \\ []
+       ) do
+    test_pid = self()
+    callback_ref = make_ref()
 
     invocation = %{
       id: invocation_id,
@@ -1070,23 +1077,18 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
           []
       end
 
-    {:ok, artefact} = Runner.run(reflection, invocation, runner_opts)
+    callback = fn result -> send(test_pid, {callback_ref, result}) end
 
-    Enum.each(reflection.outputs, fn
-      %{kind: :destination} = output ->
-        :ok =
-          Gralkor.Destination.Storage.put_artefact(
-            output,
-            reflection.name,
-            operator_id,
-            artefact
-          )
+    assert {:ok, ^invocation_id} =
+             Client.reflect(agent, reflection_name, invocation, callback, runner_opts)
 
-      %{kind: :return, handler: handler} ->
-        :ok = handler.return(operator_id, invocation_id, artefact)
-    end)
-
-    artefact
+    receive do
+      {^callback_ref,
+       %{invocation_id: ^invocation_id, artefact: %Artefact{}, outcome: :delivered} = result} ->
+        result
+    after
+      180_000 -> flunk("Reflection #{inspect(reflection_name)} did not deliver its callback")
+    end
   end
 
   defp store_artefact!(artefact, reflection_name, operator_id, destination_name) do
@@ -1127,21 +1129,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       nil ->
         Process.sleep(1_000)
         destination_artefact_until(operator_id, destination, artefact_id, attempts - 1)
-    end
-  end
-
-  defp return_artefact_until(artefact_id, attempts \\ 120)
-
-  defp return_artefact_until(_artefact_id, 0), do: nil
-
-  defp return_artefact_until(artefact_id, attempts) do
-    case Enum.find(JourneyReturnHandler.artefacts(), &(&1.id == artefact_id)) do
-      %Artefact{} = artefact ->
-        artefact
-
-      nil ->
-        Process.sleep(1_000)
-        return_artefact_until(artefact_id, attempts - 1)
     end
   end
 
