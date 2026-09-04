@@ -1,4 +1,4 @@
-Functional: runtime-configuration (src: none; functional: test/functional/runtime_configuration_functional_test.exs)
+Functional: runtime-configuration (src: lib/jido_gralkor/runtime.ex, lib/jido_gralkor/plugin.ex; functional: test/functional/runtime_configuration_functional_test.exs)
 
 when a consumer starts a Jido agent with the Gralkor plugin
   then the plugin starts one Gralkor runtime under that agent

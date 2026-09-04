@@ -53,10 +53,28 @@ defmodule JidoGralkor.Plugin do
 
   alias Gralkor.Client
   alias JidoGralkor.Canonical
+  alias JidoGralkor.Runtime
   alias Jido.AI.Request
   alias Jido.Signal
 
   @no_thread_warning_hint "jido_ai commits state.thread on :request_completed, not at :ai.react.query"
+
+  @impl Jido.Plugin
+  def child_spec(config) do
+    %{
+      id: Runtime,
+      start:
+        {Runtime, :start_link,
+         [
+           [
+             owner: self(),
+             configuration:
+               fetch_opt(config, :runtime_config) ||
+                 %{destinations: [], lenses: [], reflections: []}
+           ]
+         ]}
+    }
+  end
 
   @impl Jido.Plugin
   def mount(_agent, opts) do
