@@ -423,36 +423,42 @@ end
 Point as many Lenses as your application needs at `global`, `operator`, or an application Destination. Several Lenses may use the same Destination with different ontologies:
 
 ```elixir
-# config/runtime.exs
-config :jido_gralkor,
+runtime_config = %{
+  destinations: [],
   lenses: [
-    [
+    %{
       name: "observations",
       destination: "global",
+      write: :append,
       ontology: MyApp.Ontology,
       ingestion: Gralkor.Lens.Ingestion.Store
-    ],
-    [
+    },
+    %{
       name: "decisions",
       destination: "global",
+      write: :append,
       ontology: MyApp.Ontology,
       ingestion: MyApp.DecisionIngestion
-    ]
-  ]
+    }
+  ],
+  reflections: []
+}
 ```
 
-A replaceable Lens declares `write: :replace_graph` and the graph format it accepts instead of `:ingestion`:
+A replaceable Lens declares `write: :replace_graph` and a Destination instead of `:ingestion` or `:ontology`:
 
 ```elixir
-config :jido_gralkor,
+runtime_config = %{
+  destinations: [],
   lenses: [
-    [
+    %{
       name: "systems",
       destination: "global",
-      write: :replace_graph,
-      graph_format: :property_graph
-    ]
-  ]
+      write: :replace_graph
+    }
+  ],
+  reflections: []
+}
 ```
 
 Destination names control visibility: `operator` resolves a separate `operator/<operator id>` graph for each operator; `global` and application Destination names resolve to one shared graph each.
@@ -503,11 +509,11 @@ Search is independent of that mount. With only a query, `memory_search` searches
 
 This includes episodes only when their Destination is either selected Destination and their originating Lens is either selected Lens. Selecting a Lens never adds its Destination. A Lens selector applies only to episode results; direct callers may still explicitly request facts, nodes, or Reflection artefacts without a Lens selector.
 
-Consumers that ingest, replace, or search outside an agent call the same public boundary directly:
+Consumers target the AgentServer whose runtime configuration should resolve each named operation:
 
 ```elixir
 :ok =
-  Gralkor.Client.ingest(%Gralkor.Ingest{
+  Gralkor.Client.ingest(agent_server, %Gralkor.Ingest{
     id: "release-planning-2026-08-28",
     operator_id: "operator-42",
     lens: "decisions",
@@ -517,7 +523,7 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   })
 
 {:ok, memories} =
-  Gralkor.Client.search(%Gralkor.Search{
+  Gralkor.Client.search(agent_server, %Gralkor.Search{
     operator_id: "operator-42",
     query: "When should we release?",
     destinations: ["global"],
@@ -526,25 +532,22 @@ Consumers that ingest, replace, or search outside an agent call the same public 
   })
 
 :ok =
-  Gralkor.Client.replace(%Gralkor.Replace{
+  Gralkor.Client.replace(agent_server, %Gralkor.Replace{
     operator_id: "operator-42",
     lens: "systems",
     graph: %Gralkor.Graph{
-      format: :property_graph,
-      data: %{
-        nodes: [
-          %{id: "payments", labels: ["System"], properties: %{name: "Payments"}},
-          %{id: "ledger", labels: ["System"], properties: %{name: "Ledger"}}
-        ],
-        relationships: [
-          %{
-            from: "payments",
-            to: "ledger",
-            type: "DEPENDS_ON",
-            properties: %{protocol: "events"}
-          }
-        ]
-      }
+      nodes: [
+        %{id: "payments", labels: ["System"], properties: %{name: "Payments"}},
+        %{id: "ledger", labels: ["System"], properties: %{name: "Ledger"}}
+      ],
+      relationships: [
+        %{
+          from: "payments",
+          to: "ledger",
+          type: "DEPENDS_ON",
+          properties: %{protocol: "events"}
+        }
+      ]
     }
   })
 ```
@@ -563,13 +566,13 @@ Appending Lens episodes record writer provenance by suffixing their source descr
 
 Search defaults to stored episodes across every accessible registered Destination: the current operator's private `operator/<operator id>` logical graph plus every shared Destination. Supplying `destinations` narrows the graphs; supplying `lenses` narrows writers; OR applies within either list and both dimensions must match when both are present. Destination searches run concurrently while results retain selected Destination order. `max_results` defaults to `20`, must be a positive integer, and applies independently after writer filtering in every Destination. Each episode identifies its Destination plus its originating Lens or declaring Reflection; raw legacy episodes that carry neither trusted writer marker are omitted before that limit rather than assigned invented provenance. Direct callers may explicitly request `:facts`, `:nodes`, or `:artefacts` without Lens selectors; node searches accept `entity_types`, fact searches accept `edge_types`, and artefact searches may narrow by `artefact_id`. The `memory_search` action returns attributed episode results as JSON.
 
-`:property_graph` is the supported replacement format. Every node requires a unique, non-blank string `:id`, a list of non-blank string `:labels`, and a `:properties` map. Every relationship requires `:from` and `:to` identifiers naming supplied nodes, a non-blank string `:type`, and a `:properties` map. This payload is the whole current graph for the Lens; partial node and relationship operations are not supported.
+`%Gralkor.Graph{nodes:, relationships:}` is the sole replacement representation. Every node requires a unique, non-blank string `:id`, a list of non-blank string `:labels`, and a `:properties` map. Every relationship requires `:from` and `:to` identifiers naming supplied nodes, a non-blank string `:type`, and a `:properties` map. This payload is the whole current graph for the Lens; partial node and relationship operations are not supported.
 
-Replacement changes only content owned by that Lens at its Destination. Gralkor overwrites any supplied `_gralkor_lens` property with the selected Lens name on every inserted node and relationship. Content saved through another Lens or Reflection, or carrying no Lens ownership, remains unchanged. An empty graph removes all graph content owned by the selected Lens. The supplied graph format must match the Lens's configured `:graph_format`.
+Replacement changes only content owned by that Lens at its Destination. Gralkor overwrites any supplied `_gralkor_lens` property with the selected Lens name on every inserted node and relationship. Content saved through another Lens or Reflection, or carrying no Lens ownership, remains unchanged. An empty graph removes all graph content owned by the selected Lens. No graph-format option exists.
 
-Invalid Lens names, write modes, formats, and graph data raise `ArgumentError`; graph data is fully validated before storage mutation begins. Once a valid replacement starts, deletion and insertion are not transactional: an import error is returned, and content already removed or inserted is not rolled back.
+Invalid Lens names, write modes, and graph data raise `ArgumentError`; graph data is fully validated before storage mutation begins. Once a valid replacement starts, deletion and insertion are not transactional: an import error is returned, and content already removed or inserted is not rolled back.
 
-Registry and plugin configuration fail fast for blank, duplicate, reserved, retired, or malformed Lens definitions and for unknown Lens names. The retired `"default"` Lens name raises with guidance to use `"operator"`; it is not an alias. If no Lens configuration is used, the implicit `"operator"` Lens writes to `operator/<operator id>` and uses Jido Gralkor's built-in generic extraction contract.
+Runtime and plugin configuration fail fast for blank, duplicate, reserved, retired, or malformed Lens definitions and for unknown Lens names. The retired `"default"` Lens name raises with guidance to use `"operator"`; it is not an alias. If no Lens configuration is used, the implicit `"operator"` Lens writes to `operator/<operator id>` and uses Jido Gralkor's built-in generic extraction contract.
 
 ### Ontology DSL
 
