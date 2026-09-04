@@ -271,7 +271,10 @@ defmodule JidoGralkor.Runtime do
     end
   end
 
-  defp validate_invocation_callback(_callback), do: :ok
+  defp validate_invocation_callback(callback) when is_function(callback, 1), do: :ok
+
+  defp validate_invocation_callback(callback),
+    do: {:error, {:invalid_invocation_callback, callback}}
 
   defp invocation_id(invocation) when is_map(invocation) do
     case field(invocation, :id) do
