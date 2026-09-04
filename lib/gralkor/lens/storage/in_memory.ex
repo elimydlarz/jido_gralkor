@@ -37,7 +37,7 @@ defmodule Gralkor.Lens.Storage.InMemory do
   end
 
   @impl Gralkor.Lens.Storage
-      def replace_graph(
+  def replace_graph(
         %Store{lens: %Replaceable{name: lens_name}} = store,
         %Gralkor.Graph{} = graph
       ) do

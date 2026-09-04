@@ -231,7 +231,9 @@ defmodule JidoGralkor.Runtime do
              case definition_keys(definition) do
                {:ok, keys} ->
                  case Enum.reject(keys, &known_field?(&1, fields)) do
-                   [] -> nil
+                   [] ->
+                     nil
+
                    unknown ->
                      {:unknown_definition_fields, collection, field(definition, :name), unknown}
                  end
@@ -255,7 +257,10 @@ defmodule JidoGralkor.Runtime do
   defp definition_keys(_definition), do: :error
 
   defp known_field?(key, fields) when is_atom(key), do: key in fields
-  defp known_field?(key, fields) when is_binary(key), do: key in Enum.map(fields, &Atom.to_string/1)
+
+  defp known_field?(key, fields) when is_binary(key),
+    do: key in Enum.map(fields, &Atom.to_string/1)
+
   defp known_field?(_key, _fields), do: false
 
   defp validate_reserved_names(configuration) do
@@ -267,10 +272,11 @@ defmodule JidoGralkor.Runtime do
 
     Enum.reduce_while(packaged, :ok, fn {collection, reserved}, :ok ->
       case Enum.find(Map.fetch!(configuration, collection), &(field(&1, :name) in reserved)) do
-        nil -> {:cont, :ok}
+        nil ->
+          {:cont, :ok}
+
         definition ->
-          {:halt,
-           {:error, {:reserved_definition_name, collection, field(definition, :name)}}}
+          {:halt, {:error, {:reserved_definition_name, collection, field(definition, :name)}}}
       end
     end)
   end
@@ -343,7 +349,8 @@ defmodule JidoGralkor.Runtime do
           do: {:error, {:invalid_invocation_id, id}},
           else: {:ok, id}
 
-      id -> {:error, {:invalid_invocation_id, id}}
+      id ->
+        {:error, {:invalid_invocation_id, id}}
     end
   end
 
@@ -435,7 +442,9 @@ defmodule JidoGralkor.Runtime do
 
   defp server_status(%{status: status}), do: normalize_status(status)
   defp server_status(%{"status" => status}), do: normalize_status(status)
-  defp server_status(value) when is_map(value), do: value |> Map.values() |> Enum.find_value(&server_status/1)
+
+  defp server_status(value) when is_map(value),
+    do: value |> Map.values() |> Enum.find_value(&server_status/1)
 
   defp server_status(value) when is_tuple(value) do
     value |> Tuple.to_list() |> Enum.find_value(&server_status/1)

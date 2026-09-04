@@ -975,9 +975,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: AsyncConsumerAgent,
-           id: "reflection-async-submission",
-           register_global: false}
+           agent: AsyncConsumerAgent, id: "reflection-async-submission", register_global: false}
         )
 
       assert :ok =
@@ -1020,9 +1018,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: AsyncConsumerAgent,
-           id: "reflection-invalid-callback",
-           register_global: false}
+           agent: AsyncConsumerAgent, id: "reflection-invalid-callback", register_global: false}
         )
 
       assert :ok =
@@ -1053,9 +1049,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: AsyncConsumerAgent,
-           id: "reflection-async-success",
-           register_global: false}
+           agent: AsyncConsumerAgent, id: "reflection-async-success", register_global: false}
         )
 
       assert :ok =

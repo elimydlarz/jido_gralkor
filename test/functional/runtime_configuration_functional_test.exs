@@ -45,7 +45,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
 
     entity Entity do
-      field :value, :string
+      field(:value, :string)
     end
   end
 
@@ -53,7 +53,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
 
     entity Episodic do
-      field :value, :string
+      field(:value, :string)
     end
   end
 
@@ -61,7 +61,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
 
     entity Community do
-      field :value, :string
+      field(:value, :string)
     end
   end
 
@@ -69,7 +69,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
 
     entity Person do
-      field :name, :string
+      field(:name, :string)
     end
   end
 
@@ -127,9 +127,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: ConsumerAgent,
-           id: "runtime-configuration-consumer",
-           register_global: false}
+           agent: ConsumerAgent, id: "runtime-configuration-consumer", register_global: false}
         )
 
       assert {:ok, state} = Jido.AgentServer.state(agent_server)
@@ -147,9 +145,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: ConsumerAgent,
-           id: "runtime-configuration-owner",
-           register_global: false}
+           agent: ConsumerAgent, id: "runtime-configuration-owner", register_global: false}
         )
 
       assert %{
@@ -178,9 +174,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: ConsumerAgent,
-           id: "runtime-configuration-packaged-lens",
-           register_global: false}
+           agent: ConsumerAgent, id: "runtime-configuration-packaged-lens", register_global: false}
         )
 
       assert %Gralkor.Lens{
@@ -217,9 +211,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: ConsumerAgent,
-           id: "runtime-configuration-replacement",
-           register_global: false}
+           agent: ConsumerAgent, id: "runtime-configuration-replacement", register_global: false}
         )
 
       configuration = %{
@@ -294,9 +286,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       first_agent =
         start_supervised!(
           {Jido.AgentServer,
-           agent: ConsumerAgent,
-           id: "runtime-configuration-first-agent",
-           register_global: false}
+           agent: ConsumerAgent, id: "runtime-configuration-first-agent", register_global: false}
         )
 
       second_agent =
@@ -432,8 +422,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
            register_global: false}
         )
 
-      assert {:error,
-              {:unknown_definition_fields, :destinations, "project", [:ontology]}} =
+      assert {:error, {:unknown_definition_fields, :destinations, "project", [:ontology]}} =
                JidoGralkor.Runtime.replace(agent_server, %{
                  destinations: [%{name: "project", ontology: ConsumerOntology}],
                  lenses: [],
