@@ -1,8 +1,8 @@
 Functional: lens-registration (src: lib/gralkor/lens.ex, lib/gralkor/lens/replaceable.ex; functional: test/functional/lens_registration_functional_test.exs)
 
-when an agent's runtime configuration contains a valid appending or replaceable Lens
-  then that agent's direct and mounted memory operations can select the Lens by name
-  and those operations observe the same agent-owned Lens definition
+when the application compatibility registry contains a valid appending or replaceable Lens
+  then direct and mounted compatibility operations can select the Lens by name
+  and those operations observe the same application-owned Lens definition
   and the Lens uses its referenced registered Destination
 
 where an appending Lens definition provides `write: :append`, a Destination name, and an ingestion process
@@ -14,10 +14,10 @@ where an appending Lens omits its ontology
 if a Lens definition retains a top-level scope or address setting
   then validation fails identifying the unsupported Lens setting
 
-if an agent's runtime Lens collection is not a list
+if the application compatibility Lens registry is not a list
   then validation fails naming what it found instead
 
-if an agent's runtime configuration contains an invalid Lens
+if the application compatibility registry contains an invalid Lens
   then validation fails before ingestion or search begins
   and a blank Lens name is identified
   and a Lens name containing the reserved provenance delimiter ` [lens: ` is identified
