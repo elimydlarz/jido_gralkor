@@ -643,6 +643,7 @@ invocation = %{
   representations: completed_representations
 }
 
+review_consumer = self()
 callback = fn result -> send(review_consumer, {:release_review, result}) end
 
 {:ok, ^invocation_id} =
