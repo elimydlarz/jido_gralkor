@@ -83,9 +83,19 @@ defmodule Gralkor.CaptureBuffer do
     append_lenses(session_id, operator_id, agent_name, user_name, [lens], msgs)
   end
 
+  def append_lens(runtime_owner, session_id, operator_id, agent_name, user_name, lens, msgs)
+      when is_binary(session_id) and is_list(msgs) do
+    append_lenses(runtime_owner, session_id, operator_id, agent_name, user_name, [lens], msgs)
+  end
+
   def append_lenses(session_id, operator_id, agent_name, user_name, lenses, msgs)
       when is_binary(session_id) and is_list(lenses) and
              is_list(msgs) do
+    append_lenses(nil, session_id, operator_id, agent_name, user_name, lenses, msgs)
+  end
+
+  def append_lenses(runtime_owner, session_id, operator_id, agent_name, user_name, lenses, msgs)
+      when is_binary(session_id) and is_list(lenses) and is_list(msgs) do
     raise_if_blank!(:operator_id, operator_id)
     raise_if_blank!(:agent_name, agent_name)
     raise_if_blank!(:user_name, user_name)
@@ -95,7 +105,8 @@ defmodule Gralkor.CaptureBuffer do
 
     case GenServer.call(
            __MODULE__,
-           {:append_lenses, session_id, operator_id, agent_name, user_name, lenses, msgs}
+           {:append_lenses, runtime_owner, session_id, operator_id, agent_name, user_name, lenses,
+            msgs}
          ) do
       :ok ->
         :ok
@@ -114,6 +125,11 @@ defmodule Gralkor.CaptureBuffer do
         raise ArgumentError,
               "session #{inspect(session_id)} is bound to user #{inspect(bound_user)}; " <>
                 "refusing to append under user #{inspect(new_user)}"
+
+      {:runtime_mismatch, new_runtime, bound_runtime} ->
+        raise ArgumentError,
+              "session #{inspect(session_id)} is bound to runtime #{inspect(bound_runtime)}; " <>
+                "refusing to append under runtime #{inspect(new_runtime)}"
 
       {:capture_mode_mismatch, :legacy, :lens} ->
         raise ArgumentError,
@@ -216,7 +232,8 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   def handle_call(
-        {:append_lenses, session_id, operator_id, agent_name, user_name, lenses, msgs},
+        {:append_lenses, runtime_owner, session_id, operator_id, agent_name, user_name, lenses,
+         msgs},
         _from,
         state
       ) do
@@ -226,6 +243,7 @@ defmodule Gralkor.CaptureBuffer do
 
       {false, nil} ->
         entry = %{
+          runtime_owner: runtime_owner,
           operator_id: operator_id,
           agent_name: agent_name,
           user_name: user_name,
@@ -238,7 +256,12 @@ defmodule Gralkor.CaptureBuffer do
         {:reply, :ok, %{state | lens_entries: Map.put(state.lens_entries, session_id, entry)}}
 
       {false,
-       %{operator_id: ^operator_id, agent_name: ^agent_name, user_name: ^user_name} = entry} ->
+       %{
+         runtime_owner: ^runtime_owner,
+         operator_id: ^operator_id,
+         agent_name: ^agent_name,
+         user_name: ^user_name
+       } = entry} ->
         new_lenses = Enum.reject(Enum.uniq(lenses), &Map.has_key?(entry.batches, &1))
 
         batches =
@@ -263,6 +286,9 @@ defmodule Gralkor.CaptureBuffer do
 
       {false, %{user_name: bound_user}} ->
         {:reply, {:user_mismatch, user_name, bound_user}, state}
+
+      {false, %{runtime_owner: bound_runtime}} ->
+        {:reply, {:runtime_mismatch, runtime_owner, bound_runtime}, state}
     end
   end
 
@@ -501,7 +527,8 @@ defmodule Gralkor.CaptureBuffer do
             user_name,
             lens_name,
             lens_turns,
-            entry.ingestion_id
+            entry.ingestion_id,
+            entry.runtime_owner
           )
         end
 
@@ -625,9 +652,13 @@ defmodule Gralkor.CaptureBuffer do
          user_name,
          lens,
          turns,
-         ingestion_id
+         ingestion_id,
+         runtime_owner
        ) do
     cond do
+      is_function(callback, 7) ->
+        callback.(operator_id, agent_name, user_name, lens, turns, ingestion_id, runtime_owner)
+
       is_function(callback, 6) ->
         callback.(operator_id, agent_name, user_name, lens, turns, ingestion_id)
 

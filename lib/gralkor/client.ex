@@ -141,6 +141,43 @@ defmodule Gralkor.Client do
   end
 
   @doc false
+  def capture(
+        runtime_owner,
+        session_id,
+        operator_id,
+        agent_name,
+        user_name,
+        messages,
+        lens,
+        additional_lenses
+      ) do
+    client = impl()
+
+    if function_exported?(client, :capture, 8) do
+      client.capture(
+        runtime_owner,
+        session_id,
+        operator_id,
+        agent_name,
+        user_name,
+        messages,
+        lens,
+        additional_lenses
+      )
+    else
+      client.capture(
+        session_id,
+        operator_id,
+        agent_name,
+        user_name,
+        messages,
+        lens,
+        additional_lenses
+      )
+    end
+  end
+
+  @doc false
   @spec ingest_with_representation(Ingest.t()) ::
           {:ok, [IngestedRepresentation.t()]} | {:error, term()}
   def ingest_with_representation(%Ingest{lens: lens_name} = request) do

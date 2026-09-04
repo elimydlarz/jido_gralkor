@@ -226,9 +226,10 @@ defmodule JidoGralkor.Plugin do
                   )
 
                 lens_name ->
-                  Client.lens!(lens_name)
+                  Runtime.lens!(self(), lens_name)
 
-                  Client.impl().capture(
+                  Client.capture(
+                    self(),
                     session_id,
                     agent.id,
                     agent_name(agent),
@@ -319,7 +320,7 @@ defmodule JidoGralkor.Plugin do
     new_context =
       case Map.fetch(existing_context, :lens) do
         {:ok, lens} ->
-          Client.lens!(lens)
+          Runtime.lens!(self(), lens)
           extras |> Map.merge(existing_context) |> Map.merge(extras) |> Map.put(:lens, lens)
 
         :error ->

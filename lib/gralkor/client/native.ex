@@ -91,6 +91,32 @@ defmodule Gralkor.Client.Native do
     )
   end
 
+  def capture(
+        runtime_owner,
+        session_id,
+        operator_id,
+        agent_name,
+        user_name,
+        msgs,
+        lens,
+        additional_lenses
+      ) do
+    raise_if_blank!(:session_id, session_id)
+    raise_if_blank!(:operator_id, operator_id)
+    raise_if_blank!(:agent_name, agent_name)
+    raise_if_blank!(:user_name, user_name)
+
+    CaptureBuffer.append_lenses(
+      runtime_owner,
+      session_id,
+      operator_id,
+      agent_name,
+      user_name,
+      [lens | additional_lenses],
+      msgs
+    )
+  end
+
   @impl Gralkor.Client
   def flush(session_id) do
     raise_if_blank!(:session_id, session_id)

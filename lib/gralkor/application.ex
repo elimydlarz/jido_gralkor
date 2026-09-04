@@ -112,21 +112,27 @@ defmodule Gralkor.Application do
   @doc false
   def build_lens_flush_callback(deps \\ []) do
     ingest_fn = Keyword.get(deps, :ingest_fn, &Gralkor.Client.ingest_with_representation/1)
+    runtime_ingest_fn =
+      Keyword.get(deps, :runtime_ingest_fn, &Gralkor.Client.ingest_with_representation/2)
 
-    fn operator_id, agent_name, user_name, lens, turns, ingestion_id ->
+    fn operator_id, agent_name, user_name, lens, turns, ingestion_id, runtime_owner ->
       transcript = Distill.format_transcript(turns, agent_name, user_name)
 
       if transcript == "" do
         :ok
       else
-        ingest_fn.(%Ingest{
+        request = %Ingest{
           id: ingestion_id,
           operator_id: operator_id,
           lens: lens,
           source_kind: :conversation,
           content: transcript,
           source_description: "captured"
-        })
+        }
+
+        if runtime_owner,
+          do: runtime_ingest_fn.(runtime_owner, request),
+          else: ingest_fn.(request)
       end
     end
   end
