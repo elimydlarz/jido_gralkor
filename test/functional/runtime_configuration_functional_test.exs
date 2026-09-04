@@ -188,7 +188,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   end
 
   setup do
-    keys = [:runtime_configuration_test_pid, :destination_storage, :lens_storage]
+    keys = [:runtime_configuration_test_pid, :destination_storage, :lens_storage, :client]
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
     Application.put_env(:jido_gralkor, :runtime_configuration_test_pid, self())
 
