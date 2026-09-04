@@ -87,7 +87,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     test "then the graph is stored within only its resolved Destination" do
       local = replaceable_store("operator-one", "systems", :operator)
       global = replaceable_store("operator-one", "catalogue", :global)
-      graph = %Gralkor.Graph{format: :property_graph, data: graph_data("system")}
+      graph = graph(graph_data("system"))
 
       assert :ok = Store.replace_graph(local, graph)
       assert :ok = Store.replace_graph(global, graph)
@@ -104,9 +104,8 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     test "and every supplied node and relationship retains each non-reserved graph value" do
       store = replaceable_store("operator-one", "systems", :operator)
 
-      graph = %Gralkor.Graph{
-        format: :property_graph,
-        data: %{
+      graph =
+        graph(%{
           nodes: [
             %{
               id: "source",
@@ -123,8 +122,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
               properties: %{protocol: "events"}
             }
           ]
-        }
-      }
+        })
 
       assert :ok = Store.replace_graph(store, graph)
 
@@ -155,9 +153,8 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     test "and every supplied node and relationship records the replacing Lens as its owner" do
       store = replaceable_store("operator-one", "systems", :operator)
 
-      graph = %Gralkor.Graph{
-        format: :property_graph,
-        data: %{
+      graph =
+        graph(%{
           nodes: [
             %{id: "source", labels: ["System"], properties: %{}},
             %{id: "target", labels: ["System"], properties: %{}}
@@ -165,8 +162,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
           relationships: [
             %{from: "source", to: "target", type: "DEPENDS_ON", properties: %{}}
           ]
-        }
-      }
+        })
 
       assert :ok = Store.replace_graph(store, graph)
 
@@ -182,9 +178,8 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     test "and graph content previously owned by the replacing Lens at that destination is removed" do
       systems = replaceable_store("operator-one", "systems", :global)
 
-      first = %Gralkor.Graph{
-        format: :property_graph,
-        data: %{
+      first =
+        graph(%{
           nodes: [
             %{id: "old-source", labels: ["System"], properties: %{}},
             %{id: "old-target", labels: ["System"], properties: %{}}
@@ -192,15 +187,14 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
           relationships: [
             %{from: "old-source", to: "old-target", type: "DEPENDS_ON", properties: %{}}
           ]
-        }
-      }
+        })
 
       assert :ok = Store.replace_graph(systems, first)
 
       assert :ok =
                Store.replace_graph(
                  systems,
-                 %Gralkor.Graph{format: :property_graph, data: graph_data("current")}
+                 graph(graph_data("current"))
                )
 
       assert %{nodes: [%{id: "current"}], relationships: []} = InMemory.graph(key(systems))
@@ -213,13 +207,13 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       assert :ok =
                Store.replace_graph(
                  catalogue,
-                 %Gralkor.Graph{format: :property_graph, data: graph_data("catalogue")}
+                 graph(graph_data("catalogue"))
                )
 
       assert :ok =
                Store.replace_graph(
                  systems,
-                 %Gralkor.Graph{format: :property_graph, data: graph_data("systems")}
+                 graph(graph_data("systems"))
                )
 
       assert %{nodes: nodes} = InMemory.graph(key(systems))
@@ -242,7 +236,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       assert :ok =
                Store.replace_graph(
                  systems,
-                 %Gralkor.Graph{format: :property_graph, data: graph_data("systems")}
+                 graph(graph_data("systems"))
                )
 
       assert %{nodes: [unowned, owned]} = InMemory.graph(key(systems))
@@ -268,7 +262,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       assert :ok =
                Store.replace_graph(
                  systems,
-                 %Gralkor.Graph{format: :property_graph, data: graph_data("systems")}
+                 graph(graph_data("systems"))
                )
 
       assert %{nodes: [learning, owned]} = InMemory.graph(key(systems))
@@ -284,7 +278,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       assert :ok =
                Store.replace_graph(
                  systems,
-                 %Gralkor.Graph{format: :property_graph, data: graph_data("old")}
+                 graph(graph_data("old"))
                )
 
       assert :ok = Store.replace_graph(systems, empty_graph())
@@ -307,7 +301,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
         assert :ok =
                  Store.replace_graph(
                    systems,
-                   %Gralkor.Graph{format: :property_graph, data: graph_data(id)}
+                   graph(graph_data(id))
                  )
       end
 
@@ -366,8 +360,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       operator_id: operator_id,
       lens: %Replaceable{
         name: name,
-        destination: destination(Atom.to_string(scope)),
-        graph_format: :property_graph
+        destination: destination(Atom.to_string(scope))
       }
     }
   end
@@ -381,7 +374,9 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     %{nodes: [%{id: id, labels: ["System"], properties: %{name: id}}], relationships: []}
   end
 
+  defp graph(data), do: struct!(Gralkor.Graph, data)
+
   defp empty_graph do
-    %Gralkor.Graph{format: :property_graph, data: %{nodes: [], relationships: []}}
+    %Gralkor.Graph{nodes: [], relationships: []}
   end
 end
