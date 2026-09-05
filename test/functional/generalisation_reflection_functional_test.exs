@@ -267,6 +267,17 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       assert directions =~ "new generalisation with no lineage uses level 1"
       assert directions =~ "one greater than the highest level in its evolves_from snapshots"
     end
+
+    test "and inference is directed to provide non-blank content for every current generalisation and lineage snapshot" do
+      directions =
+        "evolve-generalisations"
+        |> step_directions()
+        |> normalized_whitespace()
+        |> String.downcase()
+
+      assert directions =~ "non-blank content"
+      assert directions =~ "every current generalisation and lineage snapshot"
+    end
   end
 
   describe "when the packaged generalisation Reflection's default related-memory search returns no stored information" do
@@ -323,8 +334,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     end
   end
 
-  describe "when packaged generalisation inference returns typed values" do
-    test "then model-produced content, level, and lineage are preserved without comparison" do
+  describe "when the packaged generalisation Reflection synthesises an evolved generalisation > while its `content`, `level`, and `evolves_from` values satisfy the declared structured-output types" do
+    test "then those model-produced values become the generalisation without comparison to related memory" do
       put_stored_generalisation_response([
         %{"content" => "A stored but unrelated generalisation", "level" => 8}
       ])
