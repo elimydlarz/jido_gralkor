@@ -167,6 +167,26 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :unsupported}
   end
 
+  defmodule SnapshotOutputStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_, _, _, _, _, _), do: {:ok, []}
+
+    @impl true
+    def put_artefact(output, reflection_name, operator_id, artefact) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid),
+        {:runtime_reflection_delivery, output, reflection_name, operator_id, artefact}
+      )
+
+      :ok
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+  end
+
   defmodule RecordingLensStorage do
     @behaviour Gralkor.Lens.Storage
 
@@ -824,6 +844,18 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "when a named Reflection submission is admitted" do
+    test "then its background work retains the Reflection definition active at admission" do
+      {first_output, _second_output} = reflection_snapshot_outputs("retained-reflection")
+      assert first_output.destination.name == "first-reviews"
+    end
+
+    test "and later submission uses any subsequently installed Reflection definition" do
+      {_first_output, second_output} = reflection_snapshot_outputs("later-reflection")
+      assert second_output.destination.name == "second-reviews"
+    end
+  end
+
   describe "when a search begins" do
     test "then its selected Lenses and Destinations resolve from one runtime snapshot" do
       agent_server =
@@ -1429,6 +1461,96 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       ],
       reflections: []
     }
+  end
+
+  defp reflection_snapshot_outputs(id) do
+    Application.put_env(:jido_gralkor, :destination_storage, SnapshotOutputStorage)
+
+    agent_server =
+      start_supervised!(
+        {Jido.AgentServer,
+         agent: ConsumerAgent, id: "#{id}-agent", register_global: false}
+      )
+
+    assert :ok =
+             JidoGralkor.Runtime.replace(
+               agent_server,
+               reflection_configuration("first-reviews")
+             )
+
+    test_pid = self()
+    release = make_ref()
+
+    blocked_inference = fn _request ->
+      send(test_pid, {:runtime_snapshot_started, self()})
+
+      receive do
+        {^release, :continue} -> {:ok, %{output: %{"summary" => "first"}}}
+      end
+    end
+
+    callback = &send(test_pid, {:runtime_reflection_callback, &1})
+
+    assert {:ok, "#{id}-first"} =
+             Gralkor.Client.reflect(
+               agent_server,
+               "review",
+               reflection_invocation("#{id}-first"),
+               callback,
+               inference: blocked_inference
+             )
+
+    assert_receive {:runtime_snapshot_started, blocked_process}
+
+    assert :ok =
+             JidoGralkor.Runtime.replace(
+               agent_server,
+               reflection_configuration("second-reviews")
+             )
+
+    send(blocked_process, {release, :continue})
+
+    assert_receive {:runtime_reflection_delivery, first_output, "review", _, first_artefact}
+    assert_receive {:runtime_reflection_callback, %{artefact: ^first_artefact}}
+
+    assert {:ok, "#{id}-second"} =
+             Gralkor.Client.reflect(
+               agent_server,
+               "review",
+               reflection_invocation("#{id}-second"),
+               callback,
+               inference: fn _ -> {:ok, %{output: %{"summary" => "second"}}} end
+             )
+
+    assert_receive {:runtime_reflection_delivery, second_output, "review", _, second_artefact}
+    assert_receive {:runtime_reflection_callback, %{artefact: ^second_artefact}}
+    {first_output, second_output}
+  end
+
+  defp reflection_configuration(destination) do
+    %{
+      destinations: [%{name: destination}],
+      lenses: [],
+      reflections: [
+        %{
+          name: "review",
+          outputs: [%{kind: :destination, destination: destination}],
+          chain_of_thought: %{
+            steps: [
+              %{
+                label: "review",
+                directions: "Review.",
+                output: %{"summary" => "string"}
+              }
+            ]
+          }
+        }
+      ]
+    }
+  end
+
+  defp reflection_invocation(id) do
+    %{id: id, operator_id: "operator-one", invocation_context: %{}, representations: []}
   end
 
   defp empty_runtime_configuration,
