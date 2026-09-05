@@ -303,20 +303,38 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert_receive {:graph_replaced, "operator/operator-one"}
     end
 
-    test "and graph replacement receives the selected Lens name and supplied nodes and relationships" do
-      store = replaceable_store(:operator)
+    test "and graph replacement receives the selected Lens name" do
+      test_pid = self()
+
+      replace_graph_fn = fn _group_id, lens_name, _data ->
+        send(test_pid, {:graph_replaced, lens_name})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.replace_graph(replaceable_store(:operator), property_graph(),
+                 replace_graph_fn: replace_graph_fn
+               )
+
+      assert_receive {:graph_replaced, "systems"}
+    end
+
+    test "and graph replacement receives the supplied nodes and relationships" do
       graph = property_graph()
       data = Map.from_struct(graph)
       test_pid = self()
 
-      replace_graph_fn = fn group_id, lens_name, data ->
-        send(test_pid, {:graph_replaced, group_id, lens_name, data})
+      replace_graph_fn = fn _group_id, _lens_name, replacement_data ->
+        send(test_pid, {:graph_replaced, replacement_data})
         :ok
       end
 
-      assert :ok = Graphiti.replace_graph(store, graph, replace_graph_fn: replace_graph_fn)
+      assert :ok =
+               Graphiti.replace_graph(replaceable_store(:operator), graph,
+                 replace_graph_fn: replace_graph_fn
+               )
 
-      assert_receive {:graph_replaced, _, "systems", ^data}
+      assert_receive {:graph_replaced, ^data}
     end
 
     test "and the graph replacement result is returned to the caller" do
@@ -348,13 +366,29 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert_receive {:graph_replaced, "global"}
     end
 
-    test "and graph replacement receives the selected Lens name and supplied nodes and relationships" do
+    test "and graph replacement receives the selected Lens name" do
+      test_pid = self()
+
+      replace_graph_fn = fn _group_id, lens_name, _data ->
+        send(test_pid, {:graph_replaced, lens_name})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.replace_graph(replaceable_store(:global), property_graph(),
+                 replace_graph_fn: replace_graph_fn
+               )
+
+      assert_receive {:graph_replaced, "systems"}
+    end
+
+    test "and graph replacement receives the supplied nodes and relationships" do
       graph = property_graph()
       data = Map.from_struct(graph)
       test_pid = self()
 
-      replace_graph_fn = fn group_id, lens_name, data ->
-        send(test_pid, {:graph_replaced, group_id, lens_name, data})
+      replace_graph_fn = fn _group_id, _lens_name, replacement_data ->
+        send(test_pid, {:graph_replaced, replacement_data})
         :ok
       end
 
@@ -363,7 +397,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  replace_graph_fn: replace_graph_fn
                )
 
-      assert_receive {:graph_replaced, "global", "systems", ^data}
+      assert_receive {:graph_replaced, ^data}
     end
 
     test "and the graph replacement result is returned to the caller" do
@@ -395,13 +429,29 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert_receive {:graph_replaced, "systems"}
     end
 
-    test "and graph replacement receives the selected Lens name and supplied nodes and relationships" do
+    test "and graph replacement receives the selected Lens name" do
+      test_pid = self()
+
+      replace_graph_fn = fn _group_id, lens_name, _replacement_data ->
+        send(test_pid, {:graph_replaced, lens_name})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.replace_graph(replaceable_store(:application), property_graph(),
+                 replace_graph_fn: replace_graph_fn
+               )
+
+      assert_receive {:graph_replaced, "systems"}
+    end
+
+    test "and graph replacement receives the supplied nodes and relationships" do
       graph = property_graph()
       data = Map.from_struct(graph)
       test_pid = self()
 
-      replace_graph_fn = fn group_id, lens_name, replacement_data ->
-        send(test_pid, {:graph_replaced, group_id, lens_name, replacement_data})
+      replace_graph_fn = fn _group_id, _lens_name, replacement_data ->
+        send(test_pid, {:graph_replaced, replacement_data})
         :ok
       end
 
@@ -410,7 +460,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  replace_graph_fn: replace_graph_fn
                )
 
-      assert_receive {:graph_replaced, "systems", "systems", ^data}
+      assert_receive {:graph_replaced, ^data}
     end
 
     test "and the graph replacement result is returned to the caller" do
