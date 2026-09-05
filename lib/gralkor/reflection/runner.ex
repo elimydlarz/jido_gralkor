@@ -269,7 +269,7 @@ defmodule Gralkor.Reflection.Runner do
 
     context =
       request.tool_context
-      |> Map.put_new(:operator_id, request.operator_id)
+      |> Map.put(:operator_id, request.operator_id)
       |> Map.put(:tools, request.tools)
 
     case call_with_tools.(

@@ -664,15 +664,45 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert model == "#{configured.provider}:#{configured.id}"
       assert prompt =~ ~s("lens":"observations")
       assert received_context.tools == tools
-
-      assert Map.drop(received_context, [:tools]) ==
-               Map.merge(tool_context, %{operator_id: "operator-one"})
     end
 
     test "and the current step is the only step exposed to inference", context do
       assert [first | _] = run_and_collect_requests(reflection(context), invocation())
       assert first.step == %{label: "gather", directions: "Gather facts."}
       refute Map.has_key?(first, :steps)
+    end
+
+    test "and built-in inference tool context uses the invocation's operator identity while retaining every other supplied context value" do
+      tool_context = %{
+        operator_id: "conflicting-caller-value",
+        session_id: "session-one",
+        custom: "kept"
+      }
+
+      request = %{
+        directions: "Use memory.",
+        output_schema: %{"artefact" => "string"},
+        representations: [],
+        stored_information: [],
+        tools: [],
+        tool_context: tool_context,
+        operator_id: "invocation-operator"
+      }
+
+      call = fn Jido.AI.Actions.ToolCalling.CallWithTools, _params, received ->
+        send(self(), {:default_inference_context, received})
+        {:ok, %{text: ~s({"artefact":"done"})}}
+      end
+
+      assert {:ok, %{output: %{"artefact" => "done"}}} = Runner.default_inference(request, call)
+
+      assert_receive {:default_inference_context,
+                      %{
+                        operator_id: "invocation-operator",
+                        session_id: "session-one",
+                        custom: "kept",
+                        tools: []
+                      }}
     end
   end
 
@@ -929,8 +959,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "if a consumer triggers a Reflection without valid invocation identity" do
-    test "then submission fails before Reflection work begins" do
+  describe "if a consumer triggers a Reflection without a valid invocation identifier or operator identifier" do
+    test "then submission fails before the Reflection is admitted" do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
