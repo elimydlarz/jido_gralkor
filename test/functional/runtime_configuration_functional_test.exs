@@ -147,6 +147,22 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  defmodule BlockingIngestion do
+    @behaviour Gralkor.Lens.Ingestion
+
+    @impl true
+    def ingest(_request, store) do
+      test_pid = Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid)
+      send(test_pid, {:blocking_runtime_ingestion, self()})
+
+      receive do
+        :continue_runtime_ingestion ->
+          send(test_pid, {:runtime_ingestion, store.lens.destination.name})
+          :ok
+      end
+    end
+  end
+
   defmodule RecordingDestinationStorage do
     @behaviour Gralkor.Destination.Storage
 
