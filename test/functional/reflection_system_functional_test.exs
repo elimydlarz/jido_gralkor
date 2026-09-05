@@ -1945,16 +1945,26 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   defp resolve_reflection(definition) do
     with_runtime(runtime_configuration([definition]), fn owner ->
-      Runtime.reflection!(owner, Keyword.get(definition, :name) || Map.get(definition, :name))
+      Runtime.reflection!(owner, definition_name(definition))
     end)
   end
+
+  defp definition_name(definition) when is_list(definition), do: Keyword.fetch!(definition, :name)
+
+  defp definition_name(definition) when is_map(definition),
+    do: Map.get(definition, :name) || Map.fetch!(definition, "name")
 
   defp packaged_reflection(name) do
     with_runtime(runtime_configuration([]), &Runtime.reflection!(&1, name))
   end
 
   defp with_runtime(configuration, fun) do
-    owner = spawn(fn -> receive do: (:stop -> :ok) end)
+    owner =
+      spawn(fn ->
+        receive do
+          :stop -> :ok
+        end
+      end)
     {:ok, runtime} = Runtime.start_link(owner: owner, configuration: configuration)
 
     try do
