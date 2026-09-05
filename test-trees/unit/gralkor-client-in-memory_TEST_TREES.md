@@ -75,10 +75,10 @@ when a flush is requested for a session
 when a flush is requested for a session and awaited with a timeout
   while the flush completes inside the timeout
     then success is returned
-    and a recall for the same group afterwards surfaces the just-flushed turns
+    and a later recall for the same group reaches the backend as a separate call
   while the flush does not complete inside the timeout
     then a timeout error is returned
-    and the buffered turns remain available to flush on a later call
+    and a later flush-and-await for the same session reaches the backend as a separate call
   if the backend fails before the timeout elapses
     then that failure is returned unchanged
 

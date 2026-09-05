@@ -43,6 +43,8 @@ where captured turns select a Lens
     then an argument error is raised before any turn is buffered
   if a turn is appended for an existing session under a different operator
     then an argument error is raised, a session not being re-bindable across operators
+  if a turn is appended for an existing session under a different runtime owner
+    then an argument error is raised, a session not being re-bindable across runtime owners
   if a turn is appended for an existing session under a different agent name
     then an argument error is raised
   if a turn is appended for an existing session under a different user name
@@ -57,6 +59,8 @@ where captured turns select a Lens
   when one captured turn is routed through a primary Lens and an additional Lens
     then every routed Lens receives that turn in its own batch
     but the session's buffered turns contain that turn only once
+  when one captured turn names the same Lens more than once
+    then the Lens flush callback receives one batch per distinct Lens
   when Lens-selected turns begin a new buffered ingestion
     then one ingestion identifier is minted and retained for every retry of that buffered ingestion
     and identifiers remain collision-resistant across process and VM restarts
@@ -115,6 +119,7 @@ when a session holding turns is flushed and awaited
     and the entry is still consumed
   while the flush callback reports an upstream-LLM error
     then that error is returned without any retry
+    and the entry is still consumed
   while the flush callback fails for any other reason
     then the same configured backoff schedule applies, bounded by the caller's timeout
     when the callback throws, exits, or returns a value outside its contract
@@ -133,6 +138,7 @@ when a session holding no turns is flushed and awaited
 when every buffered session is flushed at once
   then each session's turns go through the same flush callback and retry schedule
   and the call returns only once every one of those flushes has been awaited
+  and every Lens-selected entry is resolved through the configured Lens resolver before its Lens flush callback runs
   if one session's flush fails
     then the other sessions' flushes still complete
     and the call reports success after every session has been attempted
@@ -150,4 +156,5 @@ if any other unexpected message arrives, a linked process exiting abnormally inc
 
 when the supervision tree stops the buffer
   then every pending entry is drained through the flush callback before termination returns
+  and every pending Lens-selected entry is resolved through the configured Lens resolver before its Lens flush callback runs
   and every already-started fire-and-forget flush worker finishes before termination returns

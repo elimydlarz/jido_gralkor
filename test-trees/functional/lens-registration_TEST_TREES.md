@@ -8,8 +8,17 @@ when the application compatibility registry contains a valid appending or replac
 where an appending Lens definition provides `write: :append`, a Destination name, and an ingestion process
   then the Lens uses its declared ingestion behaviour
 
+where an application compatibility Lens omits its write mode
+  then the Lens defaults to `write: :append`
+
 where an appending Lens omits its ontology
   then the Lens uses jido_gralkor's built-in default ontology
+
+if an application compatibility Lens's ontology declares a custom entity kind named `Entity`, `Episodic`, or `Community`
+  then validation fails identifying the entity kind reserved by Graphiti
+
+when an application compatibility Lens's ontology declares a custom entity kind named `Person`
+  then validation accepts that entity kind
 
 if a Lens definition retains a top-level scope or address setting
   then validation fails identifying the unsupported Lens setting

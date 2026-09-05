@@ -12,6 +12,10 @@ where information is submitted directly without a mounted plugin or conversation
   and the caller observes whether ingestion succeeded or failed
   and completed ingestion neither resolves nor invokes configured Reflections
 
+where completed representations are requested
+  then each successful Store write yields one `Gralkor.IngestedRepresentation`
+  and the representations are returned in Store write order
+
 if ingestion selects an invalid Lens
   then ingestion fails before an ingestion process runs or memory is stored
 
@@ -22,3 +26,5 @@ if episode ingestion selects a replaceable Lens
 if the selected Lens's ingestion process fails
   then ingestion returns that failure to the caller
   and no fallback write bypasses the selected process
+  while one or more Store writes completed before the failure
+    then no partial list of `Gralkor.IngestedRepresentation` values is returned
