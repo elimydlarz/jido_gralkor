@@ -214,7 +214,14 @@ defmodule Gralkor.LensIngestionFunctionalTest do
               [
                 %Gralkor.IngestedRepresentation{lens: "observations", result: :ok},
                 %Gralkor.IngestedRepresentation{lens: "observations", result: :ok}
-              ]} = Client.ingest_with_representation(request("many"))
+      ]} = Client.ingest_with_representation(request("many"))
+    end
+
+    test "and the representations are returned in Store write order" do
+      Application.put_env(:jido_gralkor, :lenses, [lens(VariableIngestion)])
+
+      assert {:ok, [%{content: "first"}, %{content: "second"}]} =
+               Client.ingest_with_representation(request("many"))
     end
   end
 
