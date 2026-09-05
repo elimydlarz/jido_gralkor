@@ -148,10 +148,10 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       assert Enum.any?(
                episodes,
-               &match?(%{lens: "observations", content: "Release in small batches."}, &1)
+               &match?(%{episode: %{lens: "observations", content: "Release in small batches."}}, &1)
              )
 
-      assert Enum.any?(episodes, &match?(%{reflection: "review"}, &1))
+      assert Enum.any?(episodes, &match?(%{episode: %{reflection: "review"}}, &1))
     end
   end
 
