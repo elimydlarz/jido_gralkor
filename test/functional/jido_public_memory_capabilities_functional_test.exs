@@ -53,6 +53,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                %{
                  name: "observations",
                  destination: "operator",
+                 write: :append,
                  ingestion: Gralkor.Lens.Ingestion.Store
                }
              ],
