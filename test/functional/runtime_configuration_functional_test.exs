@@ -1103,6 +1103,71 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert :ok = Gralkor.Client.Native.flush_and_await("runtime-capture-session", 1_000)
       assert_receive {:runtime_ingestion, "runtime-memory"}
     end
+
+    test "then a scheduled ingestion retains its resolved Lens after the targeted agent terminates" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+      test_pid = self()
+      runtime_callback = Gralkor.Application.build_lens_flush_callback()
+
+      lens_flush_callback = fn operator_id,
+                               agent_name,
+                               user_name,
+                               lens,
+                               turns,
+                               ingestion_id,
+                               runtime_owner ->
+        send(test_pid, {:lens_flush_worker_ready, self()})
+
+        receive do
+          :continue_lens_flush ->
+            runtime_callback.(
+              operator_id,
+              agent_name,
+              user_name,
+              lens,
+              turns,
+              ingestion_id,
+              runtime_owner
+            )
+        end
+      end
+
+      start_supervised!(
+        {Gralkor.CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: lens_flush_callback,
+         lens_resolver: fn runtime_owner, names ->
+           {:ok, JidoGralkor.Runtime.lenses!(runtime_owner, names)}
+         end,
+         retries: []}
+      )
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: CustomLensConsumerAgent,
+           id: "runtime-configuration-captured-after-agent-stop",
+           register_global: false}
+        )
+
+      assert :ok =
+               Gralkor.Client.capture(
+                 agent_server,
+                 "runtime-capture-after-stop",
+                 "operator-one",
+                 "Runtime Configuration Consumer",
+                 "Eli",
+                 [Gralkor.Message.new("user", "Retain the resolved Lens.")],
+                 "runtime-observations",
+                 []
+               )
+
+      assert :ok = Gralkor.Client.Native.flush("runtime-capture-after-stop")
+      assert_receive {:lens_flush_worker_ready, worker}
+      assert :ok = GenServer.stop(agent_server, :normal)
+      send(worker, :continue_lens_flush)
+      assert_receive {:runtime_ingestion, "runtime-memory"}
+    end
   end
 
   describe "when named graph replacement begins" do
