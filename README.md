@@ -142,6 +142,8 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
 | `:destination_storage` | module implementing `Gralkor.Destination.Storage` | `Gralkor.Destination.Storage.Graphiti` | The single memory boundary behind `Client.search/1` and Reflection Destination outputs. Artefact writes create-or-confirm by stable `artefact.id`. Set to `Gralkor.Destination.Storage.InMemory` in tests. |
+| `:destinations` | list of Destination definitions | `[]` | Application compatibility registry for direct client calls without an AgentServer target. Mounted agents use their own `:runtime_config`. |
+| `:lenses` | list of Lens definitions | `[]` | Application compatibility registry for direct client calls without an AgentServer target. An omitted write mode defaults to `:append`; mounted-agent Lens definitions declare their write mode explicitly. |
 | `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall search and presentation. On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. |
 | `:test` | boolean | `false` | Verbose diagnostic logging: recall queries, returned facts, and flushed capture bodies are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
 
@@ -153,6 +155,8 @@ config :jido_gralkor,
 ```
 
 Mounted-agent Destinations, Lenses, and Reflections come only from each plugin mount's `:runtime_config`, described below. Legacy direct client arities retain application-environment Destination and Lens registries as compatibility surfaces, but mounted agents never fall back to them. `:destination_storage` remains the single storage boundary for both search and Reflection output.
+
+The retired `:reflection_storage` setting causes startup to fail. Configure `:destination_storage` for artefact persistence and declare each Reflection's Destination output in the agent's `:runtime_config`.
 
 The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `recall/4` need no ontology configuration. The Lens uses the packaged operator Destination and the library-owned `Gralkor.DefaultOntology`. Application-specific extraction schemas belong on appending Lenses or Reflections.
 
@@ -659,7 +663,7 @@ callback = fn result -> send(review_consumer, {:release_review, result}) end
 
 The callback eventually receives a map with `:invocation_id`, the terminal `:outcome`, and `:artefact` when production succeeded. A successful delivery reports `outcome: :delivered`. A non-retryable production failure reports `{:production_failed, reason}`. Abandonment reports `{:abandoned, %{stage: :production | :delivery, reason: reason}}`; delivery abandonment still includes the produced artefact.
 
-Each admitted invocation progresses independently. A 5xx failure from inference, packaged-generalisation related-memory retrieval, or Destination delivery retries with exponential backoff until success or twenty-four hours from the first failed attempt. A 4xx failure is abandoned immediately. Unfinished work terminates with the agent; the consumer owns durable scheduling and may resubmit after its supervisor starts a replacement agent.
+Each admitted invocation progresses independently. A 5xx failure from inference, packaged-generalisation related-memory retrieval, or Destination delivery retries with exponential backoff until success or twenty-four hours from the first failed attempt. A 4xx failure is abandoned immediately. Unfinished work terminates with the agent without invoking its callback; the consumer owns durable scheduling and may resubmit after its supervisor starts a replacement agent.
 
 Each inline Chain of Thought contains an ordered, non-empty `steps` list. A step declares a non-blank `label`, natural-language `directions`, and an exact non-empty structured `output` schema. Later directions may interpolate only prior outputs with `{{output_name}}`. Each step receives the invocation identity and context, completed lensed representations, host tools, and tool context. The final step becomes one `%Gralkor.Artefact{}` whose fields are exactly `id` and `payload`.
 
@@ -753,7 +757,7 @@ The embedded Gralkor adapter (under `lib/gralkor/`):
 - `Gralkor.Lens.Store` / `Gralkor.Lens.Storage.Graphiti` — append, replacement, and search capabilities for exact Destination graph identities.
 - `Gralkor.Lens.Ingestion.Store` — the built-in straight-through ingestion process.
 - `JidoGralkor.Runtime` — the per-AgentServer atomic configuration snapshot and supervisor for admitted Reflection production, Destination delivery, retry, and callback.
-- `Gralkor.Reflection`, `Gralkor.Reflection.Registry`, `Gralkor.Reflection.ChainOfThought`, and `Gralkor.Reflection.Runner` — validated structured declarations and the inner ordered-inference engine.
+- `Gralkor.Reflection`, `Gralkor.Reflection.ChainOfThought`, and `Gralkor.Reflection.Runner` — structured declarations validated by the agent runtime and the inner ordered-inference engine.
 - `Gralkor.Artefact` and `Gralkor.Destination.Storage` — producer-independent artefacts and their canonical Destination storage boundary.
 - `Gralkor.Ontology` — compile-time DSL for declaring graphiti custom-entity ontologies (`entity`/`field`/`from`/verb macros).
 - `Gralkor.Application`, `Gralkor.Python`, `Gralkor.GraphitiPool`, `Gralkor.CaptureBuffer`, `Gralkor.Recall`, `Gralkor.Distill`, `Gralkor.Format`, `Gralkor.Config`, and `Gralkor.Message` — the embedded capture, recall, and Graphiti pipelines.

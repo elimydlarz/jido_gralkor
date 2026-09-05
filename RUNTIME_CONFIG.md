@@ -215,7 +215,7 @@ Retries stop when the operation succeeds or twenty-four hours have elapsed since
 
 A non-retryable 4xx client failure is abandoned immediately without retry and is reported through the same callback.
 
-Retries are supervised in memory beneath the consuming agent. If the agent terminates, unfinished work terminates with it. The consumer remains responsible for durable job state and for deciding whether to submit work again after restarting the agent.
+Retries are supervised in memory beneath the consuming agent. If the agent terminates, unfinished work terminates with it without invoking its callback. The consumer remains responsible for durable job state and for deciding whether to submit work again after restarting the agent.
 
 ## Generalisation lineage
 
