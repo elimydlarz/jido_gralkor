@@ -234,7 +234,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     {:ok, adventure: run_adventure(agent)}
   end
 
-  describe "when two operators use implicit memory, Lenses, explicitly invoked Reflections, and shared-Destination replacement" do
+  describe "when two operators use implicit memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement" do
     test "then ontology-free implicit operator memory remains recallable", %{adventure: adventure} do
       assert adventure.implicit_memory
     end
@@ -299,7 +299,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when the Journey consumer invokes generalisation after successive ingestions containing related observations" do
+  describe "when the Journey consumer triggers generalisation after successive ingestions containing related observations" do
     test "then the first resulting generalisation exposes non-blank content, an integer level, and a lineage list",
          %{adventure: adventure} do
       assert %{
@@ -735,10 +735,15 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         published_representations
       )
 
-    consumer_destination_artefact = consumer_reflection_result.artefact
-
     consumer_artefact_id =
       Artefact.id_for(@operator_one, "journey-published-policy", "published-policy-review")
+
+    consumer_destination_artefact =
+      destination_artefact_until(
+        @operator_one,
+        "global",
+        consumer_artefact_id
+      )
 
     assert consumer_destination_artefact.id == consumer_artefact_id
 
@@ -980,11 +985,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
           is_integer(generalisation["level"]) and is_list(generalisation["evolves_from"])
       end)
 
-    first_content =
-      case first_generalisation do
-        %{"content" => content} when is_binary(content) and content != "" -> content
-        _ -> "Deployments that begin with reversible canaries expose faults before broad impact."
-      end
+    assert %{"content" => first_content} = first_generalisation
+    assert is_binary(first_content) and first_content != ""
 
     later_ingestion_id = "journey-generalisation-level-two"
 
