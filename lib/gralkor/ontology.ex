@@ -35,12 +35,17 @@ defmodule Gralkor.Ontology do
   entity, so a type whose name alone is ambiguous is extracted far more
   reliably with one.
 
-  Entity and edge *type* names are unrestricted, but field names are not:
-  graphiti rejects any custom entity attribute colliding with its own
-  `EntityNode` fields — `uuid`, `name`, `group_id`, `labels`, `created_at`,
-  `summary`, `attributes`, `name_embedding`. This DSL does not check that at
-  compile time, so such a field raises `EntityTypeValidationError` from
-  Python on the first write through the owning Lens.
+  Custom entity kinds named `Entity`, `Episodic`, or `Community` collide with
+  Graphiti's built-in kinds and are rejected when runtime or application-
+  compatibility Lens configuration is validated. Other entity kinds,
+  including `Person`, and custom edge type names remain eligible.
+
+  Field names are also constrained: Graphiti rejects any custom entity
+  attribute colliding with its own `EntityNode` fields — `uuid`, `name`,
+  `group_id`, `labels`, `created_at`, `summary`, `attributes`,
+  `name_embedding`. This DSL does not check that at compile time, so such a
+  field raises `EntityTypeValidationError` from Python on the first write
+  through the owning Lens.
 
   See `test-trees/unit/gralkor-ontology_TEST_TREES.md`.
   """

@@ -1,14 +1,17 @@
 defmodule Gralkor.Lens do
   @moduledoc """
-  Application-owned definition of a memory Lens.
+  Resolved definition of an appending memory Lens.
 
   A Lens combines a unique name, a registered `Gralkor.Destination`, an
   extraction ontology, and a module implementing `Gralkor.Lens.Ingestion`.
   Several Lenses and Reflections may use the same Destination.
 
-  Consumers normally register Lens definitions in `:jido_gralkor, :lenses`
-  and resolve them through `Gralkor.Client`, rather than constructing this
-  struct directly.
+  Consumers normally declare `write: :append` Lens definitions in a mounted
+  agent's runtime configuration and resolve them through that agent's
+  `JidoGralkor.Runtime`. `Gralkor.Client` also resolves definitions in
+  `:jido_gralkor, :lenses` for direct application-compatibility calls. The
+  resolved struct itself needs no write-mode field: its module identifies the
+  appending write contract.
   """
 
   @enforce_keys [:name, :destination, :ontology, :ingestion]
