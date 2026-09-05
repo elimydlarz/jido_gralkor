@@ -1,4 +1,4 @@
-Unit: destination-in-memory-artefact-storage (src: lib/gralkor/destination/storage/in_memory.ex; unit: test/gralkor/reflection/storage/in_memory_test.exs)
+Unit: destination-in-memory-artefact-storage (src: lib/gralkor/destination/storage/in_memory.ex; unit: test/gralkor/destination/storage/in_memory_artefact_test.exs)
 
 when in-memory Destination storage receives a new artefact
   then it stores the artefact at the declared Destination output
