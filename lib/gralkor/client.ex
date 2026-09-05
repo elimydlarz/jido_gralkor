@@ -50,6 +50,7 @@ defmodule Gralkor.Client do
   @type messages :: [Gralkor.Message.t()]
   @type user_name :: String.t()
   @type search_result :: map()
+  @type runtime_owner :: pid()
 
   alias Gralkor.Ingest
   alias Gralkor.IngestedRepresentation
@@ -126,7 +127,7 @@ defmodule Gralkor.Client do
     end
   end
 
-  @spec ingest(GenServer.server(), Ingest.t()) :: :ok | {:error, term()}
+  @spec ingest(runtime_owner(), Ingest.t()) :: :ok | {:error, term()}
   def ingest(runtime_owner, %Ingest{} = request) do
     case ingest_with_representation(runtime_owner, request) do
       {:ok, _representations} ->
@@ -137,7 +138,7 @@ defmodule Gralkor.Client do
     end
   end
 
-  @spec reflect(GenServer.server(), String.t(), map(), (term() -> any()), keyword()) ::
+  @spec reflect(runtime_owner(), String.t(), map(), (term() -> any()), keyword()) ::
           {:ok, String.t()} | {:error, term()}
   def reflect(runtime_owner, reflection_name, invocation, callback, opts \\ []) do
     Runtime.submit_reflection(runtime_owner, reflection_name, invocation, callback, opts)
@@ -155,9 +156,9 @@ defmodule Gralkor.Client do
         additional_lenses
       ) do
     client = impl()
+    runtime_owner = Runtime.ensure_available!(runtime_owner)
 
-    if Runtime.started?(runtime_owner) and Code.ensure_loaded?(client) and
-         function_exported?(client, :capture, 8) do
+    if Code.ensure_loaded?(client) and function_exported?(client, :capture, 8) do
       client.capture(
         runtime_owner,
         session_id,
@@ -169,15 +170,8 @@ defmodule Gralkor.Client do
         additional_lenses
       )
     else
-      client.capture(
-        session_id,
-        operator_id,
-        agent_name,
-        user_name,
-        messages,
-        lens,
-        additional_lenses
-      )
+      raise ArgumentError,
+            "configured Gralkor client #{inspect(client)} does not support runtime-targeted capture"
     end
   end
 
@@ -189,8 +183,12 @@ defmodule Gralkor.Client do
   end
 
   @doc false
-  @spec ingest_with_representation(GenServer.server(), Ingest.t()) ::
+  @spec ingest_with_representation(runtime_owner(), Ingest.t()) ::
           {:ok, [IngestedRepresentation.t()]} | {:error, term()}
+  def ingest_with_representation(_runtime_owner, %Ingest{lens: %Lens{} = lens} = request) do
+    ingest_with_resolved_lens(request, lens)
+  end
+
   def ingest_with_representation(runtime_owner, %Ingest{lens: lens_name} = request) do
     ingest_with_resolved_lens(request, Runtime.lens!(runtime_owner, lens_name))
   end
@@ -333,16 +331,20 @@ defmodule Gralkor.Client do
     search_resolved(request, lenses, destinations)
   end
 
-  @spec search(GenServer.server(), Search.t()) ::
+  @spec search(runtime_owner(), Search.t()) ::
           {:ok, [search_result()]} | {:error, term()}
   def search(runtime_owner, %Search{} = request) do
     validate_max_results!(request.max_results)
     validate_result_type!(request.result_type)
+    validate_selector_names!(:lenses, request.lenses)
+    validate_selector_names!(:destinations, request.destinations)
 
-    lenses = resolve_search_lenses!(runtime_owner, request.lenses)
+    {resolved_lenses, destinations} =
+      Runtime.resolve_search!(runtime_owner, request.lenses, request.destinations)
+
+    lenses = resolved_lenses |> Enum.map(& &1.name) |> Enum.uniq()
     validate_lens_result_type!(lenses, request.result_type)
 
-    destinations = resolve_search_destinations!(runtime_owner, request.destinations)
     search_resolved(request, lenses, destinations)
   end
 
@@ -425,27 +427,6 @@ defmodule Gralkor.Client do
   defp resolve_search_destinations!(names),
     do: raise(ArgumentError, "search destinations must be a list, got #{inspect(names)}")
 
-  defp resolve_search_destinations!(runtime_owner, []), do: Runtime.destinations(runtime_owner)
-
-  defp resolve_search_destinations!(runtime_owner, names) when is_list(names) do
-    names
-    |> Enum.map(fn
-      name when is_binary(name) ->
-        if String.trim(name) == "" do
-          raise ArgumentError, "invalid Destination name #{inspect(name)}"
-        end
-
-        Runtime.destination!(runtime_owner, name)
-
-      name ->
-        raise ArgumentError, "invalid Destination name #{inspect(name)}"
-    end)
-    |> Enum.uniq_by(& &1.name)
-  end
-
-  defp resolve_search_destinations!(_runtime_owner, names),
-    do: raise(ArgumentError, "search destinations must be a list, got #{inspect(names)}")
-
   defp resolve_search_lenses!(names) when is_list(names) do
     names
     |> Enum.map(fn
@@ -465,24 +446,23 @@ defmodule Gralkor.Client do
   defp resolve_search_lenses!(names),
     do: raise(ArgumentError, "search lenses must be a list, got #{inspect(names)}")
 
-  defp resolve_search_lenses!(runtime_owner, names) when is_list(names) do
-    names
-    |> Enum.map(fn
+  defp validate_selector_names!(selector, names) when is_list(names) do
+    singular = selector |> Atom.to_string() |> String.trim_trailing("s") |> String.capitalize()
+
+    Enum.each(names, fn
       name when is_binary(name) ->
         if String.trim(name) == "" do
-          raise ArgumentError, "invalid Lens name #{inspect(name)}"
+          raise ArgumentError, "invalid #{singular} name #{inspect(name)}"
         end
 
-        Runtime.lens!(runtime_owner, name).name
-
       name ->
-        raise ArgumentError, "invalid Lens name #{inspect(name)}"
+        raise ArgumentError, "invalid #{singular} name #{inspect(name)}"
     end)
-    |> Enum.uniq()
   end
 
-  defp resolve_search_lenses!(_runtime_owner, names),
-    do: raise(ArgumentError, "search lenses must be a list, got #{inspect(names)}")
+  defp validate_selector_names!(selector, names) do
+    raise ArgumentError, "search #{selector} must be a list, got #{inspect(names)}"
+  end
 
   defp validate_lens_result_type!([], _result_type), do: :ok
   defp validate_lens_result_type!(_lenses, :episodes), do: :ok
