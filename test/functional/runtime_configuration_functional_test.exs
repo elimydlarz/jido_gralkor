@@ -894,7 +894,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       assert_receive {:runtime_search, "second-memory"}
     end
-
   end
 
   describe "when a runtime-targeted operation is given an owning AgentServer PID whose Gralkor runtime is unavailable" do
@@ -1054,7 +1053,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       send(worker, :continue_lens_flush)
       assert_receive {:runtime_ingestion, "runtime-memory"}
     end
-
   end
 
   describe "when complete runtime configuration contains an appending Lens declaring `write: :append`, a Destination, an ingestion module, and an optional ontology" do
