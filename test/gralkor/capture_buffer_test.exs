@@ -718,7 +718,7 @@ defmodule Gralkor.CaptureBufferTest do
   end
 
   describe "when a Lens-selected session is flushed through a configured Lens resolver" do
-    test "then every selected Lens is resolved before its ingestion worker is scheduled and retained by that worker" do
+    test "then every selected Lens is resolved before its ingestion worker is scheduled" do
       test_pid = self()
 
       resolved_lens = %Gralkor.Lens{
@@ -761,6 +761,64 @@ defmodule Gralkor.CaptureBufferTest do
 
       assert :ok = CaptureBuffer.flush("resolved-session")
       assert_received :lens_resolved
+      assert_receive {:resolved_lens_flushed, ^resolved_lens}
+    end
+
+    test "and the worker retains those resolved Lens definitions if the targeted agent subsequently terminates or replaces its configuration" do
+      test_pid = self()
+
+      resolved_lens = %Gralkor.Lens{
+        name: "observations",
+        destination: %Gralkor.Destination{name: "memory"},
+        ontology: Gralkor.DefaultOntology,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      }
+
+      {:ok, runtime_owner} = Agent.start_link(fn -> resolved_lens end)
+
+      resolver = fn ^runtime_owner, ["observations"] ->
+        send(test_pid, :lens_resolved)
+        {:ok, [Agent.get(runtime_owner, & &1)]}
+      end
+
+      callback = fn _, _, _, lens, _, _, _ ->
+        send(test_pid, {:resolved_lens_worker_waiting, self(), lens})
+
+        receive do
+          :finish_flush ->
+            send(test_pid, {:resolved_lens_flushed, lens})
+            :ok
+        end
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: callback,
+         lens_resolver: resolver,
+         retries: []}
+      )
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 runtime_owner,
+                 "retained-resolution-session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 [Message.new("user", "remember")]
+               )
+
+      assert :ok = CaptureBuffer.flush("retained-resolution-session")
+      assert_received :lens_resolved
+
+      assert_receive {:resolved_lens_worker_waiting, worker, ^resolved_lens}
+      :ok = Agent.stop(runtime_owner)
+      send(worker, :finish_flush)
+
       assert_receive {:resolved_lens_flushed, ^resolved_lens}
     end
 
