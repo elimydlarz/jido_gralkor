@@ -1465,6 +1465,8 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
   defp reflection_snapshot_outputs(id) do
     Application.put_env(:jido_gralkor, :destination_storage, SnapshotOutputStorage)
+    first_id = "#{id}-first"
+    second_id = "#{id}-second"
 
     agent_server =
       start_supervised!(
@@ -1490,11 +1492,11 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
     callback = &send(test_pid, {:runtime_reflection_callback, &1})
 
-    assert {:ok, "#{id}-first"} =
+    assert {:ok, ^first_id} =
              Gralkor.Client.reflect(
                agent_server,
                "review",
-               reflection_invocation("#{id}-first"),
+               reflection_invocation(first_id),
                callback,
                inference: blocked_inference
              )
@@ -1512,11 +1514,11 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     assert_receive {:runtime_reflection_delivery, first_output, "review", _, first_artefact}
     assert_receive {:runtime_reflection_callback, %{artefact: ^first_artefact}}
 
-    assert {:ok, "#{id}-second"} =
+    assert {:ok, ^second_id} =
              Gralkor.Client.reflect(
                agent_server,
                "review",
-               reflection_invocation("#{id}-second"),
+               reflection_invocation(second_id),
                callback,
                inference: fn _ -> {:ok, %{output: %{"summary" => "second"}}} end
              )
