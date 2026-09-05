@@ -168,45 +168,13 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
   describe "when the memory search tool runs with a usable query > while the tool context identifies an owning AgentServer as the Gralkor runtime target" do
     test "then Search uses that agent's current runtime configuration" do
-      Application.put_env(:jido_gralkor, :destinations, [[name: "compat-notes"]])
-      Application.put_env(:jido_gralkor, :lenses, [])
-
-      start_supervised!(
-        {JidoGralkor.Runtime,
-         owner: self(),
-         configuration: %{
-           destinations: [[name: "runtime-notes"]],
-           lenses: [],
-           reflections: []
-         }}
-      )
-
-      assert {:ok, _result} =
-               MemorySearch.run(
-                 %{query: "launch", destinations: ["runtime-notes"]},
-                 %{agent_id: "operator-one", gralkor_runtime: self()}
-               )
-
-      assert_receive {:destination_search, "runtime-notes", "operator-one", "launch", :episodes,
-                      20, []}
-
-      refute_receive {:destination_search, "compat-notes", _, _, _, _, _}
+      prove_runtime_targeted_search()
     end
   end
 
   describe "when the memory search tool runs with a usable query > while the tool context has no Gralkor runtime target" do
     test "then Search uses the application compatibility configuration" do
-      Application.put_env(:jido_gralkor, :destinations, [[name: "compat-notes"]])
-      Application.put_env(:jido_gralkor, :lenses, [])
-
-      assert {:ok, _result} =
-               MemorySearch.run(
-                 %{query: "launch", destinations: ["compat-notes"]},
-                 %{agent_id: "operator-one"}
-               )
-
-      assert_receive {:destination_search, "compat-notes", "operator-one", "launch", :episodes,
-                      20, []}
+      prove_application_compatibility_search()
     end
   end
 
@@ -322,5 +290,48 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
   defp run_search(params) do
     MemorySearch.run(params, %{agent_id: "operator-one"})
+  end
+
+  defp prove_runtime_targeted_search do
+    configure_application_destinations()
+
+    start_supervised!(
+      {JidoGralkor.Runtime,
+       owner: self(),
+       configuration: %{
+         destinations: [[name: "runtime-notes"]],
+         lenses: [],
+         reflections: []
+       }}
+    )
+
+    assert {:ok, _result} =
+             MemorySearch.run(
+               %{query: "launch", destinations: ["runtime-notes"]},
+               %{agent_id: "operator-one", gralkor_runtime: self()}
+             )
+
+    assert_receive {:destination_search, "runtime-notes", "operator-one", "launch", :episodes,
+                    20, []}
+
+    refute_receive {:destination_search, "compat-notes", _, _, _, _, _}
+  end
+
+  defp prove_application_compatibility_search do
+    configure_application_destinations()
+
+    assert {:ok, _result} =
+             MemorySearch.run(
+               %{query: "launch", destinations: ["compat-notes"]},
+               %{agent_id: "operator-one"}
+             )
+
+    assert_receive {:destination_search, "compat-notes", "operator-one", "launch", :episodes,
+                    20, []}
+  end
+
+  defp configure_application_destinations do
+    Application.put_env(:jido_gralkor, :destinations, [[name: "compat-notes"]])
+    Application.put_env(:jido_gralkor, :lenses, [])
   end
 end
