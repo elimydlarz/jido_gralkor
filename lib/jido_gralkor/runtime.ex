@@ -673,14 +673,16 @@ defmodule JidoGralkor.Runtime do
 
   defp process_reflection(reflection, invocation, callback, opts, runtime_owner) do
     production_opts = Keyword.put(opts, :runtime_owner, runtime_owner)
-    production = fn -> Runner.run(reflection, invocation, production_opts) end
+    run_reflection = Keyword.get(opts, :run_reflection, &Runner.run/3)
+    deliver_artefact = Keyword.get(opts, :deliver_artefact, &DestinationStorage.put_artefact/5)
+    production = fn -> run_reflection.(reflection, invocation, production_opts) end
 
     case retry(production, &match?({:ok, _artefact}, &1), opts) do
       {:ok, {:ok, artefact}} ->
         output = Enum.find(reflection.outputs, &(&1.kind == :destination))
 
         delivery = fn ->
-          DestinationStorage.put_artefact(
+          deliver_artefact.(
             output,
             reflection.name,
             field(invocation, :operator_id),
@@ -724,33 +726,44 @@ defmodule JidoGralkor.Runtime do
   defp retry(operation, success?, opts) do
     clock = Keyword.get(opts, :clock, fn -> System.monotonic_time(:millisecond) end)
     started_at = clock.()
-    retry(operation, success?, opts, clock, started_at, 1_000)
+    retry(operation, success?, opts, clock, started_at, 1_000, :first_attempt)
   end
 
-  defp retry(operation, success?, opts, clock, started_at, delay) do
-    result = operation.()
+  defp retry(operation, success?, opts, clock, started_at, delay, previous_result) do
+    deadline = Keyword.get(opts, :retry_deadline_ms, @reflection_retry_deadline_ms)
 
-    cond do
-      success?.(result) ->
-        {:ok, result}
+    if previous_result != :first_attempt and clock.() - started_at >= deadline do
+      {:abandoned, previous_result}
+    else
+      result = operation.()
 
-      retryable_server_failure?(result) and
-          clock.() - started_at + delay <
-            Keyword.get(opts, :retry_deadline_ms, @reflection_retry_deadline_ms) ->
-        sleep = Keyword.get(opts, :sleep, &Process.sleep/1)
-        sleep.(delay)
+      cond do
+        success?.(result) ->
+          {:ok, result}
 
-        retry(
-          operation,
-          success?,
-          opts,
-          clock,
-          started_at,
-          min(delay * 2, @maximum_reflection_backoff_ms)
-        )
+        retryable_server_failure?(result) ->
+          remaining = deadline - (clock.() - started_at)
 
-      true ->
-        {:abandoned, result}
+          if remaining <= 0 do
+            {:abandoned, result}
+          else
+            sleep = Keyword.get(opts, :sleep, &Process.sleep/1)
+            sleep.(min(delay, remaining))
+
+            retry(
+              operation,
+              success?,
+              opts,
+              clock,
+              started_at,
+              min(delay * 2, @maximum_reflection_backoff_ms),
+              result
+            )
+          end
+
+        true ->
+          {:abandoned, result}
+      end
     end
   end
 
