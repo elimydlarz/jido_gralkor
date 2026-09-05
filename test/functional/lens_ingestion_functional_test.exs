@@ -206,6 +206,18 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     end
   end
 
+  describe "where completed representations are requested" do
+    test "then each successful Store write yields one `Gralkor.IngestedRepresentation`" do
+      Application.put_env(:jido_gralkor, :lenses, [lens(VariableIngestion)])
+
+      assert {:ok,
+              [
+                %Gralkor.IngestedRepresentation{lens: "observations", result: :ok},
+                %Gralkor.IngestedRepresentation{lens: "observations", result: :ok}
+              ]} = Client.ingest_with_representation(request("many"))
+    end
+  end
+
   describe "if ingestion selects an invalid Lens" do
     test "then ingestion fails before an ingestion process runs or memory is stored" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
