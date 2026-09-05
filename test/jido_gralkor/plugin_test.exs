@@ -114,7 +114,7 @@ defmodule JidoGralkor.PluginTest do
       assert %{
                start:
                  {JidoGralkor.Runtime, :start_link,
-                  [[configuration: %{destinations: [], lenses: [], reflections: []}]]}
+                  [[owner: _owner, configuration: %{destinations: [], lenses: [], reflections: []}]]}
              } = Plugin.child_spec(%{})
     end
   end
