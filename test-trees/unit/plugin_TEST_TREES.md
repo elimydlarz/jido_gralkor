@@ -9,6 +9,12 @@ when a consumer reads the plugin's advertised identity and ownership
   and it owns the `:__memory__` plugin-state slot
   and it is singleton
 
+when a consuming AgentServer requests the plugin's child specification
+  then the plugin declares one Gralkor runtime child owned by that AgentServer
+  and the child receives the complete runtime configuration supplied to the plugin
+  where runtime configuration is omitted
+    then the child receives empty consumer Destination, Lens, and Reflection collections
+
 when a consumer agent mounts the plugin
   then the expanded routes resolve with no conflicts against the host agent
 

@@ -13,7 +13,8 @@ when the pool starts
     and the cross-encoder is built for the provider the LLM spec names
     and each provider credential is passed explicitly from the BEAM side
       where the credential exists only in the BEAM environment
-        then the credential still reaches the provider client
+        then the BEAM-side credential lookup returns the configured value
+        and the embedded Python environment cannot read that BEAM-only value directly
     while the embedder spec names Google
       then the embedder sends one input per request
     while the two specs name different providers
@@ -79,6 +80,10 @@ when an episode is added
     and the translated entity types, edge types, edge type map, and excluded entity types are forwarded to the graph library
     and the forwarded dictionary carries exactly the keys the ontology selects, omitting the rest
     and the forwarded dictionary uses the graph library's key names outside and the ontology's declared type names inside
+  where a supported source kind is supplied
+    then conversation, document, and structured-record sources reach the graph library as message, text, and JSON episodes respectively
+    and the existing episode extraction is instructed to preserve source attribution and epistemic wording
+    and no separate presentation-classification operation is invoked
   while an episode identifier is supplied
     when that identifier does not exist
       then one episode is created under that identifier through the normal extraction path
@@ -98,10 +103,6 @@ when one episode is requested by exact identifier
   and the result identifies whether durable extraction completion is recorded
   while that identifier is absent
     then lookup reports not found
-  where a supported source kind is supplied
-    then conversation, document, and structured-record sources reach the graph library as message, text, and JSON episodes respectively
-    and the existing episode extraction is instructed to preserve source attribution and epistemic wording
-    and no separate presentation-classification operation is invoked
 
 if adding an episode raises inside the graph library
   then an error carrying only the raised exception's class and message is returned

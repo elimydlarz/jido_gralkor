@@ -7,7 +7,7 @@ when the application starts
     and the Python runtime is told not to sweep for orphaned embedded servers, this deployment never having spawned one
     and a configured data directory is ignored
   while a data directory is configured
-  and no remote connection is configured
+  while no remote connection is configured
     then the Python runtime, graph pool, and capture buffer are supervised in that order
     and the graph pool is constructed with the embedded connection
     and the Python runtime is told to sweep for orphaned embedded servers, this deployment spawning one of its own
@@ -19,6 +19,9 @@ when the application starts
 
 if the remote FalkorDB configuration is not a keyword list carrying a host and a port
   then startup raises before any child starts
+
+if the retired `:reflection_storage` setting is configured
+  then application startup fails identifying Destination outputs as the artefact memory boundary
 
 when a capture flush runs
   then the transcript episode is rendered from the user and assistant text of every captured turn only, with no agent reasoning and no inference call
@@ -49,3 +52,7 @@ when a capture flush is retried after its captured episode has already been writ
 when a Lens capture flush runs
   then the selected turns are rendered in the order they were appended
   and the rendered transcript is submitted through the selected Lens as a captured episode
+  while an owning AgentServer is supplied as the runtime target
+    then the captured episode is submitted through that AgentServer's runtime-targeted Lens ingestion
+  while no runtime target is supplied
+    then the captured episode is submitted through application-compatibility Lens ingestion

@@ -4,7 +4,7 @@ when the FalkorDB connection is resolved
   while neither a remote configuration nor a data directory is set
     then nothing is returned, so the supervisor can start with no children
   while a data directory is set
-  and no remote configuration is set
+  while no remote configuration is set
     then an embedded connection carrying that data directory is returned
     and a leading tilde in the data directory is expanded to an absolute path
   while a remote configuration carrying a host and a port is set
@@ -27,6 +27,15 @@ if the remote FalkorDB host is blank
 
 if the remote FalkorDB port is not a positive integer
   then resolving the connection raises, naming the offending value
+
+when the embedded FalkorDB socket timeout is resolved
+  while no timeout is configured
+    then sixty thousand milliseconds is returned
+  while a positive integer timeout is configured
+    then that timeout is returned unchanged
+
+if the embedded FalkorDB socket timeout is not a positive integer
+  then resolving the timeout raises, naming the setting and its offending value
 
 when a role's model override is configured as a provider and a model id joined by a colon
   then a spec carrying that provider as an atom and that model id as a string is returned

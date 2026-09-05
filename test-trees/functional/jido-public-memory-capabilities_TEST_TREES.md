@@ -38,6 +38,10 @@ when an agent invokes memory search with a usable query
   if Search fails
     then the failure is returned unchanged
 
+when a fresh agent handles a request related to an evolved generalisation
+  then the answer identifies the retrieved deployment predecessor and newly covered feature-release scope
+  and the recommendation applies their reversible limited-scope lesson to the requested migration
+
 when an agent receives the memory search tool
   then its description directs the agent to search related observations and generalisations
   and its description directs the agent to apply relevant generalisations in light of their evolution histories and related observations
