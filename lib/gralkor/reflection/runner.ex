@@ -118,6 +118,16 @@ defmodule Gralkor.Reflection.Runner do
       result_type: :episodes
     }
 
+    case Keyword.fetch(opts, :related_memory_search) do
+      {:ok, search} ->
+        search.(Keyword.get(opts, :runtime_owner), request)
+
+      :error ->
+        default_related_memory_search(opts, request)
+    end
+  end
+
+  defp default_related_memory_search(opts, request) do
     case Keyword.fetch(opts, :runtime_owner) do
       {:ok, runtime_owner} -> Client.search(runtime_owner, request)
       :error -> Client.search(request)
