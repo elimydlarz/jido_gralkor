@@ -1240,7 +1240,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   defp runtime_owner_names do
     :global.registered_names()
     |> Enum.filter(fn
-      {JidoGralkor.Runtime, _owner} -> true
+      {JidoGralkor.Runtime, owner} when is_pid(owner) -> true
       _ -> false
     end)
     |> MapSet.new()
