@@ -127,7 +127,14 @@ defmodule JidoGralkor.Plugin do
   end
 
   defp fetch_opt(opts, key) when is_list(opts), do: Keyword.get(opts, key)
-  defp fetch_opt(opts, key) when is_map(opts), do: Map.get(opts, key)
+
+  defp fetch_opt(opts, key) when is_map(opts) do
+    case Map.fetch(opts, key) do
+      {:ok, value} -> value
+      :error -> Map.get(opts, Atom.to_string(key))
+    end
+  end
+
   defp fetch_opt(_, _), do: nil
 
   defp has_opt?(opts, key) when is_list(opts), do: Keyword.has_key?(opts, key)
