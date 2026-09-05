@@ -48,6 +48,16 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     def ingest(_request, _store), do: {:error, :rejected}
   end
 
+  defmodule PartiallyFailingIngestion do
+    @behaviour Gralkor.Lens.Ingestion
+
+    @impl true
+    def ingest(%{source_description: source}, store) do
+      :ok = Gralkor.Lens.Store.add(store, "stored before failure", source)
+      {:error, :rejected}
+    end
+  end
+
   defmodule RecordingStorage do
     @behaviour Gralkor.Lens.Storage
 
@@ -278,6 +288,15 @@ defmodule Gralkor.LensIngestionFunctionalTest do
 
       assert {:error, :rejected} = Client.ingest(request("rejected"))
       refute_receive {:episode_added, _, _, _}
+    end
+
+    describe "while one or more Store writes completed before the failure" do
+      test "then no partial list of `Gralkor.IngestedRepresentation` values is returned" do
+        Application.put_env(:jido_gralkor, :lenses, [lens(PartiallyFailingIngestion)])
+
+        assert {:error, :rejected} = Client.ingest_with_representation(request("partial"))
+        assert_receive {:episode_added, _, "stored before failure", "functional"}
+      end
     end
   end
 
