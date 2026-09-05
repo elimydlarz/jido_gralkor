@@ -61,9 +61,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
       result =
         case Map.get(context, :gralkor_runtime) do
           runtime_owner when not is_nil(runtime_owner) ->
-            if JidoGralkor.Runtime.started?(runtime_owner),
-              do: Client.search(runtime_owner, request),
-              else: Client.search(request)
+            Client.search(runtime_owner, request)
 
           nil ->
             Client.search(request)

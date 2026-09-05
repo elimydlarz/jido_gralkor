@@ -44,14 +44,12 @@ defmodule JidoGralkor.Lifecycle do
 
     Logger.info("[gralkor] flush — session:#{thread_id} reason:#{inspect(reason)}")
 
-    Task.start(fn ->
-      case client.flush(thread_id) do
-        :ok ->
-          :ok
+    case client.flush(thread_id) do
+      :ok ->
+        :ok
 
-        {:error, reason} ->
-          Logger.error("[gralkor] flush failed: #{inspect(reason)}")
-      end
-    end)
+      {:error, reason} ->
+        Logger.error("[gralkor] flush failed: #{inspect(reason)}")
+    end
   end
 end

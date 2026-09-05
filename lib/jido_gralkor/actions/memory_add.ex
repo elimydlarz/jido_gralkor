@@ -53,9 +53,7 @@ defmodule JidoGralkor.Actions.MemoryAdd do
 
             case Map.get(context, :gralkor_runtime) do
               runtime_owner when not is_nil(runtime_owner) ->
-                if JidoGralkor.Runtime.started?(runtime_owner),
-                  do: Client.ingest(runtime_owner, request),
-                  else: Client.ingest(request)
+                Client.ingest(runtime_owner, request)
 
               nil ->
                 Client.ingest(request)

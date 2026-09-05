@@ -111,22 +111,18 @@ defmodule JidoGralkor.Plugin do
         {:ok, %{agent_name: agent_name}}
 
       ingestion_lens ->
-        validate_mount_lens!(opts, runtime_config, ingestion_lens)
+        validate_mount_lens!(runtime_config, ingestion_lens)
         {:ok, %{agent_name: agent_name, ingestion_lens: ingestion_lens}}
     end
   end
 
-  defp validate_mount_lens!(opts, runtime_config, lens_name) do
-    if has_opt?(opts, :runtime_config) do
-      names =
-        ["operator"] ++
-          Enum.map(Map.fetch!(runtime_config, :lenses), &fetch_opt(&1, :name))
+  defp validate_mount_lens!(runtime_config, lens_name) do
+    names =
+      ["operator"] ++
+        Enum.map(Map.fetch!(runtime_config, :lenses), &fetch_opt(&1, :name))
 
-      unless lens_name in names do
-        raise ArgumentError, "unknown Lens #{inspect(lens_name)}"
-      end
-    else
-      Client.lens!(lens_name)
+    unless lens_name in names do
+      raise ArgumentError, "unknown Lens #{inspect(lens_name)}"
     end
   end
 
