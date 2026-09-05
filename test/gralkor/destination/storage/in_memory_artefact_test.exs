@@ -1,8 +1,8 @@
 defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
   use ExUnit.Case, async: false
 
-  alias Gralkor.Destination
   alias Gralkor.Artefact
+  alias Gralkor.Destination
   alias Gralkor.Destination.Storage.InMemory
 
   setup do

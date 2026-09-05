@@ -1,8 +1,8 @@
 defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
   use ExUnit.Case, async: true
 
-  alias Gralkor.Destination
   alias Gralkor.Artefact
+  alias Gralkor.Destination
   alias Gralkor.Destination.Storage.Graphiti
 
   describe "when Graphiti Destination storage receives an artefact" do
@@ -61,7 +61,7 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
     end
   end
 
-  describe "when Graphiti Reflection storage looks up an artefact identifier > while the matching episode contains that artefact and durable extraction completion is recorded" do
+  describe "when Graphiti Destination storage looks up an artefact identifier > while the matching episode contains that artefact and durable extraction completion is recorded" do
     test "then it returns the matching deserialized artefact" do
       artefact = artefact()
 
@@ -84,7 +84,7 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
     end
   end
 
-  describe "while the matching episode contains that artefact but durable extraction completion is absent" do
+  describe "when Graphiti Destination storage looks up an artefact identifier > while the matching episode contains that artefact but durable extraction completion is absent" do
     test "then lookup returns the incomplete artefact for Destination storage to resume without rerunning the Runner" do
       artefact = artefact()
 
@@ -107,7 +107,7 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
     end
   end
 
-  describe "when Graphiti Reflection storage looks up an artefact identifier > while the episode is missing" do
+  describe "when Graphiti Destination storage looks up an artefact identifier > while the episode is missing" do
     test "then lookup reports not found" do
       get_episode = fn "observations", "missing" -> {:error, :not_found} end
 
@@ -122,7 +122,7 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
     end
   end
 
-  describe "when Graphiti Reflection storage looks up an artefact identifier > while the episode body identifies another artefact" do
+  describe "when Graphiti Destination storage looks up an artefact identifier > while the episode body identifies another artefact" do
     test "then lookup reports an artefact conflict" do
       mismatched_id = %{artefact() | id: "another-id"}
 
