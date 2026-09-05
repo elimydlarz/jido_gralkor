@@ -88,8 +88,13 @@ defmodule Gralkor.Reflection.ChainOfThought do
         {:error, {:unknown_interpolation, reference, label}}
 
       invalid_output ->
-        {_name, type} = invalid_output
-        {:error, {:invalid_output_type, label, type}}
+        {name, type} = invalid_output
+
+        if non_blank?(name) do
+          {:error, {:invalid_output_type, label, type}}
+        else
+          {:error, {:invalid_output_name, label, name}}
+        end
 
       true ->
         step = %Step{label: label, directions: directions, output: output}
