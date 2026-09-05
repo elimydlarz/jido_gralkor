@@ -21,8 +21,7 @@ defmodule JidoGralkor.PluginTest do
     InMemory.reset()
 
     start_supervised!(
-      {JidoGralkor.Runtime,
-       owner: self(), configuration: runtime_configuration()}
+      {JidoGralkor.Runtime, owner: self(), configuration: runtime_configuration()}
     )
 
     :ok

@@ -825,7 +825,8 @@ defmodule JidoGralkor.Runtime do
 
   defp runtime_pid!(owner) when is_pid(owner) do
     case :global.whereis_name({__MODULE__, owner}) do
-      runtime when is_pid(runtime) -> runtime
+      runtime when is_pid(runtime) ->
+        runtime
 
       :undefined ->
         _ = synchronize_owner(owner)
