@@ -611,7 +611,9 @@ defmodule Gralkor.Client.NativeTest do
 
   defp forward_traces(recipient) do
     receive do
-      :stop -> :ok
+      :stop ->
+        :ok
+
       trace ->
         send(recipient, {:native_call_trace, trace})
         forward_traces(recipient)
