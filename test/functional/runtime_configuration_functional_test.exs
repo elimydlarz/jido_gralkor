@@ -737,6 +737,39 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   end
 
   describe "when named ingestion begins" do
+    test "then it retains the Lens definition active when ingestion began" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-retained-ingestion",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 blocking_ingestion_configuration("first-memory")
+               )
+
+      ingestion =
+        Task.async(fn ->
+          Gralkor.Client.ingest(agent_server, ingestion_request("retained-ingestion"))
+        end)
+
+      assert_receive {:blocking_runtime_ingestion, worker}
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 ingestion_configuration("second-memory")
+               )
+
+      send(worker, :continue_runtime_ingestion)
+      assert :ok = Task.await(ingestion)
+      assert_receive {:runtime_ingestion, "first-memory"}
+    end
+
     test "and later named ingestion uses any subsequently installed Lens definition" do
       agent_server =
         start_supervised!(
@@ -789,7 +822,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   end
 
   describe "when a search begins" do
-    test "then its selected Lenses and Destinations resolve from one runtime snapshot" do
+    test "then it retains the selected Lens and Destination definitions from one snapshot active when search began" do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
@@ -864,8 +897,8 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
   end
 
- describe "when a runtime-targeted operation cannot reach its owning AgentServer runtime" do
-    test "then it fails without falling back to application compatibility configuration" do
+  describe "when a runtime-targeted operation is given an owning AgentServer PID whose Gralkor runtime is unavailable" do
+    test "then it fails identifying the unavailable runtime" do
       Application.put_env(:jido_gralkor, :destination_storage, RecordingDestinationStorage)
 
       dead_owner = spawn(fn -> :ok end)
@@ -882,7 +915,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       refute_receive {:runtime_search, _destination}
     end
 
-    test "then targeted capture fails without invoking the compatibility capture arity" do
+    test "and it never falls back to application compatibility configuration" do
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
       Gralkor.Client.InMemory.set_capture(:ok)
 
@@ -908,7 +941,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   end
 
   describe "if a runtime-targeted operation is given anything other than an owning AgentServer PID" do
-    test "then it fails identifying that the target must be a PID" do
+    test "then it fails identifying that the runtime target must be a PID" do
       assert_raise ArgumentError, ~r/runtime target must be an owning AgentServer PID/, fn ->
         JidoGralkor.Runtime.snapshot(:registered_agent_name)
       end
@@ -916,7 +949,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   end
 
   describe "when a selected-Lens turn is buffered for capture" do
-    test "then its eventual ingestion resolves the Lens through the targeted agent's runtime configuration" do
+    test "then flush scheduling resolves the Lens through the targeted agent's current runtime-configuration snapshot" do
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
 
       start_supervised!(
@@ -950,7 +983,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert_receive {:runtime_ingestion, "runtime-memory"}
     end
 
-    test "then a scheduled ingestion retains its resolved Lens after the targeted agent terminates" do
+    test "and its eventual ingestion retains that resolved Lens after the targeted agent terminates" do
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
       test_pid = self()
       runtime_callback = Gralkor.Application.build_lens_flush_callback()
@@ -1022,6 +1055,49 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert_receive {:runtime_ingestion, "runtime-memory"}
     end
 
+  end
+
+  describe "when complete runtime configuration contains an appending Lens declaring `write: :append`, a Destination, an ingestion module, and an optional ontology" do
+    test "then replacement accepts the Lens for ingestion" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-appending-lens",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 ingestion_configuration("project")
+               )
+
+      assert %Gralkor.Lens{
+               name: "observations",
+               destination: %Gralkor.Destination{name: "project"},
+               ingestion: RecordingIngestion
+             } = JidoGralkor.Runtime.lens!(agent_server, "observations")
+    end
+
+    test "and an omitted ontology selects `Gralkor.DefaultOntology`" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-default-ontology",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 ingestion_configuration("project")
+               )
+
+      assert %Gralkor.Lens{ontology: Gralkor.DefaultOntology} =
+               JidoGralkor.Runtime.lens!(agent_server, "observations")
+    end
   end
 
   describe "when complete runtime configuration contains a replaceable Lens declaring `write: :replace_graph` and a Destination" do
