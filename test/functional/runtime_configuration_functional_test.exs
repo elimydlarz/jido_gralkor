@@ -986,6 +986,57 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "when a runtime-targeted operation cannot reach its owning AgentServer runtime" do
+    test "then it fails without falling back to application compatibility configuration" do
+      Application.put_env(:jido_gralkor, :destination_storage, RecordingDestinationStorage)
+
+      dead_owner = spawn(fn -> :ok end)
+      monitor = Process.monitor(dead_owner)
+      assert_receive {:DOWN, ^monitor, :process, ^dead_owner, :normal}
+
+      assert_raise ArgumentError, ~r/Gralkor runtime unavailable/, fn ->
+        JidoGralkor.Actions.MemorySearch.run(
+          %{query: "memory", destinations: ["global"], lenses: []},
+          %{agent_id: "operator-one", gralkor_runtime: dead_owner}
+        )
+      end
+
+      refute_receive {:runtime_search, _destination}
+    end
+
+    test "then targeted capture fails without invoking the compatibility capture arity" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
+      Gralkor.Client.InMemory.set_capture(:ok)
+
+      dead_owner = spawn(fn -> :ok end)
+      monitor = Process.monitor(dead_owner)
+      assert_receive {:DOWN, ^monitor, :process, ^dead_owner, :normal}
+
+      assert_raise ArgumentError, ~r/Gralkor runtime unavailable/, fn ->
+        Gralkor.Client.capture(
+          dead_owner,
+          "runtime-unavailable-capture",
+          "operator-one",
+          "Runtime Configuration Consumer",
+          "Eli",
+          [Gralkor.Message.new("user", "must not cross configuration boundaries")],
+          "operator",
+          []
+        )
+      end
+
+      assert Gralkor.Client.InMemory.captures() == []
+    end
+  end
+
+  describe "if a runtime-targeted operation is given anything other than an owning AgentServer PID" do
+    test "then it fails identifying that the target must be a PID" do
+      assert_raise ArgumentError, ~r/runtime target must be an owning AgentServer PID/, fn ->
+        JidoGralkor.Runtime.snapshot(:registered_agent_name)
+      end
+    end
+  end
+
   describe "when an agentic memory addition begins" do
     test "then it uses the targeted agent's current ingestion Lens" do
       agent_server =
