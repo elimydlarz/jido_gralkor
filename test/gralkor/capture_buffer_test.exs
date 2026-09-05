@@ -266,6 +266,33 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "where captured turns select a Lens > if a turn is appended for an existing session under a different runtime owner" do
+    test "then an argument error is raised, a session not being re-bindable across runtime owners" do
+      :ok =
+        CaptureBuffer.append_lens(
+          :runtime_one,
+          "session",
+          "operator-one",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "x")]
+        )
+
+      assert_raise ArgumentError, ~r/runtime/, fn ->
+        CaptureBuffer.append_lens(
+          :runtime_two,
+          "session",
+          "operator-one",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "y")]
+        )
+      end
+    end
+  end
+
   describe "where captured turns select a Lens > if a turn is appended for an existing session under a different agent name" do
     test "then an argument error is raised" do
       :ok =
