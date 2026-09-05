@@ -594,6 +594,40 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
+  describe "if an optional ontology field is explicitly false" do
+    test "then validation rejects false as the invalid ontology value" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-false-ontology",
+           register_global: false}
+        )
+
+      assert {:error, {:invalid_lens_ontology, "observations", false}} =
+               JidoGralkor.Runtime.replace(agent_server, false_ontology_configuration())
+    end
+
+    test "and an atom-keyed false value is not replaced by a string-keyed value from the same definition" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-atom-false-ontology",
+           register_global: false}
+        )
+
+      configuration = false_ontology_configuration()
+      [lens] = configuration.lenses
+
+      assert {:error, {:invalid_lens_ontology, "observations", false}} =
+               JidoGralkor.Runtime.replace(agent_server, %{
+                 configuration
+                 | lenses: [Map.put(lens, "ontology", ConsumerOntology)]
+               })
+    end
+  end
+
   describe "if the consumer supplies invalid durable configuration while starting an agent" do
     test "then the Gralkor plugin fails to start for that agent" do
       previous = Process.flag(:trap_exit, true)
