@@ -306,7 +306,11 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       reflections: definitions
     }
 
-    JidoGralkor.Plugin.mount(%{}, agent_name: "Destination registration", runtime_config: configuration)
+    JidoGralkor.Plugin.mount(%{},
+      agent_name: "Destination registration",
+      runtime_config: configuration
+    )
+
     start_supervised!({Runtime, owner: self(), configuration: configuration})
 
     Enum.map(definitions, &Runtime.reflection!(self(), Keyword.fetch!(&1, :name)))
