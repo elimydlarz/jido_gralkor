@@ -509,6 +509,11 @@ defmodule Gralkor.Client.NativeTest do
         class _FakeGraphiti:
             def __init__(self):
                 self.recorded = {"episodes": [], "communities": 0, "indices": 0}
+                self.operation_delay = 0
+
+            async def _wait_for_operation(self):
+                if self.operation_delay:
+                    await asyncio.sleep(self.operation_delay)
 
             async def search(self, query, num_results=10, search_filter=None):
                 if query.startswith("slow:"):
@@ -521,6 +526,7 @@ defmodule Gralkor.Client.NativeTest do
                 return _Results()
 
             async def add_episode(self, **kwargs):
+                await self._wait_for_operation()
                 if kwargs.get("episode_body") == "boom":
                     raise RuntimeError("graph refused the write")
                 self.recorded["episodes"].append({
@@ -537,13 +543,16 @@ defmodule Gralkor.Client.NativeTest do
                 })
 
             async def build_indices_and_constraints(self):
+                await self._wait_for_operation()
                 if self.recorded["indices"] == "fail":
                     raise RuntimeError("indices refused")
                 self.recorded["indices"] += 1
 
             async def build_communities(self):
+                await self._wait_for_operation()
                 if self.recorded["communities"] == "fail":
                     raise RuntimeError("communities refused")
+                self.recorded["communities"] += 1
                 return ([1, 2, 3], [4])
 
         _FakeGraphiti()
