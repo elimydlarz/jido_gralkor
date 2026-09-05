@@ -102,6 +102,79 @@ defmodule Gralkor.Reflection.ChainOfThoughtTest do
     end
   end
 
+  describe "if an output name is declared by more than one step" do
+    test "then parsing identifies the output and both declaring steps" do
+      steps = [step("first", %{"finding" => "string"}), step("second", %{"finding" => "string"})]
+
+      assert {:error, {:duplicate_output, "finding", "first", "second"}} =
+               ChainOfThought.from_config(%{steps: steps})
+    end
+  end
+
+  describe "if an interpolation references an output not declared by an earlier step" do
+    test "then parsing identifies the interpolation and current step" do
+      first = %{step("first", %{"finding" => "string"}) | directions: "Inspect {{ finding }}."}
+      later = step("second", %{"approved" => "boolean"})
+
+      assert {:error, {:unknown_interpolation, "finding", "first"}} =
+               ChainOfThought.from_config(%{steps: [first, later]})
+
+      forward = %{first | directions: "Inspect {{ approved }}."}
+
+      assert {:error, {:unknown_interpolation, "approved", "first"}} =
+               ChainOfThought.from_config(%{steps: [forward, later]})
+    end
+  end
+
+  describe "when a value is checked against a consumed structured-output type" do
+    test "then string, boolean, and integer declarations enforce their corresponding JSON value types" do
+      for {type, valid, invalid} <- [
+            {"string", ["", "release"], [nil, true, 1, %{}]},
+            {"boolean", [true, false], ["true", 0, 1, nil]},
+            {"integer", [0, -1, 42], [1.0, "1", true, nil]}
+          ] do
+        for value <- valid, do: assert(ChainOfThought.matches_type?(value, type))
+        for value <- invalid, do: refute(ChainOfThought.matches_type?(value, type))
+      end
+    end
+
+    test "and arrays and exact objects recursively enforce their declared consumed types" do
+      type = "Array<{ content: string; history: Array<{ level: integer; accepted: boolean }> }>"
+      value = [%{"content" => "trial", "history" => [%{"level" => 1, "accepted" => true}]}]
+      assert ChainOfThought.matches_type?(value, type)
+
+      invalid = [%{"content" => "trial", "history" => [%{"level" => "1", "accepted" => true}]}]
+      refute ChainOfThought.matches_type?(invalid, type)
+      refute ChainOfThought.matches_type?(%{}, type)
+    end
+  end
+
+  describe "when a value is checked against a consumed structured-output type > while the value has the declared shape and types" do
+    test "then it matches" do
+      assert ChainOfThought.matches_type?([], "Array<string>")
+      assert ChainOfThought.matches_type?([[1], [2, 3]], "Array<Array<integer>>")
+      assert ChainOfThought.matches_type?(%{"accepted" => false}, "{ accepted: boolean }")
+      assert ChainOfThought.matches_type?(%{accepted: true}, "{ accepted: boolean }")
+    end
+  end
+
+  describe "when a value is checked against a consumed structured-output type > while an exact object has a missing, extra, or mistyped field" do
+    test "then it does not match" do
+      for value <- [%{}, %{"level" => 1, "extra" => 2}, %{"level" => "1"}, nil, []] do
+        refute ChainOfThought.matches_type?(value, "{ level: integer }")
+      end
+    end
+  end
+
+  describe "when natural-language directions contain output interpolations" do
+    test "then their referenced output names are returned in occurrence order" do
+      assert ChainOfThought.interpolations("{{ first }} then {{second-output}} and {{ first }}") ==
+               ["first", "second-output", "first"]
+
+      assert ChainOfThought.interpolations("Review evidence.") == []
+    end
+  end
+
   defp step(label, output) do
     %{label: label, directions: "Review the supplied evidence.", output: output}
   end
