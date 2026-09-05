@@ -530,8 +530,9 @@ defmodule Gralkor.CaptureBuffer do
 
   defp do_flush_lenses(entry, callback, retries) when is_function(callback) do
     first_error =
-      Enum.reduce(entry.lens_order, nil, fn lens, first_error ->
-        turns = Map.fetch!(entry.batches, lens)
+      Enum.reduce(entry.lens_order, nil, fn lens_name, first_error ->
+        turns = Map.fetch!(entry.batches, lens_name)
+        lens = Map.get(entry, :resolved_lenses, %{}) |> Map.get(lens_name, lens_name)
 
         invoke = fn operator_id, agent_name, user_name, lens_name, lens_turns ->
           invoke_lens_callback(
@@ -573,6 +574,34 @@ defmodule Gralkor.CaptureBuffer do
       {:error, _} = error ->
         error
     end
+  end
+
+  defp resolve_lens_entry(entry, nil), do: {:ok, entry}
+
+  defp resolve_lens_entry(entry, resolver) when is_function(resolver, 2) do
+    case safe_resolve_lenses(resolver, entry.runtime_owner, entry.lens_order) do
+      {:ok, definitions} when is_list(definitions) and length(definitions) == length(entry.lens_order) ->
+        resolved_lenses =
+          entry.lens_order
+          |> Enum.zip(definitions)
+          |> Map.new()
+
+        {:ok, Map.put(entry, :resolved_lenses, resolved_lenses)}
+
+      {:ok, definitions} ->
+        {:error, {:invalid_lens_resolution, definitions}}
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp safe_resolve_lenses(resolver, runtime_owner, lens_names) do
+    resolver.(runtime_owner, lens_names)
+  rescue
+    error -> {:error, {:lens_resolution_failed, Exception.message(error)}}
+  catch
+    kind, reason -> {:error, {:lens_resolution_failed, {kind, reason}}}
   end
 
   defp do_flush(group, agent, user, ontology, turns, cb, retries, t0) do
