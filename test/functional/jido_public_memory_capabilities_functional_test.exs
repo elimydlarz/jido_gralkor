@@ -693,16 +693,15 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   defp deterministic_evolved_generalisation_answer do
     operator_id = "functional-agent-#{System.unique_integer([:positive])}"
+    jido = Jido.default_instance()
 
-    agent =
-      start_supervised!(
-        {Jido.AgentServer,
-         [
-           agent: DeterministicMemoryAgent,
-           id: operator_id,
-           register_global: false
-         ]}
-      )
+    start_supervised!({Jido, name: jido, otp_app: :jido_gralkor})
+
+    assert {:ok, agent} =
+             Jido.start_agent(jido, DeterministicMemoryAgent,
+               id: operator_id,
+               register_global: false
+             )
 
     assert :ok =
              Client.ingest(agent, %Ingest{
