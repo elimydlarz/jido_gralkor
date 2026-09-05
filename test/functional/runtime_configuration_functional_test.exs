@@ -1165,6 +1165,50 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       send(worker, :continue_lens_flush)
       assert_receive {:runtime_ingestion, "runtime-memory"}
     end
+
+    test "then graceful agent termination resolves the Lens before stopping its runtime" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+
+      start_supervised!(
+        {Gralkor.CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
+         lens_resolver: fn runtime_owner, names ->
+           {:ok, JidoGralkor.Runtime.lenses!(runtime_owner, names)}
+         end,
+         retries: []}
+      )
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: CustomLensConsumerAgent,
+           id: "runtime-configuration-graceful-capture",
+           lifecycle_mod: JidoGralkor.Lifecycle,
+           register_global: false}
+        )
+
+      session_id = "runtime-capture-graceful-stop"
+
+      :sys.replace_state(agent_server, fn state ->
+        put_in(state.agent.state[:__thread__], %{id: session_id})
+      end)
+
+      assert :ok =
+               Gralkor.Client.capture(
+                 agent_server,
+                 session_id,
+                 "operator-one",
+                 "Runtime Configuration Consumer",
+                 "Eli",
+                 [Gralkor.Message.new("user", "Flush me during graceful termination.")],
+                 "runtime-observations",
+                 []
+               )
+
+      assert :ok = GenServer.stop(agent_server, :normal)
+      assert_receive {:runtime_ingestion, "runtime-memory"}
+    end
   end
 
   describe "when named graph replacement begins" do
