@@ -384,16 +384,13 @@ defmodule Gralkor.Client.NativeTest do
 
       :ok = stop_supervised(CaptureBuffer)
 
-      start_supervised!(
-        {CaptureBuffer, flush_callback: blocking_callback, retries: []}
-      )
+      start_supervised!({CaptureBuffer, flush_callback: blocking_callback, retries: []})
 
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert :ok = Native.flush("s1")
 
-      assert_receive {:flush_started, worker, "g", "Susu", "Eli", Gralkor.DefaultOntology,
-                      _turns}
+      assert_receive {:flush_started, worker, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
 
       refute_received :flush_completed
       send(worker, :finish_flush)
