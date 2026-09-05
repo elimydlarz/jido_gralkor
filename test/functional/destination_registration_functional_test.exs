@@ -4,7 +4,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
   @moduletag :functional
 
   alias Gralkor.Client
-  alias Gralkor.Reflection.Registry, as: ReflectionRegistry
+  alias JidoGralkor.Runtime
 
   defmodule MemoryOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
@@ -60,7 +60,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
                Client.lens!("observations")
 
       assert [%Gralkor.Reflection{outputs: [output]}] =
-               ReflectionRegistry.load!([reflection_definition()])
+               configured_reflections!([reflection_definition()])
 
       assert output.destination == %Gralkor.Destination{name: "shared"}
     end
@@ -86,7 +86,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
   describe "when multiple Lenses or Reflections reference the same Destination" do
     test "then their results are saved to the same Destination" do
       lens_destination = Client.lens!("observations").destination
-      [reflection] = ReflectionRegistry.load!([reflection_definition()])
+      [reflection] = configured_reflections!([reflection_definition()])
 
       destination_output = Enum.find(reflection.outputs, &(&1.kind == :destination))
       assert destination_output.destination == lens_destination
@@ -131,7 +131,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       assert :ok = Client.replace(replacement("catalogue", "catalogue"))
 
-      reflection = ReflectionRegistry.load!([reflection_definition()]) |> List.first()
+      reflection = configured_reflections!([reflection_definition()]) |> List.first()
 
       artefact = %Gralkor.Artefact{
         id: "review-one",
@@ -189,7 +189,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       end
 
       assert_raise ArgumentError, fn ->
-        ReflectionRegistry.load!([reflection_definition()])
+        configured_reflections!([reflection_definition()])
       end
 
       assert_raise ArgumentError, fn ->
@@ -287,8 +287,8 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
         Client.lens!("observations")
       end
 
-      assert_raise ArgumentError, ~r/review.*Destination.*missing/, fn ->
-        ReflectionRegistry.load!([
+      assert_raise ArgumentError, ~r/unknown_destination.*review.*missing/, fn ->
+        configured_reflections!([
           reflection_definition(
             outputs: [
               [kind: :destination, destination: "missing", ontology: MemoryOntology]
@@ -297,6 +297,19 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
         ])
       end
     end
+  end
+
+  defp configured_reflections!(definitions) do
+    configuration = %{
+      destinations: Application.fetch_env!(:jido_gralkor, :destinations),
+      lenses: [],
+      reflections: definitions
+    }
+
+    JidoGralkor.Plugin.mount(%{}, agent_name: "Destination registration", runtime_config: configuration)
+    start_supervised!({Runtime, owner: self(), configuration: configuration})
+
+    Enum.map(definitions, &Runtime.reflection!(self(), Keyword.fetch!(&1, :name)))
   end
 
   defp reflection_definition(overrides \\ []) do
