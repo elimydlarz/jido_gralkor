@@ -75,6 +75,13 @@ when a session holding turns is flushed without awaiting
   and the entry is removed, so reading the session's turns back returns nothing
   and a scheduled-flush line naming the session and its turn count is logged at info, so a successful flush is observable from logs alone
 
+when a Lens-selected session is flushed through a configured Lens resolver
+  then every selected Lens is resolved before its ingestion worker is scheduled
+  and the worker retains those resolved Lens definitions if the targeted agent subsequently terminates or replaces its configuration
+  if Lens resolution fails
+    then the flush reports the failure
+    and the buffered entry remains available to flush again
+
 when a session holding no turns is flushed without awaiting
   then no flush is scheduled
   and an empty-flush line naming the session is logged at info, so an empty flush is distinguishable from no flush attempted

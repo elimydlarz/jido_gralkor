@@ -7,7 +7,8 @@ when a consumer wires the module as an agent server's lifecycle
 
 when the agent server terminates
   while a thread is committed to agent state
-    then that thread's buffered memory is flushed without blocking termination
+    then that thread's buffered-memory flush is scheduled before termination returns
+    and termination does not wait for the scheduled ingestion to complete
     and the flush is logged at info naming the session id and the terminate reason
     if the flush call fails
       then the failure is logged

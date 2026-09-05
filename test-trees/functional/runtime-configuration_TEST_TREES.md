@@ -19,6 +19,10 @@ if a replacement is invalid
   then the call returns the validation failure
   and that agent's previously active snapshot remains unchanged
 
+if an optional ontology field is explicitly false
+  then validation rejects false as the invalid ontology value
+  and an atom-keyed false value is not replaced by a string-keyed value from the same definition
+
 when a consuming agent is restarted under consumer supervision
   then the consumer starts the agent with its current complete durable configuration
   and the restarted plugin installs that configuration before accepting memory work
@@ -54,12 +58,20 @@ when named ingestion begins
   and later named ingestion uses any subsequently installed Lens definition
 
 when a selected-Lens turn is buffered for capture
-  then its eventual ingestion resolves the Lens through the targeted agent's runtime configuration
+  then flush scheduling resolves the Lens through the targeted agent's current runtime-configuration snapshot
+  and its eventual ingestion retains that resolved Lens after the targeted agent terminates
 
 when a named Reflection submission is admitted
   then its background work retains the Reflection definition active at admission
   and later submission uses any subsequently installed Reflection definition
 
 when a search begins
-  then it retains the Destination definitions active when search began
+  then it retains the selected Lens and Destination definitions from one snapshot active when search began
   and later search uses any subsequently installed Destination definitions
+
+when a runtime-targeted operation is given an owning AgentServer PID whose Gralkor runtime is unavailable
+  then it fails identifying the unavailable runtime
+  and it never falls back to application compatibility configuration
+
+if a runtime-targeted operation is given anything other than an owning AgentServer PID
+  then it fails identifying that the runtime target must be a PID

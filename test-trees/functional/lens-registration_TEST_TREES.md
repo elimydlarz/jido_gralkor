@@ -1,7 +1,7 @@
 Functional: lens-registration (src: lib/gralkor/lens.ex, lib/gralkor/lens/replaceable.ex; functional: test/functional/lens_registration_functional_test.exs)
 
 when the application compatibility registry contains a valid appending or replaceable Lens
-  then direct and mounted compatibility operations can select the Lens by name
+  then direct compatibility operations can select the Lens by name
   and each selected name resolves to the same application-owned Lens definition
   and the Lens uses its referenced registered Destination
 
