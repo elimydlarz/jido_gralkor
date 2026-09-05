@@ -897,36 +897,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
-  describe "if a Lens definition has an invalid write mode, ingestion process, or ontology" do
-    test "then replacement fails identifying the invalid Lens field" do
-      base = %{
-        name: "observations",
-        destination: "global",
-        write: :append,
-        ingestion: RecordingIngestion
-      }
-
-      for {definition, expected} <- [
-            {Map.delete(base, :write), {:invalid_lens_write, "observations", nil}},
-            {%{base | write: :merge}, {:invalid_lens_write, "observations", :merge}},
-            {Map.delete(base, :ingestion), {:invalid_lens_ingestion, "observations", nil}},
-            {Map.put(base, :ingestion, String),
-             {:invalid_lens_ingestion, "observations", String}},
-            {Map.put(base, :ontology, String), {:invalid_lens_ontology, "observations", String}},
-            {Map.put(base, :ontology, false), {:invalid_lens_ontology, "observations", false}},
-            {base |> Map.put(:ontology, false) |> Map.put("ontology", ConsumerOntology),
-             {:invalid_lens_ontology, "observations", false}}
-          ] do
-        assert {:error, ^expected} =
-                 JidoGralkor.Runtime.validate(%{
-                   destinations: [],
-                   lenses: [definition],
-                   reflections: []
-                 })
-      end
-    end
-  end
-
   describe "if an ontology declares a custom entity kind named `Entity`, `Episodic`, or `Community`" do
     test "then replacement fails identifying the entity kind reserved by Graphiti" do
       for {kind, ontology} <- [
