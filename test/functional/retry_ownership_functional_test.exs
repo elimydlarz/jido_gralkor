@@ -14,12 +14,135 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
   import ExUnit.CaptureLog
 
   alias Gralkor.CaptureBuffer
+  alias Gralkor.Client
   alias Gralkor.Client.Native
   alias Gralkor.GraphitiPool
   alias Gralkor.Message
+  alias JidoGralkor.Runtime
 
   @moduletag :functional
   @moduletag timeout: 120_000
+
+  defmodule ReflectionConsumerAgent do
+    use Jido.Agent,
+      name: "retry_ownership_reflection_consumer",
+      default_plugins: false,
+      plugins: [
+        {JidoGralkor.Plugin,
+         %{
+           agent_name: "Retry Ownership Reflection Consumer",
+           runtime_config: %{destinations: [], lenses: [], reflections: []}
+         }}
+      ]
+  end
+
+  defmodule ProbeStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_, _, _, _, _, _), do: {:ok, []}
+
+    @impl true
+    def put_artefact(output, reflection, operator, artefact) do
+      send(test_pid(), {:destination_delivery, output, reflection, operator, artefact})
+      :ok
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+
+    defp test_pid,
+      do: Application.fetch_env!(:jido_gralkor, :retry_ownership_reflection_test_pid)
+  end
+
+  defmodule RetryableStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_, _, _, _, _, _), do: {:ok, []}
+
+    @impl true
+    def put_artefact(_, _, _, artefact) do
+      counter = Application.fetch_env!(:jido_gralkor, :retry_ownership_counter)
+      :counters.add(counter, 1, 1)
+      attempt = :counters.get(counter, 1)
+      send(test_pid(), {:retryable_delivery, attempt, artefact})
+      if attempt < 3, do: {:error, %{status: 503}}, else: :ok
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+
+    defp test_pid,
+      do: Application.fetch_env!(:jido_gralkor, :retry_ownership_reflection_test_pid)
+  end
+
+  defmodule AlwaysRetryableStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_, _, _, _, _, _), do: {:ok, []}
+
+    @impl true
+    def put_artefact(_, _, _, artefact) do
+      send(test_pid(), {:retryable_delivery, artefact})
+      {:error, %{status: 503, reason: :temporarily_unavailable}}
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+
+    defp test_pid,
+      do: Application.fetch_env!(:jido_gralkor, :retry_ownership_reflection_test_pid)
+  end
+
+  defmodule NonRetryableStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_, _, _, _, _, _), do: {:ok, []}
+
+    @impl true
+    def put_artefact(_, _, _, artefact) do
+      send(test_pid(), {:non_retryable_delivery, artefact})
+      {:error, %{status: 422, reason: :invalid_output}}
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+
+    defp test_pid,
+      do: Application.fetch_env!(:jido_gralkor, :retry_ownership_reflection_test_pid)
+  end
+
+  defmodule RelatedMemoryStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(destination, _, _, _, _, _) do
+      if destination.name == "global" do
+        counter = Application.fetch_env!(:jido_gralkor, :retry_ownership_counter)
+        :counters.add(counter, 1, 1)
+        attempt = :counters.get(counter, 1)
+        send(test_pid(), {:related_memory_attempt, attempt})
+        if attempt == 1, do: {:error, %{status: 503}}, else: {:ok, []}
+      else
+        {:ok, []}
+      end
+    end
+
+    @impl true
+    def put_artefact(_, _, _, artefact) do
+      send(test_pid(), {:generalisation_delivery, artefact})
+      :ok
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+
+    defp test_pid,
+      do: Application.fetch_env!(:jido_gralkor, :retry_ownership_reflection_test_pid)
+  end
 
   setup do
     # graphiti_core's own modules import each other; letting the first import
@@ -28,13 +151,19 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     :ok = Gralkor.Python.smoke_import_graphiti()
 
     original_client = Application.get_env(:jido_gralkor, :client)
+    original_test_pid = Application.get_env(:jido_gralkor, :retry_ownership_reflection_test_pid)
+    original_counter = Application.get_env(:jido_gralkor, :retry_ownership_counter)
     Application.put_env(:jido_gralkor, :client, Native)
+    Application.put_env(:jido_gralkor, :retry_ownership_reflection_test_pid, self())
 
     on_exit(fn ->
       case original_client do
         nil -> Application.delete_env(:jido_gralkor, :client)
         mod -> Application.put_env(:jido_gralkor, :client, mod)
       end
+
+      restore_env(:retry_ownership_reflection_test_pid, original_test_pid)
+      restore_env(:retry_ownership_counter, original_counter)
     end)
 
     :ok
