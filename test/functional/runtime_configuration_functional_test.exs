@@ -825,6 +825,30 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   end
 
   describe "when a search begins" do
+    test "then its selected Lenses and Destinations resolve from one runtime snapshot" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-atomic-search",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 ingestion_configuration("project")
+               )
+
+      assert {[%Gralkor.Lens{name: "observations"}],
+              [%Gralkor.Destination{name: "project"}]} =
+               JidoGralkor.Runtime.resolve_search!(
+                 agent_server,
+                 ["observations"],
+                 ["project"]
+               )
+    end
+
     test "and later search uses any subsequently installed Destination definitions" do
       Application.put_env(
         :jido_gralkor,
