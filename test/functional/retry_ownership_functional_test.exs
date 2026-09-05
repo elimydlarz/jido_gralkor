@@ -323,6 +323,120 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     end
   end
 
+  describe "when Reflection production, packaged generalisation related-memory retrieval, or Destination delivery reports a retryable server failure" do
+    test "then the failing boundary retries with exponential backoff" do
+      assert_retryable_production()
+      assert_retryable_related_memory()
+      assert_retryable_delivery()
+    end
+
+    test "and another Reflection invocation continues independently" do
+      agent = start_reflection_agent("independent-retry")
+      assert :ok = Runtime.replace(agent, reflection_configuration())
+      test_pid = self()
+      attempts = :counters.new(1, [])
+
+      slow_inference = fn _request ->
+        :counters.add(attempts, 1, 1)
+
+        if :counters.get(attempts, 1) == 1,
+          do: {:error, %{status: 503}},
+          else: {:ok, %{output: %{"summary" => "recovered"}}}
+      end
+
+      slow_sleep = fn delay ->
+        send(test_pid, {:slow_retry_waiting, self(), delay})
+
+        receive do
+          :continue_retry -> :ok
+        end
+      end
+
+      assert {:ok, "slow-retry"} =
+               submit(agent, "review", invocation("slow-retry"),
+                 inference: slow_inference,
+                 storage: ProbeStorage,
+                 sleep: slow_sleep
+               )
+
+      assert_receive {:slow_retry_waiting, slow_process, 1_000}
+
+      assert {:ok, "independent"} =
+               submit(agent, "review", invocation("independent"),
+                 inference: fn _ -> {:ok, %{output: %{"summary" => "independent"}}} end,
+                 storage: ProbeStorage
+               )
+
+      assert_receive {:reflection_callback,
+                      %{invocation_id: "independent", outcome: :delivered}}
+
+      refute_receive {:reflection_callback, %{invocation_id: "slow-retry"}}
+      send(slow_process, :continue_retry)
+
+      assert_receive {:reflection_callback, %{invocation_id: "slow-retry", outcome: :delivered}}
+    end
+  end
+
+  describe "when Reflection production, packaged generalisation related-memory retrieval, or Destination delivery reports a retryable server failure > while a later attempt succeeds" do
+    test "then the invocation completes normally" do
+      assert %{outcome: :delivered} = assert_retryable_delivery()
+    end
+  end
+
+  describe "when Reflection production, packaged generalisation related-memory retrieval, or Destination delivery reports a retryable server failure > while no attempt succeeds within twenty-four hours of the first failure" do
+    test "then the invocation abandons the failed work" do
+      {_artefact, result} = retryable_delivery_abandonment("retryable-abandoned")
+      assert {:abandoned, %{stage: :delivery}} = result.outcome
+    end
+
+    test "and no error artefact is written to the Reflection's Destination" do
+      {artefact, _result} = retryable_delivery_abandonment("retryable-no-error-artefact")
+      assert artefact.payload == %{"summary" => "complete"}
+      refute_receive {:retryable_delivery, _}
+    end
+
+    test "and its callback receives the produced artefact, when one exists, and the abandonment outcome" do
+      {artefact, result} = retryable_delivery_abandonment("retryable-callback")
+      assert result.artefact == artefact
+      assert {:abandoned, %{stage: :delivery, reason: %{status: 503}}} = result.outcome
+    end
+  end
+
+  describe "when Reflection production or Destination delivery reports a non-retryable client failure" do
+    test "then the invocation abandons the failed work without retry" do
+      production = non_retryable_production("non-retryable-production")
+      assert {:abandoned, %{stage: :production}} = production.outcome
+
+      {_artefact, delivery} = non_retryable_delivery("non-retryable-delivery")
+      assert {:abandoned, %{stage: :delivery}} = delivery.outcome
+      refute_receive {:unexpected_retry_sleep, _}
+    end
+
+    test "and no error artefact is written to the Reflection's Destination" do
+      {artefact, _result} = non_retryable_delivery("non-retryable-no-error-artefact")
+      assert artefact.payload == %{"summary" => "complete"}
+      refute_receive {:non_retryable_delivery, _}
+    end
+
+    test "and its callback receives the produced artefact, when one exists, and the abandonment outcome" do
+      {artefact, result} = non_retryable_delivery("non-retryable-callback")
+      assert result.artefact == artefact
+      assert {:abandoned, %{stage: :delivery, reason: %{status: 422}}} = result.outcome
+    end
+  end
+
+  describe "when a consuming agent terminates during Reflection work" do
+    test "then that agent's unfinished work terminates with its Gralkor runtime" do
+      %{worker_down?: worker_down?} = terminate_reflection_work("termination-owner")
+      assert worker_down?
+    end
+
+    test "and the invocation callback is not invoked" do
+      %{callback_received?: callback_received?} = terminate_reflection_work("termination-callback")
+      refute callback_received?
+    end
+  end
+
   describe "when recall's outermost deadline expires" do
     test "then recall returns without retrying and logs the expiry as a warning" do
       %{g: g} = start_pool()
@@ -349,4 +463,220 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
       assert attempts(g, "search") == 1
     end
   end
+
+  defp assert_retryable_production do
+    agent = start_reflection_agent("retryable-production")
+    assert :ok = Runtime.replace(agent, reflection_configuration())
+    counter = :counters.new(1, [])
+    test_pid = self()
+
+    inference = fn _request ->
+      :counters.add(counter, 1, 1)
+      attempt = :counters.get(counter, 1)
+      send(test_pid, {:production_attempt, attempt})
+
+      if attempt < 3,
+        do: {:error, %{status: 503}},
+        else: {:ok, %{output: %{"summary" => "complete"}}}
+    end
+
+    assert {:ok, "retryable-production"} =
+             submit(agent, "review", invocation("retryable-production"),
+               inference: inference,
+               storage: ProbeStorage,
+               sleep: &send(test_pid, {:retry_backoff, &1})
+             )
+
+    assert_receive {:production_attempt, 1}
+    assert_receive {:retry_backoff, 1_000}
+    assert_receive {:production_attempt, 2}
+    assert_receive {:retry_backoff, 2_000}
+    assert_receive {:production_attempt, 3}
+    assert_receive {:reflection_callback, %{invocation_id: "retryable-production", outcome: :delivered}}
+  end
+
+  defp assert_retryable_related_memory do
+    Application.put_env(:jido_gralkor, :destination_storage, RelatedMemoryStorage)
+    Application.put_env(:jido_gralkor, :retry_ownership_counter, :counters.new(1, []))
+    agent = start_reflection_agent("retryable-related-memory")
+    test_pid = self()
+
+    inference = fn
+      %{step: %{label: "inspect-world"}} -> {:ok, %{output: %{"inspection" => "reviewed"}}}
+      %{step: %{label: "evolve-generalisations"}} ->
+        {:ok, %{output: %{"generalisations" => []}}}
+    end
+
+    assert {:ok, "retryable-related-memory"} =
+             submit(agent, "generalisations", invocation("retryable-related-memory"),
+               inference: inference,
+               storage: RelatedMemoryStorage,
+               sleep: &send(test_pid, {:retry_backoff, &1})
+             )
+
+    assert_receive {:related_memory_attempt, 1}
+    assert_receive {:retry_backoff, 1_000}
+    assert_receive {:related_memory_attempt, 2}
+    assert_receive {:reflection_callback,
+                    %{invocation_id: "retryable-related-memory", outcome: :delivered}}
+  end
+
+  defp assert_retryable_delivery do
+    Application.put_env(:jido_gralkor, :retry_ownership_counter, :counters.new(1, []))
+    agent = start_reflection_agent("retryable-delivery-#{System.unique_integer([:positive])}")
+    assert :ok = Runtime.replace(agent, reflection_configuration())
+    test_pid = self()
+    invocation_id = "retryable-delivery-#{System.unique_integer([:positive])}"
+
+    assert {:ok, ^invocation_id} =
+             submit(agent, "review", invocation(invocation_id),
+               inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end,
+               storage: RetryableStorage,
+               sleep: &send(test_pid, {:retry_backoff, &1})
+             )
+
+    assert_receive {:retryable_delivery, 1, artefact}
+    assert_receive {:retry_backoff, 1_000}
+    assert_receive {:retryable_delivery, 2, ^artefact}
+    assert_receive {:retry_backoff, 2_000}
+    assert_receive {:retryable_delivery, 3, ^artefact}
+    assert_receive {:reflection_callback, %{invocation_id: ^invocation_id} = result}
+    result
+  end
+
+  defp retryable_delivery_abandonment(invocation_id) do
+    agent = start_reflection_agent(invocation_id)
+    assert :ok = Runtime.replace(agent, reflection_configuration())
+    clock = :atomics.new(1, [])
+
+    assert {:ok, ^invocation_id} =
+             submit(agent, "review", invocation(invocation_id),
+               inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end,
+               storage: AlwaysRetryableStorage,
+               clock: fn -> :atomics.get(clock, 1) end,
+               sleep: fn _ -> :atomics.put(clock, 1, 86_400_000) end
+             )
+
+    assert_receive {:retryable_delivery, artefact}
+    assert_receive {:reflection_callback, %{invocation_id: ^invocation_id} = result}
+    refute_receive {:retryable_delivery, _}
+    {artefact, result}
+  end
+
+  defp non_retryable_production(invocation_id) do
+    agent = start_reflection_agent(invocation_id)
+    assert :ok = Runtime.replace(agent, reflection_configuration())
+    test_pid = self()
+
+    assert {:ok, ^invocation_id} =
+             submit(agent, "review", invocation(invocation_id),
+               inference: fn _ -> {:error, %{status: 422, reason: :invalid_request}} end,
+               storage: ProbeStorage,
+               sleep: &send(test_pid, {:unexpected_retry_sleep, &1})
+             )
+
+    assert_receive {:reflection_callback, %{invocation_id: ^invocation_id} = result}
+    refute_receive {:destination_delivery, _, _, _, _}
+    result
+  end
+
+  defp non_retryable_delivery(invocation_id) do
+    agent = start_reflection_agent(invocation_id)
+    assert :ok = Runtime.replace(agent, reflection_configuration())
+    test_pid = self()
+
+    assert {:ok, ^invocation_id} =
+             submit(agent, "review", invocation(invocation_id),
+               inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end,
+               storage: NonRetryableStorage,
+               sleep: &send(test_pid, {:unexpected_retry_sleep, &1})
+             )
+
+    assert_receive {:non_retryable_delivery, artefact}
+    assert_receive {:reflection_callback, %{invocation_id: ^invocation_id} = result}
+    {artefact, result}
+  end
+
+  defp terminate_reflection_work(id) do
+    previous_trap_exit = Process.flag(:trap_exit, true)
+
+    try do
+      {:ok, agent} =
+        Jido.AgentServer.start_link(
+          agent: ReflectionConsumerAgent,
+          id: id,
+          register_global: false
+        )
+
+      assert :ok = Runtime.replace(agent, reflection_configuration())
+      test_pid = self()
+
+      inference = fn _request ->
+        send(test_pid, {:unfinished_reflection, self()})
+
+        receive do
+          :never -> {:ok, %{output: %{"summary" => "impossible"}}}
+        end
+      end
+
+      assert {:ok, ^id} =
+               submit(agent, "review", invocation(id),
+                 inference: inference,
+                 storage: ProbeStorage
+               )
+
+      assert_receive {:unfinished_reflection, worker}
+      monitor = Process.monitor(worker)
+      Process.exit(agent, :shutdown)
+      worker_down? = receive do: ({:DOWN, ^monitor, :process, ^worker, _} -> true), after: (500 -> false)
+      callback_received? = receive do: ({:reflection_callback, %{invocation_id: ^id}} -> true), after: (50 -> false)
+      %{worker_down?: worker_down?, callback_received?: callback_received?}
+    after
+      Process.flag(:trap_exit, previous_trap_exit)
+    end
+  end
+
+  defp start_reflection_agent(id) do
+    start_supervised!(
+      Supervisor.child_spec(
+        {Jido.AgentServer,
+         agent: ReflectionConsumerAgent, id: id, register_global: false},
+        id: {:retry_ownership_agent, id}
+      )
+    )
+  end
+
+  defp submit(agent, name, invocation, opts) do
+    test_pid = self()
+    Client.reflect(agent, name, invocation, &send(test_pid, {:reflection_callback, &1}), opts)
+  end
+
+  defp reflection_configuration do
+    %{
+      destinations: [%{name: "reviews"}],
+      lenses: [],
+      reflections: [
+        %{
+          name: "review",
+          outputs: [%{kind: :destination, destination: "reviews"}],
+          chain_of_thought: %{
+            steps: [
+              %{
+                label: "review",
+                directions: "Review.",
+                output: %{"summary" => "string"}
+              }
+            ]
+          }
+        }
+      ]
+    }
+  end
+
+  defp invocation(id) do
+    %{id: id, operator_id: "operator-one", invocation_context: %{}, representations: []}
+  end
+
+  defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
+  defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
 end
