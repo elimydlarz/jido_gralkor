@@ -583,7 +583,10 @@ defmodule Gralkor.Client.NativeTest do
 
   defp call_with_task_yield_deadline(fun) do
     traced_process = self()
-    :erlang.trace(traced_process, true, [:call])
+    trace_recipient = self()
+    tracer = spawn_link(fn -> forward_traces(trace_recipient) end)
+
+    :erlang.trace(traced_process, true, [:call, {:tracer, tracer}])
     :erlang.trace_pattern({Task, :yield, 2}, true, [])
 
     try do
@@ -591,7 +594,9 @@ defmodule Gralkor.Client.NativeTest do
 
       deadline =
         receive do
-          {:trace, ^traced_process, :call, {Task, :yield, [_task, deadline]}} -> deadline
+          {:native_call_trace,
+           {:trace, ^traced_process, :call, {Task, :yield, [_task, deadline]}}} ->
+            deadline
         after
           1_000 -> flunk("the Native recall did not reach Task.yield/2")
         end
@@ -600,6 +605,16 @@ defmodule Gralkor.Client.NativeTest do
     after
       :erlang.trace_pattern({Task, :yield, 2}, false, [])
       :erlang.trace(traced_process, false, [:call])
+      send(tracer, :stop)
+    end
+  end
+
+  defp forward_traces(recipient) do
+    receive do
+      :stop -> :ok
+      trace ->
+        send(recipient, {:native_call_trace, trace})
+        forward_traces(recipient)
     end
   end
 
