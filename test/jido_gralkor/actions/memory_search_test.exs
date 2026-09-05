@@ -311,8 +311,8 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                %{agent_id: "operator-one", gralkor_runtime: self()}
              )
 
-    assert_receive {:destination_search, "runtime-notes", "operator-one", "launch", :episodes,
-                    20, []}
+    assert_receive {:destination_search, "runtime-notes", "operator-one", "launch", :episodes, 20,
+                    []}
 
     refute_receive {:destination_search, "compat-notes", _, _, _, _, _}
   end
@@ -326,8 +326,8 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                %{agent_id: "operator-one"}
              )
 
-    assert_receive {:destination_search, "compat-notes", "operator-one", "launch", :episodes,
-                    20, []}
+    assert_receive {:destination_search, "compat-notes", "operator-one", "launch", :episodes, 20,
+                    []}
   end
 
   defp configure_application_destinations do

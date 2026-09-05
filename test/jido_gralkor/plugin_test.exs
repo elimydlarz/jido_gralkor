@@ -86,7 +86,12 @@ defmodule JidoGralkor.PluginTest do
                id: JidoGralkor.Runtime,
                start:
                  {JidoGralkor.Runtime, :start_link,
-                  [[owner: owner, configuration: %{destinations: [], lenses: [], reflections: []}]]}
+                  [
+                    [
+                      owner: owner,
+                      configuration: %{destinations: [], lenses: [], reflections: []}
+                    ]
+                  ]}
              } = Plugin.child_spec(%{})
 
       assert owner == self()
@@ -114,7 +119,12 @@ defmodule JidoGralkor.PluginTest do
       assert %{
                start:
                  {JidoGralkor.Runtime, :start_link,
-                  [[owner: _owner, configuration: %{destinations: [], lenses: [], reflections: []}]]}
+                  [
+                    [
+                      owner: _owner,
+                      configuration: %{destinations: [], lenses: [], reflections: []}
+                    ]
+                  ]}
              } = Plugin.child_spec(%{})
     end
   end

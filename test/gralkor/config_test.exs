@@ -10,6 +10,7 @@ defmodule Gralkor.ConfigTest do
     original_llm = System.get_env("GRALKOR_LLM_MODEL")
     original_embedder = System.get_env("GRALKOR_EMBEDDER_MODEL")
     original_falkordb = Application.get_env(:jido_gralkor, :falkordb)
+
     original_socket_timeout =
       Application.get_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms)
 

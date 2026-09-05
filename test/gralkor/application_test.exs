@@ -289,7 +289,9 @@ defmodule Gralkor.ApplicationTest do
             send(self(), {:compatibility_ingested, request})
             :ok
           end,
-          runtime_ingest_fn: fn _owner, _request -> flunk("runtime-targeted ingestion was used") end
+          runtime_ingest_fn: fn _owner, _request ->
+            flunk("runtime-targeted ingestion was used")
+          end
         )
 
       assert :ok =

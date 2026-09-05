@@ -239,8 +239,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                gralkor_runtime: self()
              })
 
-    assert_receive {:lens_ingest, _request,
-                    %{lens: %{destination: %{name: "runtime-decisions"}}}}
+    assert_receive {:lens_ingest, _request, %{lens: %{destination: %{name: "runtime-decisions"}}}}
   end
 
   defp prove_application_compatibility_lens_ingestion do
@@ -253,8 +252,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                lens: "decisions"
              })
 
-    assert_receive {:lens_ingest, _request,
-                    %{lens: %{destination: %{name: "compat-decisions"}}}}
+    assert_receive {:lens_ingest, _request, %{lens: %{destination: %{name: "compat-decisions"}}}}
   end
 
   defp configure_application_lens(destination) do
