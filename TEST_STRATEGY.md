@@ -51,10 +51,12 @@ The test kind identifies the consumer seam. Hook timing does not change a test's
 - `mix test.fast` uses ExUnit's stale dependency tracking to select changed or related Unit and Integration tests and excludes Functional and Journey.
 - `mix test.all` runs Unit, Integration, Functional, Journey, and Node tests and fails when either runner fails.
 - `PostToolUse` after `Edit` or `Write` starts `mix test.fast` followed by `node --test` optimistically and returns without waiting.
-- `Stop` first delivers saved optimistic failures, waits for active optimistic work, and then runs `mix test` followed by `node --test` synchronously.
+- `Stop` first delivers saved optimistic failures and returns failure immediately when any are delivered. A subsequent Stop without saved failures waits for active optimistic work, then runs `mix test` followed by `node --test` synchronously.
 - During Functional RED and GREEN, the coding agent runs only the current focused Functional test.
 - When implementation appears finished, the coding agent runs `mix test.functional`.
 - After a Journey tree or test change, the coding agent runs `mix test.journey`.
 - After a substantive production change affecting operator-visible behavior, a public interface, persistence, an external-system boundary, architecture boundaries, or orchestration spanning components, the coding agent runs `mix test.journey`.
 - Documentation, formatting, and behavior-preserving local refactors do not trigger Journey.
 - Setup and CI own `mix test.all`; ordinary coding-agent work does not duplicate it.
+
+The shared ExUnit helper initializes the packaged Python interpreter before tag selection. This test infrastructure initialization does not make a Unit subject's dependencies real: Unit tests still substitute every dependency outside their subject. Tests that execute the real embedded Python or Graphiti boundary are Integration or Functional tests, according to their consumer seam.

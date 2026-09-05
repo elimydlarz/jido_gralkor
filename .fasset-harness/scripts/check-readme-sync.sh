@@ -19,10 +19,15 @@ surface_files=(
   lib/gralkor/ingest.ex
   lib/gralkor/ingested_representation.ex
   lib/gralkor/search.ex
+  lib/gralkor/destination.ex
+  lib/gralkor/destination/registry.ex
   lib/gralkor/destination/storage.ex
   lib/gralkor/destination/storage/graphiti.ex
   lib/gralkor/destination/storage/in_memory.ex
   lib/gralkor/lens.ex
+  lib/gralkor/lens/replaceable.ex
+  lib/gralkor/replace.ex
+  lib/gralkor/graph.ex
   lib/gralkor/lens/ingestion.ex
   lib/gralkor/lens/ingestion/store.ex
   lib/gralkor/lens/store.ex
@@ -30,12 +35,12 @@ surface_files=(
   lib/gralkor/reflection.ex
   lib/gralkor/reflection/chain_of_thought.ex
   lib/gralkor/reflection/packaged.ex
-  lib/gralkor/reflection/registry.ex
   lib/gralkor/reflection/runner.ex
-  lib/gralkor/reflection/scheduler.ex
-  lib/gralkor/reflection/store.ex
+  lib/gralkor/reflection/erl_ontology.ex
   lib/gralkor/ontology.ex
   lib/gralkor/python.ex
+  lib/gralkor/capture_buffer.ex
+  lib/gralkor/default_ontology.ex
   lib/jido_gralkor/plugin.ex
   lib/jido_gralkor/runtime.ex
   lib/jido_gralkor/re_act.ex
@@ -46,6 +51,8 @@ surface_files=(
   lib/jido_gralkor/actions/memory_build_indices.ex
   lib/jido_gralkor/actions/memory_build_communities.ex
   .agents/skills/publish/SKILL.md
+  DESTINATIONS.md
+  RUNTIME_CONFIG.md
 )
 files=("README.md" "${surface_files[@]}")
 
