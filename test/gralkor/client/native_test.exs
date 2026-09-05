@@ -584,6 +584,28 @@ defmodule Gralkor.Client.NativeTest do
     Pythonx.decode(raw)
   end
 
+  defp call_with_task_yield_deadline(fun) do
+    traced_process = self()
+    :erlang.trace(traced_process, true, [:call])
+    :erlang.trace_pattern({Task, :yield, 2}, true, [])
+
+    try do
+      result = fun.()
+
+      deadline =
+        receive do
+          {:trace, ^traced_process, :call, {Task, :yield, [_task, deadline]}} -> deadline
+        after
+          1_000 -> flunk("the Native recall did not reach Task.yield/2")
+        end
+
+      {result, deadline}
+    after
+      :erlang.trace_pattern({Task, :yield, 2}, false, [])
+      :erlang.trace(traced_process, false, [:call])
+    end
+  end
+
   describe "when memory is added with a group and content" do
     @describetag :integration
     setup :start_recording_pool
@@ -752,17 +774,24 @@ defmodule Gralkor.Client.NativeTest do
       :ok
     end
 
-    @tag :capture_log
     test "then it carries the recall pipeline's deadline, twelve seconds unless the deployment configures another" do
-      Application.put_env(:jido_gralkor, :recall_deadline_ms, 50)
-
-      assert {:error, :recall_deadline_expired} =
-               Native.recall("g", "TestAgent", nil, "slow: what do we know")
-
       Application.delete_env(:jido_gralkor, :recall_deadline_ms)
 
-      assert {:ok, block} = Native.recall("g", "TestAgent", nil, "slow: what do we know")
-      assert block =~ "<gralkor-memory"
+      assert {{:ok, default_block}, 12_000} =
+               call_with_task_yield_deadline(fn ->
+                 Native.recall("g", "TestAgent", nil, "what do we know")
+               end)
+
+      assert default_block =~ "<gralkor-memory"
+
+      Application.put_env(:jido_gralkor, :recall_deadline_ms, 75)
+
+      assert {{:ok, configured_block}, 75} =
+               call_with_task_yield_deadline(fn ->
+                 Native.recall("g", "TestAgent", nil, "what else do we know")
+               end)
+
+      assert configured_block =~ "<gralkor-memory"
     end
   end
 
