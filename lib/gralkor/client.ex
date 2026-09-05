@@ -239,7 +239,7 @@ defmodule Gralkor.Client do
     replace_with_resolved_lens(request, graph, lens!(lens_name))
   end
 
-  @spec replace(GenServer.server(), Replace.t()) :: :ok | {:error, term()}
+  @spec replace(runtime_owner(), Replace.t()) :: :ok | {:error, term()}
   def replace(runtime_owner, %Replace{lens: lens_name, graph: graph} = request) do
     replace_with_resolved_lens(request, graph, Runtime.lens!(runtime_owner, lens_name))
   end
