@@ -290,13 +290,14 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       refute_receive {:episode_added, _, _, _}
     end
 
-    describe "while one or more Store writes completed before the failure" do
-      test "then no partial list of `Gralkor.IngestedRepresentation` values is returned" do
-        Application.put_env(:jido_gralkor, :lenses, [lens(PartiallyFailingIngestion)])
+  end
 
-        assert {:error, :rejected} = Client.ingest_with_representation(request("partial"))
-        assert_receive {:episode_added, _, "stored before failure", "functional"}
-      end
+  describe "if the selected Lens's ingestion process fails > while one or more Store writes completed before the failure" do
+    test "then no partial list of `Gralkor.IngestedRepresentation` values is returned" do
+      Application.put_env(:jido_gralkor, :lenses, [lens(PartiallyFailingIngestion)])
+
+      assert {:error, :rejected} = Client.ingest_with_representation(request("partial"))
+      assert_receive {:episode_added, _, "stored before failure", "functional"}
     end
   end
 
