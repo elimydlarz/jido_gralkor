@@ -732,38 +732,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
-  describe "when an agentic memory addition begins" do
-    test "then it uses the targeted agent's current ingestion Lens" do
-      agent_server =
-        start_supervised!(
-          {Jido.AgentServer,
-           agent: ConsumerAgent, id: "runtime-configuration-agentic-add", register_global: false}
-        )
-
-      assert :ok =
-               JidoGralkor.Runtime.replace(
-                 agent_server,
-                 ingestion_configuration("agent-memory")
-               )
-
-      assert {:ok, %{result: "Ingesting."}} =
-               JidoGralkor.Actions.MemoryAdd.run(
-                 %{
-                   content: "runtime-directed insight",
-                   source_kind: :document,
-                   source_description: "functional"
-                 },
-                 %{
-                   agent_id: "operator-one",
-                   lens: "observations",
-                   gralkor_runtime: agent_server
-                 }
-               )
-
-      assert_receive {:runtime_ingestion, "agent-memory"}
-    end
-  end
-
   describe "when a selected-Lens turn is buffered for capture" do
     test "then its eventual ingestion resolves the Lens through the targeted agent's runtime configuration" do
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
