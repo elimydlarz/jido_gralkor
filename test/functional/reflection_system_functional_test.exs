@@ -1688,16 +1688,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   defp assert_valid(_context) do
-    assert {:ok,
-            [
-              %Gralkor.Reflection{
-                name: "generalisation",
-                outputs: [
-                  %{kind: :destination, destination: %Gralkor.Destination{name: "operator"}}
-                ]
-              }
-            ]} =
-             Registry.load([valid_definition()])
+    assert :ok = validate_reflections([valid_definition()])
   end
 
   defp reflection(
@@ -1705,15 +1696,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
          name \\ "generalisation",
          destination \\ "operator"
        ) do
-    [reflection] =
-      Registry.load!([
-        valid_definition(
-          name: name,
-          outputs: [[kind: :destination, destination: destination]]
-        )
-      ])
-
-    reflection
+    resolve_reflection(
+      valid_definition(
+        name: name,
+        outputs: [[kind: :destination, destination: destination]]
+      )
+    )
   end
 
   defp destination_output(reflection),
@@ -1730,22 +1718,19 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   defp one_step_reflection(_context) do
-    [reflection] =
-      Registry.load!([
-        valid_definition(
-          chain_of_thought: %{
-            steps: [
-              %{
-                label: "reflect",
-                directions: "Reflect.",
-                output: %{"artefact" => "string"}
-              }
-            ]
-          }
-        )
-      ])
-
-    reflection
+    resolve_reflection(
+      valid_definition(
+        chain_of_thought: %{
+          steps: [
+            %{
+              label: "reflect",
+              directions: "Reflect.",
+              output: %{"artefact" => "string"}
+            }
+          ]
+        }
+      )
+    )
   end
 
   defp invocation do
@@ -1920,6 +1905,44 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       ],
       overrides
     )
+  end
+
+  defp validate_reflections(reflections) do
+    Runtime.validate(runtime_configuration(reflections))
+  end
+
+  defp resolve_reflection(definition) do
+    with_runtime(runtime_configuration([definition]), fn owner ->
+      Runtime.reflection!(owner, Keyword.get(definition, :name) || Map.get(definition, :name))
+    end)
+  end
+
+  defp packaged_reflection(name) do
+    with_runtime(runtime_configuration([]), &Runtime.reflection!(&1, name))
+  end
+
+  defp with_runtime(configuration, fun) do
+    owner = spawn(fn -> receive do: (:stop -> :ok) end)
+    {:ok, runtime} = Runtime.start_link(owner: owner, configuration: configuration)
+
+    try do
+      fun.(owner)
+    after
+      GenServer.stop(runtime)
+      send(owner, :stop)
+    end
+  end
+
+  defp runtime_configuration(reflections) do
+    %{
+      destinations: [
+        %{name: "reflection-test"},
+        %{name: "observations"},
+        %{name: "decisions"}
+      ],
+      lenses: [],
+      reflections: reflections
+    }
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
