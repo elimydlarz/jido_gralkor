@@ -699,7 +699,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         {Jido.AgentServer,
          [
            agent: DeterministicMemoryAgent,
-           id: operator_id
+           id: operator_id,
+           register_global: false
          ]}
       )
 
