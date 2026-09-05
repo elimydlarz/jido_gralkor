@@ -367,8 +367,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
                  storage: ProbeStorage
                )
 
-      assert_receive {:reflection_callback,
-                      %{invocation_id: "independent", outcome: :delivered}}
+      assert_receive {:reflection_callback, %{invocation_id: "independent", outcome: :delivered}}
 
       refute_receive {:reflection_callback, %{invocation_id: "slow-retry"}}
       send(slow_process, :continue_retry)
@@ -432,7 +431,9 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     end
 
     test "and the invocation callback is not invoked" do
-      %{callback_received?: callback_received?} = terminate_reflection_work("termination-callback")
+      %{callback_received?: callback_received?} =
+        terminate_reflection_work("termination-callback")
+
       refute callback_received?
     end
   end
@@ -492,7 +493,9 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     assert_receive {:production_attempt, 2}
     assert_receive {:retry_backoff, 2_000}
     assert_receive {:production_attempt, 3}
-    assert_receive {:reflection_callback, %{invocation_id: "retryable-production", outcome: :delivered}}
+
+    assert_receive {:reflection_callback,
+                    %{invocation_id: "retryable-production", outcome: :delivered}}
   end
 
   defp assert_retryable_related_memory do
@@ -502,7 +505,9 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     test_pid = self()
 
     inference = fn
-      %{step: %{label: "inspect-world"}} -> {:ok, %{output: %{"inspection" => "reviewed"}}}
+      %{step: %{label: "inspect-world"}} ->
+        {:ok, %{output: %{"inspection" => "reviewed"}}}
+
       %{step: %{label: "evolve-generalisations"}} ->
         {:ok, %{output: %{"generalisations" => []}}}
     end
@@ -517,6 +522,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     assert_receive {:related_memory_attempt, 1}
     assert_receive {:retry_backoff, 1_000}
     assert_receive {:related_memory_attempt, 2}
+
     assert_receive {:reflection_callback,
                     %{invocation_id: "retryable-related-memory", outcome: :delivered}}
   end
@@ -628,8 +634,13 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
       assert_receive {:unfinished_reflection, worker}
       monitor = Process.monitor(worker)
       Process.exit(agent, :shutdown)
-      worker_down? = receive do: ({:DOWN, ^monitor, :process, ^worker, _} -> true), after: (500 -> false)
-      callback_received? = receive do: ({:reflection_callback, %{invocation_id: ^id}} -> true), after: (50 -> false)
+
+      worker_down? =
+        receive do: ({:DOWN, ^monitor, :process, ^worker, _} -> true), after: (500 -> false)
+
+      callback_received? =
+        receive do: ({:reflection_callback, %{invocation_id: ^id}} -> true), after: (50 -> false)
+
       %{worker_down?: worker_down?, callback_received?: callback_received?}
     after
       Process.flag(:trap_exit, previous_trap_exit)
@@ -639,8 +650,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
   defp start_reflection_agent(id) do
     start_supervised!(
       Supervisor.child_spec(
-        {Jido.AgentServer,
-         agent: ReflectionConsumerAgent, id: id, register_global: false},
+        {Jido.AgentServer, agent: ReflectionConsumerAgent, id: id, register_global: false},
         id: {:retry_ownership_agent, id}
       )
     )
