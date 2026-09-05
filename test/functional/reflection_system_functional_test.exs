@@ -4,9 +4,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   @moduletag :functional
 
   alias Gralkor.Client
-  alias Gralkor.Reflection.Registry
   alias Gralkor.Reflection.Runner
   alias Gralkor.Search
+  alias JidoGralkor.Runtime
 
   defmodule AsyncConsumerAgent do
     use Jido.Agent,
@@ -181,7 +181,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     :ok
   end
 
-  describe "when Reflection declarations are validated" do
+  describe "when an agent runtime validates Reflection declarations" do
     test("while every Reflection has a non-blank name", context, do: assert_valid(context))
     test("and every Reflection name is unique", context, do: assert_valid(context))
 
@@ -215,7 +215,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
           outputs: [[kind: :destination, destination: "operator", ontology: ReflectionOntology]]
         )
 
-      assert {:ok, [reflection]} = Registry.load([definition])
+      reflection = resolve_reflection(definition)
 
       assert reflection.outputs == [
                %{
@@ -239,150 +239,150 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test("then validation succeeds", context, do: assert_valid(context))
   end
 
-  describe "when Reflection declarations are validated > if the configured Reflection registry is not a list" do
+  describe "when an agent runtime validates Reflection declarations > if the configured Reflection collection is not a list" do
     test "then validation fails identifying the configured value" do
-      assert {:error, {:invalid_reflections, :invalid_registry}} =
-               Registry.load(:invalid_registry)
+      assert {:error, {:invalid_collection, :reflections, :invalid_collection}} =
+               validate_reflections(:invalid_collection)
     end
   end
 
-  describe "when Reflection declarations are validated > if a Reflection's `outputs` value is not a list" do
+  describe "when an agent runtime validates Reflection declarations > if a Reflection's `outputs` value is not a list" do
     test "then validation fails identifying that Reflection and outputs value" do
       definition = valid_definition(outputs: :invalid)
 
-      assert {:error, {:invalid_outputs, "generalisation", :invalid}} =
-               Registry.load([definition])
+      assert {:error, {:invalid_reflection_outputs, "generalisation", :invalid}} =
+               validate_reflections([definition])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Reflection declares no Destination output" do
+  describe "when an agent runtime validates Reflection declarations > if a Reflection declares no Destination output" do
     test "then validation fails identifying that Reflection and missing Destination output" do
       definition = valid_definition(outputs: [])
 
       assert {:error, {:missing_destination_output, "generalisation"}} =
-               Registry.load([definition])
+               validate_reflections([definition])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Reflection declares more than one Destination output" do
+  describe "when an agent runtime validates Reflection declarations > if a Reflection declares more than one Destination output" do
     test "then validation fails identifying that Reflection and duplicate Destination output kind" do
       output = [kind: :destination, destination: "operator"]
       definition = valid_definition(outputs: [output, output])
 
-      assert {:error, {:duplicate_output, "generalisation", :destination}} =
-               Registry.load([definition])
+      assert {:error, {:duplicate_destination_output, "generalisation"}} =
+               validate_reflections([definition])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Reflection declares an unsupported output kind" do
+  describe "when an agent runtime validates Reflection declarations > if a Reflection declares an unsupported output kind" do
     test "then validation fails identifying that Reflection and output kind" do
       outputs = [
         [kind: :destination, destination: "operator"],
         [kind: :return]
       ]
 
-      assert {:error, {:unsupported_output, "generalisation", :return}} =
-               Registry.load([valid_definition(outputs: outputs)])
+      assert {:error, {:unsupported_reflection_output, "generalisation", :return}} =
+               validate_reflections([valid_definition(outputs: outputs)])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Reflection name is blank" do
+  describe "when an agent runtime validates Reflection declarations > if a Reflection name is blank" do
     test "then validation fails identifying the blank name" do
-      assert {:error, {:blank_name, " "}} =
-               Registry.load([valid_definition(name: " ")])
+      assert {:error, {:blank_definition_name, :reflections, " "}} =
+               validate_reflections([valid_definition(name: " ")])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Reflection name contains the reserved provenance delimiter ` [lens: `" do
+  describe "when an agent runtime validates Reflection declarations > if a Reflection name contains the reserved provenance delimiter ` [lens: `" do
     test "then validation fails identifying the Reflection and reserved provenance syntax" do
       name = "review [lens: observations]"
 
-      assert {:error, {:reserved_provenance_syntax, ^name, " [lens: "}} =
-               Registry.load([valid_definition(name: name)])
+      assert {:error, {:reserved_provenance_syntax, :reflections, ^name}} =
+               validate_reflections([valid_definition(name: name)])
     end
   end
 
-  describe "when Reflection declarations are validated > if Reflection names are duplicated" do
+  describe "when an agent runtime validates Reflection declarations > if Reflection names are duplicated" do
     test "then validation fails identifying the duplicate name" do
       definition = valid_definition()
 
-      assert {:error, {:duplicate_name, "generalisation"}} =
-               Registry.load([definition, definition])
+      assert {:error, {:duplicate_definition_name, :reflections, "generalisation"}} =
+               validate_reflections([definition, definition])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Reflection has no Chain of Thought" do
+  describe "when an agent runtime validates Reflection declarations > if a Reflection has no Chain of Thought" do
     test "then validation fails identifying that Reflection" do
       definition = valid_definition() |> Keyword.delete(:chain_of_thought)
 
       assert {:error, {:missing_chain_of_thought, "generalisation"}} =
-               Registry.load([definition])
+               validate_reflections([definition])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Reflection's Chain of Thought is not structured configuration" do
+  describe "when an agent runtime validates Reflection declarations > if a Reflection's Chain of Thought is not structured configuration" do
     test "then validation fails identifying that Reflection and configured value" do
       assert {:error, {:invalid_chain_of_thought, "generalisation", "external-definition"}} =
-               Registry.load([valid_definition(chain_of_thought: "external-definition")])
+               validate_reflections([valid_definition(chain_of_thought: "external-definition")])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Chain of Thought has no steps" do
+  describe "when an agent runtime validates Reflection declarations > if a Chain of Thought has no steps" do
     test "then validation fails identifying that Reflection and Chain of Thought" do
       assert {:error, {:invalid_chain_of_thought, "generalisation", :missing_steps}} =
-               Registry.load([valid_definition(chain_of_thought: %{steps: []})])
+               validate_reflections([valid_definition(chain_of_thought: %{steps: []})])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Chain of Thought step has no non-blank label" do
+  describe "when an agent runtime validates Reflection declarations > if a Chain of Thought step has no non-blank label" do
     test "then validation fails identifying that Reflection and step" do
       cot = %{steps: [%{label: " ", directions: "Think.", output: %{"result" => "string"}}]}
 
       assert {:error, {:invalid_chain_of_thought, "generalisation", {:invalid_step_label, " "}}} =
-               Registry.load([valid_definition(chain_of_thought: cot)])
+               validate_reflections([valid_definition(chain_of_thought: cot)])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Chain of Thought step has no natural-language directions" do
+  describe "when an agent runtime validates Reflection declarations > if a Chain of Thought step has no natural-language directions" do
     test "then validation fails identifying that Reflection and step" do
       cot = %{steps: [%{label: "think", output: %{"result" => "string"}}]}
 
       assert {:error,
               {:invalid_chain_of_thought, "generalisation", {:invalid_step_directions, "think"}}} =
-               Registry.load([valid_definition(chain_of_thought: cot)])
+               validate_reflections([valid_definition(chain_of_thought: cot)])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Chain of Thought step has no structured-output declaration" do
+  describe "when an agent runtime validates Reflection declarations > if a Chain of Thought step has no structured-output declaration" do
     test "then validation fails identifying that Reflection and step" do
       cot = %{steps: [%{label: "think", directions: "Think."}]}
 
       assert {:error,
               {:invalid_chain_of_thought, "generalisation", {:invalid_step_output, "think"}}} =
-               Registry.load([valid_definition(chain_of_thought: cot)])
+               validate_reflections([valid_definition(chain_of_thought: cot)])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Chain of Thought step is not a map" do
+  describe "when an agent runtime validates Reflection declarations > if a Chain of Thought step is not a map" do
     test "then validation fails identifying that Reflection and step" do
       assert {:error,
               {:invalid_chain_of_thought, "generalisation", {:invalid_step, "not-a-step"}}} =
-               Registry.load([valid_definition(chain_of_thought: %{steps: ["not-a-step"]})])
+               validate_reflections([valid_definition(chain_of_thought: %{steps: ["not-a-step"]})])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Chain of Thought step declares an unsupported structured-output type" do
+  describe "when an agent runtime validates Reflection declarations > if a Chain of Thought step declares an unsupported structured-output type" do
     test "then validation fails identifying that Reflection, step, and type" do
       cot = %{steps: [%{label: "think", directions: "Think.", output: %{"result" => "mystery"}}]}
 
       assert {:error,
               {:invalid_chain_of_thought, "generalisation",
                {:invalid_output_type, "think", "mystery"}}} =
-               Registry.load([valid_definition(chain_of_thought: cot)])
+               validate_reflections([valid_definition(chain_of_thought: cot)])
     end
   end
 
-  describe "when Reflection declarations are validated > if an output name is declared by more than one step" do
+  describe "when an agent runtime validates Reflection declarations > if an output name is declared by more than one step" do
     test "then validation fails identifying that Reflection, output name, and steps" do
       cot = %{
         steps: [
@@ -394,11 +394,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert {:error,
               {:invalid_chain_of_thought, "generalisation",
                {:duplicate_output, "result", "one", "two"}}} =
-               Registry.load([valid_definition(chain_of_thought: cot)])
+               validate_reflections([valid_definition(chain_of_thought: cot)])
     end
   end
 
-  describe "when Reflection declarations are validated > if an interpolation references an output not declared by an earlier step" do
+  describe "when an agent runtime validates Reflection declarations > if an interpolation references an output not declared by an earlier step" do
     test "then validation fails identifying that Reflection, step, and interpolation" do
       cot = %{
         steps: [
@@ -410,34 +410,32 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert {:error,
               {:invalid_chain_of_thought, "generalisation",
                {:unknown_interpolation, "later", "one"}}} =
-               Registry.load([valid_definition(chain_of_thought: cot)])
+               validate_reflections([valid_definition(chain_of_thought: cot)])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Destination output has no Destination name" do
+  describe "when an agent runtime validates Reflection declarations > if a Destination output has no Destination name" do
     test "then validation fails identifying that Reflection and missing Destination" do
       definition = valid_definition(outputs: [[kind: :destination]])
 
-      assert {:error, {:missing_destination, "generalisation", nil}} =
-               Registry.load([definition])
+      assert {:error, {:missing_reflection_destination, "generalisation", nil}} =
+               validate_reflections([definition])
     end
   end
 
-  describe "when Reflection declarations are validated > if a Destination output references an unknown Destination" do
+  describe "when an agent runtime validates Reflection declarations > if a Destination output references an unknown Destination" do
     test "then validation fails identifying that Reflection and Destination" do
-      assert {:error, {:invalid_destination, "generalisation", message}} =
-               Registry.load([
+      assert {:error, {:unknown_destination, :reflections, "generalisation", "missing"}} =
+               validate_reflections([
                  valid_definition(outputs: [[kind: :destination, destination: "missing"]])
                ])
-
-      assert message =~ ~s(Reflection "generalisation" references unknown Destination "missing")
     end
   end
 
-  describe "when Reflection declarations are validated > if a Destination output declares an invalid ontology" do
+  describe "when an agent runtime validates Reflection declarations > if a Destination output declares an invalid ontology" do
     test "then validation fails identifying that Reflection and ontology" do
-      assert {:error, {:invalid_ontology, "generalisation", String}} =
-               Registry.load([
+      assert {:error, {:invalid_reflection_ontology, "generalisation", String}} =
+               validate_reflections([
                  valid_definition(
                    outputs: [
                      [kind: :destination, destination: "operator", ontology: String]
