@@ -435,12 +435,12 @@ defmodule Gralkor.Reflection.RunnerTest do
     owner = self()
 
     search = fn received_owner, request ->
-      send(test_pid, {:related_memory_search, received_owner, request})
+      send(test_pid, {:runner_event, :related_memory_search, received_owner, request})
       {:ok, [%{content: "stored information"}]}
     end
 
     inference = fn request ->
-      assert_received {:related_memory_search, ^owner, %Search{result_type: :episodes}}
+      send(test_pid, {:runner_event, :inference, request.step.label})
       {:ok, output_for(request)}
     end
 
@@ -451,7 +451,12 @@ defmodule Gralkor.Reflection.RunnerTest do
                inference: inference
              )
 
-    refute_receive {:related_memory_search, _, _}
+    assert_receive {:runner_event, :related_memory_search, ^owner,
+                    %Search{result_type: :episodes}}
+
+    assert_receive {:runner_event, :inference, "collect"}
+    assert_receive {:runner_event, :inference, "decide"}
+    refute_receive {:runner_event, :related_memory_search, _, _}
   end
 
   defp prove_related_memory_query do
