@@ -367,7 +367,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then validation fails identifying that Reflection and step" do
       assert {:error,
               {:invalid_chain_of_thought, "generalisation", {:invalid_step, "not-a-step"}}} =
-               validate_reflections([valid_definition(chain_of_thought: %{steps: ["not-a-step"]})])
+               validate_reflections([
+                 valid_definition(chain_of_thought: %{steps: ["not-a-step"]})
+               ])
     end
   end
 
