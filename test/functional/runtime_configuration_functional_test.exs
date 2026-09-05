@@ -129,7 +129,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
 
     entity Person do
-      field(:name, :string)
+      field(:value, :string)
     end
   end
 
@@ -203,28 +203,8 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
-  defmodule RecordingLensStorage do
-    @behaviour Gralkor.Lens.Storage
-
-    @impl true
-    def add_episode(_, _, _), do: {:error, :unsupported}
-
-    @impl true
-    def search(_, _, _), do: {:error, :unsupported}
-
-    @impl true
-    def replace_graph(store, graph) do
-      send(
-        Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid),
-        {:runtime_graph_replacement, store.lens.destination.name, graph}
-      )
-
-      :ok
-    end
-  end
-
   setup do
-    keys = [:runtime_configuration_test_pid, :destination_storage, :lens_storage, :client]
+    keys = [:runtime_configuration_test_pid, :destination_storage, :client]
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
     Application.put_env(:jido_gralkor, :runtime_configuration_test_pid, self())
 
@@ -691,7 +671,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
-  describe "if the Gralkor plugin runtime terminates unexpectedly" do
+  describe "if the Gralkor plugin runtime terminates unexpectedly > while its linked AgentServer runs under consumer supervision" do
     test "then its linked AgentServer terminates" do
       supervisor =
         start_supervised!({ConsumerSupervisor, id: "runtime-configuration-runtime-restart"})
@@ -1260,7 +1240,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   defp runtime_owner_names do
     :global.registered_names()
     |> Enum.filter(fn
-      {JidoGralkor.Runtime, owner} when is_pid(owner) -> true
+      {JidoGralkor.Runtime, _owner} -> true
       _ -> false
     end)
     |> MapSet.new()
@@ -1390,54 +1370,10 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     %{id: id, operator_id: "operator-one", invocation_context: %{}, representations: []}
   end
 
-  defp empty_runtime_configuration,
-    do: %{destinations: [], lenses: [], reflections: []}
-
-  defp valid_runtime_definition(:destinations, name), do: %{name: name}
-
-  defp valid_runtime_definition(:lenses, name) do
-    %{
-      name: name,
-      destination: "global",
-      write: :append,
-      ingestion: RecordingIngestion
-    }
-  end
-
-  defp valid_runtime_definition(:reflections, name) do
-    %{
-      name: name,
-      outputs: [%{kind: :destination, destination: "global"}],
-      chain_of_thought: %{
-        steps: [
-          %{
-            label: "review",
-            directions: "Review.",
-            output: %{"summary" => "string"}
-          }
-        ]
-      }
-    }
-  end
-
   defp destination_configuration(destination) do
     %{
       destinations: [%{name: destination}],
       lenses: [],
-      reflections: []
-    }
-  end
-
-  defp replaceable_configuration(destination) do
-    %{
-      destinations: [%{name: destination}],
-      lenses: [
-        %{
-          name: "topology",
-          destination: destination,
-          write: :replace_graph
-        }
-      ],
       reflections: []
     }
   end
