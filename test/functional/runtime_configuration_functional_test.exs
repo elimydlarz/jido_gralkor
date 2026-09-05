@@ -1161,6 +1161,13 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       assert :ok = Gralkor.Client.Native.flush("runtime-capture-after-stop")
       assert_receive {:lens_flush_worker_ready, worker}
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 ingestion_configuration("replacement-memory")
+               )
+
       assert :ok = GenServer.stop(agent_server, :normal)
       send(worker, :continue_lens_flush)
       assert_receive {:runtime_ingestion, "runtime-memory"}
