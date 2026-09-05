@@ -356,7 +356,9 @@ defmodule Gralkor.Reflection.RunnerTest do
     call = %{name: "lookup", arguments: %{"query" => "deployment"}}
 
     inference = fn
-      %{tool_results: []} -> {:tool_calls, [call]}
+      %{tool_results: []} ->
+        {:tool_calls, [call]}
+
       %{tool_results: results} ->
         send(test_pid, {:returned_tool_results, results})
         {:ok, %{output: %{"answer" => "ready"}}}
@@ -425,9 +427,7 @@ defmodule Gralkor.Reflection.RunnerTest do
               step: "finish",
               reason: {:invalid_inference_response, :not_a_response}
             }} =
-             Runner.run(reflection, invocation(),
-               inference: fn _request -> :not_a_response end
-             )
+             Runner.run(reflection, invocation(), inference: fn _request -> :not_a_response end)
   end
 
   defp prove_runtime_targeted_related_memory_search do
@@ -508,7 +508,11 @@ defmodule Gralkor.Reflection.RunnerTest do
   defp prove_related_memory_failure do
     test_pid = self()
     search = fn _owner, _request -> {:error, :unavailable} end
-    inference = fn _request -> send(test_pid, :inference_started); {:ok, %{}} end
+
+    inference = fn _request ->
+      send(test_pid, :inference_started)
+      {:ok, %{}}
+    end
 
     assert {:error,
             %{reflection: "generalisations", reason: {:related_memory_search, :unavailable}}} =
@@ -523,7 +527,11 @@ defmodule Gralkor.Reflection.RunnerTest do
 
   defp prove_other_reflection_skips_related_memory do
     test_pid = self()
-    search = fn _owner, _request -> send(test_pid, :related_memory_searched); {:ok, []} end
+
+    search = fn _owner, _request ->
+      send(test_pid, :related_memory_searched)
+      {:ok, []}
+    end
 
     assert {:ok, %Artefact{}} =
              Runner.run(single_step_reflection(), invocation(),
@@ -600,7 +608,7 @@ defmodule Gralkor.Reflection.RunnerTest do
 
     assert {:error, {:invalid_structured_output, ["not", "an", "object"]}} =
              Runner.default_inference(request, fn _action, _args, _context ->
-               {:ok, %{text: ~s(["not","an","object"])} }
+               {:ok, %{text: ~s(["not","an","object"])}}
              end)
   end
 
