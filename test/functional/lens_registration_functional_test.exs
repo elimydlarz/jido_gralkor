@@ -117,6 +117,16 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     end
   end
 
+  describe "where an application compatibility Lens omits its write mode" do
+    test "then the Lens defaults to `write: :append`" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        valid_lens("observations") |> Keyword.delete(:write)
+      ])
+
+      assert %Gralkor.Lens{ingestion: StoreIngestion} = Client.lens!("observations")
+    end
+  end
+
   describe "where an appending Lens omits its ontology" do
     test "then the Lens uses jido_gralkor's built-in default ontology" do
       Application.put_env(:jido_gralkor, :lenses, [
