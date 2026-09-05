@@ -450,13 +450,7 @@ defmodule Gralkor.CaptureBuffer do
     end
 
     for {_session_id, entry} <- state.lens_entries do
-      case resolve_lens_entry(entry, state.lens_resolver) do
-        {:ok, resolved_entry} ->
-          do_flush_lenses(resolved_entry, state.lens_flush_callback, state.retries)
-
-        {:error, _reason} = error ->
-          error
-      end
+      do_flush_lenses(entry, state.lens_flush_callback, state.retries)
     end
 
     :ok
