@@ -97,12 +97,18 @@ defmodule Gralkor.Client.NativeTest do
       end
     end
 
-    test "and no search is issued" do
+    @tag :integration
+    test "and no search is issued", context do
+      %{g: g} = start_recall_recording_pool(context)
+
       for agent_name <- [nil, ""] do
         assert_raise ArgumentError, ~r/agent_name/, fn ->
           Native.recall("g", agent_name, "s1", "q")
         end
       end
+
+      {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      assert Pythonx.decode(recorded) == %{}
     end
   end
 
