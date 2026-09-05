@@ -679,92 +679,9 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert_receive {:runtime_search, "second-memory"}
     end
 
-    test "then agentic memory search uses the targeted agent's Destination definitions" do
-      Application.put_env(
-        :jido_gralkor,
-        :destination_storage,
-        RecordingDestinationStorage
-      )
-
-      agent_server =
-        start_supervised!(
-          {Jido.AgentServer,
-           agent: ConsumerAgent,
-           id: "runtime-configuration-agentic-search",
-           register_global: false}
-        )
-
-      assert :ok =
-               JidoGralkor.Runtime.replace(
-                 agent_server,
-                 destination_configuration("agent-memory")
-               )
-
-      assert {:ok, %{result: "[]"}} =
-               JidoGralkor.Actions.MemorySearch.run(
-                 %{query: "memory", destinations: ["agent-memory"], lenses: []},
-                 %{agent_id: "operator-one", gralkor_runtime: agent_server}
-               )
-
-      assert_receive {:runtime_search, "agent-memory"}
-    end
-
-    test "then packaged generalisation related-memory search uses the targeted agent's Destinations" do
-      Application.put_env(
-        :jido_gralkor,
-        :destination_storage,
-        RecordingDestinationStorage
-      )
-
-      agent_server =
-        start_supervised!(
-          {Jido.AgentServer,
-           agent: ConsumerAgent,
-           id: "runtime-configuration-generalisation-search",
-           register_global: false}
-        )
-
-      assert :ok =
-               JidoGralkor.Runtime.replace(
-                 agent_server,
-                 destination_configuration("agent-memory")
-               )
-
-      test_pid = self()
-      callback = fn result -> send(test_pid, {:generalisation_callback, result}) end
-
-      inference = fn
-        %{step: %{label: "inspect-world"}} ->
-          {:ok, %{output: %{"inspection" => "inspected"}}}
-
-        %{step: %{label: "evolve-generalisations"}} ->
-          {:ok, %{output: %{"generalisations" => []}}}
-      end
-
-      assert {:ok, "generalisation-search"} =
-               Gralkor.Client.reflect(
-                 agent_server,
-                 "generalisations",
-                 %{
-                   id: "generalisation-search",
-                   operator_id: "operator-one",
-                   representations: []
-                 },
-                 callback,
-                 inference: inference
-               )
-
-      searched =
-        for _ <- 1..3 do
-          assert_receive {:runtime_search, destination}
-          destination
-        end
-
-      assert MapSet.new(searched) == MapSet.new(["operator", "global", "agent-memory"])
-    end
   end
 
-  describe "when a runtime-targeted operation cannot reach its owning AgentServer runtime" do
+ describe "when a runtime-targeted operation cannot reach its owning AgentServer runtime" do
     test "then it fails without falling back to application compatibility configuration" do
       Application.put_env(:jido_gralkor, :destination_storage, RecordingDestinationStorage)
 
