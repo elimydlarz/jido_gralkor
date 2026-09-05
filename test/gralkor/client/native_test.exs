@@ -833,10 +833,56 @@ defmodule Gralkor.Client.NativeTest do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then it carries no deadline of its own, so a memory addition, a capture flush, an index rebuild and a community build each run for as long as the graph takes" do
+    test "then it carries no deadline of its own, so a memory addition, a capture flush, an index rebuild and a community build each run for as long as the graph takes",
+         %{g: g} do
+      original_deadline = Application.get_env(:jido_gralkor, :recall_deadline_ms)
+
+      on_exit(fn ->
+        case original_deadline do
+          nil -> Application.delete_env(:jido_gralkor, :recall_deadline_ms)
+          value -> Application.put_env(:jido_gralkor, :recall_deadline_ms, value)
+        end
+      end)
+
+      Application.put_env(:jido_gralkor, :recall_deadline_ms, 1)
+      Pythonx.eval("g.operation_delay = 0.05", %{"g" => g})
+
+      test_pid = self()
+      graph_flush = Gralkor.Application.build_flush_callback(nil)
+
+      flush_callback = fn group, agent, user, ontology, turns ->
+        result = graph_flush.(group, agent, user, ontology, turns)
+        send(test_pid, {:capture_flush_finished, result})
+        result
+      end
+
+      start_supervised!({CaptureBuffer, flush_callback: flush_callback, retries: []})
+
       assert :ok = Native.memory_add("g1", "content", "manual")
+
+      assert :ok =
+               Native.capture(
+                 "slow-session",
+                 "g1",
+                 "Susu",
+                 "Eli",
+                 [Message.new("user", "captured content")]
+               )
+
+      assert :ok = Native.flush("slow-session")
+      assert_receive {:capture_flush_finished, :ok}, 1_000
+
       assert {:ok, %{status: "built"}} = Native.build_indices()
       assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("g1")
+
+      assert Enum.any?(episodes(g), &(&1["body"] == "content"))
+      assert Enum.any?(episodes(g), &String.contains?(&1["body"], "captured content"))
+
+      {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+      recorded = Pythonx.decode(recorded)
+
+      assert recorded["indices"] >= 1
+      assert recorded["communities"] == 1
     end
   end
 
