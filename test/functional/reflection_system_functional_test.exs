@@ -1322,7 +1322,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "if Reflection production fails" do
-    test "then no Destination output is attempted and the callback eventually receives the failure" do
+    test "then no Destination output is attempted" do
       Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
 
       agent_server =
@@ -1361,6 +1361,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                       }}
 
       refute_receive {:destination_output_delivered, _, _, _, _}
+    end
+
+    test "and the invocation callback eventually receives the production failure" do
+      result = submit_failed_reflection("generic-production-failure")
+
+      assert result == %{
+               invocation_id: "generic-production-failure",
+               outcome:
+                 {:production_failed,
+                  %{reflection: "review", step: "review", reason: :provider_unavailable}}
+             }
     end
   end
 
@@ -1892,6 +1903,33 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     assert_receive {:destination_output_delivered, _output, "review", "operator-one", artefact}
     assert_receive {:successful_reflection_callback, result}
     {artefact, result}
+  end
+
+  defp submit_failed_reflection(invocation_id) do
+    Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
+
+    agent_server =
+      start_supervised!(
+        {Jido.AgentServer,
+         agent: AsyncConsumerAgent, id: invocation_id, register_global: false}
+      )
+
+    assert :ok = Runtime.replace(agent_server, async_reflection_configuration())
+
+    test_pid = self()
+
+    assert {:ok, ^invocation_id} =
+             Client.reflect(
+               agent_server,
+               "review",
+               async_reflection_invocation(invocation_id),
+               &send(test_pid, {:failed_reflection_callback, &1}),
+               inference: fn _ -> {:error, :provider_unavailable} end
+             )
+
+    assert_receive {:failed_reflection_callback, result}
+    refute_receive {:destination_output_delivered, _, _, _, _}
+    result
   end
 
   defp erl_payload do
