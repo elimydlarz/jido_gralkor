@@ -17,6 +17,23 @@ defmodule JidoGralkor.LifecycleTest do
     end
   end
 
+  defmodule DelayedIngestionClient do
+    def flush(session_id) do
+      test_pid = Application.fetch_env!(:jido_gralkor, :lifecycle_test_pid)
+      send(test_pid, {:flush_scheduled, session_id})
+
+      Task.start(fn ->
+        send(test_pid, {:ingestion_waiting, self()})
+
+        receive do
+          :finish_ingestion -> :ok
+        end
+      end)
+
+      :ok
+    end
+  end
+
   setup do
     InMemory.reset()
     :ok
@@ -88,14 +105,26 @@ defmodule JidoGralkor.LifecycleTest do
   end
 
   describe "when the agent server terminates > while a thread is committed to agent state" do
-    test "then that thread's buffered memory is flushed without blocking termination" do
+    test "then that thread's buffered-memory flush is scheduled before termination returns" do
       InMemory.set_flush(:ok)
       thread_id = "thread-term"
 
       s = state(%{__thread__: %{id: thread_id}})
 
       assert :ok = Lifecycle.terminate(:normal, s)
-      assert eventually(fn -> InMemory.flushes() == [[thread_id]] end)
+      assert InMemory.flushes() == [[thread_id]]
+    end
+
+    test "and termination does not wait for the scheduled ingestion to complete" do
+      use_client(DelayedIngestionClient)
+      s = state(%{__thread__: %{id: "thread-delayed"}})
+
+      assert :ok = Lifecycle.terminate(:normal, s)
+      assert_receive {:flush_scheduled, "thread-delayed"}
+      assert_receive {:ingestion_waiting, ingestion}
+      assert Process.alive?(ingestion)
+
+      send(ingestion, :finish_ingestion)
     end
 
     test "and the flush is logged at info naming the session id and the terminate reason" do
@@ -115,6 +144,23 @@ defmodule JidoGralkor.LifecycleTest do
       assert log =~ "[info]"
       assert log =~ "[gralkor] flush — session:thread-log reason:{:shutdown, :idle_timeout}"
     end
+  end
+
+  defp use_client(client) do
+    previous = Application.get_env(:jido_gralkor, :client)
+    previous_test_pid = Application.get_env(:jido_gralkor, :lifecycle_test_pid)
+    Application.put_env(:jido_gralkor, :client, client)
+    Application.put_env(:jido_gralkor, :lifecycle_test_pid, self())
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:jido_gralkor, :client, previous),
+        else: Application.delete_env(:jido_gralkor, :client)
+
+      if previous_test_pid,
+        do: Application.put_env(:jido_gralkor, :lifecycle_test_pid, previous_test_pid),
+        else: Application.delete_env(:jido_gralkor, :lifecycle_test_pid)
+    end)
   end
 
   describe "when the agent server terminates > while a thread is committed to agent state > if the flush call fails" do
