@@ -496,6 +496,28 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "where captured turns select a Lens > when one captured turn names the same Lens more than once" do
+    test "then the Lens flush callback receives one batch per distinct Lens" do
+      turn = [Message.new("user", "one turn")]
+
+      assert :ok =
+               CaptureBuffer.append_lenses(
+                 "session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 ["observations", "observations", "decisions", "decisions"],
+                 turn
+               )
+
+      assert :ok = CaptureBuffer.flush_and_await("session", 1_000)
+
+      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "observations", [^turn]}
+      assert_receive {:lens_flushed, "operator-one", "Susu", "Eli", "decisions", [^turn]}
+      refute_receive {:lens_flushed, _, _, _, _, _}
+    end
+  end
+
   describe "where captured turns select a Lens > when Lens-selected turns begin a new buffered ingestion" do
     test "then one ingestion identifier is minted and retained for every retry of that buffered ingestion" do
       test_pid = self()
