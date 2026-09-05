@@ -22,7 +22,7 @@ defmodule JidoGralkor.PluginTest do
 
     start_supervised!(
       {JidoGralkor.Runtime,
-       owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}}
+       owner: self(), configuration: runtime_configuration()}
     )
 
     :ok

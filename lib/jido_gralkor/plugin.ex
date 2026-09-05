@@ -339,9 +339,13 @@ defmodule JidoGralkor.Plugin do
 
   defp retain_request_context(signal), do: signal
 
-  defp runtime_lens!(lens) do
-    if Runtime.started?(self()), do: Runtime.lens!(self(), lens), else: Client.lens!(lens)
+  defp runtime_lens!(lens) when is_binary(lens) do
+    Runtime.lens!(self(), lens)
+  rescue
+    ArgumentError -> raise ArgumentError, "unknown Lens #{inspect(lens)}"
   end
+
+  defp runtime_lens!(lens), do: raise(ArgumentError, "invalid Lens #{inspect(lens)}")
 
   defp maybe_put_lens_ref(refs, lens) when is_binary(lens),
     do: Map.put(refs, :jido_gralkor_lens, lens)
