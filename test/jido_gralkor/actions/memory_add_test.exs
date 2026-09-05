@@ -164,78 +164,13 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
   describe "when the memory add tool runs with content, a source kind, and a source description > where the tool context selects a Lens > while the tool context identifies an owning AgentServer as the Gralkor runtime target" do
     test "then Lens ingestion uses that agent's current runtime configuration" do
-      Process.register(self(), :memory_add_lens_test)
-
-      Application.put_env(:jido_gralkor, :destinations, [[name: "compat-decisions"]])
-
-      Application.put_env(:jido_gralkor, :lenses, [
-        [
-          name: "decisions",
-          destination: "compat-decisions",
-          ontology: LensOntology,
-          ingestion: RecordingIngestion
-        ]
-      ])
-
-      start_supervised!(
-        {JidoGralkor.Runtime,
-         owner: self(),
-         configuration: %{
-           destinations: [[name: "runtime-decisions"]],
-           lenses: [
-             [
-               name: "decisions",
-               destination: "runtime-decisions",
-               ontology: LensOntology,
-               ingestion: RecordingIngestion
-             ]
-           ],
-           reflections: []
-         }}
-      )
-
-      assert {:ok, %{result: "Ingesting."}} =
-               MemoryAdd.run(
-                 %{
-                   content: "We chose Friday.",
-                   source_kind: :conversation,
-                   source_description: "agent decision"
-                 },
-                 %{agent_id: "operator-one", lens: "decisions", gralkor_runtime: self()}
-               )
-
-      assert_receive {:lens_ingest, _request,
-                      %{lens: %{destination: %{name: "runtime-decisions"}}}}
+      prove_runtime_targeted_lens_ingestion()
     end
   end
 
   describe "when the memory add tool runs with content, a source kind, and a source description > where the tool context selects a Lens > while the tool context has no Gralkor runtime target" do
     test "then Lens ingestion uses the application compatibility configuration" do
-      Process.register(self(), :memory_add_lens_test)
-
-      Application.put_env(:jido_gralkor, :destinations, [[name: "compat-decisions"]])
-
-      Application.put_env(:jido_gralkor, :lenses, [
-        [
-          name: "decisions",
-          destination: "compat-decisions",
-          ontology: LensOntology,
-          ingestion: RecordingIngestion
-        ]
-      ])
-
-      assert {:ok, %{result: "Ingesting."}} =
-               MemoryAdd.run(
-                 %{
-                   content: "We chose Friday.",
-                   source_kind: :conversation,
-                   source_description: "agent decision"
-                 },
-                 %{agent_id: "operator-one", lens: "decisions"}
-               )
-
-      assert_receive {:lens_ingest, _request,
-                      %{lens: %{destination: %{name: "compat-decisions"}}}}
+      prove_application_compatibility_lens_ingestion()
     end
   end
 
@@ -281,6 +216,67 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                  %{agent_id: "01USER"}
                )
     end
+  end
+
+  defp prove_runtime_targeted_lens_ingestion do
+    Process.register(self(), :memory_add_lens_test)
+    configure_application_lens("compat-decisions")
+
+    start_supervised!(
+      {JidoGralkor.Runtime,
+       owner: self(),
+       configuration: %{
+         destinations: [[name: "runtime-decisions"]],
+         lenses: [lens_configuration("runtime-decisions")],
+         reflections: []
+       }}
+    )
+
+    assert {:ok, %{result: "Ingesting."}} =
+             MemoryAdd.run(memory_add_params(), %{
+               agent_id: "operator-one",
+               lens: "decisions",
+               gralkor_runtime: self()
+             })
+
+    assert_receive {:lens_ingest, _request,
+                    %{lens: %{destination: %{name: "runtime-decisions"}}}}
+  end
+
+  defp prove_application_compatibility_lens_ingestion do
+    Process.register(self(), :memory_add_lens_test)
+    configure_application_lens("compat-decisions")
+
+    assert {:ok, %{result: "Ingesting."}} =
+             MemoryAdd.run(memory_add_params(), %{
+               agent_id: "operator-one",
+               lens: "decisions"
+             })
+
+    assert_receive {:lens_ingest, _request,
+                    %{lens: %{destination: %{name: "compat-decisions"}}}}
+  end
+
+  defp configure_application_lens(destination) do
+    Application.put_env(:jido_gralkor, :destinations, [[name: destination]])
+    Application.put_env(:jido_gralkor, :lenses, [lens_configuration(destination)])
+  end
+
+  defp lens_configuration(destination) do
+    [
+      name: "decisions",
+      destination: destination,
+      ontology: LensOntology,
+      ingestion: RecordingIngestion
+    ]
+  end
+
+  defp memory_add_params do
+    %{
+      content: "We chose Friday.",
+      source_kind: :conversation,
+      source_description: "agent decision"
+    }
   end
 
   defp eventually(fun, timeout_ms \\ 500, interval_ms \\ 10) do
