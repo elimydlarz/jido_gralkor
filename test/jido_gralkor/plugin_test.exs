@@ -113,8 +113,20 @@ defmodule JidoGralkor.PluginTest do
       assert {:ok, %{agent_name: "Susu", ingestion_lens: "observations"}} =
                Plugin.mount(%{id: "operator-one", state: %{}},
                  agent_name: "Susu",
-                 ingestion_lens: "observations"
+                 ingestion_lens: "observations",
+                 runtime_config: runtime_configuration()
                )
+    end
+
+    test "and a Lens present only in the application compatibility registry is rejected" do
+      configure_lenses()
+
+      assert_raise ArgumentError, ~r/unknown Lens "observations"/, fn ->
+        Plugin.mount(%{id: "operator-one", state: %{}},
+          agent_name: "Susu",
+          ingestion_lens: "observations"
+        )
+      end
     end
   end
 
@@ -763,7 +775,8 @@ defmodule JidoGralkor.PluginTest do
     {:ok, plugin_state} =
       Plugin.mount(%{id: "operator-one", state: %{}},
         agent_name: "Susu",
-        ingestion_lens: "observations"
+        ingestion_lens: "observations",
+        runtime_config: runtime_configuration()
       )
 
     plugin_state
@@ -795,5 +808,21 @@ defmodule JidoGralkor.PluginTest do
         ingestion: Gralkor.Lens.Ingestion.Store
       ]
     ])
+  end
+
+  defp runtime_configuration do
+    %{
+      destinations: [%{name: "memory"}],
+      lenses: [
+        %{
+          name: "observations",
+          destination: "memory",
+          write: :append,
+          ontology: LensOntology,
+          ingestion: Gralkor.Lens.Ingestion.Store
+        }
+      ],
+      reflections: []
+    }
   end
 end
