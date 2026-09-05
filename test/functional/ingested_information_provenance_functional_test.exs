@@ -298,7 +298,8 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                  "Mina",
                  "observations",
                  [[Gralkor.Message.new("user", "Atlas might launch Friday.")]],
-                 "ingestion-1"
+                 "ingestion-1",
+                 nil
                )
 
       assert_receive {:captured_ingest, %Ingest{id: "ingestion-1", source_kind: :conversation}}
