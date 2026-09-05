@@ -1,5 +1,5 @@
 defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
-  use ExUnit.Case, async: false
+  use Jido.AI.TestCase, async: false
 
   alias Gralkor.Client
   alias Gralkor.Client.InMemory
@@ -37,6 +37,33 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       {:ok, [%{content: "matching stored episode", lens: "observations"}]}
     end
+  end
+
+  defmodule DeterministicMemoryAgent do
+    use Jido.AI.Agent,
+      name: "deterministic_memory_agent",
+      default_plugins: %{__memory__: false},
+      plugins: [
+        {JidoGralkor.Plugin,
+         %{
+           agent_name: "Deterministic Memory Agent",
+           runtime_config: %{
+             destinations: [],
+             lenses: [
+               %{
+                 name: "observations",
+                 destination: "operator",
+                 ingestion: Gralkor.Lens.Ingestion.Store
+               }
+             ],
+             reflections: []
+           }
+         }}
+      ],
+      tools: [JidoGralkor.Actions.MemorySearch],
+      max_iterations: 2,
+      system_prompt:
+        "Search memory before answering and apply the retrieved evolved generalisation."
   end
 
   setup do
@@ -446,6 +473,23 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
+  describe "when a fresh agent handles a request related to an evolved generalisation" do
+    test "then the answer identifies the retrieved deployment predecessor and newly covered feature-release scope" do
+      answer = deterministic_evolved_generalisation_answer()
+
+      assert answer =~ "PREDECESSOR: level 1; scope deployment rollout"
+      assert answer =~ "EVOLVED: level 2; newly covered scope feature releases"
+    end
+
+    test "and the recommendation applies their reversible limited-scope lesson to the requested migration" do
+      answer = deterministic_evolved_generalisation_answer()
+
+      assert answer =~ "RECOMMENDATION: Use a reversible limited-scope canary"
+      assert answer =~ "Payments database migration"
+      assert answer =~ "expose faults before broad impact"
+    end
+  end
+
   describe "when an agent receives the memory search tool" do
     test "then its description directs the agent to search related observations and generalisations" do
       description = MemorySearch.__action_metadata__().description
@@ -644,5 +688,94 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       )
 
     Plugin.handle_signal(signal, %{agent: agent})
+  end
+
+  defp deterministic_evolved_generalisation_answer do
+    operator_id = "functional-agent-#{System.unique_integer([:positive])}"
+
+    agent =
+      start_supervised!(
+        {Jido.AgentServer,
+         [
+           agent: DeterministicMemoryAgent,
+           id: operator_id
+         ]}
+      )
+
+    assert :ok =
+             Client.ingest(agent, %Ingest{
+               id: "functional-related-observation",
+               operator_id: operator_id,
+               lens: "observations",
+               source_kind: :document,
+               content:
+                 "A reversible canary exposed a configuration fault before broad deployment impact.",
+               source_description: "deployment review"
+             })
+
+    put_generalisation_for(
+      operator_id,
+      "Reversible limited-scope trials expose faults before broad impact across deployments, migrations, and feature releases.",
+      2,
+      [
+        %{
+          "content" =>
+            "A reversible limited-scope trial exposed faults before a deployment reached broad impact.",
+          "level" => 1
+        }
+      ]
+    )
+
+    prompt = "Recommend how to roll out the Payments database migration."
+
+    scripted_answer = """
+    RECOMMENDATION: Use a reversible limited-scope canary for the Payments database migration.
+    PREDECESSOR: level 1; scope deployment rollout
+    EVOLVED: level 2; newly covered scope feature releases
+    RATIONALE: The evolved lesson and related observation show that a limited reversible trial can expose faults before broad impact.
+    """
+
+    script =
+      expect_react do
+        user(prompt)
+        call("memory_search", %{query: "reversible canary deployment feature releases"})
+        answer(scripted_answer)
+      end
+
+    assert {:ok, answer} = DeterministicMemoryAgent.ask_sync(agent, prompt, react_opts(script))
+    answer
+  end
+
+  defp put_generalisation_for(operator_id, content, level, evolves_from) do
+    reflection = %Gralkor.Reflection{
+      name: "generalisations",
+      outputs: [
+        %{
+          kind: :destination,
+          destination: Gralkor.Destination.Registry.fetch!("global"),
+          ontology: Gralkor.DefaultOntology
+        }
+      ],
+      chain_of_thought: nil
+    }
+
+    artefact = %Gralkor.Artefact{
+      id: "functional-agent-generalisation-#{System.unique_integer([:positive, :monotonic])}",
+      payload: %{
+        "generalisations" => [
+          %{"content" => content, "level" => level, "evolves_from" => evolves_from}
+        ]
+      }
+    }
+
+    assert :ok =
+             Gralkor.Destination.Storage.InMemory.put_artefact(
+               Enum.find(reflection.outputs, &(&1.kind == :destination)),
+               reflection.name,
+               operator_id,
+               artefact
+             )
+
+    artefact
   end
 end
