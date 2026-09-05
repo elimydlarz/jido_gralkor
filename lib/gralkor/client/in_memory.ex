@@ -99,6 +99,19 @@ defmodule Gralkor.Client.InMemory do
     )
   end
 
+  def capture(
+        _runtime_owner,
+        session_id,
+        operator_id,
+        agent_name,
+        user_name,
+        turn,
+        lens,
+        additional_lenses
+      ) do
+    capture(session_id, operator_id, agent_name, user_name, turn, lens, additional_lenses)
+  end
+
   @impl Gralkor.Client
   def memory_add(group_id, content, source),
     do: GenServer.call(__MODULE__, {:call, :memory_add, [group_id, content, source]})

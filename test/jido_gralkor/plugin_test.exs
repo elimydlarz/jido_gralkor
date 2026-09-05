@@ -19,6 +19,12 @@ defmodule JidoGralkor.PluginTest do
 
   setup do
     InMemory.reset()
+
+    start_supervised!(
+      {JidoGralkor.Runtime,
+       owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}}
+    )
+
     :ok
   end
 
