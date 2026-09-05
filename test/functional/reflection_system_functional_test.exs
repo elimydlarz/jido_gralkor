@@ -447,20 +447,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   describe "when an agent's Gralkor runtime installs its package-owned Reflection definitions" do
     test "then ERL declares one Destination output referencing the packaged `operator` Destination" do
-      erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
+      erl = packaged_reflection("erl")
 
       assert [%{kind: :destination, destination: %Gralkor.Destination{name: "operator"}}] =
                erl.outputs
     end
 
     test "and ERL's Destination output carries jido_gralkor's built-in experiential-learning ontology" do
-      erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
+      erl = packaged_reflection("erl")
 
       assert destination_output(erl).ontology == Gralkor.Reflection.ERLOntology
     end
 
     test "and generalisation declares one Destination output referencing the packaged `global` Destination" do
-      generalisation = Enum.find(Registry.configured!(), &(&1.name == "generalisations"))
+      generalisation = packaged_reflection("generalisations")
 
       assert destination_output(generalisation).destination.name == "global"
     end
@@ -468,7 +468,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   describe "where an application-defined Destination output omits its ontology" do
     test "then the output selects generic extraction for a runtime-delivered artefact" do
-      reflection = Registry.load!([valid_definition()]) |> List.first()
+      reflection = resolve_reflection(valid_definition())
       assert destination_output(reflection).ontology == Gralkor.DefaultOntology
     end
   end
@@ -476,7 +476,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "where an application-defined Destination output declares an application ontology" do
     test "then the output selects that ontology for a runtime-delivered artefact" do
       reflection =
-        Registry.load!([
+        resolve_reflection(
           valid_definition(
             outputs: [
               [
@@ -486,8 +486,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
               ]
             ]
           )
-        ])
-        |> List.first()
+        )
 
       assert destination_output(reflection).ontology == ReflectionOntology
     end
@@ -495,7 +494,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   describe "when a consumer stores the default ERL Reflection's artefact through its Destination output" do
     test "then extraction receives the built-in `Learning` entity type from that output's ontology" do
-      erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
+      erl = packaged_reflection("erl")
       artefact = Gralkor.Artefact.new("erl-artefact", erl_payload())
       caller = self()
 
@@ -528,7 +527,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
 
     test "and the Runner-returned Learning payload contains exactly its problem kind, approach, success, and reusable lesson" do
-      erl = Enum.find(Registry.configured!(), &(&1.name == "erl"))
+      erl = packaged_reflection("erl")
 
       assert {:ok, artefact} = Runner.run(erl, invocation(), inference: &erl_output_for/1)
       assert artefact.payload == erl_payload()
@@ -551,21 +550,18 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         }
       ]
 
-      assert {:ok,
-              [
-                %Gralkor.Reflection{
-                  name: "inline-review",
-                  chain_of_thought: %Gralkor.Reflection.ChainOfThought{
-                    steps: [
-                      %Gralkor.Reflection.ChainOfThought.Step{
-                        label: "review",
-                        directions: "Review the supplied evidence.",
-                        output: %{"summary" => "string"}
-                      }
-                    ]
-                  }
-                }
-              ]} = Registry.load([definition])
+      assert %Gralkor.Reflection{
+               name: "inline-review",
+               chain_of_thought: %Gralkor.Reflection.ChainOfThought{
+                 steps: [
+                   %Gralkor.Reflection.ChainOfThought.Step{
+                     label: "review",
+                     directions: "Review the supplied evidence.",
+                     output: %{"summary" => "string"}
+                   }
+                 ]
+               }
+             } = resolve_reflection(definition)
     end
   end
 
