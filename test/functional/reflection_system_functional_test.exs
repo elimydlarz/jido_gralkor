@@ -1115,7 +1115,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "when a consumer-owned scheduled job triggers a Reflection" do
-    test "then the job does not wait and its callback eventually receives the normal completion outcome" do
+    test "then the scheduled job does not wait for the Reflection to finish" do
       Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
 
       agent_server =
@@ -1161,6 +1161,43 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_receive {:scheduled_reflection_callback,
                       %{
                         invocation_id: "scheduled-invocation",
+                        artefact: %Gralkor.Artefact{payload: %{"summary" => "scheduled"}},
+                        outcome: :delivered
+                      }}
+    end
+
+    test "and its invocation callback eventually receives the same completion or failure outcome as any other consumer trigger" do
+      Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent,
+           id: "reflection-scheduled-callback",
+           register_global: false}
+        )
+
+      assert :ok = Runtime.replace(agent_server, async_reflection_configuration())
+
+      test_pid = self()
+      callback = &send(test_pid, {:scheduled_reflection_callback, &1})
+
+      scheduled_job =
+        Task.async(fn ->
+          Client.reflect(
+            agent_server,
+            "review",
+            async_reflection_invocation("scheduled-callback-invocation"),
+            callback,
+            inference: fn _ -> {:ok, %{output: %{"summary" => "scheduled"}}} end
+          )
+        end)
+
+      assert {:ok, "scheduled-callback-invocation"} = Task.await(scheduled_job)
+
+      assert_receive {:scheduled_reflection_callback,
+                      %{
+                        invocation_id: "scheduled-callback-invocation",
                         artefact: %Gralkor.Artefact{payload: %{"summary" => "scheduled"}},
                         outcome: :delivered
                       }}
