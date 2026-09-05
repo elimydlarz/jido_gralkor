@@ -106,6 +106,10 @@ defmodule JidoGralkor.Runtime do
     {:reply, reply, state}
   end
 
+  def handle_call({:fetch_many, collection, names}, _from, state) do
+    {:reply, fetch_definitions(Map.fetch!(state.definitions, collection), collection, names), state}
+  end
+
   def handle_call({:all, :destinations}, _from, state) do
     {:reply, state.definitions.destination_list, state}
   end
@@ -614,6 +618,27 @@ defmodule JidoGralkor.Runtime do
       {:ok, definitions} -> definitions
       {:error, reason} -> raise ArgumentError, inspect(reason)
     end
+  end
+
+  defp fetch_definitions(index, collection, names) do
+    Enum.reduce_while(names, {:ok, []}, fn name, {:ok, definitions} ->
+      case Map.fetch(index, name) do
+        {:ok, definition} -> {:cont, {:ok, [definition | definitions]}}
+        :error -> {:halt, {:error, {:unknown_definition, collection, name}}}
+      end
+    end)
+    |> case do
+      {:ok, definitions} -> {:ok, Enum.reverse(definitions)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp resolve_search_destinations(definitions, []) do
+    {:ok, definitions.destination_list}
+  end
+
+  defp resolve_search_destinations(definitions, names) do
+    fetch_definitions(definitions.destinations, :destinations, names)
   end
 
   defp validate_invocation_callback(callback) when is_function(callback, 1), do: :ok
