@@ -267,14 +267,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "when a caller searches memory > where the Destination selector is omitted or empty" do
-    test "and the Lens selector is omitted or empty" do
-      assert {:ok, _results} =
-               Client.search(%Search{operator_id: "operator-one", query: "question"})
-
-      assert_receive {:destination_search, "operator", _, _, _, _, []}
-    end
-
+  describe "when a caller searches memory > where the Destination selector is omitted or empty > and the Lens selector is omitted or empty" do
     test "then every accessible registered Destination is selected" do
       assert {:ok, results} =
                Client.search(%Search{operator_id: "operator-one", query: "question"})
@@ -396,18 +389,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
   end
 
   describe "when a caller searches memory > where one or more Destinations are supplied > and one or more Lenses are supplied" do
-    test "and one or more Lenses are supplied" do
-      assert {:ok, _} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 destinations: ["first"],
-                 lenses: ["first-alpha"]
-               })
-
-      assert_receive {:destination_search, "first", _, _, :episodes, _, [lenses: ["first-alpha"]]}
-    end
-
     test "then only results whose Destination matches any supplied Destination and whose originating Lens matches any supplied Lens can contribute" do
       use_in_memory_storage()
       assert :ok = add_episode("first", "operator-one", "selected", "first-alpha")
