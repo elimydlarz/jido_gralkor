@@ -105,7 +105,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     end
   end
 
-  describe "when the memory search tool runs with a usable query > where the tool call supplies no Destination selector > and the tool call supplies no Lens selector" do
+  describe "when the memory search tool runs with a usable query > where the tool call supplies no Destination selector > while the tool call supplies no Lens selector" do
     test "then the Search request leaves both selector dimensions unrestricted" do
       assert {:ok, _result} = run_search(%{query: "launch"})
 
@@ -163,6 +163,50 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       end
 
       refute_receive {:destination_search, _, _, _, _, _, _}
+    end
+  end
+
+  describe "when the memory search tool runs with a usable query > while the tool context identifies an owning AgentServer as the Gralkor runtime target" do
+    test "then Search uses that agent's current runtime configuration" do
+      Application.put_env(:jido_gralkor, :destinations, [[name: "compat-notes"]])
+      Application.put_env(:jido_gralkor, :lenses, [])
+
+      start_supervised!(
+        {JidoGralkor.Runtime,
+         owner: self(),
+         configuration: %{
+           destinations: [[name: "runtime-notes"]],
+           lenses: [],
+           reflections: []
+         }}
+      )
+
+      assert {:ok, _result} =
+               MemorySearch.run(
+                 %{query: "launch", destinations: ["runtime-notes"]},
+                 %{agent_id: "operator-one", gralkor_runtime: self()}
+               )
+
+      assert_receive {:destination_search, "runtime-notes", "operator-one", "launch", :episodes,
+                      20, []}
+
+      refute_receive {:destination_search, "compat-notes", _, _, _, _, _}
+    end
+  end
+
+  describe "when the memory search tool runs with a usable query > while the tool context has no Gralkor runtime target" do
+    test "then Search uses the application compatibility configuration" do
+      Application.put_env(:jido_gralkor, :destinations, [[name: "compat-notes"]])
+      Application.put_env(:jido_gralkor, :lenses, [])
+
+      assert {:ok, _result} =
+               MemorySearch.run(
+                 %{query: "launch", destinations: ["compat-notes"]},
+                 %{agent_id: "operator-one"}
+               )
+
+      assert_receive {:destination_search, "compat-notes", "operator-one", "launch", :episodes,
+                      20, []}
     end
   end
 
