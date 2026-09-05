@@ -10,6 +10,8 @@ defmodule Gralkor.ConfigTest do
     original_llm = System.get_env("GRALKOR_LLM_MODEL")
     original_embedder = System.get_env("GRALKOR_EMBEDDER_MODEL")
     original_falkordb = Application.get_env(:jido_gralkor, :falkordb)
+    original_socket_timeout =
+      Application.get_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms)
 
     on_exit(fn ->
       restore_env("GRALKOR_DATA_DIR", original_data_dir)
@@ -20,12 +22,18 @@ defmodule Gralkor.ConfigTest do
         nil -> Application.delete_env(:jido_gralkor, :falkordb)
         v -> Application.put_env(:jido_gralkor, :falkordb, v)
       end
+
+      case original_socket_timeout do
+        nil -> Application.delete_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms)
+        v -> Application.put_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms, v)
+      end
     end)
 
     System.delete_env("GRALKOR_DATA_DIR")
     System.delete_env("GRALKOR_LLM_MODEL")
     System.delete_env("GRALKOR_EMBEDDER_MODEL")
     Application.delete_env(:jido_gralkor, :falkordb)
+    Application.delete_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms)
     :ok
   end
 
@@ -39,7 +47,7 @@ defmodule Gralkor.ConfigTest do
     end
   end
 
-  describe "when the FalkorDB connection is resolved > while a data directory is set > and no remote configuration is set" do
+  describe "when the FalkorDB connection is resolved > while a data directory is set > while no remote configuration is set" do
     test "then an embedded connection carrying that data directory is returned" do
       System.put_env("GRALKOR_DATA_DIR", "/tmp/gralkor")
       assert Config.falkordb_spec() == {:embedded, "/tmp/gralkor"}
@@ -114,6 +122,32 @@ defmodule Gralkor.ConfigTest do
     test "then resolving the connection raises, naming the offending value" do
       Application.put_env(:jido_gralkor, :falkordb, host: "h", port: 0)
       assert_raise ArgumentError, ~r/0/, fn -> Config.falkordb_spec() end
+    end
+  end
+
+  describe "when the embedded FalkorDB socket timeout is resolved > while no timeout is configured" do
+    test "then sixty thousand milliseconds is returned" do
+      assert Config.embedded_falkordb_socket_timeout_ms() == 60_000
+    end
+  end
+
+  describe "when the embedded FalkorDB socket timeout is resolved > while a positive integer timeout is configured" do
+    test "then that timeout is returned unchanged" do
+      Application.put_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms, 12_345)
+
+      assert Config.embedded_falkordb_socket_timeout_ms() == 12_345
+    end
+  end
+
+  describe "if the embedded FalkorDB socket timeout is not a positive integer" do
+    test "then resolving the timeout raises, naming the setting and its offending value" do
+      for invalid <- [0, -1, "slow"] do
+        Application.put_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms, invalid)
+
+        assert_raise ArgumentError,
+                     ~r/:embedded_falkordb_socket_timeout_ms.*#{Regex.escape(inspect(invalid))}/,
+                     fn -> Config.embedded_falkordb_socket_timeout_ms() end
+      end
     end
   end
 
