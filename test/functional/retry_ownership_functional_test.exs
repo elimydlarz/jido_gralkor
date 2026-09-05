@@ -151,6 +151,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     :ok = Gralkor.Python.smoke_import_graphiti()
 
     original_client = Application.get_env(:jido_gralkor, :client)
+    original_destination_storage = Application.get_env(:jido_gralkor, :destination_storage)
     original_test_pid = Application.get_env(:jido_gralkor, :retry_ownership_reflection_test_pid)
     original_counter = Application.get_env(:jido_gralkor, :retry_ownership_counter)
     Application.put_env(:jido_gralkor, :client, Native)
@@ -164,6 +165,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
       restore_env(:retry_ownership_reflection_test_pid, original_test_pid)
       restore_env(:retry_ownership_counter, original_counter)
+      restore_env(:destination_storage, original_destination_storage)
     end)
 
     :ok
