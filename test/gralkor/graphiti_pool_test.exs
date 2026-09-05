@@ -1237,8 +1237,7 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if removing an episode raises inside the graph library" do
-    @describetag :integration
-
+    @tag :integration
     test "then an error carrying only the raised exception's class and message is returned" do
       {g, _} =
         Pythonx.eval(
