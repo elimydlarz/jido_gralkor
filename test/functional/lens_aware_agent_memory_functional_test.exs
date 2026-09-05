@@ -356,8 +356,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
   end
 
-  describe "when a mounted memory plugin has a configured ingestion Lens" do
-    test "then automatic capture and memory addition use the registered ingestion Lens" do
+  describe "when a mounted memory plugin has an ingestion Lens declared by its consuming agent's runtime configuration" do
+    test "then automatic capture and memory addition use that runtime-owned Lens" do
       assert {:ok, plugin_state} =
                mount(
                  agent_name: "Susu",
