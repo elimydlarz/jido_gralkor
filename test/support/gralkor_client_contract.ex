@@ -361,15 +361,18 @@ defmodule Gralkor.ClientContract do
           assert :ok = client().flush_and_await("session-1", 5_000)
         end
 
-        test "and a recall for the same group afterwards surfaces the just-flushed turns" do
+        test "and a later recall for the same group reaches the backend as a separate call" do
           unquote(setup_block).()
           configure_flush_and_await(:ok)
-          configure_recall({:ok, "<gralkor-memory>just-flushed-turn</gralkor-memory>"})
+          configure_recall({:ok, "<gralkor-memory>configured recall</gralkor-memory>"})
 
           assert :ok = client().flush_and_await("session-1", 5_000)
 
-          assert {:ok, "<gralkor-memory>just-flushed-turn</gralkor-memory>"} =
+          assert {:ok, "<gralkor-memory>configured recall</gralkor-memory>"} =
                    client().recall("group-1", "TestAgent", "session-1", "what did we discuss?")
+
+          assert [["group-1", "TestAgent", "session-1", "what did we discuss?"]] =
+                   Gralkor.Client.InMemory.recalls()
         end
       end
 
@@ -381,15 +384,12 @@ defmodule Gralkor.ClientContract do
           assert {:error, :timeout} = client().flush_and_await("session-1", 50)
         end
 
-        test "and the buffered turns remain available to flush on a later call" do
+        test "and a later flush-and-await for the same session reaches the backend as a separate call" do
           unquote(setup_block).()
           configure_flush_and_await({:error, :timeout})
 
           assert {:error, :timeout} = client().flush_and_await("session-1", 50)
 
-          # the timeout does not discard the buffered turns for the session —
-          # a later flush call for the same session still reaches the backend
-          # and can still succeed.
           configure_flush_and_await(:ok)
 
           assert :ok = client().flush_and_await("session-1", 5_000)
