@@ -1237,6 +1237,70 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     }
   end
 
+  defp blocking_ingestion_configuration(destination) do
+    configuration = ingestion_configuration(destination)
+    [lens] = configuration.lenses
+    %{configuration | lenses: [%{lens | ingestion: BlockingIngestion}]}
+  end
+
+  defp false_ontology_configuration do
+    %{
+      destinations: [],
+      lenses: [
+        %{
+          name: "observations",
+          destination: "global",
+          write: :append,
+          ingestion: RecordingIngestion,
+          ontology: false
+        }
+      ],
+      reflections: []
+    }
+  end
+
+  defp runtime_owner_names do
+    :global.registered_names()
+    |> Enum.filter(fn
+      {JidoGralkor.Runtime, owner} when is_pid(owner) -> true
+      _ -> false
+    end)
+    |> MapSet.new()
+  end
+
+  defp restart_consuming_agent(id) do
+    supervisor =
+      start_supervised!(
+        Supervisor.child_spec(
+          {ConsumerSupervisor, id: id},
+          id: {:runtime_configuration_consumer_supervisor, id}
+        )
+      )
+
+    original_agent = supervised_agent(supervisor)
+    Process.exit(original_agent, :kill)
+    await_replacement_agent(supervisor, original_agent)
+  end
+
+  defp restart_after_runtime_failure(id) do
+    supervisor =
+      start_supervised!(
+        Supervisor.child_spec(
+          {ConsumerSupervisor, id: id},
+          id: {:runtime_configuration_runtime_supervisor, id}
+        )
+      )
+
+    original_agent = supervised_agent(supervisor)
+    {:ok, state} = Jido.AgentServer.state(original_agent)
+
+    %{pid: runtime} =
+      Map.fetch!(state.children, {:plugin, JidoGralkor.Plugin, JidoGralkor.Runtime})
+
+    Process.exit(runtime, :unexpected_runtime_failure)
+    {original_agent, await_replacement_agent(supervisor, original_agent)}
+  end
+
   defp reflection_snapshot_outputs(id) do
     Application.put_env(:jido_gralkor, :destination_storage, SnapshotOutputStorage)
     first_id = "#{id}-first"
