@@ -1001,7 +1001,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "when an admitted Reflection completes successfully" do
-    test "then its artefact is delivered and the invocation callback eventually receives that success" do
+    test "then its produced artefact is delivered to its Destination" do
       Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
 
       agent_server =
@@ -1035,6 +1035,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                         artefact: ^artefact,
                         outcome: :delivered
                       }}
+    end
+
+    test "and the submitting consumer's callback eventually receives the same invocation identifier" do
+      {_artefact, result} = submit_successful_reflection("success-callback-identifier")
+      assert result.invocation_id == "success-callback-identifier"
+    end
+
+    test "and that callback receives the produced artefact and successful delivery outcome" do
+      {artefact, result} = submit_successful_reflection("success-callback-outcome")
+      assert result.artefact == artefact
+      assert result.outcome == :delivered
     end
   end
 
@@ -1816,6 +1827,34 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       invocation_context: %{},
       representations: []
     }
+  end
+
+  defp submit_successful_reflection(invocation_id) do
+    Application.put_env(:jido_gralkor, :destination_storage, OutputProbeStorage)
+
+    agent_server =
+      start_supervised!(
+        {Jido.AgentServer,
+         agent: AsyncConsumerAgent, id: invocation_id, register_global: false}
+      )
+
+    assert :ok = Runtime.replace(agent_server, async_reflection_configuration())
+
+    test_pid = self()
+    callback = &send(test_pid, {:successful_reflection_callback, &1})
+
+    assert {:ok, ^invocation_id} =
+             Client.reflect(
+               agent_server,
+               "review",
+               async_reflection_invocation(invocation_id),
+               callback,
+               inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end
+             )
+
+    assert_receive {:destination_output_delivered, _output, "review", "operator-one", artefact}
+    assert_receive {:successful_reflection_callback, result}
+    {artefact, result}
   end
 
   defp erl_payload do
