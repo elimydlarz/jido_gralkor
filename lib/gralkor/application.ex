@@ -55,7 +55,10 @@ defmodule Gralkor.Application do
       {CaptureBuffer,
        [
          flush_callback: build_flush_callback(spec),
-         lens_flush_callback: build_lens_flush_callback()
+         lens_flush_callback: build_lens_flush_callback(),
+         lens_resolver: fn runtime_owner, names ->
+           {:ok, JidoGralkor.Runtime.lenses!(runtime_owner, names)}
+         end
        ]}
     ]
   end
