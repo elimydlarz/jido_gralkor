@@ -1,6 +1,6 @@
-Functional: reflection-system (src: lib/jido_gralkor/plugin.ex, lib/gralkor/reflection.ex, lib/gralkor/reflection/erl_ontology.ex, lib/gralkor/artefact.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex; functional: test/functional/reflection_system_functional_test.exs)
+Functional: reflection-system (src: lib/jido_gralkor/plugin.ex, lib/jido_gralkor/runtime.ex, lib/gralkor/reflection.ex, lib/gralkor/reflection/erl_ontology.ex, lib/gralkor/artefact.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex; functional: test/functional/reflection_system_functional_test.exs)
 
-when Reflection declarations are validated
+when an agent runtime validates Reflection declarations
   while every Reflection has a non-blank name
   and every Reflection name is unique
   and every Reflection contains one structured Chain of Thought
@@ -15,7 +15,7 @@ when Reflection declarations are validated
   and every Destination output declares a valid extraction ontology
     then validation succeeds
 
-  if the configured Reflection registry is not a list
+  if the configured Reflection collection is not a list
     then validation fails identifying the configured value
 
   if a Reflection name is blank
@@ -111,6 +111,7 @@ when a Chain of Thought step begins
   and receives that step's declared structured-output contract
   and receives the complete tool set available to the host agent
   and the current step is the only step exposed to inference
+  and built-in inference tool context uses the invocation's operator identity while retaining every other supplied context value
 
   where the directions reference outputs from earlier steps
     then every referenced value is interpolated from the Chain of Thought's shared output space
@@ -150,6 +151,9 @@ when a consumer triggers a named Reflection with an invocation callback
 if a consumer triggers a Reflection without a valid invocation callback
   then submission fails before the Reflection is admitted
 
+if a consumer triggers a Reflection without a valid invocation identifier or operator identifier
+  then submission fails before the Reflection is admitted
+
 when an admitted Reflection completes successfully
   then its produced artefact is delivered to its Destination
   and the submitting consumer's callback eventually receives the same invocation identifier
@@ -161,18 +165,6 @@ when independently submitted Reflection invocations are running
 if Reflection production fails
   then no Destination output is attempted
   and the invocation callback eventually receives the production failure
-
-if Reflection production reports a non-retryable client failure
-  then no retry or Destination output is attempted
-  and the invocation callback eventually receives immediate production abandonment
-
-when packaged generalisation related-memory retrieval reports a retryable server failure
-  then that invocation retries retrieval with exponential backoff
-  and successful retrieval allows the invocation to complete normally
-
-if a produced artefact cannot be delivered before delivery is abandoned
-  then no error artefact is written to the Reflection's Destination
-  and the invocation callback eventually receives the produced artefact and abandonment outcome
 
 when a consumer-owned scheduled job triggers a Reflection
   then the scheduled job does not wait for the Reflection to finish

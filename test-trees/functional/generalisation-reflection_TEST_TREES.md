@@ -10,6 +10,7 @@ when the packaged generalisation Reflection inspects a completed ingestion
   and inference is directed to revisit current and related observations together with prior generalisations
   and inference is directed to carry forward, combine, broaden, narrow, split, replace, or otherwise revise generalisations as observations warrant
   and inference is directed to give a new generalisation level one and an evolved generalisation one level above its highest lineage snapshot
+  and inference is directed to provide non-blank content for every current generalisation and lineage snapshot
 
 when the packaged generalisation Reflection's default related-memory search returns no stored information
   then generalisation inference still inspects every current representation
