@@ -1,4 +1,4 @@
-Functional: destination-registration (src: lib/gralkor/destination.ex, lib/gralkor/destination/registry.ex; functional: test/functional/destination_registration_functional_test.exs)
+Functional: destination-registration (src: lib/gralkor/destination.ex, lib/gralkor/destination/registry.ex, lib/jido_gralkor/runtime.ex; functional: test/functional/destination_registration_functional_test.exs)
 
 when an application registers a valid Destination
   then Lenses and Reflections can reference that Destination by name

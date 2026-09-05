@@ -90,6 +90,58 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       destination_output = Enum.find(reflection.outputs, &(&1.kind == :destination))
       assert destination_output.destination == lens_destination
+
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      start_supervised!(Gralkor.Destination.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.InMemory)
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          destination: "shared",
+          ingestion: Gralkor.Lens.Ingestion.Store
+        ]
+      ])
+
+      assert {:ok, representations} =
+               Client.ingest(%Gralkor.Ingest{
+                 id: "shared-observation",
+                 operator_id: "operator-one",
+                 lens: "observations",
+                 source_kind: :document,
+                 content: "Release in small batches.",
+                 source_description: "functional"
+               })
+
+      consumer = self()
+
+      assert {:ok, "shared-review"} =
+               Client.reflect(
+                 self(),
+                 "review",
+                 %{
+                   id: "shared-review",
+                   operator_id: "operator-one",
+                   representations: representations,
+                   invocation_context: %{}
+                 },
+                 &send(consumer, {:review_delivered, &1}),
+                 inference: fn _ -> {:ok, %{output: %{"summary" => "Prefer small releases."}}} end
+               )
+
+      assert_receive {:review_delivered, %{outcome: :delivered}}
+
+      assert {:ok, episodes} =
+               Client.search(%Gralkor.Search{
+                 operator_id: "operator-two",
+                 query: "",
+                 destinations: ["shared"]
+               })
+
+      assert Enum.all?(episodes, &(&1.destination == "shared"))
+      assert Enum.any?(episodes, &match?(%{lens: "observations", content: "Release in small batches."}, &1))
+      assert Enum.any?(episodes, &match?(%{reflection: "review"}, &1))
     end
   end
 
