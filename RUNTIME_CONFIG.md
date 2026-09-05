@@ -63,7 +63,9 @@ A replacement:
 - accepts empty consumer collections;
 - returns a tagged validation failure without changing active state.
 
-Reads observe either the complete previous snapshot or the complete replacement. They never observe a mixture.
+Reads observe either the complete previous snapshot or the complete replacement. They never observe a mixture; one search resolves all of its selected Lens and Destination definitions in a single runtime call.
+
+Every runtime-targeted operation accepts the owning `Jido.AgentServer` PID. A non-PID target or a PID without an available Gralkor runtime raises a deliberate `ArgumentError`; targeted work never falls back to application compatibility configuration.
 
 If the complete durable configuration supplied while an agent starts is invalid, that agent's Gralkor plugin fails to start. No part of the invalid configuration becomes active.
 
@@ -156,9 +158,12 @@ Each operation retains the relevant definitions active when that operation begin
 
 - named ingestion retains its Lens definition;
 - Reflection submission retains its Reflection definition when admitted;
-- search retains its Destination definitions.
+- search retains its selected Lens and Destination definitions from one snapshot;
+- Lens-selected capture resolves and retains every Lens definition before its ingestion worker is scheduled.
 
 A later replacement affects later operations only. It does not mutate work already underway.
+
+When `JidoGralkor.Lifecycle` is wired into an agent, graceful termination schedules the active thread's flush before returning. The scheduled ingestion retains its resolved Lens definitions and can finish after the owning AgentServer and runtime terminate; agent termination does not await that ingestion.
 
 Changing or removing a Lens does not migrate or delete information already stored. Stored provenance retains the Lens name used when the information was written.
 
@@ -248,6 +253,7 @@ The implementation is complete when:
 - package-owned Destinations, Lens, and Reflections remain installed;
 - invalid configuration never partially changes active state;
 - current operations retain their admitted definitions while later operations use replacements;
+- runtime-targeted operations require the owning AgentServer PID, fail when its runtime is unavailable, and never cross into application compatibility configuration;
 - graph replacement uses one fixed nodes-and-relationships representation with no format configuration;
 - Reflection submission returns without waiting and every admitted invocation eventually reports its terminal outcome through its callback while the agent remains alive;
 - successful artefacts alone are delivered to memory;

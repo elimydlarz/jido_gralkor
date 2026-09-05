@@ -181,14 +181,14 @@ The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `reca
 | Option | Required | Default | What it does |
 | --- | --- | --- | --- |
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
-| `:ingestion_lens` | no | unset (implicit-operator mode) | Registered Lens name receiving `memory_add` and automatic capture. The removed `:default_lens` option raises and identifies this replacement. |
+| `:ingestion_lens` | no | unset (implicit-operator mode) | Packaged or `:runtime_config` Lens name receiving `memory_add` and automatic capture. An application-compatibility Lens is not available to a mounted agent unless it is also declared in that mount's runtime configuration. The removed `:default_lens` option raises and identifies this replacement. |
 | `:runtime_config` | no | empty consumer collections | The complete consumer-owned Destination, Lens, and Reflection configuration for this agent. Packaged definitions are installed alongside it. Invalid startup configuration prevents the plugin from mounting. |
 
 Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
 
 Search selection is invocation-local, not a plugin mount option. `memory_search` accepts optional `destinations` and `lenses`; the removed `:search_destinations` mount option raises with migration guidance.
 
-Replace the complete configuration for one running agent with `JidoGralkor.Runtime.replace(agent_server, runtime_config)`. Validation and resolution complete before the three collections become active as one snapshot; an error leaves the old snapshot untouched. If that runtime fails, its linked AgentServer terminates and the consumer's supervisor must start a replacement agent with the current durable configuration.
+Replace the complete configuration for one running agent with `JidoGralkor.Runtime.replace(agent_server_pid, runtime_config)`. Runtime-targeted APIs accept the owning AgentServer PID. Validation and resolution complete before the three collections become active as one snapshot; an error leaves the old snapshot untouched. If the target has no available Gralkor runtime, the operation raises instead of falling back to application compatibility configuration. If that runtime fails, its linked AgentServer terminates and the consumer's supervisor must start a replacement agent with the current durable configuration.
 
 ### `JidoGralkor.ContextRotator.rotate_now/2`
 
@@ -370,7 +370,7 @@ The physical encoding replaces the former lossy `-` and `/` to `_` normalisation
 
 **First-turn bootstrap.** On the very first query of a fresh agent, the thread isn't yet committed (the ReAct strategy's `ThreadAgent.append` runs after the plugin hook). The plugin plants `:agent_name` plus the configured ingestion `:lens`, but no `:session_id`; completed and failed turn capture are both skipped with a warning until a committed thread supplies that identity. `memory_search` still searches for the current operator because public Search does not depend on conversation-session identity.
 
-**Death-triggered flush.** `JidoGralkor.Lifecycle` is an optional `Jido.AgentServer.Lifecycle` implementation. When wired as `lifecycle_mod:` on the agent, graceful termination of the AgentServer calls the configured client's `flush/1` callback for the active thread so an orphaned agent doesn't strand its capture buffer. The plugin mount alone does not enable this lifecycle. No idle-timer machinery — Jido's `AgentServer` owns `:idle_timeout` directly.
+**Death-triggered flush.** `JidoGralkor.Lifecycle` is an optional `Jido.AgentServer.Lifecycle` implementation. When wired as `lifecycle_mod:` on the agent, graceful termination schedules the configured client's `flush/1` for the active thread before termination returns. Lens definitions are resolved from one runtime snapshot before the ingestion worker starts, so that worker no longer depends on the agent runtime remaining alive; termination does not wait for ingestion itself. The plugin mount alone does not enable this lifecycle. No idle-timer machinery — Jido's `AgentServer` owns `:idle_timeout` directly.
 
 ```elixir
 {:ok, pid} =
@@ -384,7 +384,7 @@ The physical encoding replaces the former lossy `-` and `/` to `_` normalisation
 
 **Context rotation.** `JidoGralkor.ContextRotator.rotate_now/2` synchronously flushes the active session via `flush_and_await/2`, installs a fresh Jido thread, and seeds the rotated thread with the most-recent `:keep_last_n` pre-flush entries plus any turns that landed during the flush. It returns `:ok` when there is no committed thread and `{:error, reason}` when state reading, flushing, or thread installation fails. The agent process is never stopped. Use it from a `/new` chat command or a small wrapper GenServer that fires on an interval.
 
-**Error contracts.** Invalid configuration, invalid Lens requests, and automatic plugin-capture failures raise. Valid runtime-targeted `Gralkor.Client.ingest/2`, `replace/2`, `search/2`, `reflect/5`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
+**Error contracts.** Invalid configuration, invalid Lens requests, automatic plugin-capture failures, non-PID runtime targets, and unavailable targeted runtimes raise. Runtime-targeted operations never redirect to application compatibility configuration. Valid runtime-targeted `Gralkor.Client.ingest/2`, `replace/2`, `search/2`, `reflect/5`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
 
 **`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 
@@ -510,7 +510,7 @@ Search is independent of that mount. With only a query, `memory_search` searches
 
 This includes episodes only when their Destination is either selected Destination and their originating Lens is either selected Lens. Selecting a Lens never adds its Destination. A Lens selector applies only to episode results; direct callers may still explicitly request facts, nodes, or Reflection artefacts without a Lens selector.
 
-Consumers target the AgentServer whose runtime configuration should resolve each named operation:
+Consumers pass the owning AgentServer PID whose runtime configuration should resolve each named operation. A search resolves all selected Lenses and Destinations from one atomic snapshot:
 
 ```elixir
 :ok =

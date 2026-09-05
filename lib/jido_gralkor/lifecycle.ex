@@ -4,10 +4,10 @@ defmodule JidoGralkor.Lifecycle do
   Gralkor session when an agent process terminates.
 
   Sole job: on `terminate/2`, read the committed Jido thread id from
-  `state.agent.state[:__thread__].id` and fire-and-forget
-  `Gralkor.Client.flush(thread_id)` so the buffered turns don't strand
-  in `Gralkor.CaptureBuffer` state outliving the agent. Failures are
-  logged but never block termination. First-turn agents (no thread
+  `state.agent.state[:__thread__].id` and synchronously schedules
+  `Gralkor.Client.flush(thread_id)` so Lens definitions are retained before
+  the agent runtime exits. The scheduled ingestion remains asynchronous.
+  Failures are logged but never prevent termination. First-turn agents (no thread
   committed yet) terminate without calling Gralkor.
 
   Memory consolidation while the agent is alive is owned by
@@ -32,14 +32,14 @@ defmodule JidoGralkor.Lifecycle do
   @impl true
   def terminate(reason, state) do
     case state.agent.state[:__thread__] do
-      %{id: id} when is_binary(id) -> fire_flush_async(id, reason)
+      %{id: id} when is_binary(id) -> schedule_flush(id, reason)
       _ -> :ok
     end
 
     :ok
   end
 
-  defp fire_flush_async(thread_id, reason) do
+  defp schedule_flush(thread_id, reason) do
     client = Client.impl()
 
     Logger.info("[gralkor] flush — session:#{thread_id} reason:#{inspect(reason)}")
