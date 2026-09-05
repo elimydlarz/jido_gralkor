@@ -829,9 +829,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: ConsumerAgent,
-           id: "runtime-configuration-atomic-search",
-           register_global: false}
+           agent: ConsumerAgent, id: "runtime-configuration-atomic-search", register_global: false}
         )
 
       assert :ok =
@@ -840,8 +838,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  ingestion_configuration("project")
                )
 
-      assert {[%Gralkor.Lens{name: "observations"}],
-              [%Gralkor.Destination{name: "project"}]} =
+      assert {[%Gralkor.Lens{name: "observations"}], [%Gralkor.Destination{name: "project"}]} =
                JidoGralkor.Runtime.resolve_search!(
                  agent_server,
                  ["observations"],
@@ -1288,8 +1285,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
             {Map.put(base, :ingestion, String),
              {:invalid_lens_ingestion, "observations", String}},
             {Map.put(base, :ontology, String), {:invalid_lens_ontology, "observations", String}},
-            {Map.put(base, :ontology, false),
-             {:invalid_lens_ontology, "observations", false}},
+            {Map.put(base, :ontology, false), {:invalid_lens_ontology, "observations", false}},
             {base |> Map.put(:ontology, false) |> Map.put("ontology", ConsumerOntology),
              {:invalid_lens_ontology, "observations", false}}
           ] do

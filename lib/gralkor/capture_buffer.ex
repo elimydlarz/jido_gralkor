@@ -580,7 +580,8 @@ defmodule Gralkor.CaptureBuffer do
 
   defp resolve_lens_entry(entry, resolver) when is_function(resolver, 2) do
     case safe_resolve_lenses(resolver, entry.runtime_owner, entry.lens_order) do
-      {:ok, definitions} when is_list(definitions) and length(definitions) == length(entry.lens_order) ->
+      {:ok, definitions}
+      when is_list(definitions) and length(definitions) == length(entry.lens_order) ->
         resolved_lenses =
           entry.lens_order
           |> Enum.zip(definitions)

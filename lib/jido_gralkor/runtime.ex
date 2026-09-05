@@ -107,7 +107,8 @@ defmodule JidoGralkor.Runtime do
   end
 
   def handle_call({:fetch_many, collection, names}, _from, state) do
-    {:reply, fetch_definitions(Map.fetch!(state.definitions, collection), collection, names), state}
+    {:reply, fetch_definitions(Map.fetch!(state.definitions, collection), collection, names),
+     state}
   end
 
   def handle_call({:all, :destinations}, _from, state) do
