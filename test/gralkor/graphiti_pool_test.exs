@@ -953,7 +953,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when one episode is requested by exact identifier > where a supported source kind is supplied" do
+  describe "when an episode is added > where a supported source kind is supplied" do
     test "then conversation, document, and structured-record sources reach the graph library as message, text, and JSON episodes respectively" do
       {g, _} =
         Pythonx.eval(
@@ -3127,33 +3127,37 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "where the credential exists only in the BEAM environment" do
-    test "then the credential still reaches the provider client" do
-      var = "GRALKOR_CREDENTIAL_DELIVERY_PROBE_#{System.unique_integer([:positive])}"
+  describe "when the pool starts > while both configured model specs name a supported inference provider > where the credential exists only in the BEAM environment" do
+    test "then the BEAM-side credential lookup returns the configured value" do
       previous_openai = System.get_env("OPENAI_API_KEY")
 
       on_exit(fn ->
-        System.delete_env(var)
         restore_env("OPENAI_API_KEY", previous_openai)
       end)
 
-      System.put_env(var, "set-from-elixir")
-      assert System.get_env(var) == "set-from-elixir"
+      System.put_env("OPENAI_API_KEY", "openai-secret")
+      assert GraphitiPool.api_key!(:openai) == "openai-secret"
+    end
+
+    test "and the embedded Python environment cannot read that BEAM-only value directly" do
+      previous_openai = System.get_env("OPENAI_API_KEY")
+      beam_only_value = "beam-only-#{System.unique_integer([:positive])}"
+
+      on_exit(fn -> restore_env("OPENAI_API_KEY", previous_openai) end)
+
+      System.put_env("OPENAI_API_KEY", beam_only_value)
+      assert GraphitiPool.api_key!(:openai) == beam_only_value
 
       {seen_by_python, _} =
         Pythonx.eval(
           """
           import os
-          os.environ.get(name.decode('utf-8'), '<<ABSENT>>')
+          os.environ.get('OPENAI_API_KEY', '<<ABSENT>>')
           """,
-          %{"name" => var}
+          %{}
         )
 
-      assert Pythonx.decode(seen_by_python) == "<<ABSENT>>",
-             "os:putenv reached the interpreter's environment; api_key!/1 could then be replaced by letting the Python client read the variable itself"
-
-      System.put_env("OPENAI_API_KEY", "openai-secret")
-      assert GraphitiPool.api_key!(:openai) == "openai-secret"
+      refute Pythonx.decode(seen_by_python) == beam_only_value
     end
   end
 
