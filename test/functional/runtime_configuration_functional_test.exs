@@ -1468,8 +1468,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
     agent_server =
       start_supervised!(
-        {Jido.AgentServer,
-         agent: ConsumerAgent, id: "#{id}-agent", register_global: false}
+        {Jido.AgentServer, agent: ConsumerAgent, id: "#{id}-agent", register_global: false}
       )
 
     assert :ok =

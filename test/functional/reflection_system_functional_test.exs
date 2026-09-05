@@ -1172,9 +1172,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
-           agent: AsyncConsumerAgent,
-           id: "reflection-scheduled-callback",
-           register_global: false}
+           agent: AsyncConsumerAgent, id: "reflection-scheduled-callback", register_global: false}
         )
 
       assert :ok = Runtime.replace(agent_server, async_reflection_configuration())
@@ -1882,8 +1880,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     agent_server =
       start_supervised!(
-        {Jido.AgentServer,
-         agent: AsyncConsumerAgent, id: invocation_id, register_global: false}
+        {Jido.AgentServer, agent: AsyncConsumerAgent, id: invocation_id, register_global: false}
       )
 
     assert :ok = Runtime.replace(agent_server, async_reflection_configuration())
@@ -1910,8 +1907,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     agent_server =
       start_supervised!(
-        {Jido.AgentServer,
-         agent: AsyncConsumerAgent, id: invocation_id, register_global: false}
+        {Jido.AgentServer, agent: AsyncConsumerAgent, id: invocation_id, register_global: false}
       )
 
     assert :ok = Runtime.replace(agent_server, async_reflection_configuration())
@@ -2079,6 +2075,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
           :stop -> :ok
         end
       end)
+
     {:ok, runtime} = Runtime.start_link(owner: owner, configuration: configuration)
 
     try do
