@@ -179,6 +179,7 @@ defmodule Gralkor.CaptureBuffer do
        lens_entries: %{},
        flush_callback: Keyword.fetch!(opts, :flush_callback),
        lens_flush_callback: Keyword.get(opts, :lens_flush_callback),
+       lens_resolver: Keyword.get(opts, :lens_resolver),
        flush_workers: %{},
        retries: Keyword.get(opts, :retries, @default_retries)
      }}
@@ -309,59 +310,72 @@ defmodule Gralkor.CaptureBuffer do
   end
 
   def handle_call({:flush, session_id}, _from, state) do
-    case Map.pop(state.lens_entries, session_id) do
-      {nil, _lens_entries} ->
+    case Map.fetch(state.lens_entries, session_id) do
+      :error ->
         flush_legacy(session_id, state)
 
-      {entry, lens_entries} ->
-        Logger.info(
-          "[gralkor] flush scheduled — session:#{session_id} turns:#{length(entry.turns)}"
-        )
+      {:ok, entry} ->
+        case resolve_lens_entry(entry, state.lens_resolver) do
+          {:ok, resolved_entry} ->
+            Logger.info(
+              "[gralkor] flush scheduled — session:#{session_id} turns:#{length(entry.turns)}"
+            )
 
-        task =
-          Task.async(fn ->
-            do_flush_lenses(entry, state.lens_flush_callback, state.retries)
-          end)
+            task =
+              Task.async(fn ->
+                do_flush_lenses(resolved_entry, state.lens_flush_callback, state.retries)
+              end)
 
-        {:reply, :ok,
-         %{
-           state
-           | lens_entries: lens_entries,
-             flush_workers: Map.put(state.flush_workers, task.ref, task)
-         }}
+            {:reply, :ok,
+             %{
+               state
+               | lens_entries: Map.delete(state.lens_entries, session_id),
+                 flush_workers: Map.put(state.flush_workers, task.ref, task)
+             }}
+
+          {:error, _reason} = error ->
+            {:reply, error, state}
+        end
     end
   end
 
   def handle_call({:flush_and_await, session_id, timeout_ms}, _from, state) do
-    case Map.pop(state.lens_entries, session_id) do
-      {nil, _lens_entries} ->
+    case Map.fetch(state.lens_entries, session_id) do
+      :error ->
         flush_legacy_and_await(session_id, timeout_ms, state)
 
-      {entry, lens_entries} ->
-        Logger.info(
-          "[gralkor] flush_and_await — session:#{session_id} turns:#{length(entry.turns)} timeout_ms:#{timeout_ms}"
-        )
-
-        task =
-          Task.async(fn ->
-            do_flush_lenses(entry, state.lens_flush_callback, state.retries)
-          end)
-
-        case Task.yield(task, timeout_ms) || Task.shutdown(task, :brutal_kill) do
-          {:ok, :ok} ->
-            Logger.info("[gralkor] flush_and_await done — session:#{session_id} outcome:ok")
-            {:reply, :ok, %{state | lens_entries: lens_entries}}
-
-          {:ok, {:error, reason}} ->
-            Logger.warning(
-              "[gralkor] flush_and_await done — session:#{session_id} outcome:error reason:#{inspect(reason)}"
+      {:ok, entry} ->
+        case resolve_lens_entry(entry, state.lens_resolver) do
+          {:ok, resolved_entry} ->
+            Logger.info(
+              "[gralkor] flush_and_await — session:#{session_id} turns:#{length(entry.turns)} timeout_ms:#{timeout_ms}"
             )
 
-            {:reply, {:error, reason}, %{state | lens_entries: lens_entries}}
+            task =
+              Task.async(fn ->
+                do_flush_lenses(resolved_entry, state.lens_flush_callback, state.retries)
+              end)
 
-          nil ->
-            Logger.warning("[gralkor] flush_and_await timeout — session:#{session_id}")
-            {:reply, {:error, :timeout}, state}
+            case Task.yield(task, timeout_ms) || Task.shutdown(task, :brutal_kill) do
+              {:ok, :ok} ->
+                Logger.info("[gralkor] flush_and_await done — session:#{session_id} outcome:ok")
+                {:reply, :ok, %{state | lens_entries: Map.delete(state.lens_entries, session_id)}}
+
+              {:ok, {:error, reason}} ->
+                Logger.warning(
+                  "[gralkor] flush_and_await done — session:#{session_id} outcome:error reason:#{inspect(reason)}"
+                )
+
+                {:reply, {:error, reason},
+                 %{state | lens_entries: Map.delete(state.lens_entries, session_id)}}
+
+              nil ->
+                Logger.warning("[gralkor] flush_and_await timeout — session:#{session_id}")
+                {:reply, {:error, :timeout}, state}
+            end
+
+          {:error, _reason} = error ->
+            {:reply, error, state}
         end
     end
   end
