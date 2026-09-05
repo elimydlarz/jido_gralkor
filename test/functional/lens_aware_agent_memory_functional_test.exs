@@ -359,7 +359,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   describe "when a mounted memory plugin has a configured ingestion Lens" do
     test "then automatic capture and memory addition use the registered ingestion Lens" do
       assert {:ok, plugin_state} =
-               Plugin.mount(%{},
+               mount(
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
@@ -394,7 +394,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
     test "and the plugin does not redefine the selected Lens's Destination or ingestion process" do
       assert {:ok, plugin_state} =
-               Plugin.mount(%{},
+               mount(
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
@@ -407,7 +407,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   describe "where an agent turn selects another registered Lens" do
     test "then memory addition uses the turn-selected Lens" do
       assert {:ok, plugin_state} =
-               Plugin.mount(%{},
+               mount(
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
@@ -434,7 +434,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
     test "and that Lens is retained for the request" do
       assert {:ok, plugin_state} =
-               Plugin.mount(%{},
+               mount(
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
@@ -452,7 +452,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
     test "and completion without a repeated Lens captures through the retained request Lens" do
       assert {:ok, plugin_state} =
-               Plugin.mount(%{},
+               mount(
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
@@ -511,7 +511,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
     test "and failure without a repeated Lens captures through the retained request Lens" do
       assert {:ok, plugin_state} =
-               Plugin.mount(%{},
+               mount(
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
@@ -539,7 +539,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   describe "if an agent turn selects an unknown or non-binary Lens" do
     test "then handling the turn fails before memory addition or capture" do
       assert {:ok, plugin_state} =
-               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+               mount(agent_name: "Susu", ingestion_lens: "observations")
 
       for invalid <- ["missing", 42] do
         signal = %Jido.Signal{
@@ -560,7 +560,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
     test "and the invalid Lens is identified" do
       assert {:ok, plugin_state} =
-               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+               mount(agent_name: "Susu", ingestion_lens: "observations")
 
       for invalid <- ["missing", 42] do
         signal = %Jido.Signal{
@@ -580,7 +580,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   describe "when turns in one session select different Lenses" do
     test "then each Lens retains only the turns selected for it" do
       assert {:ok, plugin_state} =
-               Plugin.mount(%{},
+               mount(
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
@@ -617,7 +617,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       start_lens_capture_buffer()
 
       assert {:ok, plugin_state} =
-               Plugin.mount(%{},
+               mount(
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
@@ -657,7 +657,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       start_lens_capture_buffer()
 
       assert {:ok, plugin_state} =
-               Plugin.mount(%{},
+               mount(
                  agent_name: "Susu",
                  ingestion_lens: "observations"
                )
@@ -689,19 +689,19 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   describe "if a mounted plugin receives invalid ingestion Lens configuration" do
     test "then mounting fails before the plugin handles an agent signal" do
       assert_raise ArgumentError, fn ->
-        Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "missing")
+        mount(agent_name: "Susu", ingestion_lens: "missing")
       end
     end
 
     test "and an unknown ingestion Lens is identified" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
-        Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "missing")
+        mount(agent_name: "Susu", ingestion_lens: "missing")
       end
     end
 
     test "and the removed `:default_lens` option identifies `:ingestion_lens` as its replacement" do
       assert_raise ArgumentError, ~r/default_lens.*ingestion_lens/, fn ->
-        Plugin.mount(%{}, agent_name: "Susu", default_lens: "observations")
+        mount(agent_name: "Susu", default_lens: "observations")
       end
     end
   end
@@ -709,7 +709,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   describe "if a mounted plugin receives the removed `:search_destinations` option" do
     test "then mounting fails before the plugin handles an agent signal" do
       assert_raise ArgumentError, ~r/search_destinations.*MemorySearch.*destinations/s, fn ->
-        Plugin.mount(%{},
+        mount(
           agent_name: "Susu",
           ingestion_lens: "observations",
           search_destinations: ["observations"]
@@ -719,7 +719,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
     test "and the error identifies MemorySearch's per-search `destinations` selector as its replacement" do
       assert_raise ArgumentError, ~r/search_destinations.*MemorySearch.*destinations/s, fn ->
-        Plugin.mount(%{},
+        mount(
           agent_name: "Susu",
           ingestion_lens: "observations",
           search_destinations: ["observations"]
@@ -736,6 +736,43 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         __thread__: %{id: "session-one"},
         user_name: "Eli"
       }
+    }
+  end
+
+  defp mount(opts) do
+    Plugin.mount(%{}, Keyword.put_new(opts, :runtime_config, runtime_configuration()))
+  end
+
+  defp runtime_configuration do
+    %{
+      destinations: [
+        %{name: "observations"},
+        %{name: "decisions"}
+      ],
+      lenses: [
+        %{
+          name: "observations",
+          destination: "observations",
+          write: :append,
+          ontology: MemoryOntology,
+          ingestion: StoreIngestion
+        },
+        %{
+          name: "decisions",
+          destination: "decisions",
+          write: :append,
+          ontology: MemoryOntology,
+          ingestion: StoreIngestion
+        },
+        %{
+          name: "shared-generalisations",
+          destination: "global",
+          write: :append,
+          ontology: Gralkor.DefaultOntology,
+          ingestion: StoreIngestion
+        }
+      ],
+      reflections: []
     }
   end
 
