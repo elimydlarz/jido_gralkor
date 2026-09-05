@@ -94,7 +94,12 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       start_supervised!(Gralkor.Lens.Storage.InMemory)
       start_supervised!(Gralkor.Destination.Storage.InMemory)
       Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-      Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.InMemory)
+
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        Gralkor.Destination.Storage.InMemory
+      )
 
       Application.put_env(:jido_gralkor, :lenses, [
         [
@@ -140,7 +145,12 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
                })
 
       assert Enum.all?(episodes, &(&1.destination == "shared"))
-      assert Enum.any?(episodes, &match?(%{lens: "observations", content: "Release in small batches."}, &1))
+
+      assert Enum.any?(
+               episodes,
+               &match?(%{lens: "observations", content: "Release in small batches."}, &1)
+             )
+
       assert Enum.any?(episodes, &match?(%{reflection: "review"}, &1))
     end
   end
