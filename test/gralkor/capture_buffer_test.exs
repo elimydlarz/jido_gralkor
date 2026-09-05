@@ -1007,6 +1007,52 @@ defmodule Gralkor.CaptureBufferTest do
       assert :ok = CaptureBuffer.flush_all()
       assert_received {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "1"}]]}
     end
+
+    test "and every Lens-selected entry is resolved through the configured Lens resolver before its Lens flush callback runs" do
+      test_pid = self()
+
+      resolved_lens = %Gralkor.Lens{
+        name: "observations",
+        destination: %Gralkor.Destination{name: "memory"},
+        ontology: Gralkor.DefaultOntology,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      }
+
+      resolver = fn :runtime_owner, ["observations"] ->
+        send(test_pid, :flush_all_resolved)
+        {:ok, [resolved_lens]}
+      end
+
+      callback = fn _, _, _, lens, _, _, _ ->
+        send(test_pid, {:flush_all_flushed, lens})
+        :ok
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: callback,
+         lens_resolver: resolver,
+         retries: []}
+      )
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 :runtime_owner,
+                 "resolved-session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 [Message.new("user", "remember")]
+               )
+
+      assert :ok = CaptureBuffer.flush_all()
+      assert_received :flush_all_resolved
+      assert_received {:flush_all_flushed, ^resolved_lens}
+    end
   end
 
   describe "when a flush of every buffered session finds none buffered" do
