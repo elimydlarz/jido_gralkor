@@ -264,6 +264,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
     [
       name: "decisions",
       destination: destination,
+      write: :append,
       ontology: LensOntology,
       ingestion: RecordingIngestion
     ]
