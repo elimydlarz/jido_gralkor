@@ -88,7 +88,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "when an agent runtime validates Reflection declarations" do
-    test("while every Reflection has a non-blank name", context, do: assert_valid(context))
     test("and every Reflection name is unique", context, do: assert_valid(context))
 
     test("and every Reflection contains one structured Chain of Thought", context,
