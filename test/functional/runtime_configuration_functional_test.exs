@@ -640,10 +640,25 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  register_global: false
                )
     end
+
+    test "and no part of the invalid configuration becomes active" do
+      previous = Process.flag(:trap_exit, true)
+      on_exit(fn -> Process.flag(:trap_exit, previous) end)
+      before = runtime_owner_names()
+
+      assert {:error, _reason} =
+               Jido.AgentServer.start_link(
+                 agent: InvalidConsumerAgent,
+                 id: "runtime-configuration-no-partial-invalid-start",
+                 register_global: false
+               )
+
+      assert runtime_owner_names() == before
+    end
   end
 
   describe "when a consuming agent is restarted under consumer supervision" do
-    test "then the replacement agent installs the consumer's durable configuration before accepting memory work" do
+    test "then the consumer starts the agent with its current complete durable configuration" do
       supervisor =
         start_supervised!({ConsumerSupervisor, id: "runtime-configuration-consumer-restart"})
 
@@ -661,10 +676,23 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert %Gralkor.Destination{name: "durable-memory"} =
                JidoGralkor.Runtime.destination!(replacement_agent, "durable-memory")
     end
+
+    test "and the restarted plugin installs that configuration before accepting memory work" do
+      replacement_agent = restart_consuming_agent("runtime-configuration-restart-install")
+
+      assert %{
+               destinations: [%{name: "durable-memory"}],
+               lenses: [],
+               reflections: []
+             } = JidoGralkor.Runtime.snapshot(replacement_agent)
+
+      assert %Gralkor.Destination{name: "durable-memory"} =
+               JidoGralkor.Runtime.destination!(replacement_agent, "durable-memory")
+    end
   end
 
   describe "if the Gralkor plugin runtime terminates unexpectedly" do
-    test "then its linked AgentServer terminates and consumer supervision starts a replacement with durable configuration" do
+    test "then its linked AgentServer terminates" do
       supervisor =
         start_supervised!({ConsumerSupervisor, id: "runtime-configuration-runtime-restart"})
 
@@ -681,6 +709,24 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                       :unexpected_runtime_failure}
 
       replacement_agent = await_replacement_agent(supervisor, original_agent)
+
+      assert %{
+               destinations: [%{name: "durable-memory"}],
+               lenses: [],
+               reflections: []
+             } = JidoGralkor.Runtime.snapshot(replacement_agent)
+    end
+
+    test "and the consumer supervisor starts a replacement AgentServer" do
+      {_original_agent, replacement_agent} =
+        restart_after_runtime_failure("runtime-configuration-supervisor-replacement")
+
+      assert Process.alive?(replacement_agent)
+    end
+
+    test "and the replacement agent receives the consumer's current durable configuration" do
+      {_original_agent, replacement_agent} =
+        restart_after_runtime_failure("runtime-configuration-durable-replacement")
 
       assert %{
                destinations: [%{name: "durable-memory"}],
