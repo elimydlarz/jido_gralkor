@@ -393,7 +393,13 @@ defmodule Gralkor.CaptureBuffer do
     lens_tasks =
       for {_session_id, entry} <- state.lens_entries do
         Task.async(fn ->
-          do_flush_lenses(entry, state.lens_flush_callback, state.retries)
+          case resolve_lens_entry(entry, state.lens_resolver) do
+            {:ok, resolved_entry} ->
+              do_flush_lenses(resolved_entry, state.lens_flush_callback, state.retries)
+
+            {:error, _reason} = error ->
+              error
+          end
         end)
       end
 
