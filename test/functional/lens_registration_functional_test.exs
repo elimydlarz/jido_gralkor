@@ -39,6 +39,14 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     end
   end
 
+  defmodule PersonOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity Person do
+      field(:name, :string)
+    end
+  end
+
   defmodule StoreIngestion do
     @behaviour Gralkor.Lens.Ingestion
 
@@ -152,6 +160,16 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
           Client.lens!("observations")
         end
       end
+    end
+  end
+
+  describe "when an application compatibility Lens's ontology declares a custom entity kind named `Person`" do
+    test "then validation accepts that entity kind" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        valid_lens("people") |> Keyword.put(:ontology, PersonOntology)
+      ])
+
+      assert %Gralkor.Lens{ontology: PersonOntology} = Client.lens!("people")
     end
   end
 
