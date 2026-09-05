@@ -152,7 +152,7 @@ config :jido_gralkor,
   recall_deadline_ms: 12_000
 ```
 
-Destinations, Lenses, and Reflections are not application-environment registries. Supply them in each plugin mount's `:runtime_config`, described below. `:destination_storage` remains the single storage boundary for both search and Reflection output.
+Mounted-agent Destinations, Lenses, and Reflections come only from each plugin mount's `:runtime_config`, described below. Legacy direct client arities retain application-environment Destination and Lens registries as compatibility surfaces, but mounted agents never fall back to them. `:destination_storage` remains the single storage boundary for both search and Reflection output.
 
 The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `recall/4` need no ontology configuration. The Lens uses the packaged operator Destination and the library-owned `Gralkor.DefaultOntology`. Application-specific extraction schemas belong on appending Lenses or Reflections.
 
