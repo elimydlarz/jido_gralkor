@@ -668,6 +668,84 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
+  describe "when a Lens-selected session is flushed through a configured Lens resolver" do
+    test "then every selected Lens is resolved before its ingestion worker is scheduled and retained by that worker" do
+      test_pid = self()
+
+      resolved_lens = %Gralkor.Lens{
+        name: "observations",
+        destination: %Gralkor.Destination{name: "memory"},
+        ontology: Gralkor.DefaultOntology,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      }
+
+      resolver = fn :runtime_owner, ["observations"] ->
+        send(test_pid, :lens_resolved)
+        {:ok, [resolved_lens]}
+      end
+
+      callback = fn _, _, _, lens, _, _, _ ->
+        send(test_pid, {:resolved_lens_flushed, lens})
+        :ok
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: callback,
+         lens_resolver: resolver,
+         retries: []}
+      )
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 :runtime_owner,
+                 "resolved-session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 [Message.new("user", "remember")]
+               )
+
+      assert :ok = CaptureBuffer.flush("resolved-session")
+      assert_received :lens_resolved
+      assert_receive {:resolved_lens_flushed, ^resolved_lens}
+    end
+
+    test "if Lens resolution fails then the failure is returned and the entry remains buffered" do
+      resolver = fn :runtime_owner, ["observations"] -> {:error, :runtime_unavailable} end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: fn _, _, _, _, _, _, _ -> :ok end,
+         lens_resolver: resolver,
+         retries: []}
+      )
+
+      turn = [Message.new("user", "remember")]
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 :runtime_owner,
+                 "failed-resolution-session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 turn
+               )
+
+      assert {:error, :runtime_unavailable} = CaptureBuffer.flush("failed-resolution-session")
+      assert CaptureBuffer.turns_for("failed-resolution-session") == [turn]
+    end
+  end
+
   describe "when a session holding turns is flushed and awaited > while the flush callback succeeds within the caller's timeout" do
     test "then success is returned" do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
