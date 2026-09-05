@@ -826,7 +826,14 @@ defmodule JidoGralkor.Runtime do
   defp runtime_pid!(owner) when is_pid(owner) do
     case :global.whereis_name({__MODULE__, owner}) do
       runtime when is_pid(runtime) -> runtime
-      :undefined -> runtime_unavailable!(owner)
+
+      :undefined ->
+        _ = synchronize_owner(owner)
+
+        case :global.whereis_name({__MODULE__, owner}) do
+          runtime when is_pid(runtime) -> runtime
+          :undefined -> runtime_unavailable!(owner)
+        end
     end
   end
 
@@ -837,6 +844,12 @@ defmodule JidoGralkor.Runtime do
 
   defp runtime_unavailable!(owner) do
     raise ArgumentError, "Gralkor runtime unavailable for owning AgentServer #{inspect(owner)}"
+  end
+
+  defp synchronize_owner(owner) do
+    Jido.AgentServer.state(owner)
+  catch
+    :exit, _reason -> :unavailable
   end
 
   defp via(owner), do: {:global, {__MODULE__, owner}}
