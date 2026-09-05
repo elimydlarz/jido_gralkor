@@ -162,6 +162,83 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
     end
   end
 
+  describe "when the memory add tool runs with content, a source kind, and a source description > where the tool context selects a Lens > while the tool context identifies an owning AgentServer as the Gralkor runtime target" do
+    test "then Lens ingestion uses that agent's current runtime configuration" do
+      Process.register(self(), :memory_add_lens_test)
+
+      Application.put_env(:jido_gralkor, :destinations, [[name: "compat-decisions"]])
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "decisions",
+          destination: "compat-decisions",
+          ontology: LensOntology,
+          ingestion: RecordingIngestion
+        ]
+      ])
+
+      start_supervised!(
+        {JidoGralkor.Runtime,
+         owner: self(),
+         configuration: %{
+           destinations: [[name: "runtime-decisions"]],
+           lenses: [
+             [
+               name: "decisions",
+               destination: "runtime-decisions",
+               ontology: LensOntology,
+               ingestion: RecordingIngestion
+             ]
+           ],
+           reflections: []
+         }}
+      )
+
+      assert {:ok, %{result: "Ingesting."}} =
+               MemoryAdd.run(
+                 %{
+                   content: "We chose Friday.",
+                   source_kind: :conversation,
+                   source_description: "agent decision"
+                 },
+                 %{agent_id: "operator-one", lens: "decisions", gralkor_runtime: self()}
+               )
+
+      assert_receive {:lens_ingest, _request,
+                      %{lens: %{destination: %{name: "runtime-decisions"}}}}
+    end
+  end
+
+  describe "when the memory add tool runs with content, a source kind, and a source description > where the tool context selects a Lens > while the tool context has no Gralkor runtime target" do
+    test "then Lens ingestion uses the application compatibility configuration" do
+      Process.register(self(), :memory_add_lens_test)
+
+      Application.put_env(:jido_gralkor, :destinations, [[name: "compat-decisions"]])
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "decisions",
+          destination: "compat-decisions",
+          ontology: LensOntology,
+          ingestion: RecordingIngestion
+        ]
+      ])
+
+      assert {:ok, %{result: "Ingesting."}} =
+               MemoryAdd.run(
+                 %{
+                   content: "We chose Friday.",
+                   source_kind: :conversation,
+                   source_description: "agent decision"
+                 },
+                 %{agent_id: "operator-one", lens: "decisions"}
+               )
+
+      assert_receive {:lens_ingest, _request,
+                      %{lens: %{destination: %{name: "compat-decisions"}}}}
+    end
+  end
+
   describe "when the memory add tool runs with content, a source kind, and a source description > if the background write fails" do
     test "then the failure is logged" do
       InMemory.set_memory_add({:error, :boom})
