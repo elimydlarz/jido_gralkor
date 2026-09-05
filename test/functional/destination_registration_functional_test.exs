@@ -109,7 +109,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
         ]
       ])
 
-      assert {:ok, representations} =
+      assert :ok =
                Client.ingest(%Gralkor.Ingest{
                  id: "shared-observation",
                  operator_id: "operator-one",
@@ -128,7 +128,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
                  %{
                    id: "shared-review",
                    operator_id: "operator-one",
-                   representations: representations,
+                   representations: [],
                    invocation_context: %{}
                  },
                  &send(consumer, {:review_delivered, &1}),
