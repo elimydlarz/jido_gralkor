@@ -370,9 +370,34 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "and success is returned before that flush completes" do
+      test_pid = self()
+
+      blocking_callback = fn group, agent, user, ontology, turns ->
+        send(test_pid, {:flush_started, self(), group, agent, user, ontology, turns})
+
+        receive do
+          :finish_flush ->
+            send(test_pid, :flush_completed)
+            :ok
+        end
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      start_supervised!(
+        {CaptureBuffer, flush_callback: blocking_callback, retries: []}
+      )
+
       :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+
       assert :ok = Native.flush("s1")
-      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
+
+      assert_receive {:flush_started, worker, "g", "Susu", "Eli", Gralkor.DefaultOntology,
+                      _turns}
+
+      refute_received :flush_completed
+      send(worker, :finish_flush)
+      assert_receive :flush_completed
     end
   end
 
