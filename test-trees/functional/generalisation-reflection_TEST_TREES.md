@@ -20,8 +20,8 @@ if the packaged generalisation Reflection's default related-memory search fails
   and the completed ingestion remains unchanged
 
 when the packaged generalisation Reflection synthesises an evolved generalisation
-  while its `content`, `level`, and `evolves_from` values satisfy the declared structured-output types
-    then those model-produced values become the generalisation without comparison to related memory
+  while its output satisfies the declared structured types
+    then its model-produced values are preserved without comparison to related memory
   while the evolved generalisation replaces a prior generalisation
     then the replaced generalisation remains searchable as historical lineage
 

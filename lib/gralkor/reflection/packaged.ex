@@ -37,10 +37,10 @@ defmodule Gralkor.Reflection.Packaged do
 
               Carry forward, combine, broaden, narrow, split, replace, or otherwise
               revise generalisations as observations warrant. Return each current
-              generalisation with its content, level, and lineage snapshots. A new
-              generalisation with no lineage uses level 1. An evolved generalisation
-              uses a level one greater than the highest level in its evolves_from
-              snapshots.
+              generalisation and every lineage snapshot with non-blank content and its
+              level. A new generalisation with no lineage uses level 1. An evolved
+              generalisation uses a level one greater than the highest level in its
+              evolves_from snapshots.
               """,
               output: %{
                 "generalisations" =>
