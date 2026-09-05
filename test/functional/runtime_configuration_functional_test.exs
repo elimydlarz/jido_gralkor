@@ -271,6 +271,45 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
              } = JidoGralkor.Runtime.snapshot(agent_server)
     end
 
+    test "and that runtime supervises the agent's Reflection processing and output delivery" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-reflection-supervision",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, reflection_configuration("reviews"))
+
+      test_pid = self()
+      release = make_ref()
+
+      inference = fn _request ->
+        send(test_pid, {:supervised_reflection_started, self()})
+
+        receive do
+          {^release, :continue} -> {:ok, %{output: %{"summary" => "complete"}}}
+        end
+      end
+
+      assert {:ok, "supervised-reflection"} =
+               Gralkor.Client.reflect(
+                 agent_server,
+                 "review",
+                 reflection_invocation("supervised-reflection"),
+                 &send(test_pid, {:supervised_reflection_callback, &1}),
+                 inference: inference,
+                 storage: SnapshotOutputStorage
+               )
+
+      assert_receive {:supervised_reflection_started, worker}
+      assert Process.alive?(worker)
+      send(worker, {release, :continue})
+      assert_receive {:supervised_reflection_callback, %{outcome: :delivered}}
+    end
+
     test "and it installs package-owned structured definitions for the `operator` and `global` Destinations" do
       agent_server =
         start_supervised!(
@@ -320,7 +359,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       end
     end
 
-    test "and it accepts an ingestion Lens defined only by that agent's runtime configuration" do
+    test "and it installs the complete consumer configuration supplied when the agent started" do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
@@ -413,6 +452,37 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
              } = JidoGralkor.Runtime.reflection!(agent_server, "review")
     end
 
+    test "and the packaged Destinations, Lens, and Reflections remain active" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-packaged-after-replacement",
+           register_global: false}
+        )
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(
+                 agent_server,
+                 destination_configuration("consumer-memory")
+               )
+
+      assert %Gralkor.Destination{name: "operator"} =
+               JidoGralkor.Runtime.destination!(agent_server, "operator")
+
+      assert %Gralkor.Destination{name: "global"} =
+               JidoGralkor.Runtime.destination!(agent_server, "global")
+
+      assert %Gralkor.Lens{name: "operator"} =
+               JidoGralkor.Runtime.lens!(agent_server, "operator")
+
+      assert %Gralkor.Reflection{name: "generalisations"} =
+               JidoGralkor.Runtime.reflection!(agent_server, "generalisations")
+
+      assert %Gralkor.Reflection{name: "erl"} =
+               JidoGralkor.Runtime.reflection!(agent_server, "erl")
+    end
+
     test "and another agent's runtime configuration remains unchanged" do
       first_agent =
         start_supervised!(
@@ -458,6 +528,23 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert_raise ArgumentError, ~r/unknown_definition.*second-memory/, fn ->
         JidoGralkor.Runtime.destination!(first_agent, "second-memory")
       end
+    end
+
+    test "and the call returns only after the replacement is active" do
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent,
+           id: "runtime-configuration-synchronous-replacement",
+           register_global: false}
+        )
+
+      configuration = destination_configuration("active-on-return")
+      assert :ok = JidoGralkor.Runtime.replace(agent_server, configuration)
+      assert JidoGralkor.Runtime.snapshot(agent_server) == configuration
+
+      assert %Gralkor.Destination{name: "active-on-return"} =
+               JidoGralkor.Runtime.destination!(agent_server, "active-on-return")
     end
   end
 
