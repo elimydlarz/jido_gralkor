@@ -1476,6 +1476,55 @@ defmodule Gralkor.CaptureBufferTest do
       assert_received {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "2"}]]}
     end
 
+    test "and every pending Lens-selected entry is resolved through the configured Lens resolver before its Lens flush callback runs" do
+      test_pid = self()
+
+      resolved_lens = %Gralkor.Lens{
+        name: "observations",
+        destination: %Gralkor.Destination{name: "memory"},
+        ontology: Gralkor.DefaultOntology,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      }
+
+      resolver = fn :runtime_owner, ["observations"] ->
+        send(test_pid, :shutdown_lens_resolved)
+        {:ok, [resolved_lens]}
+      end
+
+      lens_flush_callback = fn _, _, _, lens, _, _, _ ->
+        send(test_pid, {:shutdown_lens_flushed, lens})
+        :ok
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      {:ok, pid} =
+        start_supervised(
+          {CaptureBuffer,
+           flush_callback: fn _, _, _, _, _ -> :ok end,
+           lens_flush_callback: lens_flush_callback,
+           lens_resolver: resolver,
+           retries: []}
+        )
+
+      :ok =
+        CaptureBuffer.append_lens(
+          :runtime_owner,
+          "shutdown-lens-session",
+          "operator-one",
+          "Susu",
+          "Eli",
+          "observations",
+          [Message.new("user", "remember")]
+        )
+
+      :ok = stop_supervised(CaptureBuffer)
+      refute Process.alive?(pid)
+
+      assert_received :shutdown_lens_resolved
+      assert_received {:shutdown_lens_flushed, ^resolved_lens}
+    end
+
     test "and every already-started fire-and-forget flush worker finishes before termination returns" do
       test_pid = self()
 
