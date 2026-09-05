@@ -19,13 +19,11 @@ defmodule JidoGralkor.Runtime do
   end
 
   def snapshot(owner) do
-    ensure_started(owner)
-    GenServer.call(via(owner), :snapshot)
+    call!(owner, :snapshot)
   end
 
   def replace(owner, configuration) do
-    ensure_started(owner)
-    GenServer.call(via(owner), {:replace, configuration})
+    call!(owner, {:replace, configuration})
   end
 
   def destination!(owner, name), do: fetch_definition!(owner, :destinations, name)
@@ -33,15 +31,30 @@ defmodule JidoGralkor.Runtime do
   def reflection!(owner, name), do: fetch_definition!(owner, :reflections, name)
 
   def destinations(owner) do
-    ensure_started(owner)
-    GenServer.call(via(owner), {:all, :destinations})
+    call!(owner, {:all, :destinations})
   end
 
-  def started?(owner), do: :global.whereis_name({__MODULE__, owner}) != :undefined
+  def lenses!(owner, names), do: fetch_definitions!(owner, :lenses, names)
+
+  def resolve_search!(owner, lens_names, destination_names) do
+    case call!(owner, {:resolve_search, lens_names, destination_names}) do
+      {:ok, resolved} -> resolved
+      {:error, reason} -> raise ArgumentError, inspect(reason)
+    end
+  end
+
+  def ensure_available!(owner) do
+    _runtime = runtime_pid!(owner)
+    owner
+  end
+
+  def started?(owner) when is_pid(owner),
+    do: :global.whereis_name({__MODULE__, owner}) != :undefined
+
+  def started?(_owner), do: false
 
   def submit_reflection(owner, name, invocation, callback, opts) do
-    ensure_started(owner)
-    GenServer.call(via(owner), {:submit_reflection, name, invocation, callback, opts})
+    call!(owner, {:submit_reflection, name, invocation, callback, opts})
   end
 
   def validate(configuration) do
@@ -97,6 +110,17 @@ defmodule JidoGralkor.Runtime do
     {:reply, state.definitions.destination_list, state}
   end
 
+  def handle_call({:resolve_search, lens_names, destination_names}, _from, state) do
+    reply =
+      with {:ok, lenses} <- fetch_definitions(state.definitions.lenses, :lenses, lens_names),
+           {:ok, destinations} <-
+             resolve_search_destinations(state.definitions, destination_names) do
+        {:ok, {lenses, destinations}}
+      end
+
+    {:reply, reply, state}
+  end
+
   def handle_call({:submit_reflection, name, invocation, callback, opts}, _from, state) do
     reply =
       with :ok <- validate_invocation_callback(callback),
@@ -114,17 +138,6 @@ defmodule JidoGralkor.Runtime do
       end
 
     {:reply, reply, state}
-  end
-
-  defp ensure_started(owner) do
-    case :global.whereis_name({__MODULE__, owner}) do
-      :undefined ->
-        {:ok, _state} = Jido.AgentServer.state(owner)
-        :ok
-
-      _pid ->
-        :ok
-    end
   end
 
   defp validate_configuration(configuration) when is_map(configuration) do
@@ -189,7 +202,7 @@ defmodule JidoGralkor.Runtime do
                 %Lens{
                   name: field(definition, :name),
                   destination: Map.fetch!(destination_index, field(definition, :destination)),
-                  ontology: field(definition, :ontology) || Gralkor.DefaultOntology,
+                  ontology: ontology(definition),
                   ingestion: field(definition, :ingestion)
                 }
             end
@@ -207,7 +220,7 @@ defmodule JidoGralkor.Runtime do
                 %{
                   kind: :destination,
                   destination: Map.fetch!(destination_index, field(output, :destination)),
-                  ontology: field(output, :ontology) || Gralkor.DefaultOntology
+                  ontology: ontology(output)
                 }
               end)
 
@@ -336,7 +349,7 @@ defmodule JidoGralkor.Runtime do
         case field(definition, :write) do
           :append ->
             ingestion = field(definition, :ingestion)
-            ontology = field(definition, :ontology) || Gralkor.DefaultOntology
+            ontology = ontology(definition)
 
             cond do
               not valid_ingestion?(ingestion) ->
@@ -416,7 +429,7 @@ defmodule JidoGralkor.Runtime do
     unsupported = Enum.find(outputs, &(field(&1, :kind) != :destination))
     output = List.first(destinations)
     destination = field(output, :destination)
-    ontology = field(output, :ontology) || Gralkor.DefaultOntology
+    ontology = ontology(output)
 
     cond do
       unknown_fields == :invalid_output ->
@@ -554,13 +567,13 @@ defmodule JidoGralkor.Runtime do
 
   defp validate_reserved_entity_kinds(configuration) do
     lens_ontologies =
-      Enum.map(configuration.lenses, &(field(&1, :ontology) || Gralkor.DefaultOntology))
+      Enum.map(configuration.lenses, &ontology/1)
 
     reflection_ontologies =
       Enum.flat_map(configuration.reflections, fn reflection ->
         case field(reflection, :outputs) do
           outputs when is_list(outputs) ->
-            Enum.map(outputs, &(field(&1, :ontology) || Gralkor.DefaultOntology))
+            Enum.map(outputs, &ontology/1)
 
           _ ->
             []
@@ -590,10 +603,15 @@ defmodule JidoGralkor.Runtime do
   defp reserved_entity_kind(_ontology), do: nil
 
   defp fetch_definition!(owner, collection, name) do
-    ensure_started(owner)
-
-    case GenServer.call(via(owner), {:fetch, collection, name}) do
+    case call!(owner, {:fetch, collection, name}) do
       {:ok, definition} -> definition
+      {:error, reason} -> raise ArgumentError, inspect(reason)
+    end
+  end
+
+  defp fetch_definitions!(owner, collection, names) do
+    case call!(owner, {:fetch_many, collection, names}) do
+      {:ok, definitions} -> definitions
       {:error, reason} -> raise ArgumentError, inspect(reason)
     end
   end
