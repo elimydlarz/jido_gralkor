@@ -780,8 +780,12 @@ defmodule JidoGralkor.Runtime do
 
   defp normalize_status(_status), do: nil
 
-  defp field(map, key) when is_map(map),
-    do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
+  defp field(map, key) when is_map(map) do
+    case Map.fetch(map, key) do
+      {:ok, value} -> value
+      :error -> Map.get(map, Atom.to_string(key))
+    end
+  end
 
   defp field(keyword, key) when is_list(keyword), do: Keyword.get(keyword, key)
   defp field(_, _), do: nil
@@ -791,12 +795,45 @@ defmodule JidoGralkor.Runtime do
 
   defp has_field?(keyword, key) when is_list(keyword), do: Keyword.has_key?(keyword, key)
 
+  defp ontology(definition) do
+    case field(definition, :ontology) do
+      nil -> Gralkor.DefaultOntology
+      configured -> configured
+    end
+  end
+
   defp non_blank?(value), do: is_binary(value) and String.trim(value) != ""
 
   defp duplicate(values) do
     values
     |> Enum.frequencies()
     |> Enum.find_value(fn {value, count} -> if count > 1, do: value end)
+  end
+
+  defp call!(owner, message) do
+    runtime = runtime_pid!(owner)
+
+    try do
+      GenServer.call(runtime, message)
+    catch
+      :exit, _reason -> runtime_unavailable!(owner)
+    end
+  end
+
+  defp runtime_pid!(owner) when is_pid(owner) do
+    case :global.whereis_name({__MODULE__, owner}) do
+      runtime when is_pid(runtime) -> runtime
+      :undefined -> runtime_unavailable!(owner)
+    end
+  end
+
+  defp runtime_pid!(owner) do
+    raise ArgumentError,
+          "Gralkor runtime target must be an owning AgentServer PID, got #{inspect(owner)}"
+  end
+
+  defp runtime_unavailable!(owner) do
+    raise ArgumentError, "Gralkor runtime unavailable for owning AgentServer #{inspect(owner)}"
   end
 
   defp via(owner), do: {:global, {__MODULE__, owner}}
