@@ -80,6 +80,45 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
+  describe "when a consuming AgentServer requests the plugin's child specification" do
+    test "then the plugin declares one Gralkor runtime child owned by that AgentServer" do
+      assert %{
+               id: JidoGralkor.Runtime,
+               start:
+                 {JidoGralkor.Runtime, :start_link,
+                  [[owner: owner, configuration: %{destinations: [], lenses: [], reflections: []}]]}
+             } = Plugin.child_spec(%{})
+
+      assert owner == self()
+    end
+
+    test "and the child receives the complete runtime configuration supplied to the plugin" do
+      configuration = %{
+        destinations: [[name: "notes"]],
+        lenses: [[name: "observations", destination: "notes"]],
+        reflections: [[name: "summarise"]]
+      }
+
+      assert %{
+               start:
+                 {JidoGralkor.Runtime, :start_link,
+                  [[owner: owner, configuration: ^configuration]]}
+             } = Plugin.child_spec(runtime_config: configuration)
+
+      assert owner == self()
+    end
+  end
+
+  describe "when a consuming AgentServer requests the plugin's child specification > where runtime configuration is omitted" do
+    test "then the child receives empty consumer Destination, Lens, and Reflection collections" do
+      assert %{
+               start:
+                 {JidoGralkor.Runtime, :start_link,
+                  [[configuration: %{destinations: [], lenses: [], reflections: []}]]}
+             } = Plugin.child_spec(%{})
+    end
+  end
+
   describe "when a consumer agent mounts the plugin" do
     test "then the expanded routes resolve with no conflicts against the host agent" do
       instance = Jido.Plugin.Instance.new({Plugin, %{agent_name: "Test"}})
