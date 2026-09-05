@@ -922,6 +922,15 @@ defmodule Gralkor.CaptureBufferTest do
       assert_receive {:attempt, 1}, 200
       refute_receive {:attempt, 2}, 100
     end
+
+    test "and the entry is still consumed" do
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      assert {:error, {:upstream_llm, :rate_limited}} =
+               CaptureBuffer.flush_and_await("s1", 1_000)
+
+      assert [] = CaptureBuffer.turns_for("s1")
+    end
   end
 
   describe "when a session holding turns is flushed and awaited > while the flush callback fails for any other reason" do
