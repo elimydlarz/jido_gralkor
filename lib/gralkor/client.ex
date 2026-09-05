@@ -641,6 +641,20 @@ defmodule Gralkor.Client do
              function_exported?(ontology, :__ontology__, 0) do
       raise ArgumentError, "invalid Lens #{inspect(name)} ontology #{inspect(ontology)}"
     end
+
+    reserved_kind =
+      ontology.__ontology__()
+      |> Map.get(:entity_types, [])
+      |> Enum.find_value(fn
+        %{name: kind} when kind in ["Entity", "Episodic", "Community"] -> kind
+        _entity_type -> nil
+      end)
+
+    if reserved_kind do
+      raise ArgumentError,
+            "invalid Lens #{inspect(name)} ontology #{inspect(ontology)}: " <>
+              "entity kind #{inspect(reserved_kind)} is reserved by Graphiti"
+    end
   end
 
   @doc false
