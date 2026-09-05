@@ -621,7 +621,9 @@ defmodule JidoGralkor.Runtime do
   end
 
   defp fetch_definitions(index, collection, names) do
-    Enum.reduce_while(names, {:ok, []}, fn name, {:ok, definitions} ->
+    names
+    |> Enum.uniq()
+    |> Enum.reduce_while({:ok, []}, fn name, {:ok, definitions} ->
       case Map.fetch(index, name) do
         {:ok, definition} -> {:cont, {:ok, [definition | definitions]}}
         :error -> {:halt, {:error, {:unknown_definition, collection, name}}}
