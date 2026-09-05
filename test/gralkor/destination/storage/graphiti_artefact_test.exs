@@ -86,24 +86,7 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
 
   describe "when Graphiti Destination storage looks up an artefact identifier > while the matching episode contains that artefact but durable extraction completion is absent" do
     test "then lookup returns the incomplete artefact for Destination storage to resume without rerunning the Runner" do
-      artefact = artefact()
-
-      get_episode = fn "observations", "stable-id" ->
-        {:ok,
-         %{
-           content: Jason.encode!(Map.from_struct(artefact)),
-           extraction_complete: false
-         }}
-      end
-
-      assert {:error, {:incomplete_artefact, ^artefact}} =
-               Graphiti.get_artefact(
-                 output(),
-                 "review",
-                 "operator-one",
-                 "stable-id",
-                 get_episode
-               )
+      assert_incomplete_lookup()
     end
   end
 
@@ -145,6 +128,27 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                  )
       end
     end
+  end
+
+  defp assert_incomplete_lookup do
+    artefact = artefact()
+
+    get_episode = fn "observations", "stable-id" ->
+      {:ok,
+       %{
+         content: Jason.encode!(Map.from_struct(artefact)),
+         extraction_complete: false
+       }}
+    end
+
+    assert {:error, {:incomplete_artefact, ^artefact}} =
+             Graphiti.get_artefact(
+               output(),
+               "review",
+               "operator-one",
+               "stable-id",
+               get_episode
+             )
   end
 
   defp output,
