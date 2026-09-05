@@ -43,7 +43,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
 
     entity Person do
-      field(:name, :string)
+      field(:value, :string)
     end
   end
 
