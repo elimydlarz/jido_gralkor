@@ -15,6 +15,30 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     end
   end
 
+  defmodule EntityOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity Entity do
+      field(:value, :string)
+    end
+  end
+
+  defmodule EpisodicOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity Episodic do
+      field(:value, :string)
+    end
+  end
+
+  defmodule CommunityOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity Community do
+      field(:value, :string)
+    end
+  end
+
   defmodule StoreIngestion do
     @behaviour Gralkor.Lens.Ingestion
 
@@ -100,6 +124,24 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       ])
 
       assert Client.lens!("observations").ontology == Gralkor.DefaultOntology
+    end
+  end
+
+  describe "if an application compatibility Lens's ontology declares a custom entity kind named `Entity`, `Episodic`, or `Community`" do
+    test "then validation fails identifying the entity kind reserved by Graphiti" do
+      for {kind, ontology} <- [
+            {"Entity", EntityOntology},
+            {"Episodic", EpisodicOntology},
+            {"Community", CommunityOntology}
+          ] do
+        Application.put_env(:jido_gralkor, :lenses, [
+          valid_lens("observations") |> Keyword.put(:ontology, ontology)
+        ])
+
+        assert_raise ArgumentError, ~r/#{kind}.*reserved by Graphiti/, fn ->
+          Client.lens!("observations")
+        end
+      end
     end
   end
 
