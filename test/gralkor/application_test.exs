@@ -8,6 +8,7 @@ defmodule Gralkor.ApplicationTest do
     original_env = System.get_env("GRALKOR_DATA_DIR")
     original_client = Application.get_env(:jido_gralkor, :client)
     original_falkordb = Application.get_env(:jido_gralkor, :falkordb)
+    original_reflection_storage = Application.get_env(:jido_gralkor, :reflection_storage)
 
     on_exit(fn ->
       case original_env do
@@ -24,10 +25,16 @@ defmodule Gralkor.ApplicationTest do
         nil -> Application.delete_env(:jido_gralkor, :falkordb)
         v -> Application.put_env(:jido_gralkor, :falkordb, v)
       end
+
+      case original_reflection_storage do
+        nil -> Application.delete_env(:jido_gralkor, :reflection_storage)
+        v -> Application.put_env(:jido_gralkor, :reflection_storage, v)
+      end
     end)
 
     Application.delete_env(:jido_gralkor, :client)
     Application.delete_env(:jido_gralkor, :falkordb)
+    Application.delete_env(:jido_gralkor, :reflection_storage)
 
     test_pid = self()
 
@@ -53,7 +60,7 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
-  describe "when the application starts > while a data directory is configured > and no remote connection is configured" do
+  describe "when the application starts > while a data directory is configured > while no remote connection is configured" do
     test "then the Python runtime, graph pool, and capture buffer are supervised in that order" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
 
@@ -160,6 +167,16 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
+  describe "if the retired `:reflection_storage` setting is configured" do
+    test "then application startup fails identifying Destination outputs as the artefact memory boundary" do
+      Application.put_env(:jido_gralkor, :reflection_storage, LegacyReflectionStorage)
+
+      assert_raise ArgumentError, ~r/Destination outputs are the artefact memory boundary/, fn ->
+        App.children()
+      end
+    end
+  end
+
   describe "when a Lens capture flush runs" do
     test "then the selected turns are rendered in the order they were appended" do
       test_pid = self()
@@ -232,6 +249,62 @@ defmodule Gralkor.ApplicationTest do
                         content: "Eli: Remember this\nSusu: I will",
                         source_description: "captured"
                       }}
+    end
+  end
+
+  describe "when a Lens capture flush runs > while an owning AgentServer is supplied as the runtime target" do
+    test "then the captured episode is submitted through that AgentServer's runtime-targeted Lens ingestion" do
+      runtime_owner = self()
+
+      callback =
+        App.build_lens_flush_callback(
+          runtime_ingest_fn: fn owner, request ->
+            send(self(), {:runtime_ingested, owner, request})
+            :ok
+          end,
+          ingest_fn: fn _request -> flunk("application-compatibility ingestion was used") end
+        )
+
+      assert :ok =
+               callback.(
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 [[Gralkor.Message.new("user", "Remember this")]],
+                 "ingestion-one",
+                 runtime_owner
+               )
+
+      assert_receive {:runtime_ingested, ^runtime_owner,
+                      %Gralkor.Ingest{lens: "observations", content: "Eli: Remember this"}}
+    end
+  end
+
+  describe "when a Lens capture flush runs > while no runtime target is supplied" do
+    test "then the captured episode is submitted through application-compatibility Lens ingestion" do
+      callback =
+        App.build_lens_flush_callback(
+          ingest_fn: fn request ->
+            send(self(), {:compatibility_ingested, request})
+            :ok
+          end,
+          runtime_ingest_fn: fn _owner, _request -> flunk("runtime-targeted ingestion was used") end
+        )
+
+      assert :ok =
+               callback.(
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 [[Gralkor.Message.new("user", "Remember this")]],
+                 "ingestion-one",
+                 nil
+               )
+
+      assert_receive {:compatibility_ingested,
+                      %Gralkor.Ingest{lens: "observations", content: "Eli: Remember this"}}
     end
   end
 
