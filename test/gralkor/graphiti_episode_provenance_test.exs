@@ -1,6 +1,8 @@
 defmodule Gralkor.GraphitiEpisodeProvenanceTest do
   use ExUnit.Case, async: false
 
+  @moduletag :integration
+
   alias Gralkor.GraphitiPool
 
   setup_all do
