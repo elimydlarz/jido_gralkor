@@ -101,7 +101,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert tool_context.gralkor_runtime == self()
     end
 
-    test "then optional Destination and Lens selectors belong only to that search invocation" do
+    test "and optional Destination and Lens selectors belong only to that search invocation" do
       for {lens, content} <- [
             {"observations", "selected observation memory"},
             {"decisions", "selected decision memory"}
@@ -318,7 +318,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
   end
 
-  describe "when an agent with a mounted memory plugin invokes memory search > where the Destination selector is omitted or empty > and the Lens selector is omitted or empty" do
+  describe "when an agent with a mounted memory plugin invokes memory search > where the Destination selector is omitted or empty > while the Lens selector is omitted or empty" do
     test "and the Lens selector is omitted or empty" do
       assert {:ok, %{result: result}} =
                MemorySearch.run(%{query: "memory"}, %{agent_id: "operator-one"})
