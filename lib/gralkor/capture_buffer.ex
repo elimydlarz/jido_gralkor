@@ -576,6 +576,7 @@ defmodule Gralkor.CaptureBuffer do
     end
   end
 
+  defp resolve_lens_entry(%{runtime_owner: nil} = entry, _resolver), do: {:ok, entry}
   defp resolve_lens_entry(entry, nil), do: {:ok, entry}
 
   defp resolve_lens_entry(entry, resolver) when is_function(resolver, 2) do

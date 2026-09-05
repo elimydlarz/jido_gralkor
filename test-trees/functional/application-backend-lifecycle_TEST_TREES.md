@@ -3,6 +3,7 @@ Functional: application-backend-lifecycle (src: lib/gralkor/application.ex, lib/
 when an application starts with a remote memory backend
   then the native memory runtime starts without owning an embedded server
   and buffered Lens capture flushes without resolving or invoking configured Reflections
+  and application compatibility capture does not require an owning agent runtime
 
 when an application starts with an embedded memory backend
   then the native memory runtime starts with an embedded server owned for that application's lifetime

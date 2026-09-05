@@ -6,7 +6,6 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
   alias Gralkor.Client
   alias Gralkor.Ingest
   alias Gralkor.Search
-  alias JidoGralkor.Plugin
 
   defmodule MemoryOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
@@ -56,22 +55,13 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     :ok
   end
 
-  describe "when an application registers a valid appending or replaceable Lens" do
-    test "then direct callers and mounted memory plugins can select that Lens by name" do
+  describe "when the application compatibility registry contains a valid appending or replaceable Lens" do
+    test "then direct compatibility operations can select that Lens by name" do
       assert %Gralkor.Lens{name: "observations"} = Client.lens!("observations")
-
-      assert {:ok, %{ingestion_lens: "observations"}} =
-               Plugin.mount(%{},
-                 agent_name: "Susu",
-                 ingestion_lens: "observations"
-               )
 
       Application.put_env(:jido_gralkor, :lenses, [valid_replaceable_lens("systems")])
 
       assert %Gralkor.Lens.Replaceable{name: "systems"} = Client.lens!("systems")
-
-      assert {:ok, %{ingestion_lens: "systems"}} =
-               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "systems")
     end
 
     test "and each selected name resolves to the same application-owned Lens definition" do
@@ -82,16 +72,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
                ingestion: StoreIngestion
              } = Client.lens!("observations")
 
-      assert {:ok, %{ingestion_lens: "observations"}} =
-               Plugin.mount(%{},
-                 agent_name: "Susu",
-                 ingestion_lens: "observations"
-               )
-
       Application.put_env(:jido_gralkor, :lenses, [valid_replaceable_lens("systems")])
-
-      assert {:ok, %{ingestion_lens: "systems"}} =
-               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "systems")
 
       assert %Gralkor.Lens.Replaceable{name: "systems"} = Client.lens!("systems")
     end

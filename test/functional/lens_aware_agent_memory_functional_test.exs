@@ -72,6 +72,10 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       ]
     ])
 
+    start_supervised!(
+      {JidoGralkor.Runtime, owner: self(), configuration: runtime_configuration()}
+    )
+
     InMemory.reset()
     InMemory.set_capture(:ok)
 
@@ -89,7 +93,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   describe "when an agent with a mounted memory plugin invokes memory search" do
     test "then the tool context identifies that consuming agent's Gralkor runtime" do
       assert {:ok, plugin_state} =
-               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+               mount(agent_name: "Susu", ingestion_lens: "observations")
 
       assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
                plugin_state |> agent() |> query()
@@ -114,7 +118,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
 
       assert {:ok, plugin_state} =
-               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+               mount(agent_name: "Susu", ingestion_lens: "observations")
 
       mounted_agent = agent(plugin_state)
       assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(mounted_agent)
@@ -145,7 +149,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
     test "and search selectors neither default from nor change the configured ingestion Lens" do
       assert {:ok, plugin_state} =
-               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+               mount(agent_name: "Susu", ingestion_lens: "observations")
 
       mounted_agent = agent(plugin_state)
       assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(mounted_agent)
@@ -188,7 +192,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                })
 
       assert {:ok, plugin_state} =
-               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+               mount(agent_name: "Susu", ingestion_lens: "observations")
 
       mounted_agent = agent(plugin_state)
 
@@ -294,7 +298,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                })
 
       assert {:ok, plugin_state} =
-               Plugin.mount(%{}, agent_name: "Susu", ingestion_lens: "observations")
+               mount(agent_name: "Susu", ingestion_lens: "observations")
 
       fresh_agent = %{
         agent(plugin_state)

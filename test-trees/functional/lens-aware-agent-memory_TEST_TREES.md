@@ -1,7 +1,7 @@
 Functional: lens-aware-agent-memory (src: lib/jido_gralkor/plugin.ex, lib/jido_gralkor/actions/memory_add.ex, lib/jido_gralkor/actions/memory_search.ex, lib/gralkor/client.ex; functional: test/functional/lens_aware_agent_memory_functional_test.exs)
 
-when a mounted memory plugin has a configured ingestion Lens
-  then automatic capture and memory addition use the registered ingestion Lens
+when a mounted memory plugin has an ingestion Lens declared by its consuming agent's runtime configuration
+  then automatic capture and memory addition use that runtime-owned Lens
   and the plugin does not redefine the selected Lens's Destination or ingestion process
 
 when an agent with a mounted memory plugin invokes memory search
