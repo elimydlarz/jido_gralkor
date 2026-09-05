@@ -40,25 +40,6 @@ defmodule Gralkor.Reflection.ChainOfThought do
     end
   end
 
-  @doc false
-  def validate(%__MODULE__{steps: steps}) do
-    raw_steps =
-      Enum.map(steps, fn
-        %Step{label: label, directions: directions, output: output} ->
-          %{"label" => label, "directions" => directions, "output" => output}
-
-        invalid ->
-          invalid
-      end)
-
-    case parse_steps(%{"steps" => raw_steps}) do
-      {:ok, _steps} -> :ok
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  def validate(invalid), do: {:error, {:invalid_chain_of_thought, invalid}}
-
   defp parse_steps(%{"steps" => steps}) when is_list(steps) and steps != [] do
     Enum.reduce_while(steps, {:ok, {[], %{}}}, fn raw, {:ok, {parsed, outputs}} ->
       case parse_step(raw, outputs) do
@@ -129,11 +110,11 @@ defmodule Gralkor.Reflection.ChainOfThought do
     end
   end
 
-  def parse_type(declaration) when is_binary(declaration) do
+  defp parse_type(declaration) when is_binary(declaration) do
     declaration = String.trim(declaration)
 
     cond do
-      declaration in ["string", "boolean", "integer", "float", "number", "map", "object"] ->
+      declaration in ["string", "boolean", "integer"] ->
         {:ok, String.to_atom(declaration)}
 
       String.starts_with?(declaration, "Array<") and String.ends_with?(declaration, ">") ->
@@ -145,19 +126,12 @@ defmodule Gralkor.Reflection.ChainOfThought do
       String.starts_with?(declaration, "{") and String.ends_with?(declaration, "}") ->
         declaration |> String.slice(1, String.length(declaration) - 2) |> parse_object()
 
-      String.contains?(declaration, "|") or quoted_literal?(declaration) ->
-        literals = declaration |> split_top_level("|") |> Enum.map(&parse_literal/1)
-
-        if Enum.all?(literals, &match?({:ok, _}, &1)),
-          do: {:ok, {:literal, Enum.map(literals, &elem(&1, 1))}},
-          else: {:error, declaration}
-
       true ->
         {:error, declaration}
     end
   end
 
-  def parse_type(other), do: {:error, other}
+  defp parse_type(other), do: {:error, other}
 
   defp parse_object(body) do
     fields = split_top_level(body, ";") |> Enum.reject(&(String.trim(&1) == ""))
@@ -201,33 +175,15 @@ defmodule Gralkor.Reflection.ChainOfThought do
     parts ++ [current]
   end
 
-  defp quoted_literal?(value),
-    do:
-      (String.starts_with?(value, "\"") and String.ends_with?(value, "\"")) or
-        (String.starts_with?(value, "'") and String.ends_with?(value, "'"))
-
-  defp parse_literal(value) do
-    value = String.trim(value)
-
-    if quoted_literal?(value),
-      do: {:ok, String.slice(value, 1, String.length(value) - 2)},
-      else: {:error, value}
-  end
-
   defp wrap({:ok, value}, tag), do: {:ok, {tag, value}}
   defp wrap(error, _tag), do: error
 
   defp matches?(value, :string), do: is_binary(value)
   defp matches?(value, :boolean), do: is_boolean(value)
   defp matches?(value, :integer), do: is_integer(value)
-  defp matches?(value, :float), do: is_float(value)
-  defp matches?(value, :number), do: is_number(value)
-  defp matches?(value, type) when type in [:map, :object], do: is_map(value)
 
   defp matches?(value, {:array, type}),
     do: is_list(value) and Enum.all?(value, &matches?(&1, type))
-
-  defp matches?(value, {:literal, values}), do: value in values
 
   defp matches?(value, {:object, fields}) when is_map(value) do
     normalized = Map.new(value, fn {key, item} -> {to_string(key), item} end)
