@@ -1,4 +1,4 @@
-Unit: jido-gralkor-runtime (src: lib/jido_gralkor/runtime.ex; unit: test/jido_gralkor/runtime_test.exs)
+Unit: jido-gralkor-runtime (src: lib/jido_gralkor/runtime.ex; unit: test/jido_gralkor/runtime_test.exs, test/jido_gralkor/runtime_validation_test.exs)
 
 when a runtime starts for an owning AgentServer PID with valid complete configuration
   then one runtime owns that agent's active configuration
