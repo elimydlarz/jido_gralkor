@@ -50,99 +50,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
-  defmodule NonRetryableOutputStorage do
-    @behaviour Gralkor.Destination.Storage
-
-    @impl true
-    def search(_, _, _, _, _, _), do: {:ok, []}
-
-    @impl true
-    def put_artefact(_, _, _, artefact) do
-      send(
-        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
-        {:non_retryable_destination_attempt, artefact}
-      )
-
-      {:error, %{status: 422, reason: :invalid_output}}
-    end
-
-    @impl true
-    def get_artefact(_, _, _, _), do: {:error, :not_found}
-  end
-
-  defmodule RetryableOutputStorage do
-    @behaviour Gralkor.Destination.Storage
-
-    @impl true
-    def search(_, _, _, _, _, _), do: {:ok, []}
-
-    @impl true
-    def put_artefact(_, _, _, artefact) do
-      counter = Application.fetch_env!(:jido_gralkor, :reflection_retry_counter)
-      :counters.add(counter, 1, 1)
-      attempt = :counters.get(counter, 1)
-
-      send(
-        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
-        {:retryable_destination_attempt, attempt, artefact}
-      )
-
-      if attempt < 4, do: {:error, %{status: 503}}, else: :ok
-    end
-
-    @impl true
-    def get_artefact(_, _, _, _), do: {:error, :not_found}
-  end
-
-  defmodule AlwaysRetryableOutputStorage do
-    @behaviour Gralkor.Destination.Storage
-
-    @impl true
-    def search(_, _, _, _, _, _), do: {:ok, []}
-
-    @impl true
-    def put_artefact(_, _, _, artefact) do
-      send(
-        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
-        {:retryable_destination_attempt, artefact}
-      )
-
-      {:error, %{status: 503, reason: :temporarily_unavailable}}
-    end
-
-    @impl true
-    def get_artefact(_, _, _, _), do: {:error, :not_found}
-  end
-
-  defmodule RetryableRelatedMemoryStorage do
-    @behaviour Gralkor.Destination.Storage
-
-    @impl true
-    def search(destination, _operator_id, _query, _result_type, _max_results, _opts) do
-      counter = Application.fetch_env!(:jido_gralkor, :reflection_retry_counter)
-
-      if destination.name == "global" do
-        :counters.add(counter, 1, 1)
-        attempt = :counters.get(counter, 1)
-
-        send(
-          Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
-          {:related_memory_attempt, attempt}
-        )
-
-        if attempt == 1, do: {:error, %{status: 503}}, else: {:ok, []}
-      else
-        {:ok, []}
-      end
-    end
-
-    @impl true
-    def put_artefact(_, _, _, _), do: :ok
-
-    @impl true
-    def get_artefact(_, _, _, _), do: {:error, :not_found}
-  end
-
   setup do
     start_supervised!(Gralkor.Destination.Storage.InMemory)
     start_supervised!(Gralkor.Lens.Storage.InMemory)
@@ -155,8 +62,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
             :lens_storage,
             :reflections,
             :reflection_storage,
-            :reflection_output_test_pid,
-            :reflection_retry_counter
+            :reflection_output_test_pid
           ],
           into: %{} do
         {key, Application.get_env(:jido_gralkor, key)}
