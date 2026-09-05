@@ -473,6 +473,21 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when the package-owned generalisation Reflection is installed" do
+    test "then it retains related-memory search and normalized generalisation artefacts" do
+      reflection = packaged_reflection("generalisations")
+
+      assert reflection.name == "generalisations"
+      assert Enum.map(reflection.chain_of_thought.steps, & &1.label) ==
+               ["inspect-world", "evolve-generalisations"]
+
+      assert List.last(reflection.chain_of_thought.steps).output == %{
+               "generalisations" =>
+                 "Array<{ content: string; level: integer; evolves_from: Array<{ content: string; level: integer }> }>"
+             }
+    end
+  end
+
   describe "when a Reflection Runner is invoked" do
     test "then its ordered Chain of Thought runner starts its first step for the supplied operator and invocation",
          context do
