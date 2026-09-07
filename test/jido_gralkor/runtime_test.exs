@@ -549,7 +549,7 @@ defmodule JidoGralkor.RuntimeTest do
       start_runtime(reflection_configuration())
       parent = self()
       attempts = start_supervised!({Agent, fn -> 0 end})
-      sleeps = start_supervised!({Agent, fn -> [] end})
+      sleeps = start_supervised!({Agent, fn -> [] end}, id: :delivery_retry_sleeps)
       artefact = Gralkor.Artefact.new("delivery-retry", %{})
 
       assert {:ok, _} =
