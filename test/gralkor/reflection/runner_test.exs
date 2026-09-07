@@ -16,6 +16,7 @@ defmodule Gralkor.Reflection.RunnerTest do
           [
             type_matcher: fn
               "ready", "string" -> true
+              "collected", "string" -> true
               "ship", "string" -> true
               3, "integer" -> true
               _value, _type -> false
