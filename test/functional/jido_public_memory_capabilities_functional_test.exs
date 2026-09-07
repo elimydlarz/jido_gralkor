@@ -47,16 +47,17 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     def adapter(test_pid) do
       fn request ->
-        request_count = Process.get(:public_provider_request_count, 0)
-        Process.put(:public_provider_request_count, request_count + 1)
         body = IO.iodata_to_binary(request.body)
         payload = Jason.decode!(body)
-        send(test_pid, {:provider_request, request_count, request.url, payload})
+        messages = payload["messages"] || []
+        has_tool_results? = Enum.any?(messages, &(&1["role"] == "tool"))
+        send(test_pid, {:provider_request, request.url, payload})
 
         response =
-          case request_count do
-            0 -> tool_call_response()
-            _ -> answer_response(payload, test_pid)
+          if has_tool_results? do
+            answer_response(payload, test_pid)
+          else
+            tool_call_response()
           end
 
         {request,
