@@ -15,8 +15,9 @@ defmodule Gralkor.Reflection.RunnerTest do
         Keyword.merge(
           [
             type_matcher: fn
-              value, "string" when is_binary(value) -> true
-              value, "integer" when is_integer(value) -> true
+              "ready", "string" -> true
+              "ship", "string" -> true
+              3, "integer" -> true
               _value, _type -> false
             end,
             artefact_id_for: fn "operator-one", "invocation-one", "review" ->
