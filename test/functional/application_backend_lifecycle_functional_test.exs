@@ -97,14 +97,33 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       Application.put_env(:jido_gralkor, :falkordb, host: "memory.example", port: 6379)
       Application.put_env(:jido_gralkor, :reflections, :invalid_if_resolved)
       Application.put_env(:jido_gralkor, :destinations, [[name: "observations"]])
-      Application.put_env(:jido_gralkor, :lenses, [[name: "observations", destination: "observations", ingestion: Gralkor.Lens.Ingestion.Store]])
+
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          destination: "observations",
+          ingestion: Gralkor.Lens.Ingestion.Store
+        ]
+      ])
+
       Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
       start_supervised!(Gralkor.Lens.Storage.InMemory)
 
-      assert [{Gralkor.Python, _}, {GraphitiPool, _}, {CaptureBuffer, capture_options}] = GralkorApplication.children()
+      assert [{Gralkor.Python, _}, {GraphitiPool, _}, {CaptureBuffer, capture_options}] =
+               GralkorApplication.children()
+
       start_supervised!({CaptureBuffer, capture_options})
 
-      assert :ok = CaptureBuffer.append_lens("reflection-free-capture", "operator-one", "Susu", "Eli", "observations", [Message.new("user", "captured without Reflection scheduling")])
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 "reflection-free-capture",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 [Message.new("user", "captured without Reflection scheduling")]
+               )
+
       assert :ok = CaptureBuffer.flush_and_await("reflection-free-capture", 1_000)
       assert [%{lens: "observations"}] = Gralkor.Lens.Storage.InMemory.episodes("observations")
     end
