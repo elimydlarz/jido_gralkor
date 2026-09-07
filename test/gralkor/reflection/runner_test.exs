@@ -7,6 +7,7 @@ defmodule Gralkor.Reflection.RunnerTest do
   alias Gralkor.Reflection
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Reflection.ChainOfThought.Step
+
   defmodule Runner do
     def run(reflection, invocation, opts \\ []) do
       Gralkor.Reflection.Runner.run(
