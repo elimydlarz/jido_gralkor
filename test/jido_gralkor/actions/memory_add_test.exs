@@ -17,13 +17,31 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
     end
   end
 
+  defmodule BlockingMemoryAddClient do
+    def memory_add(group_id, content, source_description, source_kind) do
+      send(Process.whereis(:memory_add_blocking_test),
+        {:memory_add_started, group_id, content, source_description, source_kind})
+
+      receive do
+        :release -> :ok
+      end
+    end
+  end
+
   setup do
     InMemory.reset()
 
+    previous_client = Application.get_env(:jido_gralkor, :client)
     previous_destinations = Application.get_env(:jido_gralkor, :destinations)
     previous_lenses = Application.get_env(:jido_gralkor, :lenses)
 
     on_exit(fn ->
+      if previous_client do
+        Application.put_env(:jido_gralkor, :client, previous_client)
+      else
+        Application.delete_env(:jido_gralkor, :client)
+      end
+
       if previous_destinations do
         Application.put_env(:jido_gralkor, :destinations, previous_destinations)
       else
@@ -53,6 +71,31 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                  },
                  %{agent_id: "01USER"}
                )
+    end
+
+    test "then a blocking background write is submitted after the acknowledgement returns" do
+      Process.register(self(), :memory_add_blocking_test)
+      Application.put_env(:jido_gralkor, :client, BlockingMemoryAddClient)
+
+      caller =
+        Task.async(fn ->
+          MemoryAdd.run(
+            %{
+              content: "Eli prefers tea",
+              source_kind: :conversation,
+              source_description: "user preference"
+            },
+            %{agent_id: "01USER"}
+          )
+        end)
+
+      assert {:ok, %{result: "Ingesting."}} = Task.await(caller, 100)
+
+      assert_receive {:memory_add_started, "operator/01USER", "Eli prefers tea",
+                      "user preference", :conversation}
+
+      send(self(), :release)
+      assert eventually(fn -> Task.yield(caller, 0) == {:ok, {:ok, %{result: "Ingesting."}}} end)
     end
 
     test "and the background write uses the graph named `operator/<operator id>`" do

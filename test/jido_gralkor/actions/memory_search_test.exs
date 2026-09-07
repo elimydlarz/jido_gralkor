@@ -167,13 +167,13 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   end
 
   describe "when the memory search tool runs with a usable query > while the tool context identifies an owning AgentServer as the Gralkor runtime target" do
-    test "then Search uses that agent's current runtime configuration" do
+    test "then Search receives that owning AgentServer as its runtime target" do
       prove_runtime_targeted_search()
     end
   end
 
   describe "when the memory search tool runs with a usable query > while the tool context has no Gralkor runtime target" do
-    test "then Search uses the application compatibility configuration" do
+    test "then Search uses the untargeted application compatibility boundary" do
       prove_application_compatibility_search()
     end
   end
