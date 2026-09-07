@@ -871,14 +871,13 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     prompt = "Recommend how to roll out the Payments database migration."
 
-    {provider_pid, provider_port} = InspectingProviderFixture.start(self())
-    on_exit(fn -> InspectingProviderFixture.stop(provider_pid) end)
+    provider_adapter = InspectingProviderFixture.adapter(self())
 
     assert {:ok, answer} =
              DeterministicMemoryAgent.ask_sync(agent, prompt,
                llm_opts: [
-                 base_url: "http://127.0.0.1:#{provider_port}/v1",
-                 api_key: "test-provider-key"
+                 api_key: "test-provider-key",
+                 req_http_options: [adapter: provider_adapter]
                ]
              )
 
