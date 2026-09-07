@@ -137,7 +137,7 @@ defmodule JidoGralkor.RuntimeTest do
          configuration: reflection_configuration(),
          packaged_reflections: fn -> [packaged_reflection()] end,
          parse_chain_of_thought: fn _ -> {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}} end}
-      )
+      , id: :other_runtime)
 
       start_runtime(reflection_configuration())
 
@@ -679,13 +679,12 @@ defmodule JidoGralkor.RuntimeTest do
 
   defp replacement_configuration(destination) do
     configuration = reflection_configuration()
+    reflection = put_in(hd(configuration.reflections), [:outputs, Access.at(0), :destination], destination)
 
     %{
       configuration
       | destinations: [%{name: destination}],
-        reflections: [
-          put_in(hd(configuration.reflections).outputs, [Access.at(0), :destination], destination)
-        ]
+        reflections: [reflection]
     }
   end
 
