@@ -338,7 +338,7 @@ defmodule JidoGralkor.RuntimeTest do
   end
 
   describe "if Reflection production reports a retryable server failure > while a retry succeeds before twenty-four hours" do
-    test "then delivery proceeds and the callback receives the terminal outcome" do
+    test "then production retries with exponential backoff" do
       start_runtime(reflection_configuration())
       parent = self()
       attempts = Agent.start_link(fn -> 0 end) |> elem(1)
@@ -444,7 +444,7 @@ defmodule JidoGralkor.RuntimeTest do
   end
 
   describe "if Destination delivery reports a retryable server failure > while a retry succeeds before twenty-four hours" do
-    test "then the callback receives the delivered outcome" do
+    test "then delivery retries the same artefact with exponential backoff" do
       start_runtime(reflection_configuration())
       parent = self()
       attempts = start_supervised!({Agent, fn -> 0 end})
