@@ -144,7 +144,7 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
       assert {:error, {:reserved_provenance_syntax, :lenses, "notes [lens: old"}} =
                validate(Map.put(config(), :lenses, lens))
-      reflection = [[name: "review [lens: old", outputs: [], chain_of_thought: [steps: []]]
+      reflection = [[name: "review [lens: old", outputs: [], chain_of_thought: [steps: []]]]
       assert {:error, {:reserved_provenance_syntax, :reflections, "review [lens: old"}} =
                validate(Map.put(config(), :reflections, reflection))
     end
