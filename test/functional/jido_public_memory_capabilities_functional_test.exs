@@ -952,7 +952,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     assert_receive {:provider_tool_results_inspected, true, tool_results}
     assert tool_results != []
-    assert Enum.any?(tool_results, &(to_string(&1["content"]) =~ "evolves_from"))
+    assert Enum.any?(tool_results, &(to_string(&1["output"]) =~ "evolves_from"))
     answer
   end
 
