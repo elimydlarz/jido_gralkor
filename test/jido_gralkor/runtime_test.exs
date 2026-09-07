@@ -56,7 +56,12 @@ defmodule JidoGralkor.RuntimeTest do
     test "and the packaged Destinations, operator Lens, and Reflections are available beside consumer definitions" do
       start_runtime(reflection_configuration())
 
-      assert Enum.map(Runtime.destinations(self()), & &1.name) == ["operator", "global", "reviews"]
+      assert Enum.map(Runtime.destinations(self()), & &1.name) == [
+               "operator",
+               "global",
+               "reviews"
+             ]
+
       assert Runtime.lens!(self(), "operator").name == "operator"
       assert Runtime.reflection!(self(), "generalisations").name == "generalisations"
       assert Runtime.reflection!(self(), "review").name == "review"
@@ -130,7 +135,11 @@ defmodule JidoGralkor.RuntimeTest do
       start_runtime(configuration)
 
       assert {lenses, destinations} =
-               Runtime.resolve_search!(self(), ["custom", "custom"], ["reviews", "global", "reviews"])
+               Runtime.resolve_search!(self(), ["custom", "custom"], [
+                 "reviews",
+                 "global",
+                 "reviews"
+               ])
 
       assert Enum.map(lenses, & &1.name) == ["custom"]
       assert Enum.map(destinations, & &1.name) == ["reviews", "global"]
@@ -165,7 +174,13 @@ defmodule JidoGralkor.RuntimeTest do
                )
 
       assert_receive {:delivered, "reviews"}
-      assert_receive {:reflection_callback, %{invocation_id: "success-invocation", artefact: ^artefact, outcome: :delivered}}
+
+      assert_receive {:reflection_callback,
+                      %{
+                        invocation_id: "success-invocation",
+                        artefact: ^artefact,
+                        outcome: :delivered
+                      }}
     end
   end
 
@@ -212,7 +227,10 @@ defmodule JidoGralkor.RuntimeTest do
                )
 
       assert_receive :delivery_attempt
-      assert_receive {:reflection_callback, %{artefact: ^artefact, outcome: {:abandoned, %{stage: :delivery}}}}
+
+      assert_receive {:reflection_callback,
+                      %{artefact: ^artefact, outcome: {:abandoned, %{stage: :delivery}}}}
+
       refute_receive :delivery_attempt
     end
   end
@@ -268,7 +286,12 @@ defmodule JidoGralkor.RuntimeTest do
   end
 
   defp lens_configuration do
-    %{name: "custom", write: :append, destination: "reviews", ingestion: Gralkor.Lens.Ingestion.Store}
+    %{
+      name: "custom",
+      write: :append,
+      destination: "reviews",
+      ingestion: Gralkor.Lens.Ingestion.Store
+    }
   end
 
   defp invocation(id) do
