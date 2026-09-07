@@ -45,75 +45,22 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   defmodule InspectingProviderFixture do
     @answer "RECOMMENDATION: Use a reversible limited-scope canary for the Payments database migration.\nPREDECESSOR: level 1; scope deployment rollout\nEVOLVED: level 2; newly covered scope feature releases\nRATIONALE: The evolved lesson and related observation show that a limited reversible trial can expose faults before broad impact."
 
-    def start(test_pid) do
-      {:ok, listener} =
-        :gen_tcp.listen(0, [:binary, packet: :raw, active: false, reuseaddr: true])
+    def adapter(test_pid) do
+      fn request ->
+        request_count = Process.get(:public_provider_request_count, 0)
+        Process.put(:public_provider_request_count, request_count + 1)
+        body = IO.iodata_to_binary(request.body)
+        payload = Jason.decode!(body)
+        send(test_pid, {:provider_request, request_count, request.url, payload})
 
-      {:ok, {_address, port}} = :inet.sockname(listener)
-      pid = spawn_link(fn -> accept(listener, test_pid, 0) end)
-      {pid, port}
-    end
-
-    def stop(pid), do: Process.exit(pid, :normal)
-
-    defp accept(listener, test_pid, request_count) do
-      {:ok, socket} = :gen_tcp.accept(listener)
-      {:ok, body} = receive_body(socket)
-      IO.puts("provider fixture request #{request_count} bytes=#{byte_size(body)}")
-      send(test_pid, {:provider_request, request_count, body})
-
-      response =
-        case request_count do
-          0 -> tool_call_response()
-          _ -> answer_response(body, test_pid)
-        end
-
-      :ok = :gen_tcp.send(socket, response)
-      :gen_tcp.close(socket)
-      accept(listener, test_pid, request_count + 1)
-    end
-
-    defp receive_body(socket) do
-      receive_request(socket, <<>>, nil)
-    end
-
-    defp receive_request(socket, buffer, content_length) do
-      case :binary.match(buffer, "\r\n\r\n") do
-        {header_end, 4} ->
-          headers = binary_part(buffer, 0, header_end)
-          body_start = binary_part(buffer, header_end + 4, byte_size(buffer) - header_end - 4)
-          length = content_length || content_length(headers)
-
-          if byte_size(body_start) >= length do
-            {:ok, binary_part(body_start, 0, length)}
-          else
-            case :gen_tcp.recv(socket, 0, 5_000) do
-              {:ok, chunk} -> receive_request(socket, buffer <> chunk, length)
-              error -> error
-            end
+        response =
+          case request_count do
+            0 -> tool_call_response()
+            _ -> answer_response(payload, test_pid)
           end
 
-        :nomatch ->
-          case :gen_tcp.recv(socket, 0, 5_000) do
-            {:ok, chunk} -> receive_request(socket, buffer <> chunk, content_length)
-            error -> error
-          end
+        {request, Req.Response.new(status: 200, headers: %{"content-type" => ["application/json"]}, body: response)}
       end
-    end
-
-    defp content_length(headers) do
-      headers
-      |> String.split("\r\n")
-      |> Enum.find_value(0, fn line ->
-        case String.split(line, ":", parts: 2) do
-          [key, value] ->
-            if String.downcase(key) == "content-length",
-              do: String.to_integer(String.trim(value))
-
-          _ ->
-            nil
-        end
-      end)
     end
 
     defp tool_call_response do
@@ -148,8 +95,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       http_response(json)
     end
 
-    defp answer_response(body, test_pid) do
-      messages = Jason.decode!(body)["messages"] || []
+    defp answer_response(payload, test_pid) do
+      messages = payload["messages"] || []
       tool_results = Enum.filter(messages, &(&1["role"] == "tool"))
       content = Enum.map_join(tool_results, "\n", &to_string(&1["content"] || ""))
 
