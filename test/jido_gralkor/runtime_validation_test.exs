@@ -81,8 +81,10 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   describe "if a definition is neither a map nor a keyword list" do
     test "then validation identifies its collection and configured value" do
-      assert {:error, {:invalid_definition, :destinations, :bad}} =
-               validate(Map.put(config(), :destinations, [:bad]))
+      for collection <- [:destinations, :lenses, :reflections] do
+        assert {:error, {:invalid_definition, ^collection, :bad}} =
+                 validate(Map.put(config(), collection, [:bad]))
+      end
     end
   end
 
@@ -101,6 +103,10 @@ defmodule JidoGralkor.RuntimeValidationTest do
     test "then validation identifies its collection and reserved name" do
       assert {:error, {:reserved_definition_name, :destinations, "operator"}} =
                validate(Map.put(config(), :destinations, [[name: "operator"]]))
+      assert {:error, {:reserved_definition_name, :lenses, "operator"}} =
+               validate(Map.put(config(), :lenses, [[name: "operator"]]))
+      assert {:error, {:reserved_definition_name, :reflections, "packaged"}} =
+               validate(Map.put(config(), :reflections, [[name: "packaged", outputs: [], chain_of_thought: [steps: []]]]))
     end
   end
 
@@ -138,6 +144,9 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
       assert {:error, {:reserved_provenance_syntax, :lenses, "notes [lens: old"}} =
                validate(Map.put(config(), :lenses, lens))
+      reflection = [[name: "review [lens: old", outputs: [], chain_of_thought: [steps: []]]
+      assert {:error, {:reserved_provenance_syntax, :reflections, "review [lens: old"}} =
+               validate(Map.put(config(), :reflections, reflection))
     end
   end
 
