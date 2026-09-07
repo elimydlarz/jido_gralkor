@@ -59,6 +59,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     defp accept(listener, test_pid, request_count) do
       {:ok, socket} = :gen_tcp.accept(listener)
       {:ok, body} = receive_body(socket)
+      send(test_pid, {:provider_request, request_count, body})
 
       response =
         case request_count do
@@ -209,6 +210,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       max_iterations: 2,
       system_prompt:
         "Search memory before answering and apply the retrieved evolved generalisation."
+
+    def on_before_cmd(agent, action) do
+      {:ok, %{agent | state: Map.put(agent.state, :user_name, "Eli")}, action}
+    end
   end
 
   setup do
