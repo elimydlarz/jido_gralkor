@@ -46,7 +46,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     @answer "RECOMMENDATION: Use a reversible limited-scope canary for the Payments database migration.\nPREDECESSOR: level 1; scope deployment rollout\nEVOLVED: level 2; newly covered scope feature releases\nRATIONALE: The evolved lesson and related observation show that a limited reversible trial can expose faults before broad impact."
 
     def start(test_pid) do
-      {:ok, listener} = :gen_tcp.listen(0, [:binary, packet: :raw, active: false, reuseaddr: true])
+      {:ok, listener} =
+        :gen_tcp.listen(0, [:binary, packet: :raw, active: false, reuseaddr: true])
+
       {:ok, {_address, port}} = :inet.sockname(listener)
       pid = spawn_link(fn -> accept(listener, test_pid, 0) end)
       {pid, port}
@@ -105,7 +107,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
           [key, value] ->
             if String.downcase(key) == "content-length",
               do: String.to_integer(String.trim(value))
-          _ -> nil
+
+          _ ->
+            nil
         end
       end)
     end
@@ -129,7 +133,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                     type: "function",
                     function: %{
                       name: "memory_search",
-                      arguments: Jason.encode!(%{query: "reversible canary deployment feature releases"})
+                      arguments:
+                        Jason.encode!(%{query: "reversible canary deployment feature releases"})
                     }
                   }
                 ]
@@ -154,7 +159,21 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
           content =~ "level"
 
       send(test_pid, {:provider_tool_results_inspected, valid?, tool_results})
-      http_response(Jason.encode!(%{id: "fixture-answer", object: "chat.completion", model: "fixture", choices: [%{index: 0, finish_reason: "stop", message: %{role: "assistant", content: if(valid?, do: @answer, else: nil)}}]}))
+
+      http_response(
+        Jason.encode!(%{
+          id: "fixture-answer",
+          object: "chat.completion",
+          model: "fixture",
+          choices: [
+            %{
+              index: 0,
+              finish_reason: "stop",
+              message: %{role: "assistant", content: if(valid?, do: @answer, else: nil)}
+            }
+          ]
+        })
+      )
     end
 
     defp http_response(json) do
@@ -920,7 +939,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     assert_receive {:provider_tool_results_inspected, true, tool_results}
     assert tool_results != []
-    assert Enum.any?(tool_results, &to_string(&1["content"]) =~ "evolves_from")
+    assert Enum.any?(tool_results, &(to_string(&1["content"]) =~ "evolves_from"))
     answer
   end
 
