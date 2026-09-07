@@ -79,6 +79,7 @@ defmodule JidoGralkor.RuntimeTest do
                  &send(test_pid, {:reflection_callback, &1}),
                  run_reflection: fn _reflection, _invocation, _opts ->
                    send(test_pid, {:production_started, self()})
+
                    receive do
                      :release -> {:ok, Gralkor.Artefact.new("async", %{})}
                    end
@@ -208,7 +209,6 @@ defmodule JidoGralkor.RuntimeTest do
         Runtime.resolve_search!(self(), [], ["missing"])
       end
     end
-
   end
 
   describe "when search definitions are resolved from an active runtime" do
@@ -352,8 +352,11 @@ defmodule JidoGralkor.RuntimeTest do
                  invocation("retained"),
                  &send(parent, {:callback, &1}),
                  run_reflection: fn reflection, _invocation, _opts ->
-                   destination = reflection.outputs |> hd() |> Map.fetch!(:destination) |> Map.fetch!(:name)
+                   destination =
+                     reflection.outputs |> hd() |> Map.fetch!(:destination) |> Map.fetch!(:name)
+
                    send(parent, {:reflection, destination})
+
                    receive do
                      :release -> {:error, :stop}
                    end
@@ -370,6 +373,7 @@ defmodule JidoGralkor.RuntimeTest do
       assert :ok = Runtime.replace(self(), replacement_configuration("new"))
 
       parent = self()
+
       assert {:ok, "later"} =
                Runtime.submit_reflection(
                  self(),
@@ -377,11 +381,14 @@ defmodule JidoGralkor.RuntimeTest do
                  invocation("later"),
                  &send(parent, {:callback, &1}),
                  run_reflection: fn reflection, _invocation, _opts ->
-                   destination = reflection.outputs |> hd() |> Map.fetch!(:destination) |> Map.fetch!(:name)
+                   destination =
+                     reflection.outputs |> hd() |> Map.fetch!(:destination) |> Map.fetch!(:name)
+
                    send(parent, {:reflection, destination})
                    {:error, :stop}
                  end
                )
+
       assert_receive {:reflection, "new"}
     end
   end
@@ -431,7 +438,17 @@ defmodule JidoGralkor.RuntimeTest do
     test "then delivery proceeds and the callback receives the terminal outcome" do
       start_runtime(reflection_configuration())
       parent = self()
-      assert {:ok, _} = Runtime.submit_reflection(self(), "review", invocation("retry-terminal"), &send(parent, {:callback, &1}), run_reflection: fn _r, _i, _o -> {:ok, Gralkor.Artefact.new("terminal", %{})} end, deliver_artefact: fn _o, _r, _op, _a, _opts -> :ok end)
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("retry-terminal"),
+                 &send(parent, {:callback, &1}),
+                 run_reflection: fn _r, _i, _o -> {:ok, Gralkor.Artefact.new("terminal", %{})} end,
+                 deliver_artefact: fn _o, _r, _op, _a, _opts -> :ok end
+               )
+
       assert_receive {:callback, %{outcome: :delivered}}
     end
   end
@@ -544,7 +561,17 @@ defmodule JidoGralkor.RuntimeTest do
     test "then the callback receives the delivered outcome" do
       start_runtime(reflection_configuration())
       parent = self()
-      assert {:ok, _} = Runtime.submit_reflection(self(), "review", invocation("delivery-terminal"), &send(parent, {:callback, &1}), run_reflection: fn _r, _i, _o -> {:ok, Gralkor.Artefact.new("terminal", %{})} end, deliver_artefact: fn _o, _r, _op, _a, _opts -> :ok end)
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("delivery-terminal"),
+                 &send(parent, {:callback, &1}),
+                 run_reflection: fn _r, _i, _o -> {:ok, Gralkor.Artefact.new("terminal", %{})} end,
+                 deliver_artefact: fn _o, _r, _op, _a, _opts -> :ok end
+               )
+
       assert_receive {:callback, %{outcome: :delivered}}
     end
   end
