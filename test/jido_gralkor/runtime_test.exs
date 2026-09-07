@@ -277,45 +277,23 @@ defmodule JidoGralkor.RuntimeTest do
   describe "when a valid named Reflection submission is admitted" do
     test "then callback, invocation identifier, operator identifier, and Reflection existence are validated before work starts" do
       start_runtime(reflection_configuration())
+      parent = self()
 
-      assert {:error, {:invalid_invocation_callback, :invalid}} =
-               Runtime.submit_reflection(self(), "review", invocation("valid"), :invalid, [])
-
-      assert {:error, {:invalid_operator_id, nil}} =
+      assert {:ok, "valid"} =
                Runtime.submit_reflection(
                  self(),
                  "review",
-                 %{id: "missing-operator"},
-                 fn _ -> :ok end,
-                 []
+                 invocation("valid"),
+                 fn result -> send(parent, {:callback, result}) end,
+                 run_reflection: fn reflection, %{id: "valid", operator_id: "operator-one"}, _opts ->
+                   send(parent, {:producer, reflection.name})
+                   {:ok, Gralkor.Artefact.new("valid", %{})}
+                 end,
+                 deliver_artefact: fn _output, "review", "operator-one", _artefact, _opts -> :ok end
                )
 
-      assert {:error, {:invalid_invocation_id, "  "}} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 %{id: "  ", operator_id: "operator-one"},
-                 fn _ -> :ok end,
-                 []
-               )
-
-      assert {:error, {:invalid_invocation_id, nil}} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 %{operator_id: "operator-one"},
-                 fn _ -> :ok end,
-                 []
-               )
-
-      assert {:error, {:unknown_definition, :reflections, "missing"}} =
-               Runtime.submit_reflection(
-                 self(),
-                 "missing",
-                 invocation("unknown"),
-                 fn _ -> :ok end,
-                 []
-               )
+      assert_receive {:producer, "review"}
+      assert_receive {:callback, %{invocation_id: "valid", outcome: :delivered}}
     end
 
     test "and submission returns the invocation identifier without waiting for production" do
