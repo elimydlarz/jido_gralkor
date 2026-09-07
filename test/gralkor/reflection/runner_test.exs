@@ -626,13 +626,18 @@ defmodule Gralkor.Reflection.RunnerTest do
            }
 
     assert args.prompt =~ "Use the evidence."
-    assert args.prompt =~ ~s({"answer":"string"})
-
-    assert args.prompt =~
-             ~s({"id":"representation-one","lens":"observations","content":"Deployment evidence.","result":"ok"})
-
-    assert args.prompt =~ ~s([{"content":"stored observation"}])
+    assert prompt_json(args.prompt, "Lensed representations available to this Reflection step:", "Related stored information available") == [
+             %{"content" => "Deployment evidence.", "id" => "representation-one", "lens" => "observations", "result" => "ok"}
+           ]
+    assert prompt_json(args.prompt, "Related stored information available to this Reflection step:", "Return only one JSON object") == [%{"content" => "stored observation"}]
+    assert prompt_json(args.prompt, "Return only one JSON object satisfying this exact output contract:", nil) == %{"answer" => "string"}
     refute args.prompt =~ "must not leak"
+  end
+
+  defp prompt_json(prompt, heading, next_heading) do
+    suffix = if next_heading, do: "\\n\\n#{Regex.escape(next_heading)}", else: "\\n\\nThe quoted contract"
+    [_, encoded] = Regex.run(~r/#{Regex.escape(heading)}\\n(.*?)#{suffix}/s, prompt)
+    Jason.decode!(String.trim(encoded))
   end
 
   defp prove_built_in_inference_context do
