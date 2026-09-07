@@ -505,20 +505,16 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "when runtime registration is not yet visible" do
+  describe "when a runtime-targeted call receives a live owning AgentServer PID > while runtime registration is not yet visible" do
     test "then target lookup synchronizes once with the owner before deciding availability" do
-      owner =
-        spawn(fn ->
-          receive do
-            :stop -> :ok
-          end
-        end)
+      owner = start_supervised!({RuntimeSyncOwner, self()})
 
       assert_raise ArgumentError, ~r/runtime unavailable for owning AgentServer/, fn ->
         Runtime.ensure_available!(owner)
       end
 
-      send(owner, :stop)
+      assert_receive {:state_sync, ^owner}
+      refute_receive {:state_sync, ^owner}
     end
   end
 
