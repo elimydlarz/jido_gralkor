@@ -239,7 +239,7 @@ defmodule JidoGralkor.RuntimeTest do
                    if attempt == 1, do: {:error, %{status: 503}}, else: {:ok, Gralkor.Artefact.new("retry", %{})}
                  end,
                  deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts -> :ok,
-                 sleep: fn _delay -> :ok
+                 sleep: fn _delay -> :ok end
                )
 
       assert_receive {:callback, %{outcome: :delivered}}
