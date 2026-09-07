@@ -55,7 +55,7 @@ defmodule Gralkor.Reflection.RunnerTest do
       assert_receive {:inference_request, %{step: %{label: "decide"}}}
     end
 
-    test "and every step request carries the Reflection, operator, invocation identifier, and invocation context" do
+    test "and every step request carries the Reflection name, operator, invocation identifier, and invocation context" do
       prove_step_request_identity()
     end
 
