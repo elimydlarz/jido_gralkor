@@ -922,13 +922,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     prompt = "Recommend how to roll out the Payments database migration."
 
-    scripted_answer = """
-    RECOMMENDATION: Use a reversible limited-scope canary for the Payments database migration.
-    PREDECESSOR: level 1; scope deployment rollout
-    EVOLVED: level 2; newly covered scope feature releases
-    RATIONALE: The evolved lesson and related observation show that a limited reversible trial can expose faults before broad impact.
-    """
-
     {provider_pid, provider_port} = InspectingProviderFixture.start(self())
     on_exit(fn -> InspectingProviderFixture.stop(provider_pid) end)
 
