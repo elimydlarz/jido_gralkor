@@ -321,6 +321,7 @@ defmodule JidoGralkor.RuntimeTest do
     test "and submission returns the invocation identifier without waiting for production" do
       start_runtime(reflection_configuration())
       parent = self()
+      attempts = start_supervised!({Agent, fn -> 0 end})
 
       assert {:ok, "admitted"} =
                Runtime.submit_reflection(
@@ -450,7 +451,11 @@ defmodule JidoGralkor.RuntimeTest do
                  "review",
                  invocation("retry-terminal"),
                  &send(parent, {:callback, &1}),
-                 run_reflection: fn _r, _i, _o -> {:ok, Gralkor.Artefact.new("terminal", %{})} end,
+                 run_reflection: fn _r, _i, _o ->
+                   attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
+                   if attempt == 1, do: {:error, %{status: 503}}, else: {:ok, Gralkor.Artefact.new("terminal", %{})}
+                 end,
+                 sleep: fn _ -> :ok end,
                  deliver_artefact: fn _o, _r, _op, _a, _opts -> :ok end
                )
 
