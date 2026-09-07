@@ -98,9 +98,18 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
           id: "fixture-answer",
           object: "chat.completion",
           model: "fixture",
-        status: "completed",
-        output:
-          if(valid?, do: [%{"type" => "message", "role" => "assistant", "content" => [%{"type" => "output_text", "text" => @answer}]}], else: [])
+          status: "completed",
+          output:
+            if(valid?,
+              do: [
+                %{
+                  "type" => "message",
+                  "role" => "assistant",
+                  "content" => [%{"type" => "output_text", "text" => @answer}]
+                }
+              ],
+              else: []
+            )
         })
       )
     end
