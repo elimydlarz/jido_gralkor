@@ -644,7 +644,7 @@ defmodule Gralkor.Reflection.RunnerTest do
 
     runner_opts =
       opts
-      |> Keyword.take([:tools, :tool_context, :artefact_id])
+      |> Keyword.take([:tools, :tool_context, :artefact_id, :artefact_id_for, :type_matcher])
       |> Keyword.put(:inference, inference)
 
     Runner.run(
