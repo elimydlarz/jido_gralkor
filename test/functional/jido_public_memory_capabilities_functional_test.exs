@@ -43,6 +43,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   end
 
   defmodule InspectingProviderFixture do
+    @observation "A reversible canary exposed a configuration fault before broad deployment impact."
+    @generalisation "Reversible limited-scope trials expose faults before broad impact across deployments, migrations, and feature releases."
+    @predecessor "A reversible limited-scope trial exposed faults before a deployment reached broad impact."
     @answer "RECOMMENDATION: Use a reversible limited-scope canary for the Payments database migration.\nPREDECESSOR: level 1; scope deployment rollout\nEVOLVED: level 2; newly covered scope feature releases\nRATIONALE: The evolved lesson and related observation show that a limited reversible trial can expose faults before broad impact."
 
     def adapter(test_pid) do
@@ -99,14 +102,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     defp answer_response(payload, test_pid) do
       messages = payload["messages"] || []
       tool_results = Enum.filter(messages, &(&1["role"] == "tool"))
-      content = Enum.map_join(tool_results, "\n", &to_string(&1["content"] || ""))
-
-      valid? =
-        length(tool_results) > 0 and
-          content =~ "A reversible canary exposed" and
-          content =~ "feature releases" and
-          content =~ "evolves_from" and
-          content =~ "level"
+      valid? = exact_memory_evidence?(tool_results)
 
       send(test_pid, {:provider_tool_results_inspected, valid?, tool_results})
 
@@ -123,6 +119,60 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         ]
       }
     end
+
+    defp exact_memory_evidence?(tool_results) when tool_results != [] do
+      decoded = Enum.flat_map(tool_results, &decode_content/1)
+
+      Enum.any?(decoded, &deep_contains?(&1, @observation)) and
+        Enum.any?(decoded, &deep_contains_generalisation?(&1))
+    end
+
+    defp exact_memory_evidence?(_), do: false
+
+    defp decode_content(%{"content" => content}) when is_binary(content) do
+      case Jason.decode(content) do
+        {:ok, decoded} -> [decoded | nested_decoded(decoded)]
+        {:error, _} -> [content]
+      end
+    end
+
+    defp decode_content(_), do: []
+
+    defp nested_decoded(value) when is_map(value),
+      do: value |> Map.values() |> Enum.flat_map(&nested_decoded/1)
+
+    defp nested_decoded(value) when is_list(value),
+      do: Enum.flat_map(value, &nested_decoded/1)
+
+    defp nested_decoded(_), do: []
+
+    defp deep_contains?(value, expected) when is_binary(value), do: value == expected
+
+    defp deep_contains?(value, expected) when is_map(value),
+      do: Enum.any?(value, fn {key, item} -> key == "content" and deep_contains?(item, expected) or deep_contains?(item, expected) end)
+
+    defp deep_contains?(value, expected) when is_list(value),
+      do: Enum.any?(value, &deep_contains?(&1, expected))
+
+    defp deep_contains?(_, _), do: false
+
+    defp deep_contains_generalisation?(value) when is_map(value) do
+      generalisations = Map.get(value, "generalisations", [])
+
+      Enum.any?(generalisations, fn item ->
+        is_map(item) and
+          item["content"] == @generalisation and
+          item["level"] == 2 and
+          Enum.any?(item["evolves_from"] || [], fn predecessor ->
+            is_map(predecessor) and predecessor["content"] == @predecessor and predecessor["level"] == 1
+          end)
+      end) or Enum.any?(Map.values(value), &deep_contains_generalisation?/1)
+    end
+
+    defp deep_contains_generalisation?(value) when is_list(value),
+      do: Enum.any?(value, &deep_contains_generalisation?/1)
+
+    defp deep_contains_generalisation?(_), do: false
   end
 
   defmodule DeterministicMemoryAgent do
