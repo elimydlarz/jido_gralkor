@@ -59,6 +59,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     defp accept(listener, test_pid, request_count) do
       {:ok, socket} = :gen_tcp.accept(listener)
       {:ok, body} = receive_body(socket)
+      IO.puts("provider fixture request #{request_count} bytes=#{byte_size(body)}")
       send(test_pid, {:provider_request, request_count, body})
 
       response =
