@@ -7,11 +7,11 @@ when context rotation is requested
       and the agent's active session id becomes a new one
       and the agent process is still running afterwards
       while recent entries are retained
-      while the thread holds more
-        then only that many newest entries seed the rotated thread
+        while the thread holds more
+          then only that many newest entries seed the rotated thread
       while no entries are retained
-      while every prior entry was flushed
-        then the rotated thread is empty
+        while every prior entry was flushed
+          then the rotated thread is empty
       while entries arrive before installation
         then each arrives in the fresh thread once
     if installing the fresh thread fails after flushing

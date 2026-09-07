@@ -9,9 +9,9 @@ when the memory add tool runs with content, a source kind, and a source descript
   where the tool context selects a Lens
     then the Lens ingestion receives the operator, content, source kind, and source description
     while the tool context identifies an owning AgentServer as the Gralkor runtime target
-      then Lens ingestion uses that agent's current runtime configuration
+      then Lens ingestion receives that owning AgentServer as its runtime target
     while the tool context has no Gralkor runtime target
-      then Lens ingestion uses the application compatibility configuration
+      then Lens ingestion uses the untargeted application compatibility boundary
   if the background write fails
     then the failure is logged
     and the caller's acknowledgement is unaffected

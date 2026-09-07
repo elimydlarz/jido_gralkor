@@ -4,9 +4,9 @@ when the FalkorDB connection is resolved
   while neither a remote configuration nor a data directory is set
     then nothing is returned, so the supervisor can start with no children
   while a data directory is set
-  while no remote configuration is set
-    then an embedded connection carrying that data directory is returned
-    and a leading tilde in the data directory is expanded to an absolute path
+    while no remote configuration is set
+      then an embedded connection carrying that data directory is returned
+      and a leading tilde in the data directory is expanded to an absolute path
   while a remote configuration carrying a host and a port is set
     then a remote connection carrying that configuration unchanged is returned
     and a supplied username and password are carried through unchanged

@@ -6,8 +6,8 @@ when the memory search tool runs with a usable query
   and the Search request carries the usable query unchanged
   and the Search request asks for stored episodes
   where the tool call supplies no Destination selector
-  while the tool call supplies no Lens selector
-    then the Search request leaves both selector dimensions unrestricted
+    while the tool call supplies no Lens selector
+      then the Search request leaves both selector dimensions unrestricted
   where the tool call supplies Destinations
     then the Search request carries the same Destination list
   where the tool call supplies Lenses
@@ -15,9 +15,9 @@ when the memory search tool runs with a usable query
   where the tool call supplies Destinations and Lenses
     then the Search request carries both lists unchanged
   while the tool context identifies an owning AgentServer as the Gralkor runtime target
-    then Search uses that agent's current runtime configuration
+    then Search receives that owning AgentServer as its runtime target
   while the tool context has no Gralkor runtime target
-    then Search uses the application compatibility configuration
+    then Search uses the untargeted application compatibility boundary
   while Search returns results
     then the action result is their JSON encoding
     and every returned episode's Destination and originating Lens or declaring Reflection remain identifiable

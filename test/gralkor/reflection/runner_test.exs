@@ -185,8 +185,17 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
 
     test "and its identifier is derived from the operator, invocation, and Reflection identity" do
-      assert {:ok, %Artefact{id: id}} = run_successful_sequence()
-      assert id == Artefact.id_for("operator-one", "invocation-one", "review")
+      test_pid = self()
+
+      assert {:ok, %Artefact{id: "injected-id"}} =
+               run_successful_sequence(
+                 artefact_id_for: fn operator_id, invocation_id, reflection_name ->
+                   send(test_pid, {:artefact_id_for, operator_id, invocation_id, reflection_name})
+                   "injected-id"
+                 end
+               )
+
+      assert_receive {:artefact_id_for, "operator-one", "invocation-one", "review"}
     end
 
     test "and its payload contains exactly the final step's outputs" do

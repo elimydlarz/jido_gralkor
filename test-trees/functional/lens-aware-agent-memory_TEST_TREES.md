@@ -13,8 +13,8 @@ when an agent with a mounted memory plugin invokes memory search
   where no conversation thread has been committed
     then memory search still runs for the current operator
   where the Destination selector is omitted or empty
-  while the Lens selector is omitted or empty
-    then memory search uses every accessible registered Destination
+    while the Lens selector is omitted or empty
+      then memory search uses every accessible registered Destination
 
 where an agent turn selects another registered Lens
   then memory addition uses the turn-selected Lens
