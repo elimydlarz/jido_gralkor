@@ -211,7 +211,7 @@ Programmatic triggers and consumer-owned scheduled jobs use this same asynchrono
 
 The boundary that reports a retryable 5xx server failure owns retrying that operation with exponential backoff. This applies independently to inference, related-memory retrieval, and Destination delivery.
 
-Retries stop when the operation succeeds or twenty-four hours have elapsed since its first failed attempt. At that deadline, Gralkor abandons the invocation and reports the abandonment through its invocation callback.
+Retries stop when the operation succeeds or twenty-four hours have elapsed since its first attempt. At that deadline, Gralkor abandons the invocation and reports the abandonment through its invocation callback.
 
 A non-retryable 4xx client failure is abandoned immediately without retry and is reported through the same callback.
 
