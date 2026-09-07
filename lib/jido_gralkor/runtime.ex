@@ -22,8 +22,8 @@ defmodule JidoGralkor.Runtime do
     call!(owner, :snapshot)
   end
 
-  def replace(owner, configuration, opts \\ []) do
-    call!(owner, {:replace, configuration, opts})
+  def replace(owner, configuration) do
+    call!(owner, {:replace, configuration})
   end
 
   def destination!(owner, name), do: fetch_definition!(owner, :destinations, name)
@@ -89,9 +89,8 @@ defmodule JidoGralkor.Runtime do
   @impl GenServer
   def handle_call(:snapshot, _from, state), do: {:reply, state.configuration, state}
 
-  def handle_call({:replace, configuration, opts}, _from, state) do
-    validation_opts = if opts == [], do: state.validation_opts, else: validation_opts(opts)
-
+  def handle_call({:replace, configuration}, _from, state) do
+    validation_opts = state.validation_opts
     with :ok <- validate_configuration(configuration),
          {:ok, definitions} <- resolve_configuration(configuration, validation_opts) do
       {:reply, :ok,
