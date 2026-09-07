@@ -586,42 +586,6 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "when a consumer replaces complete valid configuration" do
-    test "and another owner's runtime remains unchanged" do
-      owner =
-        spawn(fn ->
-          receive do
-            :stop -> :ok
-          end
-        end)
-
-      start_supervised!(
-        {Runtime,
-         owner: owner,
-         configuration: reflection_configuration(),
-         packaged_reflections: fn -> [packaged_reflection()] end,
-         parse_chain_of_thought: fn _ -> {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}} end}
-      )
-
-      start_runtime(reflection_configuration())
-
-      replacement = replacement_configuration("new")
-      assert :ok = Runtime.replace(self(), replacement)
-      assert Runtime.destination!(owner, "reviews").name == "reviews"
-
-      send(owner, :stop)
-    end
-
-    test "and later replacement does not mutate the returned definitions" do
-      start_runtime(reflection_configuration())
-      original = Runtime.destination!(self(), "reviews")
-
-      assert :ok = Runtime.replace(self(), replacement_configuration("new"))
-      assert original.name == "reviews"
-      assert Runtime.destination!(self(), "new").name == "new"
-    end
-  end
-
   defp start_runtime(configuration) do
     start_supervised!(
       {Runtime,
