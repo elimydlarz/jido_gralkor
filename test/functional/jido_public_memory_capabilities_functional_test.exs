@@ -96,7 +96,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       Jason.decode!(
         Jason.encode!(%{
           id: "fixture-answer",
-          object: "chat.completion",
+          object: "response",
           model: "fixture",
           status: "completed",
           output:
