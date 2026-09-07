@@ -349,26 +349,37 @@ defmodule JidoGralkor.RuntimeTest do
                  invocation("retained"),
                  &send(parent, {:callback, &1}),
                  run_reflection: fn reflection, _invocation, _opts ->
-                   send(parent, {:reflection, reflection.name})
-                   {:error, :stop}
+                   destination = reflection.outputs |> hd() |> Map.fetch!(:destination) |> Map.fetch!(:name)
+                   send(parent, {:reflection, destination})
+                   receive do
+                     :release -> {:error, :stop}
+                   end
                  end
                )
 
       assert_receive {:reflection, "review"}
+      assert :ok = Runtime.replace(self(), replacement_configuration("new"))
+      send(parent, :release)
     end
 
     test "and later submission uses a subsequently installed definition" do
       start_runtime(reflection_configuration())
       assert :ok = Runtime.replace(self(), replacement_configuration("new"))
 
-      assert {:error, {:unknown_definition, :reflections, "review"}} =
+      parent = self()
+      assert {:ok, "later"} =
                Runtime.submit_reflection(
                  self(),
                  "review",
                  invocation("later"),
-                 fn _ -> :ok end,
-                 []
+                 &send(parent, {:callback, &1}),
+                 run_reflection: fn reflection, _invocation, _opts ->
+                   destination = reflection.outputs |> hd() |> Map.fetch!(:destination) |> Map.fetch!(:name)
+                   send(parent, {:reflection, destination})
+                   {:error, :stop}
+                 end
                )
+      assert_receive {:reflection, "new"}
     end
   end
 
