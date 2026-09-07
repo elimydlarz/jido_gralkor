@@ -444,6 +444,7 @@ defmodule JidoGralkor.RuntimeTest do
     test "then delivery proceeds and the callback receives the terminal outcome" do
       start_runtime(reflection_configuration())
       parent = self()
+      attempts = start_supervised!({Agent, fn -> 0 end})
 
       assert {:ok, _} =
                Runtime.submit_reflection(
