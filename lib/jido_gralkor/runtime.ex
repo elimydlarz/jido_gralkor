@@ -181,7 +181,7 @@ defmodule JidoGralkor.Runtime do
 
     with :ok <- validate_definition_fields(configuration),
          :ok <- validate_definition_names(configuration),
-         :ok <- validate_reserved_names(configuration),
+         :ok <- validate_reserved_names(configuration, packaged_reflections),
          :ok <- validate_lens_shapes(configuration.lenses),
          :ok <- validate_reflection_shapes(configuration.reflections, parse_chain_of_thought),
          :ok <- validate_destination_references(configuration),
@@ -301,11 +301,11 @@ defmodule JidoGralkor.Runtime do
 
   defp known_field?(_key, _fields), do: false
 
-  defp validate_reserved_names(configuration) do
+  defp validate_reserved_names(configuration, packaged_reflections \\ &Gralkor.Reflection.Packaged.definitions/0) do
     packaged = %{
       destinations: ["operator", "global"],
       lenses: ["operator", "global"],
-      reflections: Enum.map(Gralkor.Reflection.Packaged.definitions(), &field(&1, :name))
+      reflections: Enum.map(packaged_reflections.(), &field(&1, :name))
     }
 
     Enum.reduce_while(packaged, :ok, fn {collection, reserved}, :ok ->
@@ -841,6 +841,10 @@ defmodule JidoGralkor.Runtime do
     catch
       :exit, _reason -> runtime_unavailable!(owner)
     end
+  end
+
+  defp validation_opts(opts) do
+    Keyword.take(opts, [:packaged_reflections, :parse_chain_of_thought])
   end
 
   defp runtime_pid!(owner) when is_pid(owner) do
