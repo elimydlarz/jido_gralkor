@@ -463,12 +463,14 @@ defmodule JidoGralkor.RuntimeTest do
                  invocation("cancelled"),
                  &send(test_pid, {:reflection_callback, &1}),
                  run_reflection: fn _reflection, _invocation, _opts ->
+                   send(test_pid, :work_started)
                    receive do
                      :never -> {:ok, Gralkor.Artefact.new("never", %{})}
                    end
                  end
                )
 
+      assert_receive :work_started
       Process.exit(runtime, :kill)
       refute Process.alive?(runtime)
     end
@@ -485,12 +487,14 @@ defmodule JidoGralkor.RuntimeTest do
                  invocation("cancelled-callback"),
                  &send(test_pid, {:reflection_callback, &1}),
                  run_reflection: fn _reflection, _invocation, _opts ->
+                   send(test_pid, :work_started)
                    receive do
                      :never -> {:ok, Gralkor.Artefact.new("never", %{})}
                    end
                  end
                )
 
+      assert_receive :work_started
       Process.exit(runtime, :kill)
       refute_receive {:reflection_callback, _}, 100
     end
