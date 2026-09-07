@@ -88,10 +88,12 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   describe "if a definition contains unknown fields" do
     test "then validation identifies its collection, name, and unknown fields" do
-      c = update_in(config(), [:destinations, Access.at(0)], &Keyword.put(&1, :extra, true))
+      for {collection, name} <- [destinations: "memory", lenses: "notes", reflections: "review"] do
+        c = update_in(config(), [collection, Access.at(0)], &Keyword.put(&1, :extra, true))
 
-      assert {:error, {:unknown_definition_fields, :destinations, "memory", [:extra]}} =
-               validate(c)
+        assert {:error, {:unknown_definition_fields, ^collection, ^name, [:extra]}} =
+                 validate(c)
+      end
     end
   end
 
@@ -143,6 +145,12 @@ defmodule JidoGralkor.RuntimeValidationTest do
     test "then validation identifies the definition and Destination" do
       c = update_in(config(), [:lenses, Access.at(0)], &Keyword.put(&1, :destination, "missing"))
       assert {:error, {:unknown_destination, :lenses, "notes", "missing"}} = validate(c)
+
+      c = update_in(config(), [:reflections, Access.at(0)], fn reflection ->
+        Keyword.put(reflection, :outputs, [kind: :destination, destination: "missing", ontology: Gralkor.DefaultOntology])
+      end)
+
+      assert {:error, {:unknown_destination, :reflections, "review", "missing"}} = validate(c)
     end
   end
 
