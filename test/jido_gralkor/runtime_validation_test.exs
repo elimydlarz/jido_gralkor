@@ -147,7 +147,7 @@ defmodule JidoGralkor.RuntimeValidationTest do
       assert {:error, {:unknown_destination, :lenses, "notes", "missing"}} = validate(c)
 
       c = update_in(config(), [:reflections, Access.at(0)], fn reflection ->
-        Keyword.put(reflection, :outputs, [kind: :destination, destination: "missing", ontology: Gralkor.DefaultOntology])
+        Keyword.put(reflection, :outputs, [[kind: :destination, destination: "missing", ontology: Gralkor.DefaultOntology]])
       end)
 
       assert {:error, {:unknown_destination, :reflections, "review", "missing"}} = validate(c)
