@@ -513,4 +513,5 @@ defmodule JidoGralkor.RuntimeValidationTest do
   end
 
   defp parse_chain_of_thought(steps: []), do: {:error, :missing_steps}
+  defp parse_chain_of_thought(steps: [:bad]), do: {:error, {:invalid_step, :bad}}
 end
