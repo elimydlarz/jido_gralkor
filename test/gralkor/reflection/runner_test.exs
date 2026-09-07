@@ -656,12 +656,8 @@ defmodule Gralkor.Reflection.RunnerTest do
   end
 
   defp prompt_json(prompt, heading, next_heading) do
-    suffix =
-      if next_heading,
-        do: "\\n\\n#{Regex.escape(next_heading)}",
-        else: "\\n\\nThe quoted contract"
-
-    [_, encoded] = Regex.run(~r/#{Regex.escape(heading)}\\n(.*?)#{suffix}/s, prompt)
+    [_, rest] = String.split(prompt, heading <> "\n", parts: 2)
+    [encoded | _] = String.split(rest, "\n\n", parts: 2)
     Jason.decode!(String.trim(encoded))
   end
 
