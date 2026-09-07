@@ -349,7 +349,18 @@ defmodule JidoGralkor.RuntimeValidationTest do
     Map.put(config(), collection, if(duplicate, do: [definition, definition], else: [definition]))
   end
 
-  defp parse_chain_of_thought(steps: [step]), do: parse_chain_of_thought(%{steps: [step]})
+  defp parse_chain_of_thought(steps: [[label: "inspect", directions: "Inspect.", output: %{"summary" => "string"}]]) do
+    {:ok,
+     %Gralkor.Reflection.ChainOfThought{
+       steps: [
+         %Gralkor.Reflection.ChainOfThought.Step{
+           label: "inspect",
+           directions: "Inspect.",
+           output: %{"summary" => "string"}
+         }
+       ]
+     }}
+  end
 
   defp parse_chain_of_thought(%{
          steps: [%{label: "inspect", directions: "Inspect.", output: %{"summary" => "string"}}]
