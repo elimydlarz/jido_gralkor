@@ -330,7 +330,9 @@ defmodule JidoGralkor.RuntimeTest do
                  fn result -> send(parent, {:callback, result}) end,
                  run_reflection: fn _reflection, _invocation, _opts ->
                    send(parent, :ran)
-                   {:ok, Gralkor.Artefact.new("admitted", %{})}
+                   receive do
+                     :release -> {:ok, Gralkor.Artefact.new("admitted", %{})}
+                   end
                  end,
                  deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
                    :ok
@@ -338,6 +340,8 @@ defmodule JidoGralkor.RuntimeTest do
                )
 
       assert_receive :ran
+      refute_receive {:callback, _}
+      send(parent, :release)
       assert_receive {:callback, %{invocation_id: "admitted"}}
     end
 
@@ -355,7 +359,7 @@ defmodule JidoGralkor.RuntimeTest do
                    destination =
                      reflection.outputs |> hd() |> Map.fetch!(:destination) |> Map.fetch!(:name)
 
-                   send(parent, {:reflection, destination})
+                   send(parent, {:reflection, destination, self()})
 
                    receive do
                      :release -> {:error, :stop}
@@ -363,9 +367,10 @@ defmodule JidoGralkor.RuntimeTest do
                  end
                )
 
-      assert_receive {:reflection, "reviews"}
+      assert_receive {:reflection, "reviews", worker}
       assert :ok = Runtime.replace(self(), replacement_configuration("new"))
-      send(parent, :release)
+      send(worker, :release)
+      assert_receive {:callback, %{outcome: {:production_failed, :stop}}}
     end
 
     test "and later submission uses a subsequently installed definition" do
