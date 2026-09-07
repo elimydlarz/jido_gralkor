@@ -146,7 +146,6 @@ defmodule JidoGralkor.RuntimeTest do
       assert Runtime.destination!(owner, "reviews").name == "reviews"
       send(owner, :stop)
     end
-
   end
 
   describe "if replacement configuration is invalid" do
@@ -320,21 +319,43 @@ defmodule JidoGralkor.RuntimeTest do
     test "and the work retains the Reflection definition active at admission" do
       start_runtime(reflection_configuration())
       parent = self()
-      assert {:ok, "retained"} = Runtime.submit_reflection(self(), "review", invocation("retained"), &send(parent, {:callback, &1}), run_reflection: fn reflection, _invocation, _opts -> send(parent, {:reflection, reflection.name}); {:error, :stop} end)
+
+      assert {:ok, "retained"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("retained"),
+                 &send(parent, {:callback, &1}),
+                 run_reflection: fn reflection, _invocation, _opts ->
+                   send(parent, {:reflection, reflection.name})
+                   {:error, :stop}
+                 end
+               )
+
       assert_receive {:reflection, "review"}
     end
 
     test "and later submission uses a subsequently installed definition" do
       start_runtime(reflection_configuration())
       assert :ok = Runtime.replace(self(), replacement_configuration("new"))
-      assert {:error, {:unknown_definition, :reflections, "review"}} = Runtime.submit_reflection(self(), "review", invocation("later"), fn _ -> :ok end, [])
+
+      assert {:error, {:unknown_definition, :reflections, "review"}} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("later"),
+                 fn _ -> :ok end,
+                 []
+               )
     end
   end
 
   describe "if the callback is invalid, an invocation or operator identifier is missing or blank, or the Reflection is unknown" do
     test "then submission returns the identified failure before production starts" do
       start_runtime(reflection_configuration())
-      assert {:error, {:invalid_invocation_callback, :invalid}} = Runtime.submit_reflection(self(), "review", invocation("bad"), :invalid, [])
+
+      assert {:error, {:invalid_invocation_callback, :invalid}} =
+               Runtime.submit_reflection(self(), "review", invocation("bad"), :invalid, [])
     end
   end
 
@@ -680,7 +701,9 @@ defmodule JidoGralkor.RuntimeTest do
 
   defp replacement_configuration(destination) do
     configuration = reflection_configuration()
-    reflection = put_in(hd(configuration.reflections), [:outputs, Access.at(0), :destination], destination)
+
+    reflection =
+      put_in(hd(configuration.reflections), [:outputs, Access.at(0), :destination], destination)
 
     %{
       configuration
