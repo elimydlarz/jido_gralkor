@@ -18,12 +18,14 @@ defmodule Gralkor.Reflection.RunnerTest do
             type_matcher: fn
               "ready", "string" -> true
               "collected", "string" -> true
+              "gathered evidence", "string" -> true
               "ship", "string" -> true
               3, "integer" -> true
               _value, _type -> false
             end,
-            artefact_id_for: fn "operator-one", "invocation-one", "review" ->
-              "unit-artefact-id"
+            artefact_id_for: fn
+              "operator-one", "invocation-one", "review" -> "unit-artefact-id"
+              "operator-one", "invocation-one", "generalisations" -> "unit-artefact-id"
             end
           ],
           opts
