@@ -20,7 +20,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
   defmodule BlockingMemoryAddClient do
     def memory_add(group_id, content, source_description, source_kind) do
       send(Process.whereis(:memory_add_blocking_test),
-        {:memory_add_started, group_id, content, source_description, source_kind})
+        {:memory_add_started, self(), group_id, content, source_description, source_kind})
 
       receive do
         :release ->
