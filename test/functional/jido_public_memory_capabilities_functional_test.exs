@@ -92,7 +92,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
           ]
         })
 
-      http_response(json)
+      json
     end
 
     defp answer_response(payload, test_pid) do
@@ -109,8 +109,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       send(test_pid, {:provider_tool_results_inspected, valid?, tool_results})
 
-      http_response(
-        Jason.encode!(%{
+      Jason.encode!(%{
           id: "fixture-answer",
           object: "chat.completion",
           model: "fixture",
@@ -122,11 +121,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
             }
           ]
         })
-      )
-    end
-
-    defp http_response(json) do
-      "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: #{byte_size(json)}\r\nconnection: close\r\n\r\n#{json}"
     end
   end
 
