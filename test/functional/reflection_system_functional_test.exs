@@ -92,16 +92,16 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       definition = valid_definition()
       reflection = resolve_reflection(definition)
 
-      assert reflection.name == "reflection-test"
+      assert reflection.name == "generalisation"
 
-      assert %Gralkor.Reflection.ChainOfThought{steps: [%{label: "collect"}]} =
+      assert %Gralkor.Reflection.ChainOfThought{steps: [%{label: "gather"}, %{label: "synthesise"}]} =
                reflection.chain_of_thought
 
       assert [
                %{
                  kind: :destination,
                  destination: %Gralkor.Destination{name: "operator"},
-                 ontology: ReflectionOntology
+                 ontology: Gralkor.DefaultOntology
                }
              ] =
                reflection.outputs
