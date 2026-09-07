@@ -184,6 +184,67 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
+  describe "when a valid named Reflection submission is admitted" do
+    test "then callback, invocation identifier, operator identifier, and Reflection existence are validated before work starts" do
+      start_runtime(reflection_configuration())
+
+      assert {:error, {:invalid_invocation_callback, :invalid}} =
+               Runtime.submit_reflection(self(), "review", invocation("valid"), :invalid, [])
+
+      assert {:error, {:invalid_operator_id, nil}} =
+               Runtime.submit_reflection(self(), "review", %{id: "missing-operator"}, fn _ -> :ok end, [])
+
+      assert {:error, {:unknown_definition, :reflections, "missing"}} =
+               Runtime.submit_reflection(self(), "missing", invocation("unknown"), fn _ -> :ok end, [])
+    end
+
+    test "and submission returns the invocation identifier without waiting for production" do
+      start_runtime(reflection_configuration())
+      parent = self()
+
+      assert {:ok, "admitted"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("admitted"),
+                 fn result -> send(parent, {:callback, result}) end,
+                 run_reflection: fn _reflection, _invocation, _opts ->
+                   send(parent, :ran)
+                   {:ok, Gralkor.Artefact.new("admitted", %{})}
+                 end,
+                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts -> :ok
+               )
+
+      assert_receive :ran
+      assert_receive {:callback, %{invocation_id: "admitted"}}
+    end
+  end
+
+  describe "if Reflection production reports a retryable server failure" do
+    test "while a retry succeeds before twenty-four hours then delivery proceeds and the callback receives the terminal outcome" do
+      start_runtime(reflection_configuration())
+      parent = self()
+      attempts = Agent.start_link(fn -> 0 end) |> elem(1)
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("retry-success"),
+                 fn result -> send(parent, {:callback, result}) end,
+                 run_reflection: fn _reflection, _invocation, _opts ->
+                   attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
+                   if attempt == 1, do: {:error, %{status: 503}}, else: {:ok, Gralkor.Artefact.new("retry", %{})}
+                 end,
+                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts -> :ok,
+                 sleep: fn _delay -> :ok
+               )
+
+      assert_receive {:callback, %{outcome: :delivered}}
+      assert Agent.get(attempts, & &1) == 2
+    end
+  end
+
   describe "if Reflection production fails without a retryable server or non-retryable client status" do
     test "then no Destination output is attempted and the callback receives the production failure" do
       start_runtime(reflection_configuration())
