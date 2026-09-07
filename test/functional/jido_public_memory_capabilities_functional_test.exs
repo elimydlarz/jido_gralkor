@@ -74,7 +74,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     previous =
       for key <- [
             :client,
-               :destinations,
+            :destinations,
             :destination_storage,
             :lenses,
             :lens_storage
@@ -168,6 +168,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert_receive {:external_write_started, worker, "operator/operator-one", body, "captured",
                       Gralkor.DefaultOntology, opts}
+
       assert body =~ "Lifecycle Agent: flush this"
       assert opts[:source_kind] == :conversation
       refute_receive {:external_write_finished, "operator/operator-one"}
