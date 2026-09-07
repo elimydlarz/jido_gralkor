@@ -91,6 +91,7 @@ defmodule JidoGralkor.Runtime do
 
   def handle_call({:replace, configuration}, _from, state) do
     validation_opts = state.validation_opts
+
     with :ok <- validate_configuration(configuration),
          {:ok, definitions} <- resolve_configuration(configuration, validation_opts) do
       {:reply, :ok,

@@ -108,7 +108,6 @@ defmodule JidoGralkor.RuntimeTest do
       assert :ok = Runtime.replace(self(), replacement)
       assert Runtime.destination!(self(), "new").name == "new"
     end
-
   end
 
   describe "if replacement configuration is invalid" do
@@ -118,7 +117,6 @@ defmodule JidoGralkor.RuntimeTest do
 
       assert {:error, {:missing_collection, :lenses}} =
                Runtime.replace(self(), Map.delete(configuration, :lenses))
-
     end
 
     test "and the previously active snapshot remains unchanged" do
@@ -141,7 +139,6 @@ defmodule JidoGralkor.RuntimeTest do
       assert Enum.map(lenses, & &1.name) == ["custom"]
       assert Enum.map(destinations, & &1.name) == ["operator", "global", "reviews"]
     end
-
   end
 
   describe "when search definitions are resolved from an active runtime while Destination and Lens names are supplied" do
@@ -150,7 +147,11 @@ defmodule JidoGralkor.RuntimeTest do
       start_runtime(configuration)
 
       assert {lenses, destinations} =
-               Runtime.resolve_search!(self(), ["custom", "custom"], ["reviews", "global", "reviews"])
+               Runtime.resolve_search!(self(), ["custom", "custom"], [
+                 "reviews",
+                 "global",
+                 "reviews"
+               ])
 
       assert Enum.map(lenses, & &1.name) == ["custom"]
       assert Enum.map(destinations, & &1.name) == ["reviews", "global"]
@@ -203,14 +204,20 @@ defmodule JidoGralkor.RuntimeTest do
 
       assert {:ok, "success-callback"} =
                Runtime.submit_reflection(
-                 self(), "review", invocation("success-callback"),
+                 self(),
+                 "review",
+                 invocation("success-callback"),
                  &send(test_pid, {:reflection_callback, &1}),
                  run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
                  deliver_artefact: fn _output, _reflection, _operator, ^artefact, _opts -> :ok end
                )
 
       assert_receive {:reflection_callback,
-                      %{invocation_id: "success-callback", artefact: ^artefact, outcome: :delivered}}
+                      %{
+                        invocation_id: "success-callback",
+                        artefact: ^artefact,
+                        outcome: :delivered
+                      }}
     end
   end
 
@@ -375,7 +382,9 @@ defmodule JidoGralkor.RuntimeTest do
 
       assert {:ok, _} =
                Runtime.submit_reflection(
-                 self(), "review", invocation("cancelled-callback"),
+                 self(),
+                 "review",
+                 invocation("cancelled-callback"),
                  &send(test_pid, {:reflection_callback, &1}),
                  run_reflection: fn _reflection, _invocation, _opts ->
                    receive do
@@ -434,9 +443,12 @@ defmodule JidoGralkor.RuntimeTest do
   defp replacement_configuration(destination) do
     configuration = reflection_configuration()
 
-    %{configuration |
-      destinations: [%{name: destination}],
-      reflections: [put_in(hd(configuration.reflections).outputs, [Access.at(0), :destination], destination)]
+    %{
+      configuration
+      | destinations: [%{name: destination}],
+        reflections: [
+          put_in(hd(configuration.reflections).outputs, [Access.at(0), :destination], destination)
+        ]
     }
   end
 
