@@ -655,7 +655,7 @@ defmodule Gralkor.Reflection.RunnerTest do
     refute args.prompt =~ "must not leak"
   end
 
-  defp prompt_json(prompt, heading, next_heading) do
+  defp prompt_json(prompt, heading, _next_heading) do
     [_, rest] = String.split(prompt, heading <> "\n", parts: 2)
     [encoded | _] = String.split(rest, "\n\n", parts: 2)
     Jason.decode!(String.trim(encoded))
