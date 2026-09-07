@@ -95,7 +95,12 @@ defmodule JidoGralkor.Runtime do
     with :ok <- validate_configuration(configuration),
          {:ok, definitions} <- resolve_configuration(configuration, validation_opts) do
       {:reply, :ok,
-       %{state | configuration: configuration, definitions: definitions, validation_opts: validation_opts}}
+       %{
+         state
+         | configuration: configuration,
+           definitions: definitions,
+           validation_opts: validation_opts
+       }}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
@@ -176,8 +181,11 @@ defmodule JidoGralkor.Runtime do
     do: {:error, {:invalid_configuration, configuration}}
 
   defp resolve_configuration(configuration, opts \\ []) do
-    packaged_reflections = Keyword.get(opts, :packaged_reflections, &Gralkor.Reflection.Packaged.definitions/0)
-    parse_chain_of_thought = Keyword.get(opts, :parse_chain_of_thought, &ChainOfThought.from_config/1)
+    packaged_reflections =
+      Keyword.get(opts, :packaged_reflections, &Gralkor.Reflection.Packaged.definitions/0)
+
+    parse_chain_of_thought =
+      Keyword.get(opts, :parse_chain_of_thought, &ChainOfThought.from_config/1)
 
     with :ok <- validate_definition_fields(configuration),
          :ok <- validate_definition_names(configuration),
@@ -225,7 +233,8 @@ defmodule JidoGralkor.Runtime do
         Enum.map(
           packaged_reflections.() ++ configuration.reflections,
           fn definition ->
-            {:ok, chain_of_thought} = parse_chain_of_thought.(field(definition, :chain_of_thought))
+            {:ok, chain_of_thought} =
+              parse_chain_of_thought.(field(definition, :chain_of_thought))
 
             outputs =
               Enum.map(field(definition, :outputs), fn output ->
@@ -301,7 +310,10 @@ defmodule JidoGralkor.Runtime do
 
   defp known_field?(_key, _fields), do: false
 
-  defp validate_reserved_names(configuration, packaged_reflections \\ &Gralkor.Reflection.Packaged.definitions/0) do
+  defp validate_reserved_names(
+         configuration,
+         packaged_reflections \\ &Gralkor.Reflection.Packaged.definitions/0
+       ) do
     packaged = %{
       destinations: ["operator", "global"],
       lenses: ["operator", "global"],
@@ -400,7 +412,10 @@ defmodule JidoGralkor.Runtime do
       is_atom(ontology) and Code.ensure_loaded?(ontology) and
         function_exported?(ontology, :__ontology__, 0)
 
-  defp validate_reflection_shapes(reflections, parse_chain_of_thought \\ &ChainOfThought.from_config/1) do
+  defp validate_reflection_shapes(
+         reflections,
+         parse_chain_of_thought \\ &ChainOfThought.from_config/1
+       ) do
     Enum.reduce_while(reflections, :ok, fn definition, :ok ->
       case validate_reflection_shape(definition, parse_chain_of_thought) do
         :ok -> {:cont, :ok}
@@ -414,7 +429,8 @@ defmodule JidoGralkor.Runtime do
     outputs = field(definition, :outputs)
 
     with :ok <- validate_reflection_outputs(name, outputs),
-         {:ok, _chain_of_thought} <- validate_chain_of_thought(name, definition, parse_chain_of_thought) do
+         {:ok, _chain_of_thought} <-
+           validate_chain_of_thought(name, definition, parse_chain_of_thought) do
       :ok
     end
   end
