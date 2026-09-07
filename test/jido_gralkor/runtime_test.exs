@@ -324,6 +324,57 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
+  describe "if Reflection production reports a non-retryable client failure" do
+    test "then it is not retried or delivered and the callback receives immediate production abandonment" do
+      start_runtime(reflection_configuration())
+      parent = self()
+
+      assert {:ok, _} = Runtime.submit_reflection(self(), "review", invocation("production-client"), &send(parent, {:callback, &1}),
+        run_reflection: fn _reflection, _invocation, _opts -> {:error, %{status: 400, reason: :invalid}} end,
+        deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts -> send(parent, :unexpected_delivery); :ok end)
+
+      assert_receive {:callback, %{outcome: {:abandoned, %{stage: :production, reason: %{status: 400}}}}}
+      refute_receive :unexpected_delivery
+    end
+  end
+
+  describe "if Reflection production reports a retryable server failure while no retry succeeds within twenty-four hours" do
+    test "then production is abandoned without another attempt and the callback receives abandonment" do
+      start_runtime(reflection_configuration())
+      parent = self()
+      clock = start_supervised!({Agent, fn -> 0 end})
+
+      assert {:ok, _} = Runtime.submit_reflection(self(), "review", invocation("production-deadline"), &send(parent, {:callback, &1}),
+        run_reflection: fn _reflection, _invocation, _opts -> send(parent, :production_attempt); {:error, %{status: 503}} end,
+        clock: fn -> Agent.get(clock, & &1) end,
+        sleep: fn _delay -> Agent.update(clock, &(&1 + 86_400_000)) end)
+
+      assert_receive :production_attempt
+      assert_receive {:callback, %{outcome: {:abandoned, %{stage: :production}}}}
+      refute_receive :production_attempt
+    end
+  end
+
+  describe "if Destination delivery reports a retryable server failure" do
+    test "while a retry succeeds before twenty-four hours then the callback receives the delivered outcome" do
+      start_runtime(reflection_configuration())
+      parent = self()
+      attempts = start_supervised!({Agent, fn -> 0 end})
+      artefact = Gralkor.Artefact.new("delivery-retry", %{})
+
+      assert {:ok, _} = Runtime.submit_reflection(self(), "review", invocation("delivery-retry"), &send(parent, {:callback, &1}),
+        run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
+        deliver_artefact: fn _output, _reflection, _operator, ^artefact, _opts ->
+          attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
+          if attempt == 1, do: {:error, %{status: 503}}, else: :ok
+        end,
+        sleep: fn _delay -> :ok end)
+
+      assert_receive {:callback, %{artefact: ^artefact, outcome: :delivered}}
+      assert Agent.get(attempts, & &1) == 2
+    end
+  end
+
   describe "if Destination delivery reports a non-retryable client failure" do
     test "then no retry or error artefact is written and the callback receives abandonment with the produced artefact" do
       start_runtime(reflection_configuration())
