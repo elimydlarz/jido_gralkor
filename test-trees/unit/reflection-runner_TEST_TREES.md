@@ -2,7 +2,7 @@ Unit: reflection-runner (src: lib/gralkor/reflection/runner.ex; unit: test/gralk
 
 when the Reflection Runner receives a valid Reflection and invocation
   then the first ordered Chain of Thought step begins
-  and every step request carries the Reflection, operator, invocation identifier, and invocation context
+  and every step request carries the Reflection name, operator, invocation identifier, and invocation context
   and completed representations retain exactly their identifier, Lens, content, and storage result
   and the request carries the supplied tools and tool context
   and only the current step is exposed to inference
