@@ -142,28 +142,6 @@ defmodule JidoGralkor.RuntimeTest do
       assert Enum.map(destinations, & &1.name) == ["operator", "global", "reviews"]
     end
 
-    test "while Destination and Lens names are supplied then those definitions resolve from one snapshot in first-selected order without duplicates" do
-      configuration = %{reflection_configuration() | lenses: [lens_configuration()]}
-      start_runtime(configuration)
-
-      assert {lenses, destinations} =
-               Runtime.resolve_search!(self(), ["custom", "custom"], [
-                 "reviews",
-                 "global",
-                 "reviews"
-               ])
-
-      assert Enum.map(lenses, & &1.name) == ["custom"]
-      assert Enum.map(destinations, & &1.name) == ["reviews", "global"]
-    end
-
-    test "if any selected name is unknown then resolution fails without returning a partial result" do
-      start_runtime(reflection_configuration())
-
-      assert_raise ArgumentError, ~r/unknown_definition/, fn ->
-        Runtime.resolve_search!(self(), [], ["missing"])
-      end
-    end
   end
 
   describe "when search definitions are resolved from an active runtime while Destination and Lens names are supplied" do
