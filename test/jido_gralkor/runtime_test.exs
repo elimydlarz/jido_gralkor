@@ -649,3 +649,18 @@ defmodule JidoGralkor.RuntimeTest do
     %{id: id, operator_id: "operator-one", invocation_context: %{}, representations: []}
   end
 end
+
+defmodule RuntimeSyncOwner do
+  use GenServer
+
+  def start_link(test_pid), do: GenServer.start_link(__MODULE__, test_pid)
+
+  @impl GenServer
+  def init(test_pid), do: {:ok, test_pid}
+
+  @impl GenServer
+  def handle_call(:get_state, _from, test_pid) do
+    send(test_pid, {:state_sync, self()})
+    {:reply, {:error, :not_registered}, test_pid}
+  end
+end
