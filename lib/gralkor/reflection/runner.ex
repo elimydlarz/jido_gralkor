@@ -64,7 +64,7 @@ defmodule Gralkor.Reflection.Runner do
 
         case infer_step(request, inference, tool_executor) do
           {:ok, output} ->
-            case validate_output(output, step.output) do
+            case validate_output(output, step.output, Keyword.get(opts, :type_matcher)) do
               {:ok, normalized} ->
                 {:cont, {:ok, Map.merge(outputs, normalized)}}
 
@@ -142,11 +142,7 @@ defmodule Gralkor.Reflection.Runner do
     else
       id =
         Keyword.get_lazy(opts, :artefact_id, fn ->
-          Artefact.id_for(
-            field(ingestion, :operator_id),
-            field(ingestion, :id),
-            reflection.name
-          )
+          derive_artefact_id(opts, field(ingestion, :operator_id), field(ingestion, :id), reflection.name)
         end)
 
       {:ok, Artefact.new(id, payload)}
@@ -220,7 +216,13 @@ defmodule Gralkor.Reflection.Runner do
   defp render_value(value) when is_binary(value), do: value
   defp render_value(value), do: Jason.encode!(value)
 
-  defp validate_output(output, schema) do
+  defp derive_artefact_id(opts, operator_id, invocation_id, reflection_name) do
+    resolver = Keyword.get(opts, :artefact_id_for, &Artefact.id_for/3)
+    resolver.(operator_id, invocation_id, reflection_name)
+  end
+
+  defp validate_output(output, schema, type_matcher) do
+    type_matcher = type_matcher || (&ChainOfThought.matches_type?/2)
     normalized = Map.new(output, fn {key, value} -> {to_string(key), value} end)
     expected = Map.keys(schema) |> MapSet.new()
     actual = Map.keys(normalized) |> MapSet.new()
@@ -234,7 +236,7 @@ defmodule Gralkor.Reflection.Runner do
 
       mismatch =
           Enum.find(schema, fn {key, type} ->
-            not ChainOfThought.matches_type?(normalized[key], type)
+            not type_matcher.(normalized[key], type)
           end) ->
         {key, type} = mismatch
         {:error, {:output_type_mismatch, key, type}}
@@ -252,10 +254,14 @@ defmodule Gralkor.Reflection.Runner do
   # Jido.AI's standalone tool action owns the provider conversation and executes
   # every configured action until a final answer is produced. The final answer
   # is JSON because the step prompt includes its exact declared contract.
-  def default_inference(request), do: default_inference(request, &Jido.Exec.run/3)
+  def default_inference(request), do: default_inference(request, &Jido.Exec.run/3, [])
 
   @doc false
-  def default_inference(request, call_with_tools) when is_function(call_with_tools, 3) do
+  def default_inference(request, call_with_tools) when is_function(call_with_tools, 3),
+    do: default_inference(request, call_with_tools, [])
+
+  def default_inference(request, call_with_tools, opts)
+      when is_function(call_with_tools, 3) and is_list(opts) do
     prompt = """
     #{request.directions}
 
@@ -274,7 +280,8 @@ defmodule Gralkor.Reflection.Runner do
     and an Array<...> declaration requires a JSON array; do not quote either.
     """
 
-    model = Gralkor.Config.llm_model()
+    model_resolver = Keyword.get(opts, :model_resolver, &Gralkor.Config.llm_model/0)
+    model = model_resolver.()
     model_spec = "#{model.provider}:#{model.id}"
 
     context =
