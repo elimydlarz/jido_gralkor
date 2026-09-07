@@ -171,8 +171,9 @@ defmodule JidoGralkor.PluginTest do
                  runtime_config: runtime_configuration()
                )
     end
+  end
 
-    describe "when mount selects an ingestion Lens > where the selected Lens is packaged" do
+  describe "when mount selects an ingestion Lens > where the selected Lens is packaged" do
       test "then mounting accepts the Lens" do
         assert {:ok, %{agent_name: "Susu", ingestion_lens: "operator"}} =
                  Plugin.mount(%{id: "operator-one", state: %{}},
@@ -218,7 +219,6 @@ defmodule JidoGralkor.PluginTest do
         end
       end
     end
-  end
 
   describe "when mount selects an ingestion Lens > if the removed `:default_lens` option is supplied" do
     test "then mounting raises an ArgumentError identifying `:ingestion_lens` as its replacement" do
