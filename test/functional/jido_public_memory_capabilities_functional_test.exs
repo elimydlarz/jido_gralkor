@@ -68,35 +68,23 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
 
     defp tool_call_response do
-      json =
+      Jason.decode!(
         Jason.encode!(%{
           id: "fixture-tool-call",
-          object: "chat.completion",
+          object: "response",
+          status: "completed",
           model: "fixture",
-          choices: [
+          output: [
             %{
-              index: 0,
-              finish_reason: "tool_calls",
-              message: %{
-                role: "assistant",
-                content: nil,
-                tool_calls: [
-                  %{
-                    id: "memory-search-call",
-                    type: "function",
-                    function: %{
-                      name: "memory_search",
-                      arguments:
-                        Jason.encode!(%{query: "reversible canary deployment feature releases"})
-                    }
-                  }
-                ]
-              }
+              type: "function_call",
+              id: "memory-search-call",
+              call_id: "memory-search-call",
+              name: "memory_search",
+              arguments: Jason.encode!(%{query: "reversible canary deployment feature releases"})
             }
           ]
         })
-
-      Jason.decode!(json)
+      )
     end
 
     defp answer_response(payload, test_pid) do
