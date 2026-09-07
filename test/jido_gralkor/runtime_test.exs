@@ -212,7 +212,9 @@ defmodule JidoGralkor.RuntimeTest do
                    send(parent, :ran)
                    {:ok, Gralkor.Artefact.new("admitted", %{})}
                  end,
-                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts -> :ok
+                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
+                   :ok
+                 end
                )
 
       assert_receive :ran
