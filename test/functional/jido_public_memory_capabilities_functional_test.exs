@@ -165,6 +165,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   defmodule DeterministicMemoryAgent do
     use Jido.AI.Agent,
       name: "deterministic_memory_agent",
+      model: "openai:gpt-4o-mini",
+      streaming: false,
       default_plugins: %{__memory__: false},
       plugins: [
         {JidoGralkor.Plugin,
@@ -908,14 +910,17 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     RATIONALE: The evolved lesson and related observation show that a limited reversible trial can expose faults before broad impact.
     """
 
-    script =
-      expect_react do
-        user(prompt)
-        call("memory_search", %{query: "reversible canary deployment feature releases"})
-        answer(scripted_answer)
-      end
+    {provider_pid, provider_port} = InspectingProviderFixture.start(self())
+    on_exit(fn -> InspectingProviderFixture.stop(provider_pid) end)
 
-    assert {:ok, answer} = DeterministicMemoryAgent.ask_sync(agent, prompt, react_opts(script))
+    assert {:ok, answer} =
+             DeterministicMemoryAgent.ask_sync(agent, prompt,
+               req_http_options: [base_url: "http://127.0.0.1:#{provider_port}/v1"]
+             )
+
+    assert_receive {:provider_tool_results_inspected, true, tool_results}
+    assert tool_results != []
+    assert Enum.any?(tool_results, &to_string(&1["content"]) =~ "evolves_from")
     answer
   end
 
