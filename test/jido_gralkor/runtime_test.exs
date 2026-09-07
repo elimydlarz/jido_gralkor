@@ -238,7 +238,9 @@ defmodule JidoGralkor.RuntimeTest do
                    attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
                    if attempt == 1, do: {:error, %{status: 503}}, else: {:ok, Gralkor.Artefact.new("retry", %{})}
                  end,
-                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts -> :ok,
+                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
+                   :ok
+                 end,
                  sleep: fn _delay -> :ok end
                )
 
