@@ -211,7 +211,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         "Search memory before answering and apply the retrieved evolved generalisation."
 
     def on_before_cmd(agent, action) do
-      {:ok, %{agent | state: Map.put(agent.state, :user_name, "Eli")}, action}
+      super(%{agent | state: Map.put(agent.state, :user_name, "Eli")}, action)
     end
   end
 
