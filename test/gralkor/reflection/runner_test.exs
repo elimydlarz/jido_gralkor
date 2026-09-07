@@ -11,7 +11,7 @@ defmodule Gralkor.Reflection.RunnerTest do
 
   defmodule Runner do
     def run(reflection, invocation, opts \\ []) do
-      ProductionRunner.run(reflection, invocation,
+      Gralkor.Reflection.Runner.run(reflection, invocation,
         Keyword.merge(
           [
             type_matcher: fn
@@ -27,10 +27,10 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
 
     def default_inference(request, caller),
-      do: ProductionRunner.default_inference(request, caller, model_options())
+      do: Gralkor.Reflection.Runner.default_inference(request, caller, model_options())
 
     def default_inference(request, caller, opts),
-      do: ProductionRunner.default_inference(request, caller, Keyword.merge(model_options(), opts))
+      do: Gralkor.Reflection.Runner.default_inference(request, caller, Keyword.merge(model_options(), opts))
 
     defp model_options, do: [model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end]
   end
