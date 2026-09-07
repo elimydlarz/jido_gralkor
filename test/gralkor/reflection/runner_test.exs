@@ -157,6 +157,7 @@ defmodule Gralkor.Reflection.RunnerTest do
   describe "if inference returns a value of the wrong declared type" do
     test "then the Runner failure identifies the Reflection, step, key, and type" do
       reflection = reflection([step("score", "Score.", %{"count" => "integer"})])
+      test_pid = self()
 
       assert {:error,
               %{
@@ -165,8 +166,14 @@ defmodule Gralkor.Reflection.RunnerTest do
                 reason: {:output_type_mismatch, "count", "integer"}
               }} =
                Runner.run(reflection, invocation(),
-                 inference: fn _request -> {:ok, %{"count" => "many"}} end
+                 inference: fn _request -> {:ok, %{"count" => "many"}} end,
+                 type_matcher: fn value, type ->
+                   send(test_pid, {:type_match, value, type})
+                   false
+                 end
                )
+
+      assert_receive {:type_match, "many", "integer"}
     end
   end
 
@@ -550,7 +557,6 @@ defmodule Gralkor.Reflection.RunnerTest do
   end
 
   defp prove_built_in_inference_request do
-    System.put_env("GRALKOR_LLM_MODEL", "openai:runner-contract-model")
     test_pid = self()
 
     caller = fn action, args, context ->
@@ -559,7 +565,9 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
 
     assert {:ok, %{output: %{"answer" => "ready"}}} =
-             Runner.default_inference(default_inference_request(), caller)
+             Runner.default_inference(default_inference_request(), caller,
+               model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end
+             )
 
     assert_receive {:built_in_call, Jido.AI.Actions.ToolCalling.CallWithTools, args, _context}
     assert args.model == "openai:runner-contract-model"
