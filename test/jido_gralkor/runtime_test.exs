@@ -321,7 +321,6 @@ defmodule JidoGralkor.RuntimeTest do
     test "and submission returns the invocation identifier without waiting for production" do
       start_runtime(reflection_configuration())
       parent = self()
-      attempts = start_supervised!({Agent, fn -> 0 end})
 
       assert {:ok, "admitted"} =
                Runtime.submit_reflection(
