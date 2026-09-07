@@ -218,7 +218,7 @@ defmodule JidoGralkor.RuntimeTest do
   describe "when the owning runtime terminates during unfinished Reflection work" do
     test "then the unfinished work terminates with that runtime and its invocation callback is not invoked" do
       start_runtime(reflection_configuration())
-      runtime = Process.whereis({:global, {Runtime, self()}})
+      runtime = :global.whereis_name({Runtime, self()})
       test_pid = self()
 
       assert {:ok, _} =
