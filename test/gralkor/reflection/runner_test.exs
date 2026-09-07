@@ -7,7 +7,33 @@ defmodule Gralkor.Reflection.RunnerTest do
   alias Gralkor.Reflection
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Reflection.ChainOfThought.Step
-  alias Gralkor.Reflection.Runner
+  alias Gralkor.Reflection.Runner, as: ProductionRunner
+
+  defmodule Runner do
+    def run(reflection, invocation, opts \\ []) do
+      ProductionRunner.run(reflection, invocation,
+        Keyword.merge(
+          [
+            type_matcher: fn
+              value, "string" when is_binary(value) -> true
+              value, "integer" when is_integer(value) -> true
+              _value, _type -> false
+            end,
+            artefact_id_for: fn "operator-one", "invocation-one", "review" -> "unit-artefact-id" end
+          ],
+          opts
+        )
+      )
+    end
+
+    def default_inference(request, caller),
+      do: ProductionRunner.default_inference(request, caller, model_options())
+
+    def default_inference(request, caller, opts),
+      do: ProductionRunner.default_inference(request, caller, Keyword.merge(model_options(), opts))
+
+    defp model_options, do: [model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end]
+  end
   alias Gralkor.Search
 
   defmodule ProbeDestinationStorage do
