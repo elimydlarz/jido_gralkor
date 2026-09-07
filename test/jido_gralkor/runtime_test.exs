@@ -285,11 +285,15 @@ defmodule JidoGralkor.RuntimeTest do
                  "review",
                  invocation("valid"),
                  fn result -> send(parent, {:callback, result}) end,
-                 run_reflection: fn reflection, %{id: "valid", operator_id: "operator-one"}, _opts ->
+                 run_reflection: fn reflection,
+                                    %{id: "valid", operator_id: "operator-one"},
+                                    _opts ->
                    send(parent, {:producer, reflection.name})
                    {:ok, Gralkor.Artefact.new("valid", %{})}
                  end,
-                 deliver_artefact: fn _output, "review", "operator-one", _artefact, _opts -> :ok end
+                 deliver_artefact: fn _output, "review", "operator-one", _artefact, _opts ->
+                   :ok
+                 end
                )
 
       assert_receive {:producer, "review"}
@@ -390,16 +394,40 @@ defmodule JidoGralkor.RuntimeTest do
                Runtime.submit_reflection(self(), "review", invocation("bad"), :invalid, [])
 
       assert {:error, {:invalid_operator_id, nil}} =
-               Runtime.submit_reflection(self(), "review", %{id: "missing-operator"}, fn _ -> :ok end, [])
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 %{id: "missing-operator"},
+                 fn _ -> :ok end,
+                 []
+               )
 
       assert {:error, {:invalid_invocation_id, "  "}} =
-               Runtime.submit_reflection(self(), "review", %{id: "  ", operator_id: "operator-one"}, fn _ -> :ok end, [])
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 %{id: "  ", operator_id: "operator-one"},
+                 fn _ -> :ok end,
+                 []
+               )
 
       assert {:error, {:invalid_invocation_id, nil}} =
-               Runtime.submit_reflection(self(), "review", %{operator_id: "operator-one"}, fn _ -> :ok end, [])
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 %{operator_id: "operator-one"},
+                 fn _ -> :ok end,
+                 []
+               )
 
       assert {:error, {:unknown_definition, :reflections, "missing"}} =
-               Runtime.submit_reflection(self(), "missing", invocation("unknown"), fn _ -> :ok end, [])
+               Runtime.submit_reflection(
+                 self(),
+                 "missing",
+                 invocation("unknown"),
+                 fn _ -> :ok end,
+                 []
+               )
     end
   end
 
