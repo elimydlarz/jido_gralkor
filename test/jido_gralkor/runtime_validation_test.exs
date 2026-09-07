@@ -4,6 +4,7 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   defmodule EntityOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
+
     entity Entity do
       field(:value, :string)
     end
@@ -11,6 +12,7 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   defmodule EpisodicOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
+
     entity Episodic do
       field(:value, :string)
     end
@@ -18,6 +20,7 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   defmodule CommunityOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
+
     entity Community do
       field(:value, :string)
     end
@@ -25,6 +28,7 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   defmodule PersonOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
+
     entity Person do
       field(:value, :string)
     end
@@ -168,7 +172,18 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   describe "if a map supplies an atom-keyed ontology value and a string-keyed ontology value" do
     test "then the atom-keyed value remains authoritative even when it is false" do
-      c = Map.put(config(), :lenses, [%{"ontology" => Gralkor.DefaultOntology, name: "notes", destination: "memory", write: :append, ingestion: Gralkor.Lens.Ingestion.Store, ontology: false}])
+      c =
+        Map.put(config(), :lenses, [
+          %{
+            "ontology" => Gralkor.DefaultOntology,
+            name: "notes",
+            destination: "memory",
+            write: :append,
+            ingestion: Gralkor.Lens.Ingestion.Store,
+            ontology: false
+          }
+        ])
+
       assert {:error, {:invalid_lens_ontology, "notes", false}} = validate(c)
     end
   end
@@ -176,7 +191,10 @@ defmodule JidoGralkor.RuntimeValidationTest do
   describe "when a replaceable Lens declares `write: :replace_graph` and a Destination" do
     test "then it resolves as a replaceable Lens" do
       lens = [[name: "notes", destination: "memory", write: :replace_graph]]
-      {:ok, pid} = Runtime.start_link(owner: self(), configuration: Map.put(config(), :lenses, lens))
+
+      {:ok, pid} =
+        Runtime.start_link(owner: self(), configuration: Map.put(config(), :lenses, lens))
+
       on_exit(fn -> GenServer.stop(pid) end)
       assert %Gralkor.Lens.Replaceable{name: "notes"} = Runtime.lens!(self(), "notes")
     end
@@ -347,7 +365,11 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   describe "if a configured ontology declares `Entity`, `Episodic`, or `Community`" do
     test "then validation identifies the entity kind reserved by Graphiti" do
-      for {kind, ontology} <- [{"Entity", EntityOntology}, {"Episodic", EpisodicOntology}, {"Community", CommunityOntology}] do
+      for {kind, ontology} <- [
+            {"Entity", EntityOntology},
+            {"Episodic", EpisodicOntology},
+            {"Community", CommunityOntology}
+          ] do
         c = ontology_configuration(ontology)
         assert {:error, {:reserved_entity_kind, ^kind}} = validate(c)
       end
@@ -400,10 +422,24 @@ defmodule JidoGralkor.RuntimeValidationTest do
   end
 
   defp ontology_configuration(ontology) do
-    %{config() | lenses: [[name: "notes", destination: "memory", write: :append, ingestion: Gralkor.Lens.Ingestion.Store, ontology: ontology]], reflections: []}
+    %{
+      config()
+      | lenses: [
+          [
+            name: "notes",
+            destination: "memory",
+            write: :append,
+            ingestion: Gralkor.Lens.Ingestion.Store,
+            ontology: ontology
+          ]
+        ],
+        reflections: []
+    }
   end
 
-  defp parse_chain_of_thought(steps: [[label: "inspect", directions: "Inspect.", output: %{"summary" => "string"}]]) do
+  defp parse_chain_of_thought(
+         steps: [[label: "inspect", directions: "Inspect.", output: %{"summary" => "string"}]]
+       ) do
     {:ok,
      %Gralkor.Reflection.ChainOfThought{
        steps: [
