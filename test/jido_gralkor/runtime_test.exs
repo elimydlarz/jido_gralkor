@@ -330,6 +330,7 @@ defmodule JidoGralkor.RuntimeTest do
                  fn result -> send(parent, {:callback, result}) end,
                  run_reflection: fn _reflection, _invocation, _opts ->
                    send(parent, {:ran, self()})
+
                    receive do
                      :release -> {:ok, Gralkor.Artefact.new("admitted", %{})}
                    end
@@ -458,7 +459,10 @@ defmodule JidoGralkor.RuntimeTest do
                  &send(parent, {:callback, &1}),
                  run_reflection: fn _r, _i, _o ->
                    attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
-                   if attempt == 1, do: {:error, %{status: 503}}, else: {:ok, Gralkor.Artefact.new("terminal", %{})}
+
+                   if attempt == 1,
+                     do: {:error, %{status: 503}},
+                     else: {:ok, Gralkor.Artefact.new("terminal", %{})}
                  end,
                  sleep: fn _ -> :ok end,
                  deliver_artefact: fn _o, _r, _op, _a, _opts -> :ok end
@@ -730,6 +734,7 @@ defmodule JidoGralkor.RuntimeTest do
         case invocation.id do
           "one" ->
             send(parent, {:blocked, self()})
+
             receive do
               :release -> {:ok, Gralkor.Artefact.new(invocation.id, %{})}
             end
