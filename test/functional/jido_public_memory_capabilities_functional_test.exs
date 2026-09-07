@@ -88,17 +88,23 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     flush_test_pid = self()
 
+    add_episode_fn = fn group_id, body, source, ontology, opts ->
+      send(
+        flush_test_pid,
+        {:external_write_started, self(), group_id, body, source, ontology, opts}
+      )
+
+      receive do
+        :release ->
+          send(flush_test_pid, {:external_write_finished, group_id})
+          :ok
+      end
+    end
+
     start_supervised!(
       {CaptureBuffer,
-       flush_callback: fn group_id, _agent_name, _user_name, _ontology, turns ->
-         send(flush_test_pid, {:external_flush_started, self(), group_id, turns})
-
-         receive do
-           :release ->
-             send(flush_test_pid, {:external_flush_finished, group_id})
-             :ok
-         end
-       end}
+       flush_callback:
+         Gralkor.Application.build_flush_callback(nil, add_episode_fn: add_episode_fn)}
     )
 
     Application.put_env(:jido_gralkor, :destinations, [
