@@ -136,8 +136,9 @@ defmodule JidoGralkor.RuntimeTest do
          owner: owner,
          configuration: reflection_configuration(),
          packaged_reflections: fn -> [packaged_reflection()] end,
-         parse_chain_of_thought: fn _ -> {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}} end}
-      , id: :other_runtime)
+         parse_chain_of_thought: fn _ -> {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}} end},
+        id: :other_runtime
+      )
 
       start_runtime(reflection_configuration())
 
