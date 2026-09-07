@@ -409,7 +409,12 @@ defmodule JidoGralkor.RuntimeTest do
 
   describe "when runtime registration is not yet visible" do
     test "then target lookup synchronizes once with the owner before deciding availability" do
-      owner = spawn(fn -> receive do :stop -> :ok end end)
+      owner =
+        spawn(fn ->
+          receive do
+            :stop -> :ok
+          end
+        end)
 
       assert_raise ArgumentError, ~r/runtime unavailable for owning AgentServer/, fn ->
         Runtime.ensure_available!(owner)
@@ -429,7 +434,12 @@ defmodule JidoGralkor.RuntimeTest do
 
   describe "if no runtime is available after owner synchronization or the runtime call exits" do
     test "then target lookup raises an argument error identifying the unavailable runtime" do
-      owner = spawn(fn -> receive do :stop -> :ok end end)
+      owner =
+        spawn(fn ->
+          receive do
+            :stop -> :ok
+          end
+        end)
 
       assert_raise ArgumentError, ~r/runtime unavailable for owning AgentServer/, fn ->
         Runtime.destination!(owner, "reviews")
@@ -451,8 +461,25 @@ defmodule JidoGralkor.RuntimeTest do
 
       deliver_artefact = fn _output, _reflection, _operator, _artefact, _opts -> :ok end
 
-      assert {:ok, "one"} = Runtime.submit_reflection(self(), "review", invocation("one"), &send(parent, {:callback, &1}), run_reflection: run_reflection, deliver_artefact: deliver_artefact)
-      assert {:ok, "two"} = Runtime.submit_reflection(self(), "review", invocation("two"), &send(parent, {:callback, &1}), run_reflection: run_reflection, deliver_artefact: deliver_artefact)
+      assert {:ok, "one"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("one"),
+                 &send(parent, {:callback, &1}),
+                 run_reflection: run_reflection,
+                 deliver_artefact: deliver_artefact
+               )
+
+      assert {:ok, "two"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("two"),
+                 &send(parent, {:callback, &1}),
+                 run_reflection: run_reflection,
+                 deliver_artefact: deliver_artefact
+               )
 
       assert_receive {:started, "one"}
       assert_receive {:started, "two"}
@@ -463,8 +490,21 @@ defmodule JidoGralkor.RuntimeTest do
 
   describe "when a consumer replaces complete valid configuration" do
     test "and another owner's runtime remains unchanged" do
-      owner = spawn(fn -> receive do :stop -> :ok end end)
-      start_supervised!({Runtime, owner: owner, configuration: reflection_configuration(), packaged_reflections: fn -> [packaged_reflection()] end, parse_chain_of_thought: fn _ -> {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}} end})
+      owner =
+        spawn(fn ->
+          receive do
+            :stop -> :ok
+          end
+        end)
+
+      start_supervised!(
+        {Runtime,
+         owner: owner,
+         configuration: reflection_configuration(),
+         packaged_reflections: fn -> [packaged_reflection()] end,
+         parse_chain_of_thought: fn _ -> {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}} end}
+      )
+
       start_runtime(reflection_configuration())
 
       replacement = replacement_configuration("new")
