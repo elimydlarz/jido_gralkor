@@ -109,7 +109,19 @@ defmodule JidoGralkor.RuntimeTest do
       assert Runtime.destination!(self(), "new").name == "new"
     end
 
-    test "if replacement configuration is invalid then replacement returns the validation error and the previously active snapshot remains unchanged" do
+  end
+
+  describe "if replacement configuration is invalid" do
+    test "then replacement returns the validation error" do
+      configuration = reflection_configuration()
+      start_runtime(configuration)
+
+      assert {:error, {:missing_collection, :lenses}} =
+               Runtime.replace(self(), Map.delete(configuration, :lenses))
+
+    end
+
+    test "and the previously active snapshot remains unchanged" do
       configuration = reflection_configuration()
       start_runtime(configuration)
 
@@ -120,8 +132,8 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "when search definitions are resolved from an active runtime" do
-    test "while no Destination names are supplied then every accessible Destination and every selected Lens resolve from one snapshot" do
+  describe "when search definitions are resolved from an active runtime while no Destination names are supplied" do
+    test "then every accessible Destination and every selected Lens resolve from one snapshot" do
       configuration = %{reflection_configuration() | lenses: [lens_configuration()]}
       start_runtime(configuration)
 
@@ -154,8 +166,31 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
+  describe "when search definitions are resolved from an active runtime while Destination and Lens names are supplied" do
+    test "then those definitions resolve from one snapshot in first-selected order without duplicates" do
+      configuration = %{reflection_configuration() | lenses: [lens_configuration()]}
+      start_runtime(configuration)
+
+      assert {lenses, destinations} =
+               Runtime.resolve_search!(self(), ["custom", "custom"], ["reviews", "global", "reviews"])
+
+      assert Enum.map(lenses, & &1.name) == ["custom"]
+      assert Enum.map(destinations, & &1.name) == ["reviews", "global"]
+    end
+  end
+
+  describe "when search definitions are resolved from an active runtime if any selected name is unknown" do
+    test "then resolution fails without returning a partial result" do
+      start_runtime(reflection_configuration())
+
+      assert_raise ArgumentError, ~r/unknown_definition/, fn ->
+        Runtime.resolve_search!(self(), [], ["missing"])
+      end
+    end
+  end
+
   describe "when Reflection production and Destination delivery succeed" do
-    test "then the artefact is written once through the declared Destination output and the callback receives the invocation identifier, artefact, and delivered outcome" do
+    test "then the artefact is written once through the declared Destination output" do
       start_runtime(reflection_configuration())
       test_pid = self()
       artefact = Gralkor.Artefact.new("success", %{})
@@ -181,6 +216,23 @@ defmodule JidoGralkor.RuntimeTest do
                         artefact: ^artefact,
                         outcome: :delivered
                       }}
+    end
+
+    test "and the callback receives the invocation identifier, artefact, and delivered outcome" do
+      start_runtime(reflection_configuration())
+      test_pid = self()
+      artefact = Gralkor.Artefact.new("success", %{})
+
+      assert {:ok, "success-callback"} =
+               Runtime.submit_reflection(
+                 self(), "review", invocation("success-callback"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
+                 deliver_artefact: fn _output, _reflection, _operator, ^artefact, _opts -> :ok end
+               )
+
+      assert_receive {:reflection_callback,
+                      %{invocation_id: "success-callback", artefact: ^artefact, outcome: :delivered}}
     end
   end
 
