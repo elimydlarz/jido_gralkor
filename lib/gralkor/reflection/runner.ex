@@ -142,7 +142,12 @@ defmodule Gralkor.Reflection.Runner do
     else
       id =
         Keyword.get_lazy(opts, :artefact_id, fn ->
-          derive_artefact_id(opts, field(ingestion, :operator_id), field(ingestion, :id), reflection.name)
+          derive_artefact_id(
+            opts,
+            field(ingestion, :operator_id),
+            field(ingestion, :id),
+            reflection.name
+          )
         end)
 
       {:ok, Artefact.new(id, payload)}
