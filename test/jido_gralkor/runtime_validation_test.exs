@@ -471,7 +471,9 @@ defmodule JidoGralkor.RuntimeValidationTest do
            directions: "Inspect.",
            output: %{"summary" => "string"}
          }
-       ]
+     ]
      }}
   end
+
+  defp parse_chain_of_thought(steps: []), do: {:error, :missing_steps}
 end
