@@ -398,6 +398,92 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
+  describe "when a runtime-targeted call receives a live owning AgentServer PID" do
+    test "then the runtime registered for that owner receives the call" do
+      start_runtime(reflection_configuration())
+
+      assert Runtime.ensure_available!(self()) == self()
+      assert Runtime.destination!(self(), "reviews").name == "reviews"
+    end
+  end
+
+  describe "when runtime registration is not yet visible" do
+    test "then target lookup synchronizes once with the owner before deciding availability" do
+      owner = spawn(fn -> receive do :stop -> :ok end end)
+
+      assert_raise ArgumentError, ~r/runtime unavailable for owning AgentServer/, fn ->
+        Runtime.ensure_available!(owner)
+      end
+
+      send(owner, :stop)
+    end
+  end
+
+  describe "if a runtime target is not an owning AgentServer PID" do
+    test "then target lookup raises an argument error identifying the invalid target" do
+      assert_raise ArgumentError, ~r/must be an owning AgentServer PID/, fn ->
+        Runtime.ensure_available!(:not_a_pid)
+      end
+    end
+  end
+
+  describe "if no runtime is available after owner synchronization or the runtime call exits" do
+    test "then target lookup raises an argument error identifying the unavailable runtime" do
+      owner = spawn(fn -> receive do :stop -> :ok end end)
+
+      assert_raise ArgumentError, ~r/runtime unavailable for owning AgentServer/, fn ->
+        Runtime.destination!(owner, "reviews")
+      end
+
+      send(owner, :stop)
+    end
+  end
+
+  describe "when independently submitted Reflection invocations run" do
+    test "then each invocation progresses without waiting for another invocation" do
+      start_runtime(reflection_configuration())
+      parent = self()
+
+      run_reflection = fn _reflection, invocation, _opts ->
+        send(parent, {:started, invocation.id})
+        {:ok, Gralkor.Artefact.new(invocation.id, %{})}
+      end
+
+      deliver_artefact = fn _output, _reflection, _operator, _artefact, _opts -> :ok end
+
+      assert {:ok, "one"} = Runtime.submit_reflection(self(), "review", invocation("one"), &send(parent, {:callback, &1}), run_reflection: run_reflection, deliver_artefact: deliver_artefact)
+      assert {:ok, "two"} = Runtime.submit_reflection(self(), "review", invocation("two"), &send(parent, {:callback, &1}), run_reflection: run_reflection, deliver_artefact: deliver_artefact)
+
+      assert_receive {:started, "one"}
+      assert_receive {:started, "two"}
+      assert_receive {:callback, %{invocation_id: "one"}}
+      assert_receive {:callback, %{invocation_id: "two"}}
+    end
+  end
+
+  describe "when a consumer replaces complete valid configuration" do
+    test "and another owner's runtime remains unchanged" do
+      owner = spawn(fn -> receive do :stop -> :ok end end)
+      start_supervised!({Runtime, owner: owner, configuration: reflection_configuration(), packaged_reflections: fn -> [packaged_reflection()] end, parse_chain_of_thought: fn _ -> {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}} end})
+      start_runtime(reflection_configuration())
+
+      replacement = replacement_configuration("new")
+      assert :ok = Runtime.replace(self(), replacement)
+      assert Runtime.destination!(owner, "reviews").name == "reviews"
+
+      send(owner, :stop)
+    end
+
+    test "and later replacement does not mutate the returned definitions" do
+      start_runtime(reflection_configuration())
+      original = Runtime.destination!(self(), "reviews")
+
+      assert :ok = Runtime.replace(self(), replacement_configuration("new"))
+      assert original.name == "reviews"
+      assert Runtime.destination!(self(), "new").name == "new"
+    end
+  end
+
   defp start_runtime(configuration) do
     start_supervised!(
       {Runtime,
