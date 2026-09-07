@@ -1,18 +1,7 @@
 Functional: reflection-system (src: lib/jido_gralkor/plugin.ex, lib/jido_gralkor/runtime.ex, lib/gralkor/reflection.ex, lib/gralkor/reflection/erl_ontology.ex, lib/gralkor/artefact.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex; functional: test/functional/reflection_system_functional_test.exs)
 
 when an agent runtime validates Reflection declarations
-  while every Reflection has a non-blank name
-  and every Reflection name is unique
-  and every Reflection contains one structured Chain of Thought
-  and every Chain of Thought contains one or more ordered steps
-  and every step has a non-blank label and natural-language directions
-  and every step declares one or more named structured outputs and their types
-  and output names are unique across the Chain of Thought
-  and every interpolation references an output from an earlier step
-  and every Reflection declares an `outputs` list
-  and exactly one output has kind `:destination`
-  and every Destination output references a registered Destination by name
-  and every Destination output declares a valid extraction ontology
+  while all declarations satisfy their naming, Chain-of-Thought, and Destination-output requirements
     then validation succeeds
 
   if the configured Reflection collection is not a list
