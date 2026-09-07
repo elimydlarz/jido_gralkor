@@ -62,7 +62,8 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
   describe "when the memory add tool runs with content, a source kind, and a source description" do
     test "then it returns an acknowledgement immediately, without waiting on the write" do
-      InMemory.set_memory_add(:ok)
+      Process.register(self(), :memory_add_blocking_test)
+      Application.put_env(:jido_gralkor, :client, BlockingMemoryAddClient)
 
       assert {:ok, %{result: "Ingesting."}} =
                MemoryAdd.run(
@@ -73,25 +74,6 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                  },
                  %{agent_id: "01USER"}
                )
-    end
-
-    test "then a blocking background write is submitted after the acknowledgement returns" do
-      Process.register(self(), :memory_add_blocking_test)
-      Application.put_env(:jido_gralkor, :client, BlockingMemoryAddClient)
-
-      caller =
-        Task.async(fn ->
-          MemoryAdd.run(
-            %{
-              content: "Eli prefers tea",
-              source_kind: :conversation,
-              source_description: "user preference"
-            },
-            %{agent_id: "01USER"}
-          )
-        end)
-
-      assert {:ok, %{result: "Ingesting."}} = Task.await(caller, 100)
 
       assert_receive {:memory_add_started, worker, "operator/01USER", "Eli prefers tea",
                       "user preference", :conversation}
