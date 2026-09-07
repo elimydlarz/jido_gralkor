@@ -168,7 +168,7 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   describe "if a map supplies an atom-keyed ontology value and a string-keyed ontology value" do
     test "then the atom-keyed value remains authoritative even when it is false" do
-      c = Map.put(config(), :lenses, [%{name: "notes", destination: "memory", write: :append, ingestion: Gralkor.Lens.Ingestion.Store, ontology: false, "ontology" => Gralkor.DefaultOntology}])
+      c = Map.put(config(), :lenses, [%{"ontology" => Gralkor.DefaultOntology, name: "notes", destination: "memory", write: :append, ingestion: Gralkor.Lens.Ingestion.Store, ontology: false}])
       assert {:error, {:invalid_lens_ontology, "notes", false}} = validate(c)
     end
   end
