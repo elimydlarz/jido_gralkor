@@ -52,8 +52,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       fn request ->
         body = IO.iodata_to_binary(request.body)
         payload = Jason.decode!(body)
-        messages = payload["messages"] || []
-        has_tool_results? = Enum.any?(messages, &(&1["role"] == "tool"))
+        input = payload["input"] || []
+        has_tool_results? = Enum.any?(input, &(&1["type"] == "function_call_output"))
         send(test_pid, {:provider_request, request.url, payload})
 
         response =
@@ -100,8 +100,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
 
     defp answer_response(payload, test_pid) do
-      messages = payload["messages"] || []
-      tool_results = Enum.filter(messages, &(&1["role"] == "tool"))
+      tool_results = Enum.filter(payload["input"] || [], &(&1["type"] == "function_call_output"))
       valid? = exact_memory_evidence?(tool_results)
 
       send(test_pid, {:provider_tool_results_inspected, valid?, tool_results})
@@ -111,13 +110,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
           id: "fixture-answer",
           object: "chat.completion",
           model: "fixture",
-          choices: [
-            %{
-              index: 0,
-              finish_reason: "stop",
-              message: %{role: "assistant", content: if(valid?, do: @answer, else: nil)}
-            }
-          ]
+        status: "completed",
+        output:
+          if(valid?, do: [%{"type" => "message", "role" => "assistant", "content" => [%{"type" => "output_text", "text" => @answer}]}], else: [])
         })
       )
     end
@@ -131,14 +126,18 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     defp exact_memory_evidence?(_), do: false
 
-    defp decode_content(%{"content" => content}) when is_binary(content) do
-      case Jason.decode(content) do
-        {:ok, decoded} -> [decoded | nested_decoded(decoded)]
-        {:error, _} -> [content]
-      end
-    end
+    defp decode_content(%{"output" => output}) when is_binary(output), do: decode_json(output)
+
+    defp decode_content(%{"content" => content}) when is_binary(content), do: decode_json(content)
 
     defp decode_content(_), do: []
+
+    defp decode_json(value) do
+      case Jason.decode(value) do
+        {:ok, decoded} -> [decoded | nested_decoded(decoded)]
+        {:error, _} -> [value]
+      end
+    end
 
     defp nested_decoded(value) when is_map(value),
       do: value |> Map.values() |> Enum.flat_map(&nested_decoded/1)
