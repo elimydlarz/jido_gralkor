@@ -2,6 +2,34 @@ defmodule JidoGralkor.RuntimeValidationTest do
   use ExUnit.Case, async: true
   alias JidoGralkor.Runtime
 
+  defmodule EntityOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+    entity Entity do
+      field(:value, :string)
+    end
+  end
+
+  defmodule EpisodicOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+    entity Episodic do
+      field(:value, :string)
+    end
+  end
+
+  defmodule CommunityOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+    entity Community do
+      field(:value, :string)
+    end
+  end
+
+  defmodule PersonOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+    entity Person do
+      field(:value, :string)
+    end
+  end
+
   describe "if runtime configuration is not a map" do
     test "then validation identifies the configured value" do
       assert {:error, {:invalid_configuration, :not_a_map}} = validate(:not_a_map)
@@ -317,6 +345,22 @@ defmodule JidoGralkor.RuntimeValidationTest do
     end
   end
 
+  describe "if a configured ontology declares `Entity`, `Episodic`, or `Community`" do
+    test "then validation identifies the entity kind reserved by Graphiti" do
+      for {kind, ontology} <- [{"Entity", EntityOntology}, {"Episodic", EpisodicOntology}, {"Community", CommunityOntology}] do
+        c = ontology_configuration(ontology)
+        assert {:error, {:reserved_entity_kind, ^kind}} = validate(c)
+      end
+    end
+  end
+
+  describe "when a configured ontology declares another entity kind" do
+    test "then it remains eligible for configuration" do
+      c = ontology_configuration(PersonOntology)
+      assert :ok = validate(c)
+    end
+  end
+
   defp validate(configuration),
     do:
       Runtime.validate(configuration,
@@ -353,6 +397,10 @@ defmodule JidoGralkor.RuntimeValidationTest do
   defp named(collection, value, duplicate \\ false) do
     definition = Keyword.put(List.first(Map.fetch!(config(), collection)), :name, value)
     Map.put(config(), collection, if(duplicate, do: [definition, definition], else: [definition]))
+  end
+
+  defp ontology_configuration(ontology) do
+    %{config() | lenses: [[name: "notes", destination: "memory", write: :append, ingestion: Gralkor.Lens.Ingestion.Store, ontology: ontology]], reflections: []}
   end
 
   defp parse_chain_of_thought(steps: [[label: "inspect", directions: "Inspect.", output: %{"summary" => "string"}]]) do
