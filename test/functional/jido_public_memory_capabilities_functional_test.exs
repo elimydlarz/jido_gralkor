@@ -172,7 +172,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert_receive {:external_write_started, worker, "operator/operator-one", body, "captured",
                       Gralkor.DefaultOntology, opts}
 
-      assert body =~ "Lifecycle Agent: flush this"
+      assert body == "Eli: flush this"
       assert opts[:source_kind] == :conversation
       refute_receive {:external_write_finished, "operator/operator-one"}
       assert {:ok, :ok} = Task.yield(stop, 100)
