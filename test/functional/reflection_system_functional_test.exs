@@ -93,10 +93,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       reflection = resolve_reflection(definition)
 
       assert reflection.name == "reflection-test"
+
       assert %Gralkor.Reflection.ChainOfThought{steps: [%{label: "collect"}]} =
                reflection.chain_of_thought
 
-      assert [%{kind: :destination, destination: %Gralkor.Destination{name: "operator"}, ontology: ReflectionOntology}] =
+      assert [
+               %{
+                 kind: :destination,
+                 destination: %Gralkor.Destination{name: "operator"},
+                 ontology: ReflectionOntology
+               }
+             ] =
                reflection.outputs
     end
   end
@@ -434,6 +441,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       reflection = packaged_reflection("generalisations")
 
       assert reflection.name == "generalisations"
+
       assert Enum.map(reflection.chain_of_thought.steps, & &1.label) ==
                ["inspect-world", "evolve-generalisations"]
 
