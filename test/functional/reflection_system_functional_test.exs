@@ -88,60 +88,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "when an agent runtime validates Reflection declarations" do
-    test("and every Reflection name is unique", context, do: assert_valid(context))
-
-    test("and every Reflection contains one structured Chain of Thought", context,
-      do: assert_valid(context)
-    )
-
-    test("and every Chain of Thought contains one or more ordered steps", context,
-      do: assert_valid(context)
-    )
-
-    test("and every step has a non-blank label and natural-language directions", context,
-      do: assert_valid(context)
-    )
-
-    test("and every step declares one or more named structured outputs and their types", context,
-      do: assert_valid(context)
-    )
-
-    test("and output names are unique across the Chain of Thought", context,
-      do: assert_valid(context)
-    )
-
-    test("and every interpolation references an output from an earlier step", context,
-      do: assert_valid(context)
-    )
-
-    test "and every Reflection declares an `outputs` list" do
-      definition =
-        valid_definition(
-          outputs: [[kind: :destination, destination: "operator", ontology: ReflectionOntology]]
-        )
-
+    test "then validation succeeds" do
+      definition = valid_definition()
       reflection = resolve_reflection(definition)
 
-      assert reflection.outputs == [
-               %{
-                 kind: :destination,
-                 destination: %Gralkor.Destination{name: "operator"},
-                 ontology: ReflectionOntology
-               }
-             ]
+      assert reflection.name == "reflection-test"
+      assert %Gralkor.Reflection.ChainOfThought{steps: [%{label: "collect"}]} =
+               reflection.chain_of_thought
+
+      assert [%{kind: :destination, destination: %Gralkor.Destination{name: "operator"}, ontology: ReflectionOntology}] =
+               reflection.outputs
     end
-
-    test("and exactly one output has kind `:destination`", context, do: assert_valid(context))
-
-    test("and every Destination output references a registered Destination by name", context,
-      do: assert_valid(context)
-    )
-
-    test("and every Destination output declares a valid extraction ontology", context,
-      do: assert_valid(context)
-    )
-
-    test("then validation succeeds", context, do: assert_valid(context))
   end
 
   describe "when an agent runtime validates Reflection declarations > if the configured Reflection collection is not a list" do
