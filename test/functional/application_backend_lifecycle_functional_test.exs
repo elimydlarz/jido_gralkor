@@ -48,7 +48,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
                {:remote, [host: "memory.example", port: 6379]}
     end
 
-    test "and buffered Lens capture flushes without resolving or invoking configured Reflections" do
+    test "and application compatibility capture does not require an owning agent runtime" do
       Application.put_env(:jido_gralkor, :falkordb, host: "memory.example", port: 6379)
       Application.put_env(:jido_gralkor, :reflections, :invalid_if_resolved)
       Application.put_env(:jido_gralkor, :destinations, [[name: "observations"]])
