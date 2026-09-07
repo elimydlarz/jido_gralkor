@@ -3,7 +3,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   alias Gralkor.Client
   alias Gralkor.Client.InMemory
+  alias Gralkor.Client.Native
+  alias Gralkor.CaptureBuffer
   alias Gralkor.Ingest
+  alias Gralkor.Message
   alias JidoGralkor.Actions.MemoryAdd
   alias JidoGralkor.Actions.MemoryBuildCommunities
   alias JidoGralkor.Actions.MemoryBuildIndices
@@ -39,24 +42,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
-  defmodule BlockingFlushClient do
-    def flush(session_id) do
-      test_pid = Application.fetch_env!(:jido_gralkor, :public_flush_test_pid)
-
-      {:ok, worker} =
-        Task.start(fn ->
-          send(test_pid, {:flush_started, self(), session_id})
-
-          receive do
-            :release -> send(test_pid, {:flush_finished, session_id})
-          end
-        end)
-
-      send(test_pid, {:flush_scheduled, worker, session_id})
-      :ok
-    end
-  end
-
   defmodule DeterministicMemoryAgent do
     use Jido.AI.Agent,
       name: "deterministic_memory_agent",
@@ -89,8 +74,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     previous =
       for key <- [
             :client,
-            :public_flush_test_pid,
-            :destinations,
+               :destinations,
             :destination_storage,
             :lenses,
             :lens_storage
@@ -101,6 +85,21 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     start_supervised!(Gralkor.Lens.Storage.InMemory)
     start_supervised!(Gralkor.Destination.Storage.InMemory)
+
+    flush_test_pid = self()
+
+    start_supervised!(
+      {CaptureBuffer,
+       flush_callback: fn group_id, _agent_name, _user_name, _ontology, turns ->
+         send(flush_test_pid, {:external_flush_started, self(), group_id, turns})
+
+         receive do
+           :release ->
+             send(flush_test_pid, {:external_flush_finished, group_id})
+             :ok
+         end
+       end}
+    )
 
     Application.put_env(:jido_gralkor, :destinations, [
       [name: "observations"],
@@ -147,19 +146,26 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   describe "when an application gracefully stops an agent with a committed thread" do
     test "then termination returns without waiting for the memory flush" do
-      Process.register(self(), :public_flush_test)
-      Application.put_env(:jido_gralkor, :public_flush_test_pid, self())
-      Application.put_env(:jido_gralkor, :client, BlockingFlushClient)
+      Application.put_env(:jido_gralkor, :client, Native)
+
+      assert :ok =
+               Native.capture(
+                 "committed-thread",
+                 "operator/operator-one",
+                 "Lifecycle Agent",
+                 "Eli",
+                 [Message.new("user", "flush this")]
+               )
 
       pid = start_agent_with_thread("committed-thread")
       started_at = System.monotonic_time(:millisecond)
       assert :ok = GenServer.stop(pid, :shutdown, 5_000)
       assert System.monotonic_time(:millisecond) - started_at < 1_000
 
-      assert_receive {:flush_started, worker, "committed-thread"}
-      refute_receive {:flush_finished, "committed-thread"}
+      assert_receive {:external_flush_started, worker, "operator/operator-one", _turns}
+      refute_receive {:external_flush_finished, "operator/operator-one"}
       send(worker, :release)
-      assert_receive {:flush_finished, "committed-thread"}
+      assert_receive {:external_flush_finished, "operator/operator-one"}
     end
 
     test "and the configured memory client flushes the committed thread" do
