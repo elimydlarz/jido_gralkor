@@ -619,10 +619,18 @@ defmodule Gralkor.Reflection.RunnerTest do
              )
 
     assert_receive {:built_in_call, Jido.AI.Actions.ToolCalling.CallWithTools, args, _context}
-    assert Map.take(args, [:model, :auto_execute]) == %{model: "openai:runner-contract-model", auto_execute: true}
+
+    assert Map.take(args, [:model, :auto_execute]) == %{
+             model: "openai:runner-contract-model",
+             auto_execute: true
+           }
+
     assert args.prompt =~ "Use the evidence."
     assert args.prompt =~ ~s({"answer":"string"})
-    assert args.prompt =~ ~s({"id":"representation-one","lens":"observations","content":"Deployment evidence.","result":"ok"})
+
+    assert args.prompt =~
+             ~s({"id":"representation-one","lens":"observations","content":"Deployment evidence.","result":"ok"})
+
     assert args.prompt =~ ~s([{"content":"stored observation"}])
     refute args.prompt =~ "must not leak"
   end

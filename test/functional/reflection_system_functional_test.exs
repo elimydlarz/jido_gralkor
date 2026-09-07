@@ -814,7 +814,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       refute_receive {:reflection_callback, _}
 
       send(inference_process, {release, :continue})
-      assert_receive {:reflection_callback, %{invocation_id: "reflection-invocation-one", outcome: :delivered}}
+
+      assert_receive {:reflection_callback,
+                      %{invocation_id: "reflection-invocation-one", outcome: :delivered}}
     end
   end
 
