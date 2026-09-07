@@ -346,7 +346,7 @@ defmodule JidoGralkor.RuntimeTest do
   end
 
   describe "when the owning runtime terminates during unfinished Reflection work" do
-    test "then the unfinished work terminates with that runtime and its invocation callback is not invoked" do
+    test "then the unfinished work terminates with that runtime" do
       start_runtime(reflection_configuration())
       runtime = :global.whereis_name({Runtime, self()})
       test_pid = self()
@@ -356,6 +356,26 @@ defmodule JidoGralkor.RuntimeTest do
                  self(),
                  "review",
                  invocation("cancelled"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 run_reflection: fn _reflection, _invocation, _opts ->
+                   receive do
+                     :never -> {:ok, Gralkor.Artefact.new("never", %{})}
+                   end
+                 end
+               )
+
+      Process.exit(runtime, :kill)
+      refute Process.alive?(runtime)
+    end
+
+    test "and its invocation callback is not invoked" do
+      start_runtime(reflection_configuration())
+      runtime = :global.whereis_name({Runtime, self()})
+      test_pid = self()
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(), "review", invocation("cancelled-callback"),
                  &send(test_pid, {:reflection_callback, &1}),
                  run_reflection: fn _reflection, _invocation, _opts ->
                    receive do
