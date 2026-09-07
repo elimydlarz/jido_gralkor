@@ -106,7 +106,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       send(test_pid, {:provider_tool_results_inspected, valid?, tool_results})
 
-      %{
+      Jason.decode!(Jason.encode!(%{
         id: "fixture-answer",
         object: "chat.completion",
         model: "fixture",
@@ -117,7 +117,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
             message: %{role: "assistant", content: if(valid?, do: @answer, else: nil)}
           }
         ]
-      }
+      }))
     end
 
     defp exact_memory_evidence?(tool_results) when tool_results != [] do
@@ -928,16 +928,40 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     provider_adapter = InspectingProviderFixture.adapter(self())
 
-    assert {:ok, answer} =
-             DeterministicMemoryAgent.ask_sync(agent, prompt,
-               llm_opts: [api_key: "test-provider-key"],
-               req_http_options: [adapter: provider_adapter]
-             )
+    result =
+      DeterministicMemoryAgent.ask_sync(agent, prompt,
+        llm_opts: [api_key: "test-provider-key"],
+        req_http_options: [adapter: provider_adapter]
+      )
+
+    unless match?({:ok, _answer}, result) do
+      diagnostics = drain_provider_messages([])
+
+      flunk(
+        "provider ReAct diagnostic: result=#{inspect(result)} " <>
+          "messages=#{inspect(diagnostics)}"
+      )
+    end
+
+    {:ok, answer} = result
 
     assert_receive {:provider_tool_results_inspected, true, tool_results}
     assert tool_results != []
     assert Enum.any?(tool_results, &(to_string(&1["content"]) =~ "evolves_from"))
     answer
+  end
+
+  defp drain_provider_messages(acc) do
+    receive do
+      {:provider_request, url, payload} ->
+        roles = payload |> Map.get("messages", []) |> Enum.map(&Map.get(&1, "role"))
+        drain_provider_messages([{url, roles} | acc])
+
+      {:provider_tool_results_inspected, valid?, _tool_results} ->
+        drain_provider_messages([{:tool_results_inspected, valid?} | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
   end
 
   defp put_generalisation_for(operator_id, content, level, evolves_from) do
