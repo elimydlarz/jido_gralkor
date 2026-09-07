@@ -417,7 +417,7 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "if Reflection production reports a retryable server failure while no retry succeeds within twenty-four hours" do
+  describe "if Reflection production reports a retryable server failure > while no retry succeeds within twenty-four hours" do
     test "then production is abandoned without another attempt and the callback receives abandonment" do
       start_runtime(reflection_configuration())
       parent = self()
