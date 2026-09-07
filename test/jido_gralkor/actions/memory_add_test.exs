@@ -23,7 +23,9 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
         {:memory_add_started, group_id, content, source_description, source_kind})
 
       receive do
-        :release -> :ok
+        :release ->
+          send(Process.whereis(:memory_add_blocking_test), :memory_add_finished)
+          :ok
       end
     end
   end
@@ -91,11 +93,11 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
       assert {:ok, %{result: "Ingesting."}} = Task.await(caller, 100)
 
-      assert_receive {:memory_add_started, "operator/01USER", "Eli prefers tea",
+      assert_receive {:memory_add_started, worker, "operator/01USER", "Eli prefers tea",
                       "user preference", :conversation}
 
-      send(self(), :release)
-      assert eventually(fn -> Task.yield(caller, 0) == {:ok, {:ok, %{result: "Ingesting."}}} end)
+      send(worker, :release)
+      assert_receive :memory_add_finished
     end
 
     test "and the background write uses the graph named `operator/<operator id>`" do
