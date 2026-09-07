@@ -727,8 +727,17 @@ defmodule JidoGralkor.RuntimeTest do
       parent = self()
 
       run_reflection = fn _reflection, invocation, _opts ->
-        send(parent, {:started, invocation.id})
-        {:ok, Gralkor.Artefact.new(invocation.id, %{})}
+        case invocation.id do
+          "one" ->
+            send(parent, {:blocked, self()})
+            receive do
+              :release -> {:ok, Gralkor.Artefact.new(invocation.id, %{})}
+            end
+
+          "two" ->
+            send(parent, :second_started)
+            {:ok, Gralkor.Artefact.new(invocation.id, %{})}
+        end
       end
 
       deliver_artefact = fn _output, _reflection, _operator, _artefact, _opts -> :ok end
@@ -753,10 +762,12 @@ defmodule JidoGralkor.RuntimeTest do
                  deliver_artefact: deliver_artefact
                )
 
-      assert_receive {:started, "one"}
-      assert_receive {:started, "two"}
-      assert_receive {:callback, %{invocation_id: "one"}}
+      assert_receive {:blocked, first_worker}
+      assert_receive :second_started
       assert_receive {:callback, %{invocation_id: "two"}}
+      refute_receive {:callback, %{invocation_id: "one"}}
+      send(first_worker, :release)
+      assert_receive {:callback, %{invocation_id: "one"}}
     end
   end
 
