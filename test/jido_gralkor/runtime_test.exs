@@ -388,6 +388,18 @@ defmodule JidoGralkor.RuntimeTest do
 
       assert {:error, {:invalid_invocation_callback, :invalid}} =
                Runtime.submit_reflection(self(), "review", invocation("bad"), :invalid, [])
+
+      assert {:error, {:invalid_operator_id, nil}} =
+               Runtime.submit_reflection(self(), "review", %{id: "missing-operator"}, fn _ -> :ok end, [])
+
+      assert {:error, {:invalid_invocation_id, "  "}} =
+               Runtime.submit_reflection(self(), "review", %{id: "  ", operator_id: "operator-one"}, fn _ -> :ok end, [])
+
+      assert {:error, {:invalid_invocation_id, nil}} =
+               Runtime.submit_reflection(self(), "review", %{operator_id: "operator-one"}, fn _ -> :ok end, [])
+
+      assert {:error, {:unknown_definition, :reflections, "missing"}} =
+               Runtime.submit_reflection(self(), "missing", invocation("unknown"), fn _ -> :ok end, [])
     end
   end
 
