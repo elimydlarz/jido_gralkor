@@ -160,14 +160,12 @@ defmodule JidoGralkor.RuntimeValidationTest do
   describe "when an appending Lens declares `write: :append`, a Destination, and a valid ingestion module" do
     test "then it resolves as an appending Lens" do
       {:ok, pid} = Runtime.start_link(owner: self(), configuration: config())
-      on_exit(fn -> GenServer.stop(pid) end)
       assert %Gralkor.Lens{name: "notes"} = Runtime.lens!(self(), "notes")
     end
 
     test "and an omitted ontology resolves to `Gralkor.DefaultOntology`" do
       c = update_in(config(), [:lenses, Access.at(0)], &Keyword.delete(&1, :ontology))
       {:ok, pid} = Runtime.start_link(owner: self(), configuration: c)
-      on_exit(fn -> GenServer.stop(pid) end)
       assert %Gralkor.Lens{ontology: Gralkor.DefaultOntology} = Runtime.lens!(self(), "notes")
     end
   end
@@ -206,7 +204,6 @@ defmodule JidoGralkor.RuntimeValidationTest do
       {:ok, pid} =
         Runtime.start_link(owner: self(), configuration: Map.put(config(), :lenses, lens))
 
-      on_exit(fn -> GenServer.stop(pid) end)
       assert %Gralkor.Lens.Replaceable{name: "notes"} = Runtime.lens!(self(), "notes")
     end
   end
