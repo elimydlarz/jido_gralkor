@@ -943,8 +943,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   defp drain_provider_messages(acc) do
     receive do
       {:provider_request, url, payload} ->
-        roles = payload |> Map.get("messages", []) |> Enum.map(&Map.get(&1, "role"))
-        drain_provider_messages([{url, roles} | acc])
+        input_types = payload |> Map.get("input", []) |> Enum.map(&Map.get(&1, "type"))
+        drain_provider_messages([{url, input_types} | acc])
 
       {:provider_tool_results_inspected, valid?, _tool_results} ->
         drain_provider_messages([{:tool_results_inspected, valid?} | acc])
