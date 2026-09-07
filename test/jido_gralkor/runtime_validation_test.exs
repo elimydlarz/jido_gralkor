@@ -471,7 +471,7 @@ defmodule JidoGralkor.RuntimeValidationTest do
            directions: "Inspect.",
            output: %{"summary" => "string"}
          }
-     ]
+       ]
      }}
   end
 
