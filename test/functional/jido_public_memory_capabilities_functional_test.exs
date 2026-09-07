@@ -106,18 +106,20 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       send(test_pid, {:provider_tool_results_inspected, valid?, tool_results})
 
-      Jason.decode!(Jason.encode!(%{
-        id: "fixture-answer",
-        object: "chat.completion",
-        model: "fixture",
-        choices: [
-          %{
-            index: 0,
-            finish_reason: "stop",
-            message: %{role: "assistant", content: if(valid?, do: @answer, else: nil)}
-          }
-        ]
-      }))
+      Jason.decode!(
+        Jason.encode!(%{
+          id: "fixture-answer",
+          object: "chat.completion",
+          model: "fixture",
+          choices: [
+            %{
+              index: 0,
+              finish_reason: "stop",
+              message: %{role: "assistant", content: if(valid?, do: @answer, else: nil)}
+            }
+          ]
+        })
+      )
     end
 
     defp exact_memory_evidence?(tool_results) when tool_results != [] do
