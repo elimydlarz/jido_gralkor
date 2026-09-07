@@ -29,8 +29,10 @@ if mount is given a blank agent name
 
 when mount selects an ingestion Lens
   then the selected Lens name is stored on the plugin state without copying its definition
-  and each ingestion resolves that name from the agent's current runtime-configuration snapshot when ingestion begins
-  and the selected Lens must be packaged or declared by that mount's complete runtime configuration
+  where the selected Lens is packaged
+    then mounting accepts the Lens
+  where the selected Lens is declared by that mount
+    then mounting accepts the Lens
   if the ingestion Lens is unknown
     then mounting raises an ArgumentError identifying the unknown Lens
   if the Lens exists only in the application compatibility registry
