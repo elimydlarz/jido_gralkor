@@ -180,7 +180,7 @@ defmodule JidoGralkor.Runtime do
   defp validate_configuration(configuration),
     do: {:error, {:invalid_configuration, configuration}}
 
-  defp resolve_configuration(configuration, opts \\ []) do
+  defp resolve_configuration(configuration, opts) do
     packaged_reflections =
       Keyword.get(opts, :packaged_reflections, &Gralkor.Reflection.Packaged.definitions/0)
 
