@@ -78,7 +78,7 @@ defmodule JidoGralkor.RuntimeTest do
                  invocation("async-invocation"),
                  &send(test_pid, {:reflection_callback, &1}),
                  run_reflection: fn _reflection, _invocation, _opts ->
-                   send(test_pid, :production_started)
+                   send(test_pid, {:production_started, self()})
                    receive do
                      :release -> {:ok, Gralkor.Artefact.new("async", %{})}
                    end
@@ -88,9 +88,9 @@ defmodule JidoGralkor.RuntimeTest do
                  end
                )
 
-      assert_receive :production_started
+      assert_receive {:production_started, worker}
       refute_receive {:reflection_callback, _}
-      send(test_pid, :release)
+      send(worker, :release)
       assert_receive {:reflection_callback, %{outcome: :delivered}}
     end
   end
@@ -360,7 +360,7 @@ defmodule JidoGralkor.RuntimeTest do
                  end
                )
 
-      assert_receive {:reflection, "review"}
+      assert_receive {:reflection, "reviews"}
       assert :ok = Runtime.replace(self(), replacement_configuration("new"))
       send(parent, :release)
     end
