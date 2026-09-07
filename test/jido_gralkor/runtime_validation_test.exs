@@ -17,6 +17,15 @@ defmodule JidoGralkor.RuntimeValidationTest do
   end
 
   defp parse_chain_of_thought(%{steps: []}) do
-    {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}}
+    {:ok,
+     %Gralkor.Reflection.ChainOfThought{
+       steps: [
+         %Gralkor.Reflection.ChainOfThought.Step{
+           label: "inspect",
+           directions: "Inspect the supplied evidence.",
+           output: %{"summary" => "string"}
+         }
+       ]
+     }}
   end
 end
