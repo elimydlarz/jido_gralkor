@@ -822,7 +822,39 @@ defmodule Gralkor.CaptureBufferTest do
       assert_receive {:resolved_lens_flushed, ^resolved_lens}
     end
 
-    test "if Lens resolution fails then the failure is returned and the entry remains buffered" do
+  end
+
+  describe "when a Lens-selected session is flushed through a configured Lens resolver > if Lens resolution fails" do
+    test "then the failure is returned" do
+      resolver = fn :runtime_owner, ["observations"] -> {:error, :runtime_unavailable} end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: fn _, _, _, _, _ -> :ok end,
+         lens_flush_callback: fn _, _, _, _, _, _, _ -> :ok end,
+         lens_resolver: resolver,
+         retries: []}
+      )
+
+      turn = [Message.new("user", "remember")]
+
+      assert :ok =
+               CaptureBuffer.append_lens(
+                 :runtime_owner,
+                 "failed-resolution-session",
+                 "operator-one",
+                 "Susu",
+                 "Eli",
+                 "observations",
+                 turn
+               )
+
+      assert {:error, :runtime_unavailable} = CaptureBuffer.flush("failed-resolution-session")
+    end
+
+    test "and the entry remains buffered" do
       resolver = fn :runtime_owner, ["observations"] -> {:error, :runtime_unavailable} end
 
       :ok = stop_supervised(CaptureBuffer)
