@@ -39,6 +39,24 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
+  defmodule BlockingFlushClient do
+    def flush(session_id) do
+      test_pid = Application.fetch_env!(:jido_gralkor, :public_flush_test_pid)
+
+      {:ok, worker} =
+        Task.start(fn ->
+          send(test_pid, {:flush_started, self(), session_id})
+
+          receive do
+            :release -> send(test_pid, {:flush_finished, session_id})
+          end
+        end)
+
+      send(test_pid, {:flush_scheduled, worker, session_id})
+      :ok
+    end
+  end
+
   defmodule DeterministicMemoryAgent do
     use Jido.AI.Agent,
       name: "deterministic_memory_agent",
@@ -69,7 +87,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   setup do
     previous =
-      for key <- [:destinations, :destination_storage, :lenses, :lens_storage], into: %{} do
+      for key <- [:client, :destinations, :destination_storage, :lenses, :lens_storage], into: %{} do
         {key, Application.get_env(:jido_gralkor, key)}
       end
 
