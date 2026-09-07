@@ -146,14 +146,6 @@ defmodule JidoGralkor.RuntimeTest do
       send(owner, :stop)
     end
 
-    test "and later replacement does not mutate the returned definitions" do
-      start_runtime(reflection_configuration())
-      original = Runtime.destination!(self(), "reviews")
-
-      assert :ok = Runtime.replace(self(), replacement_configuration("new"))
-      assert original.name == "reviews"
-      assert Runtime.destination!(self(), "new").name == "new"
-    end
   end
 
   describe "if replacement configuration is invalid" do
@@ -211,6 +203,14 @@ defmodule JidoGralkor.RuntimeTest do
       assert_raise ArgumentError, ~r/unknown_definition/, fn ->
         Runtime.resolve_search!(self(), [], ["missing"])
       end
+    end
+
+    test "and later replacement does not mutate the returned definitions" do
+      start_runtime(reflection_configuration())
+      original = Runtime.destination!(self(), "reviews")
+      assert :ok = Runtime.replace(self(), replacement_configuration("new"))
+      assert original.name == "reviews"
+      assert Runtime.destination!(self(), "new").name == "new"
     end
   end
 
