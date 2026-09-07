@@ -192,10 +192,22 @@ defmodule JidoGralkor.RuntimeTest do
                Runtime.submit_reflection(self(), "review", invocation("valid"), :invalid, [])
 
       assert {:error, {:invalid_operator_id, nil}} =
-               Runtime.submit_reflection(self(), "review", %{id: "missing-operator"}, fn _ -> :ok end, [])
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 %{id: "missing-operator"},
+                 fn _ -> :ok end,
+                 []
+               )
 
       assert {:error, {:unknown_definition, :reflections, "missing"}} =
-               Runtime.submit_reflection(self(), "missing", invocation("unknown"), fn _ -> :ok end, [])
+               Runtime.submit_reflection(
+                 self(),
+                 "missing",
+                 invocation("unknown"),
+                 fn _ -> :ok end,
+                 []
+               )
     end
 
     test "and submission returns the invocation identifier without waiting for production" do
@@ -236,7 +248,10 @@ defmodule JidoGralkor.RuntimeTest do
                  fn result -> send(parent, {:callback, result}) end,
                  run_reflection: fn _reflection, _invocation, _opts ->
                    attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
-                   if attempt == 1, do: {:error, %{status: 503}}, else: {:ok, Gralkor.Artefact.new("retry", %{})}
+
+                   if attempt == 1,
+                     do: {:error, %{status: 503}},
+                     else: {:ok, Gralkor.Artefact.new("retry", %{})}
                  end,
                  deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
                    :ok
