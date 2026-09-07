@@ -87,7 +87,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     :ok
   end
 
-  describe "when an agent runtime validates Reflection declarations" do
+  describe "when an agent runtime validates Reflection declarations > while all declarations satisfy their naming, Chain-of-Thought, and Destination-output requirements" do
     test "then validation succeeds" do
       definition = valid_definition()
       reflection = resolve_reflection(definition)
