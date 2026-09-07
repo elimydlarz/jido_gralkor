@@ -343,9 +343,11 @@ defmodule JidoGralkor.Runtime do
         if collection in [:lenses, :reflections],
           do: Enum.find(names, &(is_binary(&1) and String.contains?(&1, " [lens: ")))
 
+      blank_index = Enum.find_index(names, &(not non_blank?(&1)))
+
       cond do
-        blank = Enum.find(names, &(not non_blank?(&1))) ->
-          {:halt, {:error, {:blank_definition_name, collection, blank}}}
+        is_integer(blank_index) ->
+          {:halt, {:error, {:blank_definition_name, collection, Enum.at(names, blank_index)}}}
 
         duplicate = duplicate(names) ->
           {:halt, {:error, {:duplicate_definition_name, collection, duplicate}}}
