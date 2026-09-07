@@ -311,7 +311,7 @@ defmodule JidoGralkor.Runtime do
 
   defp validate_reserved_names(
          configuration,
-         packaged_reflections \\ &Gralkor.Reflection.Packaged.definitions/0
+         packaged_reflections
        ) do
     packaged = %{
       destinations: ["operator", "global"],
@@ -413,7 +413,7 @@ defmodule JidoGralkor.Runtime do
 
   defp validate_reflection_shapes(
          reflections,
-         parse_chain_of_thought \\ &ChainOfThought.from_config/1
+         parse_chain_of_thought
        ) do
     Enum.reduce_while(reflections, :ok, fn definition, :ok ->
       case validate_reflection_shape(definition, parse_chain_of_thought) do
