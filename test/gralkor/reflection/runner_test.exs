@@ -598,7 +598,9 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
 
     assert {:ok, %{output: %{"answer" => "ready"}}} =
-             Runner.default_inference(request, caller)
+             Runner.default_inference(request, caller,
+               model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end
+             )
 
     assert_receive {:built_in_context, context}
 
