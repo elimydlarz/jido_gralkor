@@ -821,7 +821,6 @@ defmodule Gralkor.CaptureBufferTest do
 
       assert_receive {:resolved_lens_flushed, ^resolved_lens}
     end
-
   end
 
   describe "when a Lens-selected session is flushed through a configured Lens resolver > if Lens resolution fails" do
