@@ -52,6 +52,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         messages = payload["messages"] || []
         has_tool_results? = Enum.any?(messages, &(&1["role"] == "tool"))
         send(test_pid, {:provider_request, request.url, payload})
+        IO.puts("adapter request tool_results=#{has_tool_results?} messages=#{length(messages)}")
 
         response =
           if has_tool_results? do
