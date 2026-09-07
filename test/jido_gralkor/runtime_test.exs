@@ -110,8 +110,21 @@ defmodule JidoGralkor.RuntimeTest do
     end
 
     test "and another owner's runtime remains unchanged" do
-      owner = spawn(fn -> receive do :stop -> :ok end end)
-      start_supervised!({Runtime, owner: owner, configuration: reflection_configuration(), packaged_reflections: fn -> [packaged_reflection()] end, parse_chain_of_thought: fn _ -> {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}} end})
+      owner =
+        spawn(fn ->
+          receive do
+            :stop -> :ok
+          end
+        end)
+
+      start_supervised!(
+        {Runtime,
+         owner: owner,
+         configuration: reflection_configuration(),
+         packaged_reflections: fn -> [packaged_reflection()] end,
+         parse_chain_of_thought: fn _ -> {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}} end}
+      )
+
       start_runtime(reflection_configuration())
 
       assert :ok = Runtime.replace(self(), replacement_configuration("new"))
@@ -464,6 +477,7 @@ defmodule JidoGralkor.RuntimeTest do
                  &send(test_pid, {:reflection_callback, &1}),
                  run_reflection: fn _reflection, _invocation, _opts ->
                    send(test_pid, :work_started)
+
                    receive do
                      :never -> {:ok, Gralkor.Artefact.new("never", %{})}
                    end
@@ -488,6 +502,7 @@ defmodule JidoGralkor.RuntimeTest do
                  &send(test_pid, {:reflection_callback, &1}),
                  run_reflection: fn _reflection, _invocation, _opts ->
                    send(test_pid, :work_started)
+
                    receive do
                      :never -> {:ok, Gralkor.Artefact.new("never", %{})}
                    end
