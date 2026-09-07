@@ -103,10 +103,16 @@ defmodule JidoGralkor.RuntimeValidationTest do
     test "then validation identifies its collection and reserved name" do
       assert {:error, {:reserved_definition_name, :destinations, "operator"}} =
                validate(Map.put(config(), :destinations, [[name: "operator"]]))
+
       assert {:error, {:reserved_definition_name, :lenses, "operator"}} =
                validate(Map.put(config(), :lenses, [[name: "operator"]]))
+
       assert {:error, {:reserved_definition_name, :reflections, "packaged"}} =
-               validate(Map.put(config(), :reflections, [[name: "packaged", outputs: [], chain_of_thought: [steps: []]]]))
+               validate(
+                 Map.put(config(), :reflections, [
+                   [name: "packaged", outputs: [], chain_of_thought: [steps: []]]
+                 ])
+               )
     end
   end
 
@@ -144,7 +150,9 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
       assert {:error, {:reserved_provenance_syntax, :lenses, "notes [lens: old"}} =
                validate(Map.put(config(), :lenses, lens))
+
       reflection = [[name: "review [lens: old", outputs: [], chain_of_thought: [steps: []]]]
+
       assert {:error, {:reserved_provenance_syntax, :reflections, "review [lens: old"}} =
                validate(Map.put(config(), :reflections, reflection))
     end
@@ -401,8 +409,8 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   defp validate(configuration),
     do:
-    Runtime.validate(configuration,
-      packaged_reflections: &packaged_reflections/0,
+      Runtime.validate(configuration,
+        packaged_reflections: &packaged_reflections/0,
         parse_chain_of_thought: &parse_chain_of_thought/1
       )
 
@@ -433,7 +441,15 @@ defmodule JidoGralkor.RuntimeValidationTest do
   end
 
   defp packaged_reflections do
-    [[name: "packaged", outputs: [[kind: :destination, destination: "memory", ontology: Gralkor.DefaultOntology]], chain_of_thought: [steps: [[label: "inspect", directions: "Inspect.", output: %{"summary" => "string"}]]]]]
+    [
+      [
+        name: "packaged",
+        outputs: [[kind: :destination, destination: "memory", ontology: Gralkor.DefaultOntology]],
+        chain_of_thought: [
+          steps: [[label: "inspect", directions: "Inspect.", output: %{"summary" => "string"}]]
+        ]
+      ]
+    ]
   end
 
   defp start_runtime(configuration) do
