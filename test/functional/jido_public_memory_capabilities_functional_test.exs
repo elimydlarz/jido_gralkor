@@ -164,14 +164,16 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                )
 
       pid = start_agent_with_thread("committed-thread")
-      started_at = System.monotonic_time(:millisecond)
-      assert :ok = GenServer.stop(pid, :shutdown, 5_000)
-      assert System.monotonic_time(:millisecond) - started_at < 1_000
+      stop = Task.async(fn -> GenServer.stop(pid, :shutdown, 5_000) end)
 
-      assert_receive {:external_flush_started, worker, "operator/operator-one", _turns}
-      refute_receive {:external_flush_finished, "operator/operator-one"}
+      assert_receive {:external_write_started, worker, "operator/operator-one", body, "captured",
+                      Gralkor.DefaultOntology, opts}
+      assert body =~ "Lifecycle Agent: flush this"
+      assert opts[:source_kind] == :conversation
+      refute_receive {:external_write_finished, "operator/operator-one"}
+      assert {:ok, :ok} = Task.yield(stop, 100)
       send(worker, :release)
-      assert_receive {:external_flush_finished, "operator/operator-one"}
+      assert_receive {:external_write_finished, "operator/operator-one"}
     end
 
     test "and the configured memory client flushes the committed thread" do
