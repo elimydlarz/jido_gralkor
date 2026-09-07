@@ -133,6 +133,13 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     defp nested_decoded(value) when is_list(value),
       do: Enum.flat_map(value, &nested_decoded/1)
 
+    defp nested_decoded(value) when is_binary(value) do
+      case Jason.decode(value) do
+        {:ok, decoded} -> [decoded | nested_decoded(decoded)]
+        {:error, _} -> []
+      end
+    end
+
     defp nested_decoded(_), do: []
 
     defp deep_contains?(value, expected) when is_binary(value), do: value == expected
