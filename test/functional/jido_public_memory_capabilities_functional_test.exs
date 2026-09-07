@@ -102,7 +102,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       |> String.split("\r\n")
       |> Enum.find_value(0, fn line ->
         case String.split(line, ":", parts: 2) do
-          [key, value] when String.downcase(key) == "content-length" -> String.to_integer(String.trim(value))
+          [key, value] ->
+            if String.downcase(key) == "content-length",
+              do: String.to_integer(String.trim(value))
           _ -> nil
         end
       end)
