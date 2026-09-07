@@ -98,10 +98,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         :release ->
           send(flush_test_pid, {:external_write_finished, group_id})
           :ok
-
-        after
-          5_000 -> :ok
-        end
+      after
+        5_000 -> :ok
+      end
     end
 
     start_supervised!(
