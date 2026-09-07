@@ -76,7 +76,9 @@ defmodule JidoGralkor.RuntimeTest do
                    send(test_pid, :production_started)
                    {:ok, Gralkor.Artefact.new("async", %{})}
                  end,
-                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts -> :ok
+                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
+                   :ok
+                 end
                )
 
       assert_receive :production_started
