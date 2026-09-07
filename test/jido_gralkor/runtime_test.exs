@@ -400,6 +400,7 @@ defmodule JidoGralkor.RuntimeTest do
       start_runtime(reflection_configuration())
       parent = self()
       attempts = Agent.start_link(fn -> 0 end) |> elem(1)
+      sleeps = Agent.start_link(fn -> [] end) |> elem(1)
 
       assert {:ok, _} =
                Runtime.submit_reflection(
@@ -410,18 +411,19 @@ defmodule JidoGralkor.RuntimeTest do
                  run_reflection: fn _reflection, _invocation, _opts ->
                    attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
 
-                   if attempt == 1,
+                   if attempt <= 2,
                      do: {:error, %{status: 503}},
                      else: {:ok, Gralkor.Artefact.new("retry", %{})}
                  end,
                  deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
                    :ok
                  end,
-                 sleep: fn _delay -> :ok end
+                 sleep: fn delay -> Agent.update(sleeps, &[delay | &1]) end
                )
 
       assert_receive {:callback, %{outcome: :delivered}}
-      assert Agent.get(attempts, & &1) == 2
+      assert Agent.get(attempts, & &1) == 3
+      assert Agent.get(sleeps, &Enum.reverse/1) == [1_000, 2_000]
     end
   end
 
@@ -515,6 +517,7 @@ defmodule JidoGralkor.RuntimeTest do
       start_runtime(reflection_configuration())
       parent = self()
       attempts = start_supervised!({Agent, fn -> 0 end})
+      sleeps = start_supervised!({Agent, fn -> [] end})
       artefact = Gralkor.Artefact.new("delivery-retry", %{})
 
       assert {:ok, _} =
@@ -526,13 +529,14 @@ defmodule JidoGralkor.RuntimeTest do
                  run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
                  deliver_artefact: fn _output, _reflection, _operator, ^artefact, _opts ->
                    attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
-                   if attempt == 1, do: {:error, %{status: 503}}, else: :ok
+                   if attempt <= 2, do: {:error, %{status: 503}}, else: :ok
                  end,
-                 sleep: fn _delay -> :ok end
+                 sleep: fn delay -> Agent.update(sleeps, &[delay | &1]) end
                )
 
       assert_receive {:callback, %{artefact: ^artefact, outcome: :delivered}}
-      assert Agent.get(attempts, & &1) == 2
+      assert Agent.get(attempts, & &1) == 3
+      assert Agent.get(sleeps, &Enum.reverse/1) == [1_000, 2_000]
     end
   end
 
