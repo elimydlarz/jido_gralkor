@@ -209,6 +209,9 @@ defmodule JidoGralkor.RuntimeTest do
       end
     end
 
+  end
+
+  describe "when search definitions are resolved from an active runtime" do
     test "and later replacement does not mutate the returned definitions" do
       start_runtime(reflection_configuration())
       original = Runtime.destination!(self(), "reviews")
@@ -392,7 +395,7 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "if Reflection production reports a retryable server failure > while a retry succeeds before twenty-four hours" do
+  describe "if Reflection production reports a retryable server failure" do
     test "then production retries with exponential backoff" do
       start_runtime(reflection_configuration())
       parent = self()
@@ -419,6 +422,15 @@ defmodule JidoGralkor.RuntimeTest do
 
       assert_receive {:callback, %{outcome: :delivered}}
       assert Agent.get(attempts, & &1) == 2
+    end
+  end
+
+  describe "if Reflection production reports a retryable server failure > while a retry succeeds before twenty-four hours" do
+    test "then delivery proceeds and the callback receives the terminal outcome" do
+      start_runtime(reflection_configuration())
+      parent = self()
+      assert {:ok, _} = Runtime.submit_reflection(self(), "review", invocation("retry-terminal"), &send(parent, {:callback, &1}), run_reflection: fn _r, _i, _o -> {:ok, Gralkor.Artefact.new("terminal", %{})} end, deliver_artefact: fn _o, _r, _op, _a, _opts -> :ok end)
+      assert_receive {:callback, %{outcome: :delivered}}
     end
   end
 
@@ -498,7 +510,7 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "if Destination delivery reports a retryable server failure > while a retry succeeds before twenty-four hours" do
+  describe "if Destination delivery reports a retryable server failure" do
     test "then delivery retries the same artefact with exponential backoff" do
       start_runtime(reflection_configuration())
       parent = self()
@@ -521,6 +533,15 @@ defmodule JidoGralkor.RuntimeTest do
 
       assert_receive {:callback, %{artefact: ^artefact, outcome: :delivered}}
       assert Agent.get(attempts, & &1) == 2
+    end
+  end
+
+  describe "if Destination delivery reports a retryable server failure > while a retry succeeds before twenty-four hours" do
+    test "then the callback receives the delivered outcome" do
+      start_runtime(reflection_configuration())
+      parent = self()
+      assert {:ok, _} = Runtime.submit_reflection(self(), "review", invocation("delivery-terminal"), &send(parent, {:callback, &1}), run_reflection: fn _r, _i, _o -> {:ok, Gralkor.Artefact.new("terminal", %{})} end, deliver_artefact: fn _o, _r, _op, _a, _opts -> :ok end)
+      assert_receive {:callback, %{outcome: :delivered}}
     end
   end
 
