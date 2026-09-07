@@ -94,7 +94,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert reflection.name == "generalisation"
 
-      assert %Gralkor.Reflection.ChainOfThought{steps: [%{label: "gather"}, %{label: "synthesise"}]} =
+      assert %Gralkor.Reflection.ChainOfThought{
+               steps: [%{label: "gather"}, %{label: "synthesise"}]
+             } =
                reflection.chain_of_thought
 
       assert [
