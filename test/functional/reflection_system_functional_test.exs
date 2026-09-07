@@ -1245,10 +1245,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  defp assert_valid(_context) do
-    assert :ok = validate_reflections([valid_definition()])
-  end
-
   defp reflection(
          _context,
          name \\ "generalisation",
