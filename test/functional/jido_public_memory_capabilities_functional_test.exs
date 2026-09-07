@@ -930,10 +930,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     assert {:ok, answer} =
              DeterministicMemoryAgent.ask_sync(agent, prompt,
-               llm_opts: [
-                 api_key: "test-provider-key",
-                 req_http_options: [adapter: provider_adapter]
-               ]
+               llm_opts: [api_key: "test-provider-key"],
+               req_http_options: [adapter: provider_adapter]
              )
 
     assert_receive {:provider_tool_results_inspected, true, tool_results}
