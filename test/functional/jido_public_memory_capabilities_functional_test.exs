@@ -52,7 +52,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         messages = payload["messages"] || []
         has_tool_results? = Enum.any?(messages, &(&1["role"] == "tool"))
         send(test_pid, {:provider_request, request.url, payload})
-        IO.puts("adapter request tool_results=#{has_tool_results?} messages=#{length(messages)}")
 
         response =
           if has_tool_results? do
@@ -61,12 +60,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
             tool_call_response()
           end
 
-        {request,
-         Req.Response.new(
-           status: 200,
-           headers: %{"content-type" => ["application/json"]},
-           body: response
-         )}
+        {request, Req.Response.new(status: 200, body: response)}
       end
     end
 
@@ -99,7 +93,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
           ]
         })
 
-      json
+      Jason.decode!(json)
     end
 
     defp answer_response(payload, test_pid) do
@@ -116,7 +110,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       send(test_pid, {:provider_tool_results_inspected, valid?, tool_results})
 
-      Jason.encode!(%{
+      %{
         id: "fixture-answer",
         object: "chat.completion",
         model: "fixture",
