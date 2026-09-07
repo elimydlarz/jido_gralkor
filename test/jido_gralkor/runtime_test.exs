@@ -370,7 +370,23 @@ defmodule JidoGralkor.RuntimeTest do
   end
 
   defp start_runtime(configuration) do
-    start_supervised!({Runtime, owner: self(), configuration: configuration})
+    start_supervised!(
+      {Runtime,
+       owner: self(),
+       configuration: configuration,
+       packaged_reflections: fn -> [packaged_reflection()] end,
+       parse_chain_of_thought: fn _configuration ->
+         {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}}
+       end}
+    )
+  end
+
+  defp packaged_reflection do
+    %{
+      name: "generalisations",
+      outputs: [%{kind: :destination, destination: "global"}],
+      chain_of_thought: %{steps: []}
+    }
   end
 
   defp reflection_configuration do
