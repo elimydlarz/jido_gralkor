@@ -192,13 +192,13 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
   end
 
   describe "when the memory add tool runs with content, a source kind, and a source description > where the tool context selects a Lens > while the tool context identifies an owning AgentServer as the Gralkor runtime target" do
-    test "then Lens ingestion uses that agent's current runtime configuration" do
+    test "then Lens ingestion receives that owning AgentServer as its runtime target" do
       prove_runtime_targeted_lens_ingestion()
     end
   end
 
   describe "when the memory add tool runs with content, a source kind, and a source description > where the tool context selects a Lens > while the tool context has no Gralkor runtime target" do
-    test "then Lens ingestion uses the application compatibility configuration" do
+    test "then Lens ingestion uses the untargeted application compatibility boundary" do
       prove_application_compatibility_lens_ingestion()
     end
   end
