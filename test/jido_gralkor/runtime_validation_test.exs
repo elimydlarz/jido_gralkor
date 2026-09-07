@@ -53,7 +53,9 @@ defmodule JidoGralkor.RuntimeValidationTest do
       reflections: [
         [
           name: "review",
-          outputs: [[kind: :destination, destination: "memory", ontology: Gralkor.DefaultOntology]],
+          outputs: [
+            [kind: :destination, destination: "memory", ontology: Gralkor.DefaultOntology]
+          ],
           chain_of_thought: [
             steps: [[label: "inspect", directions: "Inspect.", output: %{"summary" => "string"}]]
           ]
@@ -64,7 +66,10 @@ defmodule JidoGralkor.RuntimeValidationTest do
     definitions = Map.fetch!(base, collection)
     definition = List.first(definitions)
     definition = Keyword.put(definition, :name, value)
-    definitions = if Keyword.get(options, :duplicate), do: [definition, definition], else: [definition]
+
+    definitions =
+      if Keyword.get(options, :duplicate), do: [definition, definition], else: [definition]
+
     Map.put(base, collection, definitions)
   end
 
@@ -89,5 +94,5 @@ defmodule JidoGralkor.RuntimeValidationTest do
      }}
   end
 
-  defp parse_chain_of_thought([steps: [step]]), do: parse_chain_of_thought(%{steps: [step]})
+  defp parse_chain_of_thought(steps: [step]), do: parse_chain_of_thought(%{steps: [step]})
 end
