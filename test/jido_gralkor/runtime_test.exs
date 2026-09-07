@@ -364,12 +364,17 @@ defmodule JidoGralkor.RuntimeTest do
                    receive do
                      :release -> {:ok, Gralkor.Artefact.new("retained", %{})}
                    end
+                 end,
+                 deliver_artefact: fn output, _reflection, _operator, _artefact, _opts ->
+                   send(parent, {:delivered_destination, output.destination.name})
+                   :ok
                  end
                )
 
       assert_receive {:reflection, "reviews", worker}
       assert :ok = Runtime.replace(self(), replacement_configuration("new"))
       send(worker, :release)
+      assert_receive {:delivered_destination, "reviews"}
       assert_receive {:callback, %{outcome: :delivered}}
     end
 
