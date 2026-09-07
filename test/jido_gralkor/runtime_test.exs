@@ -94,7 +94,7 @@ defmodule JidoGralkor.RuntimeTest do
   describe "when a consumer replaces complete valid configuration" do
     test "then every definition is validated and resolved before activation" do
       start_runtime(reflection_configuration())
-      replacement = reflection_configuration() |> Map.put(:destinations, [%{name: "new"}])
+      replacement = replacement_configuration("new")
 
       assert :ok = Runtime.replace(self(), replacement)
       assert Runtime.snapshot(self()) == replacement
@@ -103,7 +103,7 @@ defmodule JidoGralkor.RuntimeTest do
 
     test "and replacement returns only after the new snapshot is active" do
       start_runtime(reflection_configuration())
-      replacement = reflection_configuration() |> Map.put(:destinations, [%{name: "new"}])
+      replacement = replacement_configuration("new")
 
       assert :ok = Runtime.replace(self(), replacement)
       assert Runtime.destination!(self(), "new").name == "new"
@@ -428,6 +428,15 @@ defmodule JidoGralkor.RuntimeTest do
           }
         }
       ]
+    }
+  end
+
+  defp replacement_configuration(destination) do
+    configuration = reflection_configuration()
+
+    %{configuration |
+      destinations: [%{name: destination}],
+      reflections: [put_in(hd(configuration.reflections).outputs, [Access.at(0), :destination], destination)]
     }
   end
 
