@@ -139,10 +139,19 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   describe "when an application gracefully stops an agent with a committed thread" do
     test "then termination returns without waiting for the memory flush" do
+      Process.register(self(), :public_flush_test)
+      Application.put_env(:jido_gralkor, :public_flush_test_pid, self())
+      Application.put_env(:jido_gralkor, :client, BlockingFlushClient)
+
       pid = start_agent_with_thread("committed-thread")
       started_at = System.monotonic_time(:millisecond)
       assert :ok = GenServer.stop(pid, :shutdown, 5_000)
       assert System.monotonic_time(:millisecond) - started_at < 1_000
+
+      assert_receive {:flush_started, worker, "committed-thread"}
+      refute_receive {:flush_finished, "committed-thread"}
+      send(worker, :release)
+      assert_receive {:flush_finished, "committed-thread"}
     end
 
     test "and the configured memory client flushes the committed thread" do
