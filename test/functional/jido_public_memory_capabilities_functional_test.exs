@@ -87,7 +87,14 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   setup do
     previous =
-      for key <- [:client, :destinations, :destination_storage, :lenses, :lens_storage], into: %{} do
+      for key <- [
+               :client,
+               :public_flush_test_pid,
+               :destinations,
+               :destination_storage,
+               :lenses,
+               :lens_storage
+             ], into: %{} do
         {key, Application.get_env(:jido_gralkor, key)}
       end
 
