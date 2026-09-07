@@ -172,7 +172,24 @@ defmodule JidoGralkor.PluginTest do
                )
     end
 
-    test "and a Lens present only in the application compatibility registry is rejected" do
+    test "where the selected Lens is packaged > then mounting accepts the Lens" do
+      assert {:ok, %{agent_name: "Susu", ingestion_lens: "operator"}} =
+               Plugin.mount(%{id: "operator-one", state: %{}},
+                 agent_name: "Susu",
+                 ingestion_lens: "operator"
+               )
+    end
+
+    test "where the selected Lens is declared by that mount > then mounting accepts the Lens" do
+      assert {:ok, %{agent_name: "Susu", ingestion_lens: "observations"}} =
+               Plugin.mount(%{id: "operator-one", state: %{}},
+                 agent_name: "Susu",
+                 ingestion_lens: "observations",
+                 runtime_config: runtime_configuration()
+               )
+    end
+
+    test "if the Lens exists only in the application compatibility registry > then mounting raises an ArgumentError identifying the unknown Lens" do
       configure_lenses()
 
       assert_raise ArgumentError, ~r/unknown Lens "observations"/, fn ->
