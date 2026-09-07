@@ -401,8 +401,8 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   defp validate(configuration),
     do:
-      Runtime.validate(configuration,
-        packaged_reflections: fn -> [] end,
+    Runtime.validate(configuration,
+      packaged_reflections: &packaged_reflections/0,
         parse_chain_of_thought: &parse_chain_of_thought/1
       )
 
@@ -430,6 +430,10 @@ defmodule JidoGralkor.RuntimeValidationTest do
         ]
       ]
     }
+  end
+
+  defp packaged_reflections do
+    [[name: "packaged", outputs: [[kind: :destination, destination: "memory", ontology: Gralkor.DefaultOntology]], chain_of_thought: [steps: [[label: "inspect", directions: "Inspect.", output: %{"summary" => "string"}]]]]]
   end
 
   defp start_runtime(configuration) do
