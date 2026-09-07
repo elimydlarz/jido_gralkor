@@ -79,7 +79,9 @@ defmodule JidoGralkor.RuntimeTest do
                  &send(test_pid, {:reflection_callback, &1}),
                  run_reflection: fn _reflection, _invocation, _opts ->
                    send(test_pid, :production_started)
-                   {:ok, Gralkor.Artefact.new("async", %{})}
+                   receive do
+                     :release -> {:ok, Gralkor.Artefact.new("async", %{})}
+                   end
                  end,
                  deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
                    :ok
@@ -87,6 +89,8 @@ defmodule JidoGralkor.RuntimeTest do
                )
 
       assert_receive :production_started
+      refute_receive {:reflection_callback, _}
+      send(test_pid, :release)
       assert_receive {:reflection_callback, %{outcome: :delivered}}
     end
   end
