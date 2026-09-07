@@ -101,6 +101,20 @@ defmodule JidoGralkor.RuntimeTest do
       assert Runtime.destination!(self(), "new").name == "new"
     end
 
+    test "and the complete configuration becomes active as one snapshot" do
+      start_runtime(reflection_configuration())
+      replacement = replacement_configuration("new")
+      assert :ok = Runtime.replace(self(), replacement)
+      assert Runtime.snapshot(self()) == replacement
+    end
+
+    test "and package-owned definitions remain active" do
+      start_runtime(reflection_configuration())
+      assert :ok = Runtime.replace(self(), replacement_configuration("new"))
+      assert Runtime.destination!(self(), "operator").name == "operator"
+      assert Runtime.reflection!(self(), "generalisations").name == "generalisations"
+    end
+
     test "and replacement returns only after the new snapshot is active" do
       start_runtime(reflection_configuration())
       replacement = replacement_configuration("new")
@@ -162,7 +176,7 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "when search definitions are resolved from an active runtime while no Destination names are supplied" do
+  describe "when search definitions are resolved from an active runtime > while no Destination names are supplied" do
     test "then every accessible Destination and every selected Lens resolve from one snapshot" do
       configuration = %{reflection_configuration() | lenses: [lens_configuration()]}
       start_runtime(configuration)
@@ -173,7 +187,7 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "when search definitions are resolved from an active runtime while Destination and Lens names are supplied" do
+  describe "when search definitions are resolved from an active runtime > while Destination and Lens names are supplied" do
     test "then those definitions resolve from one snapshot in first-selected order without duplicates" do
       configuration = %{reflection_configuration() | lenses: [lens_configuration()]}
       start_runtime(configuration)
@@ -190,7 +204,7 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "when search definitions are resolved from an active runtime if any selected name is unknown" do
+  describe "when search definitions are resolved from an active runtime > if any selected name is unknown" do
     test "then resolution fails without returning a partial result" do
       start_runtime(reflection_configuration())
 
