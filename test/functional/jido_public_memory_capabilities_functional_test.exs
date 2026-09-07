@@ -893,6 +893,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     operator_id = "functional-agent-#{System.unique_integer([:positive])}"
     jido = Jido.default_instance()
 
+    InMemory.set_capture(:ok)
+
     start_supervised!({Jido, name: jido, otp_app: :jido_gralkor})
 
     assert {:ok, agent} =
