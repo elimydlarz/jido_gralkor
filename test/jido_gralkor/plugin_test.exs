@@ -172,44 +172,50 @@ defmodule JidoGralkor.PluginTest do
                )
     end
 
-    test "where the selected Lens is packaged > then mounting accepts the Lens" do
-      assert {:ok, %{agent_name: "Susu", ingestion_lens: "operator"}} =
-               Plugin.mount(%{id: "operator-one", state: %{}},
-                 agent_name: "Susu",
-                 ingestion_lens: "operator"
-               )
-    end
-
-    test "where the selected Lens is declared by that mount > then mounting accepts the Lens" do
-      assert {:ok, %{agent_name: "Susu", ingestion_lens: "observations"}} =
-               Plugin.mount(%{id: "operator-one", state: %{}},
-                 agent_name: "Susu",
-                 ingestion_lens: "observations",
-                 runtime_config: runtime_configuration()
-               )
-    end
-
-    test "if the Lens exists only in the application compatibility registry > then mounting raises an ArgumentError identifying the unknown Lens" do
-      configure_lenses()
-
-      assert_raise ArgumentError, ~r/unknown Lens "observations"/, fn ->
-        Plugin.mount(%{id: "operator-one", state: %{}},
-          agent_name: "Susu",
-          ingestion_lens: "observations"
-        )
+    describe "where the selected Lens is packaged" do
+      test "then mounting accepts the Lens" do
+        assert {:ok, %{agent_name: "Susu", ingestion_lens: "operator"}} =
+                 Plugin.mount(%{id: "operator-one", state: %{}},
+                   agent_name: "Susu",
+                   ingestion_lens: "operator"
+                 )
       end
     end
-  end
 
-  describe "when mount selects an ingestion Lens > if the ingestion Lens is unknown" do
-    test "then mounting raises an ArgumentError identifying the unknown Lens" do
-      configure_lenses()
+    describe "where the selected Lens is declared by that mount" do
+      test "then mounting accepts the Lens" do
+        assert {:ok, %{agent_name: "Susu", ingestion_lens: "observations"}} =
+                 Plugin.mount(%{id: "operator-one", state: %{}},
+                   agent_name: "Susu",
+                   ingestion_lens: "observations",
+                   runtime_config: runtime_configuration()
+                 )
+      end
+    end
 
-      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
-        Plugin.mount(%{id: "operator-one", state: %{}},
-          agent_name: "Susu",
-          ingestion_lens: "missing"
-        )
+    describe "if the ingestion Lens is unknown" do
+      test "then mounting raises an ArgumentError identifying the unknown Lens" do
+        configure_lenses()
+
+        assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
+          Plugin.mount(%{id: "operator-one", state: %{}},
+            agent_name: "Susu",
+            ingestion_lens: "missing"
+          )
+        end
+      end
+    end
+
+    describe "if the Lens exists only in the application compatibility registry" do
+      test "then mounting raises an ArgumentError identifying the unknown Lens" do
+        configure_lenses()
+
+        assert_raise ArgumentError, ~r/unknown Lens "observations"/, fn ->
+          Plugin.mount(%{id: "operator-one", state: %{}},
+            agent_name: "Susu",
+            ingestion_lens: "observations"
+          )
+        end
       end
     end
   end
