@@ -59,7 +59,12 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
             _ -> answer_response(payload, test_pid)
           end
 
-        {request, Req.Response.new(status: 200, headers: %{"content-type" => ["application/json"]}, body: response)}
+        {request,
+         Req.Response.new(
+           status: 200,
+           headers: %{"content-type" => ["application/json"]},
+           body: response
+         )}
       end
     end
 
@@ -110,17 +115,17 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       send(test_pid, {:provider_tool_results_inspected, valid?, tool_results})
 
       Jason.encode!(%{
-          id: "fixture-answer",
-          object: "chat.completion",
-          model: "fixture",
-          choices: [
-            %{
-              index: 0,
-              finish_reason: "stop",
-              message: %{role: "assistant", content: if(valid?, do: @answer, else: nil)}
-            }
-          ]
-        })
+        id: "fixture-answer",
+        object: "chat.completion",
+        model: "fixture",
+        choices: [
+          %{
+            index: 0,
+            finish_reason: "stop",
+            message: %{role: "assistant", content: if(valid?, do: @answer, else: nil)}
+          }
+        ]
+      })
     end
   end
 
