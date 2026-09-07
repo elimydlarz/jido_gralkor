@@ -11,7 +11,9 @@ defmodule Gralkor.Reflection.RunnerTest do
 
   defmodule Runner do
     def run(reflection, invocation, opts \\ []) do
-      Gralkor.Reflection.Runner.run(reflection, invocation,
+      Gralkor.Reflection.Runner.run(
+        reflection,
+        invocation,
         Keyword.merge(
           [
             type_matcher: fn
@@ -19,7 +21,9 @@ defmodule Gralkor.Reflection.RunnerTest do
               value, "integer" when is_integer(value) -> true
               _value, _type -> false
             end,
-            artefact_id_for: fn "operator-one", "invocation-one", "review" -> "unit-artefact-id" end
+            artefact_id_for: fn "operator-one", "invocation-one", "review" ->
+              "unit-artefact-id"
+            end
           ],
           opts
         )
@@ -30,10 +34,17 @@ defmodule Gralkor.Reflection.RunnerTest do
       do: Gralkor.Reflection.Runner.default_inference(request, caller, model_options())
 
     def default_inference(request, caller, opts),
-      do: Gralkor.Reflection.Runner.default_inference(request, caller, Keyword.merge(model_options(), opts))
+      do:
+        Gralkor.Reflection.Runner.default_inference(
+          request,
+          caller,
+          Keyword.merge(model_options(), opts)
+        )
 
-    defp model_options, do: [model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end]
+    defp model_options,
+      do: [model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end]
   end
+
   alias Gralkor.Search
 
   defmodule ProbeDestinationStorage do
