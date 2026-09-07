@@ -121,7 +121,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
             message: %{role: "assistant", content: if(valid?, do: @answer, else: nil)}
           }
         ]
-      })
+      }
     end
   end
 
