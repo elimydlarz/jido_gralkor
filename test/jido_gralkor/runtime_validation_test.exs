@@ -88,4 +88,6 @@ defmodule JidoGralkor.RuntimeValidationTest do
        ]
      }}
   end
+
+  defp parse_chain_of_thought([steps: [step]]), do: parse_chain_of_thought(%{steps: [step]})
 end
