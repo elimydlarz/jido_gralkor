@@ -224,7 +224,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
               [
                 %Gralkor.IngestedRepresentation{lens: "observations", result: :ok},
                 %Gralkor.IngestedRepresentation{lens: "observations", result: :ok}
-      ]} = Client.ingest_with_representation(request("many"))
+              ]} = Client.ingest_with_representation(request("many"))
     end
 
     test "and the representations are returned in Store write order" do
@@ -289,7 +289,6 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       assert {:error, :rejected} = Client.ingest(request("rejected"))
       refute_receive {:episode_added, _, _, _}
     end
-
   end
 
   describe "if the selected Lens's ingestion process fails > while one or more Store writes completed before the failure" do
