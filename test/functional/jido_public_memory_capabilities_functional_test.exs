@@ -149,7 +149,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     defp deep_contains?(value, expected) when is_binary(value), do: value == expected
 
     defp deep_contains?(value, expected) when is_map(value),
-      do: Enum.any?(value, fn {key, item} -> key == "content" and deep_contains?(item, expected) or deep_contains?(item, expected) end)
+      do:
+        Enum.any?(value, fn {key, item} ->
+          (key == "content" and deep_contains?(item, expected)) or deep_contains?(item, expected)
+        end)
 
     defp deep_contains?(value, expected) when is_list(value),
       do: Enum.any?(value, &deep_contains?(&1, expected))
@@ -164,7 +167,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
           item["content"] == @generalisation and
           item["level"] == 2 and
           Enum.any?(item["evolves_from"] || [], fn predecessor ->
-            is_map(predecessor) and predecessor["content"] == @predecessor and predecessor["level"] == 1
+            is_map(predecessor) and predecessor["content"] == @predecessor and
+              predecessor["level"] == 1
           end)
       end) or Enum.any?(Map.values(value), &deep_contains_generalisation?/1)
     end
