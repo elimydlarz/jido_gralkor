@@ -4,14 +4,14 @@ Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One H
 
 You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Destinations** for named graphs, **Lenses** for ingestion, and **Reflections** for consumer-invoked synthesis.
 
-This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 8.0"}` for the whole memory stack.
+This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. Consumers need only `{:jido_gralkor, "~> 9.0"}` for the whole memory stack.
 
 ## Install
 
 ```elixir
 def deps do
   [
-    {:jido_gralkor, "~> 8.0"}
+    {:jido_gralkor, "~> 9.0"}
   ]
 end
 ```
@@ -177,7 +177,6 @@ The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `reca
 {JidoGralkor.Plugin,
  %{
    agent_name: "Susu",
-   ingestion_lens: "observations",
    runtime_config: %{destinations: [], lenses: [], reflections: []}
  }}
 ```
@@ -193,6 +192,74 @@ Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the 
 Search selection is invocation-local, not a plugin mount option. `memory_search` accepts optional `destinations` and `lenses`; the removed `:search_destinations` mount option raises with migration guidance.
 
 Replace the complete configuration for one running agent with `JidoGralkor.Runtime.replace(agent_server_pid, runtime_config)`. Runtime-targeted APIs accept the owning AgentServer PID. Validation and resolution complete before the three collections become active as one snapshot; an error leaves the old snapshot untouched. If the target has no available Gralkor runtime, the operation raises instead of falling back to application compatibility configuration. If that runtime fails, its linked AgentServer terminates and the consumer's supervisor must start a replacement agent with the current durable configuration.
+
+### Dynamic runtime workflow
+
+A running agent can receive new Destinations, Lenses, and Reflections without restarting. The following example assumes `agent_server` is the PID of an AgentServer with `JidoGralkor.Plugin` mounted. It installs a shared `release-evidence` Destination, an appending Lens, and a Reflection that writes its assessment to that Destination:
+
+```elixir
+runtime_config = %{
+  destinations: [%{name: "release-evidence"}],
+  lenses: [
+    %{
+      name: "release-notes",
+      destination: "release-evidence",
+      write: :append,
+      ontology: Gralkor.DefaultOntology,
+      ingestion: Gralkor.Lens.Ingestion.Store
+    }
+  ],
+  reflections: [
+    %{
+      name: "release-assessment",
+      outputs: [%{kind: :destination, destination: "release-evidence"}],
+      chain_of_thought: %{
+        steps: [
+          %{
+            label: "assess",
+            directions: "Assess the supplied release evidence and identify remaining risks.",
+            output: %{"assessment" => "string", "risks" => "Array<string>"}
+          }
+        ]
+      }
+    }
+  ]
+}
+
+:ok = JidoGralkor.Runtime.replace(agent_server, runtime_config)
+
+{:ok, representations} =
+  Gralkor.Client.ingest_with_representation(agent_server, %Gralkor.Ingest{
+    id: "release-42-evidence",
+    operator_id: "operator-42",
+    lens: "release-notes",
+    source_kind: :document,
+    source_description: "release verification report",
+    content: "The canary completed successfully and rollback was verified."
+  })
+
+consumer = self()
+callback = fn result -> send(consumer, {:release_assessment, result}) end
+
+{:ok, "release-42-assessment"} =
+  Gralkor.Client.reflect(
+    agent_server,
+    "release-assessment",
+    %{
+      id: "release-42-assessment",
+      operator_id: "operator-42",
+      invocation_context: %{release: "42"},
+      representations: representations
+    },
+    callback
+  )
+```
+
+Ingestion returns completed representations; the consumer explicitly submits them to the Reflection. Reflection submission returns immediately, so the consumer can continue working. Its callback later sends `{:release_assessment, result}` to the consumer process. On success, `result` contains `outcome: :delivered`, the invocation ID, and the produced `%Gralkor.Artefact{}`; the artefact is then searchable in `release-evidence`. Keep the receiving process alive and handle the terminal outcomes described in [Configure Reflections](#configure-reflections).
+
+Replacement supplies all three consumer collections, not a patch. Include every consumer definition that should remain available; packaged definitions stay installed. `JidoGralkor.Runtime.snapshot(agent_server)` returns the current consumer configuration for preparing another replacement. Already admitted work retains its resolved definitions and output Destination; later requests use the new snapshot. An invalid replacement returns `{:error, reason}` and leaves the previous configuration active.
+
+The consumer owns persistence and scheduling. Save the configuration in the application's durable store and supply it again through the plugin's `runtime_config` when starting a replacement agent. Work interrupted by agent termination does not survive the restart; use stable invocation IDs when resubmitting it.
 
 ### `JidoGralkor.ContextRotator.rotate_now/2`
 
