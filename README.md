@@ -728,7 +728,7 @@ callback = fn result -> send(review_consumer, {:release_review, result}) end
   )
 ```
 
-The callback eventually receives a map with `:invocation_id`, the terminal `:outcome`, and `:artefact` when production succeeded. A successful delivery reports `outcome: :delivered`. A non-retryable production failure reports `{:production_failed, reason}`. Abandonment reports `{:abandoned, %{stage: :production | :delivery, reason: reason}}`; delivery abandonment still includes the produced artefact.
+The callback eventually receives a map with `:invocation_id`, the terminal `:outcome`, and `:artefact` when production succeeded. A successful delivery reports `outcome: :delivered`. A production failure outside the HTTP 4xx/5xx classifications reports `{:production_failed, reason}`. An HTTP 4xx production failure or exhausted HTTP 5xx retries reports `{:abandoned, %{stage: :production, reason: reason}}`. Delivery abandonment reports `{:abandoned, %{stage: :delivery, reason: reason}}` and still includes the produced artefact.
 
 Each admitted invocation progresses independently. A 5xx failure from inference, packaged-generalisation related-memory retrieval, or Destination delivery retries with exponential backoff until success or twenty-four hours from the first failed attempt. A 4xx failure is abandoned immediately. Unfinished work terminates with the agent without invoking its callback; the consumer owns durable scheduling and may resubmit after its supervisor starts a replacement agent.
 
