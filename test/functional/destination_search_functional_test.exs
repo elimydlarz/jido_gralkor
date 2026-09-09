@@ -156,20 +156,24 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
 
     test "and unselected writers cannot consume the result allowance for selected-Lens results" do
-      Application.put_env(:jido_gralkor, :destination_search_responses, %{
-        "first" => {:ok, ["selected"]},
-        "second" => {:ok, ["unselected"]}
-      })
+      use_in_memory_storage()
+      assert :ok = add_episode("first", "operator-one", "unselected one", "first-beta")
+      assert :ok = add_episode("first", "operator-one", "unselected two", "first-beta")
+      assert :ok = add_episode("first", "operator-one", "selected one", "first-alpha")
+      assert :ok = add_episode("first", "operator-one", "selected two", "first-alpha")
 
-      assert {:ok, [%{destination: "first", fact: "selected"}]} =
+      assert {:ok,
+              [
+                %{episode: %{content: "selected one", lens: "first-alpha"}},
+                %{episode: %{content: "selected two", lens: "first-alpha"}}
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
-                 query: "question",
+                 query: "memory",
                  destinations: ["first"],
-                 result_type: :facts
+                 lenses: ["first-alpha"],
+                 max_results: 2
                })
-
-      refute_receive {:destination_search, "second", _, _, _, _, _}
     end
   end
 
@@ -331,27 +335,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  operator_id: "operator-one",
                  query: "memory",
                  lenses: ["first-alpha", "second-beta"]
-               })
-    end
-
-    test "and unselected writers cannot consume the result allowance for selected-Lens results" do
-      use_in_memory_storage()
-      assert :ok = add_episode("first", "operator-one", "unselected one", "first-beta")
-      assert :ok = add_episode("first", "operator-one", "unselected two", "first-beta")
-      assert :ok = add_episode("first", "operator-one", "selected one", "first-alpha")
-      assert :ok = add_episode("first", "operator-one", "selected two", "first-alpha")
-
-      assert {:ok,
-              [
-                %{episode: %{content: "selected one", lens: "first-alpha"}},
-                %{episode: %{content: "selected two", lens: "first-alpha"}}
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 destinations: ["first"],
-                 lenses: ["first-alpha"],
-                 max_results: 2
                })
     end
 
