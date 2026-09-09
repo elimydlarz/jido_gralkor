@@ -146,7 +146,7 @@ Reflection payload keys and values retain their stored shape; Graphiti JSON obje
 
 Fact results have `%{destination: name, fact: record}`. The Graphiti record contains `fact` text, `created_at`, `valid_at`, `invalid_at`, `expired_at`, and `sources`; each source retains `id`, `source_kind`, and `source_description`. Missing timestamps remain `nil`. In-memory storage is a deterministic test backend: it wraps stored episode text as a fact record with Lens and source-description attribution rather than performing extraction. Node results remain `%{destination: name, node: node_map}`; explicit artefact results remain `%{destination: name, artefact: %Gralkor.Artefact{id: id, payload: payload}}`.
 
-Readable presentation is separate: call `Gralkor.Format.format_fact(record)` explicitly. Legacy `recall` still uses that operation to construct its readable memory block. Search never invokes readable fact formatting.
+Readable presentation is separate: call `Gralkor.Format.format_fact(record)` explicitly. Legacy `recall` still uses that operation to construct its readable memory block. `Gralkor.Client.search/1,2` never invokes readable fact formatting.
 
 ### Whole-result model budgeting
 

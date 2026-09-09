@@ -12,9 +12,9 @@ when the pool starts
     and the embedder is built for the provider the embedder spec names
     and the cross-encoder is built for the provider the LLM spec names
     and each provider credential is passed explicitly from the BEAM side
-      where the credential exists only in the BEAM environment
-        then the BEAM-side credential lookup returns the configured value
-        and the embedded Python environment cannot read that BEAM-only value directly
+    where the credential exists only in the BEAM environment
+      then the BEAM-side credential lookup returns the configured value
+      and the embedded Python environment cannot read that BEAM-only value directly
     while the embedder spec names Google
       then the embedder sends one input per request
     while the two specs name different providers
