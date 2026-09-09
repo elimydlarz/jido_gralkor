@@ -6,52 +6,28 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     test "then Lens groups use `Lens: <name>` headings" do
       assert rendered([fact("Use retries", [%{lens: "jira"}])]) == "Lens: jira\n- Use retries"
     end
-  end
-
-  describe "when the memory search formatter is called" do
     test "and Reflection groups use `Reflection: <name>` headings" do
       assert rendered([fact("Use canaries", [%{reflection: "lessons"}])]) == "Reflection: lessons\n- Use canaries"
     end
-  end
-
-  describe "when the memory search formatter is called" do
     test "and each fact is presented as one bullet with its complete text" do
       assert rendered([fact("First\ncontinued", [%{lens: "notes"}]), fact("Second", [%{lens: "notes"}])]) == "Lens: notes\n- First\ncontinued\n- Second"
     end
-  end
-
-  describe "when the memory search formatter is called" do
     test "and groups retain first-appearance order with retrieval order inside each group" do
       assert rendered([fact("one", [%{lens: "z"}]), fact("two", [%{lens: "a"}]), fact("three", [%{lens: "z"}])]) == "Lens: z\n- one\n- three\n\nLens: a\n- two"
     end
-  end
-
-  describe "when the memory search formatter is called" do
     test "and repeated provenance for one source adds no duplicate bullet for that fact" do
       assert rendered([fact("one", [%{lens: "x", id: "a"}, %{lens: "x", id: "b"}])]) == "Lens: x\n- one"
     end
-  end
-
-  describe "when the memory search formatter is called" do
     test "and facts with several named sources appear under each distinct source" do
       assert rendered([fact("shared", [%{lens: "notes"}, %{reflection: "lessons"}])]) == "Lens: notes\n- shared\n\nReflection: lessons\n- shared"
     end
-  end
-
-  describe "when the memory search formatter is called" do
     test "and unnamed provenance is grouped under `Source: unknown`" do
       assert rendered([fact("one", []), fact("two", [%{source_description: "legacy"}])]) == "Source: unknown\n- one\n- two"
     end
-  end
-
-  describe "when the memory search formatter is called" do
     test "and the formatter adds no Destination, artefact, level, or lineage metadata" do
       input = fact("Use canaries", [%{reflection: "lessons", id: "episode-id"}]) |> Map.put(:artefact, %{id: "artefact-id", payload: %{level: 2, evolves_from: ["old"]}})
       assert rendered([input]) == "Reflection: lessons\n- Use canaries"
     end
-  end
-
-  describe "when the memory search formatter is called" do
     test "and the structured input remains unchanged" do
       input = [fact("one", [%{lens: "notes", id: "source-id"}])]
       assert rendered(input) == "Lens: notes\n- one"
@@ -70,17 +46,11 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       expected = %{result: "Lens: notes\n- one"}
       assert Presentation.for_model([fact("one", [%{lens: "notes"}])], envelope_bytes(expected)) == {:ok, expected}
     end
-  end
-
-  describe "when formatted fact results must fit response limits" do
     test "and headings and omission notices count towards the 16384-character ceiling" do
       content = String.duplicate("x", 16_384 - String.length("Lens: notes\n- "))
       assert String.length(rendered([fact(content, [%{lens: "notes"}])])) == 16_384
       assert rendered([fact(content <> "x", [%{lens: "notes"}])]) == "Omitted facts: 1 (response limit)."
     end
-  end
-
-  describe "when formatted fact results must fit response limits" do
     test "and UTF-8 bytes and JSON escaping count towards the complete-envelope byte budget" do
       input = [fact(String.duplicate("λ\n\"", 40), [%{lens: "notes"}])]
       text = rendered(input)
@@ -88,18 +58,12 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       assert Presentation.for_model(input, bytes) == {:ok, %{result: text}}
       assert Presentation.for_model(input, bytes - 1) == {:ok, %{result: "Omitted facts: 1 (response limit)."}}
     end
-  end
-
-  describe "when formatted fact results must fit response limits" do
     test "and a fact that exceeds either limit is omitted whole while later fitting facts remain eligible" do
       input = [fact(String.duplicate("x", 17_000), [%{lens: "notes"}]), fact("small", [%{lens: "notes"}])]
       assert rendered(input) == "Lens: notes\n- small\n\nOmitted facts: 1 (response limit)."
       assert {:ok, %{result: same}} = Presentation.for_model(input, 200)
       assert same == rendered(input)
     end
-  end
-
-  describe "when formatted fact results must fit response limits" do
     test "and the omission notice counts excluded input facts once regardless of their source count" do
       input = [fact(String.duplicate("x", 17_000), [%{lens: "a"}, %{lens: "b"}])]
       assert rendered(input) == "Omitted facts: 1 (response limit)."
