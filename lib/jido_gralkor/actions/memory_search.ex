@@ -63,7 +63,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
         query: query,
         destinations: Map.get(params, :destinations, []),
         lenses: Map.get(params, :lenses, []),
-        result_type: :episodes
+        result_type: :facts
       }
 
       result =

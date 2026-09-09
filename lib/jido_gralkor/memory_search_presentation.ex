@@ -38,8 +38,13 @@ defmodule JidoGralkor.MemorySearchPresentation do
     end
   end
 
-  defp output(results, total),
-    do: %{result: results, omissions: %{byte_budget: total - length(results)}}
+  defp output(results, _total) do
+    groups = Enum.group_by(results, fn %{fact: fact} -> hd(fact.sources).lens end)
+    text = Enum.map_join(groups, "\n\n", fn {lens, facts} ->
+      "Lens: #{lens}\n" <> Enum.map_join(facts, "\n", &"- #{&1.fact.fact}")
+    end)
+    %{result: text}
+  end
 
   defp envelope_bytes(output), do: byte_size(Jason.encode!(%{ok: true, result: output}))
 end
