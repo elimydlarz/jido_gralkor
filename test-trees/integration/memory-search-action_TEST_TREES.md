@@ -1,4 +1,4 @@
-Unit: memory-search-action (src: lib/jido_gralkor/actions/memory_search.ex; unit: test/jido_gralkor/actions/memory_search_test.exs)
+Integration: memory-search-action (src: lib/jido_gralkor/actions/memory_search.ex; integration: test/jido_gralkor/actions/memory_search_test.exs)
 
 when the memory search tool runs with a usable query
   then the existing public Search capability is invoked once
