@@ -50,7 +50,7 @@ defmodule Gralkor.Destination.Storage.InMemory do
       |> Destination.graph_id(operator_id)
       |> LensStorage.episodes()
       |> Enum.take(max_results)
-      |> Enum.map(& &1.content)
+      |> Enum.map(&%{fact: &1.content, sources: [Map.take(&1, [:lens, :source_description])]})
 
     {:ok, results}
   end
@@ -64,7 +64,7 @@ defmodule Gralkor.Destination.Storage.InMemory do
       |> LensStorage.episodes()
       |> Enum.filter(&(lenses == [] or &1.lens in lenses))
       |> Enum.take(max_results)
-      |> Enum.map(&Map.take(&1, [:content, :lens]))
+      |> Enum.map(&Map.take(&1, [:content, :lens, :source_description]))
 
     reflection_episodes =
       if lenses == [] and Process.whereis(__MODULE__) do
@@ -73,7 +73,8 @@ defmodule Gralkor.Destination.Storage.InMemory do
         |> Enum.take(max_results)
         |> Enum.map(fn %{artefact: artefact, reflection: reflection} ->
           %{
-            content: Jason.encode!(Map.from_struct(artefact)),
+            artefact: Map.from_struct(artefact),
+            source_description: "reflection:#{reflection}",
             reflection: reflection
           }
         end)

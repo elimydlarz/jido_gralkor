@@ -18,7 +18,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
       episode =
         if destination.name == "global" do
-          %{content: ~s({"payload":{"generalisations":[]}}), reflection: "generalisations"}
+          %{
+            artefact: %{id: "generalisation-one", payload: %{"generalisations" => []}},
+            reflection: "generalisations"
+          }
         else
           %{content: "selected #{destination.name} memory", lens: destination.name}
         end
@@ -179,29 +182,29 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   end
 
   describe "when the memory search tool runs with a usable query > while Search returns results" do
-    test "then the action result is their JSON encoding" do
+    test "then the action result is the structured result list" do
       assert {:ok, %{result: result}} =
                run_search(%{
                  query: "launch",
                  destinations: ["observations", "global"]
                })
 
-      assert Jason.decode!(result) == [
+      assert [
                %{
-                 "destination" => "observations",
-                 "episode" => %{
-                   "content" => "selected observations memory",
-                   "lens" => "observations"
+                 destination: "observations",
+                 episode: %{
+                   content: "selected observations memory",
+                   lens: "observations"
                  }
                },
                %{
-                 "destination" => "global",
-                 "episode" => %{
-                   "content" => ~s({"payload":{"generalisations":[]}}),
-                   "reflection" => "generalisations"
+                 destination: "global",
+                 episode: %{
+                   artefact: %{id: "generalisation-one", payload: %{"generalisations" => []}},
+                   reflection: "generalisations"
                  }
                }
-             ]
+             ] = result
     end
 
     test "and every returned episode's Destination and originating Lens or declaring Reflection remain identifiable" do
@@ -213,14 +216,14 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
       assert [
                %{
-                 "destination" => "observations",
-                 "episode" => %{"lens" => "observations"}
+                 destination: "observations",
+                 episode: %{lens: "observations"}
                },
                %{
-                 "destination" => "global",
-                 "episode" => %{"reflection" => "generalisations"}
+                 destination: "global",
+                 episode: %{reflection: "generalisations"}
                }
-             ] = Jason.decode!(result)
+             ] = result
     end
   end
 

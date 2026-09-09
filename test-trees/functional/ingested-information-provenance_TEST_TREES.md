@@ -47,3 +47,8 @@ if public ingestion omits or supplies an unsupported source kind
 if public ingestion supplies content whose shape does not correspond to its source kind
   then ingestion raises an argument error identifying the rejected source content
   and no Lens ingestion process or Graphiti operation begins
+
+when public episode search reads completed Reflection output
+  then the episode exposes the exact artefact identifier and structured payload with its Reflection source description
+  if the stored Reflection body is not a valid artefact
+    then search returns an explicit invalid artefact error

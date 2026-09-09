@@ -49,7 +49,7 @@ defmodule Gralkor.Client do
   @type agent_name :: String.t()
   @type messages :: [Gralkor.Message.t()]
   @type user_name :: String.t()
-  @type search_result :: map()
+  @type search_result :: Gralkor.Search.result()
   @type runtime_owner :: pid()
 
   alias Gralkor.Ingest

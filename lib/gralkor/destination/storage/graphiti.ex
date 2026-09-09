@@ -4,7 +4,6 @@ defmodule Gralkor.Destination.Storage.Graphiti do
 
   alias Gralkor.Destination
   alias Gralkor.Artefact
-  alias Gralkor.Format
   alias Gralkor.GraphitiPool
 
   @impl true
@@ -74,7 +73,7 @@ defmodule Gralkor.Destination.Storage.Graphiti do
     search_opts = Keyword.take(opts, [:edge_types])
 
     case GraphitiPool.search(GraphitiPool, graph_id, query, max_results, search_opts) do
-      {:ok, facts} -> {:ok, Enum.map(facts, &Format.format_fact/1)}
+      {:ok, facts} -> {:ok, facts}
       {:error, _} = error -> error
     end
   end
@@ -99,7 +98,7 @@ defmodule Gralkor.Destination.Storage.Graphiti do
            require_reflection_complete: true,
            require_trusted_provenance: true
          ) do
-      {:ok, episodes} -> {:ok, Enum.map(episodes, &episode_provenance/1)}
+      {:ok, episodes} -> structure_episodes(episodes)
       {:error, _} = error -> error
     end
   end
@@ -146,21 +145,47 @@ defmodule Gralkor.Destination.Storage.Graphiti do
     end
   end
 
-  defp episode_provenance(%{content: content, source_description: source_description}) do
+  defp structure_episodes(episodes) do
+    Enum.reduce_while(episodes, {:ok, []}, fn episode, {:ok, results} ->
+      case episode_provenance(episode) do
+        {:ok, result} -> {:cont, {:ok, [result | results]}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, results} -> {:ok, Enum.reverse(results)}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp episode_provenance(%{content: content, source_description: source_description} = episode) do
     case Regex.run(~r/^(.*) \[lens: (.+)\]$/s, source_description) do
       [_, source_description, lens] ->
-        %{content: content, source_description: source_description, lens: lens}
+        {:ok, Map.merge(episode, %{source_description: source_description, lens: lens})}
 
       _ ->
         reflection_episode(content, source_description)
     end
   end
 
-  defp reflection_episode(content, "reflection:" <> reflection),
-    do: %{content: content, reflection: reflection}
+  defp reflection_episode(content, "reflection:" <> reflection = source_description) do
+    case decode_artefact(content) do
+      [%Artefact{id: id, payload: payload}]
+      when is_binary(id) and byte_size(id) > 0 and is_map(payload) ->
+        {:ok,
+         %{
+           artefact: %{id: id, payload: payload},
+           reflection: reflection,
+           source_description: source_description
+         }}
+
+      _ ->
+        {:error, {:invalid_reflection_artefact, reflection}}
+    end
+  end
 
   defp reflection_episode(content, source_description),
-    do: %{content: content, source_description: source_description}
+    do: {:ok, %{content: content, source_description: source_description}}
 
   @doc false
   def decode_artefact(%{content: content}), do: decode_artefact(content)

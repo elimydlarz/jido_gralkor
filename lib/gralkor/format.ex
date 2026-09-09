@@ -1,6 +1,9 @@
 defmodule Gralkor.Format do
   @moduledoc """
-  Format graphiti edge data into the canonical fact strings the LLM sees.
+  Explicit readable presentation of structured graphiti fact records.
+
+  Public search returns the records themselves. This operation is opt-in;
+  legacy recall calls it before constructing its readable memory block.
 
   Pure Elixir — graphiti runs in Python, but we extract its edges into
   Elixir maps and format them here, never reaching back into Python for

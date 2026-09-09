@@ -11,12 +11,28 @@ defmodule Gralkor.Search do
   ORed within either list and the two dimensions are ANDed together. Lens
   filtering is valid only for episode results. A Lens-written episode exposes
   `content`, `source_description`, and `lens`; a Reflection-written episode
-  exposes its encoded artefact as `content` and its writer as `reflection`.
+  exposes `artefact: %{id: id, payload: payload}`, `source_description`, and
+  its writer as `reflection`. Reflection episodes have no encoded `content`.
+  Naturally textual Lens content remains text, including JSON-looking source
+  records. Facts retain their text, timestamps, and structured `sources`; use
+  `Gralkor.Format.format_fact/1` explicitly for readable fact presentation.
 
   Episodes are the default result type. Facts, nodes, and Reflection artefacts
   remain available by explicitly setting `result_type` to `:facts`, `:nodes`,
   or `:artefacts`.
   """
+
+  @type lens_episode :: %{content: String.t(), source_description: String.t(), lens: String.t()}
+  @type reflection_episode :: %{
+          artefact: %{id: String.t(), payload: map()},
+          source_description: String.t(),
+          reflection: String.t()
+        }
+  @type result ::
+          %{destination: String.t(), episode: lens_episode() | reflection_episode()}
+          | %{destination: String.t(), fact: map()}
+          | %{destination: String.t(), node: map()}
+          | %{destination: String.t(), artefact: Gralkor.Artefact.t()}
 
   @enforce_keys [:operator_id, :query]
   defstruct [

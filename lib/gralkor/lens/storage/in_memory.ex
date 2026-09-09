@@ -12,7 +12,8 @@ defmodule Gralkor.Lens.Storage.InMemory do
 
   @type episode :: %{
           required(:content) => String.t(),
-          required(:lens) => String.t()
+          required(:lens) => String.t(),
+          required(:source_description) => String.t()
         }
   @type key :: String.t()
   @type state :: %{key() => [episode()]}
@@ -32,8 +33,11 @@ defmodule Gralkor.Lens.Storage.InMemory do
   def graph(key), do: GenServer.call(__MODULE__, {:graph, key})
 
   @impl Gralkor.Lens.Storage
-  def add_episode(%Store{} = store, content, _source_description) do
-    GenServer.call(__MODULE__, {:add, key(store), episode(content, store.lens)})
+  def add_episode(%Store{} = store, content, source_description) do
+    GenServer.call(
+      __MODULE__,
+      {:add, key(store), episode(content, store.lens, source_description)}
+    )
   end
 
   @impl Gralkor.Lens.Storage
@@ -86,8 +90,9 @@ defmodule Gralkor.Lens.Storage.InMemory do
     {:reply, Map.get(state, {:graph, key}, %{nodes: [], relationships: []}), state}
   end
 
-  @spec episode(String.t(), Lens.t()) :: episode()
-  defp episode(content, lens), do: %{content: content, lens: lens.name}
+  @spec episode(String.t(), Lens.t(), String.t()) :: episode()
+  defp episode(content, lens, source_description),
+    do: %{content: content, lens: lens.name, source_description: source_description}
 
   defp key(%Store{operator_id: operator_id, lens: %{destination: destination}}),
     do: Destination.graph_id(destination, operator_id)

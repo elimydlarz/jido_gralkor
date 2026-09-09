@@ -168,10 +168,14 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                  result_type: :facts
                })
 
-      assert recalled_fact =~ "Mina speculated that Atlas might launch Friday."
-      assert recalled_fact =~ "episode-document-1"
-      assert recalled_fact =~ "document"
-      assert recalled_fact =~ "Q3 Roadmap — Draft"
+      assert %{fact: "Mina speculated that Atlas might launch Friday.", sources: [source]} =
+               recalled_fact
+
+      assert source == %{
+               id: "episode-document-1",
+               source_kind: "document",
+               source_description: "Q3 Roadmap — Draft"
+             }
     end
 
     test "and recall presents the extracted fact wording and its source attribution without rewriting either" do
@@ -618,6 +622,59 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
       end
 
       refute_receive {:episode_added, _, _, _}
+    end
+  end
+
+  describe "when public episode search reads completed Reflection output" do
+    test "then the episode exposes the exact artefact identifier and structured payload with its Reflection source description" do
+      graphiti = use_native_boundary()
+
+      artefact = %{
+        id: "reflection-one",
+        payload: %{
+          "generalisations" => [
+            %{
+              "content" => "small rollouts",
+              "level" => 2,
+              "evolves_from" => [%{"content" => "prior", "level" => 1}]
+            }
+          ]
+        }
+      }
+
+      set_episode_search_fixture(graphiti, [
+        %{content: Jason.encode!(artefact), source_description: "reflection:generalisations"}
+      ])
+
+      assert {:ok, [%{destination: "observations", episode: episode}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "rollout",
+                 destinations: ["observations"]
+               })
+
+      assert episode == %{
+               artefact: artefact,
+               reflection: "generalisations",
+               source_description: "reflection:generalisations"
+             }
+    end
+  end
+
+  describe "when public episode search reads completed Reflection output > if the stored Reflection body is not a valid artefact" do
+    test "then search returns an explicit invalid artefact error" do
+      graphiti = use_native_boundary()
+
+      set_episode_search_fixture(graphiti, [
+        %{content: ~s({"id":"broken"}), source_description: "reflection:generalisations"}
+      ])
+
+      assert {:error, {:invalid_reflection_artefact, "generalisations"}} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "rollout",
+                 destinations: ["observations"]
+               })
     end
   end
 

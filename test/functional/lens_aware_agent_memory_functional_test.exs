@@ -134,15 +134,15 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  search_context
                )
 
-      assert Jason.decode!(result) == [
+      assert [
                %{
-                 "destination" => "decisions",
-                 "episode" => %{
-                   "content" => "selected decision memory",
-                   "lens" => "decisions"
+                 destination: "decisions",
+                 episode: %{
+                   content: "selected decision memory",
+                   lens: "decisions"
                  }
                }
-             ]
+             ] = result
 
       assert search_context.lens == "observations"
     end
@@ -155,7 +155,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(mounted_agent)
       memory_context = Map.put(tool_context, :agent_id, mounted_agent.id)
 
-      assert {:ok, %{result: "[]"}} =
+      assert {:ok, %{result: []}} =
                MemorySearch.run(
                  %{query: "decision", destinations: ["decisions"], lenses: ["decisions"]},
                  memory_context
@@ -207,15 +207,15 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  Map.put(tool_context, :agent_id, mounted_agent.id)
                )
 
-      assert Jason.decode!(result) == [
+      assert [
                %{
-                 "destination" => "observations",
-                 "episode" => %{
-                   "content" => "observation visible from a decision turn",
-                   "lens" => "observations"
+                 destination: "observations",
+                 episode: %{
+                   content: "observation visible from a decision turn",
+                   lens: "observations"
                  }
                }
-             ]
+             ] = result
     end
 
     test "and every returned episode identifies its Destination and originating Lens or declaring Reflection" do
@@ -266,21 +266,21 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert [
                %{
-                 "destination" => "observations",
-                 "episode" => %{"content" => "lensed provenance", "lens" => "observations"}
+                 destination: "observations",
+                 episode: %{content: "lensed provenance", lens: "observations"}
                },
                %{
-                 "destination" => "global",
-                 "episode" => %{
-                   "content" => encoded_artefact,
-                   "reflection" => "generalisations"
+                 destination: "global",
+                 episode: %{
+                   artefact: returned_artefact,
+                   reflection: "generalisations"
                  }
                }
-             ] = Jason.decode!(result)
+             ] = result
 
-      assert Jason.decode!(encoded_artefact) == %{
-               "id" => "provenance-generalisation",
-               "payload" => artefact.payload
+      assert returned_artefact == %{
+               id: "provenance-generalisation",
+               payload: artefact.payload
              }
     end
   end
@@ -314,7 +314,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  Map.put(tool_context, :agent_id, fresh_agent.id)
                )
 
-      assert [%{"destination" => "observations"}] = Jason.decode!(result)
+      assert [%{destination: "observations"}] = result
     end
   end
 
@@ -340,7 +340,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, %{result: result}} =
                MemorySearch.run(%{query: "memory"}, %{agent_id: "operator-one"})
 
-      assert Enum.map(Jason.decode!(result), & &1["destination"]) == [
+      assert Enum.map(result, & &1.destination) == [
                "operator",
                "global",
                "observations",

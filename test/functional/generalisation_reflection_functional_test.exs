@@ -586,11 +586,10 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
         {:ok,
          [
            %{
-             content:
-               Jason.encode!(%{
-                 id: "stored-generalisation-artefact",
-                 payload: %{generalisations: stored}
-               }),
+             artefact: %{
+               id: "stored-generalisation-artefact",
+               payload: %{"generalisations" => stored}
+             },
              reflection: "generalisations"
            }
          ]}
@@ -609,27 +608,16 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
   defp prior_generalisation_snapshots(stored_information) do
     stored_information
     |> Enum.flat_map(fn
-      %{destination: "global", episode: %{content: content}} ->
-        stored_generalisations(content)
-
-      %{destination: "global", episode: content} when is_binary(content) ->
-        stored_generalisations(content)
+      %{
+        destination: "global",
+        episode: %{artefact: %{payload: %{"generalisations" => generalisations}}}
+      } ->
+        generalisations
 
       _ ->
         []
     end)
     |> Enum.map(&Map.take(&1, ["content", "level"]))
-  end
-
-  defp stored_generalisations(content) do
-    case Jason.decode(content) do
-      {:ok, %{"payload" => %{"generalisations" => generalisations}}}
-      when is_list(generalisations) ->
-        generalisations
-
-      _ ->
-        []
-    end
   end
 
   defp step_directions(label) do
@@ -709,7 +697,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
   end
 
-  defp decode_episode(%{content: content}), do: Jason.decode!(content)
+  defp decode_episode(%{artefact: artefact}),
+    do: %{"id" => artefact.id, "payload" => artefact.payload}
 
   defp put_artefact(reflection, operator_id, artefact) do
     Gralkor.Destination.Storage.put_artefact(

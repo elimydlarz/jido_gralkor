@@ -405,7 +405,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
 
     test "and every accessible registered Destination is searched", %{adventure: adventure} do
-      searched = Enum.map(adventure.default_memory_search, & &1["destination"])
+      searched = Enum.map(adventure.default_memory_search, & &1.destination)
 
       assert MapSet.new(searched) == MapSet.new(["operator", "global", "operations"])
     end
@@ -427,7 +427,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       operations_results =
         Enum.filter(
           adventure.default_memory_search,
-          &(&1["destination"] == "operations")
+          &(&1.destination == "operations")
         )
 
       assert has_evolved_generalisation?(
@@ -512,7 +512,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          %{adventure: adventure} do
       assert Enum.any?(
                adventure.post_selector_memory_search,
-               &(&1["destination"] == "global")
+               &(&1.destination == "global")
              )
     end
 
@@ -871,7 +871,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         @operator_one,
         "operator",
         "backup vacuum overlap",
-        &(String.contains?(&1.fact, "Susu") or String.contains?(&1.fact, "Eli")),
+        &(String.contains?(&1.fact.fact, "Susu") or String.contains?(&1.fact.fact, "Eli")),
         "conversation",
         "captured"
       )
@@ -884,21 +884,21 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         "Atlas Deployment requires Rollback Checkpoint",
         fn facts ->
           selected =
-            Enum.filter(facts, &String.contains?(&1.fact, "Rollback Checkpoint"))
+            Enum.filter(facts, &String.contains?(&1.fact.fact, "Rollback Checkpoint"))
 
           every_fact_has_episode_id?(selected) and
             every_fact_has_source_kind?(selected, "document") and
             any_fact_has_source_description?(selected, "deployment policy")
         end
       )
-      |> Enum.filter(&String.contains?(&1.fact, "Rollback Checkpoint"))
+      |> Enum.filter(&String.contains?(&1.fact.fact, "Rollback Checkpoint"))
 
     structured_record_facts =
       attributed_facts(
         @operator_one,
         "operator",
         "payments ledger dependency",
-        &String.contains?(&1.fact, "depends on Ledger"),
+        &String.contains?(&1.fact.fact, "depends on Ledger"),
         "structured_record",
         "system dependency registry"
       )
@@ -1199,9 +1199,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     assert {:ok, %{result: result}} =
              MemorySearch.run(params, %{agent_id: operator_id, gralkor_runtime: agent})
 
-    decoded = Jason.decode!(result)
-    assert is_list(decoded)
-    decoded
+    assert is_list(result)
+    result
   end
 
   defp agent_request(agent) do
@@ -1250,11 +1249,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   defp decode_memory_search_result(%{
-         data: %{result: {:ok, %{result: encoded_results}, _effects}}
+         data: %{result: {:ok, %{result: results}, _effects}}
        }) do
-    decoded = Jason.decode!(encoded_results)
-    assert is_list(decoded)
-    decoded
+    assert is_list(results)
+    results
   end
 
   defp search_until(operator_id, destinations, result_type, query, predicate, attempts \\ 60)
@@ -1296,14 +1294,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
   defp has_declaring_reflection?(results, destination, reflection) do
     Enum.any?(results, fn
-      %{
-        "destination" => ^destination,
-        "episode" => %{"reflection" => ^reflection}
-      } ->
-        true
-
-      _ ->
-        false
+      %{destination: ^destination, episode: %{reflection: ^reflection}} -> true
+      _ -> false
     end)
   end
 
@@ -1313,29 +1305,18 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
        }) do
     Enum.any?(results, fn
       %{
-        "episode" => %{
-          "content" => content,
-          "reflection" => "generalisations"
+        episode: %{
+          reflection: "generalisations",
+          artefact: %{payload: %{"generalisations" => generalisations}}
         }
       } ->
-        case Jason.decode(content) do
-          {:ok, %{"payload" => %{"generalisations" => generalisations}}}
-          when is_list(generalisations) ->
-            Enum.any?(generalisations, fn
-              %{
-                "content" => ^expected_content,
-                "level" => ^expected_level,
-                "evolves_from" => [_ | _]
-              } ->
-                true
-
-              _ ->
-                false
-            end)
+        Enum.any?(generalisations, fn
+          %{"content" => ^expected_content, "level" => ^expected_level, "evolves_from" => [_ | _]} ->
+            true
 
           _ ->
             false
-        end
+        end)
 
       _ ->
         false
@@ -1366,20 +1347,21 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
   defp every_episode_has_provenance?(results) do
     Enum.all?(results, fn
-      %{"destination" => destination, "episode" => episode} when is_binary(destination) ->
-        is_binary(episode["lens"]) or is_binary(episode["reflection"])
+      %{destination: destination, episode: episode} when is_binary(destination) ->
+        is_binary(episode[:lens]) or is_binary(episode[:reflection])
 
       _ ->
         false
     end)
   end
 
+  defp episode_content(%{artefact: artefact}), do: Jason.encode!(artefact.payload)
   defp episode_content(%{content: content}), do: content
   defp episode_content(%{"content" => content}), do: content
   defp episode_content(content) when is_binary(content), do: content
 
   defp contains_fact?(results, text) do
-    Enum.any?(results, fn %{fact: fact} -> String.contains?(fact, text) end)
+    Enum.any?(results, fn %{fact: fact} -> String.contains?(fact.fact, text) end)
   end
 
   defp attributed_facts(
@@ -1429,25 +1411,31 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   defp every_fact_has_episode_id?([]), do: false
 
   defp every_fact_has_episode_id?(results) do
-    Enum.all?(results, fn %{fact: fact} -> Regex.match?(~r/episode: [^)]+\)/, fact) end)
+    Enum.all?(results, fn %{fact: fact} ->
+      fact.sources != [] and Enum.all?(fact.sources, &is_binary(&1.id))
+    end)
   end
 
   defp every_fact_has_source_kind?([], _source_kind), do: false
 
   defp every_fact_has_source_kind?(results, source_kind) do
     Enum.all?(results, fn %{fact: fact} ->
-      String.contains?(fact, "source: #{source_kind} —")
+      Enum.any?(fact.sources, &(&1.source_kind == source_kind))
     end)
   end
 
   defp every_fact_has_source_description?([], _source_description), do: false
 
   defp every_fact_has_source_description?(results, source_description) do
-    Enum.all?(results, fn %{fact: fact} -> String.contains?(fact, source_description) end)
+    Enum.all?(results, fn %{fact: fact} ->
+      Enum.any?(fact.sources, &String.contains?(&1.source_description, source_description))
+    end)
   end
 
   defp any_fact_has_source_description?(results, source_description) do
-    Enum.any?(results, fn %{fact: fact} -> String.contains?(fact, source_description) end)
+    Enum.any?(results, fn %{fact: fact} ->
+      Enum.any?(fact.sources, &String.contains?(&1.source_description, source_description))
+    end)
   end
 
   defp contains_all?(text, expected) do

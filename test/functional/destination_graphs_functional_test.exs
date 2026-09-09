@@ -103,8 +103,8 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
 
       assert {:ok,
               [
-                %{destination: "global", fact: "public observation"},
-                %{destination: "global", fact: "public decision"}
+                %{destination: "global", fact: %{fact: "public observation"}},
+                %{destination: "global", fact: %{fact: "public decision"}}
               ]} =
                search("operator-three", ["global"])
     end
@@ -126,7 +126,7 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
     test "and every operator can retrieve the episode by searching that Destination" do
       assert :ok = ingest("operator-one", "observations", "shared observation")
 
-      assert {:ok, [%{destination: "observations", fact: "shared observation"}]} =
+      assert {:ok, [%{destination: "observations", fact: %{fact: "shared observation"}}]} =
                search("operator-two", ["observations"])
     end
 
@@ -142,7 +142,7 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
       assert :ok = ingest("operator-one", "published-observations", "public observation")
       assert :ok = ingest("operator-one", "published-decisions", "public decision")
 
-      assert {:ok, [%{fact: "public observation"}, %{fact: "public decision"}]} =
+      assert {:ok, [%{fact: %{fact: "public observation"}}, %{fact: %{fact: "public decision"}}]} =
                search("operator-one", ["global"])
     end
   end

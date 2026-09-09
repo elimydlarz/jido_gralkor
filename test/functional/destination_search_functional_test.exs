@@ -242,7 +242,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       use_in_memory_storage()
       assert :ok = add_episode("first", "operator-one", "shared memory")
 
-      assert {:ok, [%{destination: "first", fact: "shared memory"}]} =
+      assert {:ok, [%{destination: "first", fact: %{fact: "shared memory"}}]} =
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "shared",
@@ -454,8 +454,11 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
   end
 
   describe "where a caller explicitly selects facts" do
-    test "then relevant relationships extracted in the selected Destinations are returned" do
-      assert {:ok, [%{destination: "first", fact: "first:question"}]} =
+    test "then relevant relationships extracted in the selected Destinations are returned as structured fact records" do
+      use_in_memory_storage()
+      assert :ok = add_episode("first", "operator-one", "first:question")
+
+      assert {:ok, [%{destination: "first", fact: %{fact: "first:question"}}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "question",
@@ -578,7 +581,29 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                })
     end
 
-    test "and every episode written through a Destination artefact output retains its artefact identifier" do
+    test "and Lens source descriptions and naturally textual content remain unchanged" do
+      use_in_memory_storage()
+      content = ~s({"jira":"still source text"})
+      assert :ok = add_episode("first", "operator-one", content, "first-alpha")
+
+      assert {:ok,
+              [
+                %{
+                  episode: %{
+                    content: ^content,
+                    source_description: "functional",
+                    lens: "first-alpha"
+                  }
+                }
+              ]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "jira",
+                 destinations: ["first"]
+               })
+    end
+
+    test "and every episode written through a Destination artefact output exposes its stable artefact identifier and payload as structured fields" do
       use_in_memory_storage()
 
       destination = Gralkor.Destination.Registry.fetch!("first")
@@ -608,13 +633,13 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  artefact
                )
 
-      content = Jason.encode!(Map.from_struct(artefact))
+      returned_artefact = Map.from_struct(artefact)
 
       assert {:ok,
               [
                 %{
                   destination: "first",
-                  episode: %{content: ^content, reflection: "review"}
+                  episode: %{artefact: ^returned_artefact, reflection: "review"}
                 }
               ]} =
                Client.search(%Search{

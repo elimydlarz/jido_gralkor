@@ -47,10 +47,11 @@ where a caller supplies no maximum result count
 when a caller omits the result type or explicitly selects episodes
   then relevant stored episode content is returned
   and every episode written through a Lens identifies that originating Lens
-  and every episode written through a Destination artefact output retains its artefact identifier
+  and Lens source descriptions and naturally textual content remain unchanged
+  and every episode written through a Destination artefact output exposes its stable artefact identifier and payload as structured fields
 
 where a caller explicitly selects facts
-  then relevant relationships extracted in the selected Destinations are returned
+  then relevant relationships extracted in the selected Destinations are returned as structured fact records
 
 where a caller explicitly selects nodes
   then relevant entities extracted in the selected Destinations are returned

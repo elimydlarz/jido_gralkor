@@ -880,8 +880,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     test "then it fails identifying the unavailable runtime" do
       Application.put_env(:jido_gralkor, :destination_storage, RecordingDestinationStorage)
 
-      dead_owner = spawn(fn -> :ok end)
-      monitor = Process.monitor(dead_owner)
+      {dead_owner, monitor} = spawn_monitor(fn -> :ok end)
       assert_receive {:DOWN, ^monitor, :process, ^dead_owner, :normal}
 
       assert_raise ArgumentError, ~r/Gralkor runtime unavailable/, fn ->
@@ -898,8 +897,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
       Gralkor.Client.InMemory.set_capture(:ok)
 
-      dead_owner = spawn(fn -> :ok end)
-      monitor = Process.monitor(dead_owner)
+      {dead_owner, monitor} = spawn_monitor(fn -> :ok end)
       assert_receive {:DOWN, ^monitor, :process, ^dead_owner, :normal}
 
       assert_raise ArgumentError, ~r/Gralkor runtime unavailable/, fn ->

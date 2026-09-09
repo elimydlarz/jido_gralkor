@@ -41,7 +41,7 @@ defmodule Gralkor.OperatorLensCompatibilityFunctionalTest do
                  source_description: "legacy"
                })
 
-      assert {:ok, [%{destination: "operator", fact: "compatible memory"}]} =
+      assert {:ok, [%{destination: "operator", fact: %{fact: "compatible memory"}}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
                  query: "compatible",

@@ -218,6 +218,17 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
+  defmodule TransportMemoryAgent do
+    use Jido.AI.Agent,
+      name: "memory_transport_acceptance",
+      model: "openai:gpt-4o-mini",
+      streaming: false,
+      default_plugins: %{__memory__: false},
+      tools: [JidoGralkor.Actions.MemorySearch],
+      max_iterations: 2,
+      system_prompt: "Search memory before answering."
+  end
+
   setup do
     previous =
       for key <- [
@@ -438,15 +449,15 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert {:ok, %{result: result}} =
                memory_search(%{query: "private", destinations: ["operator"]}, [])
 
-      assert Jason.decode!(result) == [
+      assert [
                %{
-                 "destination" => "operator",
-                 "episode" => %{
-                   "content" => "private memory for operator-one",
-                   "lens" => "operator"
+                 destination: "operator",
+                 episode: %{
+                   content: "private memory for operator-one",
+                   lens: "operator"
                  }
                }
-             ]
+             ] = result
     end
 
     test "and the usable query selects relevant stored episodes" do
@@ -461,15 +472,15 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert_receive {:public_search, "observations", "operator-one", ^query, :episodes, 20, []}
 
-      assert Jason.decode!(result) == [
+      assert [
                %{
-                 "destination" => "observations",
-                 "episode" => %{
-                   "content" => "matching stored episode",
-                   "lens" => "observations"
+                 destination: "observations",
+                 episode: %{
+                   content: "matching stored episode",
+                   lens: "observations"
                  }
                }
-             ]
+             ] = result
     end
 
     test "and returned results obey the optional `destinations` and `lenses` selectors supplied for that invocation" do
@@ -486,15 +497,15 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                  []
                )
 
-      assert Jason.decode!(result) == [
+      assert [
                %{
-                 "destination" => "decisions",
-                 "episode" => %{"content" => "selected decision", "lens" => "decisions"}
+                 destination: "decisions",
+                 episode: %{content: "selected decision", lens: "decisions"}
                }
-             ]
+             ] = result
     end
 
-    test "and the action returns results as JSON with their Destination and originating Lens or declaring Reflection" do
+    test "and the action returns structured results with their Destination and originating Lens or declaring Reflection" do
       assert :ok = ingest_memory("observations", "provenance observation")
       artefact = put_generalisation("provenance generalisation", 1, [])
 
@@ -506,22 +517,22 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert [
                %{
-                 "destination" => "observations",
-                 "episode" => %{
-                   "content" => "provenance observation",
-                   "lens" => "observations"
+                 destination: "observations",
+                 episode: %{
+                   content: "provenance observation",
+                   lens: "observations"
                  }
                },
                %{
-                 "destination" => "global",
-                 "episode" => %{
-                   "content" => encoded_artefact,
-                   "reflection" => "generalisations"
+                 destination: "global",
+                 episode: %{
+                   artefact: returned_artefact,
+                   reflection: "generalisations"
                  }
                }
-             ] = Jason.decode!(result)
+             ] = result
 
-      assert Jason.decode!(encoded_artefact)["id"] == artefact.id
+      assert returned_artefact.id == artefact.id
     end
 
     test "and relevant stored generalisations can contribute beside related ingested information" do
@@ -535,9 +546,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                )
 
       assert [
-               %{"episode" => %{"lens" => "observations"}},
-               %{"episode" => %{"reflection" => "generalisations"}}
-             ] = Jason.decode!(result)
+               %{episode: %{lens: "observations"}},
+               %{episode: %{reflection: "generalisations"}}
+             ] = result
     end
 
     test "and each returned generalisation exposes its exact content, evolution-depth level, and `evolves_from` history" do
@@ -549,14 +560,14 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert [
                %{
-                 "episode" => %{
-                   "content" => encoded_artefact,
-                   "reflection" => "generalisations"
+                 episode: %{
+                   artefact: returned_artefact,
+                   reflection: "generalisations"
                  }
                }
-             ] = Jason.decode!(result)
+             ] = result
 
-      assert Jason.decode!(encoded_artefact)["payload"] == artefact.payload
+      assert returned_artefact.payload == artefact.payload
     end
   end
 
@@ -569,7 +580,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert {:ok, %{result: result}} = memory_search(%{query: "default"}, [])
 
-      assert Enum.map(Jason.decode!(result), & &1["destination"]) == [
+      assert Enum.map(result, & &1.destination) == [
                "operator",
                "global",
                "observations",
@@ -589,15 +600,15 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                  []
                )
 
-      assert Jason.decode!(result) == [
+      assert [
                %{
-                 "destination" => "observations",
-                 "episode" => %{
-                   "content" => "destination-only observation",
-                   "lens" => "observations"
+                 destination: "observations",
+                 episode: %{
+                   content: "destination-only observation",
+                   lens: "observations"
                  }
                }
-             ]
+             ] = result
     end
   end
 
@@ -609,15 +620,15 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert {:ok, %{result: result}} =
                memory_search(%{query: "lens-only", lenses: ["decisions"]}, [])
 
-      assert Jason.decode!(result) == [
+      assert [
                %{
-                 "destination" => "decisions",
-                 "episode" => %{
-                   "content" => "lens-only decision",
-                   "lens" => "decisions"
+                 destination: "decisions",
+                 episode: %{
+                   content: "lens-only decision",
+                   lens: "decisions"
                  }
                }
-             ]
+             ] = result
     end
   end
 
@@ -636,7 +647,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                  []
                )
 
-      assert Jason.decode!(result) == []
+      assert result == []
     end
   end
 
@@ -650,15 +661,15 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                  []
                )
 
-      assert Jason.decode!(result) == [
+      assert [
                %{
-                 "destination" => "observations",
-                 "episode" => %{
-                   "content" => "thread-independent search",
-                   "lens" => "observations"
+                 destination: "observations",
+                 episode: %{
+                   content: "thread-independent search",
+                   lens: "observations"
                  }
                }
-             ]
+             ] = result
     end
   end
 
@@ -766,6 +777,300 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       overrides = %{messages: [:message], llm_opts: [temperature: 0.2]}
       assert ReAct.maybe_force_memory_search(overrides, %{iteration: 2}) == overrides
     end
+  end
+
+  describe "when structured memory search results cross the model tool-output boundary" do
+    test "then one JSON decode exposes complete attributable results whose combined text exceeds the per-string limit" do
+      content = String.duplicate("x", 10_000)
+      assert :ok = ingest_memory("observations", content)
+      assert :ok = ingest_memory("decisions", content)
+      result = memory_search(%{query: "x", destinations: ["observations", "decisions"]}, [])
+      wire = Jido.AI.Turn.format_tool_result_content(result)
+      assert byte_size(wire) > 16_384
+      assert %{"ok" => true, "result" => %{"result" => results}} = Jason.decode!(wire)
+      assert Enum.map(results, & &1["episode"]["content"]) == [content, content]
+      assert Enum.map(results, & &1["destination"]) == ["observations", "decisions"]
+    end
+  end
+
+  describe "when structured memory search results cross the model tool-output boundary > while one source text exceeds the framework string limit" do
+    test "then the model receives the complete source text" do
+      content = String.duplicate("x", 16_385)
+      assert :ok = ingest_memory("observations", content)
+      result = memory_search(%{query: "x", destinations: ["observations"]}, [])
+      assert {:ok, %{result: [%{episode: %{content: ^content}}]}} = result
+      wire = Jido.AI.Turn.format_tool_result_content(result) |> Jason.decode!()
+
+      assert hd(wire["result"]["result"])["episode"]["content"] == content
+    end
+  end
+
+  describe "when structured memory search results cross the model tool-output boundary > while a Reflection payload includes evolution history" do
+    test "then the model receives the complete structured history" do
+      artefact = put_generalisation("rollout", 2, [%{"content" => "prior rollout", "level" => 1}])
+      result = memory_search(%{query: "rollout", destinations: ["global"]}, [])
+      assert {:ok, %{result: [%{episode: %{artefact: %{payload: payload}}}]}} = result
+      assert payload == artefact.payload
+      wire = Jido.AI.Turn.format_tool_result_content(result) |> Jason.decode!()
+      delivered = hd(wire["result"]["result"])["episode"]["artefact"]["payload"]
+      assert delivered == payload
+    end
+  end
+
+  describe "when memory search results are prepared for a model byte budget" do
+    test "then the serialized success envelope fits the configured byte budget" do
+      assert :ok = ingest_memory("observations", String.duplicate("x", 1000))
+      assert :ok = ingest_memory("decisions", "small")
+
+      result =
+        memory_search(%{query: "x", destinations: ["observations", "decisions"]},
+          memory_search_max_bytes: 400
+        )
+
+      assert byte_size(Jido.AI.Turn.format_tool_result_content(result)) <= 400
+    end
+
+    test "and the result list contains only complete attributed results in their original order" do
+      assert :ok = ingest_memory("observations", "first")
+      assert :ok = ingest_memory("observations", String.duplicate("large", 1000))
+      assert :ok = ingest_memory("observations", "last")
+
+      assert {:ok, %{result: results}} =
+               memory_search(%{query: "x", destinations: ["observations"]},
+                 memory_search_max_bytes: 400
+               )
+
+      assert [
+               %{
+                 destination: "observations",
+                 episode: %{
+                   content: "first",
+                   lens: "observations",
+                   source_description: "functional"
+                 }
+               },
+               %{
+                 destination: "observations",
+                 episode: %{
+                   content: "last",
+                   lens: "observations",
+                   source_description: "functional"
+                 }
+               }
+             ] = results
+    end
+
+    test "and omission counts and byte-budget reasons are reported outside the result list" do
+      assert :ok = ingest_memory("observations", String.duplicate("large", 1000))
+      assert :ok = ingest_memory("observations", "small")
+
+      assert {:ok, %{result: [%{episode: %{content: "small"}}], omissions: %{byte_budget: 1}}} =
+               memory_search(%{query: "x", destinations: ["observations"]},
+                 memory_search_max_bytes: 400
+               )
+    end
+  end
+
+  describe "when memory search results are prepared for a model byte budget > while an individual result exceeds the budget" do
+    test "then that whole result is omitted while later fitting results remain available" do
+      artefact =
+        put_generalisation("current", 2, [
+          %{"content" => String.duplicate("history", 1000), "level" => 1}
+        ])
+
+      assert :ok = ingest_memory("observations", "small")
+
+      assert {:ok, %{result: [%{episode: %{content: "small"}}], omissions: %{byte_budget: 1}}} =
+               memory_search(%{query: "x", destinations: ["global", "observations"]},
+                 memory_search_max_bytes: 400
+               )
+
+      assert {:ok, [%{episode: %{artefact: %{payload: payload}}}]} =
+               Client.search(%Gralkor.Search{
+                 operator_id: "operator-one",
+                 query: "x",
+                 destinations: ["global"]
+               })
+
+      assert payload == artefact.payload
+    end
+  end
+
+  describe "when memory search results are prepared for a model byte budget > while the budget cannot hold an empty success envelope with omission metadata" do
+    test "then an explicit budget error is returned" do
+      assert {:error, {:memory_search_budget_too_small, %{max_bytes: 1, minimum_bytes: minimum}}} =
+               memory_search(%{query: "x"}, memory_search_max_bytes: 1)
+
+      assert minimum > 1
+    end
+  end
+
+  describe "when memory search results are prepared for a model byte budget > if the budget is not a positive integer" do
+    test "then the action rejects the budget before searching memory" do
+      Application.put_env(:jido_gralkor, :destination_storage, RecordingSearchStorage)
+      Application.put_env(:jido_gralkor, :public_search_test_pid, self())
+      on_exit(fn -> Application.delete_env(:jido_gralkor, :public_search_test_pid) end)
+
+      for invalid <- [0, -1, nil, 1.5, "100"] do
+        assert_raise ArgumentError, ~r/memory_search_max_bytes.*positive integer/, fn ->
+          memory_search(%{query: "x"}, memory_search_max_bytes: invalid)
+        end
+      end
+
+      refute_received {:public_search, _, _, _, _, _, _}
+    end
+  end
+
+  describe "when canonical memory results cross the outgoing provider boundary" do
+    test "then deeply nested history and domain keys reach the provider unchanged" do
+      history =
+        Enum.reduce(1..12, %{"document_key" => "jira/ABC-123"}, fn _, value ->
+          %{"history" => value}
+        end)
+
+      artefact =
+        put_generalisation("current", 2, [
+          %{"content" => "prior", "level" => 1, "history" => history}
+        ])
+
+      {wire, _bytes} = provider_memory_result(%{query: "x", destinations: ["global"]})
+
+      assert %{
+               "ok" => true,
+               "result" => %{
+                 "result" => [%{"episode" => %{"artefact" => %{"payload" => payload}}}]
+               }
+             } = wire
+
+      assert payload == artefact.payload
+    end
+
+    test "and source fields longer than 16384 characters reach the provider unchanged" do
+      content = String.duplicate("λ", 16_385)
+      assert :ok = ingest_memory("observations", content)
+      {wire, _bytes} = provider_memory_result(%{query: "x", destinations: ["observations"]})
+
+      assert %{
+               "result" => %{
+                 "result" => [%{"episode" => %{"content" => ^content}}],
+                 "omissions" => %{"byte_budget" => 0}
+               }
+             } = wire
+    end
+
+    test "and more than 100 results reach the provider without synthetic result entries" do
+      names = Enum.map(1..6, &"transport-#{&1}")
+      Application.put_env(:jido_gralkor, :destinations, Enum.map(names, &[name: &1]))
+
+      Application.put_env(
+        :jido_gralkor,
+        :lenses,
+        Enum.map(names, &[name: &1, destination: &1, ingestion: Gralkor.Lens.Ingestion.Store])
+      )
+
+      for index <- 0..100 do
+        assert :ok = ingest_memory(Enum.at(names, div(index, 20)), "record-#{index}")
+      end
+
+      {wire, _bytes} = provider_memory_result(%{query: "x", destinations: names})
+      assert %{"result" => %{"result" => results, "omissions" => %{"byte_budget" => 0}}} = wire
+      assert Enum.map(results, & &1["episode"]["content"]) == Enum.map(0..100, &"record-#{&1}")
+    end
+  end
+
+  describe "when canonical memory results cross the outgoing provider boundary > while a byte budget omits results" do
+    test "then the provider receives complete retained results and exact omission metadata within the budget" do
+      first = "first\"λ\n"
+      assert :ok = ingest_memory("observations", first)
+      assert :ok = ingest_memory("observations", String.duplicate("large", 1000))
+      assert :ok = ingest_memory("observations", "last")
+
+      assert {:ok, [first_result, _large, last_result]} =
+               Client.search(%Gralkor.Search{
+                 operator_id: "operator-one",
+                 query: "x",
+                 destinations: ["observations"]
+               })
+
+      expected = %{
+        ok: true,
+        result: %{result: [first_result, last_result], omissions: %{byte_budget: 1}}
+      }
+
+      encoded = Jason.encode!(expected)
+      max_bytes = byte_size(encoded)
+
+      {wire, bytes} =
+        provider_memory_result(%{query: "x", destinations: ["observations"]}, max_bytes)
+
+      assert wire == Jason.decode!(encoded)
+      assert bytes == max_bytes
+    end
+  end
+
+  defp provider_memory_result(params, max_bytes \\ 65_536) do
+    jido = Jido.default_instance()
+    start_supervised!({Jido, name: jido, otp_app: :jido_gralkor})
+
+    assert {:ok, agent} =
+             Jido.start_agent(jido, TransportMemoryAgent,
+               id: "operator-one",
+               register_global: false
+             )
+
+    test_pid = self()
+
+    adapter = fn request ->
+      payload = request.body |> IO.iodata_to_binary() |> Jason.decode!()
+
+      output =
+        case Enum.find(payload["input"], &(&1["type"] == "function_call_output")) do
+          nil ->
+            [
+              %{
+                type: "function_call",
+                id: "memory-call",
+                call_id: "memory-call",
+                name: "memory_search",
+                arguments: Jason.encode!(params)
+              }
+            ]
+
+          %{"output" => content} ->
+            send(test_pid, {:model_memory_output, content})
+
+            [
+              %{
+                type: "message",
+                role: "assistant",
+                content: [%{type: "output_text", text: "done"}]
+              }
+            ]
+        end
+
+      body =
+        %{
+          id: "transport-response",
+          object: "response",
+          status: "completed",
+          model: "fixture",
+          output: output
+        }
+        |> Jason.encode!()
+        |> Jason.decode!()
+
+      {request, Req.Response.new(status: 200, body: body)}
+    end
+
+    assert {:ok, "done"} =
+             TransportMemoryAgent.ask_sync(agent, "Search memory",
+               tool_context: %{memory_search_max_bytes: max_bytes},
+               llm_opts: [api_key: "test-provider-key"],
+               req_http_options: [adapter: adapter]
+             )
+
+    assert_receive {:model_memory_output, content}
+    {Jason.decode!(content), byte_size(content)}
   end
 
   defp eventually(fun, attempts \\ 100)

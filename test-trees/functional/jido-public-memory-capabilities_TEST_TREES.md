@@ -1,4 +1,4 @@
-Functional: jido-public-memory-capabilities (src: lib/jido_gralkor/lifecycle.ex, lib/jido_gralkor/plugin.ex, lib/jido_gralkor/actions/memory_add.ex, lib/jido_gralkor/actions/memory_build_indices.ex, lib/jido_gralkor/actions/memory_build_communities.ex, lib/jido_gralkor/actions/memory_search.ex, lib/jido_gralkor/re_act.ex, lib/gralkor/client.ex, lib/gralkor/search.ex; functional: test/functional/jido_public_memory_capabilities_functional_test.exs)
+Functional: jido-public-memory-capabilities (src: lib/jido_gralkor/lifecycle.ex, lib/jido_gralkor/plugin.ex, lib/jido_gralkor/actions/memory_add.ex, lib/jido_gralkor/actions/memory_build_indices.ex, lib/jido_gralkor/actions/memory_build_communities.ex, lib/jido_gralkor/actions/memory_search.ex, lib/jido_gralkor/memory_search_presentation.ex, lib/jido_gralkor/re_act.ex, lib/gralkor/client.ex, lib/gralkor/search.ex; functional: test/functional/jido_public_memory_capabilities_functional_test.exs)
 
 when an application gracefully stops an agent with a committed thread
   then termination returns without waiting for the memory flush
@@ -22,7 +22,7 @@ when an agent invokes memory search with a usable query
   then returned results are scoped to the current operator
   and the usable query selects relevant stored episodes
   and returned results obey the optional `destinations` and `lenses` selectors supplied for that invocation
-  and the action returns results as JSON with their Destination and originating Lens or declaring Reflection
+  and the action returns structured results with their Destination and originating Lens or declaring Reflection
   and relevant stored generalisations can contribute beside related ingested information
   and each returned generalisation exposes its exact content, evolution-depth level, and `evolves_from` history
   where both selectors are omitted or empty
@@ -62,3 +62,28 @@ when a consumer prepares the first ReAct iteration
 
 when a consumer prepares a later ReAct iteration
   then every request override is returned unchanged
+
+when structured memory search results cross the model tool-output boundary
+  then one JSON decode exposes complete attributable results whose combined text exceeds the per-string limit
+  while one source text exceeds the framework string limit
+    then the model receives the complete source text
+  while a Reflection payload includes evolution history
+    then the model receives the complete structured history
+
+when memory search results are prepared for a model byte budget
+  then the serialized success envelope fits the configured byte budget
+  and the result list contains only complete attributed results in their original order
+  and omission counts and byte-budget reasons are reported outside the result list
+  while an individual result exceeds the budget
+    then that whole result is omitted while later fitting results remain available
+  while the budget cannot hold an empty success envelope with omission metadata
+    then an explicit budget error is returned
+  if the budget is not a positive integer
+    then the action rejects the budget before searching memory
+
+when canonical memory results cross the outgoing provider boundary
+  then deeply nested history and domain keys reach the provider unchanged
+  and source fields longer than 16384 characters reach the provider unchanged
+  and more than 100 results reach the provider without synthetic result entries
+  while a byte budget omits results
+    then the provider receives complete retained results and exact omission metadata within the budget

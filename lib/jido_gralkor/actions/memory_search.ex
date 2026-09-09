@@ -14,8 +14,10 @@ defmodule JidoGralkor.Actions.MemorySearch do
       (`tool_choice: memory_search`) where the LLM is required to
       invoke the tool but has nothing meaningful to search for.
 
-  Results are returned as JSON with their Destination and originating Lens or
-  declaring Reflection. Errors propagate.
+  Results are returned as structured data with their Destination and originating Lens or
+  declaring Reflection. `:memory_search_max_bytes` in the tool context defaults to
+  65,536 bytes for the complete Jido success envelope. Only whole results are retained;
+  `omissions.byte_budget` reports the excluded count outside `result`. Errors propagate.
   """
 
   use Jido.Action,
@@ -36,11 +38,17 @@ defmodule JidoGralkor.Actions.MemorySearch do
 
   alias Gralkor.Client
   alias Gralkor.Search
+  alias JidoGralkor.MemorySearchPresentation
 
   @no_query_result "Memory search did not run: no query was provided. Pick a focused query (a concrete episode, behaviour, or topic) and call memory_search again. This is a NON-RESULT, not an empty result — long-term memory was NOT queried."
 
   @impl true
   def run(params, context) do
+    max_bytes =
+      context
+      |> Map.get(:memory_search_max_bytes, 65_536)
+      |> MemorySearchPresentation.validate_max_bytes!()
+
     query = params |> Map.get(:query, "") |> to_string()
 
     if String.trim(query) == "" do
@@ -68,7 +76,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
         end
 
       case result do
-        {:ok, results} -> {:ok, %{result: Jason.encode!(results)}}
+        {:ok, results} -> MemorySearchPresentation.for_model(results, max_bytes)
         {:error, reason} -> {:error, reason}
       end
     end

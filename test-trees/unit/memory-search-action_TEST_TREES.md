@@ -19,7 +19,7 @@ when the memory search tool runs with a usable query
   while the tool context has no Gralkor runtime target
     then Search uses the untargeted application compatibility boundary
   while Search returns results
-    then the action result is their JSON encoding
+    then the action result is the structured result list
     and every returned episode's Destination and originating Lens or declaring Reflection remain identifiable
   if Search fails
     then the failure reason is returned to the caller unchanged
