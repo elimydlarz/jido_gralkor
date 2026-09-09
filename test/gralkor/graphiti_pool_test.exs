@@ -1671,7 +1671,7 @@ defmodule Gralkor.GraphitiPoolTest do
               def __init__(self):
                   self.recorded = {}
 
-              async def search(self, query, num_results=10):
+              async def search(self, query, num_results=10, search_filter=None):
                   self.recorded['query'] = query
                   self.recorded['num_results'] = num_results
                   return [_Edge("X is a thing")]
@@ -1774,7 +1774,7 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.episodes = []
 
         class _FakeGraphiti:
-            async def search(self, query, num_results=10):
+            async def search(self, query, num_results=10, search_filter=None):
                 return [_Edge("timestamps flow through")]
 
         _FakeGraphiti()
@@ -1845,7 +1845,7 @@ defmodule Gralkor.GraphitiPoolTest do
             def __init__(self):
                 self.driver = _Driver()
 
-            async def search(self, query, num_results=10):
+            async def search(self, query, num_results=10, search_filter=None):
                 return [_Edge()]
 
         _FakeGraphiti()
@@ -1895,7 +1895,7 @@ defmodule Gralkor.GraphitiPoolTest do
         Pythonx.eval(
           """
           class _FakeGraphiti:
-              async def search(self, query, num_results=10):
+              async def search(self, query, num_results=10, search_filter=None):
                   raise RuntimeError("boom")
 
           _FakeGraphiti()
@@ -2961,7 +2961,7 @@ defmodule Gralkor.GraphitiPoolTest do
               def __init__(self):
                   self.recorded = {}
 
-              async def search(self, query, num_results=10):
+              async def search(self, query, num_results=10, search_filter=None):
                   self.recorded['query'] = query
                   self.recorded['num_results'] = num_results
                   return []
@@ -3668,7 +3668,7 @@ defmodule Gralkor.GraphitiPoolTest do
       Pythonx.eval(
         """
         class _SuccessfulWarmupGraphiti:
-            async def search(self, query, num_results=10):
+            async def search(self, query, num_results=10, search_filter=None):
                 return []
 
         _SuccessfulWarmupGraphiti()
@@ -3754,7 +3754,7 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.episodes = []
 
         class _FakeGraphiti:
-            async def search(self, query, num_results=10):
+            async def search(self, query, num_results=10, search_filter=None):
                 return [_Edge()]
 
         _FakeGraphiti()
