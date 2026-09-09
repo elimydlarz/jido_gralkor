@@ -91,7 +91,7 @@ when memory search formats facts for the consuming agent
   if the byte budget is not a positive integer
     then the action rejects the budget before searching memory
 
-when formatted memory search results cross the outgoing provider boundary through unmodified Jido AI 2.3.0
+when unmodified Jido AI 2.3.0 sends memory search output to the provider
   then one decode of the tool envelope exposes the exact readable string returned by the action
   and the tool result contains readable fact bullets rather than a JSON-encoded result list
   while the canonical Reflection payload contains deep lineage or domain keys ending in `_key`

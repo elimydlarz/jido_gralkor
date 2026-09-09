@@ -688,7 +688,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       refute_received {:public_search, _, _, _, _, _, _}
     end
   end
-  describe "when formatted memory search results cross the outgoing provider boundary through unmodified Jido AI 2.3.0" do
+  describe "when unmodified Jido AI 2.3.0 sends memory search output to the provider" do
     test "then one decode of the tool envelope exposes the exact readable string returned by the action" do
       assert :ok = ingest_memory("observations", "A precise fact with document_key and λ.")
       params = %{query: "x", destinations: ["observations"]}
@@ -702,7 +702,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert wire["result"]["result"] == "Lens: observations\n- Use retries."
     end
   end
-  describe "when formatted memory search results cross the outgoing provider boundary through unmodified Jido AI 2.3.0 > while the canonical Reflection payload contains deep lineage or domain keys ending in `_key`" do
+  describe "when unmodified Jido AI 2.3.0 sends memory search output to the provider > while the canonical Reflection payload contains deep lineage or domain keys ending in `_key`" do
     test "then the provider receives the retained extracted fact text unchanged" do
       history = Enum.reduce(1..12, %{"document_key" => "ABC-123"}, fn _, value -> %{"history" => value} end)
       artefact = put_generalisation("Use canaries for ABC-123.", 2, [history])
@@ -712,7 +712,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert stored.payload == artefact.payload
     end
   end
-  describe "when formatted memory search results cross the outgoing provider boundary through unmodified Jido AI 2.3.0 > while more than 100 facts fit within the response limits" do
+  describe "when unmodified Jido AI 2.3.0 sends memory search output to the provider > while more than 100 facts fit within the response limits" do
     test "then the provider receives every formatted fact without a synthetic omission item" do
       names = Enum.map(1..6, &"transport-#{&1}")
       Application.put_env(:jido_gralkor, :destinations, Enum.map(names, &[name: &1]))
@@ -726,7 +726,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert wire["result"]["result"] == expected
     end
   end
-  describe "when formatted memory search results cross the outgoing provider boundary through unmodified Jido AI 2.3.0 > while a source fact exceeds the response limits" do
+  describe "when unmodified Jido AI 2.3.0 sends memory search output to the provider > while a source fact exceeds the response limits" do
     test "then the provider receives an explicit omission notice instead of a sliced fact" do
       assert :ok = ingest_memory("observations", String.duplicate("λ", 16_385))
       assert :ok = ingest_memory("observations", "small")
