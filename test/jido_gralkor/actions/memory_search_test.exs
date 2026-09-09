@@ -5,72 +5,30 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
   alias JidoGralkor.Actions.MemorySearch
 
-  defmodule RecordingStorage do
-    @behaviour Gralkor.Destination.Storage
+  use Mimic
 
-    @impl true
-    def search(destination, operator_id, query, result_type, max_results, opts) do
-      send(
-        Process.whereis(:memory_search_destination_test),
-        {:destination_search, destination.name, operator_id, query, result_type, max_results,
-         opts}
-      )
+  alias Gralkor.Client
+  alias Gralkor.Search
+  alias JidoGralkor.MemorySearchPresentation
 
-      episode =
-        if destination.name == "global" do
-          %{
-            artefact: %{id: "generalisation-one", payload: %{"generalisations" => []}},
-            reflection: "generalisations"
-          }
-        else
-          %{content: "selected #{destination.name} memory", lens: destination.name}
-        end
-
-      {:ok, [episode]}
-    end
-  end
-
-  defmodule FailingDestinationStorage do
-    @behaviour Gralkor.Destination.Storage
-
-    @impl true
-    def search(_destination, _operator_id, _query, _result_type, _max_results, _opts),
-      do: {:error, :boom}
-  end
+  setup :verify_on_exit!
 
   setup do
-    Process.register(self(), :memory_search_destination_test)
+    stub(Client, :search, fn request ->
+      send(self(), {:search, :compatibility, request})
+      {:ok, search_results()}
+    end)
 
-    previous =
-      for key <- [:destinations, :destination_storage, :lenses], into: %{} do
-        {key, Application.get_env(:jido_gralkor, key)}
-      end
+    stub(Client, :search, fn owner, request ->
+      send(self(), {:search, owner, request})
+      {:ok, search_results()}
+    end)
 
-    Application.put_env(:jido_gralkor, :destination_storage, RecordingStorage)
+    stub(MemorySearchPresentation, :validate_max_bytes!, fn bytes -> bytes end)
 
-    Application.put_env(:jido_gralkor, :destinations, [
-      [name: "observations"],
-      [name: "decisions"]
-    ])
-
-    Application.put_env(:jido_gralkor, :lenses, [
-      [
-        name: "observations",
-        destination: "observations",
-        ingestion: Gralkor.Lens.Ingestion.Store
-      ],
-      [
-        name: "decisions",
-        destination: "decisions",
-        ingestion: Gralkor.Lens.Ingestion.Store
-      ]
-    ])
-
-    on_exit(fn ->
-      Enum.each(previous, fn
-        {key, nil} -> Application.delete_env(:jido_gralkor, key)
-        {key, value} -> Application.put_env(:jido_gralkor, key, value)
-      end)
+    stub(MemorySearchPresentation, :for_model, fn results, bytes ->
+      send(self(), {:presentation, results, bytes})
+      {:ok, %{result: results, omissions: %{byte_budget: 0}}}
     end)
 
     :ok
@@ -80,15 +38,15 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     test "then the existing public Search capability is invoked once" do
       assert {:ok, _result} = run_search(%{query: "launch", destinations: ["observations"]})
 
-      assert_receive {:destination_search, "observations", _, _, _, _, _}
-      refute_receive {:destination_search, _, _, _, _, _, _}
+      assert_receive {:search, :compatibility, %Search{}}
+      refute_receive {:search, _, _}
     end
 
     test "and the Search request carries the current operator" do
       assert {:ok, _result} = run_search(%{query: "launch", destinations: ["observations"]})
 
-      assert_receive {:destination_search, "observations", "operator-one", "launch", :episodes,
-                      20, []}
+      assert_receive {:search, :compatibility,
+                      %Search{operator_id: "operator-one", query: "launch", result_type: :episodes}}
     end
 
     test "and the Search request carries the usable query unchanged" do
@@ -96,15 +54,14 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
       assert {:ok, _result} = run_search(%{query: query, destinations: ["observations"]})
 
-      assert_receive {:destination_search, "observations", "operator-one", ^query, :episodes, 20,
-                      []}
+      assert_receive {:search, :compatibility, %Search{query: ^query}}
     end
 
     test "and the Search request asks for stored episodes" do
       assert {:ok, _result} = run_search(%{query: "launch", destinations: ["observations"]})
 
-      assert_receive {:destination_search, "observations", "operator-one", "launch", :episodes,
-                      20, []}
+      assert_receive {:search, :compatibility,
+                      %Search{operator_id: "operator-one", query: "launch", result_type: :episodes}}
     end
   end
 
@@ -112,12 +69,9 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     test "then the Search request leaves both selector dimensions unrestricted" do
       assert {:ok, _result} = run_search(%{query: "launch"})
 
-      for destination <- ["operator", "global", "observations", "decisions"] do
-        assert_receive {:destination_search, ^destination, "operator-one", "launch", :episodes,
-                        20, []}
-      end
+      assert_receive {:search, :compatibility, %Search{destinations: [], lenses: []}}
 
-      refute_receive {:destination_search, _, _, _, _, _, _}
+      refute_receive {:search, _, _}
     end
   end
 
@@ -129,12 +83,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                  destinations: ["observations", "decisions"]
                })
 
-      for destination <- ["observations", "decisions"] do
-        assert_receive {:destination_search, ^destination, "operator-one", "launch", :episodes,
-                        20, []}
-      end
+      assert_receive {:search, :compatibility,
+                      %Search{destinations: ["observations", "decisions"]}}
 
-      refute_receive {:destination_search, _, _, _, _, _, _}
+      refute_receive {:search, _, _}
     end
   end
 
@@ -142,12 +94,9 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     test "then the Search request carries the same Lens list" do
       assert {:ok, _result} = run_search(%{query: "launch", lenses: ["decisions"]})
 
-      for destination <- ["operator", "global", "observations", "decisions"] do
-        assert_receive {:destination_search, ^destination, "operator-one", "launch", :episodes,
-                        20, [lenses: ["decisions"]]}
-      end
+      assert_receive {:search, :compatibility, %Search{lenses: ["decisions"]}}
 
-      refute_receive {:destination_search, _, _, _, _, _, _}
+      refute_receive {:search, _, _}
     end
   end
 
@@ -160,12 +109,11 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                  lenses: ["decisions", "observations"]
                })
 
-      for destination <- ["observations", "decisions"] do
-        assert_receive {:destination_search, ^destination, "operator-one", "launch", :episodes,
-                        20, [lenses: ["decisions", "observations"]]}
-      end
+      assert_receive {:search, :compatibility,
+                      %Search{destinations: ["observations", "decisions"],
+                              lenses: ["decisions", "observations"]}}
 
-      refute_receive {:destination_search, _, _, _, _, _, _}
+      refute_receive {:search, _, _}
     end
   end
 
@@ -205,6 +153,8 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                  }
                }
              ] = result
+
+      assert_receive {:presentation, ^result, 65_536}
     end
 
     test "and every returned episode's Destination and originating Lens or declaring Reflection remain identifiable" do
@@ -229,11 +179,8 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
   describe "when the memory search tool runs with a usable query > if Search fails" do
     test "then the failure reason is returned to the caller unchanged" do
-      Application.put_env(
-        :jido_gralkor,
-        :destination_storage,
-        FailingDestinationStorage
-      )
+      expect(Client, :search, fn %Search{} -> {:error, :boom} end)
+      reject(MemorySearchPresentation, :for_model, 2)
 
       assert {:error, :boom} =
                run_search(%{query: "launch", destinations: ["observations"]})
@@ -265,7 +212,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     end
 
     test "then no Search is issued" do
-      refute_receive {:destination_search, _, _, _, _, _, _}
+      refute_receive {:search, _, _}
     end
 
     test "and the result explicitly states that no query was provided", %{result: result} do
@@ -287,7 +234,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       assert {:ok, %{result: result}} = run_search(%{query: "   "})
 
       assert result =~ "no query was provided"
-      refute_receive {:destination_search, _, _, _, _, _, _}
+      refute_receive {:search, _, _}
     end
   end
 
@@ -296,32 +243,23 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   end
 
   defp prove_runtime_targeted_search do
-    configure_application_destinations()
-
-    start_supervised!(
-      {JidoGralkor.Runtime,
-       owner: self(),
-       configuration: %{
-         destinations: [[name: "runtime-notes"]],
-         lenses: [],
-         reflections: []
-       }}
-    )
+    owner = self()
+    reject(Client, :search, 1)
 
     assert {:ok, _result} =
              MemorySearch.run(
                %{query: "launch", destinations: ["runtime-notes"]},
-               %{agent_id: "operator-one", gralkor_runtime: self()}
+               %{agent_id: "operator-one", gralkor_runtime: owner}
              )
 
-    assert_receive {:destination_search, "runtime-notes", "operator-one", "launch", :episodes, 20,
-                    []}
-
-    refute_receive {:destination_search, "compat-notes", _, _, _, _, _}
+    assert_receive {:search, ^owner,
+                    %Search{operator_id: "operator-one", query: "launch",
+                            destinations: ["runtime-notes"], result_type: :episodes}}
+    refute_receive {:search, _, _}
   end
 
   defp prove_application_compatibility_search do
-    configure_application_destinations()
+    reject(Client, :search, 2)
 
     assert {:ok, _result} =
              MemorySearch.run(
@@ -329,12 +267,19 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                %{agent_id: "operator-one"}
              )
 
-    assert_receive {:destination_search, "compat-notes", "operator-one", "launch", :episodes, 20,
-                    []}
+    assert_receive {:search, :compatibility,
+                    %Search{operator_id: "operator-one", query: "launch",
+                            destinations: ["compat-notes"], result_type: :episodes}}
+    refute_receive {:search, _, _}
   end
 
-  defp configure_application_destinations do
-    Application.put_env(:jido_gralkor, :destinations, [[name: "compat-notes"]])
-    Application.put_env(:jido_gralkor, :lenses, [])
+  defp search_results do
+    [
+      %{destination: "observations",
+        episode: %{content: "selected observations memory", lens: "observations"}},
+      %{destination: "global",
+        episode: %{artefact: %{id: "generalisation-one", payload: %{"generalisations" => []}},
+                   reflection: "generalisations"}}
+    ]
   end
 end
