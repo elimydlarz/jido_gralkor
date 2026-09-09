@@ -505,34 +505,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
              ] = result
     end
 
-    test "and the action returns structured results with their Destination and originating Lens or declaring Reflection" do
-      assert :ok = ingest_memory("observations", "provenance observation")
-      artefact = put_generalisation("provenance generalisation", 1, [])
-
-      assert {:ok, %{result: result}} =
-               memory_search(
-                 %{query: "provenance", destinations: ["observations", "global"]},
-                 []
-               )
-
-      assert [
-               %{
-                 destination: "observations",
-                 episode: %{
-                   content: "provenance observation",
-                   lens: "observations"
-                 }
-               },
-               %{
-                 destination: "global",
-                 episode: %{
-                   artefact: returned_artefact,
-                   reflection: "generalisations"
-                 }
-               }
-             ] = result
-
-      assert returned_artefact.id == artefact.id
+    test "and the action returns one readable string with fact bullets grouped under named Lens or Reflection headings" do
+      assert :ok = ingest_memory("observations", "Payment retries need an idempotency key.")
+      assert {:ok, %{result: text}} = memory_search(%{query: "payment", destinations: ["observations"]}, [])
+      assert text == "Lens: observations\n- Payment retries need an idempotency key."
     end
 
     test "and relevant stored generalisations can contribute beside related ingested information" do
