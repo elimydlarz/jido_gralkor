@@ -191,4 +191,4 @@ Gralkor.Client.search(agent_server, %Gralkor.Search{
 })
 ```
 
-Set `result_type` to `:facts`, `:nodes`, or `:artefacts` for those forms. Node results may be filtered by ontology entity type, and fact results by ontology relationship type. A non-empty `lenses` selector cannot be combined with these non-episode result types.
+Set `result_type` to `:facts`, `:nodes`, or `:artefacts` for those forms. Node results may be filtered by ontology entity type, and fact results by ontology relationship type. A non-empty `lenses` selector is supported for episodes and facts; it cannot be combined with node or artefact results.
