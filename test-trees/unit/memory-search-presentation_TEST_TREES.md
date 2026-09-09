@@ -1,6 +1,6 @@
 Unit: memory-search-presentation (src: lib/jido_gralkor/memory_search_presentation.ex; unit: test/jido_gralkor/memory_search_presentation_test.exs)
 
-when structured fact results are formatted for the model
+when the memory search formatter is called
   then Lens groups use `Lens: <name>` headings
   and Reflection groups use `Reflection: <name>` headings
   and each fact is presented as one bullet with its complete text
