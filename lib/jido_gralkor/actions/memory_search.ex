@@ -14,10 +14,12 @@ defmodule JidoGralkor.Actions.MemorySearch do
       (`tool_choice: memory_search`) where the LLM is required to
       invoke the tool but has nothing meaningful to search for.
 
-  Results are returned as structured data with their Destination and originating Lens or
-  declaring Reflection. `:memory_search_max_bytes` in the tool context defaults to
-  65,536 bytes for the complete Jido success envelope. Only whole results are retained;
-  `omissions.byte_budget` reports the excluded count outside `result`. Errors propagate.
+  Results are readable fact bullets grouped under named Lens or Reflection headings.
+  The structured search API remains available for consumers that format their own data.
+  The tool context's `:memory_search_max_bytes` defaults to 65,536 UTF-8 bytes for the
+  complete Jido success envelope. The text also stays within Jido's 16,384-character
+  string limit. Whole facts that do not fit are counted in an explicit omission notice.
+  Errors propagate.
   """
 
   use Jido.Action,

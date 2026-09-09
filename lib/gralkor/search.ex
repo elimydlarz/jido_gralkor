@@ -9,12 +9,14 @@ defmodule Gralkor.Search do
 
   `destinations` selects graphs and `lenses` filters episode writers. Names are
   ORed within either list and the two dimensions are ANDed together. Lens
-  filtering is valid only for episode results. A Lens-written episode exposes
+  filtering is valid for episode and fact results. A Lens-written episode exposes
   `content`, `source_description`, and `lens`; a Reflection-written episode
   exposes `artefact: %{id: id, payload: payload}`, `source_description`, and
   its writer as `reflection`. Reflection episodes have no encoded `content`.
   Naturally textual Lens content remains text, including JSON-looking source
-  records. Facts retain their text, timestamps, and structured `sources`; use
+  records. Facts retain their text, timestamps, and structured `sources` with named Lens or
+  Reflection provenance where available. Lens selection filters matching edges before
+  the result limit and retains only selected Lens sources. Use
   `Gralkor.Format.format_fact/1` explicitly for readable fact presentation.
 
   Episodes are the default result type. Facts, nodes, and Reflection artefacts
