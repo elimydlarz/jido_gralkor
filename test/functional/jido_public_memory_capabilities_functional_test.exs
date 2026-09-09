@@ -2,6 +2,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   use Jido.AI.TestCase, async: false
 
   alias Gralkor.Client
+  alias JidoGralkor.MemorySearchPresentation, as: Presentation
   alias Gralkor.Client.InMemory
   alias Gralkor.Client.Native
   alias Gralkor.CaptureBuffer
@@ -38,15 +39,29 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         {:public_search, destination.name, operator_id, query, result_type, max_results, opts}
       )
 
-      {:ok, [%{content: "matching stored episode", lens: "observations"}]}
+      {:ok, [%{fact: "matching stored fact", sources: [%{lens: "observations"}]}]}
     end
+  end
+
+  defmodule FactSearchStorage do
+    @behaviour Gralkor.Destination.Storage
+    def search(destination, operator, query, :facts, maximum, opts) do
+      {:ok, observations} = Gralkor.Destination.Storage.InMemory.search(destination, operator, query, :facts, maximum, opts)
+      lenses = Keyword.get(opts, :lenses, [])
+      extracted = Application.get_env(:jido_gralkor, :public_extracted_facts, [])
+      |> Enum.filter(&(&1.destination == destination.name and &1.operator == operator))
+      |> Enum.map(& &1.fact)
+      |> Enum.filter(fn fact -> lenses == [] or Enum.any?(fact.sources, &(Map.get(&1, :lens) in lenses)) end)
+      {:ok, Enum.take(extracted ++ observations, maximum)}
+    end
+    def search(destination, operator, query, type, maximum, opts),
+      do: Gralkor.Destination.Storage.InMemory.search(destination, operator, query, type, maximum, opts)
   end
 
   defmodule InspectingProviderFixture do
     @observation "A reversible canary exposed a configuration fault before broad deployment impact."
     @generalisation "Reversible limited-scope trials expose faults before broad impact across deployments, migrations, and feature releases."
-    @predecessor "A reversible limited-scope trial exposed faults before a deployment reached broad impact."
-    @answer "RECOMMENDATION: Use a reversible limited-scope canary for the Payments database migration.\nPREDECESSOR: level 1; scope deployment rollout\nEVOLVED: level 2; newly covered scope feature releases\nRATIONALE: The evolved lesson and related observation show that a limited reversible trial can expose faults before broad impact."
+    @answer "RECOMMENDATION: Use a reversible limited-scope canary for the Payments database migration. RATIONALE: Retrieved facts show that trials expose faults before broad impact."
 
     def adapter(test_pid) do
       fn request ->
@@ -114,74 +129,16 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       )
     end
 
-    defp exact_memory_evidence?(tool_results) when tool_results != [] do
-      decoded = Enum.flat_map(tool_results, &decode_content/1)
-
-      Enum.any?(decoded, &deep_contains?(&1, @observation)) and
-        Enum.any?(decoded, &deep_contains_generalisation?(&1))
+    defp exact_memory_evidence?(tool_results) do
+      Enum.any?(tool_results, fn %{"output" => output} ->
+        case Jason.decode!(output) do
+          %{"ok" => true, "result" => %{"result" => text}} when is_binary(text) ->
+            String.contains?(text, "Lens: observations\n- " <> @observation) and
+              String.contains?(text, "Reflection: generalisations\n- " <> @generalisation)
+          _ -> false
+        end
+      end)
     end
-
-    defp exact_memory_evidence?(_), do: false
-
-    defp decode_content(%{"output" => output}) when is_binary(output), do: decode_json(output)
-
-    defp decode_content(%{"content" => content}) when is_binary(content), do: decode_json(content)
-
-    defp decode_content(_), do: []
-
-    defp decode_json(value) do
-      case Jason.decode(value) do
-        {:ok, decoded} -> [decoded | nested_decoded(decoded)]
-        {:error, _} -> [value]
-      end
-    end
-
-    defp nested_decoded(value) when is_map(value),
-      do: value |> Map.values() |> Enum.flat_map(&nested_decoded/1)
-
-    defp nested_decoded(value) when is_list(value),
-      do: Enum.flat_map(value, &nested_decoded/1)
-
-    defp nested_decoded(value) when is_binary(value) do
-      case Jason.decode(value) do
-        {:ok, decoded} -> [decoded | nested_decoded(decoded)]
-        {:error, _} -> []
-      end
-    end
-
-    defp nested_decoded(_), do: []
-
-    defp deep_contains?(value, expected) when is_binary(value), do: value == expected
-
-    defp deep_contains?(value, expected) when is_map(value),
-      do:
-        Enum.any?(value, fn {key, item} ->
-          (key == "content" and deep_contains?(item, expected)) or deep_contains?(item, expected)
-        end)
-
-    defp deep_contains?(value, expected) when is_list(value),
-      do: Enum.any?(value, &deep_contains?(&1, expected))
-
-    defp deep_contains?(_, _), do: false
-
-    defp deep_contains_generalisation?(value) when is_map(value) do
-      generalisations = Map.get(value, "generalisations", [])
-
-      Enum.any?(generalisations, fn item ->
-        is_map(item) and
-          item["content"] == @generalisation and
-          item["level"] == 2 and
-          Enum.any?(item["evolves_from"] || [], fn predecessor ->
-            is_map(predecessor) and predecessor["content"] == @predecessor and
-              predecessor["level"] == 1
-          end)
-      end) or Enum.any?(Map.values(value), &deep_contains_generalisation?/1)
-    end
-
-    defp deep_contains_generalisation?(value) when is_list(value),
-      do: Enum.any?(value, &deep_contains_generalisation?/1)
-
-    defp deep_contains_generalisation?(_), do: false
   end
 
   defmodule DeterministicMemoryAgent do
@@ -236,7 +193,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
             :destinations,
             :destination_storage,
             :lenses,
-            :lens_storage
+            :lens_storage,
+            :public_extracted_facts
           ],
           into: %{} do
         {key, Application.get_env(:jido_gralkor, key)}
@@ -276,7 +234,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     Application.put_env(
       :jido_gralkor,
       :destination_storage,
-      Gralkor.Destination.Storage.InMemory
+      FactSearchStorage
     )
 
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
@@ -299,6 +257,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       ]
     ])
 
+    Application.put_env(:jido_gralkor, :public_extracted_facts, [])
     InMemory.reset()
 
     on_exit(fn ->
@@ -434,75 +393,25 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   describe "when an agent invokes memory search with a usable query" do
     test "then returned results are scoped to the current operator" do
-      for operator <- ["operator-one", "operator-two"] do
-        assert :ok =
-                 Client.ingest(%Ingest{
-                   id: "operator-scope-#{operator}",
-                   operator_id: operator,
-                   lens: "operator",
-                   source_kind: :document,
-                   content: "private memory for #{operator}",
-                   source_description: "functional"
-                 })
-      end
-
-      assert {:ok, %{result: result}} =
-               memory_search(%{query: "private", destinations: ["operator"]}, [])
-
-      assert [
-               %{
-                 destination: "operator",
-                 episode: %{
-                   content: "private memory for operator-one",
-                   lens: "operator"
-                 }
-               }
-             ] = result
+      assert :ok = ingest_memory("operator", "own memory")
+      assert :ok = ingest_memory("operator", "other memory", "operator-two")
+      assert {:ok, %{result: text}} = memory_search(%{query: "memory", destinations: ["operator"]}, [])
+      assert text == "Lens: operator\n- own memory"
     end
 
-    test "and the usable query selects relevant stored episodes" do
+    test "and the usable query selects relevant extracted facts" do
       Application.put_env(:jido_gralkor, :destination_storage, RecordingSearchStorage)
       Application.put_env(:jido_gralkor, :public_search_test_pid, self())
       on_exit(fn -> Application.delete_env(:jido_gralkor, :public_search_test_pid) end)
-
-      query = "  launch city  "
-
-      assert {:ok, %{result: result}} =
-               memory_search(%{query: query, destinations: ["observations"]}, [])
-
-      assert_receive {:public_search, "observations", "operator-one", ^query, :episodes, 20, []}
-
-      assert [
-               %{
-                 destination: "observations",
-                 episode: %{
-                   content: "matching stored episode",
-                   lens: "observations"
-                 }
-               }
-             ] = result
+      assert {:ok, %{result: "Lens: observations\n- matching stored fact"}} = memory_search(%{query: "precise query", destinations: ["observations"]}, [])
+      assert_receive {:public_search, "observations", "operator-one", "precise query", :facts, 20, _}
     end
 
     test "and returned results obey the optional `destinations` and `lenses` selectors supplied for that invocation" do
-      assert :ok = ingest_memory("observations", "selected observation")
-      assert :ok = ingest_memory("decisions", "selected decision")
-
-      assert {:ok, %{result: result}} =
-               memory_search(
-                 %{
-                   query: "selected",
-                   destinations: ["observations", "decisions"],
-                   lenses: ["decisions"]
-                 },
-                 []
-               )
-
-      assert [
-               %{
-                 destination: "decisions",
-                 episode: %{content: "selected decision", lens: "decisions"}
-               }
-             ] = result
+      assert :ok = ingest_memory("observations", "wanted")
+      assert :ok = ingest_memory("decisions", "other")
+      assert {:ok, %{result: text}} = memory_search(%{query: "memory", destinations: ["observations"], lenses: ["observations"]}, [])
+      assert text == "Lens: observations\n- wanted"
     end
 
     test "and the action returns one readable string with fact bullets grouped under named Lens or Reflection headings" do
@@ -512,99 +421,41 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
 
     test "and relevant stored generalisations can contribute beside related ingested information" do
-      assert :ok = ingest_memory("observations", "related rollout observation")
-      _artefact = put_generalisation("related rollout generalisation", 1, [])
-
-      assert {:ok, %{result: result}} =
-               memory_search(
-                 %{query: "related rollout", destinations: ["observations", "global"]},
-                 []
-               )
-
-      assert [
-               %{episode: %{lens: "observations"}},
-               %{episode: %{reflection: "generalisations"}}
-             ] = result
+      assert :ok = ingest_memory("observations", "observed rollout")
+      put_generalisation("Use canaries", 2, [])
+      assert {:ok, %{result: text}} = memory_search(%{query: "rollout", destinations: ["observations", "global"]}, [])
+      assert text == "Lens: observations\n- observed rollout\n\nReflection: generalisations\n- Use canaries"
     end
 
-    test "and each returned generalisation exposes its exact content, evolution-depth level, and `evolves_from` history" do
-      evolves_from = [%{"content" => "earlier rollout guidance", "level" => 1}]
-      artefact = put_generalisation("current rollout guidance", 2, evolves_from)
-
-      assert {:ok, %{result: result}} =
-               memory_search(%{query: "rollout guidance", destinations: ["global"]}, [])
-
-      assert [
-               %{
-                 episode: %{
-                   artefact: returned_artefact,
-                   reflection: "generalisations"
-                 }
-               }
-             ] = result
-
-      assert returned_artefact.payload == artefact.payload
+    test "and the presentation adds no artefact identifiers, evolution-depth levels, or lineage metadata" do
+      put_generalisation("Use canaries", 2, [%{"content" => "prior", "level" => 1}])
+      assert {:ok, %{result: "Reflection: generalisations\n- Use canaries"}} = memory_search(%{query: "canaries", destinations: ["global"]}, [])
     end
   end
 
   describe "when an agent invokes memory search with a usable query > where both selectors are omitted or empty" do
     test "then every accessible registered Destination can contribute" do
-      assert :ok = ingest_memory("operator", "operator default")
-      assert :ok = ingest_memory("shared-notes", "global default")
-      assert :ok = ingest_memory("observations", "observation default")
-      assert :ok = ingest_memory("decisions", "decision default")
-
-      assert {:ok, %{result: result}} = memory_search(%{query: "default"}, [])
-
-      assert Enum.map(result, & &1.destination) == [
-               "operator",
-               "global",
-               "observations",
-               "decisions"
-             ]
+      for lens <- ["operator", "shared-notes", "observations", "decisions"], do: assert(:ok = ingest_memory(lens, lens <> " fact"))
+      assert {:ok, %{result: text}} = memory_search(%{query: "fact"}, [])
+      for lens <- ["operator", "shared-notes", "observations", "decisions"], do: assert(text =~ "Lens: #{lens}\n- #{lens} fact")
     end
   end
 
   describe "when an agent invokes memory search with a usable query > where only Destinations are supplied" do
     test "then only results from any supplied Destination can contribute" do
-      assert :ok = ingest_memory("observations", "destination-only observation")
-      assert :ok = ingest_memory("decisions", "destination-only decision")
-
-      assert {:ok, %{result: result}} =
-               memory_search(
-                 %{query: "destination-only", destinations: ["observations"]},
-                 []
-               )
-
-      assert [
-               %{
-                 destination: "observations",
-                 episode: %{
-                   content: "destination-only observation",
-                   lens: "observations"
-                 }
-               }
-             ] = result
+      assert :ok = ingest_memory("observations", "wanted")
+      assert :ok = ingest_memory("decisions", "other")
+      assert {:ok, %{result: text}} = memory_search(%{query: "memory", destinations: ["observations"]}, [])
+      assert text == "Lens: observations\n- wanted"
     end
   end
 
   describe "when an agent invokes memory search with a usable query > where only Lenses are supplied" do
     test "then only results originating in any supplied Lens can contribute" do
-      assert :ok = ingest_memory("observations", "lens-only observation")
-      assert :ok = ingest_memory("decisions", "lens-only decision")
-
-      assert {:ok, %{result: result}} =
-               memory_search(%{query: "lens-only", lenses: ["decisions"]}, [])
-
-      assert [
-               %{
-                 destination: "decisions",
-                 episode: %{
-                   content: "lens-only decision",
-                   lens: "decisions"
-                 }
-               }
-             ] = result
+      assert :ok = ingest_memory("observations", "wanted")
+      assert :ok = ingest_memory("decisions", "other")
+      assert {:ok, %{result: text}} = memory_search(%{query: "memory", lenses: ["decisions"]}, [])
+      assert text == "Lens: decisions\n- other"
     end
   end
 
@@ -623,29 +474,16 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                  []
                )
 
-      assert result == []
+      assert result == "No matching facts."
     end
   end
 
   describe "when an agent invokes memory search with a usable query > where no conversation thread has been committed" do
     test "then search still runs for the current operator" do
-      assert :ok = ingest_memory("observations", "thread-independent search")
-
-      assert {:ok, %{result: result}} =
-               memory_search(
-                 %{query: "thread-independent", destinations: ["observations"]},
-                 []
-               )
-
-      assert [
-               %{
-                 destination: "observations",
-                 episode: %{
-                   content: "thread-independent search",
-                   lens: "observations"
-                 }
-               }
-             ] = result
+      assert :ok = ingest_memory("observations", "wanted")
+      assert :ok = ingest_memory("decisions", "other")
+      assert {:ok, %{result: text}} = memory_search(%{query: "memory", destinations: ["observations"]}, [])
+      assert text == "Lens: observations\n- wanted"
     end
   end
 
@@ -662,14 +500,12 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   end
 
   describe "when a fresh agent handles a request related to an evolved generalisation" do
-    test "then the answer identifies the retrieved deployment predecessor and newly covered feature-release scope" do
+    test "then the answer uses the retrieved facts relevant to the requested migration" do
       answer = deterministic_evolved_generalisation_answer()
-
-      assert answer =~ "PREDECESSOR: level 1; scope deployment rollout"
-      assert answer =~ "EVOLVED: level 2; newly covered scope feature releases"
+      assert answer =~ "Retrieved facts show that trials expose faults before broad impact"
     end
 
-    test "and the recommendation applies their reversible limited-scope lesson to the requested migration" do
+    test "and the recommendation applies the retrieved reversible limited-scope lesson to the requested migration" do
       answer = deterministic_evolved_generalisation_answer()
 
       assert answer =~ "RECOMMENDATION: Use a reversible limited-scope canary"
@@ -685,11 +521,11 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert description =~ "Search related stored observations and generalisations"
     end
 
-    test "and its description directs the agent to apply relevant generalisations in light of their evolution histories and related observations" do
+    test "and its description directs the agent to use the returned source-grouped facts" do
       description = MemorySearch.__action_metadata__().description
 
       assert description =~
-               "Apply relevant generalisations in light of their evolution histories and related observations"
+               "Use the returned source-grouped facts"
     end
   end
 
@@ -755,232 +591,147 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
-  describe "when structured memory search results cross the model tool-output boundary" do
-    test "then one JSON decode exposes complete attributable results whose combined text exceeds the per-string limit" do
-      content = String.duplicate("x", 10_000)
-      assert :ok = ingest_memory("observations", content)
-      assert :ok = ingest_memory("decisions", content)
-      result = memory_search(%{query: "x", destinations: ["observations", "decisions"]}, [])
-      wire = Jido.AI.Turn.format_tool_result_content(result)
-      assert byte_size(wire) > 16_384
-      assert %{"ok" => true, "result" => %{"result" => results}} = Jason.decode!(wire)
-      assert Enum.map(results, & &1["episode"]["content"]) == [content, content]
-      assert Enum.map(results, & &1["destination"]) == ["observations", "decisions"]
+
+  describe "when a consumer explicitly formats structured fact search results" do
+    test "then named Lens sources have headings of the form `Lens: <name>`" do
+      assert rendered([fact("Use retries", [%{lens: "jira"}])]) == "Lens: jira\n- Use retries"
+    end
+    test "and named Reflection sources have headings of the form `Reflection: <name>`" do
+      assert rendered([fact("Use canaries", [%{reflection: "lessons"}])]) == "Reflection: lessons\n- Use canaries"
+    end
+    test "and each source heading is followed by bullets containing its returned fact text" do
+      assert rendered([fact("First\ncontinued", [%{lens: "notes"}]), fact("Second", [%{lens: "notes"}])]) == "Lens: notes\n- First\ncontinued\n- Second"
+    end
+    test "and source groups retain first-appearance order" do
+      assert rendered([fact("one", [%{lens: "z"}]), fact("two", [%{lens: "a"}]), fact("three", [%{lens: "z"}])]) == "Lens: z\n- one\n- three\n\nLens: a\n- two"
+    end
+    test "and facts retain retrieval order within each source group" do
+      assert rendered([fact("one", [%{lens: "z"}]), fact("two", [%{lens: "a"}]), fact("three", [%{lens: "z"}])]) == "Lens: z\n- one\n- three\n\nLens: a\n- two"
+    end
+    test "and formatting leaves the canonical structured search results unchanged" do
+      input = [fact("one", [%{lens: "notes", id: "source-id"}])]
+      assert rendered(input) == "Lens: notes\n- one"
+      assert input == [fact("one", [%{lens: "notes", id: "source-id"}])]
     end
   end
 
-  describe "when structured memory search results cross the model tool-output boundary > while one source text exceeds the framework string limit" do
-    test "then the model receives the complete source text" do
-      content = String.duplicate("x", 16_385)
-      assert :ok = ingest_memory("observations", content)
-      result = memory_search(%{query: "x", destinations: ["observations"]}, [])
-      assert {:ok, %{result: [%{episode: %{content: ^content}}]}} = result
-      wire = Jido.AI.Turn.format_tool_result_content(result) |> Jason.decode!()
-
-      assert hd(wire["result"]["result"])["episode"]["content"] == content
+  describe "when a consumer explicitly formats structured fact search results > while a fact has several named sources" do
+    test "then the fact appears once under each distinct named source" do
+      assert rendered([fact("shared", [%{lens: "notes"}, %{reflection: "lessons"}])]) == "Lens: notes\n- shared\n\nReflection: lessons\n- shared"
     end
   end
 
-  describe "when structured memory search results cross the model tool-output boundary > while a Reflection payload includes evolution history" do
-    test "then the model receives the complete structured history" do
-      artefact = put_generalisation("rollout", 2, [%{"content" => "prior rollout", "level" => 1}])
-      result = memory_search(%{query: "rollout", destinations: ["global"]}, [])
-      assert {:ok, %{result: [%{episode: %{artefact: %{payload: payload}}}]}} = result
-      assert payload == artefact.payload
-      wire = Jido.AI.Turn.format_tool_result_content(result) |> Jason.decode!()
-      delivered = hd(wire["result"]["result"])["episode"]["artefact"]["payload"]
-      assert delivered == payload
+  describe "when a consumer explicitly formats structured fact search results > while a Lens and a Reflection share a name" do
+    test "then their facts remain in separate source groups" do
+      assert rendered([fact("one", [%{lens: "same"}]), fact("two", [%{reflection: "same"}])]) == "Lens: same\n- one\n\nReflection: same\n- two"
     end
   end
 
-  describe "when memory search results are prepared for a model byte budget" do
-    test "then the serialized success envelope fits the configured byte budget" do
-      assert :ok = ingest_memory("observations", String.duplicate("x", 1000))
-      assert :ok = ingest_memory("decisions", "small")
-
-      result =
-        memory_search(%{query: "x", destinations: ["observations", "decisions"]},
-          memory_search_max_bytes: 400
-        )
-
-      assert byte_size(Jido.AI.Turn.format_tool_result_content(result)) <= 400
+  describe "when a consumer explicitly formats structured fact search results > while a fact has no named Lens or Reflection provenance" do
+    test "then the fact appears under `Source: unknown`" do
+      assert rendered([fact("one", []), fact("two", [%{source_description: "legacy"}])]) == "Source: unknown\n- one\n- two"
     end
+  end
 
-    test "and the result list contains only complete attributed results in their original order" do
-      assert :ok = ingest_memory("observations", "first")
-      assert :ok = ingest_memory("observations", String.duplicate("large", 1000))
-      assert :ok = ingest_memory("observations", "last")
-
-      assert {:ok, %{result: results}} =
-               memory_search(%{query: "x", destinations: ["observations"]},
-                 memory_search_max_bytes: 400
-               )
-
-      assert [
-               %{
-                 destination: "observations",
-                 episode: %{
-                   content: "first",
-                   lens: "observations",
-                   source_description: "functional"
-                 }
-               },
-               %{
-                 destination: "observations",
-                 episode: %{
-                   content: "last",
-                   lens: "observations",
-                   source_description: "functional"
-                 }
-               }
-             ] = results
+  describe "when a consumer explicitly formats structured fact search results > while search returns no facts" do
+    test "then the text explicitly states that no matching facts were found" do
+      assert rendered([]) == "No matching facts."
     end
+  end
 
-    test "and omission counts and byte-budget reasons are reported outside the result list" do
-      assert :ok = ingest_memory("observations", String.duplicate("large", 1000))
+  describe "when memory search formats facts for the consuming agent" do
+    test "then the complete text including headings and omission notices stays within 16384 characters" do
+      assert :ok = ingest_memory("observations", String.duplicate("x", 16_385))
       assert :ok = ingest_memory("observations", "small")
-
-      assert {:ok, %{result: [%{episode: %{content: "small"}}], omissions: %{byte_budget: 1}}} =
-               memory_search(%{query: "x", destinations: ["observations"]},
-                 memory_search_max_bytes: 400
-               )
+      assert {:ok, %{result: text}} = memory_search(%{query: "x", destinations: ["observations"]}, [])
+      assert text == "Lens: observations\n- small\n\nOmitted facts: 1 (response limit)."
+      assert String.length(text) <= 16_384
     end
-  end
-
-  describe "when memory search results are prepared for a model byte budget > while an individual result exceeds the budget" do
-    test "then that whole result is omitted while later fitting results remain available" do
-      artefact =
-        put_generalisation("current", 2, [
-          %{"content" => String.duplicate("history", 1000), "level" => 1}
-        ])
-
+    test "and the serialized success envelope fits the configured byte budget" do
+      assert :ok = ingest_memory("observations", String.duplicate("λ\n\"", 100))
       assert :ok = ingest_memory("observations", "small")
-
-      assert {:ok, %{result: [%{episode: %{content: "small"}}], omissions: %{byte_budget: 1}}} =
-               memory_search(%{query: "x", destinations: ["global", "observations"]},
-                 memory_search_max_bytes: 400
-               )
-
-      assert {:ok, [%{episode: %{artefact: %{payload: payload}}}]} =
-               Client.search(%Gralkor.Search{
-                 operator_id: "operator-one",
-                 query: "x",
-                 destinations: ["global"]
-               })
-
-      assert payload == artefact.payload
+      result = memory_search(%{query: "x", destinations: ["observations"]}, memory_search_max_bytes: 200)
+      assert byte_size(Jido.AI.Turn.format_tool_result_content(result)) <= 200
+    end
+    test "and every included fact retains its complete text" do
+      content = "Exact λ text\nwith another line."
+      assert :ok = ingest_memory("observations", content)
+      assert {:ok, %{result: text}} = memory_search(%{query: "x", destinations: ["observations"]}, [])
+      assert text == "Lens: observations\n- " <> content
     end
   end
-
-  describe "when memory search results are prepared for a model byte budget > while the budget cannot hold an empty success envelope with omission metadata" do
+  describe "when memory search formats facts for the consuming agent > while a fact cannot fit within the response limits" do
+    test "then that whole fact is omitted while later fitting facts remain eligible" do
+      assert :ok = ingest_memory("observations", String.duplicate("x", 17_000))
+      assert :ok = ingest_memory("observations", "later")
+      assert {:ok, %{result: "Lens: observations\n- later\n\nOmitted facts: 1 (response limit)."}} = memory_search(%{query: "x", destinations: ["observations"]}, [])
+    end
+    test "and the text reports the omitted fact count and response-limit reason" do
+      for _ <- 1..2, do: assert(:ok = ingest_memory("observations", String.duplicate("x", 17_000)))
+      assert {:ok, %{result: "Omitted facts: 2 (response limit)."}} = memory_search(%{query: "x", destinations: ["observations"]}, [])
+    end
+  end
+  describe "when memory search formats facts for the consuming agent > while the byte budget cannot hold an empty response with the required notice" do
     test "then an explicit budget error is returned" do
-      assert {:error, {:memory_search_budget_too_small, %{max_bytes: 1, minimum_bytes: minimum}}} =
-               memory_search(%{query: "x"}, memory_search_max_bytes: 1)
-
+      assert {:error, {:memory_search_budget_too_small, %{max_bytes: 1, minimum_bytes: minimum}}} = memory_search(%{query: "x"}, memory_search_max_bytes: 1)
       assert minimum > 1
     end
   end
-
-  describe "when memory search results are prepared for a model byte budget > if the budget is not a positive integer" do
+  describe "when memory search formats facts for the consuming agent > if the byte budget is not a positive integer" do
     test "then the action rejects the budget before searching memory" do
       Application.put_env(:jido_gralkor, :destination_storage, RecordingSearchStorage)
       Application.put_env(:jido_gralkor, :public_search_test_pid, self())
       on_exit(fn -> Application.delete_env(:jido_gralkor, :public_search_test_pid) end)
-
       for invalid <- [0, -1, nil, 1.5, "100"] do
-        assert_raise ArgumentError, ~r/memory_search_max_bytes.*positive integer/, fn ->
-          memory_search(%{query: "x"}, memory_search_max_bytes: invalid)
-        end
+        assert_raise ArgumentError, ~r/memory_search_max_bytes.*positive integer/, fn -> memory_search(%{query: "x"}, memory_search_max_bytes: invalid) end
       end
-
       refute_received {:public_search, _, _, _, _, _, _}
     end
   end
-
-  describe "when canonical memory results cross the outgoing provider boundary" do
-    test "then deeply nested history and domain keys reach the provider unchanged" do
-      history =
-        Enum.reduce(1..12, %{"document_key" => "jira/ABC-123"}, fn _, value ->
-          %{"history" => value}
-        end)
-
-      artefact =
-        put_generalisation("current", 2, [
-          %{"content" => "prior", "level" => 1, "history" => history}
-        ])
-
-      {wire, _bytes} = provider_memory_result(%{query: "x", destinations: ["global"]})
-
-      assert %{
-               "ok" => true,
-               "result" => %{
-                 "result" => [%{"episode" => %{"artefact" => %{"payload" => payload}}}]
-               }
-             } = wire
-
-      assert payload == artefact.payload
+  describe "when formatted memory search results cross the outgoing provider boundary through unmodified Jido AI 2.3.0" do
+    test "then one decode of the tool envelope exposes the exact readable string returned by the action" do
+      assert :ok = ingest_memory("observations", "A precise fact with document_key and λ.")
+      params = %{query: "x", destinations: ["observations"]}
+      assert {:ok, expected} = memory_search(params, [])
+      {wire, _} = provider_memory_result(params)
+      assert wire == %{"ok" => true, "result" => %{"result" => expected.result}}
     end
-
-    test "and source fields longer than 16384 characters reach the provider unchanged" do
-      content = String.duplicate("λ", 16_385)
-      assert :ok = ingest_memory("observations", content)
-      {wire, _bytes} = provider_memory_result(%{query: "x", destinations: ["observations"]})
-
-      assert %{
-               "result" => %{
-                 "result" => [%{"episode" => %{"content" => ^content}}],
-                 "omissions" => %{"byte_budget" => 0}
-               }
-             } = wire
-    end
-
-    test "and more than 100 results reach the provider without synthetic result entries" do
-      names = Enum.map(1..6, &"transport-#{&1}")
-      Application.put_env(:jido_gralkor, :destinations, Enum.map(names, &[name: &1]))
-
-      Application.put_env(
-        :jido_gralkor,
-        :lenses,
-        Enum.map(names, &[name: &1, destination: &1, ingestion: Gralkor.Lens.Ingestion.Store])
-      )
-
-      for index <- 0..100 do
-        assert :ok = ingest_memory(Enum.at(names, div(index, 20)), "record-#{index}")
-      end
-
-      {wire, _bytes} = provider_memory_result(%{query: "x", destinations: names})
-      assert %{"result" => %{"result" => results, "omissions" => %{"byte_budget" => 0}}} = wire
-      assert Enum.map(results, & &1["episode"]["content"]) == Enum.map(0..100, &"record-#{&1}")
+    test "and the tool result contains readable fact bullets rather than a JSON-encoded result list" do
+      assert :ok = ingest_memory("observations", "Use retries.")
+      {wire, _} = provider_memory_result(%{query: "x", destinations: ["observations"]})
+      assert wire["result"]["result"] == "Lens: observations\n- Use retries."
     end
   end
-
-  describe "when canonical memory results cross the outgoing provider boundary > while a byte budget omits results" do
-    test "then the provider receives complete retained results and exact omission metadata within the budget" do
-      first = "first\"λ\n"
-      assert :ok = ingest_memory("observations", first)
-      assert :ok = ingest_memory("observations", String.duplicate("large", 1000))
-      assert :ok = ingest_memory("observations", "last")
-
-      assert {:ok, [first_result, _large, last_result]} =
-               Client.search(%Gralkor.Search{
-                 operator_id: "operator-one",
-                 query: "x",
-                 destinations: ["observations"]
-               })
-
-      expected = %{
-        ok: true,
-        result: %{result: [first_result, last_result], omissions: %{byte_budget: 1}}
-      }
-
-      encoded = Jason.encode!(expected)
-      max_bytes = byte_size(encoded)
-
-      {wire, bytes} =
-        provider_memory_result(%{query: "x", destinations: ["observations"]}, max_bytes)
-
-      assert wire == Jason.decode!(encoded)
-      assert bytes == max_bytes
+  describe "when formatted memory search results cross the outgoing provider boundary through unmodified Jido AI 2.3.0 > while the canonical Reflection payload contains deep lineage or domain keys ending in `_key`" do
+    test "then the provider receives the retained extracted fact text unchanged" do
+      history = Enum.reduce(1..12, %{"document_key" => "ABC-123"}, fn _, value -> %{"history" => value} end)
+      artefact = put_generalisation("Use canaries for ABC-123.", 2, [history])
+      {wire, _} = provider_memory_result(%{query: "x", destinations: ["global"]})
+      assert wire["result"]["result"] == "Reflection: generalisations\n- Use canaries for ABC-123."
+      assert {:ok, [%{episode: %{artefact: stored}}]} = Client.search(%Gralkor.Search{operator_id: "operator-one", query: "x", destinations: ["global"]})
+      assert stored.payload == artefact.payload
+    end
+  end
+  describe "when formatted memory search results cross the outgoing provider boundary through unmodified Jido AI 2.3.0 > while more than 100 facts fit within the response limits" do
+    test "then the provider receives every formatted fact without a synthetic omission item" do
+      names = Enum.map(1..6, &"transport-#{&1}")
+      Application.put_env(:jido_gralkor, :destinations, Enum.map(names, &[name: &1]))
+      Application.put_env(:jido_gralkor, :lenses, Enum.map(names, &[name: &1, destination: &1, ingestion: Gralkor.Lens.Ingestion.Store]))
+      for index <- 0..100, do: assert(:ok = ingest_memory(Enum.at(names, div(index, 20)), "record-#{index}"))
+      params = %{query: "x", destinations: names}
+      {wire, _} = provider_memory_result(params)
+      expected = Enum.map_join(Enum.with_index(names), "\n\n", fn {name, n} ->
+        "Lens: #{name}\n" <> Enum.map_join((n * 20)..min(n * 20 + 19, 100), "\n", &"- record-#{&1}")
+      end)
+      assert wire["result"]["result"] == expected
+    end
+  end
+  describe "when formatted memory search results cross the outgoing provider boundary through unmodified Jido AI 2.3.0 > while a source fact exceeds the response limits" do
+    test "then the provider receives an explicit omission notice instead of a sliced fact" do
+      assert :ok = ingest_memory("observations", String.duplicate("λ", 16_385))
+      assert :ok = ingest_memory("observations", "small")
+      {wire, _} = provider_memory_result(%{query: "x", destinations: ["observations"]})
+      assert wire["result"]["result"] == "Lens: observations\n- small\n\nOmitted facts: 1 (response limit)."
     end
   end
 
@@ -1047,6 +798,12 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     assert_receive {:model_memory_output, content}
     {Jason.decode!(content), byte_size(content)}
+  end
+
+  defp fact(text, sources), do: %{destination: "global", fact: %{fact: text, sources: sources}}
+  defp rendered(input) do
+    assert {:ok, %{result: text}} = Presentation.for_model(input, 65_536)
+    text
   end
 
   defp eventually(fun, attempts \\ 100)
@@ -1139,6 +896,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                artefact
              )
 
+    fixtures = Application.get_env(:jido_gralkor, :public_extracted_facts, [])
+    Application.put_env(:jido_gralkor, :public_extracted_facts, fixtures ++ [%{destination: "global", operator: "operator-one", fact: %{fact: content, sources: [%{reflection: "generalisations", source_description: "reflection:generalisations"}]}}])
     artefact
   end
 
@@ -1233,7 +992,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     assert_receive {:provider_tool_results_inspected, true, tool_results}
     assert tool_results != []
-    assert Enum.any?(tool_results, &(to_string(&1["output"]) =~ "evolves_from"))
+    assert Enum.any?(tool_results, &(to_string(&1["output"]) =~ "Reflection: generalisations"))
     answer
   end
 
@@ -1280,6 +1039,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                artefact
              )
 
+    fixtures = Application.get_env(:jido_gralkor, :public_extracted_facts, [])
+    Application.put_env(:jido_gralkor, :public_extracted_facts, fixtures ++ [%{destination: "global", operator: operator_id, fact: %{fact: content, sources: [%{reflection: "generalisations", source_description: "reflection:generalisations"}]}}])
     artefact
   end
 end
