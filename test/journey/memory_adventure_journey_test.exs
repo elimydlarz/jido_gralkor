@@ -978,10 +978,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     first_ingestion_id = "journey-generalisation-level-one"
 
     first_report = """
-    Aurora detected a configuration fault before customers were affected when
-    a reversible canary ran before the full deployment. The incident review
-    concluded that this deployment avoided broad customer impact because it
-    began with that reversible limited-scope trial.
+    The Payments Deployment requires the Rollback Checkpoint before release.
+    Aurora's incident review found that the Rollback Checkpoint caught a Payments
+    configuration fault in a reversible limited-scope canary before customers
+    were affected. Payments deployments therefore require the Rollback Checkpoint:
+    begin with a reversible limited-scope trial and check for faults before broad
+    rollout. This is the observed Payments deployment policy.
     """
 
     assert {:ok, first_representations} =
@@ -1026,11 +1028,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     A later operational review extends this preceding stored generalisation:
     #{first_content}
 
-    The same result now recurs beyond deployments. Database migrations and
-    feature releases also avoided customer-impacting failures when they began
-    with reversible limited-scope trials. Across deployments, migrations, and
-    feature releases, beginning a change with a reversible limited-scope trial
-    exposes faults before broad impact.
+    The same Payments policy now extends beyond deployments. The Payments Database
+    Migration and Payments Feature Release also require the Rollback Checkpoint.
+    Both avoided customer-impacting failures by starting with reversible limited-scope
+    trials at that checkpoint. The observed policy now applies to Payments deployments,
+    database migrations, and feature releases: each requires the Rollback Checkpoint
+    to expose faults in a reversible limited-scope trial before broad impact.
     """
 
     assert first_generalisation_artefact ==

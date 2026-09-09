@@ -250,7 +250,7 @@ defmodule Gralkor.GraphitiPool do
           "max_results" => max_results,
           "edge_types" => edge_types,
           "lenses" => lenses,
-          "group_id" => group_id
+          "group_id" => Client.sanitize_group_id(group_id)
         }
       )
 
