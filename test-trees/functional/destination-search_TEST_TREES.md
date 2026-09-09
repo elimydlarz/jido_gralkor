@@ -52,7 +52,7 @@ when a caller omits the result type or explicitly selects episodes
 
 where a caller explicitly selects facts
   then relevant relationships extracted in the selected Destinations are returned as structured fact records
-  and each fact retains every available originating episode identifier, source kind, and source description
+  and each fact retains originating episode identifiers, source kinds, and source descriptions
   and named Lens or Reflection provenance is exposed on each attributable fact source
   while one or more Lenses are supplied
     then only facts attributed to any selected Lens can contribute
