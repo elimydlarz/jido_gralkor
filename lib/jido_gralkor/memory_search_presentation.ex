@@ -24,21 +24,28 @@ defmodule JidoGralkor.MemorySearchPresentation do
     total = length(results)
     minimum_bytes = envelope_bytes(output([], total))
 
-    if minimum_bytes > max_bytes do
-      {:error,
-       {:memory_search_budget_too_small, %{max_bytes: max_bytes, minimum_bytes: minimum_bytes}}}
-    else
-      selected =
-        Enum.reduce(results, [], fn result, selected ->
-          candidate = selected ++ [result]
-          rendered = output(candidate, total)
+    complete = output(results, total)
 
-          if String.length(rendered.result) <= @max_chars and envelope_bytes(rendered) <= max_bytes,
-            do: candidate,
-            else: selected
-        end)
+    cond do
+      fits?(complete, max_bytes) ->
+        {:ok, complete}
 
-      {:ok, output(selected, total)}
+      minimum_bytes > max_bytes ->
+        {:error,
+         {:memory_search_budget_too_small, %{max_bytes: max_bytes, minimum_bytes: minimum_bytes}}}
+
+      true ->
+        selected =
+          Enum.reduce(results, [], fn result, selected ->
+            candidate = selected ++ [result]
+            rendered = output(candidate, total)
+
+            if fits?(rendered, max_bytes),
+              do: candidate,
+              else: selected
+          end)
+
+        {:ok, output(selected, total)}
     end
   end
 
@@ -47,8 +54,11 @@ defmodule JidoGralkor.MemorySearchPresentation do
       Enum.reduce(results, [], fn %{fact: fact}, groups ->
         Enum.reduce(source_headings(fact), groups, fn heading, groups ->
           case List.keyfind(groups, heading, 0) do
-            nil -> groups ++ [{heading, [fact.fact]}]
-            {^heading, facts} -> List.keyreplace(groups, heading, 0, {heading, facts ++ [fact.fact]})
+            nil ->
+              groups ++ [{heading, [fact.fact]}]
+
+            {^heading, facts} ->
+              List.keyreplace(groups, heading, 0, {heading, facts ++ [fact.fact]})
           end
         end)
       end)
@@ -83,6 +93,9 @@ defmodule JidoGralkor.MemorySearchPresentation do
 
     if headings == [], do: ["Source: unknown"], else: headings
   end
+
+  defp fits?(output, max_bytes),
+    do: String.length(output.result) <= @max_chars and envelope_bytes(output) <= max_bytes
 
   defp envelope_bytes(output), do: byte_size(Jason.encode!(%{ok: true, result: output}))
 end

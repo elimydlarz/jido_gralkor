@@ -169,6 +169,7 @@ defmodule Gralkor.GraphitiPool do
              max_results > 0 and is_list(opts) do
     instance = __MODULE__.for(server, group_id)
     edge_types = Keyword.get(opts, :edge_types)
+    lenses = Keyword.get(opts, :lenses, [])
 
     {raw, _} =
       Pythonx.eval(
@@ -182,15 +183,28 @@ defmodule Gralkor.GraphitiPool do
           [t.decode('utf-8') if isinstance(t, (bytes, bytearray)) else t for t in edge_types]
           if edge_types else None
         )
+        lens_names = [name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name for name in lenses]
+        gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+        lens_suffixes = tuple(f" [lens: {name}]" for name in lens_names)
         async def search_with_sources():
-          if types:
-            edges = await g.search(
-              q,
-              num_results=max_results,
-              search_filter=SearchFilters(edge_types=types),
+          filters = SearchFilters(edge_types=types)
+          if lens_names:
+            records, _, _ = await g.driver.execute_query(
+              '''
+              MATCH (episode:Episodic {group_id: $group_id})
+              WHERE any(suffix IN $lens_suffixes WHERE episode.source_description ENDS WITH suffix)
+              WITH collect(episode.uuid) AS episode_ids
+              MATCH ()-[edge:RELATES_TO]->()
+              WHERE edge.group_id = $group_id AND any(id IN edge.episodes WHERE id IN episode_ids)
+              RETURN edge.uuid AS uuid
+              ''',
+              group_id=gid,
+              lens_suffixes=list(lens_suffixes),
             )
-          else:
-            edges = await g.search(q, num_results=max_results)
+            filters.edge_uuids = [record['uuid'] for record in records]
+            if not filters.edge_uuids:
+              return []
+          edges = await g.search(q, num_results=max_results, search_filter=filters)
 
           episode_ids = list(dict.fromkeys(
             episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
@@ -220,6 +234,7 @@ defmodule Gralkor.GraphitiPool do
               }
               for episode_id in (getattr(edge, "episodes", None) or [])
               if episode_id in episodes_by_id
+              and (not lens_names or (episodes_by_id[episode_id].source_description or "").endswith(lens_suffixes))
             ]
             if sources:
               fact["sources"] = sources
@@ -233,7 +248,9 @@ defmodule Gralkor.GraphitiPool do
           "g" => instance,
           "query" => query,
           "max_results" => max_results,
-          "edge_types" => edge_types
+          "edge_types" => edge_types,
+          "lenses" => lenses,
+          "group_id" => group_id
         }
       )
 

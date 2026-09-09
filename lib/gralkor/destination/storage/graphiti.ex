@@ -70,11 +70,20 @@ defmodule Gralkor.Destination.Storage.Graphiti do
   @impl true
   def search(destination, operator_id, query, :facts, max_results, opts) do
     graph_id = Destination.graph_id(destination, operator_id)
-    search_opts = Keyword.take(opts, [:edge_types])
+    search_opts = Keyword.take(opts, [:edge_types, :lenses])
 
     case GraphitiPool.search(GraphitiPool, graph_id, query, max_results, search_opts) do
-      {:ok, facts} -> {:ok, facts}
-      {:error, _} = error -> error
+      {:ok, facts} ->
+        {:ok,
+         Enum.map(facts, fn fact ->
+           case Map.fetch(fact, :sources) do
+             {:ok, sources} -> Map.put(fact, :sources, Enum.map(sources, &fact_source/1))
+             :error -> fact
+           end
+         end)}
+
+      {:error, _} = error ->
+        error
     end
   end
 
@@ -144,6 +153,24 @@ defmodule Gralkor.Destination.Storage.Graphiti do
       {:ok, artefacts |> Enum.uniq_by(& &1.id) |> Enum.take(max_results)}
     end
   end
+
+  defp fact_source(%{source_description: description} = source) when is_binary(description) do
+    case Regex.run(~r/ \[lens: (.+)\]$/s, description) do
+      [_, lens] ->
+        Map.put(source, :lens, lens)
+
+      _ ->
+        case description do
+          "reflection:" <> reflection when reflection != "" ->
+            Map.put(source, :reflection, reflection)
+
+          _ ->
+            source
+        end
+    end
+  end
+
+  defp fact_source(source), do: source
 
   defp structure_episodes(episodes) do
     Enum.reduce_while(episodes, {:ok, []}, fn episode, {:ok, results} ->
