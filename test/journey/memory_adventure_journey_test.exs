@@ -128,8 +128,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       observability: %{redact_tool_args?: false},
       system_prompt: """
       Search long-term memory exactly once before answering, using a focused
-      query without Destination or Lens selectors. Apply the relevant evolved
-      generalisation in light of its preceding history and related observations.
+      query without Destination or Lens selectors. Apply the relevant retrieved
+      facts grouped under their Lens or Reflection source.
       Follow the requested answer format exactly.
       """,
       request_transformer: Gralkor.MemoryAdventureJourneyTest.JourneyRequestTransformer
@@ -1316,7 +1316,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   defp answer_field!(answer, label) do
-    labels = "RECOMMENDATION|PREDECESSOR|EVOLVED|RATIONALE"
+    labels = "RECOMMENDATION|RATIONALE"
 
     pattern =
       Regex.compile!("(?ims)^#{Regex.escape(label)}:\\s*(.*?)(?=^(?:#{labels}):|\\z)")
