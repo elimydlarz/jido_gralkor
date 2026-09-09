@@ -4,7 +4,7 @@ when the memory search tool runs with a usable query
   then the existing public Search capability is invoked once
   and the Search request carries the current operator
   and the Search request carries the usable query unchanged
-  and the Search request asks for stored episodes
+  and the Search request asks for extracted facts
   where the tool call supplies no Destination selector
     while the tool call supplies no Lens selector
       then the Search request leaves both selector dimensions unrestricted
@@ -19,14 +19,14 @@ when the memory search tool runs with a usable query
   while the tool context has no Gralkor runtime target
     then Search uses the untargeted application compatibility boundary
   while Search returns results
-    then the action result is the structured result list
-    and every returned episode's Destination and originating Lens or declaring Reflection remain identifiable
+    then the action result is readable source-grouped fact text
+    and each named originating Lens or Reflection is identified by its source heading
   if Search fails
     then the failure reason is returned to the caller unchanged
 
 when a consumer reads the memory search tool description
   then it directs the agent to search related observations and generalisations
-  and it directs the agent to apply relevant generalisations in light of their evolution histories and related observations
+  and it directs the agent to use the returned source-grouped facts
 
 if the memory search tool runs without a usable query
   then no Search is issued

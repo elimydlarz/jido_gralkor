@@ -37,9 +37,9 @@ when a fresh agent handles a request related to an evolved generalisation
   and every accessible registered Destination is searched
   and its results include relevant memory from the `operator`, `global`, and an application Destination
   and its results include relevant Lens-authored memory and relevant stored generalisations
-  and every result identifies its Destination and any originating Lens
-  and the answer identifies the retrieved deployment predecessor and newly covered feature-release scope
-  and the recommendation applies their reversible limited-scope lesson to the requested migration
+  and its readable fact bullets are grouped under the named originating Lens or Reflection
+  and the answer uses retrieved facts relevant to the requested migration
+  and the recommendation applies the retrieved reversible limited-scope lesson to the requested migration
 
 when the agent searches with both Destination and Lens selectors
   then relevant memory whose Destination and originating Lens both match the selectors is returned

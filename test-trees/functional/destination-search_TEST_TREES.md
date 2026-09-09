@@ -52,6 +52,12 @@ when a caller omits the result type or explicitly selects episodes
 
 where a caller explicitly selects facts
   then relevant relationships extracted in the selected Destinations are returned as structured fact records
+  and each fact retains every available originating episode identifier, source kind, and source description
+  and named Lens or Reflection provenance is exposed on each attributable fact source
+  while one or more Lenses are supplied
+    then only facts attributed to any selected Lens can contribute
+    and Lens filtering occurs before the per-Destination result limit
+    and only selected Lens sources contribute to the returned fact attribution
 
 where a caller explicitly selects nodes
   then relevant entities extracted in the selected Destinations are returned
@@ -77,9 +83,9 @@ if search supplies an unsupported result type
   then search fails before any Destination query is started
   and the error identifies the unsupported result type
 
-if search combines one or more Lenses with a non-episode result type
+if search combines one or more Lenses with a node or artefact result type
   then search fails before any Destination query is started
-  and the error identifies that Lens selection requires episode results
+  and the error identifies that Lens selection requires episode or fact results
 
 if search supplies any Destination or Lens selection that is not a list of registered non-blank names
   then search fails before any Destination query is started

@@ -20,11 +20,11 @@ when an agent invokes memory addition and its background write fails
 
 when an agent invokes memory search with a usable query
   then returned results are scoped to the current operator
-  and the usable query selects relevant stored episodes
+  and the usable query selects relevant extracted facts
   and returned results obey the optional `destinations` and `lenses` selectors supplied for that invocation
-  and the action returns structured results with their Destination and originating Lens or declaring Reflection
+  and the action returns one readable string with fact bullets grouped under named Lens or Reflection headings
   and relevant stored generalisations can contribute beside related ingested information
-  and each returned generalisation exposes its exact content, evolution-depth level, and `evolves_from` history
+  and the presentation adds no artefact identifiers, evolution-depth levels, or lineage metadata
   where both selectors are omitted or empty
     then every accessible registered Destination can contribute
   where only Destinations are supplied
@@ -39,12 +39,12 @@ when an agent invokes memory search with a usable query
     then the failure is returned unchanged
 
 when a fresh agent handles a request related to an evolved generalisation
-  then the answer identifies the retrieved deployment predecessor and newly covered feature-release scope
-  and the recommendation applies their reversible limited-scope lesson to the requested migration
+  then the answer uses the retrieved facts relevant to the requested migration
+  and the recommendation applies the retrieved reversible limited-scope lesson to the requested migration
 
 when an agent receives the memory search tool
   then its description directs the agent to search related observations and generalisations
-  and its description directs the agent to apply relevant generalisations in light of their evolution histories and related observations
+  and its description directs the agent to use the returned source-grouped facts
 
 if an agent invokes memory search without a usable query
   then no Search is issued
@@ -63,27 +63,40 @@ when a consumer prepares the first ReAct iteration
 when a consumer prepares a later ReAct iteration
   then every request override is returned unchanged
 
-when structured memory search results cross the model tool-output boundary
-  then one JSON decode exposes complete attributable results whose combined text exceeds the per-string limit
-  while one source text exceeds the framework string limit
-    then the model receives the complete source text
-  while a Reflection payload includes evolution history
-    then the model receives the complete structured history
+when a consumer explicitly formats structured fact search results
+  then named Lens sources have headings of the form `Lens: <name>`
+  and named Reflection sources have headings of the form `Reflection: <name>`
+  and each source heading is followed by bullets containing its returned fact text
+  and source groups retain first-appearance order
+  and facts retain retrieval order within each source group
+  and formatting leaves the canonical structured search results unchanged
+  while a fact has several named sources
+    then the fact appears once under each distinct named source
+  while a Lens and a Reflection share a name
+    then their facts remain in separate source groups
+  while a fact has no named Lens or Reflection provenance
+    then the fact appears under `Source: unknown`
+  while search returns no facts
+    then the text explicitly states that no matching facts were found
 
-when memory search results are prepared for a model byte budget
-  then the serialized success envelope fits the configured byte budget
-  and the result list contains only complete attributed results in their original order
-  and omission counts and byte-budget reasons are reported outside the result list
-  while an individual result exceeds the budget
-    then that whole result is omitted while later fitting results remain available
-  while the budget cannot hold an empty success envelope with omission metadata
+when memory search formats facts for the consuming agent
+  then the complete text including headings and omission notices stays within 16384 characters
+  and the serialized success envelope fits the configured byte budget
+  and every included fact retains its complete text
+  while a fact cannot fit within the response limits
+    then that whole fact is omitted while later fitting facts remain eligible
+    and the text reports the omitted fact count and response-limit reason
+  while the byte budget cannot hold an empty response with the required notice
     then an explicit budget error is returned
-  if the budget is not a positive integer
+  if the byte budget is not a positive integer
     then the action rejects the budget before searching memory
 
-when canonical memory results cross the outgoing provider boundary
-  then deeply nested history and domain keys reach the provider unchanged
-  and source fields longer than 16384 characters reach the provider unchanged
-  and more than 100 results reach the provider without synthetic result entries
-  while a byte budget omits results
-    then the provider receives complete retained results and exact omission metadata within the budget
+when formatted memory search results cross the outgoing provider boundary through unmodified Jido AI 2.3.0
+  then one decode of the tool envelope exposes the exact readable string returned by the action
+  and the tool result contains readable fact bullets rather than a JSON-encoded result list
+  while the canonical Reflection payload contains deep lineage or domain keys ending in `_key`
+    then the provider receives the retained extracted fact text unchanged
+  while more than 100 facts fit within the response limits
+    then the provider receives every formatted fact without a synthetic omission item
+  while a source fact exceeds the response limits
+    then the provider receives an explicit omission notice instead of a sliced fact
