@@ -449,6 +449,36 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  result_type: :facts
                })
     end
+    test "and each fact retains originating episode identifiers, source kinds, and source descriptions" do
+      use_native_fact_storage()
+      assert {:ok, [%{fact: %{sources: sources}} | _]} = fact_search([])
+      assert Enum.map(sources, &Map.take(&1, [:id, :source_kind, :source_description])) == [
+        %{id: "beta", source_kind: "document", source_description: "notes [lens: first-beta]"}
+      ]
+    end
+    test "and named Lens or Reflection provenance is exposed on each attributable fact source" do
+      use_native_fact_storage()
+      assert {:ok, results} = fact_search([])
+      assert Enum.at(results, 0).fact.sources |> hd() |> Map.fetch!(:lens) == "first-beta"
+      assert Enum.at(results, 2).fact.sources |> hd() |> Map.fetch!(:reflection) == "lessons"
+    end
+  end
+
+  describe "where a caller explicitly selects facts > while one or more Lenses are supplied" do
+    test "then only facts attributed to any selected Lens can contribute" do
+      use_native_fact_storage()
+      assert {:ok, [%{fact: %{fact: "selected fact"}}]} = fact_search(["first-alpha"])
+    end
+    test "and Lens filtering occurs before the per-Destination result limit" do
+      use_native_fact_storage()
+      assert {:ok, [%{fact: %{fact: "selected fact"}}]} = fact_search(["first-alpha"], 1)
+    end
+    test "and only selected Lens sources contribute to the returned fact attribution" do
+      use_native_fact_storage()
+      assert {:ok, [%{fact: %{sources: sources}}]} = fact_search(["first-alpha"])
+      assert Enum.map(sources, & &1.id) == ["alpha"]
+      assert Enum.map(sources, & &1.lens) == ["first-alpha"]
+    end
   end
 
   describe "where a caller explicitly selects nodes" do
@@ -817,30 +847,80 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "if search combines one or more Lenses with a non-episode result type" do
+  describe "if search combines one or more Lenses with a node or artefact result type" do
     test "then search fails before any Destination query is started" do
-      assert_raise ArgumentError, ~r/Lens selection requires episode results/, fn ->
+      assert_raise ArgumentError, ~r/Lens selection requires episode or fact results/, fn ->
         Client.search(%Search{
           operator_id: "operator-one",
           query: "question",
           lenses: ["first-alpha"],
-          result_type: :facts
+          result_type: :nodes
         })
       end
 
       refute_receive {:destination_search, _, _, _, _, _, _}
     end
 
-    test "and the error identifies that Lens selection requires episode results" do
-      assert_raise ArgumentError, ~r/Lens selection requires episode results/, fn ->
+    test "and the error identifies that Lens selection requires episode or fact results" do
+      assert_raise ArgumentError, ~r/Lens selection requires episode or fact results/, fn ->
         Client.search(%Search{
           operator_id: "operator-one",
           query: "question",
           lenses: ["first-alpha"],
-          result_type: :facts
+          result_type: :nodes
         })
       end
     end
+  end
+
+  defp fact_search(lenses, maximum \\ 20) do
+    Client.search(%Search{operator_id: "operator-one", query: "fact", destinations: ["first"], result_type: :facts, lenses: lenses, max_results: maximum})
+  end
+
+  defp use_native_fact_storage do
+    Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.Graphiti)
+    {graphiti, _} = Pythonx.eval("""
+    from types import SimpleNamespace
+    from graphiti_core.nodes import EpisodeType
+    class FactFixture:
+        def __init__(self):
+            self.episodes = {
+                'beta': SimpleNamespace(uuid='beta', source=EpisodeType.text, source_description='notes [lens: first-beta]'),
+                'alpha': SimpleNamespace(uuid='alpha', source=EpisodeType.text, source_description='notes [lens: first-alpha]'),
+                'reflection': SimpleNamespace(uuid='reflection', source=EpisodeType.json, source_description='reflection:lessons'),
+            }
+            self.edges = [
+                self.edge('other', 'unselected fact', ['beta']),
+                self.edge('selected', 'selected fact', ['beta', 'alpha']),
+                self.edge('reflected', 'reflected fact', ['reflection']),
+            ]
+            self.driver = self
+            self.graph_operations_interface = self
+        def edge(self, uuid, fact, episodes):
+            return SimpleNamespace(uuid=uuid, fact=fact, episodes=episodes, created_at=None, valid_at=None, invalid_at=None, expired_at=None)
+        async def execute_query(self, query, **params):
+            assert 'RELATES_TO' in query
+            assert params['group_id']
+            suffixes = tuple(params['lens_suffixes'])
+            ids = {key for key, episode in self.episodes.items() if episode.source_description.endswith(suffixes)}
+            return ([{'uuid': edge.uuid} for edge in self.edges if any(i in ids for i in edge.episodes)], None, None)
+        async def search(self, query, num_results=20, search_filter=None):
+            edges = self.edges
+            if search_filter and search_filter.edge_uuids is not None:
+                edges = [edge for edge in edges if edge.uuid in search_filter.edge_uuids]
+            return edges[:num_results]
+        async def episodic_node_get_by_uuids(self, cls, driver, uuids):
+            return [self.episodes[uuid] for uuid in uuids]
+    FactFixture()
+    """, %{})
+    start_supervised!({Gralkor.GraphitiPool,
+      name: Gralkor.GraphitiPool, table: :gralkor_graphiti_instances,
+      falkordb_spec: {:embedded, "/tmp/never_used"},
+      construct_falkor_db: fn _ -> :fixture end,
+      construct_shared_clients: fn _, _ -> %{llm_client: nil, embedder: nil, cross_encoder: nil} end,
+      construct_instance: fn _, _, _ -> graphiti end,
+      initialise_instance: fn _ -> :ok end, warmup: false,
+      install_loop_fn: &Gralkor.Python.install_async_runtime/0})
   end
 
   defp use_in_memory_storage do
