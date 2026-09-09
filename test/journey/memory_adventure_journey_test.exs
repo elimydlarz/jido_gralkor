@@ -133,6 +133,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       Follow the requested answer format exactly.
       """,
       request_transformer: Gralkor.MemoryAdventureJourneyTest.JourneyRequestTransformer
+
+    def on_before_cmd(agent, action) do
+      super(%{agent | state: Map.put(agent.state, :user_name, "Eli")}, action)
+    end
   end
 
   setup_all do
@@ -486,7 +490,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   describe "when the agent searches with both Destination and Lens selectors" do
     test "then relevant memory whose Destination and originating Lens both match the selectors is returned",
          %{adventure: adventure} do
-      assert adventure.selected_memory_search != []
+      assert adventure.selected_memory_search != [],
+             inspect(adventure.post_selector_memory_search, limit: :infinity)
 
       assert Enum.all?(adventure.selected_memory_search, fn result ->
                has_originating_lens?([result], "operator", "work-notes")
