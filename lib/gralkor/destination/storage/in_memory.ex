@@ -46,6 +46,7 @@ defmodule Gralkor.Destination.Storage.InMemory do
   @impl true
   def search(destination, operator_id, _query, :facts, max_results, opts) do
     lenses = Keyword.get(opts, :lenses, [])
+
     results =
       destination
       |> Destination.graph_id(operator_id)

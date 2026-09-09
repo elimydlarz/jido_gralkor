@@ -9,7 +9,7 @@ when an agent with a mounted memory plugin invokes memory search
   and optional Destination and Lens selectors belong only to that search invocation
   and search selectors neither default from nor change the configured ingestion Lens
   and a turn-selected ingestion Lens neither defaults nor restricts memory search
-  and every returned episode identifies its Destination and originating Lens or declaring Reflection
+  and returned facts are grouped under their named originating Lens or Reflection
   where no conversation thread has been committed
     then memory search still runs for the current operator
   where the Destination selector is omitted or empty

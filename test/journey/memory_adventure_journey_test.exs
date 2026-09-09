@@ -430,10 +430,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
           &(&1.destination == "operations")
         )
 
-      assert has_evolved_generalisation?(
-               operations_results,
-               adventure.later_generalisation
-             )
+      assert has_declaring_reflection?(operations_results, "operations", "generalisations")
     end
 
     test "and its results include relevant Lens-authored memory and relevant stored generalisations",
@@ -450,27 +447,26 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                "generalisations"
              )
 
-      assert has_evolved_generalisation?(
+      assert has_declaring_reflection?(
                adventure.default_memory_search,
-               adventure.later_generalisation
+               "global",
+               "generalisations"
              )
     end
 
-    test "and every result identifies its Destination and any originating Lens",
+    test "and its readable fact bullets are grouped under the named originating Lens or Reflection",
          %{adventure: adventure} do
-      assert every_episode_has_provenance?(adventure.default_memory_search)
+      assert adventure.memory_search_text =~ "Lens: work-notes\n- "
+      assert adventure.memory_search_text =~ "Reflection: generalisations\n- "
     end
 
-    test "and the answer identifies the retrieved deployment predecessor and newly covered feature-release scope",
+    test "and the answer uses retrieved facts relevant to the requested migration",
          %{adventure: adventure} do
-      predecessor = answer_field!(adventure.agent_answer, "PREDECESSOR")
-      evolved = answer_field!(adventure.agent_answer, "EVOLVED")
-
-      assert Regex.match?(~r/\bdeploy\w*\b/i, predecessor)
-      assert Regex.match?(~r/\bfeatures?(?:[-\s]+(?:releases?|rollouts?))?\b/i, evolved)
+      recommendation = answer_field!(adventure.agent_answer, "RECOMMENDATION")
+      assert Regex.match?(~r/\b(?:Payments|migration)\b/i, recommendation)
     end
 
-    test "and the recommendation applies their reversible limited-scope lesson to the requested migration",
+    test "and the recommendation applies the retrieved reversible limited-scope lesson to the requested migration",
          %{adventure: adventure} do
       recommendation = answer_field!(adventure.agent_answer, "RECOMMENDATION")
       rationale = answer_field!(adventure.agent_answer, "RATIONALE")
@@ -930,6 +926,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       consumer_returned_artefact: consumer_returned_artefact,
       consumer_reflection_outcome: consumer_reflection_result.outcome,
       default_memory_search: default_memory_search,
+      memory_search_text: agent_request.memory_search_text,
       memory_search_arguments: agent_request.memory_search_arguments,
       memory_search_completion_count: agent_request.memory_search_completion_count,
       agent_answer: agent_request.answer,
@@ -1199,22 +1196,19 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     assert {:ok, %{result: result}} =
              MemorySearch.run(params, %{agent_id: operator_id, gralkor_runtime: agent})
 
-    assert is_list(result)
-    result
+    assert is_binary(result)
+    facts_matching_text(agent, operator_id, params, result)
   end
 
   defp agent_request(agent) do
     prompt = """
     A Payments database migration needs a rollout recommendation.
     Search related memory first. Base the recommendation on the most relevant
-    evolved generalisation, its evolves_from history, and the related observations;
-    do not rely on generic rollout advice alone.
+    facts grouped by Lens and Reflection source; do not rely on generic rollout advice alone.
 
     Answer with exactly these fields:
     RECOMMENDATION: <the rollout approach>
-    PREDECESSOR: level <integer>; scope <the predecessor's scope>
-    EVOLVED: level <integer>; newly covered scope <a scope other than this migration>
-    RATIONALE: <how the observations and evolution history support the recommendation>
+    RATIONALE: <how the retrieved facts support the recommendation>
     """
 
     assert {:ok, %{request: request, events: event_stream}} =
@@ -1235,7 +1229,15 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     assert [%{data: %{arguments: arguments}}] = memory_search_started
     assert [completed] = memory_search_completed
 
-    results = decode_memory_search_result(completed)
+    text = decode_memory_search_result(completed)
+
+    params = %{
+      query: Map.get(arguments, :query, Map.get(arguments, "query")),
+      destinations: Map.get(arguments, :destinations, Map.get(arguments, "destinations", [])),
+      lenses: Map.get(arguments, :lenses, Map.get(arguments, "lenses", []))
+    }
+
+    results = facts_matching_text(agent, @operator_one, params, text)
 
     %{
       answer: answer,
@@ -1244,14 +1246,15 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         lenses: Map.get(arguments, :lenses, Map.get(arguments, "lenses"))
       },
       memory_search_completion_count: length(memory_search_completed),
-      memory_search_results: results
+      memory_search_results: results,
+      memory_search_text: text
     }
   end
 
   defp decode_memory_search_result(%{
          data: %{result: {:ok, %{result: results}, _effects}}
        }) do
-    assert is_list(results)
+    assert is_binary(results)
     results
   end
 
@@ -1285,45 +1288,32 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   defp has_originating_lens?(results, destination, lens) do
-    Enum.any?(results, fn
-      %{destination: ^destination, episode: %{lens: ^lens}} -> true
-      %{"destination" => ^destination, "episode" => %{"lens" => ^lens}} -> true
-      _ -> false
+    Enum.any?(results, fn %{destination: selected, fact: fact} ->
+      selected == destination and
+        Enum.any?(Map.get(fact, :sources, []), &(Map.get(&1, :lens) == lens))
     end)
   end
 
   defp has_declaring_reflection?(results, destination, reflection) do
-    Enum.any?(results, fn
-      %{destination: ^destination, episode: %{reflection: ^reflection}} -> true
-      _ -> false
+    Enum.any?(results, fn %{destination: selected, fact: fact} ->
+      selected == destination and
+        Enum.any?(Map.get(fact, :sources, []), &(Map.get(&1, :reflection) == reflection))
     end)
   end
 
-  defp has_evolved_generalisation?(results, %{
-         "content" => expected_content,
-         "level" => expected_level
-       }) do
-    Enum.any?(results, fn
-      %{
-        episode: %{
-          reflection: "generalisations",
-          artefact: %{payload: %{"generalisations" => generalisations}}
-        }
-      } ->
-        Enum.any?(generalisations, fn
-          %{"content" => ^expected_content, "level" => ^expected_level, "evolves_from" => [_ | _]} ->
-            true
+  defp facts_matching_text(agent, operator, params, text) do
+    assert {:ok, facts} =
+             Client.search(agent, %Search{
+               operator_id: operator,
+               query: params.query,
+               destinations: Map.get(params, :destinations, []),
+               lenses: Map.get(params, :lenses, []),
+               result_type: :facts
+             })
 
-          _ ->
-            false
-        end)
-
-      _ ->
-        false
-    end)
+    assert {:ok, %{result: ^text}} = JidoGralkor.MemorySearchPresentation.for_model(facts, 65_536)
+    facts
   end
-
-  defp has_evolved_generalisation?(_results, _generalisation), do: false
 
   defp answer_field!(answer, label) do
     labels = "RECOMMENDATION|PREDECESSOR|EVOLVED|RATIONALE"
@@ -1341,18 +1331,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       _ ->
         flunk("expected answer field #{label}, got: #{inspect(answer)}")
     end
-  end
-
-  defp every_episode_has_provenance?([]), do: false
-
-  defp every_episode_has_provenance?(results) do
-    Enum.all?(results, fn
-      %{destination: destination, episode: episode} when is_binary(destination) ->
-        is_binary(episode[:lens]) or is_binary(episode[:reflection])
-
-      _ ->
-        false
-    end)
   end
 
   defp episode_content(%{artefact: artefact}), do: Jason.encode!(artefact.payload)

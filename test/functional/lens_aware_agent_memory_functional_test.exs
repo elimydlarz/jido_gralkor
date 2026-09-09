@@ -27,6 +27,15 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
   end
 
+  defmodule SourceFactFixture do
+    @behaviour Gralkor.Destination.Storage
+    def search(%{name: "observations"}, _, _, :facts, _, _),
+      do: {:ok, [%{fact: "observed fact", sources: [%{lens: "observations"}]}]}
+
+    def search(%{name: "global"}, _, _, :facts, _, _),
+      do: {:ok, [%{fact: "reflected fact", sources: [%{reflection: "generalisations"}]}]}
+  end
+
   setup do
     previous_client = Application.get_env(:jido_gralkor, :client)
     previous_destinations = Application.get_env(:jido_gralkor, :destinations)
@@ -134,15 +143,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  search_context
                )
 
-      assert [
-               %{
-                 destination: "decisions",
-                 episode: %{
-                   content: "selected decision memory",
-                   lens: "decisions"
-                 }
-               }
-             ] = result
+      assert result == "Lens: decisions\n- selected decision memory"
 
       assert search_context.lens == "observations"
     end
@@ -155,7 +156,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(mounted_agent)
       memory_context = Map.put(tool_context, :agent_id, mounted_agent.id)
 
-      assert {:ok, %{result: []}} =
+      assert {:ok, %{result: "No matching facts."}} =
                MemorySearch.run(
                  %{query: "decision", destinations: ["decisions"], lenses: ["decisions"]},
                  memory_context
@@ -207,81 +208,20 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  Map.put(tool_context, :agent_id, mounted_agent.id)
                )
 
-      assert [
-               %{
-                 destination: "observations",
-                 episode: %{
-                   content: "observation visible from a decision turn",
-                   lens: "observations"
-                 }
-               }
-             ] = result
+      assert result == "Lens: observations\n- observation visible from a decision turn"
     end
 
-    test "and every returned episode identifies its Destination and originating Lens or declaring Reflection" do
-      assert :ok =
-               Client.ingest(%Ingest{
-                 id: "provenance-lens-episode",
-                 operator_id: "operator-one",
-                 lens: "observations",
-                 source_kind: :document,
-                 content: "lensed provenance",
-                 source_description: "functional"
-               })
+    test "and returned facts are grouped under their named originating Lens or Reflection" do
+      Application.put_env(:jido_gralkor, :destination_storage, SourceFactFixture)
 
-      reflection = %Gralkor.Reflection{
-        name: "generalisations",
-        outputs: [
-          %{
-            kind: :destination,
-            destination: Gralkor.Destination.Registry.fetch!("global"),
-            ontology: Gralkor.DefaultOntology
-          }
-        ],
-        chain_of_thought: nil
-      }
-
-      artefact = %Gralkor.Artefact{
-        id: "provenance-generalisation",
-        payload: %{
-          "generalisations" => [
-            %{"content" => "evolved provenance", "level" => 1, "evolves_from" => []}
-          ]
-        }
-      }
-
-      assert :ok =
-               Gralkor.Destination.Storage.InMemory.put_artefact(
-                 Enum.find(reflection.outputs, &(&1.kind == :destination)),
-                 reflection.name,
-                 "operator-one",
-                 artefact
-               )
-
-      assert {:ok, %{result: result}} =
+      assert {:ok, %{result: text}} =
                MemorySearch.run(
                  %{query: "provenance", destinations: ["observations", "global"]},
                  %{agent_id: "operator-one"}
                )
 
-      assert [
-               %{
-                 destination: "observations",
-                 episode: %{content: "lensed provenance", lens: "observations"}
-               },
-               %{
-                 destination: "global",
-                 episode: %{
-                   artefact: returned_artefact,
-                   reflection: "generalisations"
-                 }
-               }
-             ] = result
-
-      assert returned_artefact == %{
-               id: "provenance-generalisation",
-               payload: artefact.payload
-             }
+      assert text ==
+               "Lens: observations\n- observed fact\n\nReflection: generalisations\n- reflected fact"
     end
   end
 
@@ -314,7 +254,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  Map.put(tool_context, :agent_id, fresh_agent.id)
                )
 
-      assert [%{destination: "observations"}] = result
+      assert result == "Lens: observations\n- first-turn searchable memory"
     end
   end
 
@@ -340,12 +280,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, %{result: result}} =
                MemorySearch.run(%{query: "memory"}, %{agent_id: "operator-one"})
 
-      assert Enum.map(result, & &1.destination) == [
-               "operator",
-               "global",
-               "observations",
-               "decisions"
-             ]
+      assert result ==
+               "Lens: operator\n- operator memory\n\nLens: shared-generalisations\n- global memory\n\nLens: observations\n- observation memory\n\nLens: decisions\n- decision memory"
     end
   end
 
