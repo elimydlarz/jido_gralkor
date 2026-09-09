@@ -23,7 +23,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
   use Jido.Action,
     name: "memory_search",
     description:
-      "Search related stored observations and generalisations. Apply relevant generalisations in light of their evolution histories and related observations. Use a specific, focused query.",
+      "Search related stored observations and generalisations. Use the returned source-grouped facts. Use a specific, focused query.",
     schema: [
       query: [type: :string, default: "", doc: "The search query"],
       destinations: [

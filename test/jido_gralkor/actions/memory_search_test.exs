@@ -18,17 +18,8 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
          opts}
       )
 
-      episode =
-        if destination.name == "global" do
-          %{
-            artefact: %{id: "generalisation-one", payload: %{"generalisations" => []}},
-            reflection: "generalisations"
-          }
-        else
-          %{content: "selected #{destination.name} memory", lens: destination.name}
-        end
-
-      {:ok, [episode]}
+      source = if destination.name == "global", do: %{reflection: "generalisations"}, else: %{lens: destination.name}
+      {:ok, [%{fact: "selected #{destination.name} memory", sources: [source]}]}
     end
   end
 
@@ -89,7 +80,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     test "and the Search request carries the current operator" do
       assert {:ok, _result} = run_search(%{query: "launch", destinations: ["observations"]})
 
-      assert_receive {:destination_search, "observations", "operator-one", "launch", :episodes,
+      assert_receive {:destination_search, "observations", "operator-one", "launch", :facts,
                       20, []}
     end
 
@@ -98,14 +89,14 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
       assert {:ok, _result} = run_search(%{query: query, destinations: ["observations"]})
 
-      assert_receive {:destination_search, "observations", "operator-one", ^query, :episodes, 20,
+      assert_receive {:destination_search, "observations", "operator-one", ^query, :facts, 20,
                       []}
     end
 
-    test "and the Search request asks for stored episodes" do
+    test "and the Search request asks for extracted facts" do
       assert {:ok, _result} = run_search(%{query: "launch", destinations: ["observations"]})
 
-      assert_receive {:destination_search, "observations", "operator-one", "launch", :episodes,
+      assert_receive {:destination_search, "observations", "operator-one", "launch", :facts,
                       20, []}
     end
   end
@@ -115,7 +106,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       assert {:ok, _result} = run_search(%{query: "launch"})
 
       for destination <- ["operator", "global", "observations", "decisions"] do
-        assert_receive {:destination_search, ^destination, "operator-one", "launch", :episodes,
+        assert_receive {:destination_search, ^destination, "operator-one", "launch", :facts,
                         20, []}
       end
 
@@ -132,7 +123,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                })
 
       for destination <- ["observations", "decisions"] do
-        assert_receive {:destination_search, ^destination, "operator-one", "launch", :episodes,
+        assert_receive {:destination_search, ^destination, "operator-one", "launch", :facts,
                         20, []}
       end
 
@@ -145,7 +136,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       assert {:ok, _result} = run_search(%{query: "launch", lenses: ["decisions"]})
 
       for destination <- ["operator", "global", "observations", "decisions"] do
-        assert_receive {:destination_search, ^destination, "operator-one", "launch", :episodes,
+        assert_receive {:destination_search, ^destination, "operator-one", "launch", :facts,
                         20, [lenses: ["decisions"]]}
       end
 
@@ -163,7 +154,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                })
 
       for destination <- ["observations", "decisions"] do
-        assert_receive {:destination_search, ^destination, "operator-one", "launch", :episodes,
+        assert_receive {:destination_search, ^destination, "operator-one", "launch", :facts,
                         20, [lenses: ["decisions", "observations"]]}
       end
 
@@ -184,48 +175,14 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   end
 
   describe "when the memory search tool runs with a usable query > while Search returns results" do
-    test "then the action result is the structured result list" do
-      assert {:ok, %{result: result}} =
-               run_search(%{
-                 query: "launch",
-                 destinations: ["observations", "global"]
-               })
-
-      assert [
-               %{
-                 destination: "observations",
-                 episode: %{
-                   content: "selected observations memory",
-                   lens: "observations"
-                 }
-               },
-               %{
-                 destination: "global",
-                 episode: %{
-                   artefact: %{id: "generalisation-one", payload: %{"generalisations" => []}},
-                   reflection: "generalisations"
-                 }
-               }
-             ] = result
+    test "then the action result is readable source-grouped fact text" do
+      assert {:ok, %{result: text}} = run_search(%{query: "launch", destinations: ["observations", "global"]})
+      assert text == "Lens: observations\n- selected observations memory\n\nReflection: generalisations\n- selected global memory"
     end
-
-    test "and every returned episode's Destination and originating Lens or declaring Reflection remain identifiable" do
-      assert {:ok, %{result: result}} =
-               run_search(%{
-                 query: "launch",
-                 destinations: ["observations", "global"]
-               })
-
-      assert [
-               %{
-                 destination: "observations",
-                 episode: %{lens: "observations"}
-               },
-               %{
-                 destination: "global",
-                 episode: %{reflection: "generalisations"}
-               }
-             ] = result
+    test "and each named originating Lens or Reflection is identified by its source heading" do
+      assert {:ok, %{result: text}} = run_search(%{query: "launch", destinations: ["observations", "global"]})
+      assert text =~ "Lens: observations\n"
+      assert text =~ "Reflection: generalisations\n"
     end
   end
 
@@ -248,9 +205,9 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                "Search related stored observations and generalisations"
     end
 
-    test "and it directs the agent to apply relevant generalisations in light of their evolution histories and related observations" do
+    test "and it directs the agent to use the returned source-grouped facts" do
       assert MemorySearch.__action_metadata__().description =~
-               "Apply relevant generalisations in light of their evolution histories and related observations"
+               "Use the returned source-grouped facts"
     end
   end
 
@@ -316,7 +273,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                %{agent_id: "operator-one", gralkor_runtime: self()}
              )
 
-    assert_receive {:destination_search, "runtime-notes", "operator-one", "launch", :episodes, 20,
+    assert_receive {:destination_search, "runtime-notes", "operator-one", "launch", :facts, 20,
                     []}
 
     refute_receive {:destination_search, "compat-notes", _, _, _, _, _}
@@ -331,7 +288,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                %{agent_id: "operator-one"}
              )
 
-    assert_receive {:destination_search, "compat-notes", "operator-one", "launch", :episodes, 20,
+    assert_receive {:destination_search, "compat-notes", "operator-one", "launch", :facts, 20,
                     []}
   end
 

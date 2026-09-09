@@ -465,11 +465,11 @@ defmodule Gralkor.Client do
   end
 
   defp validate_lens_result_type!([], _result_type), do: :ok
-  defp validate_lens_result_type!(_lenses, :episodes), do: :ok
+  defp validate_lens_result_type!(_lenses, type) when type in [:episodes, :facts], do: :ok
 
   defp validate_lens_result_type!(_lenses, result_type) do
     raise ArgumentError,
-          "Lens selection requires episode results, got #{inspect(result_type)}"
+          "Lens selection requires episode or fact results, got #{inspect(result_type)}"
   end
 
   @spec validate_max_results!(term()) :: :ok

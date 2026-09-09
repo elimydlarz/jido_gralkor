@@ -44,11 +44,13 @@ defmodule Gralkor.Destination.Storage.InMemory do
   end
 
   @impl true
-  def search(destination, operator_id, _query, :facts, max_results, _opts) do
+  def search(destination, operator_id, _query, :facts, max_results, opts) do
+    lenses = Keyword.get(opts, :lenses, [])
     results =
       destination
       |> Destination.graph_id(operator_id)
       |> LensStorage.episodes()
+      |> Enum.filter(&(lenses == [] or &1.lens in lenses))
       |> Enum.take(max_results)
       |> Enum.map(&%{fact: &1.content, sources: [Map.take(&1, [:lens, :source_description])]})
 
