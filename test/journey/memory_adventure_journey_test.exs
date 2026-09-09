@@ -651,39 +651,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                )
              )
 
-    IO.inspect(
-      %{
-        first: first_generalisation,
-        later: later_generalisation,
-        operator_facts:
-          search(@operator_one, ["operator"], :facts, "reversible deployment migration trial"),
-        global_facts:
-          search(@operator_one, ["global"], :facts, "reversible deployment migration trial"),
-        operations_facts:
-          search(@operator_one, ["operations"], :facts, "reversible deployment migration trial")
-      },
-      label: "JOURNEY_FACT_DIAGNOSTIC",
-      limit: :infinity
-    )
-
-    for group <- ["operator/#{@operator_one}", "global", "operations"] do
-      graph = GraphitiPool.for(GraphitiPool, group)
-
-      {raw, _} =
-        Pythonx.eval(
-          """
-          import asyncio
-          asyncio._gralkor_run(g.driver.execute_query('MATCH (n)-[e:RELATES_TO]->(m) RETURN n.name AS source, m.name AS target, e.fact AS fact, e.group_id AS group_id, e.episodes AS episodes'))[0]
-          """,
-          %{"g" => graph}
-        )
-
-      IO.inspect(Pythonx.decode(raw), label: "JOURNEY_GRAPH_#{group}", limit: :infinity)
-    end
-
-    agent_request = agent_request(agent)
-    default_memory_search = agent_request.memory_search_results
-
     implicit_episodes =
       search_until(
         @operator_one,
@@ -792,6 +759,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     :ok = Client.replace(agent, replacement("Ledger", "old"))
     :ok = Client.replace(agent, replacement("Clearing", "current"))
+
+    agent_request = agent_request(agent)
+    default_memory_search = agent_request.memory_search_results
 
     {:ok, implicit_memory} =
       Native.recall(
