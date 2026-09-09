@@ -651,6 +651,18 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                )
              )
 
+    IO.inspect(
+      %{
+        first: first_generalisation,
+        later: later_generalisation,
+        operator_facts:
+          search(@operator_one, ["operator"], :facts, "reversible deployment migration trial"),
+        global_facts:
+          search(@operator_one, ["global"], :facts, "reversible deployment migration trial"),
+        operations_facts:
+          search(@operator_one, ["operations"], :facts, "reversible deployment migration trial")
+      }, label: "JOURNEY_FACT_DIAGNOSTIC", limit: :infinity)
+
     agent_request = agent_request(agent)
     default_memory_search = agent_request.memory_search_results
 
