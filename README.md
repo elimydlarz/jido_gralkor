@@ -459,6 +459,20 @@ The physical encoding replaces the former lossy `-` and `/` to `_` normalisation
 
 **Memory search results.** `Gralkor.Client.search/1,2` returns structured records for consumers that control their own presentation. The `memory_search` action requests Graphiti facts and returns readable text in `{:ok, %{result: text}}`: named `Lens:` or `Reflection:` headings followed by fact bullets. It adds no artefact IDs or evolution-history metadata. The explicit `JidoGralkor.MemorySearchPresentation.for_model/2` formatter retains complete facts within the 16,384-character text limit and `tool_context[:memory_search_max_bytes]` (65,536 bytes by default for the complete serialized envelope), with an explicit omitted-fact count when necessary. It works with unmodified Jido AI 2.3.0. See [the schema, format, and consumer migration](DESTINATIONS.md#consumer-migration-and-model-delivery).
 
+For example, the consuming agent receives text like:
+
+```text
+Lens: jira
+- Payment retries must use an idempotency key.
+- The settlement worker retries failed requests three times.
+
+Reflection: generalisations
+- Begin Payments migrations with a reversible, limited-scope trial.
+- Verify the rollback checkpoint before expanding the rollout.
+```
+
+When facts are omitted to fit the response limit, the text ends with a notice such as `Omitted facts: 3 (response limit).` Treat `result` as readable text; do not JSON-decode it. For programmatic access, use `Gralkor.Client.search/1,2` with `result_type: :facts` and read each record's `fact.fact` and `fact.sources` fields directly.
+
 **`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 
 ## Configure Lenses
