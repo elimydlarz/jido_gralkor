@@ -919,7 +919,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                 return SimpleNamespace(uuid=uuid, fact=fact, episodes=episodes, created_at=None, valid_at=None, invalid_at=None, expired_at=None)
             async def execute_query(self, query, **params):
                 assert 'RELATES_TO' in query
-                assert params['group_id']
+                assert params['group_id'] == 'g_' + 'first'.encode().hex()
                 suffixes = tuple(params['lens_suffixes'])
                 ids = {key for key, episode in self.episodes.items() if episode.source_description.endswith(suffixes)}
                 return ([{'uuid': edge.uuid} for edge in self.edges if any(i in ids for i in edge.episodes)], None, None)
