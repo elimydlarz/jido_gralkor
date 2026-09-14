@@ -263,6 +263,7 @@ defmodule Gralkor.CaptureBuffer do
   def handle_call({:flush, session_id}, _from, %{capture_entries: entries} = state)
       when is_map_key(entries, session_id) do
     entry = Map.fetch!(entries, session_id)
+    Logger.info("[gralkor] flush scheduled — session:#{session_id} turns:#{length(entry.turns)}")
     task = Task.async(fn -> do_flush_capture(entry, state) end)
 
     {:reply, :ok,
@@ -280,13 +281,27 @@ defmodule Gralkor.CaptureBuffer do
       )
       when is_map_key(entries, session_id) do
     entry = Map.fetch!(entries, session_id)
+
+    Logger.info(
+      "[gralkor] flush_and_await — session:#{session_id} turns:#{length(entry.turns)} timeout_ms:#{timeout_ms}"
+    )
+
     task = Task.async(fn -> do_flush_capture(entry, state) end)
 
     case Task.yield(task, timeout_ms) || Task.shutdown(task, :brutal_kill) do
-      {:ok, outcome} ->
-        {:reply, outcome, %{state | capture_entries: Map.delete(entries, session_id)}}
+      {:ok, :ok} ->
+        Logger.info("[gralkor] flush_and_await done — session:#{session_id} outcome:ok")
+        {:reply, :ok, %{state | capture_entries: Map.delete(entries, session_id)}}
+
+      {:ok, {:error, reason} = error} ->
+        Logger.warning(
+          "[gralkor] flush_and_await done — session:#{session_id} outcome:error reason:#{inspect(reason)}"
+        )
+
+        {:reply, error, %{state | capture_entries: Map.delete(entries, session_id)}}
 
       nil ->
+        Logger.warning("[gralkor] flush_and_await timeout — session:#{session_id}")
         {:reply, {:error, :timeout}, state}
     end
   end
