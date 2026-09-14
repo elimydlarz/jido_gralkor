@@ -27,8 +27,8 @@ defmodule JidoGralkor.Plugin do
   full request trace and assistant answer are normalised via
   `JidoGralkor.Canonical.to_messages/3` into Gralkor's canonical
   `[%Gralkor.Message{role, content}]` shape and submitted to the configured
-  client. Implicit-operator capture uses `capture/5`; Lens-aware capture uses
-  the selected ordinary Lens.
+  client through `Client.capture/2` with an explicit `Gralkor.Capture` route.
+  Direct capture selects the configured Destination; Lens capture selects its process.
   The capture buffer keeps turn order by `session_id` and flushes Lens batches
   independently.
   Capture is skipped if the thread isn't present (first-turn failure
@@ -106,19 +106,39 @@ defmodule JidoGralkor.Plugin do
             ":search_destinations was removed; use MemorySearch's per-search :destinations selector instead"
     end
 
+    capture_destination = fetch_opt(opts, :capture_destination)
+    validate_mount_destination!(runtime_config, capture_destination)
+    state = %{agent_name: agent_name, capture_destination: capture_destination}
+
     case fetch_opt(opts, :ingestion_lens) do
       nil ->
-        {:ok, %{agent_name: agent_name}}
+        {:ok, state}
 
       ingestion_lens ->
         validate_mount_lens!(runtime_config, ingestion_lens)
-        {:ok, %{agent_name: agent_name, ingestion_lens: ingestion_lens}}
+        {:ok, Map.put(state, :ingestion_lens, ingestion_lens)}
+    end
+  end
+
+  defp validate_mount_destination!(runtime_config, name) do
+    names = ["personal", "global"] ++ Enum.map(runtime_config.destinations, &fetch_opt(&1, :name))
+
+    if name == "operator" do
+      raise ArgumentError, "capture Destination \"operator\" was retired; migrate and select \"personal\""
+    end
+
+    unless name in names do
+      raise ArgumentError, "invalid :capture_destination #{inspect(name)}; select a registered Destination explicitly"
     end
   end
 
   defp validate_mount_lens!(runtime_config, lens_name) do
+    if lens_name in ["operator", "default"] do
+      raise ArgumentError, "Lens #{inspect(lens_name)} was retired; select \"personal-chat\" or explicit direct capture"
+    end
+
     names =
-      ["operator"] ++
+      ["personal-chat"] ++
         Enum.map(Map.fetch!(runtime_config, :lenses), &fetch_opt(&1, :name))
 
     unless lens_name in names do
@@ -216,33 +236,20 @@ defmodule JidoGralkor.Plugin do
           messages ->
             user_name = user_name!(agent)
 
-            result =
+            route =
               case lens do
-                nil ->
-                  group_id = Client.operator_graph_id(agent.id)
-
-                  Client.impl().capture(
-                    session_id,
-                    group_id,
-                    agent_name(agent),
-                    user_name,
-                    messages
-                  )
-
-                lens_name ->
-                  runtime_lens!(lens_name)
-
-                  Client.capture(
-                    self(),
-                    session_id,
-                    agent.id,
-                    agent_name(agent),
-                    user_name,
-                    messages,
-                    lens_name,
-                    []
-                  )
+                nil -> {:direct, Map.fetch!(plugin_state(agent), :capture_destination)}
+                name -> {:lenses, [name]}
               end
+
+            result = Client.capture(self(), %Gralkor.Capture{
+              session_id: session_id,
+              operator_id: agent.id,
+              agent_name: agent_name(agent),
+              user_name: user_name,
+              messages: messages,
+              route: route
+            })
 
             case result do
               :ok -> :ok
@@ -281,30 +288,35 @@ defmodule JidoGralkor.Plugin do
         %{lens: lens}
 
       _ ->
-        %{}
+        %{lens: nil}
     end
   end
 
   defp selected_lens(agent, request_id) do
-    request_lens(agent, request_id) ||
-      case plugin_state(agent) do
-        %{ingestion_lens: lens} -> lens
-        _ -> nil
-      end
+    case request_lens(agent, request_id) do
+      {:ok, lens} -> lens
+      :error -> Map.get(plugin_state(agent), :ingestion_lens)
+    end
   end
 
   defp request_lens(agent, request_id) do
-    agent.state
-    |> Map.get(:__thread__, %{})
-    |> Map.get(:entries, [])
-    |> Enum.find_value(fn
-      %{refs: refs} when is_map(refs) ->
-        if ref_value(refs, :request_id) == request_id,
-          do: ref_value(refs, :jido_gralkor_lens)
+    entry =
+      agent.state
+      |> Map.get(:__thread__, %{})
+      |> Map.get(:entries, [])
+      |> Enum.find(fn
+        %{refs: refs} when is_map(refs) -> ref_value(refs, :request_id) == request_id
+        _ -> false
+      end)
 
-      _entry ->
-        nil
-    end)
+    case entry do
+      %{refs: refs} ->
+        case Map.fetch(refs, :jido_gralkor_lens) do
+          :error -> Map.fetch(refs, "jido_gralkor_lens")
+          found -> found
+        end
+      _ -> :error
+    end
   end
 
   defp ref_value(refs, key), do: Map.get(refs, key) || Map.get(refs, Atom.to_string(key))
@@ -346,15 +358,15 @@ defmodule JidoGralkor.Plugin do
 
   defp retain_request_context(signal), do: signal
 
+  defp runtime_lens!(nil), do: :ok
+
   defp runtime_lens!(lens) when is_binary(lens) do
     Runtime.lens!(self(), lens)
-  rescue
-    ArgumentError -> raise ArgumentError, "unknown Lens #{inspect(lens)}"
   end
 
   defp runtime_lens!(lens), do: raise(ArgumentError, "invalid Lens #{inspect(lens)}")
 
-  defp maybe_put_lens_ref(refs, lens) when is_binary(lens),
+  defp maybe_put_lens_ref(refs, lens) when is_binary(lens) or is_nil(lens),
     do: Map.put(refs, :jido_gralkor_lens, lens)
 
   defp maybe_put_lens_ref(refs, _lens), do: refs
