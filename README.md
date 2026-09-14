@@ -420,7 +420,7 @@ defmodule MyApp.ChatAgent do
       {JidoGralkor.Plugin,
        %{
          capture_destination: "personal",
-     agent_name: "Susu",
+         agent_name: "Susu",
          ingestion_lens: "observations",
          runtime_config: %{
            destinations: [],
