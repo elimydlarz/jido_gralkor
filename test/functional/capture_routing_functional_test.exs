@@ -245,7 +245,7 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
     end
   end
 
-  describe "if a capture request has an invalid identity, route, Destination, or selected Lens" do
+  describe "if a capture request has an invalid identity, canonical message, route, Destination, or selected Lens" do
     test "then capture fails before buffering any turn" do
       for {key, value} <- [
             operator_id: "",

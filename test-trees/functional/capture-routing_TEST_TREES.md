@@ -29,7 +29,7 @@ when one selected capture route fails
 when a capture route renders an empty transcript
   then no write or Lens ingestion runs
 
-if a capture request has an invalid identity, route, Destination, or selected Lens
+if a capture request has an invalid identity, canonical message, route, Destination, or selected Lens
   then capture fails before buffering any turn
 
 if a caller uses a retired positional capture adapter
