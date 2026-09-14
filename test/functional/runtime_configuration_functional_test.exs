@@ -290,7 +290,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert_receive {:supervised_reflection_callback, %{outcome: :delivered}}
     end
 
-    test "and it installs package-owned structured definitions for the `operator` and `global` Destinations" do
+    test "and it installs package-owned structured definitions for the `personal` and `global` Destinations" do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
@@ -300,12 +300,12 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         )
 
       assert Enum.map(JidoGralkor.Runtime.destinations(agent_server), & &1.name) == [
-               "operator",
+               "personal",
                "global"
              ]
     end
 
-    test "and it installs the package-owned `operator` Lens" do
+    test "and it installs the package-owned `personal-chat` Lens" do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
@@ -313,11 +313,11 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         )
 
       assert %Gralkor.Lens{
-               name: "operator",
-               destination: %Gralkor.Destination{name: "operator"},
+               name: "personal-chat",
+               destination: %Gralkor.Destination{name: "personal"},
                ontology: Gralkor.DefaultOntology,
                ingestion: Gralkor.Lens.Ingestion.Store
-             } = JidoGralkor.Runtime.lens!(agent_server, "operator")
+             } = JidoGralkor.Runtime.lens!(agent_server, "personal-chat")
     end
 
     test "and it installs package-owned structured definitions for the generalisations and ERL Reflections" do
@@ -447,14 +447,14 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  destination_configuration("consumer-memory")
                )
 
-      assert %Gralkor.Destination{name: "operator"} =
-               JidoGralkor.Runtime.destination!(agent_server, "operator")
+      assert %Gralkor.Destination{name: "personal"} =
+               JidoGralkor.Runtime.destination!(agent_server, "personal")
 
       assert %Gralkor.Destination{name: "global"} =
                JidoGralkor.Runtime.destination!(agent_server, "global")
 
-      assert %Gralkor.Lens{name: "operator"} =
-               JidoGralkor.Runtime.lens!(agent_server, "operator")
+      assert %Gralkor.Lens{name: "personal-chat"} =
+               JidoGralkor.Runtime.lens!(agent_server, "personal-chat")
 
       assert %Gralkor.Reflection{name: "generalisations"} =
                JidoGralkor.Runtime.reflection!(agent_server, "generalisations")
@@ -926,7 +926,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   end
 
   describe "when a selected-Lens turn is buffered for capture" do
-    test "then flush scheduling resolves the Lens through the targeted agent's current runtime-configuration snapshot" do
+    test "then capture acceptance resolves the Lens through the targeted agent's current runtime-configuration snapshot" do
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
 
       start_supervised!(
@@ -1195,6 +1195,59 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       assert %Gralkor.Lens{ontology: PersonOntology} =
                JidoGralkor.Runtime.lens!(agent_server, "people")
+    end
+  end
+
+  describe "if current configuration uses a retired operator Destination or Lens name" do
+    test "then validation identifies the retired name and its personal or personal-chat replacement" do
+      for {collection, definition, replacement} <- [
+        {:destinations, %{name: "operator"}, "personal"},
+        {:lenses, %{name: "operator", destination: "personal", write: :append, ingestion: Gralkor.Lens.Ingestion.Store}, "personal-chat"},
+        {:lenses, %{name: "notes", destination: "operator", write: :append, ingestion: Gralkor.Lens.Ingestion.Store}, "personal"}
+      ] do
+        config = %{destinations: [], lenses: [], reflections: []} |> Map.put(collection, [definition])
+        assert {:error, reason} = JidoGralkor.Runtime.validate(config)
+        assert inspect(reason) =~ "retired"
+        assert inspect(reason) =~ replacement
+      end
+    end
+
+    test "and the previous runtime snapshot remains active" do
+      config = %{destinations: [], lenses: [], reflections: []}
+      start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: config})
+      assert {:error, _} = JidoGralkor.Runtime.replace(self(), %{config | destinations: [%{name: "operator"}]})
+      assert JidoGralkor.Runtime.snapshot(self()) == config
+    end
+  end
+
+  describe "if consumer configuration claims the packaged personal Destination or personal-chat Lens" do
+    test "then validation rejects the conflicting consumer definition before activating it" do
+      for {collection, name} <- [{:destinations, "personal"}, {:lenses, "personal-chat"}] do
+        config = %{destinations: [], lenses: [], reflections: []} |> Map.put(collection, [%{name: name}])
+        assert {:error, {:reserved_definition_name, ^collection, ^name}} = JidoGralkor.Runtime.validate(config)
+      end
+    end
+  end
+
+  describe "if a consumer Destination begins with personal/ or operator/" do
+    test "then validation rejects the private or retired graph namespace" do
+      for name <- ["personal/shared", "operator/shared"] do
+        assert {:error, {:reserved_destination_namespace, ^name}} = JidoGralkor.Runtime.validate(%{destinations: [%{name: name}], lenses: [], reflections: []})
+      end
+    end
+  end
+
+  describe "when a caller selects the retired operator Destination or Lens" do
+    test "then the operation fails with an explicit migration error before reading or writing memory" do
+      start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}})
+      for {collection, replacement} <- [{:destination!, "personal"}, {:lens!, "personal-chat"}] do
+        assert_raise ArgumentError, ~r/retired/, fn ->
+          apply(JidoGralkor.Runtime, collection, [self(), "operator"])
+        end
+        assert_raise ArgumentError, ~r/#{replacement}/, fn ->
+          apply(JidoGralkor.Runtime, collection, [self(), "operator"])
+        end
+      end
     end
   end
 
