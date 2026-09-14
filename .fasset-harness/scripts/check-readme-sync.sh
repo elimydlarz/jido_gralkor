@@ -13,6 +13,7 @@ surface_files=(
   config/config.exs
   lib/gralkor/application.ex
   lib/gralkor/client.ex
+  lib/gralkor/capture.ex
   lib/gralkor/client/native.ex
   lib/gralkor/config.ex
   lib/gralkor/graphiti_pool.ex
@@ -39,6 +40,9 @@ surface_files=(
   lib/gralkor/reflection/erl_ontology.ex
   lib/gralkor/ontology.ex
   lib/gralkor/python.ex
+  lib/gralkor/personal_graph_migration.ex
+  priv/python/personal_graph_migration.py
+  lib/mix/tasks/gralkor.migrate_personal.ex
   lib/gralkor/capture_buffer.ex
   lib/gralkor/default_ontology.ex
   lib/jido_gralkor/plugin.ex
@@ -52,6 +56,7 @@ surface_files=(
   lib/jido_gralkor/actions/memory_build_communities.ex
   .agents/skills/publish/SKILL.md
   DESTINATIONS.md
+  PERSONAL_MEMORY_MIGRATION.md
   RUNTIME_CONFIG.md
 )
 files=("README.md" "${surface_files[@]}")
