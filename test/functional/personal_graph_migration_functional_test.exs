@@ -109,6 +109,16 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when an application prepares a private graph migration > if a consumer Lens already owns the packaged personal-chat name" do
+    test "then migration refuses before changing any graph", context do
+      seed_history(context.database, "owner")
+      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+      assert {:error, message} = PersonalGraphMigration.prepare(context.connection, ["owner"], %{"lenses" => ["personal-chat"]}, journal)
+      assert message =~ "Lens namespace conflict"
+      refute File.exists?(journal)
+    end
+  end
+
   describe "when an application migrates quiescent historical private graphs" do
     test "then every node and relationship group identity changes to its matching personal graph identity", context do
       seed_history(context.database, "owner")
