@@ -17,7 +17,7 @@ Keep `owner`, `dashboard:<account UUID>`, punctuation, case, and every other ide
 
 The mechanism is FalkorDB `GRAPH.COPY`, followed by restartable group-identity updates on the copied graph. The source remains intact. There is no re-ingestion or extraction. The complete source and translated target inventories must match, including node and relationship identities, endpoints, episode references, immutable content, embeddings, timestamps, source provenance, `_gralkor_lens`, community data, claim generations, completion markers, indexes, and constraints. Records without a group identity remain unchanged; conflicting group identities are rejected.
 
-The isolated verification environment reports Graphiti 0.29.3, Python FalkorDB client 1.7.1, falkordblite 0.10.0, Redis 8.6.2, and FalkorDB module 4.18.3. Verify the deployed versions and repeat the procedure on their restored copy before a live cutover. The manifest records the connected versions. Command references: [GRAPH.COPY](https://docs.falkordb.com/commands/graph.copy.html) and [GRAPH.CONSTRAINT](https://docs.falkordb.com/commands/graph.constraint.html).
+The isolated verification environment reports Graphiti 0.29.3, Python FalkorDB client 1.7.1, falkordblite 0.10.0, Redis 8.6.2, and FalkorDB module 4.18.3. Verify the deployed versions and repeat the procedure on their restored copy before a live cutover. The manifest records the local client-library versions and connected server versions. Command references: [GRAPH.COPY](https://docs.falkordb.com/commands/graph.copy.html) and [GRAPH.CONSTRAINT](https://docs.falkordb.com/commands/graph.constraint.html).
 
 ## Inventory and prepare
 
@@ -79,7 +79,7 @@ These counters are the operator's evidence from every consuming system; the migr
 mix gralkor.migrate_personal apply /absolute/path/apply-request.json
 ```
 
-`apply/3` completes the persisted phases. `advance/3` performs the next bounded phase for interruption exercises: copy intent, copied graph, rewritten node groups, rewritten relationship groups, then verification. The journal is locked, integrity-checked, atomically replaced, and fsynced between steps. Repeating apply after interruption resumes the recorded work; repeating verified apply confirms the same inventories. Do not edit a journal to bypass a conflict. The integrity checksum detects changes and corruption; it is not an authentication signature.
+`apply/3` completes the persisted phases. `advance/3` advances copy/rewrite work in bounded increments for interruption exercises. The journal records copy intent before issuing `GRAPH.COPY`, followed by copied graph, rewritten node groups, rewritten relationship groups, and verification states. The journal is locked, integrity-checked, atomically replaced, and fsynced between steps. Repeating apply after interruption resumes the recorded work; repeating verified apply confirms the same inventories. Do not edit a journal to bypass a conflict. The integrity checksum detects changes and corruption; it is not an authentication signature.
 
 Only the journal that recorded copy intent may resume a matching target after an interruption. Independent migration processes must use the same journal and quiescence boundary. Never run competing migrations through different journals against the same identities.
 
@@ -111,5 +111,7 @@ Restore the exact original Phil configuration with `PersonalMemoryMigration.roll
 ## Verification scope
 
 The package Functional migration tree covers real disposable FalkorDB copies, preservation, conflicts, interrupted progress, public historical recall, artefact delivery, and guarded rollback. Capture/provenance Functional tests cover exclusive routes, identity bindings, truthful history, flush/retry behavior, and malformed stored records. The single real-provider Journey adds direct capture, personal-chat capture, private ERL, shared memory, and replacement in one operator lifecycle. Phil owns persisted configuration, historical job/checkpoint/projection, UI, and actual previous-application rollback checks.
+
+For each candidate revision, record the terminal results of the complete Functional suite, the single Journey, and the hook-owned Unit/Integration checks separately. The tree coverage described here does not certify that those gates have passed.
 
 These are isolated verification procedures. They do not migrate any live store, publish a package, or deploy Phil.
