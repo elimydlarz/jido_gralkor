@@ -308,6 +308,7 @@ These results belong to the implementation session. Pending full gates are not i
 | Graphiti stale-writer diagnostic | Delayed theft reproduced the fixture race; explicit extraction barrier passed the original-seed diagnostic | `/private/tmp/jgr-rename-stale-delayed-red.log`, `/private/tmp/jgr-rename-stale-green2.log` |
 | Native recall deadline diagnostic | Original-seed focused test passed after separating forwarding from fixture timing; production deadline unchanged | `/tmp/gralkor-native-deadline-verified.log` |
 | Complete package Functional suite | 593 passed, 887 excluded; 172.7 seconds; exit 0, including approved real OpenAI ontology extraction and all migration tests | `/private/tmp/jgr-rename-full-functional.log` |
+| Complete package memory Journey | 44 passed; 266.1 seconds; real approved OpenAI capture, Reflection, recall, isolation, provenance, and replacement lifecycle | `/tmp/gralkor-journey-rename.log` |
 | Phil full Functional | 608 passed, 798 excluded; 670.2 seconds | `/private/tmp/phil-rename-full-functional.log` |
 | Phil final installed Stop gate | 796 Unit/Integration passed, 620 excluded; 83.6 seconds; hook exit 0 | `/private/tmp/phil-rename-final-unit-integration.log` |
 | Phil actual pinned package consumer check | 85 affected Functional tests passed; 110.6 seconds; fetched dependency revision `d805d0d8e03b5740f9792f8ab60db19698017db4` | `/private/tmp/phil-rename-pinned-functional.log` |
@@ -325,7 +326,7 @@ Trees, executable coverage labels, and the corresponding implementation/docs hav
 
 Still pending:
 
-1. The package memory Journey and Phil's single isolated synthetic artefact Journey, both using the OpenAI API.
+1. Phil's single isolated synthetic artefact Journey using the OpenAI API.
 2. Final completion reconciliation with those terminal results and the single independent review of the verified change.
 
 The operator explicitly approved all three test gates after automatic approval review requested payload/destination-specific authorization. The approved destination is `api.openai.com`; payloads are response/editor preferences, synthetic codenames/cities/support channels/scheduling conversations/deployment reviews/dependency graphs, controlled Atlas evidence, and generated Reflection/recall content. Normal inference charges and disposable local data are within this approval. Run the complete package Functional suite, package Journey, and Phil's isolated artefact Journey sequentially so their embedded runtimes cannot interfere.
