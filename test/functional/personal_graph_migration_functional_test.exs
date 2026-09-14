@@ -51,6 +51,40 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     :ok
   end
 
+  describe "when an application requests a private graph migration > if no explicit graph endpoint is supplied" do
+    test "then migration rejects the connection before opening a default store" do
+      assert {:error, message} = PersonalGraphMigration.plan([port: -1], ["owner"], %{})
+      assert message =~ "explicit graph endpoint"
+    end
+  end
+
+  describe "when the migration command receives an unsupported operation" do
+    test "then it reports usage without connecting to a graph" do
+      assert_raise Mix.Error, ~r/operation|usage|Usage/, fn ->
+        Mix.Tasks.Gralkor.MigratePersonal.run(["unknown", "/missing-migration-request.json"])
+      end
+    end
+  end
+
+  describe "when an application prepares a private graph migration > if a source node or relationship carries an incompatible stored group identity" do
+    test "then preparation refuses while records without a group identity remain preservable", context do
+      seed_history(context.database, "owner")
+      query(context.database, "operator/owner", "CREATE (:Historical {uuid: 'unscoped'})")
+      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+      for match <- ["MATCH (item:Entity {uuid: 'entity-a'})", "MATCH ()-[item:RELATES_TO]->()"] do
+        query(context.database, "operator/owner", match <> " SET item.group_id = 'foreign'")
+        assert {:error, message} = PersonalGraphMigration.prepare(context.connection, ["owner"], %{}, journal)
+        assert message =~ "incompatible stored group identity"
+        refute File.exists?(journal)
+        query(context.database, "operator/owner", match <> " SET item.group_id = '" <> Gralkor.Client.sanitize_group_id("operator/owner") <> "'")
+      end
+      assert {:ok, _} = PersonalGraphMigration.prepare(context.connection, ["owner"], %{}, journal)
+      assert {:ok, manifest} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      unscoped = Enum.find(hd(manifest["graphs"])["target_inventory"]["nodes"], &(&1["properties"]["uuid"] == "unscoped"))
+      refute Map.has_key?(unscoped["properties"], "group_id")
+    end
+  end
+
   describe "when an application requests a private graph migration > if operator identities are empty, blank, duplicated, non-textual, or already resolved graph names" do
     test "then migration rejects the identities before connecting to a graph" do
       for identities <- [[], [""], [" "], [42], [nil], ["owner", "owner"], ["operator/owner"], ["personal/owner"]] do

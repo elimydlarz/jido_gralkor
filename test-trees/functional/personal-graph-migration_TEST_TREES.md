@@ -29,6 +29,8 @@ when an application prepares a private graph migration
     then migration refuses before changing any graph
   if an explicitly identified source graph is missing
     then migration refuses without guessing a former lossy graph name
+  if a source node or relationship carries an incompatible stored group identity
+    then preparation refuses while records without a group identity remain preservable
   if any writer remains admitted, buffered, active, or failed during cutover
     then migration refuses before copying any graph
   if an episode claim still has an active lease
