@@ -10,6 +10,7 @@ when an agent with a mounted memory plugin invokes memory search
   and search selectors neither default from nor change the configured ingestion Lens
   and a turn-selected ingestion Lens neither defaults nor restricts memory search
   and returned facts are grouped under their named originating Lens or Reflection
+  and directly captured conversation facts identify their conversation origin
   where no conversation thread has been committed
     then memory search still runs for the current operator
   where the Destination selector is omitted or empty
@@ -39,3 +40,20 @@ if a mounted plugin receives invalid ingestion Lens configuration
 if a mounted plugin receives the removed `:search_destinations` option
   then mounting fails before the plugin handles an agent signal
   and the error identifies MemorySearch's per-search `destinations` selector as its replacement
+
+when a mounted memory plugin has an explicit capture Destination and no ingestion Lens
+  then automatic capture selects that Destination directly for the current operator
+  and no packaged Lens is selected implicitly
+
+where an agent turn explicitly selects direct capture after a Lens-selected turn
+  then completion retains that request's direct route
+  and failure retains that request's direct route
+
+when turns in one session alternate direct capture and selected Lenses
+  then each route receives only its selected turns in original order
+  and different Lenses sharing a Destination each run their own ingestion process
+  and repeated selected Lens names run only once for each selected batch
+
+if a mounted plugin receives invalid capture Destination configuration
+  then mounting fails before the plugin handles an agent signal
+  and the error identifies the rejected Destination

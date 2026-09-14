@@ -10,7 +10,7 @@ when a caller searches memory
   where the Destination selector is omitted or empty
   and the Lens selector is omitted or empty
     then every accessible registered Destination is selected
-    and results written by every Lens or Destination artefact output can contribute
+    and results written directly or by every Lens or Destination artefact output can contribute
 
   where one or more Destinations are supplied
     while the Lens selector is omitted or empty
@@ -28,8 +28,8 @@ when a caller searches memory
     then only results whose Destination matches any supplied Destination and whose originating Lens matches any supplied Lens can contribute
     and selecting a Lens does not add that Lens's Destination to the supplied Destinations
 
-where the selected Destinations include `operator`
-  then only the current operator's `operator/<operator id>` graph is searched
+where the selected Destinations include `personal`
+  then only the current operator's `personal/<operator id>` graph is searched
   and another operator's graph cannot contribute a result
 
 where the selected Destinations include any shared Destination
@@ -47,6 +47,10 @@ where a caller supplies no maximum result count
 when a caller omits the result type or explicitly selects episodes
   then relevant stored episode content is returned
   and every episode written through a Lens identifies that originating Lens
+  and every directly written episode retains content and source kind without Lens or Reflection authorship
+  and historical unmarked episodes remain available without invented authorship
+  and historical operator-labelled episodes retain their recorded Lens provenance
+  and a personal-chat Lens selector excludes historical operator-labelled and direct episodes
   and Lens source descriptions and naturally textual content remain unchanged
   and every episode written through a Destination artefact output exposes its stable artefact identifier and payload as structured fields
 

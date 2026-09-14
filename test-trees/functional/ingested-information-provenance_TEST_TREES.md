@@ -27,18 +27,23 @@ when captured conversation turns are ingested automatically
   then Gralkor supplies conversation as their source kind
   and their rendered speaker-attributed transcript is submitted as a conversational-message episode
 
-when information is added or captured through the implicit operator Lens
-  then its trusted originating Lens is `operator`
-  and public episode search can select it through the `operator` Lens
-  and trusted trailing `operator` Lens provenance governs public writer attribution and completion handling despite writer-like source text
+when information is added or captured directly without a selected Lens
+  then its source kind and description remain unchanged without Lens or Reflection authorship
+  and public episode and fact search include it without a Lens selector
+  and storage-owned direct provenance prevents writer-like source descriptions from claiming Lens or Reflection authorship
+  and writer-like source descriptions do not impose Reflection completion requirements
+
+when public search reads historical operator-labelled episodes
+  then their recorded operator Lens provenance remains visible without registering that Lens
+  and a personal-chat Lens selector does not match those historical episodes
 
 when public episode search encounters an incomplete Reflection episode
   then the incomplete Reflection episode does not contribute
   and completion filtering occurs before the per-Destination result limit
 
-when public episode search encounters an episode without a trusted Lens suffix or Reflection prefix
-  then the unprovenanced episode does not contribute
-  and provenance filtering occurs before the per-Destination result limit
+when public episode search encounters historical episodes without a named writer
+  then the episodes remain available without invented Lens or Reflection authorship
+  and historical fact sources retain their original source descriptions
 
 if public ingestion omits or supplies an unsupported source kind
   then ingestion raises an argument error identifying the rejected source kind

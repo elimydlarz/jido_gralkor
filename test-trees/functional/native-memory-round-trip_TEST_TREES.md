@@ -2,7 +2,7 @@ Functional: native-memory-round-trip (src: lib/gralkor/client.ex, lib/gralkor/cl
 
 when a fact is written into an operator's memory
   then the graph stores its plain text unchanged
-  and the graph named `operator/<operator id>` receives it
+  and the graph named `personal/<operator id>` receives it
 
 when facts are written for logical operator graphs that previously normalised to the same name
   then each logical graph identifier is encoded exactly once at the physical Graphiti boundary
@@ -14,7 +14,7 @@ when memory search returns facts for recall
 
 when a captured turn is flushed for its session
   then flush returns before graph ingestion completes
-  and the rendered transcript eventually reaches the session's group with trusted `operator` Lens provenance
+  and the rendered transcript eventually reaches the selected personal graph with direct conversation provenance
   and a second flush writes no duplicate transcript
 
 if the graph fails a recall search
