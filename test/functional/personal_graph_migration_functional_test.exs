@@ -61,6 +61,32 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
                Enum.map(identifiers, &{"operator/" <> &1, "personal/" <> &1})
     end
 
+    test "and the manifest records both graph names using the existing injective physical encoding", context do
+      assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner", "a/b", "a_b"], %{})
+      for graph <- manifest["graphs"] do
+        assert graph["source_physical"] == Gralkor.Client.sanitize_group_id(graph["source_logical"])
+        assert graph["target_physical"] == Gralkor.Client.sanitize_group_id(graph["target_logical"])
+      end
+      assert manifest["graphs"] |> Enum.map(& &1["target_physical"]) |> Enum.uniq() |> length() == 3
+    end
+
+    test "and the manifest reports source and target existence without creating either graph", context do
+      seed_history(context.database, "owner")
+      {before, _} = Pythonx.eval("database.list_graphs()", %{"database" => context.database})
+      assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner", "missing"], %{})
+      assert Enum.map(manifest["graphs"], &{&1["source_exists"], &1["target_exists"]}) == [{true, false}, {false, false}]
+      {afterward, _} = Pythonx.eval("database.list_graphs()", %{"database" => context.database})
+      assert Pythonx.decode(before) == Pythonx.decode(afterward)
+    end
+
+    test "and the manifest reports the installed Graphiti and connected FalkorDB versions", context do
+      assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      assert manifest["versions"]["graphiti"] == "0.29.3"
+      assert Enum.any?(manifest["versions"]["modules"], &(&1["name"] == "graph" and is_integer(&1["ver"])))
+      assert manifest["versions"]["server"] =~ ~r/^\d+\.\d+/
+      IO.puts("Migration fixture versions: " <> Jason.encode!(manifest["versions"]))
+    end
+
     test "and the manifest inventories all node and relationship properties, UUIDs, endpoints, indexes, constraints, and configuration references", context do
       seed_history(context.database, "owner")
       references = %{"destinations" => ["global"], "lenses" => ["observations"], "active_configuration" => "revision-unchanged"}
@@ -131,6 +157,18 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when an application prepares a private graph migration > if an unrelated graph already occupies a target name" do
+    test "then migration refuses before changing any graph", context do
+      seed_history(context.database, "owner")
+      Pythonx.eval("database.select_graph('g_' + b'personal/owner'.hex()).query('CREATE (:Unrelated {uuid: 42})')", %{"database" => context.database})
+      assert {:ok, before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+      assert {:error, message} = PersonalGraphMigration.prepare(context.connection, ["owner"], %{}, journal)
+      assert message =~ "target graph already exists"
+      assert {:ok, ^before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+    end
+  end
+
   describe "when an application migrates quiescent historical private graphs" do
     test "then every node and relationship group identity changes to its matching personal graph identity", context do
       seed_history(context.database, "owner")
@@ -147,6 +185,71 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert graph["target_inventory"]["node_count"] == 8
       assert graph["target_inventory"]["relationship_count"] == 3
     end
+
+    test "and episode, entity, community, relationship, and claim UUIDs remain equal", context do
+      {source, target} = migrate_history(context)
+      assert Enum.map(source["nodes"], & &1["properties"]["uuid"]) == Enum.map(target["nodes"], & &1["properties"]["uuid"])
+      assert Enum.map(source["relationships"], & &1["properties"]["uuid"]) == Enum.map(target["relationships"], & &1["properties"]["uuid"])
+    end
+
+    test "and relationship endpoints and fact-to-episode references remain equal", context do
+      {source, target} = migrate_history(context)
+      assert Enum.map(source["relationships"], &{&1["source"], &1["target"], &1["properties"]["episodes"]}) ==
+               Enum.map(target["relationships"], &{&1["source"], &1["target"], &1["properties"]["episodes"]})
+    end
+
+    test "and immutable artefact content, embeddings, timestamps, source provenance, and Lens ownership remain equal", context do
+      {source, target} = migrate_history(context)
+      for kind <- ["nodes", "relationships"] do
+        assert Enum.map(source[kind], &Map.delete(&1["properties"], "group_id")) ==
+                 Enum.map(target[kind], &Map.delete(&1["properties"], "group_id"))
+      end
+    end
+
+    test "and indexes and constraints remain operational with equal definitions", context do
+      {source, target} = migrate_history(context)
+      assert source["indexes"] == target["indexes"]
+      assert source["constraints"] == target["constraints"]
+      assert Enum.all?(target["indexes"] ++ target["constraints"], &(&1["status"] == "OPERATIONAL"))
+    end
+
+    test "and completed Reflection extraction markers remain complete", context do
+      {_source, target} = migrate_history(context)
+      assert episode(target, "complete")["_gralkor_extraction_complete"] == true
+    end
+
+    test "and incomplete Reflection extraction markers remain incomplete", context do
+      {_source, target} = migrate_history(context)
+      refute Map.has_key?(episode(target, "incomplete"), "_gralkor_extraction_complete")
+    end
+
+    test "and claim generations and fencing state remain equal under the new group identity", context do
+      {source, target} = migrate_history(context)
+      claims = fn inventory ->
+        inventory["nodes"] |> Enum.filter(&("_GralkorEpisodeClaim" in &1["labels"])) |> Enum.map(&Map.delete(&1["properties"], "group_id"))
+      end
+      assert claims.(source) == claims.(target)
+    end
+
+    test "and the original graphs remain unchanged and restorable", context do
+      journal = prepare_history(context)
+      original = File.read!(journal) |> Jason.decode!() |> Map.fetch!("graphs") |> hd() |> Map.fetch!("source_inventory")
+      assert {:ok, _result} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      assert {:ok, current} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      assert hd(current["graphs"])["source_inventory"] == original
+    end
+  end
+
+  defp episode(inventory, uuid) do
+    inventory["nodes"] |> Enum.find(&("Episodic" in &1["labels"] and &1["properties"]["uuid"] == uuid)) |> Map.fetch!("properties")
+  end
+
+  defp migrate_history(context) do
+    journal = prepare_history(context)
+    assert {:ok, _result} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+    assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+    graph = hd(manifest["graphs"])
+    {graph["source_inventory"], graph["target_inventory"]}
   end
 
   defp prepare_history(context, references \\ %{}) do
