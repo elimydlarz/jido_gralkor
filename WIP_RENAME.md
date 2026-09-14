@@ -1,6 +1,12 @@
 # Personal memory naming and capture correction
 
-Status: evaluation and handover only, 2026-09-14. No implementation, test-tree changes, manually invoked behavioural test runs, database migrations, or releases have been performed. Automatic hooks did run tests and reported failures, recorded in section 6. The only deliverable from the documenting session is this file.
+Status: implementation and isolated verification in progress, 2026-09-14. The operator explicitly authorized this document end to end across both repositories, including contract reconciliation, implementation, isolated migration/rollback verification, and final independent review. Publication, deployment, and live-data migration remain outside that authorization.
+
+Implemented decisions: `Gralkor.Capture` is the typed runtime-targeted request; `{:direct, destination}` and `{:lenses, names}` dispatch exclusively. Mounts require `capture_destination`. The packaged names are `personal-chat` and `personal`, with unchanged operator identifiers. Positional capture calls raise migration guidance. Direct provenance is storage-owned, and historical provenance remains unchanged. Phil has guarded persisted-configuration migration and archival delivery/projection routing that retains original snapshots and hashes.
+
+Verification so far: affected package capture, search, configuration, ERL, and replacement Functional checks pass in isolated builds; Phil's affected Functional run passed 300 tests. The recorded stale-write race was reproduced with delayed claim theft and fixed with an explicit extraction barrier in the fixture. The 75ms recall diagnostic reproduced deadline expiry during startup while proving correct deadline forwarding; the fixture now separates forwarding from actual deadline expiry, which remains covered independently. Full regression, complete migration/rollback/public-read verification, Journeys, completion sync, and the final independent review are still pending. These focused results do not establish those full gates.
+
+The requirements and original source findings below remain the acceptance checklist. “Current” findings and historical line anchors describe the pre-implementation baseline unless a completion note states otherwise.
 
 Primary repository: `/Users/eli/code/os/jido_gralkor`.
 Consumer repository: `/Users/eli/code/fasset/fasset-intelligence-lab/phil`.
@@ -31,7 +37,7 @@ Keep real consumer-defined Lenses, including Lenses targeting `personal`. A Dest
 
 Ordinary direct capture must remain possible without any selected Lens. Remove the old automatically supplied `operator` Lens and its special resolution fallback. New direct writes must not claim either `operator` or `personal-chat` Lens authorship.
 
-The naming decisions are operator instructions. The detailed API and dispatch design below are recommendations to express in the proposed trees before implementation; they have not received tree approval.
+The naming decisions are operator instructions. The typed request and exclusive dispatch recommendations below have been finalized in the revised trees under the operator's explicit authorization to complete this work without routine confirmation.
 
 ## 2. Capture contract and routing recommendation
 
@@ -215,7 +221,7 @@ Tests previously using `operator` as an unmatched Lens fixture must use a real a
 
 ## 6. Contracts, tests, and documentation
 
-Begin with the relevant Functional trees under the project's change workflow; inspect the current test strategy and focused commands before proposing leaves. Show the complete cumulative proposed tree diff according to the applicable workflow. Add inner trees only when a failing consumer test reveals a need. This handover is not an approved test-tree diff.
+Begin with the relevant Functional trees under the project's change workflow; inspect the current test strategy and focused commands before proposing leaves. Show the complete cumulative proposed tree diff according to the applicable workflow. Add inner trees only when a failing consumer test reveals a need. The original handover was not a test-tree approval; the subsequent end-to-end instruction authorizes in-scope reconciliation, and cumulative substantive tree diffs are shown during implementation.
 
 Affected existing contracts include:
 
