@@ -261,7 +261,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   describe "when an agent with a mounted memory plugin invokes memory search > where the Destination selector is omitted or empty > while the Lens selector is omitted or empty" do
     test "then memory search uses every accessible registered Destination" do
       for {lens, content} <- [
-            {"operator", "operator memory"},
+            {"personal-chat", "operator memory"},
             {"shared-generalisations", "global memory"},
             {"observations", "observation memory"},
             {"decisions", "decision memory"}
@@ -281,7 +281,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                MemorySearch.run(%{query: "memory"}, %{agent_id: "operator-one"})
 
       assert result ==
-               "Lens: operator\n- operator memory\n\nLens: shared-generalisations\n- global memory\n\nLens: observations\n- observation memory\n\nLens: decisions\n- decision memory"
+               "Lens: personal-chat\n- operator memory\n\nLens: shared-generalisations\n- global memory\n\nLens: observations\n- observation memory\n\nLens: decisions\n- decision memory"
     end
   end
 
@@ -318,7 +318,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  %{agent: completion}
                )
 
-      assert [[_, _, _, _, _, "observations", []]] = InMemory.captures()
+      assert [[_, %Gralkor.Capture{route: {:lenses, ["observations"]}}]] = InMemory.captures()
     end
 
     test "and the plugin does not redefine the selected Lens's Destination or ingestion process" do
@@ -434,7 +434,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, :continue} =
                Plugin.handle_signal(completion_signal, %{agent: completion_agent})
 
-      assert [["session-one", "operator-one", "Susu", "Eli", _messages, "decisions", []]] =
+      assert [[_, %Gralkor.Capture{session_id: "session-one", operator_id: "operator-one", agent_name: "Susu", user_name: "Eli", route: {:lenses, ["decisions"]}}]] =
                InMemory.captures()
     end
 
@@ -461,7 +461,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       }
 
       assert {:ok, :continue} = Plugin.handle_signal(failure_signal, %{agent: failed_agent})
-      assert [[_, _, _, _, _, "decisions", []]] = InMemory.captures()
+      assert [[_, %Gralkor.Capture{route: {:lenses, ["decisions"]}}]] = InMemory.captures()
     end
   end
 
@@ -533,8 +533,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
 
       assert [
-               [_, _, _, _, observation_messages, "observations", []],
-               [_, _, _, _, decision_messages, "decisions", []]
+               [_, %Gralkor.Capture{messages: observation_messages, route: {:lenses, ["observations"]}}],
+               [_, %Gralkor.Capture{messages: decision_messages, route: {:lenses, ["decisions"]}}]
              ] = InMemory.captures()
 
       assert Enum.any?(observation_messages, &(&1.content == "Observed."))
@@ -669,7 +669,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   end
 
   defp mount(opts) do
-    Plugin.mount(%{}, Keyword.put_new(opts, :runtime_config, runtime_configuration()))
+    Plugin.mount(%{}, opts |> Keyword.put_new(:capture_destination, "personal") |> Keyword.put_new(:runtime_config, runtime_configuration()))
   end
 
   defp runtime_configuration do

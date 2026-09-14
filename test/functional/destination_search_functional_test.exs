@@ -215,28 +215,28 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "where the selected Destinations include `operator`" do
-    test "then only the current operator's `operator/<operator id>` graph is searched" do
+  describe "where the selected Destinations include `personal`" do
+    test "then only the current operator's `personal/<operator id>` graph is searched" do
       use_in_memory_storage()
-      assert :ok = add_episode("operator", "operator-one", "private memory")
+      assert :ok = add_episode("personal", "operator-one", "private memory")
 
-      assert {:ok, [%{destination: "operator", episode: %{content: "private memory"}}]} =
+      assert {:ok, [%{destination: "personal", episode: %{content: "private memory"}}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "private",
-                 destinations: ["operator"]
+                 destinations: ["personal"]
                })
     end
 
     test "and another operator's graph cannot contribute a result" do
       use_in_memory_storage()
-      assert :ok = add_episode("operator", "operator-one", "private memory")
+      assert :ok = add_episode("personal", "operator-one", "private memory")
 
       assert {:ok, []} =
                Client.search(%Search{
                  operator_id: "operator-two",
                  query: "private",
-                 destinations: ["operator"]
+                 destinations: ["personal"]
                })
     end
   end
@@ -276,27 +276,27 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert {:ok, results} =
                Client.search(%Search{operator_id: "operator-one", query: "question"})
 
-      assert Enum.map(results, & &1.destination) == ["operator", "global", "first", "second"]
+      assert Enum.map(results, & &1.destination) == ["personal", "global", "first", "second"]
 
-      for destination <- ["operator", "global", "first", "second"] do
+      for destination <- ["personal", "global", "first", "second"] do
         assert_receive {:destination_search, ^destination, "operator-one", "question", :episodes,
                         20, []}
       end
     end
 
-    test "and results written by every Lens or Destination artefact output can contribute" do
+    test "and results written directly or by every Lens or Destination artefact output can contribute" do
       use_in_memory_storage()
-      assert :ok = add_episode("operator", "operator-one", "current operator", "operator")
-      assert :ok = add_episode("operator", "operator-two", "other operator", "operator")
+      assert :ok = add_episode("personal", "operator-one", "current operator", "personal-chat")
+      assert :ok = add_episode("personal", "operator-two", "other operator", "personal-chat")
 
       assert {:ok,
               [
                 %{
-                  destination: "operator",
-                  episode: %{content: "current operator", lens: "operator"}
+                  destination: "personal",
+                  episode: %{content: "current operator", lens: "personal-chat"}
                 }
               ]} =
-               Client.search(%Search{operator_id: "operator-one", query: "operator"})
+               Client.search(%Search{operator_id: "operator-one", query: "personal"})
     end
   end
 
@@ -309,7 +309,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  lenses: ["first-alpha"]
                })
 
-      for destination <- ["operator", "global", "first", "second"] do
+      for destination <- ["personal", "global", "first", "second"] do
         assert_receive {:destination_search, ^destination, _, _, _, _, _}
       end
     end

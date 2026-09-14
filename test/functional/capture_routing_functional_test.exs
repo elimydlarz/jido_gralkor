@@ -70,8 +70,7 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
       refute Keyword.has_key?(opts, :lens)
       refute_receive {:direct_write, _, _, _, _, _}
     end
-  end
-  describe "when a caller submits a typed runtime-targeted capture request" do
+
     test "and a Lens route invokes each distinct selected Lens without an implicit direct write" do
       capture({:lenses, ["personal-chat", "first", "first"]}, "one")
       assert :ok = Client.impl().flush_and_await("capture-session", 1_000)
