@@ -478,7 +478,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
           data: %{query: "Remember this", tool_context: %{lens: invalid}}
         }
 
-        assert_raise ArgumentError, ~r/unknown Lens|invalid Lens/, fn ->
+        assert_raise ArgumentError, ~r/unknown.*lenses|unknown Lens|invalid Lens/, fn ->
           Plugin.handle_signal(signal, %{agent: agent(plugin_state)})
         end
       end
@@ -499,7 +499,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
           data: %{query: "Remember this", tool_context: %{lens: invalid}}
         }
 
-        assert_raise ArgumentError, ~r/unknown Lens|invalid Lens/, fn ->
+        assert_raise ArgumentError, ~r/unknown.*lenses|unknown Lens|invalid Lens/, fn ->
           Plugin.handle_signal(signal, %{agent: agent(plugin_state)})
         end
       end

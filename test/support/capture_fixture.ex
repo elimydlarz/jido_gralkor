@@ -26,7 +26,7 @@ defmodule Gralkor.CaptureFixture do
           owner: self(),
           configuration: %{
             destinations: Enum.map(["g", "g1", "g-1", "with-hyphens", "group-1", "operator_one"], &%{name: &1}),
-            lenses: Enum.map(["observations", "generalisations", "decisions"], &%{name: &1, destination: "personal", ingestion: Gralkor.Lens.Ingestion.Store}),
+            lenses: Enum.map(["observations", "generalisations", "decisions"], &%{name: &1, destination: "personal", write: :append, ingestion: Gralkor.Lens.Ingestion.Store}),
             reflections: []
           }
         })

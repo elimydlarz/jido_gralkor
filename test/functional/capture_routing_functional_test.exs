@@ -232,7 +232,7 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
   defp configuration do
     %{
       destinations: [%{name: "shared"}],
-      lenses: Enum.map(["first", "second", "shared"], &%{name: &1, destination: if(&1 == "shared", do: "shared", else: "personal"), ingestion: Gralkor.Lens.Ingestion.Store}),
+      lenses: Enum.map(["first", "second", "shared"], &%{name: &1, destination: if(&1 == "shared", do: "shared", else: "personal"), write: :append, ingestion: Gralkor.Lens.Ingestion.Store}),
       reflections: []
     }
   end

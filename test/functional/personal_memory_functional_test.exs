@@ -46,7 +46,7 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
     })
     start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: %{
       destinations: [],
-      lenses: [%{name: "notes", destination: "personal", ingestion: Gralkor.Lens.Ingestion.Store}],
+      lenses: [%{name: "notes", destination: "personal", write: :append, ingestion: Gralkor.Lens.Ingestion.Store}],
       reflections: []
     }})
     start_supervised!({Gralkor.CaptureBuffer,
