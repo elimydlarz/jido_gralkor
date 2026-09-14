@@ -286,6 +286,12 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     Application.put_env(:jido_gralkor, :public_extracted_facts, [])
     InMemory.reset()
 
+    start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: %{
+      destinations: Application.fetch_env!(:jido_gralkor, :destinations),
+      lenses: Enum.map(Application.fetch_env!(:jido_gralkor, :lenses), &Keyword.put(&1, :write, :append)),
+      reflections: []
+    }})
+
     on_exit(fn ->
       Enum.each(previous, fn
         {key, nil} -> Application.delete_env(:jido_gralkor, key)

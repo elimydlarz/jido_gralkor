@@ -31,6 +31,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Retry Ownership Reflection Consumer",
+           capture_destination: "personal",
            runtime_config: %{destinations: [], lenses: [], reflections: []}
          }}
       ]
