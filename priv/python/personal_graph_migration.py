@@ -253,7 +253,18 @@ def validate_preparation(manifest: dict[str, object]) -> None:
             raise ValueError(f"target graph already exists: {graph['target_physical']}")
 
 
+def validate_identities(identifiers: list[str]) -> None:
+    if not isinstance(identifiers, list) or not identifiers:
+        raise ValueError("operator identities must be a non-empty list")
+    if any(not isinstance(identity, str) or not identity.strip() or identity.startswith(("operator/", "personal/")) for identity in identifiers):
+        raise ValueError("operator identities must be non-blank identifiers, not resolved graph names")
+    if len(set(identifiers)) != len(identifiers):
+        raise ValueError("operator identities must be distinct")
+
+
 def execute(request: dict[str, object]) -> dict[str, object]:
+    if request["action"] in {"plan", "prepare"}:
+        validate_identities(request["operator_ids"])
     with FalkorDB(**request["connection"]) as database:
         action = request["action"]
         if action == "plan":
