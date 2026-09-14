@@ -169,6 +169,19 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when an application prepares a private graph migration > if an episode claim still has an active lease" do
+    test "then migration refuses before copying its graph", context do
+      seed_history(context.database, "owner")
+      query(context.database, "operator/owner", "MATCH (claim:_GralkorEpisodeClaim {uuid: 'incomplete'}) SET claim.owner = 'active-worker', claim.lease_until_ms = timestamp() + 60000")
+      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+      assert {:ok, _manifest} = PersonalGraphMigration.prepare(context.connection, ["owner"], %{}, journal)
+      assert {:error, message} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      assert message =~ "active episode claim"
+      assert {:ok, current} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      refute hd(current["graphs"])["target_exists"]
+    end
+  end
+
   describe "when an application migrates quiescent historical private graphs" do
     test "then every node and relationship group identity changes to its matching personal graph identity", context do
       seed_history(context.database, "owner")
@@ -242,6 +255,14 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
 
   defp episode(inventory, uuid) do
     inventory["nodes"] |> Enum.find(&("Episodic" in &1["labels"] and &1["properties"]["uuid"] == uuid)) |> Map.fetch!("properties")
+  end
+
+  defp query(database, logical, cypher) do
+    Pythonx.eval("database.select_graph('g_' + logical.hex()).query(cypher.decode())", %{
+      "database" => database,
+      "logical" => logical,
+      "cypher" => cypher
+    })
   end
 
   defp migrate_history(context) do
