@@ -477,6 +477,8 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.steal_after_save = set()
                 self.reject_renewals = set()
                 self.query_calls = []
+                self.stolen_extraction_started = asyncio.Event()
+                self.continue_stolen_extraction = asyncio.Event()
 
             async def execute_query(self, query, **params):
                 async with self.lock:
@@ -560,7 +562,9 @@ defmodule Gralkor.GraphitiPoolTest do
             async def add_episode(self, **kwargs):
                 from graphiti_core.nodes import EpisodicNode
                 self.extractions += 1
-                await asyncio.sleep(0.05)
+                if kwargs['uuid'] == 'stolen-claim' and not self.driver.stolen_extraction_started.is_set():
+                    self.driver.stolen_extraction_started.set()
+                    await self.driver.continue_stolen_extraction.wait()
                 episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
                 await episode.save(self.driver)
 
@@ -632,7 +636,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
     assert eventually(fn ->
              {present, _} =
-               Pythonx.eval("'stolen-claim' in graphs[0].driver.claims", %{"graphs" => graphs})
+               Pythonx.eval("graphs[0].driver.stolen_extraction_started.is_set()", %{"graphs" => graphs})
 
              Pythonx.decode(present)
            end)
@@ -642,6 +646,7 @@ defmodule Gralkor.GraphitiPoolTest do
       claim = graphs[0].driver.claims['stolen-claim']
       claim['owner'] = 'replacement-owner'
       claim['generation'] += 1
+      asyncio._gralkor_loop.call_soon_threadsafe(graphs[0].driver.continue_stolen_extraction.set)
       """,
       %{"graphs" => graphs}
     )

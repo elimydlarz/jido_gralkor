@@ -21,6 +21,22 @@ defmodule Gralkor.PersonalGraphMigration do
     })
   end
 
+  @spec prepare(connection(), [String.t()], map(), String.t()) ::
+          {:ok, manifest()} | {:error, String.t()}
+  def prepare(connection, operator_ids, configuration_references, journal_path) do
+    execute(connection, %{
+      action: "prepare",
+      operator_ids: operator_ids,
+      configuration_references: configuration_references,
+      journal_path: journal_path
+    })
+  end
+
+  @spec apply(connection(), String.t(), map()) :: {:ok, manifest()} | {:error, String.t()}
+  def apply(connection, journal_path, quiescence) do
+    execute(connection, %{action: "apply", journal_path: journal_path, quiescence: quiescence})
+  end
+
   defp execute(connection, request) do
     :ok = Gralkor.Python.ensure_initialised()
 

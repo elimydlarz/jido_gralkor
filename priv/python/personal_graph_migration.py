@@ -1,6 +1,10 @@
 from datetime import date, datetime, time
 from importlib.metadata import version
+import fcntl
 import json
+import os
+from pathlib import Path
+import time as clock
 
 from falkordb import FalkorDB
 from falkordb.graph import Graph
@@ -70,6 +74,7 @@ def plan(database: FalkorDB, identifiers: list[str], references: dict[str, objec
             "target_exists": target in existing,
             "source_inventory": inventory(database.select_graph(source)) if source in existing else {},
             "target_inventory": inventory(database.select_graph(target)) if target in existing else {},
+            "phase": "planned",
         })
     return {
         "format": "gralkor-personal-graphs-v1",
@@ -86,6 +91,103 @@ def plan(database: FalkorDB, identifiers: list[str], references: dict[str, objec
     }
 
 
+def persist(path: Path, manifest: dict[str, object], create: bool = False) -> None:
+    destination = path if create else path.with_suffix(path.suffix + ".tmp")
+    flags = os.O_WRONLY | os.O_CREAT | (os.O_EXCL if create else os.O_TRUNC)
+    with os.fdopen(os.open(destination, flags, 0o600), "w") as stream:
+        json.dump(manifest, stream, sort_keys=True, ensure_ascii=False)
+        stream.flush()
+        os.fsync(stream.fileno())
+    if not create:
+        os.replace(destination, path)
+    directory = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def schema_ready(graph: Graph) -> None:
+    deadline = clock.monotonic() + 30
+    while True:
+        definitions = records(graph.list_indices()) + graph.list_constraints()
+        statuses = {str(item["status"]).upper() for item in definitions}
+        if statuses <= {"OPERATIONAL", "ACTIVE"}:
+            return
+        if statuses & {"FAILED", "ERROR"} or clock.monotonic() >= deadline:
+            raise ValueError(f"graph schema is not operational: {graph.name}: {statuses}")
+        clock.sleep(0.01)
+
+
+def translated(inventory_value: dict[str, object], source: str, target: str) -> dict[str, object]:
+    result = json.loads(json.dumps(inventory_value))
+    for entity in result["nodes"] + result["relationships"]:
+        properties = entity["properties"]
+        if properties.get("group_id") == source:
+            properties["group_id"] = target
+    return result
+
+
+def advance(database: FalkorDB, path: Path, manifest: dict[str, object]) -> dict[str, object]:
+    if manifest["phase"] == "verified":
+        return manifest
+    for entry in manifest["graphs"]:
+        source = database.select_graph(entry["source_physical"])
+        target = database.select_graph(entry["target_physical"])
+        if inventory(source) != entry["source_inventory"]:
+            raise ValueError(f"source changed after inventory: {source.name}")
+        if entry["phase"] == "planned":
+            entry["phase"] = "copying"
+            persist(path, manifest)
+        if entry["phase"] == "copying":
+            source.copy(target.name)
+            schema_ready(target)
+            entry["phase"] = "copied"
+            persist(path, manifest)
+            return manifest
+        if entry["phase"] == "copied":
+            target.query(
+                "MATCH (node) WHERE node.group_id = $source SET node.group_id = $target",
+                {"source": source.name, "target": target.name},
+            )
+            entry["phase"] = "nodes_rewritten"
+            persist(path, manifest)
+            return manifest
+        if entry["phase"] == "nodes_rewritten":
+            target.query(
+                "MATCH ()-[relationship]->() WHERE relationship.group_id = $source SET relationship.group_id = $target",
+                {"source": source.name, "target": target.name},
+            )
+            entry["phase"] = "relationships_rewritten"
+            persist(path, manifest)
+            return manifest
+        if entry["phase"] == "relationships_rewritten":
+            schema_ready(target)
+            target_inventory = inventory(target)
+            if target_inventory != translated(entry["source_inventory"], source.name, target.name):
+                raise ValueError(f"target differs from translated source: {target.name}")
+            entry["target_inventory"] = target_inventory
+            entry["phase"] = "verified"
+            persist(path, manifest)
+    manifest["phase"] = "verified"
+    persist(path, manifest)
+    return manifest
+
+
 def execute(request: dict[str, object]) -> dict[str, object]:
     with FalkorDB(**request["connection"]) as database:
-        return plan(database, request["operator_ids"], request["configuration_references"])
+        action = request["action"]
+        if action == "plan":
+            return plan(database, request["operator_ids"], request["configuration_references"])
+        path = Path(request["journal_path"])
+        with open(path.with_suffix(path.suffix + ".lock"), "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            if action == "prepare":
+                manifest = plan(database, request["operator_ids"], request["configuration_references"])
+                persist(path, manifest, create=True)
+                return manifest
+            with open(path) as stream:
+                manifest = json.load(stream)
+            while manifest["phase"] != "verified":
+                manifest = advance(database, path, manifest)
+            return manifest
