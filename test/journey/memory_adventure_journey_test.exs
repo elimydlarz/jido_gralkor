@@ -83,17 +83,18 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Memory Adventure Agent",
+           capture_destination: "personal",
            runtime_config: %{
              destinations: [%{name: "operations"}],
              lenses: [
                %{
                  name: "work-notes",
-                 destination: "operator",
+                 destination: "personal",
                  write: :append,
                  ontology: Gralkor.MemoryAdventureJourneyTest.JourneyOntology,
                  ingestion: Gralkor.Lens.Ingestion.Store
                },
-               %{name: "systems", destination: "operator", write: :replace_graph},
+               %{name: "systems", destination: "personal", write: :replace_graph},
                %{
                  name: "published",
                  destination: "global",
@@ -171,13 +172,13 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Application.put_env(:jido_gralkor, :lenses, [
       [
         name: "work-notes",
-        destination: "operator",
+        destination: "personal",
         ontology: JourneyOntology,
         ingestion: Gralkor.Lens.Ingestion.Store
       ],
       [
         name: "systems",
-        destination: "operator",
+        destination: "personal",
         write: :replace_graph
       ],
       [
@@ -238,9 +239,27 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     {:ok, adventure: run_adventure(agent)}
   end
 
-  describe "when two operators use implicit memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement" do
-    test "then ontology-free implicit operator memory remains recallable", %{adventure: adventure} do
+  describe "when two operators use direct personal memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement" do
+    test "then ontology-free direct personal memory remains recallable", %{adventure: adventure} do
       assert adventure.implicit_memory
+    end
+
+    test "and direct conversation capture remains searchable without Lens or Reflection authorship", %{adventure: adventure} do
+      assert [%{episode: episode}] = adventure.direct_capture_episodes
+      assert episode.writer == :direct
+      assert episode.source_kind == "conversation"
+      assert episode.source_description == "captured"
+      refute Map.has_key?(episode, :lens)
+      refute Map.has_key?(episode, :reflection)
+    end
+
+    test "and personal-chat processing records its actual Lens provenance", %{adventure: adventure} do
+      assert [%{episode: %{lens: "personal-chat", source_kind: "conversation"}}] = adventure.personal_chat_episodes
+    end
+
+    test "and alternating direct and personal-chat turns writes one episode for each selected route", %{adventure: adventure} do
+      assert length(adventure.direct_capture_episodes) == 1
+      assert length(adventure.personal_chat_episodes) == 1
     end
 
     test "and captured appending-Lens information remains searchable", %{adventure: adventure} do
@@ -253,12 +272,16 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.erl_learning
     end
 
+    test "and ERL remains absent from the other operator's personal Destination", %{adventure: adventure} do
+      refute adventure.erl_visible_to_other_operator
+    end
+
     test "and the global graph is visible to both operators", %{adventure: adventure} do
       assert adventure.global_for_first_operator
       assert adventure.global_for_second_operator
     end
 
-    test "and each operator's selector-free search returns that operator's operator-local memory",
+    test "and each operator's selector-free search returns that operator's personal memory",
          %{
            adventure: adventure
          } do
@@ -266,7 +289,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.second_operator_own_local_information
     end
 
-    test "and each operator's selector-free search excludes the other operator's operator-local memory",
+    test "and each operator's selector-free search excludes the other operator's personal memory",
          %{
            adventure: adventure
          } do
@@ -274,7 +297,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       refute adventure.second_operator_other_local_information
     end
 
-    test "and implicit-default memory uses the graph named `operator/<operator id>`", %{
+    test "and direct memory uses the graph named `personal/<operator id>`", %{
       adventure: adventure
     } do
       assert adventure.implicit_default_operator_graph
@@ -349,7 +372,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   describe "when distinct ingestions use Lenses backed by different Destinations" do
-    test "then the `work-notes` input is searchable through the `operator` Destination", %{
+    test "then the `work-notes` input is searchable through the `personal` Destination", %{
       adventure: adventure
     } do
       assert adventure.work_notes_input_at_operator
@@ -411,14 +434,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     test "and every accessible registered Destination is searched", %{adventure: adventure} do
       searched = Enum.map(adventure.default_memory_search, & &1.destination)
 
-      assert MapSet.new(searched) == MapSet.new(["operator", "global", "operations"])
+      assert MapSet.new(searched) == MapSet.new(["personal", "global", "operations"])
     end
 
-    test "and its results include relevant memory from the `operator`, `global`, and an application Destination",
+    test "and its results include relevant memory from the `personal`, `global`, and an application Destination",
          %{adventure: adventure} do
       assert has_originating_lens?(
                adventure.default_memory_search,
-               "operator",
+               "personal",
                "work-notes"
              )
 
@@ -441,7 +464,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          %{adventure: adventure} do
       assert has_originating_lens?(
                adventure.default_memory_search,
-               "operator",
+               "personal",
                "work-notes"
              )
 
@@ -494,7 +517,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              inspect(adventure.post_selector_memory_search, limit: :infinity)
 
       assert Enum.all?(adventure.selected_memory_search, fn result ->
-               has_originating_lens?([result], "operator", "work-notes")
+               has_originating_lens?([result], "personal", "work-notes")
              end)
     end
 
@@ -654,7 +677,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     implicit_episodes =
       search_until(
         @operator_one,
-        ["operator"],
+        ["personal"],
         :episodes,
         "private deployment codename Juniper Muscat",
         &contains_episode?(&1, "juniper")
@@ -662,23 +685,46 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     session_id = "memory_adventure_#{System.unique_integer([:positive])}"
 
-    :ok =
-      Client.capture(
-        agent,
-        session_id,
-        @operator_one,
-        "Susu",
-        "Eli",
-        [
-          Message.new("user", "The nightly Backup job conflicts with the Vacuum job."),
-          Message.new("behaviour", "thought: both jobs overlap at 02:00"),
-          Message.new("assistant", appended_fact)
-        ],
-        "work-notes",
-        []
-      )
+    :ok = Client.capture(agent, %Gralkor.Capture{
+      session_id: session_id,
+      operator_id: @operator_one,
+      agent_name: "Susu",
+      user_name: "Eli",
+      messages: [Message.new("user", "The private recovery codename is Cedar and the rehearsal city is Amman.")],
+      route: {:direct, "personal"}
+    })
+
+    :ok = Client.capture(agent, %Gralkor.Capture{
+      session_id: session_id,
+      operator_id: @operator_one,
+      agent_name: "Susu",
+      user_name: "Eli",
+      messages: [Message.new("user", "The personal support channel is Harbor and its check-in day is Thursday.")],
+      route: {:lenses, ["personal-chat"]}
+    })
+
+    :ok = Client.capture(agent, %Gralkor.Capture{
+      session_id: session_id,
+      operator_id: @operator_one,
+      agent_name: "Susu",
+      user_name: "Eli",
+      messages: [
+        Message.new("user", "The nightly Backup job conflicts with the Vacuum job."),
+        Message.new("behaviour", "thought: both jobs overlap at 02:00"),
+        Message.new("assistant", appended_fact)
+      ],
+      route: {:lenses, ["work-notes"]}
+    })
 
     :ok = Native.flush_and_await(session_id, 90_000)
+
+    direct_capture_episodes =
+      search_until(@operator_one, ["personal"], :episodes, "Cedar Amman", &contains_episode?(&1, "cedar"))
+      |> Enum.filter(&contains_episode?([&1], "cedar"))
+
+    personal_chat_episodes =
+      search_until(@operator_one, ["personal"], :episodes, "Harbor Thursday", &contains_episode?(&1, "harbor"))
+      |> Enum.filter(&contains_episode?([&1], "harbor"))
 
     _erl_artefact =
       invoke_reflection!(
@@ -765,7 +811,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     {:ok, implicit_memory} =
       Native.recall(
-        Client.operator_graph_id(@operator_one),
+        Client.personal_graph_id(@operator_one),
         "Susu",
         "fresh_recall_#{System.unique_integer([:positive])}",
         "What is the private deployment codename and launch city?"
@@ -774,7 +820,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     shared_episodes =
       search_until(
         @operator_one,
-        ["operator"],
+        ["personal"],
         :episodes,
         "backup vacuum 02:00 04:00",
         &(&1 != [])
@@ -803,14 +849,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     cross_product_memory_search =
       memory_search(agent, @operator_one, %{
         query: selector_query,
-        destinations: ["operator"],
+        destinations: ["personal"],
         lenses: ["published"]
       })
 
     selected_memory_search =
       memory_search(agent, @operator_one, %{
         query: selector_query,
-        destinations: ["operator"],
+        destinations: ["personal"],
         lenses: ["work-notes"]
       })
 
@@ -820,7 +866,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     work_notes_input =
       search_until(
         @operator_one,
-        ["operator"],
+        ["personal"],
         :episodes,
         "Aurora reversible canary deployment",
         &contains_episode?(&1, "aurora")
@@ -849,28 +895,30 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     erl_artefacts =
       search_until(
         @operator_one,
-        ["operator"],
+        ["personal"],
         :artefacts,
         "backup vacuum scheduling conflict",
         &(&1 != []),
         120
       )
 
+    other_operator_erl = search(@operator_two, ["personal"], :artefacts, "backup vacuum scheduling conflict")
+
     current_graph =
       search_until(
         @operator_one,
-        ["operator"],
+        ["personal"],
         :facts,
         "settlement clearing",
         &contains_fact?(&1, "Clearing")
       )
 
-    superseded_graph = search(@operator_one, ["operator"], :facts, "settlement ledger")
+    superseded_graph = search(@operator_one, ["personal"], :facts, "settlement ledger")
 
     conversation_facts =
       attributed_facts(
         @operator_one,
-        "operator",
+        "personal",
         "backup vacuum overlap",
         &(String.contains?(&1.fact.fact, "Susu") or String.contains?(&1.fact.fact, "Eli")),
         "conversation",
@@ -897,7 +945,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     structured_record_facts =
       attributed_facts(
         @operator_one,
-        "operator",
+        "personal",
         "payments ledger dependency",
         &String.contains?(&1.fact.fact, "depends on Ledger"),
         "structured_record",
@@ -906,6 +954,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     %{
       implicit_memory: contains_all?(implicit_memory, ["juniper", "muscat"]),
+      direct_capture_episodes: direct_capture_episodes,
+      personal_chat_episodes: personal_chat_episodes,
+      erl_visible_to_other_operator: learning_artefact?(other_operator_erl),
       appended_information: contains_episode?(shared_episodes, "backup"),
       erl_learning: learning_artefact?(erl_artefacts),
       global_for_first_operator: contains_episode?(global_for_first, "rollback"),
@@ -1161,7 +1212,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
             type: "RELATES_TO",
             properties: %{
               uuid: "memory-adventure-settlement-#{suffix}",
-              group_id: "operator/#{@operator_one}",
+              group_id: "personal/#{@operator_one}",
               name: "SETTLES_THROUGH",
               fact: "Payments settles through #{target}.",
               episodes: [],
@@ -1179,7 +1230,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       labels: ["Entity"],
       properties: %{
         uuid: "memory-adventure-#{id}",
-        group_id: "operator/#{@operator_one}",
+        group_id: "personal/#{@operator_one}",
         name: name,
         summary: name,
         created_at: "2026-08-11T00:00:00Z"
