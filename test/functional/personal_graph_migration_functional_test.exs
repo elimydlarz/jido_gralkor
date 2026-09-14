@@ -1060,7 +1060,8 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
         """
         from redislite import Redis
         from falkordb import FalkorDB
-        source_server = Redis(dbfilename=path.decode(), serverconfig={'port': 0, 'save': ''})
+        source_server = Redis(dbfilename=path.decode(), serverconfig={'port': 0})
+        source_server.config_set('save', '')
         source_database = FalkorDB(unix_socket_path=source_server.socket_file)
         source_server
         """,
@@ -1137,7 +1138,8 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
         """
         from redislite import Redis
         from falkordb import FalkorDB
-        restored_server = Redis(dbfilename=path.decode(), serverconfig={'port': 0, 'save': ''})
+        restored_server = Redis(dbfilename=path.decode(), serverconfig={'port': 0})
+        restored_server.config_set('save', '')
         restored_database = FalkorDB(unix_socket_path=restored_server.socket_file)
         restored_server
         """,
