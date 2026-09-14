@@ -87,7 +87,7 @@ defmodule Gralkor.Application do
         result =
           add_episode_fn.(group_id, body, "captured", ontology,
             source_kind: :conversation,
-            lens: "operator"
+            writer: :direct
           )
 
         ms = System.monotonic_time(:millisecond) - t0

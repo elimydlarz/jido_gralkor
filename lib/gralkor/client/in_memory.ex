@@ -61,55 +61,18 @@ defmodule Gralkor.Client.InMemory do
   end
 
   @impl Gralkor.Client
-  def capture(session_id, group_id, agent_name, user_name, turn) do
-    raise_if_blank!(:session_id, session_id)
-    raise_if_blank!(:agent_name, agent_name)
-    raise_if_blank!(:user_name, user_name)
-
-    GenServer.call(
-      __MODULE__,
-      {:call, :capture, [session_id, group_id, agent_name, user_name, turn]}
-    )
+  def capture(runtime_owner, %Gralkor.Capture{} = request) do
+    Gralkor.Capture.resolve!(runtime_owner, request)
+    GenServer.call(__MODULE__, {:call, :capture, [runtime_owner, request]})
   end
 
-  @impl Gralkor.Client
-  def capture(session_id, operator_id, agent_name, user_name, turn, lens) do
-    capture(session_id, operator_id, agent_name, user_name, turn, lens, [])
-  end
+  for arity <- [5, 6, 7, 8] do
+    arguments = Macro.generate_arguments(arity, __MODULE__)
 
-  @impl Gralkor.Client
-  def capture(session_id, operator_id, agent_name, user_name, turn, lens, additional_lenses) do
-    raise_if_blank!(:session_id, session_id)
-    raise_if_blank!(:operator_id, operator_id)
-    raise_if_blank!(:agent_name, agent_name)
-    raise_if_blank!(:user_name, user_name)
-
-    GenServer.call(
-      __MODULE__,
-      {:call, :capture,
-       [
-         session_id,
-         operator_id,
-         agent_name,
-         user_name,
-         turn,
-         lens,
-         additional_lenses
-       ]}
-    )
-  end
-
-  def capture(
-        _runtime_owner,
-        session_id,
-        operator_id,
-        agent_name,
-        user_name,
-        turn,
-        lens,
-        additional_lenses
-      ) do
-    capture(session_id, operator_id, agent_name, user_name, turn, lens, additional_lenses)
+    def capture(unquote_splicing(arguments)) do
+      raise ArgumentError,
+            "positional capture/#{unquote(arity)} is retired; use Gralkor.Client.capture(runtime_owner, %Gralkor.Capture{route: {:direct, destination} | {:lenses, names}})"
+    end
   end
 
   @impl Gralkor.Client

@@ -40,81 +40,18 @@ defmodule Gralkor.Client.Native do
   end
 
   @impl Gralkor.Client
-  def capture(session_id, group_id, agent_name, user_name, msgs) do
-    raise_if_blank!(:session_id, session_id)
-    raise_if_blank!(:agent_name, agent_name)
-    raise_if_blank!(:user_name, user_name)
-
-    # Capture is silent per-turn — what actually lands in memory is logged at
-    # flush time instead (see `build_flush_callback/2`, gated on the same :test
-    # flag). Logging every buffered turn here just floods the consumer's logs.
-    CaptureBuffer.append(
-      session_id,
-      group_id,
-      agent_name,
-      user_name,
-      DefaultOntology,
-      msgs
-    )
+  def capture(runtime_owner, %Gralkor.Capture{} = request) do
+    routes = Gralkor.Capture.resolve!(runtime_owner, request)
+    CaptureBuffer.append_capture(runtime_owner, request, routes)
   end
 
-  @impl Gralkor.Client
-  def capture(session_id, operator_id, agent_name, user_name, msgs, lens) do
-    raise_if_blank!(:session_id, session_id)
-    raise_if_blank!(:agent_name, agent_name)
-    raise_if_blank!(:user_name, user_name)
+  for arity <- [5, 6, 7, 8] do
+    arguments = Macro.generate_arguments(arity, __MODULE__)
 
-    CaptureBuffer.append_lens(
-      session_id,
-      operator_id,
-      agent_name,
-      user_name,
-      lens,
-      msgs
-    )
-  end
-
-  @impl Gralkor.Client
-  def capture(session_id, operator_id, agent_name, user_name, msgs, lens, additional_lenses) do
-    raise_if_blank!(:session_id, session_id)
-    raise_if_blank!(:operator_id, operator_id)
-    raise_if_blank!(:agent_name, agent_name)
-    raise_if_blank!(:user_name, user_name)
-
-    CaptureBuffer.append_lenses(
-      session_id,
-      operator_id,
-      agent_name,
-      user_name,
-      [lens | additional_lenses],
-      msgs
-    )
-  end
-
-  def capture(
-        runtime_owner,
-        session_id,
-        operator_id,
-        agent_name,
-        user_name,
-        msgs,
-        lens,
-        additional_lenses
-      ) do
-    raise_if_blank!(:session_id, session_id)
-    raise_if_blank!(:operator_id, operator_id)
-    raise_if_blank!(:agent_name, agent_name)
-    raise_if_blank!(:user_name, user_name)
-
-    CaptureBuffer.append_lenses(
-      runtime_owner,
-      session_id,
-      operator_id,
-      agent_name,
-      user_name,
-      [lens | additional_lenses],
-      msgs
-    )
+    def capture(unquote_splicing(arguments)) do
+      raise ArgumentError,
+            "positional capture/#{unquote(arity)} is retired; use Gralkor.Client.capture(runtime_owner, %Gralkor.Capture{route: {:direct, destination} | {:lenses, names}})"
+    end
   end
 
   @impl Gralkor.Client
@@ -153,7 +90,7 @@ defmodule Gralkor.Client.Native do
            source,
            DefaultOntology,
            source_kind: source_kind,
-           lens: "operator"
+           writer: :direct
          ) do
       :ok -> :ok
       {:error, _} = err -> err
