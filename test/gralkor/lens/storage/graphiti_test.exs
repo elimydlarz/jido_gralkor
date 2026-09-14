@@ -8,11 +8,11 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
   alias Gralkor.Lens.Store
   alias Gralkor.TestOntologies.Strict
 
-  describe "when a Lens store adds an episode to the `operator` Destination" do
-    test "then Graphiti receives the group named `operator/<operator id>`" do
+  describe "when a Lens store adds an episode to the `personal` Destination" do
+    test "then Graphiti receives the group named `personal/<operator id>`" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator")
+        lens: lens("observations", "personal")
       }
 
       test_pid = self()
@@ -34,7 +34,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                  add_episode_fn: add_episode_fn
                )
 
-      assert_receive {:graph_add, "operator/operator-one", _, _, _, _}
+      assert_receive {:graph_add, "personal/operator-one", _, _, _, _}
     end
 
     test "and changing the operator produces a distinct group" do
@@ -48,11 +48,11 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       stores = [
         %Store{
           operator_id: "operator-one",
-          lens: lens("observations", "operator")
+          lens: lens("observations", "personal")
         },
         %Store{
           operator_id: "operator-two",
-          lens: lens("observations", "operator")
+          lens: lens("observations", "personal")
         }
       ]
 
@@ -73,7 +73,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "and the graph add receives the episode content, source description, and Lens ontology" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator")
+        lens: lens("observations", "personal")
       }
 
       test_pid = self()
@@ -102,7 +102,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "and the graph add result is returned to the ingestion process" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator")
+        lens: lens("observations", "personal")
       }
 
       add_episode_fn = fn _group_id, _content, _source_description, _ontology, _opts ->
@@ -118,7 +118,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "then Graphiti receives that source kind unchanged" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator"),
+        lens: lens("observations", "personal"),
         source_kind: :structured_record
       }
 
@@ -160,11 +160,11 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  describe "when a Lens store using the `operator` Destination is searched" do
+  describe "when a Lens store using the `personal` Destination is searched" do
     test "then graph search receives the same resolved group" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator")
+        lens: lens("observations", "personal")
       }
 
       test_pid = self()
@@ -177,13 +177,13 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       assert {:ok, []} =
                Graphiti.search(store, "launch window", 7, search_fn: search_fn)
 
-      assert_receive {:graph_search, "operator/operator-one", _, _}
+      assert_receive {:graph_search, "personal/operator-one", _, _}
     end
 
     test "and graph search receives the query and result limit" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator")
+        lens: lens("observations", "personal")
       }
 
       test_pid = self()
@@ -200,7 +200,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     test "and the graph search result is returned to the caller" do
       store = %Store{
         operator_id: "operator-one",
-        lens: lens("observations", "operator")
+        lens: lens("observations", "personal")
       }
 
       search_fn = fn _group_id, _query, _max_results ->
@@ -212,13 +212,13 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  describe "when the implicit `operator` Lens's packaged Destination is added to or searched" do
-    test "then graph operations use the group named `operator/<operator id>`" do
+  describe "when the packaged `personal-chat` Lens's packaged Destination is added to or searched" do
+    test "then graph operations use the group named `personal/<operator id>`" do
       store = %Store{
         operator_id: "operator-one",
         lens: %Lens{
-          name: "operator",
-          destination: destination("operator"),
+          name: "personal-chat",
+          destination: destination("personal"),
           ontology: Strict,
           ingestion: Gralkor.Lens.Ingestion.Store
         }
@@ -240,8 +240,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                Graphiti.add_episode(store, "content", "source", add_episode_fn: add_episode_fn)
 
       assert {:ok, []} = Graphiti.search(store, "content", 5, search_fn: search_fn)
-      assert_receive {:graph_add, "operator/operator-one"}
-      assert_receive {:graph_search, "operator/operator-one"}
+      assert_receive {:graph_add, "personal/operator-one"}
+      assert_receive {:graph_search, "personal/operator-one"}
     end
   end
 
@@ -287,9 +287,9 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  describe "when a replaceable Lens store using the `operator` Destination replaces a complete graph" do
+  describe "when a replaceable Lens store using the `personal` Destination replaces a complete graph" do
     test "then graph replacement receives the same resolved group used by existing Lens operations" do
-      store = replaceable_store(:operator)
+      store = replaceable_store(:personal)
       graph = property_graph()
       test_pid = self()
 
@@ -300,7 +300,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
       assert :ok = Graphiti.replace_graph(store, graph, replace_graph_fn: replace_graph_fn)
 
-      assert_receive {:graph_replaced, "operator/operator-one"}
+      assert_receive {:graph_replaced, "personal/operator-one"}
     end
 
     test "and graph replacement receives the selected Lens name" do
@@ -312,7 +312,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       end
 
       assert :ok =
-               Graphiti.replace_graph(replaceable_store(:operator), property_graph(),
+               Graphiti.replace_graph(replaceable_store(:personal), property_graph(),
                  replace_graph_fn: replace_graph_fn
                )
 
@@ -330,7 +330,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       end
 
       assert :ok =
-               Graphiti.replace_graph(replaceable_store(:operator), graph,
+               Graphiti.replace_graph(replaceable_store(:personal), graph,
                  replace_graph_fn: replace_graph_fn
                )
 
@@ -343,7 +343,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       end
 
       assert {:error, :graph_unavailable} =
-               Graphiti.replace_graph(replaceable_store(:operator), property_graph(),
+               Graphiti.replace_graph(replaceable_store(:personal), property_graph(),
                  replace_graph_fn: replace_graph_fn
                )
     end
@@ -483,14 +483,14 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       end
 
       assert {:ok, []} =
-               Graphiti.search(replaceable_store(:operator), "settlement", 5,
+               Graphiti.search(replaceable_store(:personal), "settlement", 5,
                  search_fn: search_fn
                )
 
       assert {:ok, []} =
                Graphiti.search(replaceable_store(:global), "settlement", 5, search_fn: search_fn)
 
-      assert_receive {:graph_search, "operator/operator-one", "settlement", 5}
+      assert_receive {:graph_search, "personal/operator-one", "settlement", 5}
 
       assert_receive {:graph_search, "global", "settlement", 5}
     end
@@ -540,7 +540,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     [
       fn ->
         Graphiti.add_episode(
-          %Store{operator_id: "operator-one", lens: lens("observations", "operator")},
+          %Store{operator_id: "operator-one", lens: lens("observations", "personal")},
           "content",
           "source",
           add_episode_fn: add_episode_fn,
@@ -548,7 +548,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
         )
       end,
       fn ->
-        Graphiti.replace_graph(replaceable_store(:operator), property_graph(),
+        Graphiti.replace_graph(replaceable_store(:personal), property_graph(),
           replace_graph_fn: replace_graph_fn,
           unsupported_option: true
         )

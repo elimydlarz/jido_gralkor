@@ -23,7 +23,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     :ok
   end
 
-  describe "when a Lens store adds episodes to the `operator`, `global`, or an application Destination" do
+  describe "when a Lens store adds episodes to the `personal`, `global`, or an application Destination" do
     test "then each episode remains in insertion order within only its Destination" do
       operator = operator_store("operator-one")
       decisions = application_store("operator-one", "decisions")
@@ -85,7 +85,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
 
   describe "when a replaceable Lens store replaces a complete graph" do
     test "then the graph is stored within only its resolved Destination" do
-      local = replaceable_store("operator-one", "systems", :operator)
+      local = replaceable_store("operator-one", "systems", :personal)
       global = replaceable_store("operator-one", "catalogue", :global)
       graph = graph(graph_data("system"))
 
@@ -95,14 +95,14 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       assert %{nodes: [%{id: "system"}]} = InMemory.graph(key(local))
       assert %{nodes: [%{id: "system"}]} = InMemory.graph(key(global))
 
-      assert InMemory.graph(key(replaceable_store("operator-two", "systems", :operator))) == %{
+      assert InMemory.graph(key(replaceable_store("operator-two", "systems", :personal))) == %{
                nodes: [],
                relationships: []
              }
     end
 
     test "and every supplied node and relationship retains each non-reserved graph value" do
-      store = replaceable_store("operator-one", "systems", :operator)
+      store = replaceable_store("operator-one", "systems", :personal)
 
       graph =
         graph(%{
@@ -151,7 +151,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     end
 
     test "and every supplied node and relationship records the replacing Lens as its owner" do
-      store = replaceable_store("operator-one", "systems", :operator)
+      store = replaceable_store("operator-one", "systems", :personal)
 
       graph =
         graph(%{
@@ -311,7 +311,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
 
   describe "when a replaceable Lens store is searched" do
     test "then search reads from its resolved Destination" do
-      local = replaceable_store("operator-one", "systems", :operator)
+      local = replaceable_store("operator-one", "systems", :personal)
       global = replaceable_store("operator-one", "systems", :global)
 
       assert {:ok, []} = Store.search(local, "settlement", 5)
@@ -323,8 +323,8 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
     %Store{
       operator_id: operator_id,
       lens: %Lens{
-        name: "operator",
-        destination: destination("operator"),
+        name: "personal-chat",
+        destination: destination("personal"),
         ontology: Gralkor.DefaultOntology,
         ingestion: String
       }

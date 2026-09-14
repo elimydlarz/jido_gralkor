@@ -176,6 +176,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Deterministic Memory Agent",
+           capture_destination: "personal",
            runtime_config: %{
              destinations: [],
              lenses: [
@@ -300,26 +301,27 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       Application.put_env(:jido_gralkor, :client, Native)
 
       assert :ok =
-               Native.capture(
-                 "committed-thread",
-                 "operator/operator-one",
-                 "Lifecycle Agent",
-                 "Eli",
-                 [Message.new("user", "flush this")]
-               )
+               Gralkor.Client.capture(self(), %Gralkor.Capture{
+                 session_id: "committed-thread",
+                 operator_id: "operator-one",
+                 agent_name: "Lifecycle Agent",
+                 user_name: "Eli",
+                 messages: [Message.new("user", "flush this")],
+                 route: {:direct, "personal"}
+               })
 
       pid = start_agent_with_thread("committed-thread")
       stop = Task.async(fn -> GenServer.stop(pid, :shutdown, 5_000) end)
 
-      assert_receive {:external_write_started, worker, "operator/operator-one", body, "captured",
+      assert_receive {:external_write_started, worker, "personal/operator-one", body, "captured",
                       Gralkor.DefaultOntology, opts}
 
       assert body == "Eli: flush this"
       assert opts[:source_kind] == :conversation
-      refute_receive {:external_write_finished, "operator/operator-one"}
+      refute_receive {:external_write_finished, "personal/operator-one"}
       assert {:ok, :ok} = Task.yield(stop, 100)
       send(worker, :release)
-      assert_receive {:external_write_finished, "operator/operator-one"}
+      assert_receive {:external_write_finished, "personal/operator-one"}
     end
 
     test "and the configured memory client flushes the committed thread" do
@@ -360,13 +362,13 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert result =~ "17"
     end
 
-    test "and the backend receives one build for the graph named `operator/<operator id>`" do
+    test "and the backend receives one build for the graph named `personal/<operator id>`" do
       InMemory.set_build_communities({:ok, %{communities: 3, edges: 17}})
 
       assert {:ok, _result} =
                MemoryBuildCommunities.run(%{}, %{agent_id: "operator-one"})
 
-      assert InMemory.communities_builds() == [["operator/operator-one"]]
+      assert InMemory.communities_builds() == [["personal/operator-one"]]
     end
 
     test "and a backend failure is returned unchanged" do
@@ -418,13 +420,13 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   describe "when an agent invokes memory search with a usable query" do
     test "then returned results are scoped to the current operator" do
-      assert :ok = ingest_memory("operator", "own memory")
-      assert :ok = ingest_memory("operator", "other memory", "operator-two")
+      assert :ok = ingest_memory("personal-chat", "own memory")
+      assert :ok = ingest_memory("personal-chat", "other memory", "operator-two")
 
       assert {:ok, %{result: text}} =
                memory_search(%{query: "memory", destinations: ["personal"]}, [])
 
-      assert text == "Lens: operator\n- own memory"
+      assert text == "Lens: personal-chat\n- own memory"
     end
 
     test "and the usable query selects relevant extracted facts" do
@@ -482,12 +484,12 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   describe "when an agent invokes memory search with a usable query > where both selectors are omitted or empty" do
     test "then every accessible registered Destination can contribute" do
-      for lens <- ["operator", "shared-notes", "observations", "decisions"],
+      for lens <- ["personal-chat", "shared-notes", "observations", "decisions"],
           do: assert(:ok = ingest_memory(lens, lens <> " fact"))
 
       assert {:ok, %{result: text}} = memory_search(%{query: "fact"}, [])
 
-      for lens <- ["operator", "shared-notes", "observations", "decisions"],
+      for lens <- ["personal-chat", "shared-notes", "observations", "decisions"],
           do: assert(text =~ "Lens: #{lens}\n- #{lens} fact")
     end
   end
@@ -1063,7 +1065,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       state:
         Map.merge(
           %{
-            __memory__: %{agent_name: "Susu"},
+            __memory__: %{agent_name: "Susu", capture_destination: "personal"},
             __thread__: %{id: "thread-one"},
             __strategy__: %{
               request_traces: %{request_id => %{events: [%{kind: :llm_completed, data: %{}}]}}
