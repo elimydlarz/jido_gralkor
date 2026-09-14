@@ -253,6 +253,19 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when an interrupted private graph migration resumes from its persisted manifest" do
+    test "then a copied graph resumes without duplicating nodes or relationships", context do
+      journal = prepare_history(context)
+      assert {:ok, _manifest} = PersonalGraphMigration.advance(context.connection, journal, @quiescence)
+      interrupted = File.read!(journal) |> Jason.decode!()
+      assert hd(interrupted["graphs"])["phase"] == "copied"
+      assert {:ok, completed} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      target = hd(completed["graphs"])["target_inventory"]
+      assert target["node_count"] == 8
+      assert target["relationship_count"] == 3
+    end
+  end
+
   defp episode(inventory, uuid) do
     inventory["nodes"] |> Enum.find(&("Episodic" in &1["labels"] and &1["properties"]["uuid"] == uuid)) |> Map.fetch!("properties")
   end
