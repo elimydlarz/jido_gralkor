@@ -44,6 +44,7 @@ Recommended dispatch preserves the current exclusive direct-or-Lens behaviour:
 3. Every Lens keeps its declared Destination, ontology, and ingestion process. `capture_destination` governs direct capture only and cannot override a Lens's Destination.
 4. Deduplicate repeated Lens names, not different processing Lenses sharing a Destination. A process may legitimately produce zero, one, or many writes.
 5. Retain per-turn Lens selection, request correlation across completion/failure, and existing additional-Lens fan-out. Selecting a Lens must not change search selectors.
+6. Support direct-to-Lens and Lens-to-direct selections within one session by retaining each turn's selected route and batching direct and Lens turns independently. No turn enters an unselected route, and no batch combines incompatible processing or ontologies. This is a proposed correction to the current buffer's mode-mismatch rejection; express it explicitly in the revised contract.
 
 This refines an earlier assistant suggestion of always storing directly plus optional additive Lens processing. That additive suggestion was not an approved operator contract. Automatically combining direct storage with the packaged Store-based `personal-chat` Lens would create two copies of an ordinary conversation. The recommended exclusive dispatch avoids introducing that behaviour. Make this refinement visible in the proposed tree diff.
 
@@ -158,7 +159,7 @@ All paths in this section are relative to `/Users/eli/code/fasset/fasset-intelli
 ### Mounts, identity, and private recall
 
 - `lib/phil/chat_agent.ex:111`: replace `ingestion_lens: "operator"` with `ingestion_lens: "personal-chat"` and add the proposed explicit `capture_destination: "personal"`. Use the exclusive dispatch recommendation above so this does not store two transcripts. Tests must also exercise the configuration with no ingestion Lens.
-- `lib/phil/runtime_configuration/agent.ex:8`: supply explicit `capture_destination: "personal"` at the background runtime mount if the new plugin requires this configuration at mount. Recommended contract is to provide it consistently; this does not cause that non-chat agent to emit captures.
+- `lib/phil/runtime_configuration/agent.ex:8`: supply explicit `capture_destination: "personal"` at the background runtime mount consistently with the proposed plugin configuration. This does not cause that non-chat agent to emit captures.
 - `lib/phil/runtime_configuration/plugin.ex:17` already forwards mount configuration and injects runtime definitions. Keep that existing wiring rather than introducing another configuration layer.
 - Preserve `Phil.Chat.agent_id/1`, persisted `User.operator_id`, legacy `owner`, and other `dashboard:<account UUID>` values. `priv/repo/migrations/20260910100000_admin_membership.exs` deliberately preserves these identities.
 - Keep Slack's `capture_conversation: false` (`lib/phil/slack_chat.ex:384`) and the suppression in `lib/phil/chat/memory_plugin.ex:21`.
@@ -195,10 +196,12 @@ Updating active definitions is insufficient. Phil restores historical Destinatio
 - `lib/phil/reflections/execution.ex:74`: persists `result_checkpoint.resolved_definition`.
 - `lib/phil/reflections/output_delivery.ex:62`: resumes delivery using resolved snapshots.
 - `lib/phil/artefacts/artefact.ex:42`: retains immutable `resolved_definition` and `definition_hash`.
+- `lib/phil/artefacts/ingester.ex:91`: restores the stored definition and projects an artefact into Graphiti independently of Reflection output delivery.
+- `lib/phil/reflections/store.ex:27` and `lib/phil/artefacts/actions/store_completed.ex:53`: reconstruct the snapshot/hash at commit and enforce immutable retry matching.
 
-Implement explicit historical routing translation at the snapshot/delivery boundary for old private Destination names, preserving the original stored snapshot and hash. Apply it to both historical snapshot shapes and resumed checkpoints. Do not make current public APIs silently accept arbitrary retired configuration or mutate immutable archival JSON with a blanket replacement.
+Implement explicit historical routing translation in the storage routing representation used by output delivery and artefact projection. Preserve the original snapshot and hash through canonical commit and immutable retry matching. Apply routing translation to both historical snapshot shapes and resumed checkpoints. Simply replacing the Destination during `Definition.from_snapshot/1` would cause commit to regenerate different archival provenance and reject an existing artefact; do not use that shortcut. Do not make current public APIs silently accept arbitrary retired configuration or mutate immutable archival JSON with a blanket replacement.
 
-Prove pending jobs, checkpointed executions, and queued deliveries still target the same person's migrated personal graph and recover the original artefact. Preserve invocation IDs, artefact IDs, source descriptions, Reflection names, and schedule ownership. Historical `operator` must never resolve through the generic shared-name clause after the rename.
+Prove pending jobs, checkpointed executions, queued deliveries, and pending/failed artefact projections still target the same person's migrated personal graph and recover the original artefact. Include replay against an already stored private artefact, preserving its original definition/hash. Preserve invocation IDs, artefact IDs, source descriptions, Reflection names, and schedule ownership. Historical `operator` must never resolve through the generic shared-name clause after the rename.
 
 ERL changes its configured Destination name to `personal`, while generalisations remains `global`. Their production, identity, ontology, retrieval, delivery retries, and terminal callback behaviour remain unchanged.
 
@@ -237,6 +240,7 @@ Acceptance matrix:
 | Packaged names | personal-chat and personal present; retired names give migration errors; global and packaged Reflections remain |
 | Direct capture | No selected Lens; completed and failed turns flush into personal and can be read back |
 | Selected Lens | personal-chat processes a conversation once; no extra direct copy; consumer processes keep their own Destinations |
+| Route transitions | Direct, Lens, and then direct turns in one session retain independent ordered batches, with no duplicated turn or mixed route/schema |
 | Identity/isolation | Same exact identity across migration; two people cannot retrieve one another's personal memory; punctuation-sensitive IDs remain distinct |
 | Historical recall | Old provenance, source IDs, fact relationships, and supported unmarked history remain accessible without an operator Lens registry entry |
 | Provenance | New direct writes have no fictitious Lens; real Lens writes identify their process; user descriptions cannot forge writer identity |
@@ -244,7 +248,7 @@ Acceptance matrix:
 | Flush/retry | Async/awaited flush, empty transcripts, timeouts, route failures, retries, rotation, runtime snapshots, and shutdown preserve the contract |
 | Graph migration | Dry run, conflict refusal, preserved data/UUIDs/schema/completion state, restart after interruption, successful cutover, and rollback on isolated copies |
 | Reflection replay | Original completed artefact remains equal; incomplete output resumes; conflicting content still fails; old snapshots cannot target a shared operator graph |
-| Phil migration | Stored active config, trigger defaults, both snapshot formats, jobs/checkpoints, UI, chat capture, legacy owner recall, and disabled Slack capture |
+| Phil migration | Stored active config, trigger defaults, both snapshot formats, jobs/checkpoints, independent artefact projections, preserved archival hashes, UI, chat capture, legacy owner recall, and disabled Slack capture |
 | Reflection routing | ERL remains personal to its invocation identity with ERLOntology; generalisations remains global; capture adds no Reflection trigger |
 
 Update `MENTAL_MODEL.md`, `CLAUDE.md`, `README.md`, `DESTINATIONS.md`, `CHANGELOG.md`, public moduledocs, and Phil's corresponding docs. Keep canonical docs describing implemented behaviour until implementation changes it. The mental model's World-to-Code Mapping, Ubiquitous Language, Invariants, and Decision Rationale contain the relevant existing lines; tighten those rather than adding a parallel vocabulary. Document API/configuration migration separately from graph migration and historical provenance.
@@ -264,7 +268,7 @@ Suggested independent ownership after the outer contract is established:
 
 Agree shared-file ownership and API contracts before concurrent edits; adapt to others' changes instead of reverting them. The primary agent reconciles the integrated result, runs the required completion gates, and obtains the applicable final independent review. Package publishing and live deployment are distinct from implementing and proving the change.
 
-All implementation and verification in this document remains to be done. Completion requires implemented behaviour, tested migration tooling, migrated consumer code, accurate trees/docs, and a precise record of passed and unperformed gates. Do not mark the work complete after a name replacement or compile-only check. If an unavailable release pin, a live migration, or an unauthorized Journey remains, name that exact remaining outcome and its reason.
+All implementation and behavioural verification in this document remains to be done. Completion requires implemented behaviour, tested migration tooling, migrated consumer code, accurate trees/docs, and a precise record of passed and unperformed gates. Do not mark the work complete after a name replacement or compile-only check. If an unavailable release pin, a live migration, or an unauthorized Journey remains, name that exact remaining outcome and its reason.
 
 ## 8. Suggested goal for the next session
 
