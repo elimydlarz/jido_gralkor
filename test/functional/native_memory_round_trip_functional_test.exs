@@ -24,7 +24,7 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   @moduletag :functional
   @moduletag timeout: 120_000
 
-  @captured_source "captured [lens: operator]"
+  @captured_source "captured [gralkor: direct]"
 
   setup do
     test_pid = self()
@@ -100,6 +100,8 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
     on_exit(fn -> if Process.alive?(pool), do: GenServer.stop(pool) end)
 
+    start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: %{}})
+
     start_supervised!({CaptureBuffer, [flush_callback: App.build_flush_callback(nil)]})
 
     %{g: g}
@@ -136,7 +138,7 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
     test "then the graph stores its plain text unchanged", %{g: g} do
       assert :ok =
                Native.memory_add(
-                 Client.operator_graph_id("operator-one"),
+                 Client.personal_graph_id("operator-one"),
                  "Eli works at Anthropic in Sydney.",
                  "manual"
                )
@@ -145,9 +147,9 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       assert episode["body"] == "Eli works at Anthropic in Sydney."
     end
 
-    test "and the graph named `operator/<operator id>` receives it", %{g: g} do
-      graph_id = Client.operator_graph_id("operator-one")
-      assert graph_id == "operator/operator-one"
+    test "and the graph named `personal/<operator id>` receives it", %{g: g} do
+      graph_id = Client.personal_graph_id("operator-one")
+      assert graph_id == "personal/operator-one"
 
       assert :ok = Native.memory_add(graph_id, "Operator fact", "manual")
 
@@ -158,8 +160,8 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
   describe "when facts are written for logical operator graphs that previously normalised to the same name" do
     test "then each logical graph identifier is encoded exactly once at the physical Graphiti boundary" do
-      first_logical = Client.operator_graph_id("a-b")
-      second_logical = Client.operator_graph_id("a_b")
+      first_logical = Client.personal_graph_id("a-b")
+      second_logical = Client.personal_graph_id("a_b")
       first_physical = "g_" <> Base.encode16(first_logical, case: :lower)
       second_physical = "g_" <> Base.encode16(second_logical, case: :lower)
 
@@ -171,8 +173,8 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
     end
 
     test "and the pool constructs and caches a distinct physical graph instance for each logical graph" do
-      first_logical = Client.operator_graph_id("a-b")
-      second_logical = Client.operator_graph_id("a_b")
+      first_logical = Client.personal_graph_id("a-b")
+      second_logical = Client.personal_graph_id("a_b")
       first_physical = "g_" <> Base.encode16(first_logical, case: :lower)
       second_physical = "g_" <> Base.encode16(second_logical, case: :lower)
 
@@ -236,13 +238,13 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       assert await_episode(g, @captured_source)
     end
 
-    test "and the rendered transcript eventually reaches the session's group with trusted `operator` Lens provenance",
+    test "and the rendered transcript eventually reaches the selected personal graph with direct conversation provenance",
          %{g: g} do
       capture("session-transcript")
       assert :ok = Native.flush("session-transcript")
       episode = await_episode(g, @captured_source)
       assert episode, "expected a captured episode to reach the graph"
-      assert episode["group_id"] == Client.sanitize_group_id("operator_one")
+      assert episode["group_id"] == Client.sanitize_group_id("personal/operator-one")
       assert episode["body"] =~ "teal"
     end
 
@@ -271,9 +273,16 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   end
 
   defp capture(session_id) do
-    Native.capture(session_id, "operator_one", "Susu", "Eli", [
-      Message.new("user", "my favourite colour is teal"),
-      Message.new("assistant", "Noted — teal it is.")
-    ])
+    Client.capture(self(), struct!(Gralkor.Capture,
+      session_id: session_id,
+      operator_id: "operator-one",
+      agent_name: "Susu",
+      user_name: "Eli",
+      route: {:direct, "personal"},
+      messages: [
+        Message.new("user", "my favourite colour is teal"),
+        Message.new("assistant", "Noted — teal it is.")
+      ]
+    ))
   end
 end
