@@ -350,9 +350,33 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
   describe "when an interrupted private graph migration resumes from its persisted manifest" do
     test "then a copied graph resumes without duplicating nodes or relationships", context do
       journal = prepare_history(context)
-      assert {:ok, _manifest} = PersonalGraphMigration.advance(context.connection, journal, @quiescence)
-      interrupted = File.read!(journal) |> Jason.decode!()
-      assert hd(interrupted["graphs"])["phase"] == "copied"
+      {python, _} = Pythonx.eval("import sys\nsys.prefix + '/bin/python'", %{})
+      request = Jason.encode!(%{action: "advance", connection: Map.new(context.connection), journal_path: journal, quiescence: @quiescence})
+      for {boundary, expected_phase} <- [{"copy_intent", "copying"}, {"copied", "copied"}, {"nodes_rewritten", "nodes_rewritten"}, {"relationships_rewritten", "relationships_rewritten"}] do
+        script = """
+        import json, os, sys
+        from pathlib import Path
+        namespace = {}
+        path = sys.argv[1]
+        exec(compile(Path(path).read_text(), path, 'exec'), namespace)
+        request = json.loads(sys.argv[2])
+        boundary = sys.argv[3]
+        if boundary == 'copy_intent':
+            persist = namespace['persist']
+            def interrupted_persist(path, manifest, create=False):
+                persist(path, manifest, create)
+                if manifest['graphs'][0]['phase'] == 'copying':
+                    with namespace['FalkorDB'](**request['connection']) as database:
+                        entry = manifest['graphs'][0]
+                        database.select_graph(entry['source_physical']).copy(entry['target_physical'])
+                    os._exit(73)
+            namespace['persist'] = interrupted_persist
+        namespace['execute'](request)
+        os._exit(73)
+        """
+        assert {"", 73} = System.cmd(Pythonx.decode(python), ["-c", script, Application.app_dir(:jido_gralkor, "priv/python/personal_graph_migration.py"), request, boundary], stderr_to_stdout: true)
+        assert hd(Jason.decode!(File.read!(journal))["graphs"])["phase"] == expected_phase
+      end
       assert {:ok, completed} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
       target = hd(completed["graphs"])["target_inventory"]
       assert target["node_count"] == 8
