@@ -65,7 +65,8 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
   end
 
   describe "when an application migrates a consistent backup restored into a separate FalkorDB server" do
-    test "then restored graph content and operational schema remain intact through migration and public recall", context do
+    test "then restored graph content and operational schema remain intact through migration and public recall",
+         context do
       %{restored: restored, before: before, evidence: evidence} = restore_history(context)
       assert evidence["source_pid"] != evidence["restored_pid"]
       assert evidence["source_run_id"] != evidence["restored_run_id"]
@@ -73,29 +74,98 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert evidence["source_rdb_sha256"] == evidence["restored_rdb_sha256"]
       assert evidence["rdb_size"] > 0
       assert evidence["rdb_loaded"]
-      assert {:ok, ^before} = PersonalGraphMigration.plan(restored.connection, ["owner", "a/b", "a_b"], %{})
+
+      assert {:ok, ^before} =
+               PersonalGraphMigration.plan(restored.connection, ["owner", "a/b", "a_b"], %{})
 
       journal = Path.join(context.directory, "restored-migration.json")
-      assert {:ok, _} = PersonalGraphMigration.prepare(restored.connection, ["owner", "a/b", "a_b"], %{}, journal)
-      assert {:ok, manifest} = PersonalGraphMigration.apply(restored.connection, journal, @quiescence)
+
+      assert {:ok, _} =
+               PersonalGraphMigration.prepare(
+                 restored.connection,
+                 ["owner", "a/b", "a_b"],
+                 %{},
+                 journal
+               )
+
+      assert {:ok, manifest} =
+               PersonalGraphMigration.apply(restored.connection, journal, @quiescence)
+
       for graph <- manifest["graphs"] do
-        expected = Enum.reduce(["nodes", "relationships"], graph["source_inventory"], fn kind, inventory ->
-          Map.update!(inventory, kind, fn records ->
-            Enum.map(records, fn record -> put_in(record, ["properties", "group_id"], graph["target_physical"]) end)
+        expected =
+          Enum.reduce(["nodes", "relationships"], graph["source_inventory"], fn kind, inventory ->
+            Map.update!(inventory, kind, fn records ->
+              Enum.map(records, fn record ->
+                put_in(record, ["properties", "group_id"], graph["target_physical"])
+              end)
+            end)
           end)
-        end)
+
         assert graph["target_inventory"] == expected
-        assert Enum.all?(expected["indexes"] ++ expected["constraints"], &(&1["status"] == "OPERATIONAL"))
+
+        assert Enum.all?(
+                 expected["indexes"] ++ expected["constraints"],
+                 &(&1["status"] == "OPERATIONAL")
+               )
       end
 
       start_public_runtime(restored)
-      for {identity, content} <- [{"owner", "remember amber orchard"}, {"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
-        assert {:ok, results} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: identity, query: "amber", destinations: ["personal"]})
-        assert Enum.filter(results, &Map.has_key?(&1.episode, :content)) == [%{destination: "personal", episode: %{content: content, source_description: "captured", source_kind: "document", lens: "operator"}}]
+
+      for {identity, content} <- [
+            {"owner", "remember amber orchard"},
+            {"a/b", "amber slash"},
+            {"a_b", "amber underscore"}
+          ] do
+        assert {:ok, results} =
+                 Gralkor.Client.search(self(), %Gralkor.Search{
+                   operator_id: identity,
+                   query: "amber",
+                   destinations: ["personal"]
+                 })
+
+        assert Enum.filter(results, &Map.has_key?(&1.episode, :content)) == [
+                 %{
+                   destination: "personal",
+                   episode: %{
+                     content: content,
+                     source_description: "captured",
+                     source_kind: "document",
+                     lens: "operator"
+                   }
+                 }
+               ]
       end
-      assert {:ok, [%{artefact: %Gralkor.Artefact{id: "complete", payload: %{"summary" => "immutable amber"}}}]} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "amber", destinations: ["personal"], result_type: :artefacts, artefact_id: "complete"})
-      assert {:ok, []} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "orchard", destinations: ["personal"], result_type: :artefacts, artefact_id: "incomplete"})
-      IO.puts("Restored migration fixture: " <> Jason.encode!(Map.put(evidence, "versions", manifest["versions"])))
+
+      assert {:ok,
+              [
+                %{
+                  artefact: %Gralkor.Artefact{
+                    id: "complete",
+                    payload: %{"summary" => "immutable amber"}
+                  }
+                }
+              ]} =
+               Gralkor.Client.search(self(), %Gralkor.Search{
+                 operator_id: "owner",
+                 query: "amber",
+                 destinations: ["personal"],
+                 result_type: :artefacts,
+                 artefact_id: "complete"
+               })
+
+      assert {:ok, []} =
+               Gralkor.Client.search(self(), %Gralkor.Search{
+                 operator_id: "owner",
+                 query: "orchard",
+                 destinations: ["personal"],
+                 result_type: :artefacts,
+                 artefact_id: "incomplete"
+               })
+
+      IO.puts(
+        "Restored migration fixture: " <>
+          Jason.encode!(Map.put(evidence, "versions", manifest["versions"]))
+      )
     end
   end
 
@@ -720,7 +790,9 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
                      ),
                      request,
                      boundary
-                   ], stderr_to_stdout: true)
+                   ],
+                   stderr_to_stdout: true
+                 )
 
         assert hd(Jason.decode!(File.read!(journal))["graphs"])["phase"] == expected_phase
       end
@@ -983,104 +1055,156 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     File.mkdir_p!(Path.dirname(source_path))
     File.mkdir_p!(Path.dirname(restored_path))
 
-    {source_server, source_globals} = Pythonx.eval("""
-    from redislite import Redis
-    from falkordb import FalkorDB
-    source_server = Redis(dbfilename=path.decode(), serverconfig={'port': 0, 'save': ''})
-    source_database = FalkorDB(unix_socket_path=source_server.socket_file)
-    source_server
-    """, %{"path" => source_path})
+    {source_server, source_globals} =
+      Pythonx.eval(
+        """
+        from redislite import Redis
+        from falkordb import FalkorDB
+        source_server = Redis(dbfilename=path.decode(), serverconfig={'port': 0, 'save': ''})
+        source_database = FalkorDB(unix_socket_path=source_server.socket_file)
+        source_server
+        """,
+        %{"path" => source_path}
+      )
+
     stop_owned_server_on_exit(source_server)
     source_database = source_globals["source_database"]
     {source_socket, _} = Pythonx.eval("server.socket_file", %{"server" => source_server})
     source_connection = [unix_socket_path: Pythonx.decode(source_socket)]
 
-    for {identity, content} <- [{"owner", "remember amber orchard"}, {"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
+    for {identity, content} <- [
+          {"owner", "remember amber orchard"},
+          {"a/b", "amber slash"},
+          {"a_b", "amber underscore"}
+        ] do
       seed_history(source_database, identity)
-      query(source_database, "operator/" <> identity, "MATCH (e:Episodic {uuid: 'episode'}) SET e.content = '" <> content <> "'")
+
+      query(
+        source_database,
+        "operator/" <> identity,
+        "MATCH (e:Episodic {uuid: 'episode'}) SET e.content = '" <> content <> "'"
+      )
     end
-    assert {:ok, before} = PersonalGraphMigration.plan(source_connection, ["owner", "a/b", "a_b"], %{})
 
-    {backup_evidence, _} = Pythonx.eval("""
-    import hashlib, psutil, shutil
-    from pathlib import Path
-    source_info = server.info('server')
-    source_pid = source_info['process_id']
-    assert server.save() is True
-    persistence = server.info('persistence')
-    assert persistence['rdb_bgsave_in_progress'] == 0
-    assert persistence['rdb_last_bgsave_status'] == 'ok'
-    source_file = Path(source_path.decode())
-    restore_file = Path(restored_path.decode())
-    snapshot = source_file.read_bytes()
-    assert snapshot.startswith(b'REDIS')
-    database.close()
-    server.shutdown(save=False, now=True, force=True)
-    try:
-        psutil.Process(source_pid).wait(timeout=10)
-    except psutil.NoSuchProcess:
-        pass
-    assert not psutil.pid_exists(source_pid)
-    shutil.copyfile(source_file, restore_file)
-    {
-        'mechanism': 'SAVE; source shutdown NOSAVE; copy RDB; separate server startup load',
-        'source_pid': source_pid,
-        'source_run_id': source_info['run_id'],
-        'source_stopped': True,
-        'source_rdb_path': str(source_file),
-        'restored_rdb_path': str(restore_file),
-        'source_rdb_sha256': hashlib.sha256(snapshot).hexdigest(),
-        'restored_rdb_sha256': hashlib.sha256(restore_file.read_bytes()).hexdigest(),
-        'rdb_size': len(snapshot),
-    }
-    """, %{"server" => source_server, "database" => source_database, "source_path" => source_path, "restored_path" => restored_path})
+    assert {:ok, before} =
+             PersonalGraphMigration.plan(source_connection, ["owner", "a/b", "a_b"], %{})
 
-    {restored_server, restored_globals} = Pythonx.eval("""
-    from redislite import Redis
-    from falkordb import FalkorDB
-    restored_server = Redis(dbfilename=path.decode(), serverconfig={'port': 0, 'save': ''})
-    restored_database = FalkorDB(unix_socket_path=restored_server.socket_file)
-    restored_server
-    """, %{"path" => restored_path})
+    {backup_evidence, _} =
+      Pythonx.eval(
+        """
+        import hashlib, psutil, shutil
+        from pathlib import Path
+        source_info = server.info('server')
+        source_pid = source_info['process_id']
+        assert server.save() is True
+        persistence = server.info('persistence')
+        assert persistence['rdb_bgsave_in_progress'] == 0
+        assert persistence['rdb_last_bgsave_status'] == 'ok'
+        source_file = Path(source_path.decode())
+        restore_file = Path(restored_path.decode())
+        snapshot = source_file.read_bytes()
+        assert snapshot.startswith(b'REDIS')
+        database.close()
+        server.shutdown(save=False, now=True, force=True)
+        try:
+            psutil.Process(source_pid).wait(timeout=10)
+        except psutil.NoSuchProcess:
+            pass
+        assert not psutil.pid_exists(source_pid)
+        shutil.copyfile(source_file, restore_file)
+        {
+            'mechanism': 'SAVE; source shutdown NOSAVE; copy RDB; separate server startup load',
+            'source_pid': source_pid,
+            'source_run_id': source_info['run_id'],
+            'source_stopped': True,
+            'source_rdb_path': str(source_file),
+            'restored_rdb_path': str(restore_file),
+            'source_rdb_sha256': hashlib.sha256(snapshot).hexdigest(),
+            'restored_rdb_sha256': hashlib.sha256(restore_file.read_bytes()).hexdigest(),
+            'rdb_size': len(snapshot),
+        }
+        """,
+        %{
+          "server" => source_server,
+          "database" => source_database,
+          "source_path" => source_path,
+          "restored_path" => restored_path
+        }
+      )
+
+    {restored_server, restored_globals} =
+      Pythonx.eval(
+        """
+        from redislite import Redis
+        from falkordb import FalkorDB
+        restored_server = Redis(dbfilename=path.decode(), serverconfig={'port': 0, 'save': ''})
+        restored_database = FalkorDB(unix_socket_path=restored_server.socket_file)
+        restored_server
+        """,
+        %{"path" => restored_path}
+      )
+
     stop_owned_server_on_exit(restored_server)
-    {result, _} = Pythonx.eval("""
-    import time
-    from pathlib import Path
-    deadline = time.monotonic() + 30
-    for name in database.list_graphs():
-        graph = database.select_graph(name)
-        while True:
-            indices = graph.list_indices()
-            columns = [column[1] for column in indices.header]
-            definitions = [dict(zip(columns, row)) for row in indices.result_set] + graph.list_constraints()
-            if all(item['status'] == 'OPERATIONAL' for item in definitions):
-                break
-            assert time.monotonic() < deadline, 'restored schema did not become operational'
-            time.sleep(0.01)
-    info = server.info('server')
-    startup_log = [line for line in Path(server.logfile).read_text().splitlines() if 'RDB' in line or 'DB loaded from disk' in line]
-    evidence.update({
-        'restored_pid': info['process_id'],
-        'restored_run_id': info['run_id'],
-        'rdb_loaded': any('DB loaded from disk' in line for line in startup_log),
-        'restored_startup_log': startup_log,
-        'restored_graph_count': len(database.list_graphs()),
-    })
-    {'evidence': evidence, 'socket': server.socket_file}
-    """, %{"server" => restored_server, "database" => restored_globals["restored_database"], "evidence" => backup_evidence})
+
+    {result, _} =
+      Pythonx.eval(
+        """
+        import time
+        from pathlib import Path
+        deadline = time.monotonic() + 30
+        for name in database.list_graphs():
+            graph = database.select_graph(name)
+            while True:
+                indices = graph.list_indices()
+                columns = [column[1] for column in indices.header]
+                definitions = [dict(zip(columns, row)) for row in indices.result_set] + graph.list_constraints()
+                if all(item['status'] == 'OPERATIONAL' for item in definitions):
+                    break
+                assert time.monotonic() < deadline, 'restored schema did not become operational'
+                time.sleep(0.01)
+        info = server.info('server')
+        startup_log = [line for line in Path(server.logfile).read_text().splitlines() if 'RDB' in line or 'DB loaded from disk' in line]
+        evidence.update({
+            'restored_pid': info['process_id'],
+            'restored_run_id': info['run_id'],
+            'rdb_loaded': any('DB loaded from disk' in line for line in startup_log),
+            'restored_startup_log': startup_log,
+            'restored_graph_count': len(database.list_graphs()),
+        })
+        {'evidence': evidence, 'socket': server.socket_file}
+        """,
+        %{
+          "server" => restored_server,
+          "database" => restored_globals["restored_database"],
+          "evidence" => backup_evidence
+        }
+      )
+
     result = Pythonx.decode(result)
-    %{restored: %{connection: [unix_socket_path: result["socket"]], database: restored_globals["restored_database"], directory: directory}, before: before, evidence: result["evidence"]}
+
+    %{
+      restored: %{
+        connection: [unix_socket_path: result["socket"]],
+        database: restored_globals["restored_database"],
+        directory: directory
+      },
+      before: before,
+      evidence: result["evidence"]
+    }
   end
 
   defp stop_owned_server_on_exit(server) do
     on_exit(fn ->
-      Pythonx.eval("""
-      from redis.exceptions import ConnectionError
-      try:
-          server.shutdown(save=False, now=True, force=True)
-      except ConnectionError:
-          pass
-      """, %{"server" => server})
+      Pythonx.eval(
+        """
+        from redis.exceptions import ConnectionError
+        try:
+            server.shutdown(save=False, now=True, force=True)
+        except ConnectionError:
+            pass
+        """,
+        %{"server" => server}
+      )
     end)
   end
 
