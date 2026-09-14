@@ -256,7 +256,10 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     test "then the capture buffer does not retry the returned failure and logs it" do
       counter = counting_buffer(fn _n -> {:error, {:upstream_llm, :rate_limited}} end)
 
-      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok =
+        Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
+          Message.new("user", "x")
+        ])
 
       logs =
         capture_log(fn ->
@@ -274,7 +277,10 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     test "then the capture buffer does not retry it and returns it unchanged" do
       counter = counting_buffer(fn _n -> {:error, {:upstream_llm, :bad_request}} end)
 
-      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok =
+        Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
+          Message.new("user", "x")
+        ])
 
       assert {:error, {:upstream_llm, :bad_request}} = Native.flush_and_await("s1", 2_000)
       assert :counters.get(counter, 1) == 1
@@ -285,7 +291,10 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     test "then the capture buffer retries with its default one-second and two-second backoffs" do
       counter = counting_buffer(fn n -> if n < 3, do: raise("graph unavailable"), else: :ok end)
 
-      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok =
+        Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
+          Message.new("user", "x")
+        ])
 
       capture_log(fn ->
         :ok = Native.flush("s1")
@@ -304,7 +313,10 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     test "and a returned write failure is not retried by a second layer" do
       counter = counting_buffer(fn _n -> {:error, :capture_client_4xx} end)
 
-      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok =
+        Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
+          Message.new("user", "x")
+        ])
 
       capture_log(fn ->
         assert {:error, :capture_client_4xx} = Native.flush_and_await("s1", 2_000)

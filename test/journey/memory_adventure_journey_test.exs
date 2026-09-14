@@ -244,7 +244,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.implicit_memory
     end
 
-    test "and direct conversation capture remains searchable without Lens or Reflection authorship", %{adventure: adventure} do
+    test "and direct conversation capture remains searchable without Lens or Reflection authorship",
+         %{adventure: adventure} do
       assert [%{episode: episode}] = adventure.direct_capture_episodes
       assert episode.writer == :direct
       assert episode.source_kind == "conversation"
@@ -253,11 +254,15 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       refute Map.has_key?(episode, :reflection)
     end
 
-    test "and personal-chat processing records its actual Lens provenance", %{adventure: adventure} do
-      assert [%{episode: %{lens: "personal-chat", source_kind: "conversation"}}] = adventure.personal_chat_episodes
+    test "and personal-chat processing records its actual Lens provenance", %{
+      adventure: adventure
+    } do
+      assert [%{episode: %{lens: "personal-chat", source_kind: "conversation"}}] =
+               adventure.personal_chat_episodes
     end
 
-    test "and alternating direct and personal-chat turns writes one episode for each selected route", %{adventure: adventure} do
+    test "and alternating direct and personal-chat turns writes one episode for each selected route",
+         %{adventure: adventure} do
       assert length(adventure.direct_capture_episodes) == 1
       assert length(adventure.personal_chat_episodes) == 1
     end
@@ -272,7 +277,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.erl_learning
     end
 
-    test "and ERL remains absent from the other operator's personal Destination", %{adventure: adventure} do
+    test "and ERL remains absent from the other operator's personal Destination", %{
+      adventure: adventure
+    } do
       refute adventure.erl_visible_to_other_operator
     end
 
@@ -685,45 +692,70 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     session_id = "memory_adventure_#{System.unique_integer([:positive])}"
 
-    :ok = Client.capture(agent, %Gralkor.Capture{
-      session_id: session_id,
-      operator_id: @operator_one,
-      agent_name: "Susu",
-      user_name: "Eli",
-      messages: [Message.new("user", "The private recovery codename is Cedar and the rehearsal city is Amman.")],
-      route: {:direct, "personal"}
-    })
+    :ok =
+      Client.capture(agent, %Gralkor.Capture{
+        session_id: session_id,
+        operator_id: @operator_one,
+        agent_name: "Susu",
+        user_name: "Eli",
+        messages: [
+          Message.new(
+            "user",
+            "The private recovery codename is Cedar and the rehearsal city is Amman."
+          )
+        ],
+        route: {:direct, "personal"}
+      })
 
-    :ok = Client.capture(agent, %Gralkor.Capture{
-      session_id: session_id,
-      operator_id: @operator_one,
-      agent_name: "Susu",
-      user_name: "Eli",
-      messages: [Message.new("user", "The personal support channel is Harbor and its check-in day is Thursday.")],
-      route: {:lenses, ["personal-chat"]}
-    })
+    :ok =
+      Client.capture(agent, %Gralkor.Capture{
+        session_id: session_id,
+        operator_id: @operator_one,
+        agent_name: "Susu",
+        user_name: "Eli",
+        messages: [
+          Message.new(
+            "user",
+            "The personal support channel is Harbor and its check-in day is Thursday."
+          )
+        ],
+        route: {:lenses, ["personal-chat"]}
+      })
 
-    :ok = Client.capture(agent, %Gralkor.Capture{
-      session_id: session_id,
-      operator_id: @operator_one,
-      agent_name: "Susu",
-      user_name: "Eli",
-      messages: [
-        Message.new("user", "The nightly Backup job conflicts with the Vacuum job."),
-        Message.new("behaviour", "thought: both jobs overlap at 02:00"),
-        Message.new("assistant", appended_fact)
-      ],
-      route: {:lenses, ["work-notes"]}
-    })
+    :ok =
+      Client.capture(agent, %Gralkor.Capture{
+        session_id: session_id,
+        operator_id: @operator_one,
+        agent_name: "Susu",
+        user_name: "Eli",
+        messages: [
+          Message.new("user", "The nightly Backup job conflicts with the Vacuum job."),
+          Message.new("behaviour", "thought: both jobs overlap at 02:00"),
+          Message.new("assistant", appended_fact)
+        ],
+        route: {:lenses, ["work-notes"]}
+      })
 
     :ok = Native.flush_and_await(session_id, 90_000)
 
     direct_capture_episodes =
-      search_until(@operator_one, ["personal"], :episodes, "Cedar Amman", &contains_episode?(&1, "cedar"))
+      search_until(
+        @operator_one,
+        ["personal"],
+        :episodes,
+        "Cedar Amman",
+        &contains_episode?(&1, "cedar")
+      )
       |> Enum.filter(&contains_episode?([&1], "cedar"))
 
     personal_chat_episodes =
-      search_until(@operator_one, ["personal"], :episodes, "Harbor Thursday", &contains_episode?(&1, "harbor"))
+      search_until(
+        @operator_one,
+        ["personal"],
+        :episodes,
+        "Harbor Thursday",
+        &contains_episode?(&1, "harbor")
+      )
       |> Enum.filter(&contains_episode?([&1], "harbor"))
 
     _erl_artefact =
@@ -902,7 +934,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         120
       )
 
-    other_operator_erl = search(@operator_two, ["personal"], :artefacts, "backup vacuum scheduling conflict")
+    other_operator_erl =
+      search(@operator_two, ["personal"], :artefacts, "backup vacuum scheduling conflict")
 
     current_graph =
       search_until(
