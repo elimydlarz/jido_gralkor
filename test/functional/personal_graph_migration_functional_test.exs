@@ -296,6 +296,17 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when an application rolls back a private graph migration before admitting new writers" do
+    test "and only matching migration-owned target graphs are removed", context do
+      journal = prepare_history(context)
+      query(context.database, "unrelated", "CREATE (:Memory {uuid: 'preserved'})")
+      assert {:ok, _result} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      assert {:ok, %{"phase" => "rolled_back"}} = PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
+      {graphs, _} = Pythonx.eval("database.list_graphs()", %{"database" => context.database})
+      assert Enum.sort(Pythonx.decode(graphs)) == Enum.sort(Enum.map(["operator/owner", "unrelated"], &Gralkor.Client.sanitize_group_id/1))
+    end
+  end
+
   defp episode(inventory, uuid) do
     inventory["nodes"] |> Enum.find(&("Episodic" in &1["labels"] and &1["properties"]["uuid"] == uuid)) |> Map.fetch!("properties")
   end
