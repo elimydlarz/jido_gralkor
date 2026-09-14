@@ -4,7 +4,7 @@ defmodule Gralkor.Destination.Registry do
   alias Gralkor.Destination
 
   @packaged [
-    %Destination{name: "operator"},
+    %Destination{name: "personal"},
     %Destination{name: "global"}
   ]
 
@@ -21,6 +21,8 @@ defmodule Gralkor.Destination.Registry do
   end
 
   def fetch!(name) when is_binary(name) do
+    reject_retired!(name)
+
     case Enum.find(configured!(), &(&1.name == name)) do
       nil -> raise ArgumentError, "unknown Destination #{inspect(name)}"
       destination -> destination
@@ -38,9 +40,11 @@ defmodule Gralkor.Destination.Registry do
       raise ArgumentError, "invalid Destination name #{inspect(name)}"
     end
 
-    if String.starts_with?(name, "operator/") do
+    reject_retired!(name)
+
+    if String.starts_with?(name, ["personal/", "operator/"]) do
       raise ArgumentError,
-            "invalid Destination #{inspect(name)}: name uses reserved \"operator/\" graph namespace"
+            "invalid Destination #{inspect(name)}: name uses reserved \"personal/\" or \"operator/\" graph namespace"
     end
 
     validate_fields!(name, definition)
@@ -49,6 +53,13 @@ defmodule Gralkor.Destination.Registry do
 
   defp resolve!(definition),
     do: raise(ArgumentError, "invalid Destination definition #{inspect(definition)}")
+
+  defp reject_retired!("operator") do
+    raise ArgumentError,
+          "Destination \"operator\" was retired; migrate its graph and select \"personal\""
+  end
+
+  defp reject_retired!(_name), do: :ok
 
   defp validate_fields!(name, definition) do
     case Keyword.keys(definition) -- [:name] do

@@ -56,7 +56,7 @@ defmodule Gralkor.Reflection.Packaged do
         outputs: [
           %{
             kind: :destination,
-            destination: "operator",
+            destination: "personal",
             ontology: Gralkor.Reflection.ERLOntology
           }
         ],
