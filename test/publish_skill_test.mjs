@@ -7,6 +7,12 @@ const openaiYamlUrl = new URL("../.agents/skills/publish/agents/openai.yaml", im
 const envExampleUrl = new URL("../.env.example", import.meta.url);
 const mixUrl = new URL("../mix.exs", import.meta.url);
 
+async function readmeDocuments() {
+  const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+  const links = [...readme.matchAll(/\[[^\]]*\]\((?!https?:\/\/)([^)\s]+\.md)(?:#[^)\s]*)?\)/g)];
+  return [...new Set(["README.md", ...links.map((match) => match[1])])];
+}
+
 test("when an operator asks to publish jido_gralkor with a semantic-version change kind or the current version", async (context) => {
   await context.test("then the version selection is the only required operator input", async () => {
     const skill = await readFile(skillUrl, "utf8");
@@ -131,7 +137,11 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
     async () => {
       const mix = await readFile(mixUrl, "utf8");
 
-      assert.match(mix, /files:.*README\.md DESTINATIONS\.md CHANGELOG\.md/);
+      const files = mix.match(/files:\s*~w\(([^)]+)\)/)?.[1].trim().split(/\s+/);
+      assert.ok(files, "Hex package files must be declared");
+      for (const document of await readmeDocuments()) {
+        assert.ok(files.includes(document), `${document} must be packaged`);
+      }
     },
   );
 
@@ -140,7 +150,12 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
     async () => {
       const mix = await readFile(mixUrl, "utf8");
 
-      assert.match(mix, /extras: \["README\.md", "DESTINATIONS\.md"\]/);
+      const extras = mix.match(/extras:\s*(\[[^\]]+\])/)?.[1];
+      assert.ok(extras, "ExDoc extras must be declared");
+      const documents = JSON.parse(extras);
+      for (const document of await readmeDocuments()) {
+        assert.ok(documents.includes(document), `${document} must be an ExDoc extra`);
+      }
     },
   );
 
