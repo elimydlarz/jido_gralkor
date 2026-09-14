@@ -295,6 +295,10 @@ def validate_preparation(manifest: dict[str, object]) -> None:
             raise ValueError(f"source graph missing: {graph['source_physical']}")
         if graph["target_exists"]:
             raise ValueError(f"target graph already exists: {graph['target_physical']}")
+        for entity in graph["source_inventory"]["nodes"] + graph["source_inventory"]["relationships"]:
+            group_id = entity["properties"].get("group_id")
+            if group_id is not None and group_id != graph["source_physical"]:
+                raise ValueError(f"incompatible stored group identity: {graph['source_physical']}: {group_id}")
 
 
 def validate_identities(identifiers: list[str]) -> None:
@@ -312,6 +316,15 @@ def execute(request: dict[str, object]) -> dict[str, object]:
         raise ValueError("unsupported migration operation")
     if action in {"plan", "prepare"}:
         validate_identities(request["operator_ids"])
+    connection = request["connection"]
+    socket = connection.get("unix_socket_path")
+    host = connection.get("host")
+    port = connection.get("port")
+    if not (
+        isinstance(socket, str) and socket.strip()
+        or isinstance(host, str) and host.strip() and type(port) is int and 0 < port <= 65535
+    ):
+        raise ValueError("an explicit graph endpoint requires a Unix socket or host and port")
     if action == "plan":
         with FalkorDB(**request["connection"]) as database:
             return plan(database, request["operator_ids"], request["configuration_references"])

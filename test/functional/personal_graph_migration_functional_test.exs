@@ -365,7 +365,9 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       start_public_runtime(context)
       assert {:ok, results} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "orchard", destinations: ["personal"]})
       assert Enum.any?(results, &(&1.episode[:content] == "remember amber orchard" and &1.episode[:lens] == "operator"))
-      assert {:error, _} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "orchard", lenses: ["operator"]})
+      assert_raise ArgumentError, ~r/Lens "operator" was retired/, fn ->
+        Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "orchard", lenses: ["operator"]})
+      end
     end
   end
 
