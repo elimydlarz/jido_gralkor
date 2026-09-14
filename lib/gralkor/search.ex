@@ -24,7 +24,7 @@ defmodule Gralkor.Search do
   or `:artefacts`.
   """
 
-  @type direct_episode :: %{content: String.t(), source_description: String.t(), optional(:source_kind) => String.t(), optional(:writer) => :direct}
+  @type direct_episode :: %{required(:content) => String.t(), required(:source_description) => String.t(), optional(:source_kind) => String.t(), optional(:writer) => :direct}
   @type lens_episode :: %{content: String.t(), source_description: String.t(), lens: String.t()}
   @type reflection_episode :: %{
           artefact: %{id: String.t(), payload: map()},

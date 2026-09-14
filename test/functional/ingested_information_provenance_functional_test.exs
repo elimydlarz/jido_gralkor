@@ -333,7 +333,8 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                       "captured", nil, opts}
 
       assert opts[:source_kind] == :conversation
-      assert opts[:lens] == "operator"
+      assert opts[:writer] == :direct
+      refute Keyword.has_key?(opts, :lens)
     end
   end
 
