@@ -132,7 +132,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       assert MapSet.new(searches) ==
                MapSet.new([
-                 "operator",
+                 "personal",
                  "global",
                  "observations-memory",
                  "decisions-memory",
