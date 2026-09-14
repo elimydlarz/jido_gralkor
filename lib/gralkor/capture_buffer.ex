@@ -72,6 +72,10 @@ defmodule Gralkor.CaptureBuffer do
               "session #{inspect(session_id)} is bound to ontology #{inspect(bound_ontology)}; " <>
                 "refusing to append under ontology #{inspect(new_ontology)}"
 
+      {:error, :typed_session} ->
+        raise ArgumentError,
+              "session #{inspect(session_id)} contains typed capture work; compatibility append cannot mix modes"
+
       {:capture_mode_mismatch, :lens, :legacy} ->
         raise ArgumentError,
               "session #{inspect(session_id)} already holds Lens-selected turns; " <>
@@ -132,6 +136,10 @@ defmodule Gralkor.CaptureBuffer do
               "session #{inspect(session_id)} is bound to runtime #{inspect(bound_runtime)}; " <>
                 "refusing to append under runtime #{inspect(new_runtime)}"
 
+      {:error, :typed_session} ->
+        raise ArgumentError,
+              "session #{inspect(session_id)} contains typed capture work; compatibility append cannot mix modes"
+
       {:capture_mode_mismatch, :legacy, :lens} ->
         raise ArgumentError,
               "session #{inspect(session_id)} already holds turns without a Lens; " <>
@@ -151,7 +159,7 @@ defmodule Gralkor.CaptureBuffer do
 
       {:error, :legacy_session} ->
         raise ArgumentError,
-              "session #{inspect(request.session_id)} contains retired positional capture work"
+              "session #{inspect(request.session_id)} contains compatibility buffer work"
     end
   end
 
@@ -305,6 +313,23 @@ defmodule Gralkor.CaptureBuffer do
         {:reply, {:error, :timeout}, state}
     end
   end
+
+  def handle_call(
+        {:append, session_id, _group_id, _agent_name, _user_name, _ontology, _msgs},
+        _from,
+        %{capture_entries: entries} = state
+      )
+      when is_map_key(entries, session_id),
+      do: {:reply, {:error, :typed_session}, state}
+
+  def handle_call(
+        {:append_lenses, _runtime_owner, session_id, _operator_id, _agent_name, _user_name,
+         _lenses, _msgs},
+        _from,
+        %{capture_entries: entries} = state
+      )
+      when is_map_key(entries, session_id),
+      do: {:reply, {:error, :typed_session}, state}
 
   def handle_call(
         {:append, session_id, group_id, agent_name, user_name, ontology, msgs},
