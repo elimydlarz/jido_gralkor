@@ -554,6 +554,10 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
   end
 
   defp start_public_runtime(context) do
+    {telemetry, _} = Pythonx.eval("import os\nos.environ.get('GRAPHITI_TELEMETRY_ENABLED')", %{})
+    on_exit(fn ->
+      Pythonx.eval("import os\nos.environ.pop('GRAPHITI_TELEMETRY_ENABLED', None) if previous is None else os.environ.__setitem__('GRAPHITI_TELEMETRY_ENABLED', previous)", %{"previous" => telemetry})
+    end)
     keys = [:client, :destination_storage, :lens_storage]
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
     Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)

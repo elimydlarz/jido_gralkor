@@ -33,6 +33,17 @@ def records(result: QueryResult) -> list[dict[str, object]]:
     return [dict(zip(columns, row)) for row in result.result_set]
 
 
+def uuid_inventory(entities: list[dict[str, object]], nodes: bool) -> dict[str, object]:
+    by_kind = {}
+    for entity in entities:
+        uuid = entity["properties"].get("uuid")
+        for kind in entity["labels"] if nodes else [entity["type"]]:
+            values = by_kind.setdefault(kind, [])
+            if uuid is not None:
+                values.append(uuid)
+    return {kind: {"count": len(values), "values": ordered(list(set(values)))} for kind, values in by_kind.items()}
+
+
 def inventory(graph: Graph) -> dict[str, object]:
     nodes = records(graph.ro_query(
         "MATCH (node) RETURN id(node) AS id, labels(node) AS labels, properties(node) AS properties ORDER BY id(node)"
@@ -49,6 +60,8 @@ def inventory(graph: Graph) -> dict[str, object]:
         "relationships": relationships,
         "node_count": len(nodes),
         "relationship_count": len(relationships),
+        "node_uuids": uuid_inventory(nodes, True),
+        "relationship_uuids": uuid_inventory(relationships, False),
         "indexes": ordered(indexes),
         "constraints": ordered(graph.list_constraints()),
         "labels": sorted(row[0] for row in graph.ro_query("CALL db.labels()").result_set),
