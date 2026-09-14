@@ -188,7 +188,13 @@ defmodule Gralkor.Destination.Storage.Graphiti do
 
   defp episode_provenance(%{content: content, source_description: source_description} = episode) do
     if String.ends_with?(source_description, " [gralkor: direct]") do
-      {:ok, episode |> Map.put(:source_description, String.replace_suffix(source_description, " [gralkor: direct]", "")) |> Map.put(:writer, :direct)}
+      {:ok,
+       episode
+       |> Map.put(
+         :source_description,
+         String.replace_suffix(source_description, " [gralkor: direct]", "")
+       )
+       |> Map.put(:writer, :direct)}
     else
       named_episode_provenance(episode, content, source_description)
     end

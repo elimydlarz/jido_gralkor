@@ -341,57 +341,176 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
   describe "when information is added or captured directly without a selected Lens" do
     test "then its source kind and description remain unchanged without Lens or Reflection authorship" do
       graphiti = use_native_boundary()
-      assert :ok = Gralkor.Client.Native.memory_add("personal/operator-one", "Remember the launch plan.", "manual", :document)
-      assert [%{"source_description" => "manual [gralkor: direct]", "source" => "text"}] = added_episodes(graphiti)
+
+      assert :ok =
+               Gralkor.Client.Native.memory_add(
+                 "personal/operator-one",
+                 "Remember the launch plan.",
+                 "manual",
+                 :document
+               )
+
+      assert [%{"source_description" => "manual [gralkor: direct]", "source" => "text"}] =
+               added_episodes(graphiti)
     end
 
     test "and public episode and fact search include it without a Lens selector" do
       graphiti = use_native_boundary()
-      set_episode_search_fixture(graphiti, [%{content: "Direct memory", source_description: "captured [gralkor: direct]"}])
-      assert {:ok, [%{episode: episode}]} = Client.search(%Search{operator_id: "operator-one", query: "Direct", destinations: ["personal"]})
+
+      set_episode_search_fixture(graphiti, [
+        %{content: "Direct memory", source_description: "captured [gralkor: direct]"}
+      ])
+
+      assert {:ok, [%{episode: episode}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "Direct",
+                 destinations: ["personal"]
+               })
+
       assert episode.content == "Direct memory"
       assert episode.source_description == "captured"
       assert episode.writer == :direct
       refute Map.has_key?(episode, :lens)
       refute Map.has_key?(episode, :reflection)
-      set_search_fixture(graphiti, [%{fact: "Direct fact", episodes: [%{id: "direct-one", source_kind: "message", source_description: "captured [gralkor: direct]"}]}])
-      assert {:ok, [%{fact: %{sources: [source]}}]} = Client.search(%Search{operator_id: "operator-one", query: "Direct", destinations: ["personal"], result_type: :facts})
-      assert source == %{id: "direct-one", source_kind: "conversation", source_description: "captured", writer: :direct}
+
+      set_search_fixture(graphiti, [
+        %{
+          fact: "Direct fact",
+          episodes: [
+            %{
+              id: "direct-one",
+              source_kind: "message",
+              source_description: "captured [gralkor: direct]"
+            }
+          ]
+        }
+      ])
+
+      assert {:ok, [%{fact: %{sources: [source]}}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "Direct",
+                 destinations: ["personal"],
+                 result_type: :facts
+               })
+
+      assert source == %{
+               id: "direct-one",
+               source_kind: "conversation",
+               source_description: "captured",
+               writer: :direct
+             }
     end
 
     test "and storage-owned direct provenance prevents writer-like source descriptions from claiming Lens or Reflection authorship" do
       graphiti = use_native_boundary()
-      descriptions = ["manual [lens: observations]", "reflection:generalisations", "manual [gralkor: direct] [lens: observations]", "reflection:generalisations [gralkor: direct]"]
+
+      descriptions = [
+        "manual [lens: observations]",
+        "reflection:generalisations",
+        "manual [gralkor: direct] [lens: observations]",
+        "reflection:generalisations [gralkor: direct]"
+      ]
+
       for source <- descriptions do
-        assert :ok = Gralkor.Client.Native.memory_add("personal/operator-one", "A caller cannot choose its writer.", source, :document)
+        assert :ok =
+                 Gralkor.Client.Native.memory_add(
+                   "personal/operator-one",
+                   "A caller cannot choose its writer.",
+                   source,
+                   :document
+                 )
       end
+
       stored = Enum.map(added_episodes(graphiti), & &1["source_description"])
       assert stored == Enum.map(descriptions, &(&1 <> " [gralkor: direct]"))
-      set_episode_search_fixture(graphiti, Enum.map(stored, &%{content: "A caller cannot choose its writer.", source_description: &1, extraction_complete: false}))
-      assert {:ok, []} = Client.search(%Search{operator_id: "operator-one", query: "caller", destinations: ["personal"], lenses: ["observations"]})
-      assert {:ok, episodes} = Client.search(%Search{operator_id: "operator-one", query: "caller", destinations: ["personal"]})
+
+      set_episode_search_fixture(
+        graphiti,
+        Enum.map(
+          stored,
+          &%{
+            content: "A caller cannot choose its writer.",
+            source_description: &1,
+            extraction_complete: false
+          }
+        )
+      )
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "caller",
+                 destinations: ["personal"],
+                 lenses: ["observations"]
+               })
+
+      assert {:ok, episodes} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "caller",
+                 destinations: ["personal"]
+               })
+
       assert Enum.map(episodes, & &1.episode.source_description) == descriptions
-      assert Enum.all?(episodes, &(not Map.has_key?(&1.episode, :lens) and not Map.has_key?(&1.episode, :reflection)))
+
+      assert Enum.all?(
+               episodes,
+               &(not Map.has_key?(&1.episode, :lens) and not Map.has_key?(&1.episode, :reflection))
+             )
     end
 
     test "and writer-like source descriptions do not impose Reflection completion requirements" do
       graphiti = use_native_boundary()
-      set_episode_search_fixture(graphiti, [%{content: "Direct memory", source_description: "reflection:generalisations [gralkor: direct]", extraction_complete: false}])
-      assert {:ok, [%{episode: %{content: "Direct memory", writer: :direct}}]} = Client.search(%Search{operator_id: "operator-one", query: "Direct", destinations: ["personal"]})
+
+      set_episode_search_fixture(graphiti, [
+        %{
+          content: "Direct memory",
+          source_description: "reflection:generalisations [gralkor: direct]",
+          extraction_complete: false
+        }
+      ])
+
+      assert {:ok, [%{episode: %{content: "Direct memory", writer: :direct}}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "Direct",
+                 destinations: ["personal"]
+               })
     end
   end
 
   describe "when public search reads historical operator-labelled episodes" do
     test "then their recorded operator Lens provenance remains visible without registering that Lens" do
       graphiti = use_native_boundary()
-      set_episode_search_fixture(graphiti, [%{content: "Historical memory", source_description: "captured [lens: operator]"}])
-      assert {:ok, [%{episode: %{content: "Historical memory", lens: "operator"}}]} = Client.search(%Search{operator_id: "operator-one", query: "Historical", destinations: ["personal"]})
+
+      set_episode_search_fixture(graphiti, [
+        %{content: "Historical memory", source_description: "captured [lens: operator]"}
+      ])
+
+      assert {:ok, [%{episode: %{content: "Historical memory", lens: "operator"}}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "Historical",
+                 destinations: ["personal"]
+               })
     end
 
     test "and a personal-chat Lens selector does not match those historical episodes" do
       graphiti = use_native_boundary()
-      set_episode_search_fixture(graphiti, [%{content: "Historical memory", source_description: "captured [lens: operator]"}])
-      assert {:ok, []} = Client.search(%Search{operator_id: "operator-one", query: "Historical", destinations: ["personal"], lenses: ["personal-chat"]})
+
+      set_episode_search_fixture(graphiti, [
+        %{content: "Historical memory", source_description: "captured [lens: operator]"}
+      ])
+
+      assert {:ok, []} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "Historical",
+                 destinations: ["personal"],
+                 lenses: ["personal-chat"]
+               })
     end
   end
 
@@ -464,8 +583,18 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
   describe "when public episode search encounters historical episodes without a named writer" do
     test "then the episodes remain available without invented Lens or Reflection authorship" do
       graphiti = use_native_boundary()
-      set_episode_search_fixture(graphiti, [%{content: "An older episode.", source_description: "legacy source"}])
-      assert {:ok, [%{episode: episode}]} = Client.search(%Search{operator_id: "operator-one", query: "episode", destinations: ["observations"]})
+
+      set_episode_search_fixture(graphiti, [
+        %{content: "An older episode.", source_description: "legacy source"}
+      ])
+
+      assert {:ok, [%{episode: episode}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "episode",
+                 destinations: ["observations"]
+               })
+
       assert episode.content == "An older episode."
       assert episode.source_description == "legacy source"
       refute Map.has_key?(episode, :lens)
@@ -474,9 +603,27 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
     test "and historical fact sources retain their original source descriptions" do
       graphiti = use_native_boundary()
-      set_search_fixture(graphiti, [%{fact: "Historical fact", episodes: [%{id: "old-one", source_kind: "text", source_description: "legacy source"}]}])
-      assert {:ok, [%{fact: %{sources: [source]}}]} = Client.search(%Search{operator_id: "operator-one", query: "Historical", destinations: ["personal"], result_type: :facts})
-      assert source == %{id: "old-one", source_kind: "document", source_description: "legacy source"}
+
+      set_search_fixture(graphiti, [
+        %{
+          fact: "Historical fact",
+          episodes: [%{id: "old-one", source_kind: "text", source_description: "legacy source"}]
+        }
+      ])
+
+      assert {:ok, [%{fact: %{sources: [source]}}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "Historical",
+                 destinations: ["personal"],
+                 result_type: :facts
+               })
+
+      assert source == %{
+               id: "old-one",
+               source_kind: "document",
+               source_description: "legacy source"
+             }
     end
   end
 

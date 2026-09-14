@@ -22,9 +22,14 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
          Gralkor.Application.build_flush_callback(nil,
            add_episode_fn: fn group, content, source, ontology, opts ->
              send(owner, {:direct_write, group, content, source, ontology, opts})
+
              case Agent.get(behavior, & &1) do
-               :ok -> :ok
-               {:error, _} = error -> error
+               :ok ->
+                 :ok
+
+               {:error, _} = error ->
+                 error
+
                :wait ->
                  send(owner, {:write_waiting, self()})
                  receive do: (:release -> :ok)
@@ -39,6 +44,7 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
       if previous_storage,
         do: Application.put_env(:jido_gralkor, :lens_storage, previous_storage),
         else: Application.delete_env(:jido_gralkor, :lens_storage)
+
       if previous_client,
         do: Application.put_env(:jido_gralkor, :client, previous_client),
         else: Application.delete_env(:jido_gralkor, :client)
@@ -81,19 +87,31 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
     test "and a Lens keeps its declared Destination and ontology" do
       capture({:lenses, ["shared"]}, "one")
       assert :ok = Client.impl().flush_and_await("capture-session", 1_000)
-      assert [%{content: "Eli: one", lens: "shared"}] = Gralkor.Lens.Storage.InMemory.episodes("shared")
+
+      assert [%{content: "Eli: one", lens: "shared"}] =
+               Gralkor.Lens.Storage.InMemory.episodes("shared")
+
       assert episodes() == []
     end
 
     test "and each session binds its runtime owner, operator, agent, and user" do
       capture({:direct, "personal"}, "one")
+
       for {field, value} <- [operator_id: "another", agent_name: "another", user_name: "another"] do
         request = Map.put(request({:lenses, ["first"]}, "two"), field, value)
         assert_raise ArgumentError, ~r/bound/, fn -> Client.capture(self(), request) end
       end
+
       other_owner = spawn(fn -> receive do: (:stop -> :ok) end)
-      start_supervised!({JidoGralkor.Runtime, owner: other_owner, configuration: configuration()}, id: :other_runtime)
-      assert_raise ArgumentError, ~r/runtime_owner/, fn -> Client.capture(other_owner, request({:direct, "personal"}, "two")) end
+
+      start_supervised!({JidoGralkor.Runtime, owner: other_owner, configuration: configuration()},
+        id: :other_runtime
+      )
+
+      assert_raise ArgumentError, ~r/runtime_owner/, fn ->
+        Client.capture(other_owner, request({:direct, "personal"}, "two"))
+      end
+
       send(other_owner, :stop)
       assert length(Gralkor.CaptureBuffer.turns_for("capture-session")) == 1
     end
@@ -121,16 +139,27 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
     test "then buffered routes retain their captured Destination, ontology, and ingestion definitions" do
       capture({:lenses, ["first"]}, "old configuration")
       capture({:direct, "personal"}, "private")
-      assert :ok = JidoGralkor.Runtime.replace(self(), %{destinations: [], lenses: [], reflections: []})
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(self(), %{
+                 destinations: [],
+                 lenses: [],
+                 reflections: []
+               })
+
       stop_supervised!(JidoGralkor.Runtime)
       assert :ok = Client.impl().flush_and_await("capture-session", 1_000)
       assert [%{lens: "first", content: "Eli: old configuration"}] = episodes()
-      assert_receive {:direct_write, "personal/Owner:Case/001", "Eli: private", _, Gralkor.DefaultOntology, _}
+
+      assert_receive {:direct_write, "personal/Owner:Case/001", "Eli: private", _,
+                      Gralkor.DefaultOntology, _}
     end
   end
 
   describe "when an asynchronous flush is requested" do
-    test "then it schedules work and consumes the buffered entry before completion", %{behavior: behavior} do
+    test "then it schedules work and consumes the buffered entry before completion", %{
+      behavior: behavior
+    } do
       Agent.update(behavior, fn _ -> :wait end)
       capture({:direct, "personal"}, "one")
       assert :ok = Client.impl().flush("capture-session")
@@ -163,11 +192,16 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
     test "and terminal failure consumes the buffered entry", %{behavior: behavior} do
       Agent.update(behavior, fn _ -> {:error, :capture_client_4xx} end)
       capture({:direct, "personal"}, "one")
-      assert {:error, :capture_client_4xx} = Client.impl().flush_and_await("capture-session", 1_000)
+
+      assert {:error, :capture_client_4xx} =
+               Client.impl().flush_and_await("capture-session", 1_000)
+
       assert Gralkor.CaptureBuffer.turns_for("capture-session") == []
     end
 
-    test "and an await timeout preserves the buffered entry for another attempt", %{behavior: behavior} do
+    test "and an await timeout preserves the buffered entry for another attempt", %{
+      behavior: behavior
+    } do
       Agent.update(behavior, fn _ -> :wait end)
       capture({:direct, "personal"}, "one")
       assert {:error, :timeout} = Client.impl().flush_and_await("capture-session", 20)
@@ -182,7 +216,10 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
       Agent.update(behavior, fn _ -> {:error, :capture_client_4xx} end)
       capture({:direct, "personal"}, "failed")
       capture({:lenses, ["first"]}, "survives")
-      assert {:error, :capture_client_4xx} = Client.impl().flush_and_await("capture-session", 1_000)
+
+      assert {:error, :capture_client_4xx} =
+               Client.impl().flush_and_await("capture-session", 1_000)
+
       assert [%{content: "Eli: survives"}] = episodes()
     end
 
@@ -190,7 +227,9 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
       Agent.update(behavior, fn _ -> {:error, :capture_client_4xx} end)
       capture({:lenses, ["first"]}, "survives")
       capture({:direct, "personal"}, "failed")
-      assert {:error, :capture_client_4xx} = Client.impl().flush_and_await("capture-session", 1_000)
+
+      assert {:error, :capture_client_4xx} =
+               Client.impl().flush_and_await("capture-session", 1_000)
     end
   end
 
@@ -199,6 +238,7 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
       for route <- [{:direct, "personal"}, {:lenses, ["first"]}] do
         assert :ok = Client.capture(self(), %{request(route, "") | messages: []})
       end
+
       assert :ok = Client.impl().flush_and_await("capture-session", 1_000)
       assert episodes() == []
       refute_receive {:direct_write, _, _, _, _, _}
@@ -207,9 +247,23 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
 
   describe "if a capture request has an invalid identity, route, Destination, or selected Lens" do
     test "then capture fails before buffering any turn" do
-      for {key, value} <- [operator_id: "", session_id: "", agent_name: nil, user_name: " ", route: {:direct, "missing"}, route: {:direct, "operator"}, route: {:lenses, []}, route: {:lenses, ["operator"]}, route: {:lenses, ["missing"]}, route: {:lenses, [42]}] do
-        assert_raise ArgumentError, fn -> Client.capture(self(), Map.put(request({:direct, "personal"}, "one"), key, value)) end
+      for {key, value} <- [
+            operator_id: "",
+            session_id: "",
+            agent_name: nil,
+            user_name: " ",
+            route: {:direct, "missing"},
+            route: {:direct, "operator"},
+            route: {:lenses, []},
+            route: {:lenses, ["operator"]},
+            route: {:lenses, ["missing"]},
+            route: {:lenses, [42]}
+          ] do
+        assert_raise ArgumentError, fn ->
+          Client.capture(self(), Map.put(request({:direct, "personal"}, "one"), key, value))
+        end
       end
+
       assert Gralkor.CaptureBuffer.turns_for("capture-session") == []
     end
   end
@@ -217,13 +271,22 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
   describe "if a caller uses a retired positional capture adapter" do
     test "then an explicit migration error identifies the typed runtime-targeted capture request" do
       for adapter <- [Gralkor.Client.Native, Gralkor.Client.InMemory], arity <- [5, 6, 7, 8] do
-        assert_raise ArgumentError, ~r/positional capture.*retired.*Gralkor.Capture/, fn -> apply(adapter, :capture, List.duplicate("old", arity)) end
+        assert_raise ArgumentError, ~r/positional capture.*retired.*Gralkor.Capture/, fn ->
+          apply(adapter, :capture, List.duplicate("old", arity))
+        end
       end
     end
   end
 
   defp request(route, content) do
-    %Gralkor.Capture{session_id: "capture-session", operator_id: "Owner:Case/001", agent_name: "Susu", user_name: "Eli", messages: [Message.new("user", content)], route: route}
+    %Gralkor.Capture{
+      session_id: "capture-session",
+      operator_id: "Owner:Case/001",
+      agent_name: "Susu",
+      user_name: "Eli",
+      messages: [Message.new("user", content)],
+      route: route
+    }
   end
 
   defp capture(route, content), do: Client.capture(self(), request(route, content))
@@ -232,9 +295,17 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
   defp configuration do
     %{
       destinations: [%{name: "shared"}],
-      lenses: Enum.map(["first", "second", "shared"], &%{name: &1, destination: if(&1 == "shared", do: "shared", else: "personal"), write: :append, ingestion: Gralkor.Lens.Ingestion.Store}),
+      lenses:
+        Enum.map(
+          ["first", "second", "shared"],
+          &%{
+            name: &1,
+            destination: if(&1 == "shared", do: "shared", else: "personal"),
+            write: :append,
+            ingestion: Gralkor.Lens.Ingestion.Store
+          }
+        ),
       reflections: []
     }
   end
-
 end

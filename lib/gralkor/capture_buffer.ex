@@ -141,12 +141,16 @@ defmodule Gralkor.CaptureBuffer do
   @spec append_capture(pid(), Gralkor.Capture.t(), [tuple()]) :: :ok
   def append_capture(runtime_owner, request, routes) do
     case GenServer.call(__MODULE__, {:append_capture, runtime_owner, request, routes}) do
-      :ok -> :ok
+      :ok ->
+        :ok
+
       {:error, field, expected, actual} ->
         raise ArgumentError,
               "session #{inspect(request.session_id)} is bound to #{field} #{inspect(expected)}; refusing #{inspect(actual)}"
+
       {:error, :legacy_session} ->
-        raise ArgumentError, "session #{inspect(request.session_id)} contains retired positional capture work"
+        raise ArgumentError,
+              "session #{inspect(request.session_id)} contains retired positional capture work"
     end
   end
 
@@ -208,10 +212,13 @@ defmodule Gralkor.CaptureBuffer do
     }
 
     previous = Map.get(state.capture_entries, request.session_id)
-    conflict = previous && Enum.find(binding, fn {key, value} -> Map.fetch!(previous, key) != value end)
+
+    conflict =
+      previous && Enum.find(binding, fn {key, value} -> Map.fetch!(previous, key) != value end)
 
     cond do
-      Map.has_key?(state.entries, request.session_id) or Map.has_key?(state.lens_entries, request.session_id) ->
+      Map.has_key?(state.entries, request.session_id) or
+          Map.has_key?(state.lens_entries, request.session_id) ->
         {:reply, {:error, :legacy_session}, state}
 
       conflict ->
@@ -219,13 +226,31 @@ defmodule Gralkor.CaptureBuffer do
         {:reply, {:error, field, Map.fetch!(previous, field), actual}, state}
 
       true ->
-        entry = previous || Map.merge(binding, %{turns: [], route_order: [], batches: %{}, ingestion_id: ingestion_id(request.session_id)})
+        entry =
+          previous ||
+            Map.merge(binding, %{
+              turns: [],
+              route_order: [],
+              batches: %{},
+              ingestion_id: ingestion_id(request.session_id)
+            })
+
         new_routes = Enum.reject(routes, &Map.has_key?(entry.batches, &1))
-        batches = Enum.reduce(routes, entry.batches, fn route, batches ->
-          Map.update(batches, route, [request.messages], &(&1 ++ [request.messages]))
-        end)
-        entry = %{entry | turns: entry.turns ++ [request.messages], route_order: entry.route_order ++ new_routes, batches: batches}
-        {:reply, :ok, %{state | capture_entries: Map.put(state.capture_entries, request.session_id, entry)}}
+
+        batches =
+          Enum.reduce(routes, entry.batches, fn route, batches ->
+            Map.update(batches, route, [request.messages], &(&1 ++ [request.messages]))
+          end)
+
+        entry = %{
+          entry
+          | turns: entry.turns ++ [request.messages],
+            route_order: entry.route_order ++ new_routes,
+            batches: batches
+        }
+
+        {:reply, :ok,
+         %{state | capture_entries: Map.put(state.capture_entries, request.session_id, entry)}}
     end
   end
 
@@ -238,10 +263,20 @@ defmodule Gralkor.CaptureBuffer do
       when is_map_key(entries, session_id) do
     entry = Map.fetch!(entries, session_id)
     task = Task.async(fn -> do_flush_capture(entry, state) end)
-    {:reply, :ok, %{state | capture_entries: Map.delete(entries, session_id), flush_workers: Map.put(state.flush_workers, task.ref, task)}}
+
+    {:reply, :ok,
+     %{
+       state
+       | capture_entries: Map.delete(entries, session_id),
+         flush_workers: Map.put(state.flush_workers, task.ref, task)
+     }}
   end
 
-  def handle_call({:flush_and_await, session_id, timeout_ms}, _from, %{capture_entries: entries} = state)
+  def handle_call(
+        {:flush_and_await, session_id, timeout_ms},
+        _from,
+        %{capture_entries: entries} = state
+      )
       when is_map_key(entries, session_id) do
     entry = Map.fetch!(entries, session_id)
     task = Task.async(fn -> do_flush_capture(entry, state) end)
@@ -249,6 +284,7 @@ defmodule Gralkor.CaptureBuffer do
     case Task.yield(task, timeout_ms) || Task.shutdown(task, :brutal_kill) do
       {:ok, outcome} ->
         {:reply, outcome, %{state | capture_entries: Map.delete(entries, session_id)}}
+
       nil ->
         {:reply, {:error, :timeout}, state}
     end
@@ -471,12 +507,15 @@ defmodule Gralkor.CaptureBuffer do
         end)
       end
 
-    capture_tasks = for {_session_id, entry} <- state.capture_entries do
-      Task.async(fn -> do_flush_capture(entry, state) end)
-    end
+    capture_tasks =
+      for {_session_id, entry} <- state.capture_entries do
+        Task.async(fn -> do_flush_capture(entry, state) end)
+      end
 
     Task.await_many(legacy_tasks ++ lens_tasks ++ capture_tasks, :infinity)
-    {:reply, :ok, %{state | entries: %{}, lens_entries: %{}, capture_entries: %{}, flush_workers: %{}}}
+
+    {:reply, :ok,
+     %{state | entries: %{}, lens_entries: %{}, capture_entries: %{}, flush_workers: %{}}}
   end
 
   @impl true
@@ -619,15 +658,45 @@ defmodule Gralkor.CaptureBuffer do
   defp do_flush_capture(entry, state) do
     Enum.reduce(entry.route_order, :ok, fn route, outcome ->
       turns = Map.fetch!(entry.batches, route)
-      result = case route do
-        {:direct, graph_id, ontology} ->
-          do_flush(graph_id, entry.agent_name, entry.user_name, ontology, turns, state.flush_callback, state.retries)
-        {:lens, lens} ->
-          callback = fn operator_id, agent_name, user_name, lens, turns ->
-            invoke_lens_callback(state.lens_flush_callback, operator_id, agent_name, user_name, lens, turns, entry.ingestion_id, entry.runtime_owner)
-          end
-          do_flush(entry.operator_id, entry.agent_name, entry.user_name, lens, turns, callback, state.retries)
-      end
+
+      result =
+        case route do
+          {:direct, graph_id, ontology} ->
+            do_flush(
+              graph_id,
+              entry.agent_name,
+              entry.user_name,
+              ontology,
+              turns,
+              state.flush_callback,
+              state.retries
+            )
+
+          {:lens, lens} ->
+            callback = fn operator_id, agent_name, user_name, lens, turns ->
+              invoke_lens_callback(
+                state.lens_flush_callback,
+                operator_id,
+                agent_name,
+                user_name,
+                lens,
+                turns,
+                entry.ingestion_id,
+                entry.runtime_owner
+              )
+            end
+
+            do_flush(
+              entry.operator_id,
+              entry.agent_name,
+              entry.user_name,
+              lens,
+              turns,
+              callback,
+              state.retries
+            )
+        end
+
       case {outcome, result} do
         {:ok, {:error, _} = error} -> error
         _ -> outcome
