@@ -37,6 +37,11 @@ defmodule Gralkor.PersonalGraphMigration do
     execute(connection, %{action: "apply", journal_path: journal_path, quiescence: quiescence})
   end
 
+  @spec advance(connection(), String.t(), map()) :: {:ok, manifest()} | {:error, String.t()}
+  def advance(connection, journal_path, quiescence) do
+    execute(connection, %{action: "advance", journal_path: journal_path, quiescence: quiescence})
+  end
+
   defp execute(connection, request) do
     :ok = Gralkor.Python.ensure_initialised()
 

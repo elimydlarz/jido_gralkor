@@ -219,6 +219,8 @@ def execute(request: dict[str, object]) -> dict[str, object]:
             require_quiescence(request["quiescence"])
             with open(path) as stream:
                 manifest = json.load(stream)
+            if action == "advance":
+                return advance(database, path, manifest)
             while manifest["phase"] != "verified":
                 manifest = advance(database, path, manifest)
             return manifest
