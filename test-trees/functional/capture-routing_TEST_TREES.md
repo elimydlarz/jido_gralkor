@@ -34,3 +34,6 @@ if a capture request has an invalid identity, canonical message, route, Destinat
 
 if a caller uses a retired positional capture adapter
   then an explicit migration error identifies the typed runtime-targeted capture request
+
+if typed capture and compatibility buffer calls reuse one session
+  then the second mode is rejected without changing accepted turns
