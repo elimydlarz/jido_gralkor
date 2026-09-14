@@ -13,6 +13,9 @@ when an application requests a private graph migration
 when the migration command receives an unsupported operation
   then it reports usage without connecting to a graph
 
+when the migration command receives explicit JSON requests for a private graph
+  then plan, prepare, advance, apply, and rollback return their durable graph phases
+
 when an application inventories explicitly identified historical private graphs
   then the manifest preserves each operator identifier byte for byte in its old and new logical names
   and the manifest records both graph names using the existing injective physical encoding

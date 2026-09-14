@@ -66,6 +66,25 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when the migration command receives explicit JSON requests for a private graph" do
+    test "then plan, prepare, advance, apply, and rollback return their durable graph phases", context do
+      seed_history(context.database, "owner")
+      original_shell = Mix.shell()
+      Mix.shell(Mix.Shell.Process)
+      on_exit(fn -> Mix.shell(original_shell) end)
+      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+      request_path = journal <> ".request"
+      File.write!(request_path, Jason.encode!(%{connection: Map.new(context.connection), operator_ids: ["owner"], configuration_references: %{}, journal_path: journal, quiescence: @quiescence}))
+      for {operation, phase, graph_phase} <- [{"plan", "planned", "planned"}, {"prepare", "planned", "planned"}, {"advance", "planned", "copied"}, {"apply", "verified", "verified"}, {"rollback", "rolled_back", "rolled_back"}] do
+        Mix.Tasks.Gralkor.MigratePersonal.run([operation, request_path])
+        assert_receive {:mix_shell, :info, [json]}
+        manifest = Jason.decode!(json)
+        assert manifest["phase"] == phase
+        assert hd(manifest["graphs"])["phase"] == graph_phase
+      end
+    end
+  end
+
   describe "when an application prepares a private graph migration > if a source node or relationship carries an incompatible stored group identity" do
     test "then preparation refuses while records without a group identity remain preservable", context do
       seed_history(context.database, "owner")
@@ -507,7 +526,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     assert {:ok, [%{destination: "personal", artefact: ^artefact}]} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "amber", destinations: ["personal"], result_type: :artefacts, artefact_id: artefact.id})
     assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
     target = hd(manifest["graphs"])["target_inventory"]
-    assert episode(target, artefact.id)["properties"]["_gralkor_extraction_complete"] == true
+    assert episode(target, artefact.id)["_gralkor_extraction_complete"] == true
     assert Enum.count(target["nodes"], &(Enum.member?(&1["labels"], "Episodic") and &1["properties"]["uuid"] == artefact.id)) == 1
   end
 
