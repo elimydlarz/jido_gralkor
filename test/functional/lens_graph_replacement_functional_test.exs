@@ -99,7 +99,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     Application.put_env(:jido_gralkor, :destination_storage, DestinationSearchStorage)
     Application.put_env(:jido_gralkor, :destinations, destinations())
 
-    Application.put_env(:jido_gralkor, :lenses, [replaceable_lens("systems", :operator)])
+    Application.put_env(:jido_gralkor, :lenses, [replaceable_lens("systems", :personal)])
 
     on_exit(fn ->
       restore_env(:lenses, previous_lenses)
@@ -156,13 +156,13 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
 
     test "and every supplied node and relationship is inserted at the resolved destination with every non-reserved graph value unchanged" do
-      use_in_memory(:operator)
+      use_in_memory(:personal)
       supplied = connected_graph("payments")
 
       assert :ok = Client.replace(request(supplied))
 
       assert %{nodes: [source, target], relationships: [relationship]} =
-               InMemory.graph(group(:operator, "systems"))
+               InMemory.graph(group(:personal, "systems"))
 
       assert Map.drop(source.properties, [:_gralkor_lens]) == %{name: "payments"}
       assert source.labels == ["System"]
@@ -172,10 +172,10 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
 
     test "and every inserted node and relationship carries the reserved Lens ownership field set to the selected Lens name" do
-      use_in_memory(:operator)
+      use_in_memory(:personal)
       assert :ok = Client.replace(request(connected_graph("payments")))
 
-      stored = InMemory.graph(group(:operator, "systems"))
+      stored = InMemory.graph(group(:personal, "systems"))
 
       assert Enum.all?(stored.nodes, &(&1.properties._gralkor_lens == "systems"))
       assert Enum.all?(stored.relationships, &(&1.properties._gralkor_lens == "systems"))
@@ -265,7 +265,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
 
     test "and the caller observes whether replacement succeeded or failed" do
-      use_in_memory(:operator)
+      use_in_memory(:personal)
       assert :ok = Client.replace(request(graph("systems")))
 
       Application.put_env(:jido_gralkor, :lens_storage, FailingStorage)
@@ -275,19 +275,19 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
 
   describe "when a caller supplies a complete replacement graph" do
     test "then every supplied node carries a unique identifier, labels, and properties" do
-      use_in_memory(:operator)
+      use_in_memory(:personal)
       assert :ok = Client.replace(request(graph("systems")))
     end
 
     test "and every supplied relationship carries source and destination node identifiers, a type, and properties" do
-      use_in_memory(:operator)
+      use_in_memory(:personal)
       assert :ok = Client.replace(request(connected_graph("systems")))
     end
   end
 
   describe "if the supplied graph is malformed or names a missing relationship endpoint" do
     test "then replacement fails before graph content is removed or inserted" do
-      use_in_memory(:operator)
+      use_in_memory(:personal)
       assert :ok = Client.replace(request(graph("existing")))
 
       for data <- malformed_graph_data() do
@@ -302,7 +302,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       end
 
       assert %{nodes: [%{id: "existing"}]} =
-               InMemory.graph(group(:operator, "systems"))
+               InMemory.graph(group(:personal, "systems"))
     end
 
     test "and the error identifies the invalid graph data" do
