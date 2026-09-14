@@ -82,7 +82,9 @@ defmodule Gralkor.GraphitiEpisodeProvenanceTest do
                  "personal/owner",
                  "private fact",
                  "conversation",
-                 nil, writer: :direct)
+                 nil,
+                 writer: :direct
+               )
 
       assert decode(graphiti, "g.added")["source_description"] ==
                "conversation [gralkor: direct]"

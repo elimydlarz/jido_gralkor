@@ -1513,7 +1513,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  representations: [],
                  invocation_context: %{}
                },
-               &send(parent, {:personal_erl, &1}), inference: &erl_output_for/1)
+               &send(parent, {:personal_erl, &1}),
+               inference: &erl_output_for/1
+             )
 
     assert_receive {:personal_erl, %{outcome: :delivered, artefact: artefact}}, 1_000
     artefact

@@ -539,7 +539,9 @@ defmodule Gralkor.GraphitiPool do
       source_description: Map.get(m, "source_description")
     }
 
-    if Map.has_key?(m, "source_kind"), do: Map.put(episode, :source_kind, m["source_kind"]), else: episode
+    if Map.has_key?(m, "source_kind"),
+      do: Map.put(episode, :source_kind, m["source_kind"]),
+      else: episode
   end
 
   @doc """
@@ -658,6 +660,7 @@ defmodule Gralkor.GraphitiPool do
       when is_binary(group_id) and is_binary(content) and is_binary(source_description) and
              is_list(opts) do
     instance = __MODULE__.for(server, group_id)
+
     source_description =
       if Keyword.get(opts, :writer) == :direct do
         source_description <> " [gralkor: direct]"
@@ -1582,21 +1585,27 @@ defmodule Gralkor.GraphitiPool do
   end
 
   defp atomize_source_keys(map) do
-    source = Map.new(map, fn {key, value} ->
-      key = if key in @source_keys_strings, do: String.to_atom(key), else: key
-      {key, value}
-    end)
+    source =
+      Map.new(map, fn {key, value} ->
+        key = if key in @source_keys_strings, do: String.to_atom(key), else: key
+        {key, value}
+      end)
 
     case source do
       %{source_description: description} when is_binary(description) ->
         if String.ends_with?(description, " [gralkor: direct]") do
           source
-          |> Map.put(:source_description, String.replace_suffix(description, " [gralkor: direct]", ""))
+          |> Map.put(
+            :source_description,
+            String.replace_suffix(description, " [gralkor: direct]", "")
+          )
           |> Map.put(:writer, :direct)
         else
           source
         end
-      _ -> source
+
+      _ ->
+        source
     end
   end
 
