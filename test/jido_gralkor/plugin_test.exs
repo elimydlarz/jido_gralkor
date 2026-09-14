@@ -38,7 +38,7 @@ defmodule JidoGralkor.PluginTest do
       %{
         __strategy__: %{request_traces: request_traces, config: %{}},
         requests: requests,
-        __memory__: %{agent_name: agent_name},
+        __memory__: %{agent_name: agent_name, capture_destination: "personal"},
         user_name: user_name
       }
       |> maybe_put(:__thread__, if(thread_id, do: %{id: thread_id}, else: nil))
@@ -140,7 +140,7 @@ defmodule JidoGralkor.PluginTest do
   describe "when mount is given a non-blank agent name" do
     test "then it returns plugin state carrying that agent name" do
       assert {:ok, %{agent_name: "Susu"}} =
-               Plugin.mount(%{id: "user-1", state: %{}}, agent_name: "Susu")
+               Plugin.mount(%{id: "user-1", state: %{}}, capture_destination: "personal", agent_name: "Susu")
     end
   end
 
@@ -164,9 +164,9 @@ defmodule JidoGralkor.PluginTest do
     test "then the selected Lens name is stored on the plugin state without copying its definition" do
       configure_lenses()
 
-      assert {:ok, %{agent_name: "Susu", ingestion_lens: "observations"}} =
+      assert {:ok, %{capture_destination: "personal", agent_name: "Susu", ingestion_lens: "observations"}} =
                Plugin.mount(%{id: "operator-one", state: %{}},
-                 agent_name: "Susu",
+                 capture_destination: "personal", agent_name: "Susu",
                  ingestion_lens: "observations",
                  runtime_config: runtime_configuration()
                )
@@ -175,19 +175,19 @@ defmodule JidoGralkor.PluginTest do
 
   describe "when mount selects an ingestion Lens > where the selected Lens is packaged" do
     test "then mounting accepts the Lens" do
-      assert {:ok, %{agent_name: "Susu", ingestion_lens: "operator"}} =
+      assert {:ok, %{capture_destination: "personal", agent_name: "Susu", ingestion_lens: "personal-chat"}} =
                Plugin.mount(%{id: "operator-one", state: %{}},
-                 agent_name: "Susu",
-                 ingestion_lens: "operator"
+                 capture_destination: "personal", agent_name: "Susu",
+                 ingestion_lens: "personal-chat"
                )
     end
   end
 
   describe "when mount selects an ingestion Lens > where the selected Lens is declared by that mount" do
     test "then mounting accepts the Lens" do
-      assert {:ok, %{agent_name: "Susu", ingestion_lens: "observations"}} =
+      assert {:ok, %{capture_destination: "personal", agent_name: "Susu", ingestion_lens: "observations"}} =
                Plugin.mount(%{id: "operator-one", state: %{}},
-                 agent_name: "Susu",
+                 capture_destination: "personal", agent_name: "Susu",
                  ingestion_lens: "observations",
                  runtime_config: runtime_configuration()
                )
@@ -200,7 +200,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
-          agent_name: "Susu",
+          capture_destination: "personal", agent_name: "Susu",
           ingestion_lens: "missing"
         )
       end
@@ -213,7 +213,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert_raise ArgumentError, ~r/unknown Lens "observations"/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
-          agent_name: "Susu",
+          capture_destination: "personal", agent_name: "Susu",
           ingestion_lens: "observations"
         )
       end
@@ -226,7 +226,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert_raise ArgumentError, ~r/default_lens.*ingestion_lens/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
-          agent_name: "Susu",
+          capture_destination: "personal", agent_name: "Susu",
           default_lens: "observations"
         )
       end
@@ -239,7 +239,7 @@ defmodule JidoGralkor.PluginTest do
                    ~r/search_destinations.*MemorySearch.*per-search.*destinations/,
                    fn ->
                      Plugin.mount(%{id: "operator-one", state: %{}},
-                       agent_name: "Susu",
+                       capture_destination: "personal", agent_name: "Susu",
                        search_destinations: ["memory"]
                      )
                    end
@@ -367,7 +367,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert {:ok, :continue} = Plugin.handle_signal(completed, context(completion_agent))
 
-      assert [[_, _, _, _, _, "observations", []]] = InMemory.captures()
+      assert [[_, %Gralkor.Capture{route: {:lenses, ["observations"]}}]] = InMemory.captures()
 
       InMemory.reset()
       InMemory.set_capture(:ok)
@@ -376,7 +376,7 @@ defmodule JidoGralkor.PluginTest do
         Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
 
       assert {:ok, :continue} = Plugin.handle_signal(failed, context(completion_agent))
-      assert [[_, _, _, _, _, "observations", []]] = InMemory.captures()
+      assert [[_, %Gralkor.Capture{route: {:lenses, ["observations"]}}]] = InMemory.captures()
     end
   end
 
@@ -414,7 +414,7 @@ defmodule JidoGralkor.PluginTest do
                Plugin.handle_signal(signal, context(lens_agent))
 
       assert tool_context == %{
-               agent_name: "Susu",
+               capture_destination: "personal", agent_name: "Susu",
                gralkor_runtime: self(),
                lens: "observations",
                session_id: "thread-one"
@@ -435,7 +435,7 @@ defmodule JidoGralkor.PluginTest do
                Plugin.handle_signal(signal, context(lens_agent))
 
       assert tool_context == %{
-               agent_name: "Susu",
+               capture_destination: "personal", agent_name: "Susu",
                gralkor_runtime: self(),
                lens: "observations"
              }
@@ -465,28 +465,29 @@ defmodule JidoGralkor.PluginTest do
 
   describe "when an agent turn completes > while a thread has committed to agent state" do
     test "then the turn is sent for capture as canonical messages under that thread's session id" do
-      [session_id, _group_id, _agent_name, _user_name, messages] = completed_capture()
+      %Gralkor.Capture{session_id: session_id, messages: messages} = completed_capture()
       assert session_id == "thr-42"
       assert Enum.all?(messages, &match?(%Message{}, &1))
     end
 
-    test "and capture uses the graph named `operator/<operator id>`" do
-      [_session_id, group_id, _agent_name, _user_name, _messages] = completed_capture()
-      assert group_id == "operator/user-42"
+    test "and capture explicitly selects personal for the unchanged operator identity" do
+      %Gralkor.Capture{operator_id: operator_id, route: route} = completed_capture()
+      assert operator_id == "user-42"
+      assert route == {:direct, "personal"}
     end
 
     test "and the user name held in agent state is forwarded with the capture" do
-      [_session_id, _group_id, _agent_name, user_name, _messages] = completed_capture()
+      %Gralkor.Capture{user_name: user_name} = completed_capture()
       assert user_name == "Eli"
     end
 
     test "and the user's query opens the captured messages" do
-      [_session_id, _group_id, _agent_name, _user_name, messages] = completed_capture()
+      %Gralkor.Capture{messages: messages} = completed_capture()
       assert hd(messages) == %Message{role: "user", content: "what did I say?"}
     end
 
     test "and the completed answer closes them" do
-      [_session_id, _group_id, _agent_name, _user_name, messages] = completed_capture()
+      %Gralkor.Capture{messages: messages} = completed_capture()
       assert List.last(messages) == %Message{role: "assistant", content: "you said hi"}
     end
   end
@@ -508,7 +509,7 @@ defmodule JidoGralkor.PluginTest do
             }
           },
           requests: %{request_id => %{query: "hi", status: :pending, result: nil}},
-          __memory__: %{agent_name: "TestAgent"},
+          __memory__: %{agent_name: "TestAgent", capture_destination: "personal"},
           __thread__: %{id: "thr-42"}
         }
       }
@@ -594,23 +595,13 @@ defmodule JidoGralkor.PluginTest do
 
   describe "when an agent turn completes > while a thread has committed to agent state > where the plugin was mounted with Lens selections" do
     test "then the capture carries the selected Lens" do
-      assert [
-               [
-                 "thread-one",
-                 "operator-one",
-                 "Susu",
-                 "Eli",
-                 _messages,
-                 "observations",
-                 []
-               ]
-             ] = lens_capture()
+      assert [[_, %Gralkor.Capture{session_id: "thread-one", operator_id: "operator-one", agent_name: "Susu", user_name: "Eli", route: {:lenses, ["observations"]}}]] = lens_capture()
     end
   end
 
   describe "when an agent turn fails > while a thread has committed to agent state" do
     test "then the turn is captured with the failure surfaced as a terminal `request failed: …` behaviour message" do
-      [_session_id, _group_id, _agent_name, _user_name, messages] = failed_capture()
+      %Gralkor.Capture{messages: messages} = failed_capture()
 
       assert List.last(messages) == %Message{
                role: "behaviour",
@@ -619,12 +610,12 @@ defmodule JidoGralkor.PluginTest do
     end
 
     test "and no assistant message is captured for the failed turn" do
-      [_session_id, _group_id, _agent_name, _user_name, messages] = failed_capture()
+      %Gralkor.Capture{messages: messages} = failed_capture()
       refute Enum.any?(messages, &(&1.role == "assistant"))
     end
 
     test "and the user's original query is captured ahead of the failure message" do
-      [_session_id, _group_id, _agent_name, _user_name, messages] = failed_capture()
+      %Gralkor.Capture{messages: messages} = failed_capture()
       user_msg = Enum.find(messages, &(&1.role == "user"))
       assert user_msg.content == "original question"
       assert Enum.find_index(messages, &(&1.role == "user")) < length(messages) - 1
@@ -650,7 +641,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
 
-      assert [[_session, _group, _agent, _user, messages]] = InMemory.captures()
+      assert [[_, %Gralkor.Capture{messages: messages}]] = InMemory.captures()
 
       assert messages == [
                %Message{role: "user", content: "original question"},
@@ -792,7 +783,7 @@ defmodule JidoGralkor.PluginTest do
       )
 
     assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
-    assert [capture] = InMemory.captures()
+    assert [[_, capture]] = InMemory.captures()
     capture
   end
 
@@ -803,7 +794,7 @@ defmodule JidoGralkor.PluginTest do
 
     lens_agent =
       agent("operator-one",
-        agent_name: "Susu",
+        capture_destination: "personal", agent_name: "Susu",
         thread_id: "thread-one",
         request_traces: %{
           request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
@@ -842,7 +833,7 @@ defmodule JidoGralkor.PluginTest do
       Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
 
     Plugin.handle_signal(signal, context(ag))
-    assert [capture] = InMemory.captures()
+    assert [[_, capture]] = InMemory.captures()
     capture
   end
 
@@ -851,7 +842,7 @@ defmodule JidoGralkor.PluginTest do
 
     {:ok, plugin_state} =
       Plugin.mount(%{id: "operator-one", state: %{}},
-        agent_name: "Susu",
+        capture_destination: "personal", agent_name: "Susu",
         ingestion_lens: "observations",
         runtime_config: runtime_configuration()
       )

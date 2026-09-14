@@ -2,7 +2,7 @@ Unit: jido-gralkor-runtime (src: lib/jido_gralkor/runtime.ex; unit: test/jido_gr
 
 when a runtime starts for an owning AgentServer PID with valid complete configuration
   then one runtime owns that agent's active configuration
-  and the packaged Destinations, operator Lens, and Reflections are available beside consumer definitions
+  and the packaged Destinations, personal-chat Lens, and Reflections are available beside consumer definitions
   and admitted Reflection production and delivery run asynchronously under that runtime
 
 when a consumer replaces complete valid configuration

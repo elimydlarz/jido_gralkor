@@ -53,16 +53,16 @@ defmodule JidoGralkor.RuntimeTest do
       assert Runtime.destination!(self(), "reviews").name == "reviews"
     end
 
-    test "and the packaged Destinations, operator Lens, and Reflections are available beside consumer definitions" do
+    test "and the packaged Destinations, personal-chat Lens, and Reflections are available beside consumer definitions" do
       start_runtime(reflection_configuration())
 
       assert Enum.map(Runtime.destinations(self()), & &1.name) == [
-               "operator",
+               "personal",
                "global",
                "reviews"
              ]
 
-      assert Runtime.lens!(self(), "operator").name == "operator"
+      assert Runtime.lens!(self(), "personal-chat").name == "personal-chat"
       assert Runtime.reflection!(self(), "generalisations").name == "generalisations"
       assert Runtime.reflection!(self(), "review").name == "review"
     end
@@ -116,7 +116,7 @@ defmodule JidoGralkor.RuntimeTest do
     test "and package-owned definitions remain active" do
       start_runtime(reflection_configuration())
       assert :ok = Runtime.replace(self(), replacement_configuration("new"))
-      assert Runtime.destination!(self(), "operator").name == "operator"
+      assert Runtime.destination!(self(), "personal").name == "personal"
       assert Runtime.reflection!(self(), "generalisations").name == "generalisations"
     end
 
@@ -180,7 +180,7 @@ defmodule JidoGralkor.RuntimeTest do
 
       assert {lenses, destinations} = Runtime.resolve_search!(self(), ["custom"], [])
       assert Enum.map(lenses, & &1.name) == ["custom"]
-      assert Enum.map(destinations, & &1.name) == ["operator", "global", "reviews"]
+      assert Enum.map(destinations, & &1.name) == ["personal", "global", "reviews"]
     end
   end
 

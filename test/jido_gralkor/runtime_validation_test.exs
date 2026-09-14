@@ -101,11 +101,11 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   describe "if a consumer definition uses a name reserved by a package-owned definition" do
     test "then validation identifies its collection and reserved name" do
-      assert {:error, {:reserved_definition_name, :destinations, "operator"}} =
-               validate(Map.put(config(), :destinations, [[name: "operator"]]))
+      assert {:error, {:reserved_definition_name, :destinations, "personal"}} =
+               validate(Map.put(config(), :destinations, [[name: "personal"]]))
 
-      assert {:error, {:reserved_definition_name, :lenses, "operator"}} =
-               validate(Map.put(config(), :lenses, [[name: "operator"]]))
+      assert {:error, {:reserved_definition_name, :lenses, "personal-chat"}} =
+               validate(Map.put(config(), :lenses, [[name: "personal-chat"]]))
 
       assert {:error, {:reserved_definition_name, :reflections, "packaged"}} =
                validate(
@@ -131,7 +131,7 @@ defmodule JidoGralkor.RuntimeValidationTest do
         ]
       ]
 
-      assert {:error, {:retired_definition_name, :lenses, "default", "operator"}} =
+      assert {:error, {:retired_definition_name, :lenses, "default", "personal-chat"}} =
                validate(Map.put(config(), :lenses, lens))
     end
   end

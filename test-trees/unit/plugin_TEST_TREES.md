@@ -54,7 +54,7 @@ when an agent turn begins
     where the incoming tool context selects a Lens
       then the selected Lens is validated and retained on the request-correlated thread entry
       and the selected Lens remains available to completion and failure capture
-      if the selected Lens is unknown or non-binary
+      if the selected Lens is unknown or neither binary nor an explicit nil selection
         then the callback raises identifying the invalid Lens
   while no thread has committed to agent state
     then the mounted agent name and Gralkor runtime target are planted on the tool context, with no session id
@@ -68,7 +68,7 @@ when an agent turn begins
 when an agent turn completes
   while a thread has committed to agent state
     then the turn is sent for capture as canonical messages under that thread's session id
-    and capture uses the graph named `operator/<operator id>`
+    and capture explicitly selects personal for the unchanged operator identity
     and the user name held in agent state is forwarded with the capture
     and the user's query opens the captured messages
     and the completed answer closes them
