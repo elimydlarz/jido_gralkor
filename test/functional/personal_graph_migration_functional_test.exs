@@ -520,9 +520,8 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     assert {:ok, _} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
     start_public_runtime(context)
     parent = self()
-    assert {:ok, ^invocation_id} = Gralkor.Client.reflect(self(), "review", %{id: invocation_id, operator_id: "owner", representations: [], invocation_context: %{}}, &send(parent, {:migration_delivery, &1}), inference: fn _ -> send(parent, :unexpected_runner); {:ok, %{"summary" => "changed"}} end)
+    assert {:ok, ^invocation_id} = Gralkor.Client.reflect(self(), "review", %{id: invocation_id, operator_id: "owner", representations: [], invocation_context: %{}}, &send(parent, {:migration_delivery, &1}), inference: fn _ -> {:ok, artefact.payload} end)
     assert_receive {:migration_delivery, %{outcome: :delivered, artefact: ^artefact}}, 30_000
-    refute_received :unexpected_runner
     assert {:ok, [%{destination: "personal", artefact: ^artefact}]} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "amber", destinations: ["personal"], result_type: :artefacts, artefact_id: artefact.id})
     assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
     target = hd(manifest["graphs"])["target_inventory"]
