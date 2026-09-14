@@ -4,7 +4,7 @@ Status: implementation and isolated verification in progress, 2026-09-14. The op
 
 Implemented decisions: `Gralkor.Capture` is the typed runtime-targeted request; `{:direct, destination}` and `{:lenses, names}` dispatch exclusively. Mounts require `capture_destination`. The packaged names are `personal-chat` and `personal`, with unchanged operator identifiers. Positional capture calls raise migration guidance. Direct provenance is storage-owned, and historical provenance remains unchanged. Phil has guarded persisted-configuration migration and archival delivery/projection routing that retains original snapshots and hashes.
 
-Verification so far: affected package capture, search, configuration, ERL, and replacement Functional checks pass in isolated builds; Phil's affected Functional run passed 300 tests. The recorded stale-write race was reproduced with delayed claim theft and fixed with an explicit extraction barrier in the fixture. The 75ms recall diagnostic reproduced deadline expiry during startup while proving correct deadline forwarding; the fixture now separates forwarding from actual deadline expiry, which remains covered independently. Full regression, complete migration/rollback/public-read verification, Journeys, completion sync, and the final independent review are still pending. These focused results do not establish those full gates.
+Verification so far: affected package capture, search, configuration, ERL, and replacement Functional checks pass in isolated builds; Phil's full Functional run passed 608 tests, and its final installed Stop gate passed 796 Unit/Integration tests. The recorded stale-write race was reproduced with delayed claim theft and fixed with an explicit extraction barrier in the fixture. The 75ms recall diagnostic reproduced deadline expiry during startup while proving correct deadline forwarding; the fixture now separates forwarding from actual deadline expiry, which remains covered independently. Full regression, complete migration/rollback/public-read verification, Journeys, completion sync, and the final independent review are still pending. These focused results do not establish those full gates.
 
 The requirements and original source findings below remain the acceptance checklist. “Current” findings and historical line anchors describe the pre-implementation baseline unless a completion note states otherwise.
 
@@ -288,3 +288,27 @@ All implementation and verification of the intended renamed behaviour remains to
 ## 8. Suggested goal for the next session
 
 Implement and verify the work in `/Users/eli/code/os/jido_gralkor/WIP_RENAME.md` end to end across jido_gralkor and Phil. Replace the packaged operator Lens with personal-chat and the operator Destination with personal, resolving to personal/<the same identifier>. Establish explicit direct capture and optional genuine Lens processing without duplicate automatic writes; preserve truthful provenance, historical memory, operator isolation, flush/retry semantics, and private ERL delivery. Implement restartable graph and Phil configuration/job compatibility migrations and prove them on isolated data. Update trees, tests, documentation, and consumer integration; follow the project workflows, reconcile parallel work, and report material verification plus every remaining gate. Do not publish, deploy, or mutate live stores without separately scoped authorization.
+
+
+## 9. Current isolated verification evidence
+
+These results belong to the implementation session. Pending full gates are not implied by focused passes.
+
+| Check | Observed result | Evidence |
+|---|---|---|
+| Typed capture and compatibility-mode integrity | 18 Functional tests passed | `/tmp/gralkor-capture-mode-green.log` |
+| Direct/historical provenance and canonical stored artefacts | 29 Functional tests passed | `/tmp/gralkor-artefact-shape-green.log` |
+| Package configuration, packaged Reflection, and Destination registration | 149 focused Functional tests passed | `/private/tmp/jgr-rename-runtime-green2.log` |
+| Public memory capabilities and Lens replacement | 76 focused Functional tests passed | `/private/tmp/jgr-rename-public-green2.log` |
+| Capture retry ownership | 17 Functional tests passed | `/tmp/gralkor-retry-green.log` |
+| Graphiti stale-writer diagnostic | Delayed theft reproduced the fixture race; explicit extraction barrier passed the original-seed diagnostic | `/private/tmp/jgr-rename-stale-delayed-red.log`, `/private/tmp/jgr-rename-stale-green2.log` |
+| Native recall deadline diagnostic | Original-seed focused test passed after separating forwarding from fixture timing; production deadline unchanged | `/tmp/gralkor-native-deadline-verified.log` |
+| Phil full Functional | 608 passed, 798 excluded; 670.2 seconds | `/private/tmp/phil-rename-full-functional.log` |
+| Phil final installed Stop gate | 796 Unit/Integration passed, 620 excluded; 83.6 seconds; hook exit 0 | `/private/tmp/phil-rename-final-unit-integration.log` |
+| Coordinated rollback | Graph apply, exact Phil target apply, graph rollback, exact original configuration restore, and actual prior application boot/read completed | `/private/tmp/phil-rollback-old-application-evidence.json` |
+
+The rollback boot used Phil revision `3f3ecf2db7d6c80ea76ce6297679dedb6219e9e4` and its original package revision `56f97bd496dea3ab43c8888aa69f95c1a743fb32`. Its public search returned the original `complete` artefact with payload `{"summary":"immutable amber"}` from `operator/owner`. Source polling and Slack were disabled. A synthetic placeholder credential caused a nonfatal warmup 401; the historical artefact read and evidence export completed with exit 0. This establishes matching graph/configuration/application rollback, not provider readiness of the old revision.
+
+Phil's post-change Destination, Lens, and trigger screenshots were inspected at `/private/tmp/phil-personal-rename/screenshots/personal-rename-{destinations,lenses,triggers}-after.png`, following the earlier before view.
+
+Still pending: complete graph-migration focused verification including abrupt interruption and public replay, complete package Functional, package and isolated Phil Journeys, final durable dependency pin and affected consumer recheck, final package Stop/format/documentation checks, and the single independent review. Live-data migration, publication, deployment, and Phil's live-company-service Journeys are outside the isolated execution scope.
