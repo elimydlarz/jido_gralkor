@@ -1,6 +1,6 @@
 # Personal memory naming and capture correction
 
-Status: evaluation and handover only, 2026-09-14. No implementation, test-tree changes, behavioural test runs, database migrations, or releases have been performed. The only deliverable from the documenting session is this file.
+Status: evaluation and handover only, 2026-09-14. No implementation, test-tree changes, manually invoked behavioural test runs, database migrations, or releases have been performed. Automatic hooks did run tests and reported failures, recorded in section 6. The only deliverable from the documenting session is this file.
 
 Primary repository: `/Users/eli/code/os/jido_gralkor`.
 Consumer repository: `/Users/eli/code/fasset/fasset-intelligence-lab/phil`.
@@ -257,6 +257,15 @@ Current test commands are in `TEST_STRATEGY.md`, `mix.exs`, and coding-agent hoo
 
 Use isolated build, database, graph, and listener resources. Do not run competing embedded Graphiti test VMs; current startup orphan cleanup can interfere across VMs. Browser-visible Phil changes require view, fix, and view again. Report live/billable Journey authorization or infrastructure gates explicitly; an unrun gate is not a passing gate. Do not perform mutation testing unless explicitly requested.
 
+### Automatic test feedback observed while documenting
+
+The stop hook supplied `.fasset-harness/state/optimistic-feedback/diagnostics/feedback.XKHXEh` after the handover was written. These are observed hook results against the existing implementation, not verification of the proposed rename or an isolated reproduction of their causes:
+
+- Impacted tests, seed `5683`: `636/637 passed, 536 excluded`, one failure. The same-identifier concurrent-write test at `test/gralkor/graphiti_pool_test.exs:377` expected the stale write to return a Python error, but received `:ok`; the failing assertion is at `:649`.
+- Stop Unit/Integration tests, seed `640079`: `814/816 passed, 536 excluded`, two failures. The same Graphiti test failed again. `test/gralkor/client/native_test.exs:791` also expected recall to succeed with a configured 75 ms deadline, but received `{:error, :recall_deadline_expired}`; its failing assertion is at `:803`.
+
+No cause was established and no production/test files were changed to address these failures. Reproduce and diagnose them under isolated resources before treating the corresponding completion gates as clean. In particular, do not rely on unverified stale-writer fencing when validating migration of Reflection claim state. Functional and Journey verification of the rename remains unperformed.
+
 ## 7. Work organization and completion
 
 Suggested independent ownership after the outer contract is established:
@@ -268,7 +277,7 @@ Suggested independent ownership after the outer contract is established:
 
 Agree shared-file ownership and API contracts before concurrent edits; adapt to others' changes instead of reverting them. The primary agent reconciles the integrated result, runs the required completion gates, and obtains the applicable final independent review. Package publishing and live deployment are distinct from implementing and proving the change.
 
-All implementation and behavioural verification in this document remains to be done. Completion requires implemented behaviour, tested migration tooling, migrated consumer code, accurate trees/docs, and a precise record of passed and unperformed gates. Do not mark the work complete after a name replacement or compile-only check. If an unavailable release pin, a live migration, or an unauthorized Journey remains, name that exact remaining outcome and its reason.
+All implementation and verification of the intended renamed behaviour remains to be done. Completion requires implemented behaviour, tested migration tooling, migrated consumer code, accurate trees/docs, and a precise record of passed and unperformed gates. Do not mark the work complete after a name replacement or compile-only check. If an unavailable release pin, a live migration, or an unauthorized Journey remains, name that exact remaining outcome and its reason.
 
 ## 8. Suggested goal for the next session
 
