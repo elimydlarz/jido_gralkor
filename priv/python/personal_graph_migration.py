@@ -1,6 +1,7 @@
 from datetime import date, datetime, time
 from importlib.metadata import version
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -92,6 +93,7 @@ def plan(database: FalkorDB, identifiers: list[str], references: dict[str, objec
 
 
 def persist(path: Path, manifest: dict[str, object], create: bool = False) -> None:
+    manifest["integrity"] = manifest_digest(manifest)
     destination = path if create else path.with_suffix(path.suffix + ".tmp")
     flags = os.O_WRONLY | os.O_CREAT | (os.O_EXCL if create else os.O_TRUNC)
     with os.fdopen(os.open(destination, flags, 0o600), "w") as stream:
@@ -105,6 +107,48 @@ def persist(path: Path, manifest: dict[str, object], create: bool = False) -> No
         os.fsync(directory)
     finally:
         os.close(directory)
+
+
+def manifest_digest(manifest: dict[str, object]) -> str:
+    content = {key: value for key, value in manifest.items() if key != "integrity"}
+    encoded = json.dumps(content, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def validate_manifest(manifest: dict[str, object]) -> None:
+    if manifest.get("integrity") != manifest_digest(manifest):
+        raise ValueError("manifest integrity check failed")
+    if manifest.get("format") != "gralkor-personal-graphs-v1":
+        raise ValueError("unsupported manifest format")
+    phase = manifest.get("phase")
+    if phase not in {"planned", "verified", "rolling_back", "rolled_back"}:
+        raise ValueError("invalid manifest phase")
+    entries = manifest["graphs"]
+    validate_identities([entry["operator_id"] for entry in entries])
+    unfinished = False
+    for entry in entries:
+        source = "operator/" + entry["operator_id"]
+        target = "personal/" + entry["operator_id"]
+        if (
+            entry["source_logical"] != source
+            or entry["target_logical"] != target
+            or entry["source_physical"] != "g_" + source.encode("utf-8").hex()
+            or entry["target_physical"] != "g_" + target.encode("utf-8").hex()
+            or entry["source_physical"] == entry["target_physical"]
+        ):
+            raise ValueError("manifest identity mapping is inconsistent")
+        graph_phase = entry["phase"]
+        forward = {"planned", "copying", "copied", "nodes_rewritten", "relationships_rewritten", "verified"}
+        if graph_phase not in forward | {"rollback_pending", "rolled_back"}:
+            raise ValueError("invalid manifest graph phase")
+        if phase == "verified" and graph_phase != "verified":
+            raise ValueError("manifest completion phases are inconsistent")
+        if phase == "rolled_back" and graph_phase != "rolled_back":
+            raise ValueError("manifest rollback phases are inconsistent")
+        if phase == "planned":
+            if graph_phase not in forward or (unfinished and graph_phase != "planned"):
+                raise ValueError("manifest progression is inconsistent")
+            unfinished = unfinished or graph_phase != "verified"
 
 
 def schema_ready(graph: Graph) -> None:
@@ -263,23 +307,28 @@ def validate_identities(identifiers: list[str]) -> None:
 
 
 def execute(request: dict[str, object]) -> dict[str, object]:
-    if request["action"] in {"plan", "prepare"}:
+    action = request["action"]
+    if action not in {"plan", "prepare", "advance", "apply", "rollback"}:
+        raise ValueError("unsupported migration operation")
+    if action in {"plan", "prepare"}:
         validate_identities(request["operator_ids"])
-    with FalkorDB(**request["connection"]) as database:
-        action = request["action"]
-        if action == "plan":
+    if action == "plan":
+        with FalkorDB(**request["connection"]) as database:
             return plan(database, request["operator_ids"], request["configuration_references"])
-        path = Path(request["journal_path"])
-        with open(path.with_suffix(path.suffix + ".lock"), "a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            if action == "prepare":
+    path = Path(request["journal_path"])
+    with open(path.with_suffix(path.suffix + ".lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if action == "prepare":
+            with FalkorDB(**request["connection"]) as database:
                 manifest = plan(database, request["operator_ids"], request["configuration_references"])
                 validate_preparation(manifest)
                 persist(path, manifest, create=True)
                 return manifest
-            require_quiescence(request["quiescence"])
-            with open(path) as stream:
-                manifest = json.load(stream)
+        require_quiescence(request["quiescence"])
+        with open(path) as stream:
+            manifest = json.load(stream)
+        validate_manifest(manifest)
+        with FalkorDB(**request["connection"]) as database:
             if action == "rollback":
                 return rollback(database, path, manifest)
             if action == "advance":
