@@ -119,6 +119,18 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when an application prepares a private graph migration > if an explicitly identified source graph is missing" do
+    test "then migration refuses without guessing a former lossy graph name", context do
+      Pythonx.eval("database.select_graph('operator_owner').query('CREATE (:Historical {uuid: 42})')", %{"database" => context.database})
+      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+      assert {:error, message} = PersonalGraphMigration.prepare(context.connection, ["owner"], %{}, journal)
+      assert message =~ "source graph missing"
+      refute File.exists?(journal)
+      {graphs, _} = Pythonx.eval("database.list_graphs()", %{"database" => context.database})
+      assert Pythonx.decode(graphs) == ["operator_owner"]
+    end
+  end
+
   describe "when an application migrates quiescent historical private graphs" do
     test "then every node and relationship group identity changes to its matching personal graph identity", context do
       seed_history(context.database, "owner")
