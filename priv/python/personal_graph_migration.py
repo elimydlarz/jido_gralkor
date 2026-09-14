@@ -182,6 +182,13 @@ def require_quiescence(evidence: dict[str, object]) -> None:
             raise ValueError(f"quiescence requires {kind}=0")
 
 
+def validate_preparation(manifest: dict[str, object]) -> None:
+    references = manifest["configuration_references"]
+    for destination in references.get("destinations", []):
+        if destination == "personal" or destination.startswith("personal/"):
+            raise ValueError(f"Destination namespace conflict: {destination}")
+
+
 def execute(request: dict[str, object]) -> dict[str, object]:
     with FalkorDB(**request["connection"]) as database:
         action = request["action"]
@@ -192,6 +199,7 @@ def execute(request: dict[str, object]) -> dict[str, object]:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             if action == "prepare":
                 manifest = plan(database, request["operator_ids"], request["configuration_references"])
+                validate_preparation(manifest)
                 persist(path, manifest, create=True)
                 return manifest
             require_quiescence(request["quiescence"])
