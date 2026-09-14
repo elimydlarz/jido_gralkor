@@ -104,8 +104,7 @@ defmodule Gralkor.Destination.Storage.Graphiti do
            query,
            max_results,
            lenses: Keyword.get(opts, :lenses, []),
-           require_reflection_complete: true,
-           require_trusted_provenance: true
+           require_reflection_complete: true
          ) do
       {:ok, episodes} -> structure_episodes(episodes)
       {:error, _} = error -> error
@@ -154,6 +153,8 @@ defmodule Gralkor.Destination.Storage.Graphiti do
     end
   end
 
+  defp fact_source(%{writer: :direct} = source), do: source
+
   defp fact_source(%{source_description: description} = source) when is_binary(description) do
     case Regex.run(~r/ \[lens: (.+)\]$/s, description) do
       [_, lens] ->
@@ -186,12 +187,24 @@ defmodule Gralkor.Destination.Storage.Graphiti do
   end
 
   defp episode_provenance(%{content: content, source_description: source_description} = episode) do
+    if String.ends_with?(source_description, " [gralkor: direct]") do
+      {:ok, episode |> Map.put(:source_description, String.replace_suffix(source_description, " [gralkor: direct]", "")) |> Map.put(:writer, :direct)}
+    else
+      named_episode_provenance(episode, content, source_description)
+    end
+  end
+
+  defp named_episode_provenance(episode, content, source_description) do
     case Regex.run(~r/^(.*) \[lens: (.+)\]$/s, source_description) do
       [_, source_description, lens] ->
         {:ok, Map.merge(episode, %{source_description: source_description, lens: lens})}
 
       _ ->
-        reflection_episode(content, source_description)
+        if String.starts_with?(source_description, "reflection:") do
+          reflection_episode(content, source_description)
+        else
+          {:ok, episode}
+        end
     end
   end
 
@@ -210,9 +223,6 @@ defmodule Gralkor.Destination.Storage.Graphiti do
         {:error, {:invalid_reflection_artefact, reflection}}
     end
   end
-
-  defp reflection_episode(content, source_description),
-    do: {:ok, %{content: content, source_description: source_description}}
 
   @doc false
   def decode_artefact(%{content: content}), do: decode_artefact(content)

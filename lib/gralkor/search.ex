@@ -3,8 +3,8 @@ defmodule Gralkor.Search do
   A search across registered memory Destinations.
 
   With empty `destinations` and `lenses`, search reads episodes from every
-  accessible registered Destination and from every Lens and Reflection writer.
-  The packaged `operator` Destination resolves only to the current
+  accessible registered Destination and from direct capture and every Lens and Reflection writer.
+  The packaged `personal` Destination resolves only to the current
   `operator_id`'s graph.
 
   `destinations` selects graphs and `lenses` filters episode writers. Names are
@@ -24,6 +24,7 @@ defmodule Gralkor.Search do
   or `:artefacts`.
   """
 
+  @type direct_episode :: %{content: String.t(), source_description: String.t(), optional(:source_kind) => String.t(), optional(:writer) => :direct}
   @type lens_episode :: %{content: String.t(), source_description: String.t(), lens: String.t()}
   @type reflection_episode :: %{
           artefact: %{id: String.t(), payload: map()},
@@ -31,7 +32,7 @@ defmodule Gralkor.Search do
           reflection: String.t()
         }
   @type result ::
-          %{destination: String.t(), episode: lens_episode() | reflection_episode()}
+          %{destination: String.t(), episode: direct_episode() | lens_episode() | reflection_episode()}
           | %{destination: String.t(), fact: map()}
           | %{destination: String.t(), node: map()}
           | %{destination: String.t(), artefact: Gralkor.Artefact.t()}

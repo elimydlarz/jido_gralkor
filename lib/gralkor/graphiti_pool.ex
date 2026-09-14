@@ -374,13 +374,17 @@ defmodule Gralkor.GraphitiPool do
         def reflection_episode(episode):
           source_description = episode.source_description or ''
           return (
-            not lens_episode(episode)
+            not source_description.endswith(' [gralkor: direct]')
+            and not lens_episode(episode)
             and source_description.startswith('reflection:')
             and bool(source_description[len('reflection:'):])
           )
 
+        def source_description_for(episode):
+          return episode.source_description or ''
+
         def trusted_writer_provenance(episode):
-          return lens_episode(episode) or reflection_episode(episode)
+          return source_description_for(episode).endswith(' [gralkor: direct]') or lens_episode(episode) or reflection_episode(episode)
 
         if require_extraction_complete or require_reflection_complete:
           episode_ids = [
@@ -434,10 +438,14 @@ defmodule Gralkor.GraphitiPool do
           return identifier if isinstance(identifier, str) and identifier else None
 
         def episode_result(episode):
-          return {
+          result = {
             "content": episode.content,
             "source_description": episode.source_description,
           }
+          source = getattr(episode, 'source', None)
+          if source is not None:
+            result['source_kind'] = {'message': 'conversation', 'text': 'document', 'json': 'structured_record'}.get(source.value)
+          return result
 
         if converge_by_identity:
           selected_ids = []
@@ -526,10 +534,12 @@ defmodule Gralkor.GraphitiPool do
   end
 
   defp episode_map(%{} = m) do
-    %{
+    episode = %{
       content: Map.get(m, "content"),
       source_description: Map.get(m, "source_description")
     }
+
+    if Map.has_key?(m, "source_kind"), do: Map.put(episode, :source_kind, m["source_kind"]), else: episode
   end
 
   @doc """
@@ -648,7 +658,12 @@ defmodule Gralkor.GraphitiPool do
       when is_binary(group_id) and is_binary(content) and is_binary(source_description) and
              is_list(opts) do
     instance = __MODULE__.for(server, group_id)
-    source_description = lens_source_description(source_description, Keyword.get(opts, :lens))
+    source_description =
+      if Keyword.get(opts, :writer) == :direct do
+        source_description <> " [gralkor: direct]"
+      else
+        lens_source_description(source_description, Keyword.get(opts, :lens))
+      end
 
     name =
       "manual-add-#{System.system_time(:millisecond)}-#{System.unique_integer([:positive, :monotonic])}"
@@ -1567,10 +1582,22 @@ defmodule Gralkor.GraphitiPool do
   end
 
   defp atomize_source_keys(map) do
-    Map.new(map, fn {key, value} ->
+    source = Map.new(map, fn {key, value} ->
       key = if key in @source_keys_strings, do: String.to_atom(key), else: key
       {key, value}
     end)
+
+    case source do
+      %{source_description: description} when is_binary(description) ->
+        if String.ends_with?(description, " [gralkor: direct]") do
+          source
+          |> Map.put(:source_description, String.replace_suffix(description, " [gralkor: direct]", ""))
+          |> Map.put(:writer, :direct)
+        else
+          source
+        end
+      _ -> source
+    end
   end
 
   @doc "Returns one episode by its exact UUID."

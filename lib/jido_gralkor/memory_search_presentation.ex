@@ -87,6 +87,10 @@ defmodule JidoGralkor.MemorySearchPresentation do
       |> Enum.flat_map(fn
         %{lens: name} when is_binary(name) and name != "" -> ["Lens: #{name}"]
         %{reflection: name} when is_binary(name) and name != "" -> ["Reflection: #{name}"]
+        %{writer: :direct, source_kind: kind} when kind in [:conversation, "conversation"] -> ["Source: direct conversation"]
+        %{writer: :direct, source_kind: kind} when kind in [:document, "document"] -> ["Source: direct document"]
+        %{writer: :direct, source_kind: kind} when kind in [:structured_record, "structured_record"] -> ["Source: direct structured record"]
+        %{writer: :direct} -> ["Source: direct"]
         _ -> []
       end)
       |> Enum.uniq()
