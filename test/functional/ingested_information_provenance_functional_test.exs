@@ -731,7 +731,14 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
       set_episode_search_fixture(
         graphiti,
         Enum.map(
-          [valid, %{id: "scalar", payload: "not structured"}, %{id: "blank", payload: nil}],
+          [
+            valid,
+            %{id: "scalar", payload: "not structured"},
+            %{id: "null-payload", payload: nil},
+            %{id: "", payload: %{}},
+            %{id: "  ", payload: %{}},
+            %{id: 42, payload: %{}}
+          ],
           fn artefact ->
             %{content: Jason.encode!(artefact), source_description: "reflection:generalisations"}
           end

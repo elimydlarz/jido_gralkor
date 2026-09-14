@@ -236,8 +236,9 @@ defmodule Gralkor.Destination.Storage.Graphiti do
 
   def decode_artefact(content) when is_binary(content) do
     case Jason.decode(content) do
-      {:ok, %{"id" => id, "payload" => payload} = decoded} when map_size(decoded) == 2 ->
-        [%Artefact{id: id, payload: payload}]
+      {:ok, %{"id" => id, "payload" => payload} = decoded}
+      when map_size(decoded) == 2 and is_binary(id) and is_map(payload) ->
+        if String.trim(id) == "", do: [], else: [%Artefact{id: id, payload: payload}]
 
       _ ->
         []
