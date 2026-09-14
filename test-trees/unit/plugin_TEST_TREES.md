@@ -54,7 +54,7 @@ when an agent turn begins
     where the incoming tool context selects a Lens
       then the selected Lens is validated and retained on the request-correlated thread entry
       and the selected Lens remains available to completion and failure capture
-      if the selected Lens is unknown or neither binary nor an explicit nil selection
+      if the Lens is unknown or invalid
         then the callback raises identifying the invalid Lens
   while no thread has committed to agent state
     then the mounted agent name and Gralkor runtime target are planted on the tool context, with no session id

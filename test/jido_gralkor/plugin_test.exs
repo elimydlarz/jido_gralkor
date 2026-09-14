@@ -405,7 +405,7 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  describe "when an agent turn begins > while a thread has committed to agent state > where the incoming tool context selects a Lens > if the selected Lens is unknown or neither binary nor an explicit nil selection" do
+  describe "when an agent turn begins > while a thread has committed to agent state > where the incoming tool context selects a Lens > if the Lens is unknown or invalid" do
     test "then the callback raises identifying the invalid Lens" do
       plugin_state = lens_plugin_state()
 

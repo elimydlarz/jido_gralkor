@@ -158,9 +158,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
-  # ExUnit cannot nest describes, and the BEAM limits generated function-name atoms
-  # before this complete three-level path fits. Keep the deepest contract branch exact.
-  describe "if graph extraction fails before its claim-fenced transaction commits" do
+  describe "when Graphiti artefact extraction fails before its claim-fenced transaction commits" do
     test "then canonical lookup and public artefact search report no episode", %{
       reflection: reflection
     } do
