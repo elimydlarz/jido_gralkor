@@ -4,9 +4,7 @@ defmodule JidoGralkor.ContextRotator do
 
   Rotation = flush the active Gralkor session to long-term memory, then
   install a fresh `Jido.Thread` on the agent (so the next turn runs under
-  a new `session_id`) and replace the ReAct strategy's projected context
-  with a compacted version (system prompt + summary of pre-rotation turns
-  + the most recent N turns verbatim). The agent process is never stopped
+  a new `session_id`). The agent process is never stopped
   — any async work it supervises survives.
 
   Consumers call `rotate_now/2` directly to trigger a rotation (e.g. on

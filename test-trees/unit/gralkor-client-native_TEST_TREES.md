@@ -18,7 +18,7 @@ if a recall is requested with a missing or blank agent name
   then an argument error naming the agent name is raised
   and no search is issued
 
-when a grouped session captures messages with agent and user names
+when typed direct capture names its session, Destination, operator, agent, and user
   then the logical group is buffered unchanged so the physical Graphiti boundary can encode it exactly once
   and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own
   and that built-in ontology is buffered alongside the turn
@@ -32,7 +32,7 @@ where a turn is captured through a named Lens
   and the built-in ontology is not selected, a named Lens owning its own ontology
   and success is returned immediately
 
-where a turn is captured through a primary Lens together with additional Lenses
+where typed capture selects multiple named Lenses
   then each named Lens receives that turn in its own flush batch
   but the session buffers the turn only once
 
@@ -130,3 +130,6 @@ when a recall runs
 
 where any adapter operation other than recall runs
   then it carries no deadline of its own, so a memory addition, a capture flush, an index rebuild and a community build each run for as long as the graph takes
+
+if an obsolete positional capture arity is called
+  then the adapter raises an explicit typed-request migration error

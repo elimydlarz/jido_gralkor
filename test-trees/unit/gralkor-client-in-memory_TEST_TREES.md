@@ -1,4 +1,4 @@
-Unit: gralkor-client-in-memory (src: lib/gralkor/client.ex, lib/gralkor/client/in_memory.ex; unit: test/gralkor/client/in_memory_test.exs)
+Unit: gralkor-client-in-memory (src: lib/gralkor/client.ex, lib/gralkor/client/in_memory.ex; integration: test/gralkor/client/in_memory_test.exs; unit: test/gralkor/client/in_memory_test.exs)
 
 when recall, capture, flush-and-await, memory addition, index rebuilding, or community building is called
   then the call is recorded with every argument it was given, so a consumer's exact request can be inspected afterwards
@@ -27,15 +27,15 @@ where a recall is requested with no session id
   if the backend fails
     then that failure is returned unchanged
 
-when a canonical turn is captured for a named session, group, agent and user
+when a typed direct capture names its session, Destination, operator, agent, and user
   while its messages have user, assistant or behaviour roles
-    then the write uses implicit-default memory without a caller ontology argument
+    then the request selects direct Destination memory without a caller ontology argument
   while the backend acknowledges the capture
     then success is returned
   if the backend fails
     then that failure is returned unchanged
 
-where a turn is captured through a named Lens, alone or together with additional Lenses
+where a typed capture selects one or more named Lenses
   while the backend acknowledges the capture
     then success is returned
   if the backend fails
@@ -102,3 +102,6 @@ when community building is requested for a group
     then the number of communities and the number of edges are returned as a success
   if the backend fails
     then that failure is returned unchanged
+
+if an obsolete positional capture arity is called
+  then the adapter raises an explicit typed-request migration error

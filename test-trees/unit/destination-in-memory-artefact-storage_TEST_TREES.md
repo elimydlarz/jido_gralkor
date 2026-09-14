@@ -12,3 +12,6 @@ when in-memory Destination storage receives the same artefact identifier and imm
 when in-memory Destination storage receives an existing artefact identifier with different immutable content
   then the write returns an artefact conflict
   and exact lookup and Destination search retain the original unchanged
+
+when in-memory Destination storage looks up an absent artefact identifier
+  then lookup reports not found

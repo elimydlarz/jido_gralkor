@@ -186,7 +186,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "when a grouped session captures messages with agent and user names" do
+  describe "when typed direct capture names its session, Destination, operator, agent, and user" do
     setup :start_capture_buffer
 
     test "then the logical group is buffered unchanged so the physical Graphiti boundary can encode it exactly once" do
@@ -333,7 +333,7 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
-  describe "where a turn is captured through a primary Lens together with additional Lenses" do
+  describe "where typed capture selects multiple named Lenses" do
     setup :start_capture_buffer
 
     test "then each named Lens receives that turn in its own flush batch" do

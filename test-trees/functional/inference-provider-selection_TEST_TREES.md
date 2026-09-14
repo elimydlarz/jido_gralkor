@@ -1,4 +1,4 @@
-Functional: inference-provider-selection (functional: test/functional/inference_provider_selection_functional_test.exs)
+Functional: inference-provider-selection (src: lib/gralkor/application.ex, lib/gralkor/config.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/inference_provider_selection_functional_test.exs)
 
 when the deployment configures an inference LLM and an embedder
   then each role takes its own configured provider, accepting OpenAI and Google

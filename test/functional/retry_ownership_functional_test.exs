@@ -32,7 +32,6 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
          %{
            agent_name: "Retry Ownership Reflection Consumer",
            capture_destination: "personal",
-           capture_destination: "personal",
            runtime_config: %{destinations: [], lenses: [], reflections: []}
          }}
       ]

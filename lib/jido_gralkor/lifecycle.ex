@@ -4,9 +4,9 @@ defmodule JidoGralkor.Lifecycle do
   Gralkor session when an agent process terminates.
 
   Sole job: on `terminate/2`, read the committed Jido thread id from
-  `state.agent.state[:__thread__].id` and synchronously schedules
-  `Gralkor.Client.flush(thread_id)` so Lens definitions are retained before
-  the agent runtime exits. The scheduled ingestion remains asynchronous.
+  `state.agent.state[:__thread__].id` and schedules `Gralkor.Client.flush(thread_id)` before the agent runtime
+  exits. Capture already retains the accepted route definitions. The scheduled
+  ingestion remains asynchronous.
   Failures are logged but never prevent termination. First-turn agents (no thread
   committed yet) terminate without calling Gralkor.
 

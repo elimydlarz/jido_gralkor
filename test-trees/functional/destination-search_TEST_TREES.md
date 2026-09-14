@@ -8,9 +8,9 @@ when a caller searches memory
   and unselected writers cannot consume the result allowance for selected-Lens results
 
   where the Destination selector is omitted or empty
-  and the Lens selector is omitted or empty
-    then every accessible registered Destination is selected
-    and results written directly or by every Lens or Destination artefact output can contribute
+    and the Lens selector is omitted or empty
+      then every accessible registered Destination is selected
+      and results written directly or by every Lens or Destination artefact output can contribute
 
   where one or more Destinations are supplied
     while the Lens selector is omitted or empty
@@ -24,9 +24,9 @@ when a caller searches memory
       but no result from another Lens or from a Destination artefact output can contribute
 
   where one or more Destinations are supplied
-  and one or more Lenses are supplied
-    then only results whose Destination matches any supplied Destination and whose originating Lens matches any supplied Lens can contribute
-    and selecting a Lens does not add that Lens's Destination to the supplied Destinations
+    and one or more Lenses are supplied
+      then only results whose Destination matches any supplied Destination and whose originating Lens matches any supplied Lens can contribute
+      and selecting a Lens does not add that Lens's Destination to the supplied Destinations
 
 where the selected Destinations include `personal`
   then only the current operator's `personal/<operator id>` graph is searched

@@ -1,4 +1,4 @@
-Functional: ontology-extraction (functional: test/functional/ontology_extraction_test.exs)
+Functional: ontology-extraction (src: lib/gralkor/graphiti_pool.ex, lib/gralkor/client/native.ex, lib/gralkor/lens/storage/graphiti.ex; functional: test/functional/ontology_extraction_test.exs)
 
 when an episode is ingested through a named Lens with a strict ontology
   then extraction conforms every node and relationship to the declared ontology
