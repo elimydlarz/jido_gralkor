@@ -42,6 +42,11 @@ defmodule Gralkor.PersonalGraphMigration do
     execute(connection, %{action: "advance", journal_path: journal_path, quiescence: quiescence})
   end
 
+  @spec rollback(connection(), String.t(), map()) :: {:ok, manifest()} | {:error, String.t()}
+  def rollback(connection, journal_path, quiescence) do
+    execute(connection, %{action: "rollback", journal_path: journal_path, quiescence: quiescence})
+  end
+
   defp execute(connection, request) do
     :ok = Gralkor.Python.ensure_initialised()
 

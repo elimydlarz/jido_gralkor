@@ -141,23 +141,27 @@ def validate_progress(database: FalkorDB, manifest: dict[str, object]) -> None:
         ).result_set
         if active:
             raise ValueError(f"active episode claim: {source.name}")
-        if entry["phase"] == "planned":
+        if entry["phase"] in {"planned", "rolled_back"}:
             if target.name in existing:
                 raise ValueError(f"target graph already exists: {target.name}")
         elif target.name in existing:
             schema_ready(target)
             actual = inventory(target)
-            if entry["phase"] == "verified":
+            if entry["phase"] == "rollback_pending":
+                matching = actual == entry["rollback_inventory"]
+            elif entry["phase"] == "verified":
                 matching = actual == entry["target_inventory"]
             else:
                 matching = translated(actual, target.name, source.name) == entry["source_inventory"]
             if not matching:
                 raise ValueError(f"target contains conflicting data: {target.name}")
-        elif entry["phase"] != "copying":
+        elif entry["phase"] not in {"copying", "rollback_pending"}:
             raise ValueError(f"target graph missing: {target.name}")
 
 
 def advance(database: FalkorDB, path: Path, manifest: dict[str, object]) -> dict[str, object]:
+    if manifest["phase"] in {"rolling_back", "rolled_back"}:
+        raise ValueError("migration has entered rollback; prepare a new manifest to migrate again")
     validate_progress(database, manifest)
     if manifest["phase"] == "verified":
         return manifest
@@ -204,6 +208,29 @@ def advance(database: FalkorDB, path: Path, manifest: dict[str, object]) -> dict
     return manifest
 
 
+def rollback(database: FalkorDB, path: Path, manifest: dict[str, object]) -> dict[str, object]:
+    validate_progress(database, manifest)
+    if manifest["phase"] == "rolled_back":
+        return manifest
+    manifest["phase"] = "rolling_back"
+    persist(path, manifest)
+    for entry in manifest["graphs"]:
+        if entry["phase"] == "rolled_back":
+            continue
+        target = database.select_graph(entry["target_physical"])
+        if target.name in database.list_graphs():
+            entry["rollback_inventory"] = inventory(target)
+            entry["phase"] = "rollback_pending"
+            persist(path, manifest)
+            target.delete()
+        entry["target_exists"] = False
+        entry["phase"] = "rolled_back"
+        persist(path, manifest)
+    manifest["phase"] = "rolled_back"
+    persist(path, manifest)
+    return manifest
+
+
 def require_quiescence(evidence: dict[str, object]) -> None:
     if evidence.get("admission_stopped") is not True:
         raise ValueError("quiescence requires admission_stopped=true")
@@ -242,6 +269,8 @@ def execute(request: dict[str, object]) -> dict[str, object]:
             require_quiescence(request["quiescence"])
             with open(path) as stream:
                 manifest = json.load(stream)
+            if action == "rollback":
+                return rollback(database, path, manifest)
             if action == "advance":
                 return advance(database, path, manifest)
             validate_progress(database, manifest)
