@@ -252,6 +252,8 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
             session_id: "",
             agent_name: nil,
             user_name: " ",
+            messages: [%Message{role: "system", content: "not canonical"}],
+            messages: [%Message{role: "user", content: 42}],
             route: {:direct, "missing"},
             route: {:direct, "operator"},
             route: {:lenses, []},
