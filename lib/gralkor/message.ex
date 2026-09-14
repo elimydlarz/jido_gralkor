@@ -3,14 +3,14 @@ defmodule Gralkor.Message do
   Canonical message shape that Gralkor expects at its port boundary.
 
   One shape, three roles. Adapters normalise their harness's events into this
-  form before calling the configured client's `capture/5`, `/6`, or `/7`.
+  form before calling `Gralkor.Client.capture/2` with a typed request.
 
     * `:role` — `"user" | "assistant" | "behaviour"`. `behaviour` collapses
       thinking, tool calls, tool results, and any other harness-internal
       activity into a single role; Gralkor does not branch on interior shape
       beyond role.
     * `:content` — a string. Adapters choose how to render their events;
-      In implicit-operator mode Gralkor renders user and assistant content into
+      For direct capture Gralkor renders user and assistant content into
       the captured transcript. A selected Lens's ingestion process decides how
       its captured messages are persisted.
   """

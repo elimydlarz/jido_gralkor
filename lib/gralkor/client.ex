@@ -14,21 +14,26 @@ defmodule Gralkor.Client do
   without waiting for production and reports its terminal result through the
   supplied callback. With empty selectors, search runs every
   accessible registered Destination concurrently and returns episodes from
-  every Lens and Reflection writer. Destination and Lens names are ORed within
+  direct, Lens, and Reflection writers. Destination and Lens names are ORed within
   their respective selectors and ANDed across them; Lens filters are
-  episode-only. Each result identifies its Destination, while each episode
-  identifies its originating Lens or Reflection and Lens episodes retain their
-  source description. Facts, nodes, and Reflection artefacts are explicit
+  applied to episodes and facts. Each result identifies its Destination.
+  Direct episodes retain their source without Lens or Reflection authorship;
+  real Lens and Reflection records retain their named writer. Historical
+  unmarked and operator-labelled records remain readable without an active
+  operator Lens. Facts, nodes, and Reflection artefacts are explicit
   advanced result types.
 
-  The compatibility surface remains `recall/4`, `capture/5`, `flush/1`,
-  `flush_and_await/2`, and `memory_add/3` or `/4`. Lens-aware capture uses
-  `capture/6`, or `capture/7` when the same turn is also routed through
-  additional Lenses. Logical graph IDs are encoded exactly once at the physical graph boundary as `g_` plus the
-  lowercase hexadecimal encoding of every original byte (`sanitize_group_id/1`).
-  The `operator` Destination resolves to `operator/<operator id>`, so search
-  reads only the current operator's operator graph; every other Destination
-  resolves to its exact shared name.
+  Capture uses `capture/2` with an owning AgentServer PID and an explicit
+  `Gralkor.Capture` route. Direct capture selects a registered Destination;
+  Lens capture runs distinct selected processes without an implicit direct
+  write. Positional capture adapters raise migration guidance. The low-level
+  adapter ports retain `recall/4`, `memory_add/3` or `/4`, and flush operations.
+  Logical graph IDs are encoded exactly once as `g_` plus the lowercase
+  hexadecimal encoding of every original byte (`sanitize_group_id/1`).
+  The `personal` Destination resolves to `personal/<operator id>`; other
+  registered Destinations resolve to their exact shared names. Retired
+  `operator` inputs require an explicit migration and never become shared
+  private-memory graphs.
 
   `flush/1` returns `:ok` before the buffered turns have landed
   (fire-and-forget — appropriate for shutdown paths that cannot block).
