@@ -3,6 +3,17 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
 
   alias Gralkor.PersonalGraphMigration
 
+  @quiescence %{
+    admission_stopped: true,
+    capture_buffers: 0,
+    asynchronous_additions: 0,
+    reflection_workers: 0,
+    queued_deliveries: 0,
+    schedulers: 0,
+    consuming_runtimes: 0,
+    failed_work: 0
+  }
+
   @moduletag :functional
   @moduletag timeout: 120_000
 
@@ -64,6 +75,24 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert Enum.any?(inventory["indexes"], &(&1["label"] == "Episodic"))
       assert Enum.any?(inventory["constraints"], &(&1["label"] == "_GralkorEpisodeClaim" and &1["properties"] == ["uuid"]))
       assert "_gralkor_lens" in inventory["property_keys"]
+    end
+  end
+
+  describe "when an application migrates quiescent historical private graphs" do
+    test "then every node and relationship group identity changes to its matching personal graph identity", context do
+      seed_history(context.database, "owner")
+      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+
+      assert {:ok, _manifest} = PersonalGraphMigration.prepare(context.connection, ["owner"], %{}, journal)
+      assert {:ok, %{"phase" => "verified"}} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      graph = hd(manifest["graphs"])
+
+      assert Enum.all?(graph["target_inventory"]["nodes"] ++ graph["target_inventory"]["relationships"], fn entity ->
+               entity["properties"]["group_id"] == graph["target_physical"]
+             end)
+      assert graph["target_inventory"]["node_count"] == 8
+      assert graph["target_inventory"]["relationship_count"] == 3
     end
   end
 
