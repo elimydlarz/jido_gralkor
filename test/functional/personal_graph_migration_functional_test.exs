@@ -78,6 +78,21 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when an application prepares a private graph migration > if any writer remains admitted, buffered, active, or failed during cutover" do
+    test "then migration refuses before copying any graph", context do
+      journal = prepare_history(context)
+
+      Enum.each(@quiescence, fn {kind, value} ->
+        pending = Map.put(@quiescence, kind, if(value == true, do: false, else: 1))
+        assert {:error, message} = PersonalGraphMigration.apply(context.connection, journal, pending)
+        assert message =~ "quiescence"
+      end)
+
+      assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      refute hd(manifest["graphs"])["target_exists"]
+    end
+  end
+
   describe "when an application migrates quiescent historical private graphs" do
     test "then every node and relationship group identity changes to its matching personal graph identity", context do
       seed_history(context.database, "owner")
@@ -94,6 +109,13 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert graph["target_inventory"]["node_count"] == 8
       assert graph["target_inventory"]["relationship_count"] == 3
     end
+  end
+
+  defp prepare_history(context, references \\ %{}) do
+    seed_history(context.database, "owner")
+    journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+    assert {:ok, _manifest} = PersonalGraphMigration.prepare(context.connection, ["owner"], references, journal)
+    journal
   end
 
   defp seed_history(database, identity) do
