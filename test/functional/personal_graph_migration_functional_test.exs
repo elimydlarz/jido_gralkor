@@ -60,6 +60,38 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when an application requests a private graph migration > if the persisted manifest fails its integrity check" do
+    test "then migration refuses before changing any graph", context do
+      journal = prepare_history(context)
+      tamper_manifest(journal, "manifest['configuration_references']['changed'] = True", false)
+      assert {:ok, before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      assert {:error, message} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      assert message =~ "manifest integrity"
+      assert {:ok, ^before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+    end
+  end
+
+  describe "when an application requests a private graph migration > if a manifest has inconsistent identity mappings or migration phases" do
+    test "then migration refuses before changing any graph", context do
+      journal = prepare_history(context)
+      assert {:ok, _result} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      valid_manifest = File.read!(journal)
+      assert {:ok, before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+
+      for alteration <- [
+        "entry = manifest['graphs'][0]; entry['target_physical'] = entry['source_physical']; entry['target_logical'] = entry['source_logical']; entry['target_inventory'] = entry['source_inventory']",
+        "manifest['phase'] = 'unknown'",
+        "manifest['graphs'][0]['phase'] = 'planned'"
+      ] do
+        File.write!(journal, valid_manifest)
+        tamper_manifest(journal, alteration, true)
+        assert {:error, message} = PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
+        assert message =~ "manifest"
+        assert {:ok, ^before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      end
+    end
+  end
+
   describe "when an application inventories explicitly identified historical private graphs" do
     test "then the manifest preserves each operator identifier byte for byte in its old and new logical names", context do
       identifiers = ["owner", "dashboard:ABC-123", "a/b", "a_b", "CaseSensitive"]
@@ -345,6 +377,25 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       "logical" => logical,
       "cypher" => cypher
     })
+  end
+
+  defp tamper_manifest(path, alteration, resign) do
+    Pythonx.eval(
+      """
+      import hashlib, json
+      path = path.decode()
+      with open(path) as stream:
+          manifest = json.load(stream)
+      exec(alteration.decode())
+      if resign:
+          manifest.pop('integrity', None)
+          canonical = json.dumps(manifest, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+          manifest['integrity'] = hashlib.sha256(canonical.encode()).hexdigest()
+      with open(path, 'w') as stream:
+          json.dump(manifest, stream)
+      """,
+      %{"path" => path, "alteration" => alteration, "resign" => resign}
+    )
   end
 
   defp migrate_history(context) do
