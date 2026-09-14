@@ -127,7 +127,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert [
                %{
                  kind: :destination,
-                 destination: %Gralkor.Destination{name: "operator"},
+                 destination: %Gralkor.Destination{name: "personal"},
                  ontology: Gralkor.DefaultOntology
                }
              ] =
@@ -162,7 +162,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   describe "when an agent runtime validates Reflection declarations > if a Reflection declares more than one Destination output" do
     test "then validation fails identifying that Reflection and duplicate Destination output kind" do
-      output = [kind: :destination, destination: "operator"]
+      output = [kind: :destination, destination: "personal"]
       definition = valid_definition(outputs: [output, output])
 
       assert {:error, {:duplicate_destination_output, "generalisation"}} =
@@ -173,7 +173,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "when an agent runtime validates Reflection declarations > if a Reflection declares an unsupported output kind" do
     test "then validation fails identifying that Reflection and output kind" do
       outputs = [
-        [kind: :destination, destination: "operator"],
+        [kind: :destination, destination: "personal"],
         [kind: :return]
       ]
 
@@ -336,7 +336,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                validate_reflections([
                  valid_definition(
                    outputs: [
-                     [kind: :destination, destination: "operator", ontology: String]
+                     [kind: :destination, destination: "personal", ontology: String]
                    ]
                  )
                ])
@@ -344,10 +344,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "when an agent's Gralkor runtime installs its package-owned Reflection definitions" do
-    test "then ERL declares one Destination output referencing the packaged `operator` Destination" do
+    test "then ERL declares one Destination output referencing the packaged `personal` Destination" do
       erl = packaged_reflection("erl")
 
-      assert [%{kind: :destination, destination: %Gralkor.Destination{name: "operator"}}] =
+      assert [%{kind: :destination, destination: %Gralkor.Destination{name: "personal"}}] =
                erl.outputs
     end
 
@@ -436,7 +436,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then its inline steps become the Reflection's Chain of Thought" do
       definition = [
         name: "inline-review",
-        outputs: [[kind: :destination, destination: "operator"]],
+        outputs: [[kind: :destination, destination: "personal"]],
         chain_of_thought: %{
           steps: [
             %{
@@ -1373,7 +1373,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then that Destination is searched", context do
       {reflection, artefact} = stored_artefact(context)
 
-      assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
+      assert {:ok, [%{destination: "personal", artefact: ^artefact}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
@@ -1393,8 +1393,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert {:ok,
               [
-                %{destination: "operator", artefact: ^a1},
-                %{destination: "operator", artefact: ^a2}
+                %{destination: "personal", artefact: ^a1},
+                %{destination: "personal", artefact: ^a2}
               ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
@@ -1434,7 +1434,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
           storage: Gralkor.Destination.Storage.InMemory
         )
 
-      assert {:ok, [%{destination: "operator", artefact: ^artefact}]} =
+      assert {:ok, [%{destination: "personal", artefact: ^artefact}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
@@ -1458,7 +1458,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   defp reflection(
          _context,
          name \\ "generalisation",
-         destination \\ "operator"
+         destination \\ "personal"
        ) do
     resolve_reflection(
       valid_definition(
@@ -1718,7 +1718,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
             }
           ]
         },
-        outputs: [[kind: :destination, destination: "operator"]]
+        outputs: [[kind: :destination, destination: "personal"]]
       ],
       overrides
     )

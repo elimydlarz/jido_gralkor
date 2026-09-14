@@ -74,8 +74,8 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
   end
 
   describe "where the packaged Destinations are used" do
-    test "then operator memory references the Destination named `operator`" do
-      assert Client.lens!("operator").destination.name == "operator"
+    test "then personal memory references the Destination named `personal`" do
+      assert Client.lens!("personal-chat").destination.name == "personal"
     end
 
     test "and globally shared memory references the Destination named `global`" do
@@ -272,7 +272,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       end
     end
 
-    test "and a Destination name beginning `operator/` is identified as reserved" do
+    test "and a Destination name beginning `personal/` or `operator/` is identified as reserved" do
       Application.put_env(:jido_gralkor, :destinations, [
         [name: "operator/shared"]
       ])
@@ -318,6 +318,24 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       assert_raise ArgumentError, ~r/shared.*ontology/, fn ->
         Client.lens!("observations")
+      end
+    end
+  end
+
+  describe "if the application registers the retired operator Destination" do
+    test "then configuration resolution identifies personal as its replacement before any memory operation" do
+      Application.put_env(:jido_gralkor, :destinations, [[name: "operator"]])
+      assert_raise ArgumentError, ~r/operator.*retired.*personal/, fn ->
+        Gralkor.Destination.Registry.configured!()
+      end
+    end
+  end
+
+  describe "if the application registers a Destination named personal" do
+    test "then configuration resolution refuses to replace the packaged private Destination" do
+      Application.put_env(:jido_gralkor, :destinations, [[name: "personal"]])
+      assert_raise ArgumentError, ~r/(reserved|duplicate).*personal|personal.*reserved/, fn ->
+        Gralkor.Destination.Registry.configured!()
       end
     end
   end

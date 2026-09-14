@@ -65,22 +65,22 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
     :ok
   end
 
-  describe "when a Lens saves an episode to the `operator` Destination" do
-    test "then the resolved graph is named `operator/<operator id>`" do
-      assert :ok = ingest("operator-one", "operator", "private observation")
+  describe "when a Lens saves an episode to the `personal` Destination" do
+    test "then the resolved graph is named `personal/<operator id>`" do
+      assert :ok = ingest("operator-one", "personal-chat", "private observation")
 
-      assert [%{content: "private observation", lens: "operator"}] =
-               Gralkor.Lens.Storage.InMemory.episodes("operator/operator-one")
+      assert [%{content: "private observation", lens: "personal-chat"}] =
+               Gralkor.Lens.Storage.InMemory.episodes("personal/operator-one")
     end
 
     test "and the episode is unavailable to another operator using the same Destination" do
-      assert :ok = ingest("operator-one", "operator", "private observation")
+      assert :ok = ingest("operator-one", "personal-chat", "private observation")
 
-      assert {:ok, []} = search("operator-two", ["operator"])
+      assert {:ok, []} = search("operator-two", ["personal"])
     end
 
     test "and the episode is unavailable from any unselected Destination" do
-      assert :ok = ingest("operator-one", "operator", "private observation")
+      assert :ok = ingest("operator-one", "personal-chat", "private observation")
 
       assert {:ok, []} = search("operator-one", ["decisions"])
     end
@@ -166,6 +166,40 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
                Gralkor.Lens.Storage.InMemory.episodes("summaries")
 
       assert Client.lens!("summaries").destination.name == "summaries"
+    end
+  end
+
+  describe "when personal memory is resolved for an existing identity" do
+    test "then the identifier is preserved byte for byte in the logical graph name" do
+      for identity <- ["owner", "dashboard:AbC-123", "Eli/a:b.c", "A B"] do
+        assert Gralkor.Destination.graph_id(%Gralkor.Destination{name: "personal"}, identity) == "personal/" <> identity
+      end
+    end
+
+    test "and punctuation-sensitive identifiers resolve to distinct physical graphs" do
+      names = for identity <- ["a:b", "a_b", "a/b", "A:b"] do
+        Gralkor.Destination.graph_id(%Gralkor.Destination{name: "personal"}, identity)
+        |> Client.sanitize_group_id()
+      end
+      assert length(Enum.uniq(names)) == 4
+    end
+  end
+
+  describe "if a caller resolves a stale Destination named operator" do
+    test "then resolution raises a migration error before it can become a shared operator graph" do
+      assert_raise ArgumentError, ~r/operator.*retired.*personal/, fn ->
+        Gralkor.Destination.graph_id(%Gralkor.Destination{name: "operator"}, "owner")
+      end
+    end
+  end
+
+  describe "if a caller supplies a blank identity or a resolved private graph in place of an identity" do
+    test "then personal graph resolution fails before any storage request" do
+      for identity <- [nil, "", "  ", "operator/owner", "personal/owner"] do
+        assert_raise ArgumentError, ~r/operator_id/, fn ->
+          Gralkor.Destination.graph_id(%Gralkor.Destination{name: "personal"}, identity)
+        end
+      end
     end
   end
 
