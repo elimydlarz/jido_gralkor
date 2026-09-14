@@ -93,6 +93,22 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when an application prepares a private graph migration > if a consumer Destination conflicts with the new private namespace" do
+    test "then migration refuses before changing any graph", context do
+      seed_history(context.database, "owner")
+
+      for name <- ["personal", "personal/shared"] do
+        journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+        assert {:error, message} = PersonalGraphMigration.prepare(context.connection, ["owner"], %{"destinations" => [name]}, journal)
+        assert message =~ "Destination namespace conflict"
+        refute File.exists?(journal)
+      end
+
+      assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      refute hd(manifest["graphs"])["target_exists"]
+    end
+  end
+
   describe "when an application migrates quiescent historical private graphs" do
     test "then every node and relationship group identity changes to its matching personal graph identity", context do
       seed_history(context.database, "owner")

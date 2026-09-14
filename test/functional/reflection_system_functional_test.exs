@@ -1479,7 +1479,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   defp deliver_personal_erl do
-    start_supervised!(Gralkor.Destination.Storage.InMemory)
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.InMemory)
     start_supervised!({Runtime, owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}})
     parent = self()
