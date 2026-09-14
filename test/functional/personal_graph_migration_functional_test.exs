@@ -51,6 +51,15 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     :ok
   end
 
+  describe "when an application requests a private graph migration > if operator identities are empty, blank, duplicated, non-textual, or already resolved graph names" do
+    test "then migration rejects the identities before connecting to a graph" do
+      for identities <- [[], [""], [" "], [42], [nil], ["owner", "owner"], ["operator/owner"], ["personal/owner"]] do
+        assert {:error, message} = PersonalGraphMigration.plan([unix_socket_path: "/does-not-exist"], identities, %{})
+        assert message =~ "operator identities"
+      end
+    end
+  end
+
   describe "when an application inventories explicitly identified historical private graphs" do
     test "then the manifest preserves each operator identifier byte for byte in its old and new logical names", context do
       identifiers = ["owner", "dashboard:ABC-123", "a/b", "a_b", "CaseSensitive"]
@@ -304,6 +313,25 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert {:ok, %{"phase" => "rolled_back"}} = PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
       {graphs, _} = Pythonx.eval("database.list_graphs()", %{"database" => context.database})
       assert Enum.sort(Pythonx.decode(graphs)) == Enum.sort(Enum.map(["operator/owner", "unrelated"], &Gralkor.Client.sanitize_group_id/1))
+    end
+
+    test "and a repeated rollback returns the same rolled-back result", context do
+      journal = prepare_history(context)
+      assert {:ok, _result} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      assert {:ok, restored} = PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
+      assert {:ok, ^restored} = PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
+    end
+  end
+
+  describe "when an application rolls back a private graph migration before admitting new writers > if a target changed after verification" do
+    test "then rollback refuses without deleting the changed graph", context do
+      journal = prepare_history(context)
+      assert {:ok, _result} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      query(context.database, "personal/owner", "MATCH (episode:Episodic {uuid: 'episode'}) SET episode.content = 'newly written memory'")
+      assert {:ok, before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      assert {:error, message} = PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
+      assert message =~ "target contains conflicting data"
+      assert {:ok, ^before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
     end
   end
 
