@@ -1,4 +1,4 @@
-Functional: personal-graph-migration (src: lib/gralkor/personal_graph_migration.ex, priv/python/personal_graph_migration.py; functional: test/functional/personal_graph_migration_functional_test.exs)
+Functional: personal-graph-migration (src: lib/gralkor/personal_graph_migration.ex, priv/python/personal_graph_migration.py, lib/mix/tasks/gralkor.migrate_personal.ex; functional: test/functional/personal_graph_migration_functional_test.exs)
 
 when an application requests a private graph migration
   if operator identities are empty, blank, duplicated, non-textual, or already resolved graph names

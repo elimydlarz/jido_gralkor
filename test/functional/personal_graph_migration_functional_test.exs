@@ -440,6 +440,118 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     {graph["source_inventory"], graph["target_inventory"]}
   end
 
+  describe "when an application migrates quiescent historical private graphs" do
+    test "and two punctuation-sensitive operator identities remain isolated through public historical recall", context do
+      for {identity, content} <- [{"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
+        seed_history(context.database, identity)
+        query(context.database, "operator/" <> identity, "MATCH (e:Episodic {uuid: 'episode'}) SET e.content = '" <> content <> "'")
+      end
+      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+      assert {:ok, _} = PersonalGraphMigration.prepare(context.connection, ["a/b", "a_b"], %{}, journal)
+      assert {:ok, _} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      start_public_runtime(context)
+      for {identity, content} <- [{"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
+        assert {:ok, results} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: identity, query: "amber", destinations: ["personal"]})
+        assert Enum.filter(results, &Map.has_key?(&1.episode, :content)) == [%{destination: "personal", episode: %{content: content, source_description: "captured [lens: operator]", lens: "operator"}}]
+      end
+    end
+
+    test "and migrated historical episodes remain searchable without an active operator Lens", context do
+      migrate_history(context)
+      start_public_runtime(context)
+      assert {:ok, results} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "orchard", destinations: ["personal"]})
+      assert Enum.any?(results, &(&1.episode[:content] == "remember amber orchard" and &1.episode[:lens] == "operator"))
+      assert {:error, _} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "orchard", lenses: ["operator"]})
+    end
+  end
+
+  describe "when an application migrates quiescent historical private graphs > when a completed Reflection invocation is replayed" do
+    test "then public Reflection delivery returns the original immutable artefact", context do
+      replay_migrated_artefact(context, "complete")
+    end
+  end
+
+  describe "when an application migrates quiescent historical private graphs > when an incomplete Reflection invocation resumes" do
+    test "then public Reflection delivery completes under its original artefact identity", context do
+      replay_migrated_artefact(context, "incomplete")
+    end
+  end
+
+  describe "when an application rolls back a private graph migration before admitting new writers" do
+    test "then public historical recall through the original graph returns the original memory", context do
+      journal = prepare_history(context)
+      assert {:ok, _} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      assert {:ok, _} = PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
+      start_public_runtime(context)
+      assert {:ok, episodes} = Gralkor.GraphitiPool.search_episodes("operator/owner", "orchard", 20)
+      assert Enum.any?(episodes, &(&1[:content] == "remember amber orchard"))
+    end
+  end
+
+  defp replay_migrated_artefact(context, state) do
+    seed_history(context.database, "owner")
+    invocation_id = "historical-" <> state
+    artefact = Gralkor.Artefact.new(Gralkor.Artefact.id_for("owner", invocation_id, "review"), %{"summary" => "immutable amber"})
+    Pythonx.eval("""
+    graph = database.select_graph('g_' + b'operator/owner'.hex())
+    graph.query('MATCH (item) WHERE item.uuid = $previous SET item.uuid = $uuid, item.content = $content, item.source_description = $description', {'previous': previous.decode(), 'uuid': uuid.decode(), 'content': content.decode(), 'description': 'reflection:review'})
+    """, %{"database" => context.database, "previous" => state, "uuid" => artefact.id, "content" => Jason.encode!(Map.from_struct(artefact))})
+    journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+    assert {:ok, _} = PersonalGraphMigration.prepare(context.connection, ["owner"], %{}, journal)
+    assert {:ok, _} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+    start_public_runtime(context)
+    parent = self()
+    assert {:ok, ^invocation_id} = Gralkor.Client.reflect(self(), "review", %{id: invocation_id, operator_id: "owner", representations: [], invocation_context: %{}}, &send(parent, {:migration_delivery, &1}), inference: fn _ -> send(parent, :unexpected_runner); {:ok, %{"summary" => "changed"}} end)
+    assert_receive {:migration_delivery, %{outcome: :delivered, artefact: ^artefact}}, 30_000
+    refute_received :unexpected_runner
+    assert {:ok, [%{destination: "personal", artefact: ^artefact}]} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "amber", destinations: ["personal"], result_type: :artefacts, artefact_id: artefact.id})
+    assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+    target = hd(manifest["graphs"])["target_inventory"]
+    assert episode(target, artefact.id)["properties"]["_gralkor_extraction_complete"] == true
+    assert Enum.count(target["nodes"], &(Enum.member?(&1["labels"], "Episodic") and &1["properties"]["uuid"] == artefact.id)) == 1
+  end
+
+  defp start_public_runtime(context) do
+    keys = [:client, :destination_storage, :lens_storage]
+    previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
+    Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+    Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.Graphiti)
+    Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
+    on_exit(fn -> Enum.each(previous, fn {key, value} -> if is_nil(value), do: Application.delete_env(:jido_gralkor, key), else: Application.put_env(:jido_gralkor, key, value) end) end)
+    shared_clients = fn _, _ ->
+      {_, globals} = Pythonx.eval("""
+      import os
+      os.environ['GRAPHITI_TELEMETRY_ENABLED'] = 'false'
+      from graphiti_core.llm_client import OpenAIClient, LLMConfig
+      from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
+      from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
+      config = LLMConfig(api_key='isolated-fixture', base_url='http://127.0.0.1:1')
+      llm = OpenAIClient(config=config)
+      embedder = OpenAIEmbedder(config=OpenAIEmbedderConfig(api_key='isolated-fixture', base_url='http://127.0.0.1:1', embedding_dim=3))
+      cross_encoder = OpenAIRerankerClient(config=config)
+      async def generate_response(*args, **kwargs):
+          model = kwargs.get('response_model')
+          name = model.__name__ if model is not None else ''
+          if name == 'ExtractedEntities': return {'extracted_entities': []}
+          if name == 'ExtractedEdges': return {'edges': []}
+          raise AssertionError('unexpected external inference: ' + name)
+      async def create(*args, **kwargs): return [0.1, 0.2, 0.3]
+      async def create_batch(values): return [[0.1, 0.2, 0.3] for _ in values]
+      async def rank(query, passages): return [(passage, 1.0) for passage in passages]
+      llm.generate_response = generate_response
+      embedder.create = create
+      embedder.create_batch = create_batch
+      cross_encoder.rank = rank
+      """, %{})
+      %{llm_client: globals["llm"], embedder: globals["embedder"], cross_encoder: globals["cross_encoder"]}
+    end
+    start_supervised!({Gralkor.GraphitiPool, falkordb_spec: {:remote, []}, warmup: false, construct_shared_clients: shared_clients, initialise_instance: fn _ -> :ok end, construct_falkor_db: fn _ ->
+      {database, _} = Pythonx.eval("from falkordb.asyncio import FalkorDB\nFalkorDB(unix_socket_path=socket.decode())", %{"socket" => context.connection[:unix_socket_path]})
+      database
+    end})
+    start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: %{destinations: [], lenses: [], reflections: [%{name: "review", chain_of_thought: %{steps: [%{label: "review", directions: "Review", output: %{"summary" => "string"}}]}, outputs: [%{kind: :destination, destination: "personal"}]}]}})
+  end
+
   defp prepare_history(context, references \\ %{}) do
     seed_history(context.database, "owner")
     journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
