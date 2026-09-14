@@ -280,6 +280,55 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
     end
   end
 
+  describe "if typed capture and compatibility buffer calls reuse one session" do
+    test "then the second mode is rejected without changing accepted turns" do
+      for mode <- [:direct, :lens], order <- [:typed_first, :compatibility_first] do
+        session = "mixed-api-#{mode}-#{order}"
+        messages = [Message.new("user", "original")]
+
+        request = %{
+          request({:direct, "personal"}, "original")
+          | session_id: session,
+            messages: messages
+        }
+
+        compatibility = fn ->
+          case mode do
+            :direct ->
+              Gralkor.CaptureBuffer.append(
+                session,
+                "shared",
+                "Susu",
+                "Eli",
+                Gralkor.DefaultOntology,
+                messages
+              )
+
+            :lens ->
+              Gralkor.CaptureBuffer.append_lens(
+                session,
+                "owner",
+                "Susu",
+                "Eli",
+                "personal-chat",
+                messages
+              )
+          end
+        end
+
+        capture = fn -> Client.capture(self(), request) end
+
+        {first, second} =
+          if order == :typed_first, do: {capture, compatibility}, else: {compatibility, capture}
+
+        assert :ok = first.()
+        assert_raise ArgumentError, second
+        assert Gralkor.CaptureBuffer.turns_for(session) == [messages]
+        assert :ok = Gralkor.CaptureBuffer.flush_and_await(session, 1_000)
+      end
+    end
+  end
+
   defp request(route, content) do
     %Gralkor.Capture{
       session_id: "capture-session",
