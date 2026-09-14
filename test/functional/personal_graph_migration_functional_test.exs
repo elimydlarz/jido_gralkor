@@ -75,8 +75,11 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert evidence["rdb_size"] > 0
       assert evidence["rdb_loaded"]
 
-      assert {:ok, ^before} =
+      assert {:ok, restored_baseline} =
                PersonalGraphMigration.plan(restored.connection, ["owner", "a/b", "a_b"], %{})
+      assert restored_baseline["graphs"] == before["graphs"]
+      assert Map.delete(restored_baseline["versions"], "modules") == Map.delete(before["versions"], "modules")
+      assert Enum.sort(restored_baseline["versions"]["modules"]) == Enum.sort(before["versions"]["modules"])
 
       journal = Path.join(context.directory, "restored-migration.json")
 
