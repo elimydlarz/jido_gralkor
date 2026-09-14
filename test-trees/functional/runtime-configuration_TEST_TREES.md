@@ -4,8 +4,8 @@ when a consumer starts a Jido agent with the Gralkor plugin
   then the plugin starts one Gralkor runtime under that agent
   and that runtime owns the agent's runtime configuration
   and that runtime supervises the agent's Reflection processing and output delivery
-  and it installs package-owned structured definitions for the `operator` and `global` Destinations
-  and it installs the package-owned `operator` Lens
+  and it installs package-owned structured definitions for the `personal` and `global` Destinations
+  and it installs the package-owned `personal-chat` Lens
   and it installs package-owned structured definitions for the generalisations and ERL Reflections
   and it installs the complete consumer configuration supplied when the agent started
 
@@ -75,3 +75,16 @@ when a runtime-targeted operation is given an owning AgentServer PID whose Gralk
 
 if a runtime-targeted operation is given anything other than an owning AgentServer PID
   then it fails identifying that the runtime target must be a PID
+
+if current configuration uses a retired operator Destination or Lens name
+  then validation identifies the retired name and its personal or personal-chat replacement
+  and the previous runtime snapshot remains active
+
+if consumer configuration claims the packaged personal Destination or personal-chat Lens
+  then validation rejects the conflicting consumer definition before activating it
+
+if a consumer Destination begins with personal/ or operator/
+  then validation rejects the private or retired graph namespace
+
+when a caller selects the retired operator Destination or Lens
+  then the operation fails with an explicit migration error before reading or writing memory

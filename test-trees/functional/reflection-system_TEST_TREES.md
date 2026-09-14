@@ -68,7 +68,7 @@ when an agent runtime validates Reflection declarations
     then validation fails identifying that Reflection and ontology
 
 when an agent's Gralkor runtime installs its package-owned Reflection definitions
-  then ERL declares one Destination output referencing the packaged `operator` Destination
+  then ERL declares one Destination output referencing the packaged `personal` Destination
   and ERL's Destination output carries jido_gralkor's built-in experiential-learning ontology
   and generalisation declares one Destination output referencing the packaged `global` Destination
 
@@ -201,3 +201,7 @@ when a Destination is searched for artefacts
 
 if the retired `:reflection_storage` setting is configured
   then application startup fails identifying Destination outputs as the artefact memory boundary
+
+when the packaged ERL Reflection delivers to personal memory
+  then its artefact is searchable only by the invocation identity
+  and its artefact identifier remains derived from the unchanged operator and invocation identifiers

@@ -31,8 +31,8 @@ if the application compatibility registry contains an invalid Lens
   and a blank Lens name is identified
   and a Lens name containing the reserved provenance delimiter ` [lens: ` is identified
   and a duplicate Lens name is identified
-  and a reserved `operator` or `global` Lens name is identified
-  and the retired `default` Lens name identifies `operator` as its replacement
+  and a reserved `personal-chat` or `global` Lens name is identified
+  and the retired `default` or `operator` Lens name identifies `personal-chat` as its replacement
   and an invalid Lens definition shape is identified
   and a missing or unknown Lens Destination is identified with its Lens
   and an invalid Lens ontology is identified with its Lens

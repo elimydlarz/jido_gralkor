@@ -5,7 +5,7 @@ when an application registers a valid Destination
   and the Destination name identifies the graph where their results are saved
 
 where the packaged Destinations are used
-  then operator memory references the Destination named `operator`
+  then personal memory references the Destination named `personal`
   and globally shared memory references the Destination named `global`
 
 when multiple Lenses or Reflections reference the same Destination
@@ -21,7 +21,7 @@ if the Destination registry is not a list
 if an application registers an invalid Destination
   then configuration resolution raises `ArgumentError` before ingestion, Reflection, or search begins
   and a blank Destination name is identified
-  and a Destination name beginning `operator/` is identified as reserved
+  and a Destination name beginning `personal/` or `operator/` is identified as reserved
   and a duplicate Destination name is identified
   and an invalid Destination definition shape is identified
   and an address setting is identified as unsupported with its Destination
@@ -29,3 +29,9 @@ if an application registers an invalid Destination
 
 if a Lens or Reflection references an unknown Destination
   then configuration resolution raises `ArgumentError` identifying the Lens or Reflection and Destination
+
+if the application registers the retired operator Destination
+  then configuration resolution identifies personal as its replacement before any memory operation
+
+if the application registers a Destination named personal
+  then configuration resolution refuses to replace the packaged private Destination
