@@ -158,3 +158,8 @@ when the supervision tree stops the buffer
   then every pending entry is drained through the flush callback before termination returns
   and every pending Lens-selected entry is resolved through the configured Lens resolver before its Lens flush callback runs
   and every already-started fire-and-forget flush worker finishes before termination returns
+
+when a typed capture request supplies resolved direct and Lens routes
+  then each route buffers only its selected turns while session reads retain append order
+  and distinct resolved definitions for the same Lens name remain separate batches
+  and a session rejects changes to its runtime owner, operator, agent, or user before buffering

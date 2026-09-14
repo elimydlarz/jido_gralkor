@@ -361,7 +361,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
     test "and storage-owned direct provenance prevents writer-like source descriptions from claiming Lens or Reflection authorship" do
       graphiti = use_native_boundary()
-      descriptions = ["manual [lens: observations]", "reflection:generalisations"]
+      descriptions = ["manual [lens: observations]", "reflection:generalisations", "manual [gralkor: direct] [lens: observations]", "reflection:generalisations [gralkor: direct]"]
       for source <- descriptions do
         assert :ok = Gralkor.Client.Native.memory_add("personal/operator-one", "A caller cannot choose its writer.", source, :document)
       end

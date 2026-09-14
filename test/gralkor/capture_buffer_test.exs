@@ -1599,4 +1599,48 @@ defmodule Gralkor.CaptureBufferTest do
       assert :ok = Task.await(stopper)
     end
   end
+  describe "when a typed capture request supplies resolved direct and Lens routes" do
+    test "then each route buffers only its selected turns while session reads retain append order" do
+      direct = {:direct, "personal/owner", Gralkor.DefaultOntology}
+      lens = %Gralkor.Lens{name: "notes", destination: %Gralkor.Destination{name: "personal"}, ontology: Gralkor.DefaultOntology, ingestion: String}
+      first = typed_request("first")
+      second = typed_request("second")
+      third = typed_request("third")
+      assert :ok = CaptureBuffer.append_capture(self(), first, [direct])
+      assert :ok = CaptureBuffer.append_capture(self(), second, [{:lens, lens}])
+      assert :ok = CaptureBuffer.append_capture(self(), third, [direct])
+      assert CaptureBuffer.turns_for("typed-session") == [first.messages, second.messages, third.messages]
+      assert :ok = CaptureBuffer.flush_and_await("typed-session", 1_000)
+      assert_receive {:flushed, "personal/owner", "Susu", "Eli", Gralkor.DefaultOntology, turns}
+      assert turns == [first.messages, third.messages]
+      assert_receive {:lens_flushed, "owner", "Susu", "Eli", ^lens, lens_turns}
+      assert lens_turns == [second.messages]
+    end
+
+    test "and distinct resolved definitions for the same Lens name remain separate batches" do
+      first = %Gralkor.Lens{name: "notes", destination: %Gralkor.Destination{name: "first"}, ontology: Gralkor.DefaultOntology, ingestion: String}
+      second = %{first | destination: %Gralkor.Destination{name: "second"}}
+      assert :ok = CaptureBuffer.append_capture(self(), typed_request("first"), [{:lens, first}])
+      assert :ok = CaptureBuffer.append_capture(self(), typed_request("second"), [{:lens, second}])
+      assert :ok = CaptureBuffer.flush_and_await("typed-session", 1_000)
+      assert_receive {:lens_flushed, "owner", "Susu", "Eli", ^first, [[%{content: "first"}]]}
+      assert_receive {:lens_flushed, "owner", "Susu", "Eli", ^second, [[%{content: "second"}]]}
+    end
+
+    test "and a session rejects changes to its runtime owner, operator, agent, or user before buffering" do
+      request = typed_request("first")
+      routes = [{:direct, "personal/owner", Gralkor.DefaultOntology}]
+      assert :ok = CaptureBuffer.append_capture(self(), request, routes)
+      for {key, value} <- [operator_id: "other", agent_name: "other", user_name: "other"] do
+        assert_raise ArgumentError, ~r/bound/, fn -> CaptureBuffer.append_capture(self(), Map.put(request, key, value), routes) end
+      end
+      assert_raise ArgumentError, ~r/runtime_owner/, fn -> CaptureBuffer.append_capture(:other, request, routes) end
+      assert CaptureBuffer.turns_for("typed-session") == [request.messages]
+    end
+  end
+
+  defp typed_request(content) do
+    %Gralkor.Capture{session_id: "typed-session", operator_id: "owner", agent_name: "Susu", user_name: "Eli", messages: [Message.new("user", content)], route: {:direct, "personal"}}
+  end
+
 end
