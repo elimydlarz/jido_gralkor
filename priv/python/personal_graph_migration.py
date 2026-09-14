@@ -189,6 +189,9 @@ def validate_preparation(manifest: dict[str, object]) -> None:
             raise ValueError(f"Destination namespace conflict: {destination}")
     if "personal-chat" in references.get("lenses", []):
         raise ValueError("Lens namespace conflict: personal-chat")
+    for graph in manifest["graphs"]:
+        if not graph["source_exists"]:
+            raise ValueError(f"source graph missing: {graph['source_physical']}")
 
 
 def execute(request: dict[str, object]) -> dict[str, object]:
