@@ -391,6 +391,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
     JidoGralkor.Plugin.mount(%{},
       agent_name: "Destination registration",
+      capture_destination: "personal",
       runtime_config: configuration
     )
 
