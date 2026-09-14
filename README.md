@@ -682,6 +682,8 @@ On each store write, graphiti receives the selected Lens or Reflection ontology'
 
 A Reflection is a named synthesis process declared in one agent's runtime configuration with an inline structured Chain of Thought and exactly one Destination output. The consumer decides when it runs; after admission, that agent's JidoGralkor runtime owns production, Destination delivery, retry, abandonment, and the invocation callback.
 
+The Reflection Runner advances the ordered CoT steps and validates each step's exact output contract. Each step uses Jido AI's standalone ReAct runtime for model and tool turns, preserving the supplied tools and invocation context. Prompts are sent without the standalone `CallWithTools` action's 100,000-character cap; the configured model's context limit still applies. A provider failure, invalid structured output, or exhaustion of the ten-iteration step limit fails the Reflection before any later step or partial artefact is returned.
+
 The package supplies two declarations by default:
 
 - `generalisations` declares a `global` Destination output using `Gralkor.DefaultOntology`.

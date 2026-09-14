@@ -95,6 +95,32 @@ when a Reflection Runner is invoked
   where the invocation supplies ingested representations
     then every representation is available with its identifier, Lens identity, content, and storage result
 
+  while the initial step prompt exceeds 100,000 characters
+    then the configured model receives the complete directions, representations, stored information, and output contract
+    and valid model output completes the Reflection without a local prompt-length rejection
+
+  while an earlier step's output makes a later step prompt exceed 100,000 characters
+    then the configured model receives the complete interpolated output in that later step
+    and valid model output completes the remaining Chain of Thought
+
+  where the model requests tools before returning the current step's structured output
+    then the supplied tools execute with the invocation's operator identity and supplied tool context
+    and subsequent model turns receive the preceding tool results within that step
+    and the next step starts only after the current step returns valid structured output
+
+  if the model request fails
+    then the Reflection fails identifying its name, current step, and provider failure
+    and no later step is invoked
+
+  if the model returns invalid JSON or a non-object JSON value
+    then the Reflection fails identifying its name, current step, and invalid structured output
+    and no later step is invoked
+
+  if the model and tool loop reaches its iteration limit without a final answer
+    then the Reflection fails identifying its name, current step, and exhausted iteration limit
+    and no partial artefact is returned
+    and no later step is invoked
+
 when a Chain of Thought step begins
   then built-in inference receives that step's interpolated natural-language directions
   and receives that step's declared structured-output contract

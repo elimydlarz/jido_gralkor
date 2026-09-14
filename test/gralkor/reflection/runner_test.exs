@@ -292,7 +292,7 @@ defmodule Gralkor.Reflection.RunnerTest do
   end
 
   describe "when built-in inference is invoked for a step" do
-    test "then it requests the configured model with the directions, exact output contract, representations, and stored information" do
+    test "then it runs the configured model through Jido's standalone ReAct runtime with the directions, exact output contract, representations, and stored information" do
       prove_built_in_inference_request()
     end
 
@@ -305,7 +305,7 @@ defmodule Gralkor.Reflection.RunnerTest do
 
       assert {:ok, %{output: %{"answer" => "ready"}}} =
                Runner.default_inference(request, fn _action, _args, _context ->
-                 {:ok, %{text: ~s({"answer":"ready"})}}
+                 %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
                end)
     end
   end
@@ -608,9 +608,9 @@ defmodule Gralkor.Reflection.RunnerTest do
   defp prove_built_in_inference_request do
     test_pid = self()
 
-    caller = fn action, args, context ->
-      send(test_pid, {:built_in_call, action, args, context})
-      {:ok, %{text: ~s({"answer":"ready"})}}
+    caller = fn prompt, config, opts ->
+      send(test_pid, {:built_in_call, prompt, config, opts})
+      %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
     end
 
     assert {:ok, %{output: %{"answer" => "ready"}}} =
@@ -618,17 +618,23 @@ defmodule Gralkor.Reflection.RunnerTest do
                model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end
              )
 
-    assert_receive {:built_in_call, Jido.AI.Actions.ToolCalling.CallWithTools, args, _context}
+    assert_receive {:built_in_call, prompt, config, _opts}
 
-    assert Map.take(args, [:model, :auto_execute]) == %{
+    assert config == %{
              model: "openai:runner-contract-model",
-             auto_execute: true
+             tools: [SampleTool],
+             streaming: false,
+             max_iterations: 10,
+             temperature: 0.7,
+             tool_concurrency: 1,
+             tool_max_retries: 0,
+             tool_timeout_ms: 30_000
            }
 
-    assert args.prompt =~ "Use the evidence."
+    assert prompt =~ "Use the evidence."
 
     assert prompt_json(
-             args.prompt,
+             prompt,
              "Lensed representations available to this Reflection step:",
              "Related stored information available"
            ) == [
@@ -641,18 +647,18 @@ defmodule Gralkor.Reflection.RunnerTest do
            ]
 
     assert prompt_json(
-             args.prompt,
+             prompt,
              "Related stored information available to this Reflection step:",
              "Return only one JSON object"
            ) == [%{"content" => "stored observation"}]
 
     assert prompt_json(
-             args.prompt,
+             prompt,
              "Return only one JSON object satisfying this exact output contract:",
              nil
            ) == %{"answer" => "string"}
 
-    refute args.prompt =~ "must not leak"
+    refute prompt =~ "must not leak"
   end
 
   defp prompt_json(prompt, heading, _next_heading) do
@@ -666,8 +672,8 @@ defmodule Gralkor.Reflection.RunnerTest do
     request = default_inference_request()
 
     caller = fn _action, _args, context ->
-      send(test_pid, {:built_in_context, context})
-      {:ok, %{text: ~s({"answer":"ready"})}}
+      send(test_pid, {:built_in_context, Keyword.fetch!(context, :context)})
+      %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
     end
 
     assert {:ok, %{output: %{"answer" => "ready"}}} =
@@ -690,22 +696,22 @@ defmodule Gralkor.Reflection.RunnerTest do
 
     assert {:error, :provider_down} =
              Runner.default_inference(request, fn _action, _args, _context ->
-               {:error, :provider_down}
+               %{termination_reason: :failed, result: :provider_down}
              end)
 
     assert {:error, :provider_rejected} =
              Runner.default_inference(request, fn _action, _args, _context ->
-               {:ok, %{type: :error, reason: :provider_rejected}}
+               %{termination_reason: :failed, result: :provider_rejected}
              end)
 
     assert {:error, {:invalid_structured_output, %Jason.DecodeError{}}} =
              Runner.default_inference(request, fn _action, _args, _context ->
-               {:ok, %{text: "not json"}}
+               %{termination_reason: :final_answer, result: "not json"}
              end)
 
     assert {:error, {:invalid_structured_output, ["not", "an", "object"]}} =
              Runner.default_inference(request, fn _action, _args, _context ->
-               {:ok, %{text: ~s(["not","an","object"])}}
+               %{termination_reason: :final_answer, result: ~s(["not","an","object"])}
              end)
   end
 

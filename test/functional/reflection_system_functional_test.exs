@@ -21,6 +21,31 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       ]
   end
 
+  defmodule ReflectionProbe do
+    use Jido.Action,
+      name: "reflection_probe",
+      description: "Record Reflection evidence.",
+      schema: Zoi.object(%{value: Zoi.string()})
+
+    def run(%{value: value}, context) do
+      send(
+        context.test_pid,
+        {:reflection_tool, value, context.operator_id, Map.get(context, :tenant)}
+      )
+
+      {:ok, %{evidence: value}}
+    end
+  end
+
+  defmodule RequestProbe do
+    @behaviour Jido.AI.Reasoning.ReAct.RequestTransformer
+
+    def transform_request(request, _state, _config, context) do
+      send(context.test_pid, {:model_request, request.messages})
+      {:ok, %{}}
+    end
+  end
+
   defmodule ReflectionOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
   end
@@ -508,6 +533,184 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when a Reflection Runner is invoked > while the initial step prompt exceeds 100,000 characters" do
+    test "then the configured model receives the complete directions, representations, stored information, and output contract" do
+      content = String.duplicate("retained source ", 10_000)
+      representations = [%{id: "source-one", lens: "observations", content: content, result: :ok}]
+
+      stored = [
+        %{destination: "global", episode: %{content: "related evidence", lens: "observations"}}
+      ]
+
+      schema = %{"answer" => "string"}
+
+      register_step("Inspect all evidence.", representations, stored, schema, [
+        answer_turn("ready")
+      ])
+
+      request = %{
+        directions: "Inspect all evidence.",
+        representations: representations,
+        stored_information: stored,
+        output_schema: schema,
+        operator_id: "operator-one",
+        tools: [],
+        tool_context: %{test_pid: self()}
+      }
+
+      assert {:ok, %{output: %{"answer" => "ready"}}} = Runner.default_inference(request)
+    end
+
+    test "and valid model output completes the Reflection without a local prompt-length rejection" do
+      directions = String.duplicate("Evidence. ", 20_000)
+      schema = %{"answer" => "string"}
+
+      reflection = %Gralkor.Reflection{
+        name: "large-input",
+        outputs: [],
+        chain_of_thought: %Gralkor.Reflection.ChainOfThought{
+          steps: [
+            %Gralkor.Reflection.ChainOfThought.Step{
+              label: "inspect",
+              directions: directions,
+              output: schema
+            }
+          ]
+        }
+      }
+
+      prompt = expected_step_prompt(directions, [], [], schema)
+
+      Jido.AI.Test.ReActScript.new(%{
+        user: prompt,
+        turns: [%{type: :answer, text: ~s({"answer":"complete"})}]
+      })
+      |> Jido.AI.Test.ReActScript.register()
+
+      on_exit(fn -> Jido.AI.Test.ReActScript.clear_current_owner() end)
+
+      assert {:ok, %Gralkor.Artefact{payload: %{"answer" => "complete"}}} =
+               Runner.run(reflection, %{
+                 id: "large-input",
+                 operator_id: "operator-one",
+                 representations: []
+               })
+    end
+  end
+
+  describe "when a Reflection Runner is invoked > if the model request fails" do
+    test "then the Reflection fails identifying its name, current step, and provider failure" do
+      {reflection, invocation} =
+        scripted_reflection([%{type: :fail, reason: :provider_unavailable}])
+
+      assert {:error,
+              %{reflection: "runtime-contract", step: "inspect", reason: :provider_unavailable}} =
+               Runner.run(reflection, invocation)
+    end
+
+    test "and no later step is invoked" do
+      assert {:error, _} =
+               run_observed_reflection([%{type: :fail, reason: :provider_unavailable}])
+
+      assert [_] = model_requests()
+    end
+  end
+
+  describe "when a Reflection Runner is invoked > if the model and tool loop reaches its iteration limit without a final answer" do
+    test "then the Reflection fails identifying its name, current step, and exhausted iteration limit" do
+      turns =
+        for n <- 1..11,
+            do: %{type: :tool_call, name: "reflection_probe", arguments: %{value: "round-#{n}"}}
+
+      {reflection, invocation} =
+        scripted_reflection(turns ++ [%{type: :answer, text: ~s({"answer":"too late"})}])
+
+      assert {:error, %{reflection: "runtime-contract", step: "inspect", reason: :max_iterations}} =
+               Runner.run(reflection, invocation,
+                 tools: [ReflectionProbe],
+                 tool_context: %{test_pid: self()}
+               )
+    end
+
+    test "and no partial artefact is returned" do
+      assert {:error, %{reason: :max_iterations}} = run_observed_reflection(exhausted_turns())
+    end
+
+    test "and no later step is invoked" do
+      assert {:error, _} = run_observed_reflection(exhausted_turns())
+      requests = model_requests()
+      assert length(requests) == 10
+      assert Enum.all?(requests, &(hd(&1) == hd(hd(requests))))
+    end
+  end
+
+  describe "when a Reflection Runner is invoked > while an earlier step's output makes a later step prompt exceed 100,000 characters" do
+    test "then the configured model receives the complete interpolated output in that later step" do
+      answer = String.duplicate("retained evidence ", 10_000)
+      assert {:ok, _} = run_observed_reflection([answer_turn(answer)], answer)
+      assert [_, messages] = model_requests()
+      assert [%{content: prompt}] = messages
+
+      assert prompt ==
+               expected_step_prompt("Conclude " <> answer, [], [], %{"conclusion" => "string"})
+    end
+
+    test "and valid model output completes the remaining Chain of Thought" do
+      answer = String.duplicate("retained evidence ", 10_000)
+
+      assert {:ok, %Gralkor.Artefact{payload: %{"conclusion" => "done"}}} =
+               run_observed_reflection([answer_turn(answer)], answer)
+    end
+  end
+
+  describe "when a Reflection Runner is invoked > where the model requests tools before returning the current step's structured output" do
+    test "then the supplied tools execute with the invocation's operator identity and supplied tool context" do
+      assert {:ok, _} = run_observed_reflection([tool_turn("first"), answer_turn("ready")])
+      assert_receive {:reflection_tool, "first", "operator-one", "kept"}
+    end
+
+    test "and subsequent model turns receive the preceding tool results within that step" do
+      assert {:ok, _} =
+               run_observed_reflection([
+                 tool_turn("first"),
+                 tool_turn("second"),
+                 answer_turn("ready")
+               ])
+
+      assert [_, second, third, _] = model_requests()
+      assert Enum.any?(second, &(&1.role == :tool and &1.content =~ "first"))
+      assert Enum.any?(third, &(&1.role == :tool and &1.content =~ "second"))
+    end
+
+    test "and the next step starts only after the current step returns valid structured output" do
+      assert {:ok, _} = run_observed_reflection([tool_turn("first"), answer_turn("ready")])
+      assert [first, continuation, final] = model_requests()
+      assert hd(first) == hd(continuation)
+      assert [%{content: prompt}] = final
+      assert prompt == expected_step_prompt("Conclude ready", [], [], %{"conclusion" => "string"})
+    end
+  end
+
+  describe "when a Reflection Runner is invoked > if the model returns invalid JSON or a non-object JSON value" do
+    test "then the Reflection fails identifying its name, current step, and invalid structured output" do
+      for text <- ["not JSON", "[1,2]"] do
+        assert {:error,
+                %{
+                  reflection: "runtime-contract",
+                  step: "inspect",
+                  reason: {:invalid_structured_output, _}
+                }} = run_observed_reflection([%{type: :answer, text: text}])
+      end
+    end
+
+    test "and no later step is invoked" do
+      for text <- ["not JSON", "[1,2]"] do
+        assert {:error, _} = run_observed_reflection([%{type: :answer, text: text}])
+        assert [_] = model_requests()
+      end
+    end
+  end
+
   describe "when a Chain of Thought step begins" do
     test "then built-in inference receives that step's interpolated natural-language directions",
          context do
@@ -539,15 +742,16 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         operator_id: "operator-one"
       }
 
-      call = fn Jido.AI.Actions.ToolCalling.CallWithTools, params, received ->
+      call = fn prompt, config, opts ->
+        params = %{prompt: prompt, model: config.model}
+        received = Keyword.fetch!(opts, :context)
         send(self(), {:default_inference, params, received})
-        {:ok, %{text: ~s({"artefact":"done"})}}
+        %{termination_reason: :final_answer, result: ~s({"artefact":"done"})}
       end
 
       assert {:ok, %{output: %{"artefact" => "done"}}} = Runner.default_inference(request, call)
 
-      assert_receive {:default_inference, %{auto_execute: true, model: model, prompt: prompt},
-                      received_context}
+      assert_receive {:default_inference, %{model: model, prompt: prompt}, received_context}
 
       configured = Gralkor.Config.llm_model()
       assert model == "#{configured.provider}:#{configured.id}"
@@ -578,9 +782,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         operator_id: "invocation-operator"
       }
 
-      call = fn Jido.AI.Actions.ToolCalling.CallWithTools, _params, received ->
+      call = fn _prompt, _config, opts ->
+        received = Keyword.fetch!(opts, :context)
         send(self(), {:default_inference_context, received})
-        {:ok, %{text: ~s({"artefact":"done"})}}
+        %{termination_reason: :final_answer, result: ~s({"artefact":"done"})}
       end
 
       assert {:ok, %{output: %{"artefact" => "done"}}} = Runner.default_inference(request, call)
@@ -1570,4 +1775,103 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
+
+  defp expected_step_prompt(directions, representations, stored_information, schema) do
+    """
+    #{directions}
+
+    Lensed representations available to this Reflection step:
+    #{Jason.encode!(representations)}
+
+    Related stored information available to this Reflection step:
+    #{Jason.encode!(stored_information)}
+
+    Return only one JSON object satisfying this exact output contract:
+    #{Jason.encode!(schema)}
+
+    The quoted contract values are type declarations, not literal output
+    values. Emit actual JSON values of those types. In particular, an object
+    declaration such as "{ field: string }" requires a nested JSON object,
+    and an Array<...> declaration requires a JSON array; do not quote either.
+    """
+  end
+
+  defp scripted_reflection(turns) do
+    schema = %{"answer" => "string"}
+
+    first = %Gralkor.Reflection.ChainOfThought.Step{
+      label: "inspect",
+      directions: "Inspect evidence.",
+      output: schema
+    }
+
+    last = %Gralkor.Reflection.ChainOfThought.Step{
+      label: "finish",
+      directions: "Conclude {{answer}}",
+      output: %{"conclusion" => "string"}
+    }
+
+    reflection = %Gralkor.Reflection{
+      name: "runtime-contract",
+      outputs: [],
+      chain_of_thought: %Gralkor.Reflection.ChainOfThought{steps: [first, last]}
+    }
+
+    Jido.AI.Test.ReActScript.new(%{
+      user: expected_step_prompt(first.directions, [], [], schema),
+      turns: turns
+    })
+    |> Jido.AI.Test.ReActScript.register()
+
+    on_exit(fn -> Jido.AI.Test.ReActScript.clear_current_owner() end)
+    {reflection, %{id: "runtime-contract", operator_id: "operator-one", representations: []}}
+  end
+
+  defp run_observed_reflection(turns, answer \\ "ready") do
+    {reflection, invocation} = scripted_reflection(turns)
+
+    register_step("Conclude " <> answer, [], [], %{"conclusion" => "string"}, [
+      %{type: :answer, text: ~s({"conclusion":"done"})}
+    ])
+
+    Runner.run(reflection, invocation,
+      tools: [ReflectionProbe],
+      tool_context: %{test_pid: self(), operator_id: "wrong-operator", tenant: "kept"},
+      inference: fn request ->
+        Runner.default_inference(request, fn prompt, config, opts ->
+          Jido.AI.Reasoning.ReAct.run(
+            prompt,
+            Map.put(config, :request_transformer, RequestProbe),
+            opts
+          )
+        end)
+      end
+    )
+  end
+
+  defp register_step(directions, representations, stored, schema, turns) do
+    Jido.AI.Test.ReActScript.new(%{
+      user: expected_step_prompt(directions, representations, stored, schema),
+      turns: turns
+    })
+    |> Jido.AI.Test.ReActScript.register()
+
+    on_exit(fn -> Jido.AI.Test.ReActScript.clear_current_owner() end)
+  end
+
+  defp model_requests(acc \\ []) do
+    receive do
+      {:model_request, messages} -> model_requests([messages | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
+  defp tool_turn(value),
+    do: %{type: :tool_call, name: "reflection_probe", arguments: %{value: value}}
+
+  defp answer_turn(answer), do: %{type: :answer, text: Jason.encode!(%{answer: answer})}
+
+  defp exhausted_turns,
+    do: Enum.map(1..11, &tool_turn("round-#{&1}")) ++ [answer_turn("too late")]
 end

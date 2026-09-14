@@ -256,17 +256,15 @@ defmodule Gralkor.Reflection.Runner do
 
   defp field(map, key), do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
 
-  # Jido.AI's standalone tool action owns the provider conversation and executes
-  # every configured action until a final answer is produced. The final answer
-  # is JSON because the step prompt includes its exact declared contract.
-  def default_inference(request), do: default_inference(request, &Jido.Exec.run/3, [])
+  def default_inference(request),
+    do: default_inference(request, &Jido.AI.Reasoning.ReAct.run/3, [])
 
   @doc false
-  def default_inference(request, call_with_tools) when is_function(call_with_tools, 3),
-    do: default_inference(request, call_with_tools, [])
+  def default_inference(request, run_step) when is_function(run_step, 3),
+    do: default_inference(request, run_step, [])
 
-  def default_inference(request, call_with_tools, opts)
-      when is_function(call_with_tools, 3) and is_list(opts) do
+  def default_inference(request, run_step, opts)
+      when is_function(run_step, 3) and is_list(opts) do
     prompt = """
     #{request.directions}
 
@@ -294,14 +292,23 @@ defmodule Gralkor.Reflection.Runner do
       |> Map.put(:operator_id, request.operator_id)
       |> Map.put(:tools, request.tools)
 
-    case call_with_tools.(
-           Jido.AI.Actions.ToolCalling.CallWithTools,
-           %{prompt: prompt, auto_execute: true, model: model_spec},
-           context
+    case run_step.(
+           prompt,
+           %{
+             model: model_spec,
+             tools: request.tools,
+             streaming: false,
+             max_iterations: 10,
+             temperature: 0.7,
+             tool_concurrency: 1,
+             tool_max_retries: 0,
+             tool_timeout_ms: 30_000
+           },
+           context: context
          ) do
-      {:ok, %{type: :error, reason: reason}} -> {:error, reason}
-      {:ok, result} -> decode_final_output(result)
-      {:error, reason} -> {:error, reason}
+      %{termination_reason: :final_answer, result: result} -> decode_final_output(%{text: result})
+      %{termination_reason: :failed, result: reason} -> {:error, reason}
+      %{termination_reason: :max_iterations} -> {:error, :max_iterations}
     end
   end
 

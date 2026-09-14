@@ -215,9 +215,9 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
         tools: []
       }
 
-      call = fn _action, params, _context ->
-        send(self(), {:default_inference_prompt, params.prompt})
-        {:ok, %{text: Jason.encode!(%{"generalisations" => []})}}
+      call = fn prompt, _config, _opts ->
+        send(self(), {:default_inference_prompt, prompt})
+        %{termination_reason: :final_answer, result: Jason.encode!(%{"generalisations" => []})}
       end
 
       assert {:ok, %{output: %{"generalisations" => []}}} =

@@ -51,7 +51,7 @@ when another Reflection runs
   then no related-memory search is issued
 
 when built-in inference is invoked for a step
-  then it requests the configured model with the directions, exact output contract, representations, and stored information
+  then it runs the configured model through Jido's standalone ReAct runtime with the directions, exact output contract, representations, and stored information
   and it supplies the host tools and a tool context whose operator identity comes from the invocation while every other supplied field remains unchanged
   and a final JSON object is returned as wrapped structured output
   if the provider fails or returns invalid JSON or a non-object JSON value
