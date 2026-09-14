@@ -565,6 +565,8 @@ defmodule Gralkor.GraphitiPoolTest do
                 if kwargs['uuid'] == 'stolen-claim' and not self.driver.stolen_extraction_started.is_set():
                     self.driver.stolen_extraction_started.set()
                     await self.driver.continue_stolen_extraction.wait()
+                else:
+                    await asyncio.sleep(0.05)
                 episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
                 await episode.save(self.driver)
 
@@ -643,6 +645,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
     Pythonx.eval(
       """
+      import asyncio
       claim = graphs[0].driver.claims['stolen-claim']
       claim['owner'] = 'replacement-owner'
       claim['generation'] += 1

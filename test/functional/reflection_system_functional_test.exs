@@ -1456,6 +1456,33 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when the packaged ERL Reflection delivers to personal memory" do
+    test "then its artefact is searchable only by the invocation identity" do
+      artefact = deliver_personal_erl()
+      assert {:ok, [%{destination: "personal", artefact: ^artefact}]} =
+        Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "separate recurring jobs", destinations: ["personal"], result_type: :artefacts})
+      assert {:ok, []} =
+        Client.search(self(), %Gralkor.Search{operator_id: "dashboard:another", query: "separate recurring jobs", destinations: ["personal"], result_type: :artefacts})
+    end
+
+    test "and its artefact identifier remains derived from the unchanged operator and invocation identifiers" do
+      artefact = deliver_personal_erl()
+      assert artefact.id == Gralkor.Artefact.id("owner", "personal-erl-invocation", "erl")
+    end
+  end
+
+  defp deliver_personal_erl do
+    start_supervised!(Gralkor.Destination.Storage.InMemory)
+    Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.InMemory)
+    start_supervised!({Runtime, owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}})
+    parent = self()
+    assert {:ok, "personal-erl-invocation"} =
+      Client.reflect(self(), "erl", %{id: "personal-erl-invocation", operator_id: "owner", representations: [], invocation_context: %{}},
+        &send(parent, {:personal_erl, &1}), inference: &erl_output_for/1)
+    assert_receive {:personal_erl, %{outcome: :delivered, artefact: artefact}}, 1_000
+    artefact
+  end
+
   defp reflection(
          _context,
          name \\ "generalisation",
