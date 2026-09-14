@@ -192,6 +192,8 @@ def validate_preparation(manifest: dict[str, object]) -> None:
     for graph in manifest["graphs"]:
         if not graph["source_exists"]:
             raise ValueError(f"source graph missing: {graph['source_physical']}")
+        if graph["target_exists"]:
+            raise ValueError(f"target graph already exists: {graph['target_physical']}")
 
 
 def execute(request: dict[str, object]) -> dict[str, object]:
