@@ -129,6 +129,13 @@ def translated(inventory_value: dict[str, object], source: str, target: str) -> 
 
 
 def advance(database: FalkorDB, path: Path, manifest: dict[str, object]) -> dict[str, object]:
+    for entry in manifest["graphs"]:
+        active = database.select_graph(entry["source_physical"]).ro_query(
+            "MATCH (claim:_GralkorEpisodeClaim) WHERE claim.owner IS NOT NULL "
+            "AND coalesce(claim.lease_until_ms, 0) > timestamp() RETURN claim.uuid"
+        ).result_set
+        if active:
+            raise ValueError(f"active episode claim: {entry['source_physical']}")
     if manifest["phase"] == "verified":
         return manifest
     for entry in manifest["graphs"]:
