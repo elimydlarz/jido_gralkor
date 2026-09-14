@@ -1,4 +1,4 @@
-Unit: gralkor-client-native (src: lib/gralkor/client.ex, lib/gralkor/client/native.ex, lib/gralkor/default_ontology.ex; unit: test/gralkor/client/native_test.exs; integration: test/gralkor/client/native_test.exs)
+Unit: gralkor-client-native (src: lib/gralkor/client.ex, lib/gralkor/client/native.ex, lib/gralkor/default_ontology.ex; integration: test/gralkor/client/native_test.exs; unit: test/gralkor/client/native_test.exs)
 
 when any adapter operation is called
   then the work runs in the calling node's own processes, no HTTP request or other network transport being involved

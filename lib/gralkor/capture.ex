@@ -34,7 +34,15 @@ defmodule Gralkor.Capture do
 
     Destination.validate_operator_id!(request.operator_id)
 
-    unless is_list(request.messages) and Enum.all?(request.messages, &match?(%Gralkor.Message{}, &1)) do
+    unless is_list(request.messages) and
+             Enum.all?(request.messages, fn
+               %Gralkor.Message{role: role, content: content}
+               when role in ["user", "assistant", "behaviour"] and is_binary(content) ->
+                 true
+
+               _ ->
+                 false
+             end) do
       raise ArgumentError, "capture messages must be canonical Gralkor.Message values"
     end
 
@@ -60,14 +68,21 @@ defmodule Gralkor.Capture do
     case request.route do
       {:direct, name} ->
         destination = Runtime.destination!(owner, name)
-        [{:direct, Destination.graph_id(destination, request.operator_id), Gralkor.DefaultOntology}]
+
+        [
+          {:direct, Destination.graph_id(destination, request.operator_id),
+           Gralkor.DefaultOntology}
+        ]
 
       {:lenses, names} ->
         owner
         |> Runtime.lenses!(Enum.uniq(names))
         |> Enum.map(fn
-          %Lens{} = lens -> {:lens, lens}
-          lens -> raise ArgumentError, "Lens #{inspect(lens.name)} accepts only whole-graph replacement"
+          %Lens{} = lens ->
+            {:lens, lens}
+
+          lens ->
+            raise ArgumentError, "Lens #{inspect(lens.name)} accepts only whole-graph replacement"
         end)
     end
   end
