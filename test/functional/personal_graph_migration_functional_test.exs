@@ -976,6 +976,114 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
            ) == 1
   end
 
+  defp restore_history(context) do
+    directory = Path.join(context.directory, "backup-restore")
+    source_path = Path.join([directory, "source", "snapshot.rdb"])
+    restored_path = Path.join([directory, "restored", "snapshot.rdb"])
+    File.mkdir_p!(Path.dirname(source_path))
+    File.mkdir_p!(Path.dirname(restored_path))
+
+    {source_server, source_globals} = Pythonx.eval("""
+    from redislite import Redis
+    from falkordb import FalkorDB
+    source_server = Redis(dbfilename=path.decode(), serverconfig={'port': 0, 'save': ''})
+    source_database = FalkorDB(unix_socket_path=source_server.socket_file)
+    source_server
+    """, %{"path" => source_path})
+    stop_owned_server_on_exit(source_server)
+    source_database = source_globals["source_database"]
+    {source_socket, _} = Pythonx.eval("server.socket_file", %{"server" => source_server})
+    source_connection = [unix_socket_path: Pythonx.decode(source_socket)]
+
+    for {identity, content} <- [{"owner", "remember amber orchard"}, {"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
+      seed_history(source_database, identity)
+      query(source_database, "operator/" <> identity, "MATCH (e:Episodic {uuid: 'episode'}) SET e.content = '" <> content <> "'")
+    end
+    assert {:ok, before} = PersonalGraphMigration.plan(source_connection, ["owner", "a/b", "a_b"], %{})
+
+    {backup_evidence, _} = Pythonx.eval("""
+    import hashlib, psutil, shutil
+    from pathlib import Path
+    source_info = server.info('server')
+    source_pid = source_info['process_id']
+    assert server.save() is True
+    persistence = server.info('persistence')
+    assert persistence['rdb_bgsave_in_progress'] == 0
+    assert persistence['rdb_last_bgsave_status'] == 'ok'
+    source_file = Path(source_path.decode())
+    restore_file = Path(restored_path.decode())
+    snapshot = source_file.read_bytes()
+    assert snapshot.startswith(b'REDIS')
+    database.close()
+    server.shutdown(save=False, now=True, force=True)
+    try:
+        psutil.Process(source_pid).wait(timeout=10)
+    except psutil.NoSuchProcess:
+        pass
+    assert not psutil.pid_exists(source_pid)
+    shutil.copyfile(source_file, restore_file)
+    {
+        'mechanism': 'SAVE; source shutdown NOSAVE; copy RDB; separate server startup load',
+        'source_pid': source_pid,
+        'source_run_id': source_info['run_id'],
+        'source_stopped': True,
+        'source_rdb_path': str(source_file),
+        'restored_rdb_path': str(restore_file),
+        'source_rdb_sha256': hashlib.sha256(snapshot).hexdigest(),
+        'restored_rdb_sha256': hashlib.sha256(restore_file.read_bytes()).hexdigest(),
+        'rdb_size': len(snapshot),
+    }
+    """, %{"server" => source_server, "database" => source_database, "source_path" => source_path, "restored_path" => restored_path})
+
+    {restored_server, restored_globals} = Pythonx.eval("""
+    from redislite import Redis
+    from falkordb import FalkorDB
+    restored_server = Redis(dbfilename=path.decode(), serverconfig={'port': 0, 'save': ''})
+    restored_database = FalkorDB(unix_socket_path=restored_server.socket_file)
+    restored_server
+    """, %{"path" => restored_path})
+    stop_owned_server_on_exit(restored_server)
+    {result, _} = Pythonx.eval("""
+    import time
+    from pathlib import Path
+    deadline = time.monotonic() + 30
+    for name in database.list_graphs():
+        graph = database.select_graph(name)
+        while True:
+            indices = graph.list_indices()
+            columns = [column[1] for column in indices.header]
+            definitions = [dict(zip(columns, row)) for row in indices.result_set] + graph.list_constraints()
+            if all(item['status'] == 'OPERATIONAL' for item in definitions):
+                break
+            assert time.monotonic() < deadline, 'restored schema did not become operational'
+            time.sleep(0.01)
+    info = server.info('server')
+    startup_log = [line for line in Path(server.logfile).read_text().splitlines() if 'RDB' in line or 'DB loaded from disk' in line]
+    evidence.update({
+        'restored_pid': info['process_id'],
+        'restored_run_id': info['run_id'],
+        'rdb_loaded': any('DB loaded from disk' in line for line in startup_log),
+        'restored_startup_log': startup_log,
+        'restored_graph_count': len(database.list_graphs()),
+    })
+    {'evidence': evidence, 'socket': server.socket_file}
+    """, %{"server" => restored_server, "database" => restored_globals["restored_database"], "evidence" => backup_evidence})
+    result = Pythonx.decode(result)
+    %{restored: %{connection: [unix_socket_path: result["socket"]], database: restored_globals["restored_database"], directory: directory}, before: before, evidence: result["evidence"]}
+  end
+
+  defp stop_owned_server_on_exit(server) do
+    on_exit(fn ->
+      Pythonx.eval("""
+      from redis.exceptions import ConnectionError
+      try:
+          server.shutdown(save=False, now=True, force=True)
+      except ConnectionError:
+          pass
+      """, %{"server" => server})
+    end)
+  end
+
   defp start_public_runtime(context) do
     {telemetry, _} = Pythonx.eval("import os\nos.environ.get('GRAPHITI_TELEMETRY_ENABLED')", %{})
 
