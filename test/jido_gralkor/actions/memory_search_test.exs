@@ -108,7 +108,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     test "then the Search request leaves both selector dimensions unrestricted" do
       assert {:ok, _result} = run_search(%{query: "launch"})
 
-      for destination <- ["operator", "global", "observations", "decisions"] do
+      for destination <- ["personal", "global", "observations", "decisions"] do
         assert_receive {:destination_search, ^destination, "operator-one", "launch", :facts, 20,
                         []}
       end
@@ -138,7 +138,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     test "then the Search request carries the same Lens list" do
       assert {:ok, _result} = run_search(%{query: "launch", lenses: ["decisions"]})
 
-      for destination <- ["operator", "global", "observations", "decisions"] do
+      for destination <- ["personal", "global", "observations", "decisions"] do
         assert_receive {:destination_search, ^destination, "operator-one", "launch", :facts, 20,
                         [lenses: ["decisions"]]}
       end

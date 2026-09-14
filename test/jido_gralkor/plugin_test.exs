@@ -394,7 +394,7 @@ defmodule JidoGralkor.PluginTest do
             source: "/test"
           )
 
-        assert_raise ArgumentError, ~r/invalid Lens|unknown Lens/, fn ->
+        assert_raise ArgumentError, ~r/invalid Lens|unknown_definition, :lenses/, fn ->
           Plugin.handle_signal(signal, context(lens_agent))
         end
       end

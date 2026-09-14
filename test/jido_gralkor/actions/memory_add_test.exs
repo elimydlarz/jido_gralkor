@@ -77,14 +77,14 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                  %{agent_id: "01USER"}
                )
 
-      assert_receive {:memory_add_started, worker, "operator/01USER", "Eli prefers tea",
+      assert_receive {:memory_add_started, worker, "personal/01USER", "Eli prefers tea",
                       "user preference", :conversation}
 
       send(worker, :release)
       assert_receive :memory_add_finished
     end
 
-    test "and the background write uses the graph named `operator/<operator id>`" do
+    test "and the background write uses the graph named `personal/<operator id>`" do
       InMemory.set_memory_add(:ok)
 
       MemoryAdd.run(
@@ -97,7 +97,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
       )
 
       assert eventually(fn ->
-               match?([["operator/user-id", _, _, _]], InMemory.adds())
+               match?([["personal/user-id", _, _, _]], InMemory.adds())
              end)
     end
 
@@ -221,7 +221,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
           assert eventually(fn ->
                    InMemory.adds() == [
-                     ["operator/01USER", "something", "agent thought", :conversation]
+                     ["personal/01USER", "something", "agent thought", :conversation]
                    ]
                  end)
 

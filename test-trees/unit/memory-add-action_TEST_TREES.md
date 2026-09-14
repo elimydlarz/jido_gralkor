@@ -2,7 +2,7 @@ Unit: memory-add-action (src: lib/jido_gralkor/actions/memory_add.ex; unit: test
 
 when the memory add tool runs with content, a source kind, and a source description
   then it returns an acknowledgement immediately, without waiting on the write
-  and the background write uses the graph named `operator/<operator id>`
+  and the background write uses the graph named `personal/<operator id>`
   and the background write receives the content unchanged
   and the background write receives the source kind unchanged
   and the background write receives the source description unchanged
