@@ -188,6 +188,8 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], references)
       assert manifest["configuration_references"] == references
       inventory = hd(manifest["graphs"])["source_inventory"]
+      assert inventory["node_uuids"]["Episodic"] == %{"count" => 3, "values" => ["complete", "episode", "incomplete"]}
+      assert inventory["relationship_uuids"]["RELATES_TO"] == %{"count" => 1, "values" => ["fact"]}
       assert Enum.map(inventory["nodes"], & &1["properties"]["uuid"]) |> Enum.sort() ==
                Enum.sort(["episode", "entity-a", "entity-b", "community", "complete", "incomplete", "complete", "incomplete"])
       assert Enum.any?(inventory["relationships"], &(&1["properties"]["episodes"] == ["episode"]))
@@ -356,7 +358,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       start_public_runtime(context)
       for {identity, content} <- [{"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
         assert {:ok, results} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: identity, query: "amber", destinations: ["personal"]})
-        assert Enum.filter(results, &Map.has_key?(&1.episode, :content)) == [%{destination: "personal", episode: %{content: content, source_description: "captured [lens: operator]", lens: "operator"}}]
+        assert Enum.filter(results, &Map.has_key?(&1.episode, :content)) == [%{destination: "personal", episode: %{content: content, source_description: "captured", source_kind: "document", lens: "operator"}}]
       end
     end
 
