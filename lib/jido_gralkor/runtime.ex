@@ -37,6 +37,8 @@ defmodule JidoGralkor.Runtime do
   def lenses!(owner, names), do: fetch_definitions!(owner, :lenses, names)
 
   def resolve_search!(owner, lens_names, destination_names) do
+    Enum.each(lens_names, &reject_retired_selection!(:lenses, &1))
+    Enum.each(destination_names, &reject_retired_selection!(:destinations, &1))
     case call!(owner, {:resolve_search, lens_names, destination_names}) do
       {:ok, resolved} -> resolved
       {:error, reason} -> raise ArgumentError, inspect(reason)
@@ -190,12 +192,13 @@ defmodule JidoGralkor.Runtime do
     with :ok <- validate_definition_fields(configuration),
          :ok <- validate_definition_names(configuration),
          :ok <- validate_reserved_names(configuration, packaged_reflections),
+         :ok <- validate_retired_references(configuration),
          :ok <- validate_lens_shapes(configuration.lenses),
          :ok <- validate_reflection_shapes(configuration.reflections, parse_chain_of_thought),
          :ok <- validate_destination_references(configuration),
          :ok <- validate_reserved_entity_kinds(configuration) do
       destinations =
-        [%Destination{name: "operator"}, %Destination{name: "global"}] ++
+        [%Destination{name: "personal"}, %Destination{name: "global"}] ++
           Enum.map(configuration.destinations, fn definition ->
             %Destination{name: field(definition, :name)}
           end)
@@ -205,8 +208,8 @@ defmodule JidoGralkor.Runtime do
       lenses =
         [
           %Lens{
-            name: "operator",
-            destination: Map.fetch!(destination_index, "operator"),
+            name: "personal-chat",
+            destination: Map.fetch!(destination_index, "personal"),
             ontology: Gralkor.DefaultOntology,
             ingestion: Gralkor.Lens.Ingestion.Store
           }
@@ -315,8 +318,8 @@ defmodule JidoGralkor.Runtime do
          packaged_reflections
        ) do
     packaged = %{
-      destinations: ["operator", "global"],
-      lenses: ["operator", "global"],
+      destinations: ["personal", "global"],
+      lenses: ["personal-chat", "global"],
       reflections: Enum.map(packaged_reflections.(), &field(&1, :name))
     }
 
@@ -337,7 +340,7 @@ defmodule JidoGralkor.Runtime do
 
       reserved_destination =
         if collection == :destinations,
-          do: Enum.find(names, &(is_binary(&1) and String.starts_with?(&1, "operator/")))
+          do: Enum.find(names, &(is_binary(&1) and String.starts_with?(&1, ["personal/", "operator/"])))
 
       reserved_provenance =
         if collection in [:lenses, :reflections],
@@ -355,8 +358,11 @@ defmodule JidoGralkor.Runtime do
         reserved_destination ->
           {:halt, {:error, {:reserved_destination_namespace, reserved_destination}}}
 
-        collection == :lenses and "default" in names ->
-          {:halt, {:error, {:retired_definition_name, :lenses, "default", "operator"}}}
+        collection == :lenses and Enum.any?(names, &(&1 in ["default", "operator"])) ->
+          {:halt, {:error, {:retired_definition_name, :lenses, Enum.find(names, &(&1 in ["default", "operator"])), "personal-chat"}}}
+
+        collection == :destinations and "operator" in names ->
+          {:halt, {:error, {:retired_definition_name, :destinations, "operator", "personal"}}}
 
         reserved_provenance ->
           {:halt, {:error, {:reserved_provenance_syntax, collection, reserved_provenance}}}
@@ -547,10 +553,24 @@ defmodule JidoGralkor.Runtime do
     end
   end
 
+  defp validate_retired_references(configuration) do
+    references = Enum.map(configuration.lenses, &field(&1, :destination)) ++
+      Enum.flat_map(configuration.reflections, fn reflection ->
+        case field(reflection, :outputs) do
+          outputs when is_list(outputs) -> Enum.map(outputs, &field(&1, :destination))
+          _ -> []
+        end
+      end)
+
+    if "operator" in references,
+      do: {:error, {:retired_definition_name, :destinations, "operator", "personal"}},
+      else: :ok
+  end
+
   defp validate_destination_references(configuration) do
     destination_names =
       MapSet.new(
-        ["operator", "global"] ++ Enum.map(configuration.destinations, &field(&1, :name))
+        ["personal", "global"] ++ Enum.map(configuration.destinations, &field(&1, :name))
       )
 
     with :ok <- validate_lens_destinations(configuration.lenses, destination_names) do
@@ -632,7 +652,18 @@ defmodule JidoGralkor.Runtime do
 
   defp reserved_entity_kind(_ontology), do: nil
 
+  defp reject_retired_selection!(:destinations, "operator") do
+    raise ArgumentError, "Destination \"operator\" was retired; migrate its graph and select \"personal\""
+  end
+
+  defp reject_retired_selection!(:lenses, name) when name in ["operator", "default"] do
+    raise ArgumentError, "Lens #{inspect(name)} was retired; select \"personal-chat\" or explicit direct capture"
+  end
+
+  defp reject_retired_selection!(_collection, _name), do: :ok
+
   defp fetch_definition!(owner, collection, name) do
+    reject_retired_selection!(collection, name)
     case call!(owner, {:fetch, collection, name}) do
       {:ok, definition} -> definition
       {:error, reason} -> raise ArgumentError, inspect(reason)
@@ -640,6 +671,7 @@ defmodule JidoGralkor.Runtime do
   end
 
   defp fetch_definitions!(owner, collection, names) do
+    Enum.each(names, &reject_retired_selection!(collection, &1))
     case call!(owner, {:fetch_many, collection, names}) do
       {:ok, definitions} -> definitions
       {:error, reason} -> raise ArgumentError, inspect(reason)

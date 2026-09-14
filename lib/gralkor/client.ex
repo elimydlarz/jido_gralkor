@@ -66,33 +66,7 @@ defmodule Gralkor.Client do
 
   @callback recall(group_id(), agent_name(), session_id() | nil, query :: String.t()) ::
               {:ok, String.t()} | {:error, term()}
-  @callback capture(
-              session_id(),
-              group_id(),
-              agent_name(),
-              user_name(),
-              messages()
-            ) ::
-              :ok | {:error, term()}
-  @callback capture(
-              session_id(),
-              group_id(),
-              agent_name(),
-              user_name(),
-              messages(),
-              lens :: String.t(),
-              additional_lenses :: [String.t()]
-            ) ::
-              :ok | {:error, term()}
-  @callback capture(
-              session_id(),
-              group_id(),
-              agent_name(),
-              user_name(),
-              messages(),
-              lens :: String.t()
-            ) ::
-              :ok | {:error, term()}
+  @callback capture(runtime_owner(), Gralkor.Capture.t()) :: :ok | {:error, term()}
   @callback memory_add(
               group_id(),
               content :: String.t(),
@@ -144,35 +118,16 @@ defmodule Gralkor.Client do
     Runtime.submit_reflection(runtime_owner, reflection_name, invocation, callback, opts)
   end
 
-  @doc false
-  def capture(
-        runtime_owner,
-        session_id,
-        operator_id,
-        agent_name,
-        user_name,
-        messages,
-        lens,
-        additional_lenses
-      ) do
-    client = impl()
-    runtime_owner = Runtime.ensure_available!(runtime_owner)
+  @spec capture(runtime_owner(), Gralkor.Capture.t()) :: :ok | {:error, term()}
+  def capture(runtime_owner, %Gralkor.Capture{} = request) do
+    Runtime.ensure_available!(runtime_owner)
+    Gralkor.Capture.validate!(request)
+    impl().capture(runtime_owner, request)
+  end
 
-    if Code.ensure_loaded?(client) and function_exported?(client, :capture, 8) do
-      client.capture(
-        runtime_owner,
-        session_id,
-        operator_id,
-        agent_name,
-        user_name,
-        messages,
-        lens,
-        additional_lenses
-      )
-    else
-      raise ArgumentError,
-            "configured Gralkor client #{inspect(client)} does not support runtime-targeted capture"
-    end
+  @doc false
+  def capture(_owner, _session, _operator, _agent, _user, _messages, _lens, _additional) do
+    raise ArgumentError, "positional capture was retired; use Client.capture(runtime_owner, %Gralkor.Capture{})"
   end
 
   @doc false
@@ -486,17 +441,9 @@ defmodule Gralkor.Client do
     lenses = registered_lenses!()
 
     case Enum.find(lenses, fn definition -> Keyword.get(definition, :name) == name end) do
-      nil when name == "operator" ->
-        %Lens{
-          name: "operator",
-          destination: DestinationRegistry.fetch!("operator"),
-          ontology: Gralkor.DefaultOntology,
-          ingestion: StoreIngestion
-        }
-
-      nil when name == "default" ->
+      nil when name in ["operator", "default"] ->
         raise ArgumentError,
-              "Lens \"default\" was retired; use the reserved \"operator\" Lens instead"
+              "Lens #{inspect(name)} was retired; use \"personal-chat\" or explicit direct capture"
 
       nil ->
         raise ArgumentError, "unknown Lens #{inspect(name)}"
@@ -537,7 +484,8 @@ defmodule Gralkor.Client do
       lenses when is_list(lenses) ->
         Enum.each(lenses, &validate_lens!/1)
         validate_unique_names!(lenses)
-        lenses
+        [[name: "personal-chat", destination: "personal", ontology: Gralkor.DefaultOntology,
+          ingestion: StoreIngestion]] ++ lenses
 
       lenses ->
         raise ArgumentError, "Lens registry must be a list, got #{inspect(lenses)}"
@@ -560,12 +508,12 @@ defmodule Gralkor.Client do
             "invalid Lens #{inspect(name)}: name contains reserved provenance syntax \" [lens: \""
     end
 
-    if name == "default" do
+    if name in ["default", "operator"] do
       raise ArgumentError,
-            "invalid Lens \"default\": name was retired; use \"operator\" instead"
+            "invalid Lens #{inspect(name)}: name was retired; use \"personal-chat\" instead"
     end
 
-    if name in ["operator", "global"] do
+    if name in ["personal-chat", "global"] do
       raise ArgumentError, "invalid Lens #{inspect(name)}: name is reserved"
     end
 
@@ -658,11 +606,16 @@ defmodule Gralkor.Client do
   end
 
   @doc false
-  @spec operator_graph_id(String.t()) :: String.t()
-  def operator_graph_id(operator_id) when is_binary(operator_id) do
-    DestinationRegistry.fetch!("operator")
+  @spec personal_graph_id(String.t()) :: String.t()
+  def personal_graph_id(operator_id) do
+    DestinationRegistry.fetch!("personal")
     |> Gralkor.Destination.graph_id(operator_id)
   end
+
+  @doc false
+  @deprecated "Use personal_graph_id/1"
+  @spec operator_graph_id(String.t()) :: String.t()
+  def operator_graph_id(operator_id), do: personal_graph_id(operator_id)
 
   @spec sanitize_group_id(String.t()) :: String.t()
   def sanitize_group_id(id) when is_binary(id) do

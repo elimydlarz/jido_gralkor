@@ -60,7 +60,7 @@ defmodule JidoGralkor.Actions.MemoryAdd do
             end
 
           _ ->
-            group_id = Client.operator_graph_id(operator_id)
+            group_id = Client.personal_graph_id(operator_id)
 
             Client.impl().memory_add(
               group_id,
