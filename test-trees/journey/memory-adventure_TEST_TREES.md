@@ -1,17 +1,20 @@
 Journey: memory-adventure (journey: test/journey/memory_adventure_journey_test.exs)
 
-# Adventure: one operator adds ontology-free implicit memory, captures and flushes completed turns through an appending Lens, asynchronously triggers an ERL Learning, evolves a shared generalisation, and publishes global memory.
+# Adventure: one operator adds ontology-free direct personal memory, captures direct and personal-chat turns without duplicate writes, flushes completed turns through an appending Lens, asynchronously triggers an ERL Learning, evolves a shared generalisation, and publishes global memory.
 # The same operator's appending and replaceable Lenses save to one Destination before the replaceable Lens replaces its earlier graph.
-# Fresh sessions then use default and selected memory search across packaged and application Destinations; both operators check shared and operator-local visibility.
+# Fresh sessions then use default and selected memory search across packaged and application Destinations; both operators check shared and personal visibility.
 
-when two operators use implicit memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement
-  then ontology-free implicit operator memory remains recallable
+when two operators use direct personal memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement
+  then ontology-free direct personal memory remains recallable
+  and direct conversation capture remains searchable without Lens or Reflection authorship
+  and personal-chat processing records its actual Lens provenance
+  and alternating direct and personal-chat turns writes one episode for each selected route
   and captured appending-Lens information remains searchable
   and ERL writes a structured Learning artefact through its Destination output
   and the global graph is visible to both operators
-  and each operator's selector-free search returns that operator's operator-local memory
-  and each operator's selector-free search excludes the other operator's operator-local memory
-  and implicit-default memory uses the graph named `operator/<operator id>`
+  and each operator's selector-free search returns that operator's personal memory
+  and each operator's selector-free search excludes the other operator's personal memory
+  and direct memory uses the graph named `personal/<operator id>`
   and appending Lenses use that same graph
   and replaceable Lenses use that same graph
   and replacing one Lens's graph preserves information written by another Lens
@@ -24,7 +27,7 @@ when the Journey consumer triggers generalisation after successive ingestions co
   and every later lineage snapshot exposes non-blank content and an integer level
 
 when distinct ingestions use Lenses backed by different Destinations
-  then the `work-notes` input is searchable through the `operator` Destination
+  then the `work-notes` input is searchable through the `personal` Destination
   and the `published` input is searchable through the `global` Destination
   and each consumer-supplied invocation identifier resolves a completed `generalisations` artefact
 
@@ -35,7 +38,7 @@ when the Journey consumer triggers a consumer-defined Reflection with a Destinat
 when a fresh agent handles a request related to an evolved generalisation
   then one MemorySearch call is made without selectors
   and every accessible registered Destination is searched
-  and its results include relevant memory from the `operator`, `global`, and an application Destination
+  and its results include relevant memory from the `personal`, `global`, and an application Destination
   and its results include relevant Lens-authored memory and relevant stored generalisations
   and its readable fact bullets are grouped under the named originating Lens or Reflection
   and the answer uses retrieved facts relevant to the requested migration
