@@ -100,7 +100,7 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
     on_exit(fn -> if Process.alive?(pool), do: GenServer.stop(pool) end)
 
-    start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: %{}})
+    start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}})
 
     start_supervised!({CaptureBuffer, [flush_callback: App.build_flush_callback(nil)]})
 

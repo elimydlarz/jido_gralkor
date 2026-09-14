@@ -10,7 +10,7 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
     previous_client = Application.get_env(:jido_gralkor, :client)
     Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
     owner = self()
-    start_supervised!({JidoGralkor.Runtime, owner: owner, configuration: %{}})
+    start_supervised!({JidoGralkor.Runtime, owner: owner, configuration: %{destinations: [], lenses: [], reflections: []}})
 
     start_supervised!(
       {Gralkor.CaptureBuffer,
