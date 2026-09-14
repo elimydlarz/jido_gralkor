@@ -503,7 +503,7 @@ defmodule Gralkor.Client do
       raise ArgumentError, "invalid Lens name #{inspect(name)}"
     end
 
-    if String.contains?(name, " [lens: ") do
+    if String.contains?(name, [" [lens: ", " [gralkor: "]) do
       raise ArgumentError,
             "invalid Lens #{inspect(name)}: name contains reserved provenance syntax \" [lens: \""
     end

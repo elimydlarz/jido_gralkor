@@ -344,7 +344,7 @@ defmodule JidoGralkor.Runtime do
 
       reserved_provenance =
         if collection in [:lenses, :reflections],
-          do: Enum.find(names, &(is_binary(&1) and String.contains?(&1, " [lens: ")))
+          do: Enum.find(names, &(is_binary(&1) and String.contains?(&1, [" [lens: ", " [gralkor: "])))
 
       blank_index = Enum.find_index(names, &(not non_blank?(&1)))
 
