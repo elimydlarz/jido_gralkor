@@ -58,7 +58,7 @@ when named ingestion begins
   and later named ingestion uses any subsequently installed Lens definition
 
 when a selected-Lens turn is buffered for capture
-  then flush scheduling resolves the Lens through the targeted agent's current runtime-configuration snapshot
+  then capture acceptance resolves the Lens through the targeted agent's current runtime-configuration snapshot
   and its eventual ingestion retains that resolved Lens after the targeted agent terminates
 
 when a named Reflection submission is admitted
