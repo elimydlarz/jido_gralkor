@@ -48,11 +48,12 @@ defmodule Gralkor.PersonalGraphMigration do
     {result, _globals} =
       Pythonx.eval(
         """
-        import importlib.util, json
-        spec = importlib.util.spec_from_file_location('gralkor_personal_migration', module_path.decode())
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        json.dumps(module.execute(json.loads(payload.decode())))
+        import json
+        namespace = {}
+        path = module_path.decode()
+        with open(path) as source:
+            exec(compile(source.read(), path, 'exec'), namespace)
+        json.dumps(namespace['execute'](json.loads(payload.decode())))
         """,
         %{
           "module_path" => Application.app_dir(:jido_gralkor, "priv/python/personal_graph_migration.py"),
