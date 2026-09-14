@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Breaking:** replace the packaged `operator` Destination with `personal` and the packaged `operator` Lens with `personal-chat`. Private graph identity is `personal/<same operator_id>`; `global` and ERL's extraction ontology remain unchanged.
+- Require explicit plugin `capture_destination` and typed runtime-targeted `Gralkor.Capture` requests. Select direct storage or distinct Lens processes, preserving per-turn routes without an automatic duplicate write. Positional capture adapters now raise migration guidance.
+- Preserve truthful direct, Lens, Reflection, and historical provenance in public search. Historical operator markers retain their original meaning; direct and unmarked records do not claim Lens authorship.
+- Add restartable graph migration tooling with retained sources, exact inventories, conflict checks, and guarded rollback. Coordinate Phil's typed persisted configuration migration and archival Reflection delivery with the migration runbook before deployment.
+- Make the stale-writer test's ownership-transfer condition deterministic and separate Native deadline forwarding from Python fixture execution speed.
+
 ## [8.0.1] - 2026-08-27
 
 ### Changed

@@ -158,9 +158,33 @@ Mounted-agent Destinations, Lenses, and Reflections come only from each plugin m
 
 The retired `:reflection_storage` setting causes startup to fail. Configure `:destination_storage` for artefact persistence and declare each Reflection's Destination output in the agent's `:runtime_config`.
 
-The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `recall/4` need no ontology configuration. The Lens uses the packaged operator Destination and the library-owned `Gralkor.DefaultOntology`. Application-specific extraction schemas belong on appending Lenses or Reflections.
+Direct capture and the explicitly selected packaged `personal-chat` Lens use `Gralkor.DefaultOntology`. Neither requires consumer ontology configuration. The Lens targets the private `personal` Destination. Direct capture does not select a Lens or claim Lens authorship. Application-specific extraction schemas belong on appending Lenses or Reflection outputs.
 
 `recall/4` presents every fact returned by memory search verbatim and in order inside an untrusted memory block, retaining any source wording carried by each fact. Recall makes no second inference call: the consuming agent decides how to interpret the returned memory with its own model.
+
+### Explicit capture and migration
+
+These changes describe the unreleased repository API; published `10.0.0` retains the former names. Use an available repository revision for coordinated consumer testing. Publication and deployment are separate steps.
+
+```elixir
+request = %Gralkor.Capture{
+  session_id: "conversation-1",
+  operator_id: "dashboard:account-id",
+  agent_name: "Susu",
+  user_name: "Eli",
+  messages: [Gralkor.Message.new("user", "Remember the release decision.")],
+  route: {:direct, "personal"}
+}
+
+:ok = Gralkor.Client.capture(agent_server, request)
+:ok = Gralkor.Client.impl().flush_and_await(request.session_id, 30_000)
+```
+
+Use `route: {:lenses, ["personal-chat", "observations"]}` to process a turn through selected Lenses. Repeated names run once; different Lenses sharing a Destination remain independent. Direct and Lens turns may alternate in one session. Each accepted turn retains its route definitions, identity, and order across later runtime replacement or termination. Capture retries are not exactly-once delivery: an uncertain write or await timeout can produce duplicates.
+
+Positional capture adapters are retired and raise migration guidance. `Client.personal_graph_id/1` resolves the private graph for the same identifier. Do not pass a resolved graph as `operator_id`.
+
+Migrate configuration references from Destination `operator` to `personal` and selected Lens `operator` to `personal-chat`. Keep identifiers and historical provenance unchanged. This API/configuration change does not move stored graphs: follow [the graph and Phil migration runbook](PERSONAL_MEMORY_MIGRATION.md) for dry-run manifests, quiescent copying, interrupted-run recovery, verification, and rollback on isolated copies before an authorized live cutover.
 
 ### Environment variables
 
@@ -176,6 +200,7 @@ The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `reca
 ```elixir
 {JidoGralkor.Plugin,
  %{
+   capture_destination: "personal",
    agent_name: "Susu",
    runtime_config: %{destinations: [], lenses: [], reflections: []}
  }}
@@ -184,10 +209,11 @@ The implicit `"operator"` Lens and legacy `capture/5`, `memory_add/3`, and `reca
 | Option | Required | Default | What it does |
 | --- | --- | --- | --- |
 | `:agent_name` | yes | — | Non-blank string naming the agent in captured transcripts. Anything else raises at mount. |
-| `:ingestion_lens` | no | unset (implicit-operator mode) | Packaged or `:runtime_config` Lens name receiving `memory_add` and automatic capture. An application-compatibility Lens is not available to a mounted agent unless it is also declared in that mount's runtime configuration. The removed `:default_lens` option raises and identifies this replacement. |
+| `:capture_destination` | yes | — | Registered Destination for direct capture. Use `personal` for private memory; the plugin supplies the unchanged agent identity separately. |
+| `:ingestion_lens` | no | unset (direct capture) | Packaged or `:runtime_config` Lens name receiving `memory_add` and automatic capture. An application-compatibility Lens is not available to a mounted agent unless it is also declared in that mount's runtime configuration. The removed `:default_lens` option raises and identifies this replacement. |
 | `:runtime_config` | no | empty consumer collections | The complete consumer-owned Destination, Lens, and Reflection configuration for this agent. Packaged definitions are installed alongside it. Invalid startup configuration prevents the plugin from mounting. |
 
-Per-turn, `tool_context[:lens]` overrides `:ingestion_lens` for that query; the plugin retains the selection on the request's thread entry so later capture stays bound to it.
+Per-turn, `tool_context[:lens]` overrides `:ingestion_lens`; an explicit `nil` selects direct capture. The plugin retains that exact selection on the request thread entry for completion and failure. Selecting a Lens runs its process without an additional direct write. It does not change search selectors.
 
 Search selection is invocation-local, not a plugin mount option. `memory_search` accepts optional `destinations` and `lenses`; the removed `:search_destinations` mount option raises with migration guidance.
 
@@ -320,7 +346,8 @@ config :jido_gralkor,
 plugins: [
   {JidoGralkor.Plugin,
    %{
-     agent_name: "Susu",
+     capture_destination: "personal",
+   agent_name: "Susu",
      ingestion_lens: "observations",
      runtime_config: %{
        destinations: [],
@@ -392,7 +419,8 @@ defmodule MyApp.ChatAgent do
     plugins: [
       {JidoGralkor.Plugin,
        %{
-         agent_name: "Susu",
+         capture_destination: "personal",
+   agent_name: "Susu",
          ingestion_lens: "observations",
          runtime_config: %{
            destinations: [],
@@ -433,7 +461,7 @@ The plugin reads `user_name` per-turn from `agent.state[:user_name]`. Populate i
 
 **Session identity.** `session_id` is the current Jido thread id (read from `agent.state[:__thread__].id`, populated by `Jido.Thread.Plugin`). The plugin does not mint its own identifier — Jido's thread lifecycle is the single source of truth.
 
-**Destinations.** Every Lens and every Reflection Destination output references a registered Destination, which resolves to one logical graph ID: `global`, `operator/<operator id>`, or an application Destination's exact shared name. Application names beginning `operator/` are reserved for operator-local graphs and rejected. At the Graphiti boundary, each logical ID is encoded exactly once as `g_` followed by the lowercase hexadecimal encoding of every original byte. Appending Lenses and Destination outputs govern their own extraction. Multiple writers may save to the same Destination. Replacement writes inject `_gralkor_lens` into supplied nodes and relationships so a replaceable Lens changes only its own content there.
+**Destinations.** Every Lens and every Reflection Destination output references a registered Destination, which resolves to one logical graph ID: `global`, `personal/<operator id>`, or an application Destination's exact shared name. Application names beginning `personal/` or `operator/` are reserved and rejected. The retired `operator` Destination raises migration guidance and can never resolve as a shared graph. At the Graphiti boundary, each logical ID is encoded exactly once as `g_` followed by the lowercase hexadecimal encoding of every original byte. Appending Lenses and Destination outputs govern their own extraction. Multiple writers may save to the same Destination. Replacement writes inject `_gralkor_lens` into supplied nodes and relationships so a replaceable Lens changes only its own content there.
 
 The physical encoding replaces the former lossy `-` and `/` to `_` normalisation. Graphs stored under old physical names are not read or migrated automatically; migrate them only from known logical Destination/operator IDs, or re-ingest their source content, because underscores cannot recover the original ID.
 
@@ -507,7 +535,7 @@ defmodule MyApp.Ontology do
 end
 ```
 
-Point as many Lenses as your application needs at `global`, `operator`, or an application Destination. Several Lenses may use the same Destination with different ontologies:
+Point as many Lenses as your application needs at `global`, `personal`, or an application Destination. Several Lenses may use the same Destination with different ontologies:
 
 ```elixir
 runtime_config = %{
@@ -548,7 +576,7 @@ runtime_config = %{
 }
 ```
 
-Destination names control visibility: `operator` resolves a separate `operator/<operator id>` graph for each operator; `global` and application Destination names resolve to one shared graph each.
+Destination names control visibility: `personal` resolves a separate `personal/<operator id>` graph for each operator; `global` and application Destination names resolve to one shared graph each.
 
 `Gralkor.Lens.Ingestion.Store` is the built-in straight-through process. A consumer can define any other ingestion process by implementing one callback:
 
@@ -577,6 +605,7 @@ The plugin mount chooses how an agent uses the registered Lenses:
 ```elixir
 {JidoGralkor.Plugin,
  %{
+   capture_destination: "personal",
    agent_name: "Susu",
    ingestion_lens: "observations",
    runtime_config: runtime_config
@@ -652,7 +681,7 @@ The supported source kinds are:
 
 Appending Lens episodes record writer provenance by suffixing their source description with ` [lens: <Lens name>]`; Reflection episodes use the exact source description `reflection:<Reflection name>`. Both registries reject names containing the Lens delimiter so these forms stay unambiguous. This episode-writer provenance is separate from `_gralkor_lens`, which owns replacement-graph nodes and relationships.
 
-Search defaults to stored episodes across every accessible registered Destination: the current operator's private `operator/<operator id>` logical graph plus every shared Destination. Supplying `destinations` narrows the graphs; supplying `lenses` narrows writers; OR applies within either list and both dimensions must match when both are present. Destination searches run concurrently while results retain selected Destination order. `max_results` defaults to `20`, must be a positive integer, and applies independently after writer filtering in every Destination. Each episode identifies its Destination plus its originating Lens or declaring Reflection; raw legacy episodes that carry neither trusted writer marker are omitted before that limit rather than assigned invented provenance. Direct callers may explicitly request `:facts`, `:nodes`, or `:artefacts`; Lens selectors apply to episodes and facts; node searches accept `entity_types`, fact searches accept `edge_types`, and artefact searches may narrow by `artefact_id`. The `memory_search` action requests facts and returns readable bullets grouped by named Lens or Reflection.
+Search defaults to stored episodes across every accessible registered Destination: the current operator's private `personal/<operator id>` logical graph plus every shared Destination. Supplying `destinations` narrows the graphs; supplying `lenses` narrows writers; OR applies within either list and both dimensions must match when both are present. Destination searches run concurrently while results retain selected Destination order. `max_results` defaults to `20`, must be a positive integer, and applies independently after writer filtering in every Destination. Each episode identifies its Destination and actual source. Direct and historical unmarked episodes remain available without invented Lens or Reflection authorship. Historical `operator` Lens markers remain unchanged and searchable without a Lens selector; selecting `personal-chat` includes only writes genuinely made through that Lens. Direct callers may explicitly request `:facts`, `:nodes`, or `:artefacts`; Lens selectors apply to episodes and facts; node searches accept `entity_types`, fact searches accept `edge_types`, and artefact searches may narrow by `artefact_id`. The `memory_search` action requests facts and returns readable bullets grouped by named Lens, Reflection, or direct source kind.
 
 `%Gralkor.Graph{nodes:, relationships:}` is the sole replacement representation. Every node requires a unique, non-blank string `:id`, a list of non-blank string `:labels`, and a `:properties` map. Every relationship requires `:from` and `:to` identifiers naming supplied nodes, a non-blank string `:type`, and a `:properties` map. This payload is the whole current graph for the Lens; partial node and relationship operations are not supported.
 
@@ -660,7 +689,7 @@ Replacement changes only content owned by that Lens at its Destination. Gralkor 
 
 Invalid Lens names, write modes, and graph data raise `ArgumentError`; graph data is fully validated before storage mutation begins. Once a valid replacement starts, deletion and insertion are not transactional: an import error is returned, and content already removed or inserted is not rolled back.
 
-Runtime and plugin configuration fail fast for blank, duplicate, reserved, retired, or malformed Lens definitions and for unknown Lens names. The retired `"default"` Lens name raises with guidance to use `"operator"`; it is not an alias. If no Lens configuration is used, the implicit `"operator"` Lens writes to `operator/<operator id>` and uses Jido Gralkor's built-in generic extraction contract.
+Runtime and plugin configuration fail fast for blank, duplicate, reserved, retired, or malformed Lens definitions and for unknown Lens names. The retired `"default"` and `"operator"` Lens names raise with guidance to select `"personal-chat"` or explicit direct capture. No Lens is selected implicitly. The packaged Lens accepts every existing supported source kind through its Store process.
 
 ### Ontology DSL
 
@@ -687,7 +716,7 @@ The Reflection Runner advances the ordered CoT steps and validates each step's e
 The package supplies two declarations by default:
 
 - `generalisations` declares a `global` Destination output using `Gralkor.DefaultOntology`.
-- `erl` declares an `operator` Destination output using `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
+- `erl` declares a `personal` Destination output using `Gralkor.Reflection.ERLOntology`, whose `Learning` entity declares optional `problem_kind`, `approach`, `success`, and `lesson` fields.
 
 Package-owned definitions are always installed alongside the consumer's `runtime_config.reflections`; consumers cannot replace them. A Destination output's optional `:ontology` defaults to `Gralkor.DefaultOntology`.
 
@@ -763,7 +792,7 @@ Multiple Reflections and Lenses may save to the same Destination. Search selects
   Gralkor.Client.search(agent_server, %Gralkor.Search{
     operator_id: "operator-42",
     query: "What release approaches have worked?",
-    destinations: ["operator"],
+    destinations: ["personal"],
     result_type: :artefacts,
     max_results: 20
   })
@@ -772,7 +801,7 @@ Multiple Reflections and Lenses may save to the same Destination. Search selects
   Gralkor.Client.search(agent_server, %Gralkor.Search{
     operator_id: "operator-42",
     query: "",
-    destinations: ["operator"],
+    destinations: ["personal"],
     result_type: :artefacts,
     artefact_id: "reflection-123"
   })
@@ -830,7 +859,7 @@ The Jido glue:
 - `JidoGralkor.Actions.MemorySearch` — the ReAct tool that always calls runtime-targeted `Gralkor.Client.search/2` for the current operator, using optional Destination and Lens selectors from that invocation. It works before a thread is committed and short-circuits only a blank query.
 - `JidoGralkor.Actions.MemoryAdd` — fire-and-forget ReAct tool.
 - `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
-- `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's `operator/<operator id>` graph.
+- `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's `personal/<operator id>` graph.
 
 The embedded Gralkor adapter (under `lib/gralkor/`):
 

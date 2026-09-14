@@ -13,7 +13,7 @@ Lenses and Reflection Destination outputs reference registered Destinations by n
 The package registers two Destinations:
 
 - `global` is the single shared global graph. Its logical graph ID is exactly `global` for every operator.
-- `operator` is operator-local. Its logical graph ID is `operator/<operator id>`.
+- `personal` is private to one operator. Its logical graph ID is `personal/<same operator id>`.
 
 An agent may register another Destination with only a name in its complete runtime configuration:
 
@@ -25,7 +25,7 @@ runtime_config = %{
 }
 ```
 
-Its logical graph ID is exactly `product-knowledge`, shared by every operator. There is no address or scope syntax: `global/x` is just another literal Destination name, not part of the `global` graph. Names beginning `operator/` are reserved for operator-local logical IDs and cannot be registered as application Destinations.
+Its logical graph ID is exactly `product-knowledge`, shared by every operator. There is no address or scope syntax: `global/x` is just another literal Destination name, not part of the `global` graph. Names beginning `personal/` or `operator/` are reserved for private or retired logical IDs and cannot be registered as application Destinations.
 
 At the Graphiti boundary, Gralkor encodes each logical ID exactly once as `g_` followed by the lowercase hexadecimal encoding of every original byte. This replaces the former lossy `-` and `/` to `_` normalisation, so old physical graphs are not discovered or migrated automatically. Migrate only from known logical IDs, or re-ingest the source content; an underscore cannot reveal which original logical ID produced it.
 
@@ -71,7 +71,13 @@ runtime_config = %{
 }
 ```
 
-The packaged `operator` Lens writes with `Gralkor.DefaultOntology`. The packaged generalisation Reflection has a `global` Destination output with `Gralkor.DefaultOntology`; packaged ERL has an `operator` Destination output with `Gralkor.Reflection.ERLOntology`.
+The packaged `personal-chat` Lens writes with `Gralkor.DefaultOntology`. The packaged generalisation Reflection has a `global` Destination output with `Gralkor.DefaultOntology`; packaged ERL has a `personal` Destination output with `Gralkor.Reflection.ERLOntology`.
+
+Direct capture uses the built-in ontology without Lens authorship. `personal-chat` runs only when explicitly selected and uses the existing Store ingestion process for every supported source kind. Storage marks new direct writes with a terminal ` [gralkor: direct]` marker, then removes that marker from the public source description. User descriptions cannot override the actual writer. Lens and Reflection names reserve both writer delimiters.
+
+Historical ` [lens: operator]` provenance stays intact, and older unmarked episodes remain readable without invented authorship. Destination-only or selector-free search includes these records; a `personal-chat` Lens filter does not relabel or include them. Incomplete Reflection artefacts still require their durable completion marker.
+
+The retired `operator` Destination never falls through to shared-name resolution. Moving `operator/<identifier>` to `personal/<same identifier>` requires the [explicit graph migration](PERSONAL_MEMORY_MIGRATION.md), which preserves stored history and changes physical and stored group identities together. Current public configuration rejects retired names; archival consumer routing must translate separately from immutable snapshots and hashes.
 
 ## Replaceable Lenses
 
@@ -92,7 +98,7 @@ Gralkor.Client.search(agent_server, %Gralkor.Search{
 })
 ```
 
-That includes the packaged `operator` and `global` Destinations and every application Destination. Only the current operator's logical `operator/<operator id>` graph is searched; other registered Destinations retain their shared logical graph identity.
+That includes the packaged `personal` and `global` Destinations and every application Destination. Only the current operator's logical `personal/<operator id>` graph is searched; other registered Destinations retain their shared logical graph identity.
 
 Callers may narrow the graphs with `destinations` and may narrow episode writers with `lenses`:
 
@@ -100,7 +106,7 @@ Callers may narrow the graphs with `destinations` and may narrow episode writers
 Gralkor.Client.search(agent_server, %Gralkor.Search{
   operator_id: operator_id,
   query: "What should I remember?",
-  destinations: ["operator", "global"],
+  destinations: ["personal", "global"],
   lenses: ["support-cases", "decisions"]
 })
 ```
