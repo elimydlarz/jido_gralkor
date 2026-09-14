@@ -238,6 +238,12 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
                    fn -> Client.lens!(name) end
     end
 
+    test "and a Lens name containing the reserved direct-writer delimiter is identified" do
+      name = "review [gralkor: direct]"
+      Application.put_env(:jido_gralkor, :lenses, [valid_lens(name)])
+      assert_raise ArgumentError, ~r/reserved provenance/, fn -> Client.lens!(name) end
+    end
+
     test "and a duplicate Lens name is identified" do
       Application.put_env(:jido_gralkor, :lenses, [
         valid_lens("observations"),

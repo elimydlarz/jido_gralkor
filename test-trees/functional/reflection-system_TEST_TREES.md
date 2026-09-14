@@ -13,6 +13,9 @@ when an agent runtime validates Reflection declarations
   if a Reflection name contains the reserved provenance delimiter ` [lens: `
     then validation fails identifying the Reflection and reserved provenance syntax
 
+  if a Reflection name contains the reserved direct-writer delimiter
+    then validation fails identifying the Reflection and reserved provenance syntax
+
   if Reflection names are duplicated
     then validation fails identifying the duplicate name
 

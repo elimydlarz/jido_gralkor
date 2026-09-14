@@ -30,6 +30,7 @@ if the application compatibility registry contains an invalid Lens
   then validation fails before ingestion or search begins
   and a blank Lens name is identified
   and a Lens name containing the reserved provenance delimiter ` [lens: ` is identified
+  and a Lens name containing the reserved direct-writer delimiter is identified
   and a duplicate Lens name is identified
   and a reserved `personal-chat` or `global` Lens name is identified
   and the retired `default` or `operator` Lens name identifies `personal-chat` as its replacement

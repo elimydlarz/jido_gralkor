@@ -174,6 +174,14 @@ def advance(database: FalkorDB, path: Path, manifest: dict[str, object]) -> dict
     return manifest
 
 
+def require_quiescence(evidence: dict[str, object]) -> None:
+    if evidence.get("admission_stopped") is not True:
+        raise ValueError("quiescence requires admission_stopped=true")
+    for kind in ["capture_buffers", "asynchronous_additions", "reflection_workers", "queued_deliveries", "schedulers", "consuming_runtimes", "failed_work"]:
+        if type(evidence.get(kind)) is not int or evidence[kind] != 0:
+            raise ValueError(f"quiescence requires {kind}=0")
+
+
 def execute(request: dict[str, object]) -> dict[str, object]:
     with FalkorDB(**request["connection"]) as database:
         action = request["action"]
@@ -186,6 +194,7 @@ def execute(request: dict[str, object]) -> dict[str, object]:
                 manifest = plan(database, request["operator_ids"], request["configuration_references"])
                 persist(path, manifest, create=True)
                 return manifest
+            require_quiescence(request["quiescence"])
             with open(path) as stream:
                 manifest = json.load(stream)
             while manifest["phase"] != "verified":

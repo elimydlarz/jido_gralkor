@@ -344,6 +344,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when an agent runtime validates Reflection declarations > if a Reflection name contains the reserved direct-writer delimiter" do
+    test "then validation fails identifying the Reflection and reserved provenance syntax" do
+      assert {:error, {:reserved_provenance_syntax, :reflections, _}} =
+        Runtime.validate(%{destinations: [], lenses: [], reflections: [valid_definition(name: "review [gralkor: direct]")]})
+    end
+  end
+
   describe "when an agent's Gralkor runtime installs its package-owned Reflection definitions" do
     test "then ERL declares one Destination output referencing the packaged `personal` Destination" do
       erl = packaged_reflection("erl")
@@ -1467,7 +1474,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
     test "and its artefact identifier remains derived from the unchanged operator and invocation identifiers" do
       artefact = deliver_personal_erl()
-      assert artefact.id == Gralkor.Artefact.id("owner", "personal-erl-invocation", "erl")
+      assert artefact.id == Gralkor.Artefact.id_for("owner", "personal-erl-invocation", "erl")
     end
   end
 
