@@ -57,3 +57,6 @@ when public episode search reads completed Reflection output
   then the episode exposes the exact artefact identifier and structured payload with its Reflection source description
   if the stored Reflection body is not a valid artefact
     then search returns an explicit invalid artefact error
+
+when public artefact search reads stored Reflection output
+  then only records with a non-blank identifier and structured payload become canonical artefacts

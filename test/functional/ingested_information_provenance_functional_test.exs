@@ -723,6 +723,33 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
+  describe "when public artefact search reads stored Reflection output" do
+    test "then only records with a non-blank identifier and structured payload become canonical artefacts" do
+      graphiti = use_native_boundary()
+      valid = %{id: "valid", payload: %{"summary" => "retained"}}
+
+      set_episode_search_fixture(
+        graphiti,
+        Enum.map(
+          [valid, %{id: "scalar", payload: "not structured"}, %{id: "blank", payload: nil}],
+          fn artefact ->
+            %{content: Jason.encode!(artefact), source_description: "reflection:generalisations"}
+          end
+        )
+      )
+
+      assert {:ok, [%{destination: "observations", artefact: artefact}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "rollout",
+                 destinations: ["observations"],
+                 result_type: :artefacts
+               })
+
+      assert artefact == struct!(Gralkor.Artefact, valid)
+    end
+  end
+
   defp request(source_kind, content, source_description) do
     %Ingest{
       id: "provenance-#{System.unique_integer([:positive])}",
@@ -801,6 +828,10 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                 self.graphiti = graphiti
                 self.graph_operations_interface = _GraphOperations(graphiti)
                 self._gralkor_completed_episode_uuids = set()
+
+            @property
+            def episodes(self):
+                return {episode.uuid: episode for episode in self.graphiti.episode_results}
 
             @property
             def _gralkor_episode_count(self):

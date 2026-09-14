@@ -136,7 +136,10 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
             "not JSON",
             "{}",
             ~s({"id":"stable-id"}),
-            ~s({"id":"stable-id","payload":{},"extra":true})
+            ~s({"id":"stable-id","payload":{},"extra":true}),
+            ~s({"id":"stable-id","payload":42}),
+            ~s({"id":"stable-id","payload":null}),
+            ~s({"id":"","payload":{}})
           ] do
         get_episode = fn "observations", "stable-id" -> {:ok, %{content: content}} end
 
