@@ -64,6 +64,41 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when an application migrates a consistent backup restored into a separate FalkorDB server" do
+    test "then restored graph content and operational schema remain intact through migration and public recall", context do
+      %{restored: restored, before: before, evidence: evidence} = restore_history(context)
+      assert evidence["source_pid"] != evidence["restored_pid"]
+      assert evidence["source_run_id"] != evidence["restored_run_id"]
+      assert evidence["source_stopped"]
+      assert evidence["source_rdb_sha256"] == evidence["restored_rdb_sha256"]
+      assert evidence["rdb_size"] > 0
+      assert evidence["rdb_loaded"]
+      assert {:ok, ^before} = PersonalGraphMigration.plan(restored.connection, ["owner", "a/b", "a_b"], %{})
+
+      journal = Path.join(context.directory, "restored-migration.json")
+      assert {:ok, _} = PersonalGraphMigration.prepare(restored.connection, ["owner", "a/b", "a_b"], %{}, journal)
+      assert {:ok, manifest} = PersonalGraphMigration.apply(restored.connection, journal, @quiescence)
+      for graph <- manifest["graphs"] do
+        expected = Enum.reduce(["nodes", "relationships"], graph["source_inventory"], fn kind, inventory ->
+          Map.update!(inventory, kind, fn records ->
+            Enum.map(records, fn record -> put_in(record, ["properties", "group_id"], graph["target_physical"]) end)
+          end)
+        end)
+        assert graph["target_inventory"] == expected
+        assert Enum.all?(expected["indexes"] ++ expected["constraints"], &(&1["status"] == "OPERATIONAL"))
+      end
+
+      start_public_runtime(restored)
+      for {identity, content} <- [{"owner", "remember amber orchard"}, {"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
+        assert {:ok, results} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: identity, query: "amber", destinations: ["personal"]})
+        assert Enum.filter(results, &Map.has_key?(&1.episode, :content)) == [%{destination: "personal", episode: %{content: content, source_description: "captured", source_kind: "document", lens: "operator"}}]
+      end
+      assert {:ok, [%{artefact: %Gralkor.Artefact{id: "complete", payload: %{"summary" => "immutable amber"}}}]} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "amber", destinations: ["personal"], result_type: :artefacts, artefact_id: "complete"})
+      assert {:ok, []} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "orchard", destinations: ["personal"], result_type: :artefacts, artefact_id: "incomplete"})
+      IO.puts("Restored migration fixture: " <> Jason.encode!(Map.put(evidence, "versions", manifest["versions"])))
+    end
+  end
+
   describe "when the migration command receives an unsupported operation" do
     test "then it reports usage without connecting to a graph" do
       assert_raise Mix.Error, ~r/operation|usage|Usage/, fn ->
