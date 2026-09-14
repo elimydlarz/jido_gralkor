@@ -182,7 +182,7 @@ request = %Gralkor.Capture{
 
 Use `route: {:lenses, ["personal-chat", "observations"]}` to process a turn through selected Lenses. Repeated names run once; different Lenses sharing a Destination remain independent. Direct and Lens turns may alternate in one session. Each accepted turn retains its route definitions, identity, and order across later runtime replacement or termination. Capture retries are not exactly-once delivery: an uncertain write or await timeout can produce duplicates.
 
-Positional capture adapters are retired and raise migration guidance. `Client.personal_graph_id/1` resolves the private graph for the same identifier. Do not pass a resolved graph as `operator_id`.
+Positional capture adapters are retired and raise migration guidance. `Client.personal_graph_id/1` resolves the private graph for the same identifier. The deprecated `operator_graph_id/1` helper delegates to that corrected resolution. Do not pass a resolved graph as `operator_id`.
 
 Migrate configuration references from Destination `operator` to `personal` and selected Lens `operator` to `personal-chat`. Keep identifiers and historical provenance unchanged. This API/configuration change does not move stored graphs: follow [the graph and Phil migration runbook](PERSONAL_MEMORY_MIGRATION.md) for dry-run manifests, quiescent copying, interrupted-run recovery, verification, and rollback on isolated copies before an authorized live cutover.
 

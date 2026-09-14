@@ -170,6 +170,11 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
   end
 
   describe "when personal memory is resolved for an existing identity" do
+    test "and the deprecated private-graph helper resolves the same personal graph" do
+      assert apply(Client, :operator_graph_id, ["dashboard:Owner-001"]) ==
+               "personal/dashboard:Owner-001"
+    end
+
     test "then the identifier is preserved byte for byte in the logical graph name" do
       for identity <- ["owner", "dashboard:AbC-123", "Eli/a:b.c", "A B"] do
         assert Gralkor.Destination.graph_id(%Gralkor.Destination{name: "personal"}, identity) ==

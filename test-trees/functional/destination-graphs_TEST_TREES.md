@@ -24,6 +24,7 @@ where a Lens references a registered Destination
 when personal memory is resolved for an existing identity
   then the identifier is preserved byte for byte in the logical graph name
   and punctuation-sensitive identifiers resolve to distinct physical graphs
+  and the deprecated private-graph helper resolves the same personal graph
 
 if a caller resolves a stale Destination named operator
   then resolution raises a migration error before it can become a shared operator graph
