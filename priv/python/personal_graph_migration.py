@@ -187,6 +187,8 @@ def validate_preparation(manifest: dict[str, object]) -> None:
     for destination in references.get("destinations", []):
         if destination == "personal" or destination.startswith("personal/"):
             raise ValueError(f"Destination namespace conflict: {destination}")
+    if "personal-chat" in references.get("lenses", []):
+        raise ValueError("Lens namespace conflict: personal-chat")
 
 
 def execute(request: dict[str, object]) -> dict[str, object]:
