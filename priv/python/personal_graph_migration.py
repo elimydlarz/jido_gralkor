@@ -128,27 +128,50 @@ def translated(inventory_value: dict[str, object], source: str, target: str) -> 
     return result
 
 
-def advance(database: FalkorDB, path: Path, manifest: dict[str, object]) -> dict[str, object]:
+def validate_progress(database: FalkorDB, manifest: dict[str, object]) -> None:
+    existing = set(database.list_graphs())
     for entry in manifest["graphs"]:
-        active = database.select_graph(entry["source_physical"]).ro_query(
+        source = database.select_graph(entry["source_physical"])
+        target = database.select_graph(entry["target_physical"])
+        if source.name not in existing or inventory(source) != entry["source_inventory"]:
+            raise ValueError(f"source changed after inventory: {source.name}")
+        active = source.ro_query(
             "MATCH (claim:_GralkorEpisodeClaim) WHERE claim.owner IS NOT NULL "
             "AND coalesce(claim.lease_until_ms, 0) > timestamp() RETURN claim.uuid"
         ).result_set
         if active:
-            raise ValueError(f"active episode claim: {entry['source_physical']}")
+            raise ValueError(f"active episode claim: {source.name}")
+        if entry["phase"] == "planned":
+            if target.name in existing:
+                raise ValueError(f"target graph already exists: {target.name}")
+        elif target.name in existing:
+            schema_ready(target)
+            actual = inventory(target)
+            if entry["phase"] == "verified":
+                matching = actual == entry["target_inventory"]
+            else:
+                matching = translated(actual, target.name, source.name) == entry["source_inventory"]
+            if not matching:
+                raise ValueError(f"target contains conflicting data: {target.name}")
+        elif entry["phase"] != "copying":
+            raise ValueError(f"target graph missing: {target.name}")
+
+
+def advance(database: FalkorDB, path: Path, manifest: dict[str, object]) -> dict[str, object]:
+    validate_progress(database, manifest)
     if manifest["phase"] == "verified":
         return manifest
     for entry in manifest["graphs"]:
         source = database.select_graph(entry["source_physical"])
         target = database.select_graph(entry["target_physical"])
-        if inventory(source) != entry["source_inventory"]:
-            raise ValueError(f"source changed after inventory: {source.name}")
         if entry["phase"] == "planned":
             entry["phase"] = "copying"
             persist(path, manifest)
         if entry["phase"] == "copying":
-            source.copy(target.name)
+            if target.name not in database.list_graphs():
+                source.copy(target.name)
             schema_ready(target)
+            entry["target_exists"] = True
             entry["phase"] = "copied"
             persist(path, manifest)
             return manifest
@@ -221,6 +244,7 @@ def execute(request: dict[str, object]) -> dict[str, object]:
                 manifest = json.load(stream)
             if action == "advance":
                 return advance(database, path, manifest)
+            validate_progress(database, manifest)
             while manifest["phase"] != "verified":
                 manifest = advance(database, path, manifest)
             return manifest
