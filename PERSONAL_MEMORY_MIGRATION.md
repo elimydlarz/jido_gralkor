@@ -110,7 +110,9 @@ Restore the exact original Phil configuration with `PersonalMemoryMigration.roll
 
 ## Verification scope
 
-The package Functional migration tree covers real disposable FalkorDB copies, preservation, conflicts, interrupted progress, public historical recall, artefact delivery, and guarded rollback. Capture/provenance Functional tests cover exclusive routes, identity bindings, truthful history, flush/retry behavior, and malformed stored records. The single real-provider Journey adds direct capture, personal-chat capture, private ERL, shared memory, and replacement in one operator lifecycle. Phil owns persisted configuration, historical job/checkpoint/projection, UI, and actual previous-application rollback checks.
+The package Functional migration tree covers real disposable FalkorDB copies, preservation, conflicts, interrupted migration-client progress, public historical recall, artefact delivery, and guarded rollback. Its backup-restoration check takes a synchronous RDB snapshot of quiescent synthetic graphs, stops the source server, restores identical snapshot bytes into a separate server, and compares complete inventories and operational schema before migration and public recall. This verifies a synthetic backup; repeat it with the deployed versions and a consistent restored copy of the actual data before cutover.
+
+Capture/provenance Functional tests cover exclusive routes, identity bindings, truthful history, flush/retry behavior, and malformed stored records. The single real-provider Journey adds direct capture, personal-chat capture, private ERL, shared memory, and replacement in one operator lifecycle. Phil owns persisted configuration, historical job/checkpoint/projection, UI, and actual previous-application rollback checks.
 
 For each candidate revision, record the terminal results of the complete Functional suite, the single Journey, and the hook-owned Unit/Integration checks separately. The tree coverage described here does not certify that those gates have passed.
 
