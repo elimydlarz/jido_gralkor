@@ -187,6 +187,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         class _FakeGraphiti:
             def __init__(self):
                 self.attempts = {"add": 0, "search": 0}
+                self.search_delay = 0.3
 
             async def add_episode(self, **kwargs):
                 self.attempts["add"] += 1
@@ -197,7 +198,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
             async def search(self, query, num_results=10, search_filter=None):
                 self.attempts["search"] += 1
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(self.search_delay)
                 return []
 
             async def search_(self, query, config=None, group_ids=None, search_filter=None):
@@ -455,9 +456,11 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
   describe "when recall's outermost deadline expires" do
     test "then recall returns without retrying and logs the expiry as a warning" do
       %{g: g} = start_pool()
+      GraphitiPool.for(GraphitiPool, "g1")
+      Pythonx.eval("g.search_delay = 2", %{"g" => g})
 
       original = Application.get_env(:jido_gralkor, :recall_deadline_ms)
-      Application.put_env(:jido_gralkor, :recall_deadline_ms, 50)
+      Application.put_env(:jido_gralkor, :recall_deadline_ms, 500)
 
       on_exit(fn ->
         case original do
@@ -474,7 +477,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
       assert logs =~ "recall deadline expired"
 
-      Process.sleep(500)
+      Process.sleep(2_000)
       assert attempts(g, "search") == 1
     end
   end
