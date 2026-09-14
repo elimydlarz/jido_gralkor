@@ -128,7 +128,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
                         operator_id: "operator-one",
                         lens: %Gralkor.Lens.Replaceable{
                           name: "systems",
-                          destination: %Gralkor.Destination{name: "operator"}
+                          destination: %Gralkor.Destination{name: "personal"}
                         }
                       }, ^graph}
 
@@ -391,15 +391,15 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
 
   describe "when a caller searches the Destination used by a replaceable Lens" do
     test "then Destination search resolves and searches that Destination's graph" do
-      assert {:ok, [%{destination: "operator", fact: "replacement-owned fact"}]} =
+      assert {:ok, [%{destination: "personal", fact: "replacement-owned fact"}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
-                 destinations: ["operator"],
+                 destinations: ["personal"],
                  query: "How does settlement work?",
                  result_type: :facts
                })
 
-      assert_receive {:searched_destination, %Gralkor.Destination{name: "operator"},
+      assert_receive {:searched_destination, %Gralkor.Destination{name: "personal"},
                       "operator-one", "How does settlement work?", 20}
     end
   end
@@ -424,7 +424,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
   defp appending_lens(name) do
     [
       name: name,
-      destination: "operator",
+      destination: "personal",
       ontology: MemoryOntology,
       ingestion: AppendingIngestion
     ]

@@ -414,7 +414,7 @@ defmodule JidoGralkor.PluginTest do
                Plugin.handle_signal(signal, context(lens_agent))
 
       assert tool_context == %{
-               capture_destination: "personal", agent_name: "Susu",
+               agent_name: "Susu",
                gralkor_runtime: self(),
                lens: "observations",
                session_id: "thread-one"
@@ -435,7 +435,7 @@ defmodule JidoGralkor.PluginTest do
                Plugin.handle_signal(signal, context(lens_agent))
 
       assert tool_context == %{
-               capture_destination: "personal", agent_name: "Susu",
+               agent_name: "Susu",
                gralkor_runtime: self(),
                lens: "observations"
              }

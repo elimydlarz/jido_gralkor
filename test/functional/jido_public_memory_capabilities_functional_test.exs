@@ -181,7 +181,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
              lenses: [
                %{
                  name: "observations",
-                 destination: "operator",
+                 destination: "personal",
                  write: :append,
                  ingestion: Gralkor.Lens.Ingestion.Store
                }
@@ -422,7 +422,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert :ok = ingest_memory("operator", "other memory", "operator-two")
 
       assert {:ok, %{result: text}} =
-               memory_search(%{query: "memory", destinations: ["operator"]}, [])
+               memory_search(%{query: "memory", destinations: ["personal"]}, [])
 
       assert text == "Lens: operator\n- own memory"
     end
