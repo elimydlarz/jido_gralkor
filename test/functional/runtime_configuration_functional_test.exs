@@ -11,6 +11,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Runtime Configuration Consumer",
+           capture_destination: "personal",
            runtime_config: %{
              destinations: [],
              lenses: [],
@@ -28,6 +29,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Invalid Runtime Configuration Consumer",
+           capture_destination: "personal",
            runtime_config: %{
              destinations: :not_a_list,
              lenses: [],
@@ -45,6 +47,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Custom Lens Runtime Configuration Consumer",
+           capture_destination: "personal",
            ingestion_lens: "runtime-observations",
            runtime_config: %{
              destinations: [%{name: "runtime-memory"}],
@@ -70,6 +73,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Durable Runtime Configuration Consumer",
+           capture_destination: "personal",
            runtime_config: %{
              destinations: [%{name: "durable-memory"}],
              lenses: [],
@@ -901,14 +905,14 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert_receive {:DOWN, ^monitor, :process, ^dead_owner, :normal}
 
       assert_raise ArgumentError, ~r/Gralkor runtime unavailable/, fn ->
-        Gralkor.Client.capture(
+        capture(
           dead_owner,
           "runtime-unavailable-capture",
           "operator-one",
           "Runtime Configuration Consumer",
           "Eli",
           [Gralkor.Message.new("user", "must not cross configuration boundaries")],
-          "operator",
+          "personal-chat",
           []
         )
       end
@@ -945,7 +949,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         )
 
       assert :ok =
-               Gralkor.Client.capture(
+               capture(
                  agent_server,
                  "runtime-capture-session",
                  "operator-one",
@@ -1007,7 +1011,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         )
 
       assert :ok =
-               Gralkor.Client.capture(
+               capture(
                  agent_server,
                  "runtime-capture-after-stop",
                  "operator-one",
@@ -1249,6 +1253,17 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         end
       end
     end
+  end
+
+  defp capture(owner, session, operator, agent, user, messages, lens, additional) do
+    Gralkor.Client.capture(owner, %Gralkor.Capture{
+      session_id: session,
+      operator_id: operator,
+      agent_name: agent,
+      user_name: user,
+      messages: messages,
+      route: {:lenses, [lens | additional]}
+    })
   end
 
   defp ingestion_configuration(destination) do
