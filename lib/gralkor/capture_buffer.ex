@@ -2,8 +2,9 @@ defmodule Gralkor.CaptureBuffer do
   @moduledoc """
   In-flight conversation buffer keyed by `session_id`.
 
-  Holds turns until an explicit flush — session lifetime is owned by the
-  consumer; there is no idle-flush policy. On `flush/1` (or shutdown via
+  Typed capture retains each turn's resolved direct or Lens routes and batches
+  compatible definitions independently. Runtime replacement cannot reroute
+  accepted turns. Session lifetime is owned by the consumer; there is no idle-flush policy. On `flush/1` (or shutdown via
   `flush_all/0` from `terminate/2`), the buffered turns are handed to the
   configured `flush_callback` with retry: server-internal failures get the
   configured backoff (default 1s/2s/4s); contract errors (4xx) and
@@ -138,7 +139,7 @@ defmodule Gralkor.CaptureBuffer do
     end
   end
 
-  @spec append_capture(pid(), Gralkor.Capture.t(), [tuple()]) :: :ok
+  @spec append_capture(pid(), Gralkor.Capture.t(), [Gralkor.Capture.resolved_route()]) :: :ok
   def append_capture(runtime_owner, request, routes) do
     case GenServer.call(__MODULE__, {:append_capture, runtime_owner, request, routes}) do
       :ok ->

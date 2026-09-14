@@ -23,7 +23,7 @@ defmodule Gralkor.Client.InMemory do
   @doc "Set the response for the next (and all subsequent) `recall/4` calls."
   def set_recall(response), do: GenServer.call(__MODULE__, {:set, :recall, response})
 
-  @doc "Set the response for the next (and all subsequent) `capture/3` calls."
+  @doc "Set the response for the next (and all subsequent) `capture/2` calls."
   def set_capture(response), do: GenServer.call(__MODULE__, {:set, :capture, response})
 
   @doc "Set the response for the next (and all subsequent) `memory_add/3` calls."
@@ -61,6 +61,7 @@ defmodule Gralkor.Client.InMemory do
   end
 
   @impl Gralkor.Client
+  @spec capture(pid(), Gralkor.Capture.t()) :: :ok | {:error, term()}
   def capture(runtime_owner, %Gralkor.Capture{} = request) do
     Gralkor.Capture.resolve!(runtime_owner, request)
     GenServer.call(__MODULE__, {:call, :capture, [runtime_owner, request]})

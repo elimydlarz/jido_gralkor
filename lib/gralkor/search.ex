@@ -9,7 +9,11 @@ defmodule Gralkor.Search do
 
   `destinations` selects graphs and `lenses` filters episode writers. Names are
   ORed within either list and the two dimensions are ANDed together. Lens
-  filtering is valid for episode and fact results. A Lens-written episode exposes
+  filtering is valid for episode and fact results. Direct episodes expose
+  `content`, `source_description`, `source_kind`, and `writer: :direct` without
+  Lens or Reflection authorship. Historical unmarked episodes remain available
+  without invented authorship; historical `operator` Lens provenance is preserved
+  but never matched by a `personal-chat` Lens selector. A Lens-written episode exposes
   `content`, `source_description`, and `lens`; a Reflection-written episode
   exposes `artefact: %{id: id, payload: payload}`, `source_description`, and
   its writer as `reflection`. Reflection episodes have no encoded `content`.

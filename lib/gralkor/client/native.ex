@@ -40,6 +40,7 @@ defmodule Gralkor.Client.Native do
   end
 
   @impl Gralkor.Client
+  @spec capture(pid(), Gralkor.Capture.t()) :: :ok | {:error, term()}
   def capture(runtime_owner, %Gralkor.Capture{} = request) do
     routes = Gralkor.Capture.resolve!(runtime_owner, request)
     CaptureBuffer.append_capture(runtime_owner, request, routes)
