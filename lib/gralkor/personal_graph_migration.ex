@@ -61,7 +61,8 @@ defmodule Gralkor.PersonalGraphMigration do
         json.dumps(namespace['execute'](json.loads(payload.decode())))
         """,
         %{
-          "module_path" => Application.app_dir(:jido_gralkor, "priv/python/personal_graph_migration.py"),
+          "module_path" =>
+            Application.app_dir(:jido_gralkor, "priv/python/personal_graph_migration.py"),
           "payload" => Jason.encode!(Map.put(request, :connection, Map.new(connection)))
         }
       )
