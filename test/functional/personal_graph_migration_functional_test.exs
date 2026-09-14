@@ -80,12 +80,12 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
                (community:Community {uuid: 'community', group_id: $gid, name: 'garden', summary: 'community', created_at: '2026-01-01T00:00:00Z'}),
                (complete:Episodic {uuid: 'complete', group_id: $gid, name: 'completed reflection', content: '{"id":"complete","payload":{"summary":"immutable amber"}}', source: 'text', source_description: 'reflection:erl', created_at: '2026-01-01T00:00:00Z', valid_at: '2026-01-01T00:00:00Z', entity_edges: [], _gralkor_extraction_complete: true}),
                (incomplete:Episodic {uuid: 'incomplete', group_id: $gid, name: 'incomplete reflection', content: '{"id":"incomplete","payload":{"summary":"immutable orchard"}}', source: 'text', source_description: 'reflection:erl', created_at: '2026-01-01T00:00:00Z', valid_at: '2026-01-01T00:00:00Z', entity_edges: []}),
-               (finished_claim:_GralkorEpisodeClaim {uuid: 'complete', group_id: $gid, generation: 7, _gralkor_fenced_generation: 7, content: complete.content, source: complete.source, source_description: complete.source_description}),
-               (unfinished_claim:_GralkorEpisodeClaim {uuid: 'incomplete', group_id: $gid, generation: 3, _gralkor_fenced_generation: 2, owner: 'stopped-worker', lease_until_ms: 1, content: incomplete.content, source: incomplete.source, source_description: incomplete.source_description}),
+               (finished_claim:_GralkorEpisodeClaim {uuid: 'complete', group_id: $gid, generation: 7, _gralkor_fenced_generation: 7}),
+               (unfinished_claim:_GralkorEpisodeClaim {uuid: 'incomplete', group_id: $gid, generation: 3, _gralkor_fenced_generation: 2, owner: 'stopped-worker', lease_until_ms: 1}),
                (a)-[fact:RELATES_TO {uuid: 'fact', group_id: $gid, name: 'GROWS', fact: 'amber grows in orchard', episodes: ['episode'], created_at: '2026-01-01T00:00:00Z', valid_at: '2026-01-01T00:00:00Z'}]->(b),
                (episode)-[:MENTIONS {uuid: 'mention', group_id: $gid}]->(a),
                (community)-[:HAS_MEMBER {uuid: 'membership', group_id: $gid}]->(a)
-        SET a.name_embedding = vecf32([0.1, 0.2, 0.3]), fact.fact_embedding = vecf32([0.3, 0.2, 0.1])
+        SET a.name_embedding = vecf32([0.1, 0.2, 0.3]), fact.fact_embedding = vecf32([0.3, 0.2, 0.1]), finished_claim.content = complete.content, finished_claim.source = complete.source, finished_claim.source_description = complete.source_description, unfinished_claim.content = incomplete.content, unfinished_claim.source = incomplete.source, unfinished_claim.source_description = incomplete.source_description
       ''', {'gid': gid})
       graph.create_node_fulltext_index('Episodic', 'content', 'group_id', 'source', 'source_description')
       graph.create_node_vector_index('Entity', 'name_embedding', dim=3, similarity_function='cosine')
