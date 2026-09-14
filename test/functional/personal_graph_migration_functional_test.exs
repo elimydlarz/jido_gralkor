@@ -264,6 +264,36 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert target["node_count"] == 8
       assert target["relationship_count"] == 3
     end
+
+    test "and an already verified target returns the same completed migration result", context do
+      journal = prepare_history(context)
+      assert {:ok, completed} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      assert {:ok, ^completed} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+    end
+  end
+
+  describe "when an interrupted private graph migration resumes from its persisted manifest > if the source changed after its recorded inventory" do
+    test "then migration refuses without replacing either graph", context do
+      journal = prepare_history(context)
+      assert {:ok, _copied} = PersonalGraphMigration.advance(context.connection, journal, @quiescence)
+      query(context.database, "operator/owner", "MATCH (episode:Episodic {uuid: 'episode'}) SET episode.content = 'changed source'")
+      assert {:ok, before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      assert {:error, message} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      assert message =~ "source changed"
+      assert {:ok, ^before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+    end
+  end
+
+  describe "when an interrupted private graph migration resumes from its persisted manifest > if a recorded target contains conflicting data" do
+    test "then migration refuses without replacing the conflicting target", context do
+      journal = prepare_history(context)
+      assert {:ok, _copied} = PersonalGraphMigration.advance(context.connection, journal, @quiescence)
+      query(context.database, "personal/owner", "MATCH (episode:Episodic {uuid: 'episode'}) SET episode.content = 'conflicting target'")
+      assert {:ok, before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+      assert {:error, message} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      assert message =~ "target"
+      assert {:ok, ^before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
+    end
   end
 
   defp episode(inventory, uuid) do
