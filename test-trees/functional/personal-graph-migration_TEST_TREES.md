@@ -1,4 +1,4 @@
-Functional: personal-graph-migration (functional: none)
+Functional: personal-graph-migration (functional: test/functional/personal_graph_migration_functional_test.exs)
 
 when an application inventories explicitly identified historical private graphs
   then the manifest preserves each operator identifier byte for byte in its old and new logical names
