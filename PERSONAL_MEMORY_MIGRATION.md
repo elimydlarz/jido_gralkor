@@ -52,7 +52,7 @@ Preparation can precede quiescence for inspection, but source changes invalidate
 
 ## Quiescent cutover
 
-Stop admission across every application and scheduler that can write these graphs. Drain capture buffers, asynchronous memory additions, Reflection production and delivery, and artefact projection workers. Inspect terminal failures and outstanding work; `CaptureBuffer.flush_all/0` returning `:ok` is insufficient evidence that every write succeeded. Stop all old consumers so they cannot recreate the retired namespace. Retain the original graphs, consistent backups, configuration manifest, application revision, and dependency revision.
+Stop admission across every application and scheduler that can write these graphs. Drain capture buffers, asynchronous memory additions, Reflection production and delivery, and artefact projection workers. For capture, inspect both queued turns and active flush workers: `flush/1` consumes the buffered entry while its write may still be running. Report `capture_buffers: 0` only after both are drained. Inspect terminal failures and outstanding work; `CaptureBuffer.flush_all/0` returning `:ok` is insufficient evidence that every write succeeded. Stop all old consumers so they cannot recreate the retired namespace. Retain the original graphs, consistent backups, configuration manifest, application revision, and dependency revision.
 
 The apply request supplies actual observed quiescence evidence:
 
