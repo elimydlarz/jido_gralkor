@@ -1,4 +1,17 @@
-Functional: personal-graph-migration (src: lib/gralkor/personal_graph_migration.ex; functional: test/functional/personal_graph_migration_functional_test.exs)
+Functional: personal-graph-migration (src: lib/gralkor/personal_graph_migration.ex, priv/python/personal_graph_migration.py; functional: test/functional/personal_graph_migration_functional_test.exs)
+
+when an application requests a private graph migration
+  if operator identities are empty, blank, duplicated, non-textual, or already resolved graph names
+    then migration rejects the identities before connecting to a graph
+  if no explicit graph endpoint is supplied
+    then migration rejects the connection before opening a default store
+  if the persisted manifest fails its integrity check
+    then migration refuses before changing any graph
+  if a manifest has inconsistent identity mappings or migration phases
+    then migration refuses before changing any graph
+
+when the migration command receives an unsupported operation
+  then it reports usage without connecting to a graph
 
 when an application inventories explicitly identified historical private graphs
   then the manifest preserves each operator identifier byte for byte in its old and new logical names
@@ -33,6 +46,10 @@ when an application migrates quiescent historical private graphs
   and the original graphs remain unchanged and restorable
   and two punctuation-sensitive operator identities remain isolated through public historical recall
   and migrated historical episodes remain searchable without an active operator Lens
+  when a completed Reflection invocation is replayed
+    then public Reflection delivery returns the original immutable artefact
+  when an incomplete Reflection invocation resumes
+    then public Reflection delivery completes under its original artefact identity
 
 when an interrupted private graph migration resumes from its persisted manifest
   then a copied graph resumes without duplicating nodes or relationships
