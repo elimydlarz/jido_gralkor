@@ -11,6 +11,7 @@ when two operators use direct personal memory, Lenses, asynchronously triggered 
   and alternating direct and personal-chat turns writes one episode for each selected route
   and captured appending-Lens information remains searchable
   and ERL writes a structured Learning artefact through its Destination output
+  and ERL remains absent from the other operator's personal Destination
   and the global graph is visible to both operators
   and each operator's selector-free search returns that operator's personal memory
   and each operator's selector-free search excludes the other operator's personal memory
