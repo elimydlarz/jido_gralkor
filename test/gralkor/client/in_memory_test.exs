@@ -36,14 +36,14 @@ defmodule Gralkor.Client.InMemoryTest do
       InMemory.set_build_communities({:ok, %{communities: 1, edges: 2}})
 
       InMemory.recall("g-1", "TestAgent", "s-1", "q?")
-      InMemory.capture("s-1", "g-1", "TestAgent", "Eli", [Gralkor.Message.new("user", "hi")])
+      Gralkor.CaptureFixture.capture(InMemory, "s-1", "g-1", "TestAgent", "Eli", [Gralkor.Message.new("user", "hi")])
       InMemory.flush_and_await("s-1", 500)
       InMemory.memory_add("g-1", "fact", "source", :document)
       InMemory.build_indices()
       InMemory.build_communities("g-1")
 
       assert [["g-1", "TestAgent", "s-1", "q?"]] = InMemory.recalls()
-      assert [["s-1", "g-1", "TestAgent", "Eli", _]] = InMemory.captures()
+      assert [[_, %Gralkor.Capture{session_id: "s-1", route: {:direct, "g-1"}, agent_name: "TestAgent", user_name: "Eli"}]] = InMemory.captures()
       assert [["s-1", 500]] = InMemory.flush_and_awaits()
       assert [["g-1", "fact", "source", :document]] = InMemory.adds()
       assert [[]] = InMemory.indices_builds()
@@ -56,7 +56,7 @@ defmodule Gralkor.Client.InMemoryTest do
       assert {:error, :not_configured} = InMemory.recall("g", "TestAgent", "s", "q")
 
       assert {:error, :not_configured} =
-               InMemory.capture("s", "g", "TestAgent", "Eli", [
+               Gralkor.CaptureFixture.capture(InMemory, "s", "g", "TestAgent", "Eli", [
                  Gralkor.Message.new("user", "hi")
                ])
 

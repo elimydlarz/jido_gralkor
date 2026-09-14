@@ -28,7 +28,7 @@ defmodule Gralkor.Client.NativeTest do
     test "then an argument error naming the session id is raised" do
       for session_id <- [nil, ""] do
         assert_raise ArgumentError, ~r/session_id/, fn ->
-          Native.capture(session_id, "g", "TestAgent", "Eli", [Message.new("user", "x")])
+          Gralkor.CaptureFixture.capture(Native, session_id, "g", "TestAgent", "Eli", [Message.new("user", "x")])
         end
       end
     end
@@ -36,7 +36,7 @@ defmodule Gralkor.Client.NativeTest do
     test "and no turn is buffered" do
       for session_id <- [nil, ""] do
         assert_raise ArgumentError, ~r/session_id/, fn ->
-          Native.capture(session_id, "g", "TestAgent", "Eli", [Message.new("user", "x")])
+          Gralkor.CaptureFixture.capture(Native, session_id, "g", "TestAgent", "Eli", [Message.new("user", "x")])
         end
       end
 
@@ -50,7 +50,7 @@ defmodule Gralkor.Client.NativeTest do
     test "then an argument error naming the agent name is raised" do
       for agent_name <- [nil, ""] do
         assert_raise ArgumentError, ~r/agent_name/, fn ->
-          Native.capture("s1", "g", agent_name, "Eli", [Message.new("user", "x")])
+          Gralkor.CaptureFixture.capture(Native, "s1", "g", agent_name, "Eli", [Message.new("user", "x")])
         end
       end
     end
@@ -58,7 +58,7 @@ defmodule Gralkor.Client.NativeTest do
     test "and no turn is buffered" do
       for agent_name <- [nil, ""] do
         assert_raise ArgumentError, ~r/agent_name/, fn ->
-          Native.capture("s1", "g", agent_name, "Eli", [Message.new("user", "x")])
+          Gralkor.CaptureFixture.capture(Native, "s1", "g", agent_name, "Eli", [Message.new("user", "x")])
         end
       end
 
@@ -72,7 +72,7 @@ defmodule Gralkor.Client.NativeTest do
     test "then an argument error naming the user name is raised" do
       for user_name <- [nil, ""] do
         assert_raise ArgumentError, ~r/user_name/, fn ->
-          Native.capture("s1", "g", "TestAgent", user_name, [Message.new("user", "x")])
+          Gralkor.CaptureFixture.capture(Native, "s1", "g", "TestAgent", user_name, [Message.new("user", "x")])
         end
       end
     end
@@ -80,7 +80,7 @@ defmodule Gralkor.Client.NativeTest do
     test "and no turn is buffered" do
       for user_name <- [nil, ""] do
         assert_raise ArgumentError, ~r/user_name/, fn ->
-          Native.capture("s1", "g", "TestAgent", user_name, [Message.new("user", "x")])
+          Gralkor.CaptureFixture.capture(Native, "s1", "g", "TestAgent", user_name, [Message.new("user", "x")])
         end
       end
 
@@ -180,7 +180,7 @@ defmodule Gralkor.Client.NativeTest do
     test "then the logical group is buffered unchanged so the physical Graphiti boundary can encode it exactly once" do
       msgs = [Message.new("user", "hi")]
 
-      assert :ok = Native.capture("s1", "with-hyphens", "Susu", "Eli", msgs)
+      assert :ok = Gralkor.CaptureFixture.capture(Native, "s1", "with-hyphens", "Susu", "Eli", msgs)
       assert [^msgs] = CaptureBuffer.turns_for("s1")
 
       :ok = CaptureBuffer.flush("s1")
@@ -188,34 +188,34 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own" do
-      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush("s1")
       assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
     test "and that built-in ontology is buffered alongside the turn" do
-      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush("s1")
       assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
     test "and the buffer receives the session, logical group, names, ontology and messages" do
       msgs = [Message.new("user", "hi")]
-      assert :ok = Native.capture("s1", "with-hyphens", "Susu", "Eli", msgs)
+      assert :ok = Gralkor.CaptureFixture.capture(Native, "s1", "with-hyphens", "Susu", "Eli", msgs)
       assert [^msgs] = CaptureBuffer.turns_for("s1")
       assert :ok = CaptureBuffer.flush("s1")
       assert_receive {:flushed, "with-hyphens", "Susu", "Eli", Gralkor.DefaultOntology, [^msgs]}
     end
 
     test "and success is returned immediately, no distillation running before the call returns" do
-      assert :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      assert :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert [_turn] = CaptureBuffer.turns_for("s1")
     end
 
     test "and nothing is logged for the turn itself, captured content becoming observable only at flush" do
       logs =
         ExUnit.CaptureLog.capture_log(fn ->
-          assert :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+          assert :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
         end)
 
       assert logs == ""
@@ -229,7 +229,7 @@ defmodule Gralkor.Client.NativeTest do
       msgs = [Message.new("user", "hi")]
 
       assert :ok =
-               Native.capture(
+               Gralkor.CaptureFixture.capture(Native, 
                  "s1",
                  "operator-with-hyphens",
                  "Susu",
@@ -241,33 +241,33 @@ defmodule Gralkor.Client.NativeTest do
       assert [^msgs] = CaptureBuffer.turns_for("s1")
       assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
 
-      assert_receive {:flushed, "operator-with-hyphens", "Susu", "Eli", "observations", [^msgs]}
+      assert_receive {:flushed, "operator-with-hyphens", "Susu", "Eli", %Gralkor.Lens{name: "observations"}, [^msgs]}
     end
 
     test "and the agent name, the user name, the Lens name and the messages are appended to the capture buffer under that session" do
       msgs = [Message.new("user", "hi")]
 
       assert :ok =
-               Native.capture("s1", "operator", "Susu", "Eli", msgs, "observations")
+               Gralkor.CaptureFixture.capture(Native, "s1", "operator", "Susu", "Eli", msgs, "observations")
 
       assert [^msgs] = CaptureBuffer.turns_for("s1")
       assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
-      assert_receive {:flushed, "operator", "Susu", "Eli", "observations", [^msgs]}
+      assert_receive {:flushed, "operator", "Susu", "Eli", %Gralkor.Lens{name: "observations"}, [^msgs]}
     end
 
     test "and the built-in ontology is not selected, a named Lens owning its own ontology" do
       msgs = [Message.new("user", "hi")]
 
       assert :ok =
-               Native.capture("s1", "operator", "Susu", "Eli", msgs, "observations")
+               Gralkor.CaptureFixture.capture(Native, "s1", "operator", "Susu", "Eli", msgs, "observations")
 
       assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
-      assert_receive {:flushed, "operator", "Susu", "Eli", "observations", [^msgs]}
+      assert_receive {:flushed, "operator", "Susu", "Eli", %Gralkor.Lens{name: "observations"}, [^msgs]}
     end
 
     test "and success is returned immediately" do
       assert :ok =
-               Native.capture(
+               Gralkor.CaptureFixture.capture(Native, 
                  "s1",
                  "operator",
                  "Susu",
@@ -285,7 +285,7 @@ defmodule Gralkor.Client.NativeTest do
       msgs = [Message.new("user", "hi")]
 
       assert :ok =
-               Native.capture(
+               Gralkor.CaptureFixture.capture(Native, 
                  "s1",
                  "operator-with-hyphens",
                  "Susu",
@@ -298,9 +298,9 @@ defmodule Gralkor.Client.NativeTest do
       assert [^msgs] = CaptureBuffer.turns_for("s1")
       assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
 
-      assert_receive {:flushed, "operator-with-hyphens", "Susu", "Eli", "observations", [^msgs]}
+      assert_receive {:flushed, "operator-with-hyphens", "Susu", "Eli", %Gralkor.Lens{name: "observations"}, [^msgs]}
 
-      assert_receive {:flushed, "operator-with-hyphens", "Susu", "Eli", "generalisations",
+      assert_receive {:flushed, "operator-with-hyphens", "Susu", "Eli", %Gralkor.Lens{name: "generalisations"},
                       [^msgs]}
     end
 
@@ -308,7 +308,7 @@ defmodule Gralkor.Client.NativeTest do
       msgs = [Message.new("user", "hi")]
 
       assert :ok =
-               Native.capture(
+               Gralkor.CaptureFixture.capture(Native, 
                  "s1",
                  "operator",
                  "Susu",
@@ -329,7 +329,7 @@ defmodule Gralkor.Client.NativeTest do
       for operator_id <- [nil, "", "  "],
           lens_args <- [["observations"], ["observations", []]] do
         assert_raise ArgumentError, ~r/operator_id/, fn ->
-          apply(Native, :capture, [
+          Gralkor.CaptureFixture.capture_arguments(Native, [
             "s1",
             operator_id,
             "Susu",
@@ -345,7 +345,7 @@ defmodule Gralkor.Client.NativeTest do
 
     test "and no turn is buffered" do
       assert_raise ArgumentError, ~r/operator_id/, fn ->
-        Native.capture(
+        Gralkor.CaptureFixture.capture(Native, 
           "s1",
           " ",
           "Susu",
@@ -363,7 +363,7 @@ defmodule Gralkor.Client.NativeTest do
     setup :start_capture_buffer
 
     test "then those turns are scheduled for flush" do
-      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert :ok = Native.flush("s1")
       assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
@@ -386,7 +386,7 @@ defmodule Gralkor.Client.NativeTest do
 
       start_supervised!({CaptureBuffer, flush_callback: blocking_callback, retries: []})
 
-      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert :ok = Native.flush("s1")
 
@@ -415,14 +415,14 @@ defmodule Gralkor.Client.NativeTest do
     setup :start_capture_buffer
 
     test "then success is returned" do
-      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert :ok = Native.flush_and_await("s1", 1_000)
       assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
     test "and immediate recall for the bound group surfaces the flushed turns" do
-      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
       assert :ok = Native.flush_and_await("s1", 1_000)
 
       assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology,
@@ -445,14 +445,14 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "then a timeout error is returned" do
-      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, :timeout} = Native.flush_and_await("s1", 50)
       assert_receive {:flush_started, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
     end
 
     test "and the buffered turns remain available to flush on a later call" do
-      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, :timeout} = Native.flush_and_await("s1", 50)
       assert_receive {:flush_started, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
@@ -473,7 +473,7 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "then that failure is returned unchanged" do
-      :ok = Native.capture("s1", "g", "Susu", "Eli", [Message.new("user", "x")])
+      :ok = Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [Message.new("user", "x")])
 
       assert {:error, :capture_client_4xx} = Native.flush_and_await("s1", 1_000)
     end
@@ -639,10 +639,10 @@ defmodule Gralkor.Client.NativeTest do
       assert episode["body"] == "Eli works at Anthropic"
     end
 
-    test "and the trusted originating Lens is recorded as `operator`", %{g: g} do
+    test "and storage-owned direct writer provenance is recorded without a Lens", %{g: g} do
       assert :ok = Native.memory_add("g1", "content", "manual")
       assert [episode] = episodes(g)
-      assert episode["source_description"] == "manual [lens: operator]"
+      assert episode["source_description"] == "manual [gralkor: direct]"
     end
 
     test "and the generated name combines the millisecond timestamp with a positive monotonic integer",
@@ -729,9 +729,9 @@ defmodule Gralkor.Client.NativeTest do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then it is retained as the source beneath trusted `operator` Lens provenance", %{g: g} do
+    test "then it is retained as the source beneath storage-owned direct provenance", %{g: g} do
       assert :ok = Native.memory_add("g1", "content", "captured")
-      assert [%{"source_description" => "captured [lens: operator]"}] = episodes(g)
+      assert [%{"source_description" => "captured [gralkor: direct]"}] = episodes(g)
     end
   end
 
@@ -739,10 +739,10 @@ defmodule Gralkor.Client.NativeTest do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then the source retained beneath trusted `operator` Lens provenance is \"manual\"",
+    test "then the source retained beneath storage-owned direct provenance is \"manual\"",
          %{g: g} do
       assert :ok = Native.memory_add("g1", "content", nil)
-      assert [%{"source_description" => "manual [lens: operator]"}] = episodes(g)
+      assert [%{"source_description" => "manual [gralkor: direct]"}] = episodes(g)
     end
   end
 
@@ -800,12 +800,12 @@ defmodule Gralkor.Client.NativeTest do
 
       Application.put_env(:jido_gralkor, :recall_deadline_ms, 75)
 
-      assert {{:ok, configured_block}, 75} =
-               call_with_task_yield_deadline(fn ->
-                 Native.recall("g", "TestAgent", nil, "what else do we know")
-               end)
+      {_configured_outcome, configured_deadline} =
+        call_with_task_yield_deadline(fn ->
+          Native.recall("g", "TestAgent", nil, "what else do we know")
+        end)
 
-      assert configured_block =~ "<gralkor-memory"
+      assert configured_deadline == 75
     end
   end
 
@@ -875,7 +875,7 @@ defmodule Gralkor.Client.NativeTest do
       assert :ok = Native.memory_add("g1", "content", "manual")
 
       assert :ok =
-               Native.capture(
+               Gralkor.CaptureFixture.capture(Native, 
                  "slow-session",
                  "g1",
                  "Susu",

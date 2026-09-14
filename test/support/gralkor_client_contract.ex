@@ -73,7 +73,7 @@ defmodule Gralkor.ClientContract do
             end
 
             assert_raise ArgumentError, ~r/agent_name/, fn ->
-              client().capture("session-1", "group-1", agent_name, "Eli", [
+              Gralkor.CaptureFixture.capture(client(), "session-1", "group-1", agent_name, "Eli", [
                 Gralkor.Message.new("user", "hi")
               ])
             end
@@ -88,7 +88,7 @@ defmodule Gralkor.ClientContract do
           assert_raise ArgumentError, fn -> client().recall("group-1", "", "session-1", "q") end
 
           assert_raise ArgumentError, fn ->
-            client().capture("session-1", "group-1", "", "Eli", [
+            Gralkor.CaptureFixture.capture(client(), "session-1", "group-1", "", "Eli", [
               Gralkor.Message.new("user", "hi")
             ])
           end
@@ -104,7 +104,7 @@ defmodule Gralkor.ClientContract do
           configure_capture(:ok)
 
           assert :ok =
-                   client().capture(
+                   Gralkor.CaptureFixture.capture(client(), 
                      "session-1",
                      "group-1",
                      "TestAgent",
@@ -120,7 +120,7 @@ defmodule Gralkor.ClientContract do
           configure_capture({:error, :write_failed})
 
           assert {:error, :write_failed} =
-                   client().capture(
+                   Gralkor.CaptureFixture.capture(client(), 
                      "session-1",
                      "group-1",
                      "TestAgent",
@@ -136,7 +136,7 @@ defmodule Gralkor.ClientContract do
           configure_capture(:ok)
 
           assert :ok =
-                   client().capture(
+                   Gralkor.CaptureFixture.capture(client(), 
                      "session-1",
                      "group-1",
                      "TestAgent",
@@ -144,7 +144,7 @@ defmodule Gralkor.ClientContract do
                      [Gralkor.Message.new("user", "hi")]
                    )
 
-          assert [["session-1", "group-1", "TestAgent", "Eli", _turn]] =
+          assert [[_, %Gralkor.Capture{session_id: "session-1", route: {:direct, "group-1"}, agent_name: "TestAgent", user_name: "Eli"}]] =
                    Gralkor.Client.InMemory.captures()
         end
       end
@@ -156,7 +156,7 @@ defmodule Gralkor.ClientContract do
 
           for lens_args <- [["observations"], ["observations", ["decisions"]]] do
             assert :ok =
-                     apply(client(), :capture, [
+                     Gralkor.CaptureFixture.capture_arguments(client(), [
                        "session-1",
                        "operator-1",
                        "TestAgent",
@@ -175,7 +175,7 @@ defmodule Gralkor.ClientContract do
 
           for lens_args <- [["observations"], ["observations", ["decisions"]]] do
             assert {:error, :write_failed} =
-                     apply(client(), :capture, [
+                     Gralkor.CaptureFixture.capture_arguments(client(), [
                        "session-1",
                        "operator-1",
                        "TestAgent",
@@ -195,7 +195,7 @@ defmodule Gralkor.ClientContract do
           for user_name <- ["", nil],
               lens_args <- [[], ["observations"], ["observations", ["decisions"]]] do
             assert_raise ArgumentError, ~r/user_name/, fn ->
-              apply(client(), :capture, [
+              Gralkor.CaptureFixture.capture_arguments(client(), [
                 "session-1",
                 "group-1",
                 "TestAgent",
@@ -212,7 +212,7 @@ defmodule Gralkor.ClientContract do
           configure_capture(:ok)
 
           assert_raise ArgumentError, ~r/user_name/, fn ->
-            client().capture("session-1", "group-1", "TestAgent", "", [
+            Gralkor.CaptureFixture.capture(client(), "session-1", "group-1", "TestAgent", "", [
               Gralkor.Message.new("user", "hi")
             ])
           end
@@ -229,7 +229,7 @@ defmodule Gralkor.ClientContract do
           for session_id <- ["", nil],
               lens_args <- [[], ["observations"], ["observations", ["decisions"]]] do
             assert_raise ArgumentError, ~r/session_id/, fn ->
-              apply(client(), :capture, [
+              Gralkor.CaptureFixture.capture_arguments(client(), [
                 session_id,
                 "operator-1",
                 "TestAgent",
@@ -246,7 +246,7 @@ defmodule Gralkor.ClientContract do
           configure_capture(:ok)
 
           assert_raise ArgumentError, ~r/session_id/, fn ->
-            client().capture("", "group-1", "TestAgent", "Eli", [
+            Gralkor.CaptureFixture.capture(client(), "", "group-1", "TestAgent", "Eli", [
               Gralkor.Message.new("user", "hi")
             ])
           end
@@ -263,7 +263,7 @@ defmodule Gralkor.ClientContract do
           for operator_id <- [nil, "", "  "],
               lens_args <- [["observations"], ["observations", []]] do
             assert_raise ArgumentError, ~r/operator_id/, fn ->
-              apply(client(), :capture, [
+              Gralkor.CaptureFixture.capture_arguments(client(), [
                 "session-1",
                 operator_id,
                 "TestAgent",
@@ -282,7 +282,7 @@ defmodule Gralkor.ClientContract do
           configure_capture(:ok)
 
           assert_raise ArgumentError, ~r/operator_id/, fn ->
-            client().capture(
+            Gralkor.CaptureFixture.capture(client(), 
               "session-1",
               " ",
               "TestAgent",

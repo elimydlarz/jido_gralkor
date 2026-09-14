@@ -26,7 +26,7 @@ if the retired `:reflection_storage` setting is configured
 when a capture flush runs
   then the transcript episode is rendered from the user and assistant text of every captured turn only, with no agent reasoning and no inference call
   and the rendered transcript is written as a captured episode
-  and the trusted originating Lens is recorded as `operator`
+  and storage-owned direct writer provenance is recorded without a Lens
   while no episode-writing dependency is supplied
     then default writes name the graph pool server explicitly and reach it without shifted arguments
     and the logical group is encoded exactly once by that graph pool boundary

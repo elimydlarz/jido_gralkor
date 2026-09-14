@@ -405,7 +405,7 @@ defmodule Gralkor.ApplicationTest do
       assert_receive {:add, "g1", "Eli: Q\nSusu: A", "captured", :ont}
     end
 
-    test "and the trusted originating Lens is recorded as `operator`", %{turn: turn} do
+    test "and storage-owned direct writer provenance is recorded without a Lens", %{turn: turn} do
       test_pid = self()
 
       cb =
@@ -418,7 +418,8 @@ defmodule Gralkor.ApplicationTest do
 
       assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
       assert_receive {:capture_opts, opts}
-      assert opts[:lens] == "operator"
+      assert opts[:writer] == :direct
+      refute Keyword.has_key?(opts, :lens)
     end
   end
 
@@ -652,7 +653,7 @@ defmodule Gralkor.ApplicationTest do
 
       {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
       rec = Pythonx.decode(rec)
-      assert rec["source_description"] == "captured [lens: operator]"
+      assert rec["source_description"] == "captured [gralkor: direct]"
       assert rec["group_id"] == Client.sanitize_group_id("flush_group")
       assert rec["episode_body"] =~ "vacuum"
     end
