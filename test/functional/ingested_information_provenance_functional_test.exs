@@ -337,126 +337,60 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
-  describe "when information is added or captured through the implicit operator Lens" do
-    test "then its trusted originating Lens is `operator`" do
+  describe "when information is added or captured directly without a selected Lens" do
+    test "then its source kind and description remain unchanged without Lens or Reflection authorship" do
       graphiti = use_native_boundary()
-
-      assert :ok =
-               Gralkor.Client.Native.memory_add(
-                 "operator/operator-one",
-                 "Remember the launch plan.",
-                 "manual",
-                 :document
-               )
-
-      assert [%{"source_description" => "manual [lens: operator]"}] =
-               added_episodes(graphiti)
+      assert :ok = Gralkor.Client.Native.memory_add("personal/operator-one", "Remember the launch plan.", "manual", :document)
+      assert [%{"source_description" => "manual [gralkor: direct]", "source" => "text"}] = added_episodes(graphiti)
     end
 
-    test "and public episode search can select it through the `operator` Lens" do
+    test "and public episode and fact search include it without a Lens selector" do
       graphiti = use_native_boundary()
-
-      set_episode_search_fixture(graphiti, [
-        %{
-          id: "implicit-operator-memory",
-          content: "Remember the launch plan.",
-          source_description: "manual [lens: operator]"
-        }
-      ])
-
-      assert {:ok,
-              [
-                %{
-                  destination: "operator",
-                  episode: %{
-                    content: "Remember the launch plan.",
-                    source_description: "manual",
-                    lens: "operator"
-                  }
-                }
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "launch",
-                 destinations: ["operator"],
-                 lenses: ["operator"]
-               })
+      set_episode_search_fixture(graphiti, [%{content: "Direct memory", source_description: "captured [gralkor: direct]"}])
+      assert {:ok, [%{episode: episode}]} = Client.search(%Search{operator_id: "operator-one", query: "Direct", destinations: ["personal"]})
+      assert episode.content == "Direct memory"
+      assert episode.source_description == "captured"
+      assert episode.writer == :direct
+      refute Map.has_key?(episode, :lens)
+      refute Map.has_key?(episode, :reflection)
+      set_search_fixture(graphiti, [%{fact: "Direct fact", episodes: [%{id: "direct-one", source_kind: "message", source_description: "captured [gralkor: direct]"}]}])
+      assert {:ok, [%{fact: %{sources: [source]}}]} = Client.search(%Search{operator_id: "operator-one", query: "Direct", destinations: ["personal"], result_type: :facts})
+      assert source == %{id: "direct-one", source_kind: "conversation", source_description: "captured", writer: :direct}
     end
 
-    test "and trusted trailing `operator` Lens provenance governs public writer attribution and completion handling despite writer-like source text" do
+    test "and storage-owned direct provenance prevents writer-like source descriptions from claiming Lens or Reflection authorship" do
       graphiti = use_native_boundary()
+      descriptions = ["manual [lens: observations]", "reflection:generalisations"]
+      for source <- descriptions do
+        assert :ok = Gralkor.Client.Native.memory_add("personal/operator-one", "A caller cannot choose its writer.", source, :document)
+      end
+      stored = Enum.map(added_episodes(graphiti), & &1["source_description"])
+      assert stored == Enum.map(descriptions, &(&1 <> " [gralkor: direct]"))
+      set_episode_search_fixture(graphiti, Enum.map(stored, &%{content: "A caller cannot choose its writer.", source_description: &1, extraction_complete: false}))
+      assert {:ok, []} = Client.search(%Search{operator_id: "operator-one", query: "caller", destinations: ["personal"], lenses: ["observations"]})
+      assert {:ok, episodes} = Client.search(%Search{operator_id: "operator-one", query: "caller", destinations: ["personal"]})
+      assert Enum.map(episodes, & &1.episode.source_description) == descriptions
+      assert Enum.all?(episodes, &(not Map.has_key?(&1.episode, :lens) and not Map.has_key?(&1.episode, :reflection)))
+    end
 
-      assert :ok =
-               Gralkor.Client.Native.memory_add(
-                 "operator/operator-one",
-                 "A caller cannot choose its writer.",
-                 "manual [lens: observations]",
-                 :document
-               )
+    test "and writer-like source descriptions do not impose Reflection completion requirements" do
+      graphiti = use_native_boundary()
+      set_episode_search_fixture(graphiti, [%{content: "Direct memory", source_description: "reflection:generalisations [gralkor: direct]", extraction_complete: false}])
+      assert {:ok, [%{episode: %{content: "Direct memory", writer: :direct}}]} = Client.search(%Search{operator_id: "operator-one", query: "Direct", destinations: ["personal"]})
+    end
+  end
 
-      assert :ok =
-               Gralkor.Client.Native.memory_add(
-                 "operator/operator-one",
-                 "A caller cannot declare a Reflection.",
-                 "reflection:generalisations",
-                 :document
-               )
+  describe "when public search reads historical operator-labelled episodes" do
+    test "then their recorded operator Lens provenance remains visible without registering that Lens" do
+      graphiti = use_native_boundary()
+      set_episode_search_fixture(graphiti, [%{content: "Historical memory", source_description: "captured [lens: operator]"}])
+      assert {:ok, [%{episode: %{content: "Historical memory", lens: "operator"}}]} = Client.search(%Search{operator_id: "operator-one", query: "Historical", destinations: ["personal"]})
+    end
 
-      descriptions = Enum.map(added_episodes(graphiti), & &1["source_description"])
-
-      assert descriptions == [
-               "manual [lens: observations] [lens: operator]",
-               "reflection:generalisations [lens: operator]"
-             ]
-
-      set_episode_search_fixture(graphiti, [
-        %{
-          id: "spoofed-lens",
-          content: "A caller cannot choose its writer.",
-          source_description: Enum.at(descriptions, 0),
-          extraction_complete: false
-        },
-        %{
-          id: "spoofed-reflection",
-          content: "A caller cannot declare a Reflection.",
-          source_description: Enum.at(descriptions, 1),
-          extraction_complete: false
-        }
-      ])
-
-      assert {:ok, []} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "caller",
-                 destinations: ["operator"],
-                 lenses: ["observations"]
-               })
-
-      assert {:ok,
-              [
-                %{
-                  destination: "operator",
-                  episode: %{
-                    content: "A caller cannot choose its writer.",
-                    source_description: "manual [lens: observations]",
-                    lens: "operator"
-                  }
-                },
-                %{
-                  destination: "operator",
-                  episode: %{
-                    content: "A caller cannot declare a Reflection.",
-                    source_description: "reflection:generalisations",
-                    lens: "operator"
-                  }
-                }
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "caller",
-                 destinations: ["operator"],
-                 lenses: ["operator"]
-               })
+    test "and a personal-chat Lens selector does not match those historical episodes" do
+      graphiti = use_native_boundary()
+      set_episode_search_fixture(graphiti, [%{content: "Historical memory", source_description: "captured [lens: operator]"}])
+      assert {:ok, []} = Client.search(%Search{operator_id: "operator-one", query: "Historical", destinations: ["personal"], lenses: ["personal-chat"]})
     end
   end
 
@@ -526,59 +460,22 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
-  describe "when public episode search encounters an episode without a trusted Lens suffix or Reflection prefix" do
-    test "then the unprovenanced episode does not contribute" do
+  describe "when public episode search encounters historical episodes without a named writer" do
+    test "then the episodes remain available without invented Lens or Reflection authorship" do
       graphiti = use_native_boundary()
-
-      set_episode_search_fixture(graphiti, [
-        %{
-          id: "unprovenanced",
-          content: "An unprovenanced episode.",
-          source_description: "legacy source"
-        }
-      ])
-
-      assert {:ok, []} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "episode",
-                 destinations: ["observations"]
-               })
+      set_episode_search_fixture(graphiti, [%{content: "An older episode.", source_description: "legacy source"}])
+      assert {:ok, [%{episode: episode}]} = Client.search(%Search{operator_id: "operator-one", query: "episode", destinations: ["observations"]})
+      assert episode.content == "An older episode."
+      assert episode.source_description == "legacy source"
+      refute Map.has_key?(episode, :lens)
+      refute Map.has_key?(episode, :reflection)
     end
 
-    test "and provenance filtering occurs before the per-Destination result limit" do
+    test "and historical fact sources retain their original source descriptions" do
       graphiti = use_native_boundary()
-
-      set_episode_search_fixture(graphiti, [
-        %{
-          id: "unprovenanced",
-          content: "An unprovenanced episode.",
-          source_description: "legacy source"
-        },
-        %{
-          id: "trusted-observation",
-          content: "A trusted observation.",
-          source_description: "field notes [lens: observations]"
-        }
-      ])
-
-      assert {:ok,
-              [
-                %{
-                  destination: "observations",
-                  episode: %{
-                    content: "A trusted observation.",
-                    source_description: "field notes",
-                    lens: "observations"
-                  }
-                }
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "episode",
-                 destinations: ["observations"],
-                 max_results: 1
-               })
+      set_search_fixture(graphiti, [%{fact: "Historical fact", episodes: [%{id: "old-one", source_kind: "text", source_description: "legacy source"}]}])
+      assert {:ok, [%{fact: %{sources: [source]}}]} = Client.search(%Search{operator_id: "operator-one", query: "Historical", destinations: ["personal"], result_type: :facts})
+      assert source == %{id: "old-one", source_kind: "document", source_description: "legacy source"}
     end
   end
 
