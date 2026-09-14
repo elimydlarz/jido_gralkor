@@ -37,6 +37,13 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
                "Lens: notes\n- shared\n\nReflection: lessons\n- shared"
     end
 
+    test "and known direct provenance identifies its source kind without a Lens or Reflection heading" do
+      for {kind, name} <- [{:conversation, "conversation"}, {"document", "document"}, {:structured_record, "structured record"}] do
+        assert rendered([fact("one", [%{writer: :direct, source_kind: kind}])]) == "Source: direct #{name}\n- one"
+      end
+      assert rendered([fact("one", [%{writer: :direct}])]) == "Source: direct\n- one"
+    end
+
     test "and unnamed provenance is grouped under `Source: unknown`" do
       assert rendered([fact("one", []), fact("two", [%{source_description: "legacy"}])]) ==
                "Source: unknown\n- one\n- two"

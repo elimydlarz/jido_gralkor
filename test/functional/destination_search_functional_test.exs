@@ -538,6 +538,35 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
   end
 
   describe "when a caller omits the result type or explicitly selects episodes" do
+    test "and every directly written episode retains content and source kind without Lens or Reflection authorship" do
+      use_in_memory_storage()
+      seed_episode(%{content: "direct", source_kind: :conversation, source_description: "captured", writer: :direct})
+      assert {:ok, [%{episode: episode}]} = Client.search(%Search{operator_id: "operator-one", query: "direct", destinations: ["personal"]})
+      assert episode == %{content: "direct", source_kind: :conversation, source_description: "captured", writer: :direct}
+    end
+
+    test "and historical unmarked episodes remain available without invented authorship" do
+      use_in_memory_storage()
+      seed_episode(%{content: "old", source_description: "captured"})
+      assert {:ok, [%{episode: %{content: "old", source_description: "captured"} = episode}]} = Client.search(%Search{operator_id: "operator-one", query: "old"})
+      refute Map.has_key?(episode, :lens)
+      refute Map.has_key?(episode, :reflection)
+    end
+
+    test "and historical operator-labelled episodes retain their recorded Lens provenance" do
+      use_in_memory_storage()
+      seed_episode(%{content: "old", source_description: "captured", lens: "operator"})
+      assert {:ok, [%{episode: %{lens: "operator"}}]} = Client.search(%Search{operator_id: "operator-one", query: "old", destinations: ["personal"]})
+    end
+
+    test "and a personal-chat Lens selector excludes historical operator-labelled and direct episodes" do
+      use_in_memory_storage()
+      for episode <- [%{content: "old", source_description: "captured", lens: "operator"}, %{content: "direct", source_description: "captured", writer: :direct}] do
+        seed_episode(episode)
+      end
+      assert {:ok, []} = Client.search(%Search{operator_id: "operator-one", query: "memory", destinations: ["personal"], lenses: ["personal-chat"]})
+    end
+
     test "then relevant stored episode content is returned" do
       assert {:ok, [%{destination: "first", episode: "first:question"}]} =
                Client.search(%Search{
@@ -950,6 +979,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
        install_loop_fn: &Gralkor.Python.install_async_runtime/0}
     )
   end
+
+  defp seed_episode(episode), do: GenServer.call(Gralkor.Lens.Storage.InMemory, {:add, "personal/operator-one", episode})
 
   defp use_in_memory_storage do
     start_supervised!(Gralkor.Lens.Storage.InMemory)

@@ -7,6 +7,7 @@ when the memory search formatter is called
   and groups retain first-appearance order with retrieval order inside each group
   and repeated provenance for one source adds no duplicate bullet for that fact
   and facts with several named sources appear under each distinct source
+  and known direct provenance identifies its source kind without a Lens or Reflection heading
   and unnamed provenance is grouped under `Source: unknown`
   and the formatter adds no Destination, artefact, level, or lineage metadata
   and the structured input remains unchanged

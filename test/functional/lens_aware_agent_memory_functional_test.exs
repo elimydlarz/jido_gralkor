@@ -32,6 +32,9 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     def search(%{name: "observations"}, _, _, :facts, _, _),
       do: {:ok, [%{fact: "observed fact", sources: [%{lens: "observations"}]}]}
 
+    def search(%{name: "personal"}, _, _, :facts, _, _),
+      do: {:ok, [%{fact: "direct fact", sources: [%{writer: :direct, source_kind: "conversation"}]}]}
+
     def search(%{name: "global"}, _, _, :facts, _, _),
       do: {:ok, [%{fact: "reflected fact", sources: [%{reflection: "generalisations"}]}]}
   end
@@ -108,6 +111,11 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                plugin_state |> agent() |> query()
 
       assert tool_context.gralkor_runtime == self()
+    end
+
+    test "and directly captured conversation facts identify their conversation origin" do
+      Application.put_env(:jido_gralkor, :destination_storage, SourceFactFixture)
+      assert {:ok, %{result: "Source: direct conversation\n- direct fact"}} = MemorySearch.run(%{query: "direct", destinations: ["personal"]}, %{agent_id: "operator-one", gralkor_runtime: self()})
     end
 
     test "and optional Destination and Lens selectors belong only to that search invocation" do
@@ -655,6 +663,92 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         )
       end
     end
+  end
+
+  describe "when a mounted memory plugin has an explicit capture Destination and no ingestion Lens" do
+    test "then automatic capture selects that Destination directly for the current operator" do
+      assert {:ok, state} = mount(agent_name: "Susu")
+      base = agent(state)
+      assert {:ok, {:continue, %{data: %{extra_refs: refs}}}} = query(base)
+      assert {:ok, :continue} = Plugin.handle_signal(completion_signal("request-one", "Direct"), %{agent: completion_agent(base, "request-one", refs)})
+      assert [[_, %Gralkor.Capture{operator_id: "operator-one", route: {:direct, "personal"}}]] = InMemory.captures()
+    end
+
+    test "and no packaged Lens is selected implicitly" do
+      assert {:ok, state} = mount(agent_name: "Susu")
+      assert {:ok, {:continue, %{data: %{tool_context: context}}}} = query(agent(state))
+      assert context.lens == nil
+    end
+  end
+
+  describe "where an agent turn explicitly selects direct capture after a Lens-selected turn" do
+    test "then completion retains that request's direct route" do
+      assert {:ok, state} = mount(agent_name: "Susu", ingestion_lens: "observations")
+      base = agent(state)
+      assert {:ok, {:continue, %{data: %{extra_refs: refs}}}} = query_direct(base, "direct-request")
+      assert {:ok, :continue} = Plugin.handle_signal(completion_signal("direct-request", "Direct"), %{agent: completion_agent(base, "direct-request", refs)})
+      assert [[_, %Gralkor.Capture{route: {:direct, "personal"}}]] = InMemory.captures()
+    end
+
+    test "and failure retains that request's direct route" do
+      assert {:ok, state} = mount(agent_name: "Susu", ingestion_lens: "observations")
+      base = agent(state)
+      assert {:ok, {:continue, %{data: %{extra_refs: refs}}}} = query_direct(base, "direct-request")
+      signal = %Jido.Signal{id: "failed", source: "/functional", type: "ai.request.failed", data: %{request_id: "direct-request", error: "failed"}}
+      assert {:ok, :continue} = Plugin.handle_signal(signal, %{agent: completion_agent(base, "direct-request", refs)})
+      assert [[_, %Gralkor.Capture{route: {:direct, "personal"}}]] = InMemory.captures()
+    end
+  end
+
+  describe "when turns in one session alternate direct capture and selected Lenses" do
+    test "then each route receives only its selected turns in original order" do
+      assert {:ok, state} = mount(agent_name: "Susu", ingestion_lens: "observations")
+      base = agent(state)
+      for {id, lens} <- [{"lens-one", "observations"}, {"direct-one", nil}, {"lens-two", "decisions"}] do
+        result = if lens, do: query(base, lens, id), else: query_direct(base, id)
+        assert {:ok, {:continue, %{data: %{extra_refs: refs}}}} = result
+        assert {:ok, :continue} = Plugin.handle_signal(completion_signal(id, id), %{agent: completion_agent(base, id, refs)})
+      end
+      assert Enum.map(InMemory.captures(), fn [_, request] -> request.route end) == [{:lenses, ["observations"]}, {:direct, "personal"}, {:lenses, ["decisions"]}]
+    end
+
+    test "and different Lenses sharing a Destination each run their own ingestion process" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+      start_lens_capture_buffer()
+      configuration = runtime_configuration()
+      lenses = Enum.map(configuration.lenses, &Map.put(&1, :destination, "personal"))
+      assert :ok = JidoGralkor.Runtime.replace(self(), %{configuration | lenses: lenses})
+      request = %Gralkor.Capture{session_id: "session-one", operator_id: "operator-one", agent_name: "Susu", user_name: "Eli", messages: [Gralkor.Message.new("user", "shared")], route: {:lenses, ["observations", "decisions"]}}
+      assert :ok = Client.capture(self(), request)
+      assert :ok = Client.impl().flush_and_await("session-one", 1_000)
+      assert Enum.map(destination_episodes("personal"), & &1.lens) == ["observations", "decisions"]
+    end
+
+    test "and repeated selected Lens names run only once for each selected batch" do
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+      start_lens_capture_buffer()
+      request = %Gralkor.Capture{session_id: "session-one", operator_id: "operator-one", agent_name: "Susu", user_name: "Eli", messages: [Gralkor.Message.new("user", "once")], route: {:lenses, ["observations", "observations"]}}
+      assert :ok = Client.capture(self(), request)
+      assert :ok = Client.impl().flush_and_await("session-one", 1_000)
+      assert [%{content: "Eli: once"}] = destination_episodes("observations")
+    end
+  end
+
+  describe "if a mounted plugin receives invalid capture Destination configuration" do
+    test "then mounting fails before the plugin handles an agent signal" do
+      assert_raise ArgumentError, fn -> mount(agent_name: "Susu", capture_destination: "missing") end
+      assert InMemory.captures() == []
+    end
+
+    test "and the error identifies the rejected Destination" do
+      error = assert_raise ArgumentError, fn -> mount(agent_name: "Susu", capture_destination: "missing") end
+      assert Exception.message(error) =~ "missing"
+    end
+  end
+
+  defp query_direct(agent, id) do
+    signal = %Jido.Signal{id: "query-#{id}", source: "/functional", type: "ai.react.query", data: %{request_id: id, query: "Remember direct", tool_context: %{lens: nil}}}
+    Plugin.handle_signal(signal, %{agent: agent})
   end
 
   defp agent(plugin_state) do
