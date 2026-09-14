@@ -325,6 +325,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
   describe "if the application registers the retired operator Destination" do
     test "then configuration resolution identifies personal as its replacement before any memory operation" do
       Application.put_env(:jido_gralkor, :destinations, [[name: "operator"]])
+
       assert_raise ArgumentError, ~r/operator.*retired.*personal/, fn ->
         Gralkor.Destination.Registry.configured!()
       end
@@ -334,6 +335,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
   describe "if the application registers a Destination named personal" do
     test "then configuration resolution refuses to replace the packaged private Destination" do
       Application.put_env(:jido_gralkor, :destinations, [[name: "personal"]])
+
       assert_raise ArgumentError, ~r/(reserved|duplicate).*personal|personal.*reserved/, fn ->
         Gralkor.Destination.Registry.configured!()
       end

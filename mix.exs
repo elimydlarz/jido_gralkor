@@ -91,7 +91,8 @@ defmodule JidoGralkor.MixProject do
         "GitHub" => @source_url,
         "Issues" => "#{@source_url}/issues"
       },
-      files: ~w(lib priv config mix.exs README.md DESTINATIONS.md PERSONAL_MEMORY_MIGRATION.md CHANGELOG.md .formatter.exs)
+      files:
+        ~w(lib priv config mix.exs README.md DESTINATIONS.md PERSONAL_MEMORY_MIGRATION.md CHANGELOG.md .formatter.exs)
     ]
   end
 

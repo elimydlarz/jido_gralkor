@@ -1205,11 +1205,25 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   describe "if current configuration uses a retired operator Destination or Lens name" do
     test "then validation identifies the retired name and its personal or personal-chat replacement" do
       for {collection, definition, replacement} <- [
-        {:destinations, %{name: "operator"}, "personal"},
-        {:lenses, %{name: "operator", destination: "personal", write: :append, ingestion: Gralkor.Lens.Ingestion.Store}, "personal-chat"},
-        {:lenses, %{name: "notes", destination: "operator", write: :append, ingestion: Gralkor.Lens.Ingestion.Store}, "personal"}
-      ] do
-        config = %{destinations: [], lenses: [], reflections: []} |> Map.put(collection, [definition])
+            {:destinations, %{name: "operator"}, "personal"},
+            {:lenses,
+             %{
+               name: "operator",
+               destination: "personal",
+               write: :append,
+               ingestion: Gralkor.Lens.Ingestion.Store
+             }, "personal-chat"},
+            {:lenses,
+             %{
+               name: "notes",
+               destination: "operator",
+               write: :append,
+               ingestion: Gralkor.Lens.Ingestion.Store
+             }, "personal"}
+          ] do
+        config =
+          %{destinations: [], lenses: [], reflections: []} |> Map.put(collection, [definition])
+
         assert {:error, reason} = JidoGralkor.Runtime.validate(config)
         assert inspect(reason) =~ "retired"
         assert inspect(reason) =~ replacement
@@ -1219,7 +1233,10 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     test "and the previous runtime snapshot remains active" do
       config = %{destinations: [], lenses: [], reflections: []}
       start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: config})
-      assert {:error, _} = JidoGralkor.Runtime.replace(self(), %{config | destinations: [%{name: "operator"}]})
+
+      assert {:error, _} =
+               JidoGralkor.Runtime.replace(self(), %{config | destinations: [%{name: "operator"}]})
+
       assert JidoGralkor.Runtime.snapshot(self()) == config
     end
   end
@@ -1227,8 +1244,11 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   describe "if consumer configuration claims the packaged personal Destination or personal-chat Lens" do
     test "then validation rejects the conflicting consumer definition before activating it" do
       for {collection, name} <- [{:destinations, "personal"}, {:lenses, "personal-chat"}] do
-        config = %{destinations: [], lenses: [], reflections: []} |> Map.put(collection, [%{name: name}])
-        assert {:error, {:reserved_definition_name, ^collection, ^name}} = JidoGralkor.Runtime.validate(config)
+        config =
+          %{destinations: [], lenses: [], reflections: []} |> Map.put(collection, [%{name: name}])
+
+        assert {:error, {:reserved_definition_name, ^collection, ^name}} =
+                 JidoGralkor.Runtime.validate(config)
       end
     end
   end
@@ -1236,18 +1256,28 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   describe "if a consumer Destination begins with personal/ or operator/" do
     test "then validation rejects the private or retired graph namespace" do
       for name <- ["personal/shared", "operator/shared"] do
-        assert {:error, {:reserved_destination_namespace, ^name}} = JidoGralkor.Runtime.validate(%{destinations: [%{name: name}], lenses: [], reflections: []})
+        assert {:error, {:reserved_destination_namespace, ^name}} =
+                 JidoGralkor.Runtime.validate(%{
+                   destinations: [%{name: name}],
+                   lenses: [],
+                   reflections: []
+                 })
       end
     end
   end
 
   describe "when a caller selects the retired operator Destination or Lens" do
     test "then the operation fails with an explicit migration error before reading or writing memory" do
-      start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}})
+      start_supervised!(
+        {JidoGralkor.Runtime,
+         owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}}
+      )
+
       for {collection, replacement} <- [{:destination!, "personal"}, {:lens!, "personal-chat"}] do
         assert_raise ArgumentError, ~r/retired/, fn ->
           apply(JidoGralkor.Runtime, collection, [self(), "operator"])
         end
+
         assert_raise ArgumentError, ~r/#{replacement}/, fn ->
           apply(JidoGralkor.Runtime, collection, [self(), "operator"])
         end

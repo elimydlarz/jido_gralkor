@@ -132,7 +132,8 @@ defmodule Gralkor.Client do
 
   @doc false
   def capture(_owner, _session, _operator, _agent, _user, _messages, _lens, _additional) do
-    raise ArgumentError, "positional capture was retired; use Client.capture(runtime_owner, %Gralkor.Capture{})"
+    raise ArgumentError,
+          "positional capture was retired; use Client.capture(runtime_owner, %Gralkor.Capture{})"
   end
 
   @doc false
@@ -489,8 +490,15 @@ defmodule Gralkor.Client do
       lenses when is_list(lenses) ->
         Enum.each(lenses, &validate_lens!/1)
         validate_unique_names!(lenses)
-        [[name: "personal-chat", destination: "personal", ontology: Gralkor.DefaultOntology,
-          ingestion: StoreIngestion]] ++ lenses
+
+        [
+          [
+            name: "personal-chat",
+            destination: "personal",
+            ontology: Gralkor.DefaultOntology,
+            ingestion: StoreIngestion
+          ]
+        ] ++ lenses
 
       lenses ->
         raise ArgumentError, "Lens registry must be a list, got #{inspect(lenses)}"

@@ -39,6 +39,7 @@ defmodule JidoGralkor.Runtime do
   def resolve_search!(owner, lens_names, destination_names) do
     Enum.each(lens_names, &reject_retired_selection!(:lenses, &1))
     Enum.each(destination_names, &reject_retired_selection!(:destinations, &1))
+
     case call!(owner, {:resolve_search, lens_names, destination_names}) do
       {:ok, resolved} -> resolved
       {:error, reason} -> raise ArgumentError, inspect(reason)
@@ -340,11 +341,19 @@ defmodule JidoGralkor.Runtime do
 
       reserved_destination =
         if collection == :destinations,
-          do: Enum.find(names, &(is_binary(&1) and String.starts_with?(&1, ["personal/", "operator/"])))
+          do:
+            Enum.find(
+              names,
+              &(is_binary(&1) and String.starts_with?(&1, ["personal/", "operator/"]))
+            )
 
       reserved_provenance =
         if collection in [:lenses, :reflections],
-          do: Enum.find(names, &(is_binary(&1) and String.contains?(&1, [" [lens: ", " [gralkor: "])))
+          do:
+            Enum.find(
+              names,
+              &(is_binary(&1) and String.contains?(&1, [" [lens: ", " [gralkor: "]))
+            )
 
       blank_index = Enum.find_index(names, &(not non_blank?(&1)))
 
@@ -359,7 +368,10 @@ defmodule JidoGralkor.Runtime do
           {:halt, {:error, {:reserved_destination_namespace, reserved_destination}}}
 
         collection == :lenses and Enum.any?(names, &(&1 in ["default", "operator"])) ->
-          {:halt, {:error, {:retired_definition_name, :lenses, Enum.find(names, &(&1 in ["default", "operator"])), "personal-chat"}}}
+          {:halt,
+           {:error,
+            {:retired_definition_name, :lenses,
+             Enum.find(names, &(&1 in ["default", "operator"])), "personal-chat"}}}
 
         collection == :destinations and "operator" in names ->
           {:halt, {:error, {:retired_definition_name, :destinations, "operator", "personal"}}}
@@ -554,13 +566,14 @@ defmodule JidoGralkor.Runtime do
   end
 
   defp validate_retired_references(configuration) do
-    references = Enum.map(configuration.lenses, &field(&1, :destination)) ++
-      Enum.flat_map(configuration.reflections, fn reflection ->
-        case field(reflection, :outputs) do
-          outputs when is_list(outputs) -> Enum.map(outputs, &field(&1, :destination))
-          _ -> []
-        end
-      end)
+    references =
+      Enum.map(configuration.lenses, &field(&1, :destination)) ++
+        Enum.flat_map(configuration.reflections, fn reflection ->
+          case field(reflection, :outputs) do
+            outputs when is_list(outputs) -> Enum.map(outputs, &field(&1, :destination))
+            _ -> []
+          end
+        end)
 
     if "operator" in references,
       do: {:error, {:retired_definition_name, :destinations, "operator", "personal"}},
@@ -653,17 +666,20 @@ defmodule JidoGralkor.Runtime do
   defp reserved_entity_kind(_ontology), do: nil
 
   defp reject_retired_selection!(:destinations, "operator") do
-    raise ArgumentError, "Destination \"operator\" was retired; migrate its graph and select \"personal\""
+    raise ArgumentError,
+          "Destination \"operator\" was retired; migrate its graph and select \"personal\""
   end
 
   defp reject_retired_selection!(:lenses, name) when name in ["operator", "default"] do
-    raise ArgumentError, "Lens #{inspect(name)} was retired; select \"personal-chat\" or explicit direct capture"
+    raise ArgumentError,
+          "Lens #{inspect(name)} was retired; select \"personal-chat\" or explicit direct capture"
   end
 
   defp reject_retired_selection!(_collection, _name), do: :ok
 
   defp fetch_definition!(owner, collection, name) do
     reject_retired_selection!(collection, name)
+
     case call!(owner, {:fetch, collection, name}) do
       {:ok, definition} -> definition
       {:error, reason} -> raise ArgumentError, inspect(reason)
@@ -672,6 +688,7 @@ defmodule JidoGralkor.Runtime do
 
   defp fetch_definitions!(owner, collection, names) do
     Enum.each(names, &reject_retired_selection!(collection, &1))
+
     case call!(owner, {:fetch_many, collection, names}) do
       {:ok, definitions} -> definitions
       {:error, reason} -> raise ArgumentError, inspect(reason)

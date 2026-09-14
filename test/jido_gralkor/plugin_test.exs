@@ -140,7 +140,10 @@ defmodule JidoGralkor.PluginTest do
   describe "when mount is given a non-blank agent name" do
     test "then it returns plugin state carrying that agent name" do
       assert {:ok, %{agent_name: "Susu"}} =
-               Plugin.mount(%{id: "user-1", state: %{}}, capture_destination: "personal", agent_name: "Susu")
+               Plugin.mount(%{id: "user-1", state: %{}},
+                 capture_destination: "personal",
+                 agent_name: "Susu"
+               )
     end
   end
 
@@ -164,9 +167,15 @@ defmodule JidoGralkor.PluginTest do
     test "then the selected Lens name is stored on the plugin state without copying its definition" do
       configure_lenses()
 
-      assert {:ok, %{capture_destination: "personal", agent_name: "Susu", ingestion_lens: "observations"}} =
+      assert {:ok,
+              %{
+                capture_destination: "personal",
+                agent_name: "Susu",
+                ingestion_lens: "observations"
+              }} =
                Plugin.mount(%{id: "operator-one", state: %{}},
-                 capture_destination: "personal", agent_name: "Susu",
+                 capture_destination: "personal",
+                 agent_name: "Susu",
                  ingestion_lens: "observations",
                  runtime_config: runtime_configuration()
                )
@@ -175,9 +184,15 @@ defmodule JidoGralkor.PluginTest do
 
   describe "when mount selects an ingestion Lens > where the selected Lens is packaged" do
     test "then mounting accepts the Lens" do
-      assert {:ok, %{capture_destination: "personal", agent_name: "Susu", ingestion_lens: "personal-chat"}} =
+      assert {:ok,
+              %{
+                capture_destination: "personal",
+                agent_name: "Susu",
+                ingestion_lens: "personal-chat"
+              }} =
                Plugin.mount(%{id: "operator-one", state: %{}},
-                 capture_destination: "personal", agent_name: "Susu",
+                 capture_destination: "personal",
+                 agent_name: "Susu",
                  ingestion_lens: "personal-chat"
                )
     end
@@ -185,9 +200,15 @@ defmodule JidoGralkor.PluginTest do
 
   describe "when mount selects an ingestion Lens > where the selected Lens is declared by that mount" do
     test "then mounting accepts the Lens" do
-      assert {:ok, %{capture_destination: "personal", agent_name: "Susu", ingestion_lens: "observations"}} =
+      assert {:ok,
+              %{
+                capture_destination: "personal",
+                agent_name: "Susu",
+                ingestion_lens: "observations"
+              }} =
                Plugin.mount(%{id: "operator-one", state: %{}},
-                 capture_destination: "personal", agent_name: "Susu",
+                 capture_destination: "personal",
+                 agent_name: "Susu",
                  ingestion_lens: "observations",
                  runtime_config: runtime_configuration()
                )
@@ -200,7 +221,8 @@ defmodule JidoGralkor.PluginTest do
 
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
-          capture_destination: "personal", agent_name: "Susu",
+          capture_destination: "personal",
+          agent_name: "Susu",
           ingestion_lens: "missing"
         )
       end
@@ -213,7 +235,8 @@ defmodule JidoGralkor.PluginTest do
 
       assert_raise ArgumentError, ~r/unknown Lens "observations"/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
-          capture_destination: "personal", agent_name: "Susu",
+          capture_destination: "personal",
+          agent_name: "Susu",
           ingestion_lens: "observations"
         )
       end
@@ -226,7 +249,8 @@ defmodule JidoGralkor.PluginTest do
 
       assert_raise ArgumentError, ~r/default_lens.*ingestion_lens/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
-          capture_destination: "personal", agent_name: "Susu",
+          capture_destination: "personal",
+          agent_name: "Susu",
           default_lens: "observations"
         )
       end
@@ -239,7 +263,8 @@ defmodule JidoGralkor.PluginTest do
                    ~r/search_destinations.*MemorySearch.*per-search.*destinations/,
                    fn ->
                      Plugin.mount(%{id: "operator-one", state: %{}},
-                       capture_destination: "personal", agent_name: "Susu",
+                       capture_destination: "personal",
+                       agent_name: "Susu",
                        search_destinations: ["memory"]
                      )
                    end
@@ -595,7 +620,18 @@ defmodule JidoGralkor.PluginTest do
 
   describe "when an agent turn completes > while a thread has committed to agent state > where the plugin was mounted with Lens selections" do
     test "then the capture carries the selected Lens" do
-      assert [[_, %Gralkor.Capture{session_id: "thread-one", operator_id: "operator-one", agent_name: "Susu", user_name: "Eli", route: {:lenses, ["observations"]}}]] = lens_capture()
+      assert [
+               [
+                 _,
+                 %Gralkor.Capture{
+                   session_id: "thread-one",
+                   operator_id: "operator-one",
+                   agent_name: "Susu",
+                   user_name: "Eli",
+                   route: {:lenses, ["observations"]}
+                 }
+               ]
+             ] = lens_capture()
     end
   end
 
@@ -794,7 +830,8 @@ defmodule JidoGralkor.PluginTest do
 
     lens_agent =
       agent("operator-one",
-        capture_destination: "personal", agent_name: "Susu",
+        capture_destination: "personal",
+        agent_name: "Susu",
         thread_id: "thread-one",
         request_traces: %{
           request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
@@ -842,7 +879,8 @@ defmodule JidoGralkor.PluginTest do
 
     {:ok, plugin_state} =
       Plugin.mount(%{id: "operator-one", state: %{}},
-        capture_destination: "personal", agent_name: "Susu",
+        capture_destination: "personal",
+        agent_name: "Susu",
         ingestion_lens: "observations",
         runtime_config: runtime_configuration()
       )

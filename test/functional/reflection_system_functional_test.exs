@@ -347,7 +347,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "when an agent runtime validates Reflection declarations > if a Reflection name contains the reserved direct-writer delimiter" do
     test "then validation fails identifying the Reflection and reserved provenance syntax" do
       assert {:error, {:reserved_provenance_syntax, :reflections, _}} =
-        Runtime.validate(%{destinations: [], lenses: [], reflections: [valid_definition(name: "review [gralkor: direct]")]})
+               Runtime.validate(%{
+                 destinations: [],
+                 lenses: [],
+                 reflections: [valid_definition(name: "review [gralkor: direct]")]
+               })
     end
   end
 
@@ -1466,10 +1470,22 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "when the packaged ERL Reflection delivers to personal memory" do
     test "then its artefact is searchable only by the invocation identity" do
       artefact = deliver_personal_erl()
+
       assert {:ok, [%{destination: "personal", artefact: ^artefact}]} =
-        Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "separate recurring jobs", destinations: ["personal"], result_type: :artefacts})
+               Client.search(self(), %Gralkor.Search{
+                 operator_id: "owner",
+                 query: "separate recurring jobs",
+                 destinations: ["personal"],
+                 result_type: :artefacts
+               })
+
       assert {:ok, []} =
-        Client.search(self(), %Gralkor.Search{operator_id: "dashboard:another", query: "separate recurring jobs", destinations: ["personal"], result_type: :artefacts})
+               Client.search(self(), %Gralkor.Search{
+                 operator_id: "dashboard:another",
+                 query: "separate recurring jobs",
+                 destinations: ["personal"],
+                 result_type: :artefacts
+               })
     end
 
     test "and its artefact identifier remains derived from the unchanged operator and invocation identifiers" do
@@ -1480,11 +1496,25 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   defp deliver_personal_erl do
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.InMemory)
-    start_supervised!({Runtime, owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}})
+
+    start_supervised!(
+      {Runtime, owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}}
+    )
+
     parent = self()
+
     assert {:ok, "personal-erl-invocation"} =
-      Client.reflect(self(), "erl", %{id: "personal-erl-invocation", operator_id: "owner", representations: [], invocation_context: %{}},
-        &send(parent, {:personal_erl, &1}), inference: &erl_output_for/1)
+             Client.reflect(
+               self(),
+               "erl",
+               %{
+                 id: "personal-erl-invocation",
+                 operator_id: "owner",
+                 representations: [],
+                 invocation_context: %{}
+               },
+               &send(parent, {:personal_erl, &1}), inference: &erl_output_for/1)
+
     assert_receive {:personal_erl, %{outcome: :delivered, artefact: artefact}}, 1_000
     artefact
   end

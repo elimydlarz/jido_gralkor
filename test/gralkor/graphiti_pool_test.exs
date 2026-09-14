@@ -638,7 +638,9 @@ defmodule Gralkor.GraphitiPoolTest do
 
     assert eventually(fn ->
              {present, _} =
-               Pythonx.eval("graphs[0].driver.stolen_extraction_started.is_set()", %{"graphs" => graphs})
+               Pythonx.eval("graphs[0].driver.stolen_extraction_started.is_set()", %{
+                 "graphs" => graphs
+               })
 
              Pythonx.decode(present)
            end)

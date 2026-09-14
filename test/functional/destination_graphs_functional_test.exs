@@ -172,15 +172,18 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
   describe "when personal memory is resolved for an existing identity" do
     test "then the identifier is preserved byte for byte in the logical graph name" do
       for identity <- ["owner", "dashboard:AbC-123", "Eli/a:b.c", "A B"] do
-        assert Gralkor.Destination.graph_id(%Gralkor.Destination{name: "personal"}, identity) == "personal/" <> identity
+        assert Gralkor.Destination.graph_id(%Gralkor.Destination{name: "personal"}, identity) ==
+                 "personal/" <> identity
       end
     end
 
     test "and punctuation-sensitive identifiers resolve to distinct physical graphs" do
-      names = for identity <- ["a:b", "a_b", "a/b", "A:b"] do
-        Gralkor.Destination.graph_id(%Gralkor.Destination{name: "personal"}, identity)
-        |> Client.sanitize_group_id()
-      end
+      names =
+        for identity <- ["a:b", "a_b", "a/b", "A:b"] do
+          Gralkor.Destination.graph_id(%Gralkor.Destination{name: "personal"}, identity)
+          |> Client.sanitize_group_id()
+        end
+
       assert length(Enum.uniq(names)) == 4
     end
   end

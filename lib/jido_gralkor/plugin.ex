@@ -124,17 +124,20 @@ defmodule JidoGralkor.Plugin do
     names = ["personal", "global"] ++ Enum.map(runtime_config.destinations, &fetch_opt(&1, :name))
 
     if name == "operator" do
-      raise ArgumentError, "capture Destination \"operator\" was retired; migrate and select \"personal\""
+      raise ArgumentError,
+            "capture Destination \"operator\" was retired; migrate and select \"personal\""
     end
 
     unless name in names do
-      raise ArgumentError, "invalid :capture_destination #{inspect(name)}; select a registered Destination explicitly"
+      raise ArgumentError,
+            "invalid :capture_destination #{inspect(name)}; select a registered Destination explicitly"
     end
   end
 
   defp validate_mount_lens!(runtime_config, lens_name) do
     if lens_name in ["operator", "default"] do
-      raise ArgumentError, "Lens #{inspect(lens_name)} was retired; select \"personal-chat\" or explicit direct capture"
+      raise ArgumentError,
+            "Lens #{inspect(lens_name)} was retired; select \"personal-chat\" or explicit direct capture"
     end
 
     names =
@@ -242,14 +245,15 @@ defmodule JidoGralkor.Plugin do
                 name -> {:lenses, [name]}
               end
 
-            result = Client.capture(self(), %Gralkor.Capture{
-              session_id: session_id,
-              operator_id: agent.id,
-              agent_name: agent_name(agent),
-              user_name: user_name,
-              messages: messages,
-              route: route
-            })
+            result =
+              Client.capture(self(), %Gralkor.Capture{
+                session_id: session_id,
+                operator_id: agent.id,
+                agent_name: agent_name(agent),
+                user_name: user_name,
+                messages: messages,
+                route: route
+              })
 
             case result do
               :ok -> :ok
@@ -315,7 +319,9 @@ defmodule JidoGralkor.Plugin do
           :error -> Map.fetch(refs, "jido_gralkor_lens")
           found -> found
         end
-      _ -> :error
+
+      _ ->
+        :error
     end
   end
 
