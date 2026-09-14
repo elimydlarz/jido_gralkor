@@ -345,6 +345,28 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert {:ok, current} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
       assert hd(current["graphs"])["source_inventory"] == original
     end
+    test "and two punctuation-sensitive operator identities remain isolated through public historical recall", context do
+      for {identity, content} <- [{"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
+        seed_history(context.database, identity)
+        query(context.database, "operator/" <> identity, "MATCH (e:Episodic {uuid: 'episode'}) SET e.content = '" <> content <> "'")
+      end
+      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+      assert {:ok, _} = PersonalGraphMigration.prepare(context.connection, ["a/b", "a_b"], %{}, journal)
+      assert {:ok, _} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      start_public_runtime(context)
+      for {identity, content} <- [{"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
+        assert {:ok, results} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: identity, query: "amber", destinations: ["personal"]})
+        assert Enum.filter(results, &Map.has_key?(&1.episode, :content)) == [%{destination: "personal", episode: %{content: content, source_description: "captured [lens: operator]", lens: "operator"}}]
+      end
+    end
+
+    test "and migrated historical episodes remain searchable without an active operator Lens", context do
+      migrate_history(context)
+      start_public_runtime(context)
+      assert {:ok, results} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "orchard", destinations: ["personal"]})
+      assert Enum.any?(results, &(&1.episode[:content] == "remember amber orchard" and &1.episode[:lens] == "operator"))
+      assert {:error, _} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "orchard", lenses: ["operator"]})
+    end
   end
 
   describe "when an interrupted private graph migration resumes from its persisted manifest" do
@@ -415,6 +437,14 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
   end
 
   describe "when an application rolls back a private graph migration before admitting new writers" do
+    test "then public historical recall through the original graph returns the original memory", context do
+      journal = prepare_history(context)
+      assert {:ok, _} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+      assert {:ok, _} = PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
+      start_public_runtime(context)
+      assert {:ok, episodes} = Gralkor.GraphitiPool.search_episodes("operator/owner", "orchard", 20)
+      assert Enum.any?(episodes, &(&1[:content] == "remember amber orchard"))
+    end
     test "and only matching migration-owned target graphs are removed", context do
       journal = prepare_history(context)
       query(context.database, "unrelated", "CREATE (:Memory {uuid: 'preserved'})")
@@ -483,30 +513,6 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     {graph["source_inventory"], graph["target_inventory"]}
   end
 
-  describe "when an application migrates quiescent historical private graphs" do
-    test "and two punctuation-sensitive operator identities remain isolated through public historical recall", context do
-      for {identity, content} <- [{"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
-        seed_history(context.database, identity)
-        query(context.database, "operator/" <> identity, "MATCH (e:Episodic {uuid: 'episode'}) SET e.content = '" <> content <> "'")
-      end
-      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
-      assert {:ok, _} = PersonalGraphMigration.prepare(context.connection, ["a/b", "a_b"], %{}, journal)
-      assert {:ok, _} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
-      start_public_runtime(context)
-      for {identity, content} <- [{"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
-        assert {:ok, results} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: identity, query: "amber", destinations: ["personal"]})
-        assert Enum.filter(results, &Map.has_key?(&1.episode, :content)) == [%{destination: "personal", episode: %{content: content, source_description: "captured [lens: operator]", lens: "operator"}}]
-      end
-    end
-
-    test "and migrated historical episodes remain searchable without an active operator Lens", context do
-      migrate_history(context)
-      start_public_runtime(context)
-      assert {:ok, results} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "orchard", destinations: ["personal"]})
-      assert Enum.any?(results, &(&1.episode[:content] == "remember amber orchard" and &1.episode[:lens] == "operator"))
-      assert {:error, _} = Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "orchard", lenses: ["operator"]})
-    end
-  end
 
   describe "when an application migrates quiescent historical private graphs > when a completed Reflection invocation is replayed" do
     test "then public Reflection delivery returns the original immutable artefact", context do
@@ -520,16 +526,6 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
-  describe "when an application rolls back a private graph migration before admitting new writers" do
-    test "then public historical recall through the original graph returns the original memory", context do
-      journal = prepare_history(context)
-      assert {:ok, _} = PersonalGraphMigration.apply(context.connection, journal, @quiescence)
-      assert {:ok, _} = PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
-      start_public_runtime(context)
-      assert {:ok, episodes} = Gralkor.GraphitiPool.search_episodes("operator/owner", "orchard", 20)
-      assert Enum.any?(episodes, &(&1[:content] == "remember amber orchard"))
-    end
-  end
 
   defp replay_migrated_artefact(context, state) do
     seed_history(context.database, "owner")
