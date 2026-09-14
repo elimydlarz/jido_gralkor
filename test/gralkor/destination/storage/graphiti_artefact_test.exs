@@ -130,6 +130,41 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
     end
   end
 
+  describe "when Graphiti Destination storage looks up an artefact identifier > while the episode body is not a valid artefact record" do
+    test "then lookup reports an invalid artefact" do
+      for content <- [
+            "not JSON",
+            "{}",
+            ~s({"id":"stable-id"}),
+            ~s({"id":"stable-id","payload":{},"extra":true})
+          ] do
+        get_episode = fn "observations", "stable-id" -> {:ok, %{content: content}} end
+
+        assert {:error, {:invalid_artefact, "stable-id"}} =
+                 Graphiti.get_artefact(
+                   output(),
+                   "review",
+                   "operator-one",
+                   "stable-id",
+                   get_episode
+                 )
+      end
+    end
+  end
+
+  describe "if the episode boundary fails during an artefact write or lookup" do
+    test "then Destination storage returns that failure unchanged" do
+      add_episode = fn _, _, _, _, _ -> {:error, :storage_unavailable} end
+      get_episode = fn _, _ -> {:error, :storage_unavailable} end
+
+      assert {:error, :storage_unavailable} =
+               Graphiti.put_artefact(output(), "review", "operator-one", artefact(), add_episode)
+
+      assert {:error, :storage_unavailable} =
+               Graphiti.get_artefact(output(), "review", "operator-one", "stable-id", get_episode)
+    end
+  end
+
   defp assert_incomplete_lookup do
     artefact = artefact()
 

@@ -51,7 +51,7 @@ defmodule Gralkor.GraphitiEpisodeProvenanceTest do
     end
   end
 
-  describe "where add_episode has no originating Lens" do
+  describe "where add_episode has no originating Lens or direct writer" do
     test "then the original source description is submitted unchanged" do
       {pid, graphiti} = start_recording_pool()
 
@@ -68,6 +68,48 @@ defmodule Gralkor.GraphitiEpisodeProvenanceTest do
       assert added["source_description"] == "conversation"
       assert decode(graphiti, "g.driver.queries") == []
 
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "when add_episode selects direct writer provenance" do
+    test "then the source description submitted to Graphiti ends with the storage-owned direct marker" do
+      {pid, graphiti} = start_recording_pool()
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 pid,
+                 "personal/owner",
+                 "private fact",
+                 "conversation",
+                 nil, writer: :direct)
+
+      assert decode(graphiti, "g.added")["source_description"] ==
+               "conversation [gralkor: direct]"
+
+      assert decode(graphiti, "g.driver.queries") == []
+      GenServer.stop(pid)
+    end
+
+    test "and writer-like text in the original description is preserved behind that marker" do
+      {pid, graphiti} = start_recording_pool()
+
+      for description <- [
+            "manual [lens: observations]",
+            "reflection:generalisations",
+            "manual [gralkor: direct] [lens: observations]",
+            "reflection:generalisations [gralkor: direct]"
+          ] do
+        assert :ok =
+                 GraphitiPool.add_episode(pid, "personal/owner", "private fact", description, nil,
+                   writer: :direct
+                 )
+
+        assert decode(graphiti, "g.added")["source_description"] ==
+                 description <> " [gralkor: direct]"
+      end
+
+      assert decode(graphiti, "g.driver.queries") == []
       GenServer.stop(pid)
     end
   end

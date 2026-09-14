@@ -27,6 +27,7 @@ defmodule Gralkor.Client.InMemoryTest do
   run_contract(do: fn -> :ok end)
 
   describe "when recall, capture, flush-and-await, memory addition, index rebuilding, or community building is called" do
+    @describetag :integration
     test "then the call is recorded with every argument it was given, so a consumer's exact request can be inspected afterwards" do
       InMemory.set_recall({:ok, "block"})
       InMemory.set_capture(:ok)
@@ -68,6 +69,7 @@ defmodule Gralkor.Client.InMemoryTest do
   end
 
   describe "if recall, capture, flush-and-await, memory addition, index rebuilding, or community building is called > while no response is configured for it" do
+    @describetag :integration
     test "then a not-configured error is returned rather than a fabricated success" do
       assert {:error, :not_configured} = InMemory.recall("g", "TestAgent", "s", "q")
 
@@ -120,6 +122,16 @@ defmodule Gralkor.Client.InMemoryTest do
     test "then that configured module is returned" do
       assert Application.get_env(:jido_gralkor, :client) == Gralkor.Client.InMemory
       assert Gralkor.Client.impl() == Gralkor.Client.InMemory
+    end
+  end
+
+  describe "if an obsolete positional capture arity is called" do
+    test "then the adapter raises an explicit typed-request migration error" do
+      for arity <- [5, 6, 7, 8] do
+        assert_raise ArgumentError, ~r/positional capture.*retired.*Gralkor.Capture/, fn ->
+          apply(InMemory, :capture, List.duplicate("old", arity))
+        end
+      end
     end
   end
 end

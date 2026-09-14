@@ -93,6 +93,13 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
     end
   end
 
+  describe "when in-memory Destination storage looks up an absent artefact identifier" do
+    test "then lookup reports not found" do
+      assert {:error, :not_found} =
+               InMemory.get_artefact(output(), "review", "operator-one", "absent")
+    end
+  end
+
   defp output,
     do: %{
       kind: :destination,

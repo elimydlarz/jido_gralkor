@@ -23,6 +23,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "if a capture is requested with a missing or blank session id" do
+    @describetag :integration
     setup :start_capture_buffer
 
     test "then an argument error naming the session id is raised" do
@@ -49,6 +50,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "if a capture is requested with a missing or blank agent name" do
+    @describetag :integration
     setup :start_capture_buffer
 
     test "then an argument error naming the agent name is raised" do
@@ -75,6 +77,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "if a capture is requested with a missing or blank user name" do
+    @describetag :integration
     setup :start_capture_buffer
 
     test "then an argument error naming the user name is raised" do
@@ -187,6 +190,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "when typed direct capture names its session, Destination, operator, agent, and user" do
+    @describetag :integration
     setup :start_capture_buffer
 
     test "then the logical group is buffered unchanged so the physical Graphiti boundary can encode it exactly once" do
@@ -255,6 +259,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "where a turn is captured through a named Lens" do
+    @describetag :integration
     setup :start_capture_buffer
 
     test "then the operator id is buffered unchanged, so the Lens keeps the operator's original identity" do
@@ -334,6 +339,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "where typed capture selects multiple named Lenses" do
+    @describetag :integration
     setup :start_capture_buffer
 
     test "then each named Lens receives that turn in its own flush batch" do
@@ -381,6 +387,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "if named-Lens capture is requested with a missing or blank operator identifier" do
+    @describetag :integration
     setup :start_capture_buffer
 
     test "then an argument error naming the operator identifier is raised" do
@@ -419,6 +426,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "when a session holding buffered turns is flushed" do
+    @describetag :integration
     setup :start_capture_buffer
 
     test "then those turns are scheduled for flush" do
@@ -464,6 +472,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "when a session holding no buffered turns is flushed" do
+    @describetag :integration
     setup :start_capture_buffer
 
     test "then success is returned" do
@@ -477,6 +486,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "when buffered turns are flushed and awaited with a positive timeout > while the flush completes inside the timeout" do
+    @describetag :integration
     setup :start_capture_buffer
 
     test "then success is returned" do
@@ -503,6 +513,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "when buffered turns are flushed and awaited with a positive timeout > while the flush does not complete inside the timeout" do
+    @describetag :integration
     setup do
       test_pid = self()
 
@@ -541,6 +552,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "when buffered turns are flushed and awaited with a positive timeout > if the backend fails before the timeout elapses" do
+    @describetag :integration
     setup do
       start_supervised!(
         {CaptureBuffer,
@@ -561,6 +573,7 @@ defmodule Gralkor.Client.NativeTest do
   end
 
   describe "when a session holding no buffered turns is flushed and awaited" do
+    @describetag :integration
     setup :start_capture_buffer
 
     test "then success is returned" do
@@ -1169,6 +1182,16 @@ defmodule Gralkor.Client.NativeTest do
 
         assert_raise ArgumentError, ~r/recall_deadline_ms/, fn ->
           Native.recall("g", "TestAgent", nil, "query")
+        end
+      end
+    end
+  end
+
+  describe "if an obsolete positional capture arity is called" do
+    test "then the adapter raises an explicit typed-request migration error" do
+      for arity <- [5, 6, 7, 8] do
+        assert_raise ArgumentError, ~r/positional capture.*retired.*Gralkor.Capture/, fn ->
+          apply(Native, :capture, List.duplicate("old", arity))
         end
       end
     end

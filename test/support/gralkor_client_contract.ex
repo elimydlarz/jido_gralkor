@@ -62,6 +62,7 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "if a recall or a capture is requested with a missing or blank agent name" do
+        @describetag :integration
         test "then an argument error is raised at the port boundary" do
           unquote(setup_block).()
           configure_recall({:ok, "should-not-be-returned"})
@@ -106,6 +107,7 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "when a typed direct capture names its session, Destination, operator, agent, and user > while the backend acknowledges the capture" do
+        @describetag :integration
         test "then success is returned" do
           unquote(setup_block).()
           configure_capture(:ok)
@@ -123,6 +125,7 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "when a typed direct capture names its session, Destination, operator, agent, and user > if the backend fails" do
+        @describetag :integration
         test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_capture({:error, :write_failed})
@@ -140,6 +143,7 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "when a typed direct capture names its session, Destination, operator, agent, and user > while its messages have user, assistant or behaviour roles" do
+        @describetag :integration
         test "then the request selects direct Destination memory without a caller ontology argument" do
           unquote(setup_block).()
           configure_capture(:ok)
@@ -170,6 +174,7 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "where a typed capture selects one or more named Lenses > while the backend acknowledges the capture" do
+        @describetag :integration
         test "then success is returned" do
           unquote(setup_block).()
           configure_capture(:ok)
@@ -189,6 +194,7 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "where a typed capture selects one or more named Lenses > if the backend fails" do
+        @describetag :integration
         test "then that failure is returned unchanged" do
           unquote(setup_block).()
           configure_capture({:error, :write_failed})
@@ -208,6 +214,7 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "if a capture is requested with a missing or blank user name" do
+        @describetag :integration
         test "then an argument error is raised at the port boundary" do
           unquote(setup_block).()
           configure_capture(:ok)
@@ -242,6 +249,7 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "if a capture is requested with a missing or blank session id" do
+        @describetag :integration
         test "then an argument error is raised at the port boundary" do
           unquote(setup_block).()
           configure_capture(:ok)
@@ -276,6 +284,7 @@ defmodule Gralkor.ClientContract do
       end
 
       describe "if named-Lens capture is requested with a missing or blank operator identifier" do
+        @describetag :integration
         test "then an argument error is raised at the port boundary" do
           unquote(setup_block).()
           configure_capture(:ok)
