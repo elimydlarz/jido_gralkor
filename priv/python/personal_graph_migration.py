@@ -3,6 +3,7 @@ from importlib.metadata import version
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import time as clock
@@ -338,14 +339,19 @@ def execute(request: dict[str, object]) -> dict[str, object]:
         or isinstance(host, str) and host.strip() and type(port) is int and 0 < port <= 65535
     ):
         raise ValueError("an explicit graph endpoint requires a Unix socket or host and port")
+    connection = dict(connection)
+    for field, default in (("socket_timeout", 30), ("socket_connect_timeout", 5)):
+        value = connection.setdefault(field, default)
+        if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
+            raise ValueError(f"finite positive connection deadline required: {field}")
     if action == "plan":
-        with FalkorDB(**request["connection"]) as database:
+        with FalkorDB(**connection) as database:
             return plan(database, request["operator_ids"], request["configuration_references"])
     path = Path(request["journal_path"])
     with open(path.with_suffix(path.suffix + ".lock"), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if action == "prepare":
-            with FalkorDB(**request["connection"]) as database:
+            with FalkorDB(**connection) as database:
                 manifest = plan(database, request["operator_ids"], request["configuration_references"])
                 validate_preparation(manifest)
                 persist(path, manifest, create=True)
@@ -354,7 +360,7 @@ def execute(request: dict[str, object]) -> dict[str, object]:
         with open(path) as stream:
             manifest = json.load(stream)
         validate_manifest(manifest)
-        with FalkorDB(**request["connection"]) as database:
+        with FalkorDB(**connection) as database:
             if action == "rollback":
                 return rollback(database, path, manifest)
             if action == "advance":
