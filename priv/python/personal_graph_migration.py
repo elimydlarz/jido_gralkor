@@ -11,6 +11,9 @@ import time as clock
 from falkordb import FalkorDB
 from falkordb.graph import Graph
 from falkordb.query_result import QueryResult
+from redis.backoff import NoBackoff
+from redis.exceptions import ConnectionError, TimeoutError
+from redis.retry import Retry
 
 
 def canonical(value: object) -> object:
@@ -228,10 +231,19 @@ def advance(database: FalkorDB, path: Path, manifest: dict[str, object]) -> dict
         target = database.select_graph(entry["target_physical"])
         if entry["phase"] == "planned":
             entry["phase"] = "copying"
+            entry["copy_server_run_id"] = database.connection.info("server")["run_id"]
             persist(path, manifest)
         if entry["phase"] == "copying":
             if target.name not in database.list_graphs():
-                source.copy(target.name)
+                entry["copy_server_run_id"] = database.connection.info("server")["run_id"]
+                persist(path, manifest)
+                try:
+                    source.copy(target.name)
+                except (ConnectionError, TimeoutError) as error:
+                    raise ValueError(
+                        "GRAPH.COPY outcome is uncertain; copy intent remains journaled. "
+                        "A timeout does not cancel server work. Verify the target before resuming."
+                    ) from error
             schema_ready(target)
             entry["target_exists"] = True
             entry["phase"] = "copied"
@@ -344,6 +356,9 @@ def execute(request: dict[str, object]) -> dict[str, object]:
         value = connection.setdefault(field, default)
         if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
             raise ValueError(f"finite positive connection deadline required: {field}")
+    # Mutations must never be replayed after losing their server response.
+    connection["retry"] = Retry(NoBackoff(), 0)
+    connection["retry_on_error"] = []
     if action == "plan":
         with FalkorDB(**connection) as database:
             return plan(database, request["operator_ids"], request["configuration_references"])
