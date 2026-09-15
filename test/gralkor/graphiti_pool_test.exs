@@ -942,7 +942,11 @@ defmodule Gralkor.GraphitiPoolTest do
       GraphitiPool.for(pid, "g1")
 
       on_exit(fn ->
-        Pythonx.eval("import asyncio; asyncio._gralkor_loop.call_soon_threadsafe(g.release_first.set)", %{"g" => g})
+        Pythonx.eval(
+          "import asyncio; asyncio._gralkor_loop.call_soon_threadsafe(g.release_first.set)",
+          %{"g" => g}
+        )
+
         if Process.alive?(pid), do: GenServer.stop(pid)
       end)
 
@@ -952,7 +956,10 @@ defmodule Gralkor.GraphitiPoolTest do
 
       await_episode_waiting(pid, 1)
 
-      Pythonx.eval("import asyncio; asyncio._gralkor_loop.call_soon_threadsafe(g.release_first.set)", %{"g" => g})
+      Pythonx.eval(
+        "import asyncio; asyncio._gralkor_loop.call_soon_threadsafe(g.release_first.set)",
+        %{"g" => g}
+      )
 
       assert Task.await(first, 5_000) == :ok
       assert Task.await(second, 5_000) == :ok
