@@ -350,7 +350,13 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                  :document
                )
 
-      assert [%{"source_description" => "manual [gralkor: direct]", "source" => "text", "writer" => "direct"}] =
+      assert [
+               %{
+                 "source_description" => "manual [gralkor: direct]",
+                 "source" => "text",
+                 "writer" => "direct"
+               }
+             ] =
                added_episodes(graphiti)
     end
 
@@ -358,7 +364,11 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
       graphiti = use_native_boundary()
 
       set_episode_search_fixture(graphiti, [
-        %{content: "Direct memory", source_description: "captured [gralkor: direct]", writer: "direct"}
+        %{
+          content: "Direct memory",
+          source_description: "captured [gralkor: direct]",
+          writer: "direct"
+        }
       ])
 
       assert {:ok, [%{episode: episode}]} =
