@@ -1354,7 +1354,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
         server.config_set('loglevel', 'warning')
         server.config_set('save', '')
         import os
-    connection = {'unix_socket_path': os.path.realpath(server.socket_file)}
+        connection = {'unix_socket_path': os.path.realpath(server.socket_file)}
         if password is not None:
             secret = password.decode()
             server.execute_command('ACL', 'SETUSER', 'migration-fixture', 'on', '>' + secret, '~*', '+@all')
