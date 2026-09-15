@@ -387,7 +387,7 @@ defmodule Gralkor.GraphitiPool do
         #{@episode_writer_hydration}
         episodes = res.episodes
         if episodes:
-          asyncio._gralkor_run(hydrate_episode_writers(g.driver, episodes))
+          asyncio._gralkor_run(hydrate_episode_writers(getattr(g, 'driver', None), episodes))
         def lens_episode(episode):
           source_description = episode.source_description or ''
           lens_marker = ' [lens: '
