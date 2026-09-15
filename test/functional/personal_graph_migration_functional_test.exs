@@ -1353,6 +1353,11 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     %{copies: copies, finished: finished}
   end
 
+  defp graph_names(database) do
+    {result, _} = Pythonx.eval("sorted(database.list_graphs())", %{"database" => database})
+    Pythonx.decode(result)
+  end
+
   defp server_run_id(fixture) do
     {result, _} =
       Pythonx.eval("server.info('server')['run_id']", %{"server" => fixture.server})
