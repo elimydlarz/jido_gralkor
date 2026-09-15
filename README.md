@@ -127,7 +127,7 @@ end
 
 **4. A non-blank human name in agent state.** Before any completed or failed turn is captured, populate `agent.state[:user_name]` with the current human's name (for example, from the request's tool context in `on_before_cmd/2`). The plugin deliberately has no generic `"User"` fallback: a missing or blank value raises `ArgumentError` before capture.
 
-`:jido_gralkor` auto-supervises its shared storage runtime (Python → GraphitiPool → CaptureBuffer) when a FalkorDB backend is configured — no separate `Gralkor.Server` to wire into your supervision tree, and no readiness gate to add. Each `JidoGralkor.Plugin` also contributes one linked `JidoGralkor.Runtime` child beneath its consuming `Jido.AgentServer`; that child owns the agent's domain configuration and admitted Reflection work. Graceful application shutdown waits for active capture flush work and flushes buffered capture before CaptureBuffer stops.
+`:jido_gralkor` auto-supervises its shared storage runtime (Python → GraphitiPool → CaptureBuffer) when a FalkorDB backend is configured — no separate `Gralkor.Server` to wire into your supervision tree, and no readiness gate to add. Each `JidoGralkor.Plugin` also contributes one linked `JidoGralkor.Runtime` child beneath its consuming `Jido.AgentServer`; that child owns the agent's domain configuration and admitted Reflection work. Graceful application shutdown waits for active capture flush work and flushes buffered capture before CaptureBuffer stops. GraphitiPool then closes its backend connection and stops the embedded FalkorDB server it owns.
 
 ## Configuration reference
 
@@ -185,6 +185,8 @@ Use `route: {:lenses, ["personal-chat", "observations"]}` to process a turn thro
 Positional capture adapters are retired and raise migration guidance. `Client.personal_graph_id/1` resolves the private graph for the same identifier. The deprecated `operator_graph_id/1` helper delegates to that corrected resolution. Do not pass a resolved graph as `operator_id`.
 
 Migrate configuration references from Destination `operator` to `personal` and selected Lens `operator` to `personal-chat`. Keep identifiers and historical provenance unchanged. This API/configuration change does not move stored graphs: follow [the graph and Phil migration runbook](PERSONAL_MEMORY_MIGRATION.md) for dry-run manifests, quiescent copying, interrupted-run recovery, verification, and rollback on isolated copies before an authorized live cutover.
+
+Migration journals bind operations to the recorded endpoint identity. Recovery at a different endpoint requires an explicit rebind, quiescence evidence, and matching graph inventories. Migration connections have finite connect/read timeouts and no automatic retries; an uncertain copy retains its journal for validated recovery or guarded rollback.
 
 ### Environment variables
 
@@ -846,6 +848,8 @@ mix test.all          # Unit, Integration, Functional, Journey, and Node tests
 ```
 
 Functional tests require their documented provider credentials and can send test inputs to external model providers. `mix test.fast` is the routine local feedback command; use `mix test.changed` only when the affected Functional boundary is intentionally available.
+
+Run native test VMs sequentially in an isolated environment, such as a dedicated container or host. The first embedded runtime startup in a VM sweeps pre-existing bundled Redis server processes; sharing its process namespace with another embedded Gralkor runtime can terminate that runtime's server. Tests that temporarily reset the once-per-VM sweep guard restore its prior state afterward.
 
 ## What's in the library
 
