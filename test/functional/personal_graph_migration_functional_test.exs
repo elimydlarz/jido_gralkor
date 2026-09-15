@@ -119,6 +119,21 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
 
       assert message =~ "target" or message =~ "source"
     end
+
+    test "then an identical restored clone cannot be used by apply or rollback without rebind", context do
+      %{restored: restored} = restore_history(context)
+      journal = Path.join(context.directory, "identical-clone-bound.json")
+
+      assert {:ok, _manifest} =
+               PersonalGraphMigration.prepare(restored.connection, ["owner"], %{}, journal)
+
+      for operation <- [:apply, :rollback] do
+        assert {:error, message} =
+                 apply(PersonalGraphMigration, operation, [context.connection, journal, @quiescence])
+
+        assert message =~ "endpoint identity"
+      end
+    end
   end
 
   describe "when an application migrates a consistent backup restored into a separate FalkorDB server" do
