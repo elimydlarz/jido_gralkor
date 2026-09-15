@@ -64,6 +64,17 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when an application requests a private graph migration > if a connection deadline is not a finite positive duration" do
+    test "then migration rejects the deadline before connecting to a graph" do
+      for field <- [:socket_timeout, :socket_connect_timeout], value <- [nil, 0, -1, true, "5"] do
+        connection = Keyword.put([host: "127.0.0.1", port: 1], field, value)
+
+        assert {:error, message} = PersonalGraphMigration.plan(connection, ["owner"], %{})
+        assert message =~ "finite positive connection deadline"
+      end
+    end
+  end
+
   describe "when an application migrates a consistent backup restored into a separate FalkorDB server" do
     test "then restored graph content and operational schema remain intact through migration and public recall",
          context do
