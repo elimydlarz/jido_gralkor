@@ -165,6 +165,8 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
                 self.active_writes = 0
                 self.max_active_writes = 0
                 self.searches_during_write = 0
+                self.write_started = asyncio.Event()
+                self.release_write = asyncio.Event()
                 self.edge_vector_searches = 0
                 self.edge_fulltext_searches = 0
                 self.resolve_empty_candidates = False
@@ -173,20 +175,23 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
             async def add_episode(self, **kwargs):
                 self.active_writes += 1
                 self.max_active_writes = max(self.max_active_writes, self.active_writes)
-                if self.resolve_empty_candidates:
-                    from graphiti_core.search.search_config_recipes import EDGE_HYBRID_SEARCH_RRF
-                    from graphiti_core.search.search_filters import SearchFilters
-                    from graphiti_core.utils.maintenance import edge_operations
-                    result = await edge_operations.search(
-                        None,
-                        'candidate fact',
-                        group_ids=['owner'],
-                        config=EDGE_HYBRID_SEARCH_RRF,
-                        search_filter=SearchFilters(edge_uuids=[]),
-                    )
-                    self.episode_continued = result.edges == []
-                await asyncio.sleep(0.1)
-                self.active_writes -= 1
+                self.write_started.set()
+                try:
+                    if self.resolve_empty_candidates:
+                        from graphiti_core.search.search_config_recipes import EDGE_HYBRID_SEARCH_RRF
+                        from graphiti_core.search.search_filters import SearchFilters
+                        from graphiti_core.utils.maintenance import edge_operations
+                        result = await edge_operations.search(
+                            None,
+                            'candidate fact',
+                            group_ids=['owner'],
+                            config=EDGE_HYBRID_SEARCH_RRF,
+                            search_filter=SearchFilters(edge_uuids=[]),
+                        )
+                        self.episode_continued = result.edges == []
+                    await self.release_write.wait()
+                finally:
+                    self.active_writes -= 1
 
             async def search(self, *args, **kwargs):
                 if self.active_writes:
@@ -249,9 +254,25 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
 
   defp overlap_search_with_write(pool, graph) do
     write = Task.async(fn -> Native.memory_add("owner", "episode", "manual") end)
-    assert_eventually(fn -> graph_value(graph, "active_writes") == 1 end)
-    search_result = GraphitiPool.search(pool, "owner", "query", 10)
-    %{search_result: search_result, write_result: Task.await(write, 5_000)}
+
+    try do
+      assert_eventually(fn -> graph_value(graph, "active_writes") == 1 end)
+
+      search = Task.async(fn -> GraphitiPool.search(pool, "owner", "query", 10) end)
+
+      search_result =
+        case Task.yield(search, 1_000) do
+          {:ok, result} -> result
+          nil ->
+            Task.shutdown(search, :brutal_kill)
+            flunk("search did not complete while episode write was active")
+        end
+
+      %{search_result: search_result, write_result: :ok}
+    after
+      Pythonx.eval("graph.release_write.set()", %{"graph" => graph})
+      Task.await(write, 5_000)
+    end
   end
 
   defp assert_eventually(assertion, attempts \\ 100)
