@@ -44,7 +44,8 @@ defmodule Mix.Tasks.Gralkor.MigratePersonal do
           apply(PersonalGraphMigration, operation_atom(operation), [
             connection,
             Map.fetch!(request, "journal_path"),
-            Map.fetch!(request, "quiescence")
+            Map.fetch!(request, "quiescence"),
+            %{endpoint_rebind: request["endpoint_rebind"]}
           ])
       end
 
