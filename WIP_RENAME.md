@@ -1,6 +1,6 @@
 # Personal memory naming and capture correction
 
-Status: implementation, complete package Functional, and both Stop gates verified; final Journeys and independent review in progress, 2026-09-15. The operator explicitly authorized this document end to end across both repositories, including contract reconciliation, implementation, isolated migration/rollback verification, and final independent review. Publication, deployment, and live-data migration remain outside that authorization.
+Status: implementation, complete package Functional/Journey, and both Stop gates verified; final Phil Journey and independent review in progress, 2026-09-15. The operator explicitly authorized this document end to end across both repositories, including contract reconciliation, implementation, isolated migration/rollback verification, and final independent review. Publication, deployment, and live-data migration remain outside that authorization.
 
 Implemented decisions: `Gralkor.Capture` is the typed runtime-targeted request; `{:direct, destination}` and `{:lenses, names}` dispatch exclusively. Mounts require `capture_destination`. The packaged names are `personal-chat` and `personal`, with unchanged operator identifiers. Positional capture calls raise migration guidance. Direct provenance is storage-owned, and historical provenance remains unchanged. Phil has guarded persisted-configuration migration and archival delivery/projection routing that retains original snapshots and hashes.
 
@@ -311,6 +311,7 @@ These results belong to the implementation session. Pending full gates are not i
 | Package Functional suite before shutdown fix | 593 passed, 887 excluded; 172.7 seconds; exit 0, including approved real OpenAI ontology extraction and all migration tests | `/private/tmp/jgr-rename-full-functional.log` |
 | Final complete package Functional suite | 597 passed, 887 excluded; 171.5 seconds; exit 0; includes the four added deadline/recovery leaves and macOS fixture logging correction | `/private/tmp/jgr-rename-final-597-functional.log` |
 | Package memory Journey before shutdown fix | 44 passed; 266.1 seconds; real approved OpenAI capture, Reflection, recall, isolation, provenance, and replacement lifecycle | `/tmp/gralkor-journey-rename.log` |
+| Final package memory Journey | 44 passed; 209.0 seconds; exit 0; owned BEAM and Redis exited and disposable data directory was removed | `/tmp/gralkor-journey-rename-shutdown.log`, `/tmp/gralkor-journey-rename-shutdown.exit` |
 | Phil full Functional | 608 passed, 798 excluded; 670.2 seconds | `/private/tmp/phil-rename-full-functional.log` |
 | Phil final installed Stop gate | 796 Unit/Integration passed, 620 excluded; 167.6 seconds; hook exit 0; actual dependency `59c3b9da439a545a645ce808bbe7fe861ebb431f` | `/private/tmp/phil-rename-59c3-unit-integration.log`, `/private/tmp/phil-rename-59c3-stop.log` |
 | Phil shutdown-corrected package consumer check | 85 affected Functional tests passed; 117.7 seconds; exit 0; fetched dependency revision `48b1de518feab8f5a52438db43434539cd17a08b` | `/private/tmp/phil-rename-final-shutdown-pin-functional-green.log` |
@@ -331,15 +332,14 @@ Trees, executable coverage labels, and the corresponding implementation/docs hav
 
 Still pending:
 
-1. Finish the final package Journey; complete Functional now passes all 597 tests and the final Stop gate passed.
-2. Run Phil's isolated synthetic artefact Journey against its verified final dependency; the pin, affected Functional evidence, and final Stop are complete.
-3. Final completion reconciliation with those terminal results and the single independent review of the verified change.
+1. Finish Phil's isolated synthetic artefact Journey against its verified final dependency; the pin, affected Functional evidence, and final Stop are complete.
+2. Final completion reconciliation with that terminal result and the single independent review of the verified change.
 
 The operator explicitly approved all three test gates after automatic approval review requested payload/destination-specific authorization. The approved destination is `api.openai.com`; payloads are response/editor preferences, synthetic codenames/cities/support channels/scheduling conversations/deployment reviews/dependency graphs, controlled Atlas evidence, and generated Reflection/recall content. Normal inference charges and disposable local data are within this approval. Run the complete package Functional suite, package Journey, and Phil's isolated artefact Journey sequentially so their embedded runtimes cannot interfere.
 
 Live-data migration, publication, deployment, and Phil's eleven live-company-service Journey leaves are outside the isolated execution scope.
 
-The first approved package Journey passed all assertions but left its owned embedded server alive after supervisor shutdown. Cleanup identified and stopped only that fixture server. The existing application-shutdown test was strengthened to stop a real supervisor and reproduced the leak. `GraphitiPool` now traps supervisor exit signals so its existing termination cleanup executes. The focused lifecycle suite passed; final broad gates are being repeated against this correction.
+The first approved package Journey passed all assertions but left its owned embedded server alive after supervisor shutdown. Cleanup identified and stopped only that fixture server. The existing application-shutdown test was strengthened to stop a real supervisor and reproduced the leak. `GraphitiPool` now traps supervisor exit signals so its existing termination cleanup executes. The focused lifecycle suite and final complete Functional, Stop, and Journey gates passed. The final Journey's BEAM PID 65753 and Redis PID 67270 exited, and `/private/var/folders/p_/xnt0_ct14d9g8ccc86wd_dcc0000gn/T/gralkor_memory_adventure_dR414akiZBjNQo5Il5WVFw` was removed. Unrelated pre-existing Redis processes remained intact.
 
 The post-shutdown full Functional rerun exposed an independent FalkorDB `GRAPH.COPY` stall (seed 869025): the server answered PING but held client 615 blocked in COPY for several minutes, and the BEAM stack waited in Python socket receive. The journal remained `copying`, with only the source graph listed. Diagnostic state, journals, and Redis logs are preserved in `/private/tmp/jgr-copy-stall-evidence`; stack samples are `/private/tmp/jgr-functional-stall-sample.txt` and `/private/tmp/jgr-redis-stall-sample.txt`. After preserving evidence, only the task-owned server was stopped to release the call. The suite ended with 589/593 passing: one COPY failure and three downstream failures from the stopped fixture. This historical gate failed. Two hundred subsequent real copy/delete diagnostic cycles passed; the exact native fork-child cause remains unproved because the child stack was not captured.
 
