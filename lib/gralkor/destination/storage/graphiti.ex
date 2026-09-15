@@ -156,7 +156,10 @@ defmodule Gralkor.Destination.Storage.Graphiti do
   defp fact_source(%{writer: :direct} = source), do: source
 
   defp fact_source(%{source_description: description} = source) when is_binary(description) do
-    case Regex.run(~r/ \[lens: (.+)\]$/s, description) do
+    if String.ends_with?(description, " [gralkor: direct]") do
+      source
+    else
+      case Regex.run(~r/ \[lens: (.+)\]$/s, description) do
       [_, lens] ->
         Map.put(source, :lens, lens)
 
@@ -166,8 +169,9 @@ defmodule Gralkor.Destination.Storage.Graphiti do
             Map.put(source, :reflection, reflection)
 
           _ ->
-            source
+          source
         end
+      end
     end
   end
 
