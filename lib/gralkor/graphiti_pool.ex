@@ -231,6 +231,7 @@ defmodule Gralkor.GraphitiPool do
                 "id": episode_id,
                 "source_kind": source_kinds.get(episodes_by_id[episode_id].source.value),
                 "source_description": episodes_by_id[episode_id].source_description,
+                "_gralkor_writer": getattr(episodes_by_id[episode_id], '_gralkor_writer', None),
               }
               for episode_id in (getattr(edge, "episodes", None) or [])
               if episode_id in episodes_by_id
@@ -371,10 +372,13 @@ defmodule Gralkor.GraphitiPool do
             and bool(source_description[lens_start + len(lens_marker):-1])
           )
 
+        def direct_episode(episode):
+          return getattr(episode, '_gralkor_writer', None) == 'direct'
+
         def reflection_episode(episode):
           source_description = episode.source_description or ''
           return (
-            not source_description.endswith(' [gralkor: direct]')
+            not direct_episode(episode)
             and not lens_episode(episode)
             and source_description.startswith('reflection:')
             and bool(source_description[len('reflection:'):])
@@ -384,7 +388,7 @@ defmodule Gralkor.GraphitiPool do
           return episode.source_description or ''
 
         def trusted_writer_provenance(episode):
-          return source_description_for(episode).endswith(' [gralkor: direct]') or lens_episode(episode) or reflection_episode(episode)
+          return direct_episode(episode) or lens_episode(episode) or reflection_episode(episode)
 
         if require_extraction_complete or require_reflection_complete:
           episode_ids = [
@@ -442,6 +446,8 @@ defmodule Gralkor.GraphitiPool do
             "content": episode.content,
             "source_description": episode.source_description,
           }
+          if direct_episode(episode):
+            result["_gralkor_writer"] = "direct"
           source = getattr(episode, 'source', None)
           if source is not None:
             result['source_kind'] = {'message': 'conversation', 'text': 'document', 'json': 'structured_record'}.get(source.value)
@@ -465,7 +471,8 @@ defmodule Gralkor.GraphitiPool do
                       coalesce(e._gralkor_extraction_complete, false) = true
                 RETURN e.uuid AS uuid,
                        e.content AS content,
-                       e.source_description AS source_description
+                       e.source_description AS source_description,
+                       e._gralkor_writer AS _gralkor_writer
                 /* gralkor_exhaustive_identity_convergence */
                 ''',
                 group_id=gid,
@@ -476,6 +483,7 @@ defmodule Gralkor.GraphitiPool do
               {
                 "content": record['content'],
                 "source_description": record['source_description'],
+                "_gralkor_writer": record.get('_gralkor_writer'),
               }
               for record in records
             ]
