@@ -216,7 +216,20 @@ def validate_progress(database: FalkorDB, manifest: dict[str, object]) -> None:
                 matching = translated(actual, target.name, source.name) == entry["source_inventory"]
             if not matching:
                 raise ValueError(f"target contains conflicting data: {target.name}")
-        elif entry["phase"] not in {"copying", "rollback_pending"}:
+        elif entry["phase"] == "copying":
+            original_run_id = entry.get("copy_server_run_id")
+            if original_run_id is None:
+                raise ValueError(
+                    "copy intent lacks its server identity; retain this journal and require "
+                    "controlled server recovery before preparing a fresh migration"
+                )
+            if database.connection.info("server")["run_id"] == original_run_id:
+                raise ValueError(
+                    "GRAPH.COPY outcome is uncertain while its target is absent; "
+                    "wait for a matching complete target or require controlled server recovery "
+                    "before resume or rollback"
+                )
+        elif entry["phase"] != "rollback_pending":
             raise ValueError(f"target graph missing: {target.name}")
 
 
