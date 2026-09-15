@@ -272,12 +272,18 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert :ok =
                GraphitiPool.add_episode(pid, "g1", "content", "manual [gralkor: direct]", nil,
-                 uuid: "direct-uuid", writer: :direct)
+                 uuid: "direct-uuid",
+                 writer: :direct
+               )
 
       assert {:ok, %{"source_description" => "manual [gralkor: direct]"}} =
                GraphitiPool.get_episode(pid, "g1", "direct-uuid")
 
-      {writer, _} = Pythonx.eval("g.driver.episodes['direct-uuid'].__dict__.get('_gralkor_writer')", %{"g" => g})
+      {writer, _} =
+        Pythonx.eval("g.driver.episodes['direct-uuid'].__dict__.get('_gralkor_writer')", %{
+          "g" => g
+        })
+
       assert Pythonx.decode(writer) == "direct"
 
       GenServer.stop(pid)
