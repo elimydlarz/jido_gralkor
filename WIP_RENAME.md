@@ -353,6 +353,12 @@ The single independent review completed successfully through `gpt-5.6-sol` and w
 
 After correcting the shutdown-related fixture ownership and replacing fixed sleeps in the CaptureBuffer exhaustion-log fixture with terminal-result synchronization, the installed package Stop gate completed with exit 0 (`/private/tmp/jgr-rename-stop-final.log`). Successful hook output is intentionally suppressed. This verifies Unit/Integration and Node at that checkpoint; the migration deadline/recovery additions still require their final gates.
 
+## 10. Current acceptance and remaining gates
+
+The three independent review findings are corrected: journals bind endpoint identity, public rollback verification uses the public recall boundary, and direct authorship requires persisted `_gralkor_writer` metadata. Marker-like historical text remains full and unclassified.
+
+Latest observed focused evidence is 3 real-storage provenance checks, 50 migration checks, and 12 embedded overlap checks in 15.9 seconds with exit 0 (`/private/tmp/jgr-embedded-overlap-green.log`). The complete package Functional run is still in progress at `/private/tmp/jgr-review-full-functional-final.log`; its result has not yet been observed. The package Stop gate and both current-pin Journeys remain pending.
+
 ### Review corrections and verification
 
 - Journals persist canonical non-secret Unix/TCP endpoint identity, database and username. Apply, advance and rollback refuse another endpoint before connecting. Identical source/target graph copies do not grant migration ownership. Explicit recovery validates prior identity, retirement, quiescence and inventories, then durably records the new endpoint before mutations. Recovery run identity remains separate from the identity of the server that actually performed a copy.
