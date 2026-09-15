@@ -137,7 +137,7 @@ def endpoint_identity(connection: dict[str, object]) -> dict[str, object]:
     socket = connection.get("unix_socket_path")
     identity = {"db": connection.get("db", 0), "username": connection.get("username")}
     if isinstance(socket, str) and socket.strip():
-        identity.update({"kind": "unix", "unix_socket_path": socket})
+        identity.update({"kind": "unix", "unix_socket_path": os.path.realpath(os.path.abspath(socket))})
     else:
         identity.update({"kind": "tcp", "host": connection.get("host"), "port": connection.get("port")})
     return canonical(identity)
