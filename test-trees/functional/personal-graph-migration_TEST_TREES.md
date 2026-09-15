@@ -5,6 +5,11 @@ when an application requests a private graph migration
     then migration rejects the identities before connecting to a graph
   if no explicit graph endpoint is supplied
     then migration rejects the connection before opening a default store
+  when a migration journal is prepared
+    then the journal records the non-secret graph endpoint identity including host and port or Unix socket path, database, and username
+    and the journal excludes graph credentials from its endpoint identity
+  if a journal is used with a different graph endpoint identity
+    then migration refuses before mutating, applying, or rolling back any graph
   if a connection deadline is not a finite positive duration
     then migration rejects the deadline before connecting to a graph
   if the persisted manifest fails its integrity check
@@ -64,6 +69,11 @@ when an application migrates quiescent historical private graphs
 when an interrupted private graph migration resumes from its persisted manifest
   then a copied graph resumes without duplicating nodes or relationships
   and an already verified target returns the same completed migration result
+  if controlled server recovery explicitly supplies an endpoint rebind
+    then migration validates source and target inventories, quiescence evidence, and original endpoint identity before resuming
+    and migration records the rebound endpoint identity and recovered copy server run identity
+  if the endpoint changes without an explicit controlled recovery rebind
+    then migration refuses before inspecting or mutating the restored clone
   if the source changed after its recorded inventory
     then migration refuses without replacing either graph
   if a recorded target contains conflicting data
