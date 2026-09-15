@@ -833,7 +833,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                 self.episodes = episodes
 
         class _StoredEpisode:
-        def __init__(self, uuid, content, source_description, writer=None):
+            def __init__(self, uuid, content, source_description, writer=None):
                 self.uuid = uuid
                 self.content = content
                 self.source_description = source_description
@@ -849,7 +849,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                 self.expired_at = None
 
         class _Episode:
-        def __init__(self, uuid, source, source_description, writer=None):
+            def __init__(self, uuid, source, source_description, writer=None):
                 from graphiti_core.nodes import EpisodeType
                 self.uuid = uuid
                 self.source = EpisodeType(source)
