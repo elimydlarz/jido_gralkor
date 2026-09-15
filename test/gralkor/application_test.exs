@@ -620,10 +620,9 @@ defmodule Gralkor.ApplicationTest do
           %{}
         )
 
-      pid =
-        start_supervised!(
-          {Gralkor.GraphitiPool,
-           [
+      start_supervised!(
+        {Gralkor.GraphitiPool,
+         [
              name: Gralkor.GraphitiPool,
              table: :gralkor_graphiti_instances,
              falkordb_spec: {:embedded, "/tmp/never_used"},
@@ -634,8 +633,8 @@ defmodule Gralkor.ApplicationTest do
              construct_instance: fn _db, _shared, _group_id -> g end,
              warmup: false,
              install_loop_fn: &Gralkor.Python.install_async_runtime/0
-           ]}
-        )
+         ]}
+      )
 
       %{g: g}
     end
