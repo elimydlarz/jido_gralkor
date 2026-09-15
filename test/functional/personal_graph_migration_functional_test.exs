@@ -839,6 +839,8 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
 
       assert hd(completed["graphs"])["copy_server_run_id"] == server_run_id(recovered)
       assert_public_history(recovered)
+      stop_supervised!(JidoGralkor.Runtime)
+      stop_supervised!(Gralkor.GraphitiPool)
 
       assert {:ok, rolled_back} =
                PersonalGraphMigration.rollback(recovered.connection, journal, @quiescence)
