@@ -421,6 +421,7 @@ def execute(request: dict[str, object]) -> dict[str, object]:
                 current_run_id = database.connection.info("server")["run_id"]
                 if any(entry["phase"] == "copying" and entry.get("copy_server_run_id") == current_run_id for entry in manifest["graphs"]):
                     raise ValueError("controlled endpoint rebind requires a new server run identity for outstanding copy")
+                validate_progress(database, manifest)
                 manifest["endpoint_identity"] = endpoint_identity(connection)
                 manifest["endpoint_rebound_from"] = rebind["prior_endpoint"]
                 persist(path, manifest)
