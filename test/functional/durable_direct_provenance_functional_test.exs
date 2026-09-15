@@ -108,8 +108,9 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
 
     assert [[uuid, "direct"]] = Pythonx.decode(result)
 
-    assert {:ok, %{"_gralkor_writer" => "direct"}} =
+    assert {:ok, %{"_gralkor_writer" => "direct"} = stored} =
              Gralkor.GraphitiPool.get_episode("personal/owner", uuid)
+    assert stored["extraction_complete"] == deterministic
 
     # A controlled extracted fact points to the episode actually written above.
     # Search and source hydration still use the real graph and public client.
