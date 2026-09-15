@@ -60,3 +60,8 @@ when public episode search reads completed Reflection output
 
 when public artefact search reads stored Reflection output
   then only records with a non-blank identifier and structured payload become canonical artefacts
+
+when direct memory is stored in a real graph
+  then ordinary direct writes retain durable writer metadata through public episode and fact search
+  and deterministic direct writes retain durable writer metadata through public episode and fact search
+  and historical marker-like text without durable metadata stays unchanged and unclassified
