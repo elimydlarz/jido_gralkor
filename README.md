@@ -4,14 +4,14 @@ Drop-in long-term memory for a [Jido](https://hex.pm/packages/jido) agent. One H
 
 You write your agent's prompt, model, and business tools. `jido_gralkor` covers session identity, recall, capture, the `memory_search` / `memory_add` ReAct tools, a small helper that pins `tool_choice` to `memory_search` on the first ReAct iteration so the agent itself authors its memory queries, a graceful-shutdown flush, a context-rotation primitive for long-running agents, **Destinations** for named graphs, **Lenses** for ingestion, and **Reflections** for consumer-invoked synthesis.
 
-This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. The published `10.0.0` package contains the whole memory stack. The personal-memory and typed-capture examples below describe the unreleased repository API; use a matching available repository revision when testing them.
+This is the canonical home for new Gralkor development: Gralkor is Jido-first. As of `3.0.0` the former `:gralkor_ex` Hex package is folded into this one, and the legacy `:gralkor` and `:gralkor_ex` packages direct consumers here. The `11.0.0` package contains the whole memory stack, including the personal-memory and typed-capture APIs below.
 
 ## Install
 
 ```elixir
 def deps do
   [
-    {:jido_gralkor, "~> 10.0"}
+    {:jido_gralkor, "~> 11.0"}
   ]
 end
 ```
@@ -164,7 +164,7 @@ Direct capture and the explicitly selected packaged `personal-chat` Lens use `Gr
 
 ### Explicit capture and migration
 
-These changes describe the unreleased repository API; published `10.0.0` retains the former names. Use an available repository revision for coordinated consumer testing. Publication and deployment are separate steps.
+The `11.0.0` API uses the `personal` Destination, `personal-chat` Lens, and explicit typed capture routes. For upgrades from 10.x, follow [PERSONAL_MEMORY_MIGRATION.md](PERSONAL_MEMORY_MIGRATION.md) before deploying the new consumer configuration.
 
 ```elixir
 request = %Gralkor.Capture{

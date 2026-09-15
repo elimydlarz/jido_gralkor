@@ -1,6 +1,6 @@
 # Personal memory migration
 
-This unreleased API uses the `personal-chat` Lens and `personal` Destination. The latter resolves to `personal/<same operator_id>`. Direct capture selects a Destination explicitly and has no Lens authorship; selecting `personal-chat` runs Store ingestion once without an extra direct write. See [README.md](README.md#explicit-capture-and-migration) for the typed capture API.
+The `11.0.0` API uses the `personal-chat` Lens and `personal` Destination. The latter resolves to `personal/<same operator_id>`. Direct capture selects a Destination explicitly and has no Lens authorship; selecting `personal-chat` runs Store ingestion once without an extra direct write. See [README.md](README.md#explicit-capture-and-migration) for the typed capture API.
 
 Configuration changes do not move stored graphs. Use this tooling on disposable restored data first. Publication, deployment, and live-store execution require separately scoped authorization.
 
