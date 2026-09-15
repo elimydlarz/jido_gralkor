@@ -64,6 +64,8 @@ config :jido_gralkor,
 
 Remote wins when both are configured. Misconfiguration (non-keyword value, missing host/port, blank host, non-positive port) raises `ArgumentError` at app start before any child is supervised — operator typos surface immediately, not under the first user request.
 
+`GraphitiPool` traps supervisor exit signals so its termination callback closes owned graph resources during graceful supervisor shutdown. The application lifecycle Functional test stops a real supervisor and verifies its embedded server has exited; the Journey also verifies owned-resource cleanup.
+
 **Recall presentation is model-free.** `Gralkor.Recall` wraps every fact returned by graph search verbatim and in order inside an untrusted memory block, retaining available source wording. It does not load buffered turns, filter or rewrite results, or make a second inference call; the consuming agent interprets the memory with its own model and conversation context.
 
 **Default extraction.** Direct capture, direct memory addition, and the explicitly selected packaged `personal-chat` Store Lens use `Gralkor.DefaultOntology`. The Lens targets `personal`, which resolves to `personal/<same operator_id>`. It retains all supported source kinds. Custom schemas belong on appending Lenses and Reflection outputs; Destinations own only graph identity. Historical operator-labelled and unmarked memory remains readable without inventing Lens authorship.
