@@ -228,9 +228,7 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
       |> Keyword.delete(:exercise_empty_edge_candidates)
       |> Keyword.merge(opts)
 
-    {:ok, pool} = GraphitiPool.start_link(pool_opts)
-
-    on_exit(fn -> if Process.alive?(pool), do: GenServer.stop(pool) end)
+    pool = start_supervised!({GraphitiPool, pool_opts})
 
     %{graph: graph, pool: pool}
   end

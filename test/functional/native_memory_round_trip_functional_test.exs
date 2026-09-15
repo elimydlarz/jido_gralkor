@@ -81,8 +81,8 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       end
     end)
 
-    {:ok, pool} =
-      GraphitiPool.start_link(
+    start_supervised!(
+        {GraphitiPool, [
         name: Gralkor.GraphitiPool,
         table: :gralkor_graphiti_instances,
         falkordb_spec: {:embedded, "/tmp/never_used"},
@@ -96,9 +96,8 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
         end,
         warmup: false,
         install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        ]}
       )
-
-    on_exit(fn -> if Process.alive?(pool), do: GenServer.stop(pool) end)
 
     start_supervised!(
       {JidoGralkor.Runtime,

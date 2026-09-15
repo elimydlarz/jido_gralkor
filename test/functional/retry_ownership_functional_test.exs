@@ -208,8 +208,9 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         %{}
       )
 
-    {:ok, pool} =
-      GraphitiPool.start_link(
+    pool =
+      start_supervised!(
+        {GraphitiPool, [
         name: Gralkor.GraphitiPool,
         table: :gralkor_graphiti_instances,
         falkordb_spec: {:embedded, "/tmp/never_used"},
@@ -220,9 +221,8 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         construct_instance: fn _db, _shared, _group_id -> g end,
         warmup: false,
         install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        ]}
       )
-
-    on_exit(fn -> if Process.alive?(pool), do: GenServer.stop(pool) end)
 
     %{g: g, pool: pool}
   end
