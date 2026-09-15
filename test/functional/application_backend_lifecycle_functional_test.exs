@@ -131,7 +131,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
 
   describe "when an application starts with an embedded memory backend" do
     test "then the native memory runtime starts with an embedded server owned for that application's lifetime" do
-      %{pool: pool, server_pid: server_pid, data_dir: data_dir} = start_embedded_runtime()
+      %{pool: pool, supervisor: supervisor, server_pid: server_pid} = start_embedded_runtime()
 
       assert Process.alive?(pool)
       assert process_running?(server_pid)
@@ -142,19 +142,17 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
                _capture
              ] = GralkorApplication.children()
 
-      GenServer.stop(pool)
-      File.rm_rf!(data_dir)
+      Supervisor.stop(supervisor)
     end
   end
 
   describe "when an application starts with an embedded memory backend > when the application stops" do
     test "then the owned embedded server exits before shutdown completes" do
-      %{pool: pool, server_pid: server_pid, data_dir: data_dir} = start_embedded_runtime()
+      %{supervisor: supervisor, server_pid: server_pid} = start_embedded_runtime()
 
-      GenServer.stop(pool)
+      Supervisor.stop(supervisor)
 
       refute process_running?(server_pid)
-      File.rm_rf!(data_dir)
     end
   end
 
@@ -192,8 +190,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
 
     table = :"application_backend_pool_#{System.unique_integer([:positive])}"
 
-    {:ok, pool} =
-      GraphitiPool.start_link(
+    options = [
         name: nil,
         table: table,
         falkordb_spec: {:embedded, data_dir},
@@ -202,12 +199,32 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
         end,
         warmup: false,
         install_loop_fn: &Gralkor.Python.install_async_runtime/0
-      )
+      ]
+
+    supervisor =
+      start_supervised!(%{
+        id: table,
+        start: {Supervisor, :start_link, [[{GraphitiPool, options}], [strategy: :one_for_one]]},
+        type: :supervisor,
+        restart: :temporary
+      })
+
+    [{GraphitiPool, pool, :worker, _}] = Supervisor.which_children(supervisor)
 
     database = :sys.get_state(pool).falkor_db
     {server_pid, _} = Pythonx.eval("database.client.pid", %{"database" => database})
 
-    %{pool: pool, server_pid: Pythonx.decode(server_pid), data_dir: data_dir}
+    server_pid = Pythonx.decode(server_pid)
+
+    on_exit(fn ->
+      if process_running?(server_pid) do
+        Pythonx.eval("database.client._sync_client.shutdown(save=False)", %{"database" => database})
+      end
+
+      File.rm_rf!(data_dir)
+    end)
+
+    %{pool: pool, supervisor: supervisor, server_pid: server_pid}
   end
 
   defp process_running?(pid) do
