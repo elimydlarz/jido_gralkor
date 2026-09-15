@@ -794,6 +794,7 @@ defmodule Gralkor.GraphitiPool do
                         if not fence.get('distributed') and getattr(driver, 'provider', None) == GraphProvider.FALKORDB:
                             episode = dict(self)
                             episode['source'] = self.source.value
+                            episode['_gralkor_writer'] = 'direct'
                             episode.pop('labels', None)
                             return await driver.execute_query(
                                 'MERGE (e:Episodic {uuid: $uuid}) SET e = $episode RETURN e.uuid AS uuid',

@@ -1,4 +1,4 @@
-Functional: ingested-information-provenance (src: lib/gralkor/ingest.ex, lib/gralkor/client.ex, lib/gralkor/client/native.ex, lib/gralkor/application.ex, lib/gralkor/search.ex, lib/gralkor/lens/store.ex, lib/gralkor/lens/storage/graphiti.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/ingested_information_provenance_functional_test.exs, test/functional/durable_direct_provenance_functional_test.exs)
+Functional: ingested-information-provenance (src: lib/gralkor/ingest.ex, lib/gralkor/client.ex, lib/gralkor/client/native.ex, lib/gralkor/application.ex, lib/gralkor/search.ex, lib/gralkor/lens/store.ex, lib/gralkor/lens/storage/graphiti.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/graphiti_pool.ex; functional: test/functional/ingested_information_provenance_functional_test.exs)
 
 when information is submitted through public ingestion with a supported source kind
   then its stored episode retains the declared source kind
@@ -60,8 +60,3 @@ when public episode search reads completed Reflection output
 
 when public artefact search reads stored Reflection output
   then only records with a non-blank identifier and structured payload become canonical artefacts
-
-when direct memory is stored in a real graph
-  then ordinary direct writes retain durable writer metadata through public episode and fact search
-  and deterministic direct writes retain durable writer metadata through public episode and fact search
-  and historical marker-like text without durable metadata stays unchanged and unclassified

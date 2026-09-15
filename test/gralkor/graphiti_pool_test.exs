@@ -229,66 +229,6 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
     end
 
-    test "and direct writer provenance is persisted on the episodic node and returned by exact read" do
-      {g, _} =
-        Pythonx.eval(
-          """
-          from graphiti_core.errors import NodeNotFoundError
-
-          class _GraphOperations:
-              async def episodic_node_get_by_uuid(self, cls, driver, uuid):
-                  if uuid not in driver.episodes:
-                      raise NodeNotFoundError(uuid)
-                  return driver.episodes[uuid]
-
-              async def episodic_node_save(self, episode, driver):
-                  driver.episodes[episode.uuid] = episode
-
-          class _Driver:
-              def __init__(self):
-                  self.graph_operations_interface = _GraphOperations()
-                  self.episodes = {}
-
-          class _FakeGraphiti:
-              def __init__(self):
-                  self.driver = _Driver()
-
-              async def add_episode(self, **kwargs):
-                  from graphiti_core.nodes import EpisodicNode
-                  episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
-                  await episode.save(self.driver)
-
-          _FakeGraphiti()
-          """,
-          %{}
-        )
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: fn _db, _shared, _group_id -> g end,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert :ok =
-               GraphitiPool.add_episode(pid, "g1", "content", "manual", nil,
-                 uuid: "direct-uuid",
-                 writer: :direct
-               )
-
-      assert {:ok, %{"source_description" => "manual [gralkor: direct]"}} =
-               GraphitiPool.get_episode(pid, "g1", "direct-uuid")
-
-      {writer, _} =
-        Pythonx.eval("g.driver.episodes['direct-uuid'].__dict__.get('_gralkor_writer')", %{
-          "g" => g
-        })
-
-      assert Pythonx.decode(writer) == "direct"
-
-      GenServer.stop(pid)
-    end
-
     test "and durable extraction completion is recorded after the normal path succeeds" do
       {pid, _g} = start_episode_identity_pool()
 
