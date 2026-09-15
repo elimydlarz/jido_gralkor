@@ -25,6 +25,8 @@ On the verified macOS 26.5.2 bundle, a copy child was observed blocked in `serve
 
 Use `mix gralkor.migrate_personal <operation> <request.json>` or the exported `Gralkor.PersonalGraphMigration` functions. The Mix task loads configuration and initializes Python as needed; it does not start application consumers. Every request must supply a specific TCP endpoint or Unix socket. Connections never fall back to the application's configured store.
 
+`prepare` records a non-secret endpoint identity in the journal: TCP host and port or Unix socket path, together with database and username. Passwords and other credentials are excluded. Every `advance`, `apply`, and `rollback` request must use the recorded identity; a journal cannot be replayed against another endpoint even when its graphs happen to contain identical data. Journals created before endpoint binding are rejected and require a fresh preparation.
+
 Create an explicit request for the disposable restored endpoint:
 
 ```json
@@ -88,6 +90,8 @@ mix gralkor.migrate_personal apply /absolute/path/apply-request.json
 Only the journal that recorded copy intent may resume a matching target after an interruption. Independent migration processes must use the same journal and quiescence boundary. Never run competing migrations through different journals against the same identities.
 
 A timeout or lost connection during `GRAPH.COPY` leaves its outcome uncertain and preserves the copy-intent journal. A client timeout does not cancel server work. If the target later appears on the same server, resume may adopt it only after its complete inventory matches and its schema is operational. If the target remains absent and the server's `run_id` is unchanged, both resume and rollback refuse: the original copy may still finish. Keep admission stopped and retain the journal, source graphs, and consistent backups. Wait for a matching complete target or perform controlled server recovery from the retained consistent data. A changed server `run_id` allows progress only after the normal source and target checks pass; it does not replace those checks.
+
+When the original server has been retired or stopped and a consistent restore is available at a new endpoint, controlled recovery may explicitly rebind a journal. Supply `endpoint_rebind` with the journal's exact `endpoint_identity` as `prior_endpoint` and `prior_endpoint_retired: true`. The new endpoint must differ, and for an outstanding `copying` phase its server `run_id` must differ from the recorded `copy_server_run_id`. The migration still requires truthful quiescence and complete unchanged source and target inventories before recording the rebound identity and continuing. It never guesses a replacement endpoint.
 
 An older `copying` journal without `copy_server_run_id` can adopt a matching complete target through the same validation. If its target is absent, resume and rollback refuse even after the server changes. Retain that journal, perform controlled server recovery, and prepare a fresh migration at a new journal path from the recovered consistent state. Do not invent a server identity in the old journal or discard it while its copy outcome is uncertain.
 
