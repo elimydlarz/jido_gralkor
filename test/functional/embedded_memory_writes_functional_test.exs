@@ -283,19 +283,6 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
     end
   end
 
-  defp assert_eventually(assertion, attempts \\ 100)
-
-  defp assert_eventually(assertion, attempts) when attempts > 0 do
-    if assertion.() do
-      :ok
-    else
-      Process.sleep(5)
-      assert_eventually(assertion, attempts - 1)
-    end
-  end
-
-  defp assert_eventually(_assertion, 0), do: flunk("condition did not become true")
-
   defp put_env_restored(key, value) do
     original = Application.get_env(:jido_gralkor, key, :missing)
     Application.put_env(:jido_gralkor, key, value)
