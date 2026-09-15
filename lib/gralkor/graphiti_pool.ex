@@ -231,7 +231,8 @@ defmodule Gralkor.GraphitiPool do
             episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
           ))
           episodes = await EpisodicNode.get_by_uuids(g.driver, episode_ids) if episode_ids else []
-          await hydrate_episode_writers(g.driver, episodes)
+          if episodes:
+            await hydrate_episode_writers(g.driver, episodes)
           episodes_by_id = {episode.uuid: episode for episode in episodes}
           source_kinds = {
             "message": "conversation",
@@ -385,7 +386,8 @@ defmodule Gralkor.GraphitiPool do
 
         #{@episode_writer_hydration}
         episodes = res.episodes
-        asyncio._gralkor_run(hydrate_episode_writers(g.driver, episodes))
+        if episodes:
+          asyncio._gralkor_run(hydrate_episode_writers(g.driver, episodes))
         def lens_episode(episode):
           source_description = episode.source_description or ''
           lens_marker = ' [lens: '
@@ -962,8 +964,8 @@ defmodule Gralkor.GraphitiPool do
                               entity_edges: ${parameter}.entity_edges,
                               created_at: ${parameter}.created_at,
                               valid_at: ${parameter}.valid_at,
-                              _gralkor_writer: ${parameter}._gralkor_writer,
-                              _gralkor_extraction_complete: true
+                              _gralkor_writer: ${parameter}._gralkor_writer
+                              {', _gralkor_extraction_complete: true' if distributed else ''}
                             }}
                             WITH claim
                         ''')
