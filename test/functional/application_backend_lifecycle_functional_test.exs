@@ -191,15 +191,15 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
     table = :"application_backend_pool_#{System.unique_integer([:positive])}"
 
     options = [
-        name: nil,
-        table: table,
-        falkordb_spec: {:embedded, data_dir},
-        construct_shared_clients: fn _llm, _embedder ->
-          %{llm_client: nil, embedder: nil, cross_encoder: nil}
-        end,
-        warmup: false,
-        install_loop_fn: &Gralkor.Python.install_async_runtime/0
-      ]
+      name: nil,
+      table: table,
+      falkordb_spec: {:embedded, data_dir},
+      construct_shared_clients: fn _llm, _embedder ->
+        %{llm_client: nil, embedder: nil, cross_encoder: nil}
+      end,
+      warmup: false,
+      install_loop_fn: &Gralkor.Python.install_async_runtime/0
+    ]
 
     supervisor =
       start_supervised!(%{
@@ -218,7 +218,9 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
 
     on_exit(fn ->
       if process_running?(server_pid) do
-        Pythonx.eval("database.client._sync_client.shutdown(save=False)", %{"database" => database})
+        Pythonx.eval("database.client._sync_client.shutdown(save=False)", %{
+          "database" => database
+        })
       end
 
       File.rm_rf!(data_dir)
