@@ -32,6 +32,26 @@ defmodule Gralkor.GraphitiPool do
 
   @default_table :gralkor_graphiti_instances
 
+  # Graphiti 0.29.3's EpisodicNode loader selects a fixed set of properties.
+  # Read our storage-owned field from the graph before classifying provenance.
+  @episode_writer_hydration """
+  async def hydrate_episode_writers(driver, episodes):
+      from graphiti_core.driver.driver import GraphProvider
+      if not episodes or getattr(driver, 'provider', None) != GraphProvider.FALKORDB:
+          return
+      records, _, _ = await driver.execute_query(
+          'MATCH (e:Episodic) WHERE e.uuid IN $uuids '
+          'RETURN e.uuid AS uuid, e._gralkor_writer AS writer',
+          uuids=[episode.uuid for episode in episodes],
+      )
+      direct_ids = {record['uuid'] for record in records if record.get('writer') == 'direct'}
+      for episode in episodes:
+          if episode.uuid in direct_ids:
+              episode.__dict__['_gralkor_writer'] = 'direct'
+          else:
+              episode.__dict__.pop('_gralkor_writer', None)
+  """
+
   # ── Public API ──────────────────────────────────────────────
 
   @spec replace_graph(
@@ -178,6 +198,7 @@ defmodule Gralkor.GraphitiPool do
         from graphiti_core.nodes import EpisodicNode
         from graphiti_core.search.search_filters import SearchFilters
 
+        #{@episode_writer_hydration}
         q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
         types = (
           [t.decode('utf-8') if isinstance(t, (bytes, bytearray)) else t for t in edge_types]
@@ -210,6 +231,7 @@ defmodule Gralkor.GraphitiPool do
             episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
           ))
           episodes = await EpisodicNode.get_by_uuids(g.driver, episode_ids) if episode_ids else []
+          await hydrate_episode_writers(g.driver, episodes)
           episodes_by_id = {episode.uuid: episode for episode in episodes}
           source_kinds = {
             "message": "conversation",
@@ -361,7 +383,9 @@ defmodule Gralkor.GraphitiPool do
           g.search_(q, config=config, group_ids=[gid], search_filter=SearchFilters())
         )
 
+        #{@episode_writer_hydration}
         episodes = res.episodes
+        asyncio._gralkor_run(hydrate_episode_writers(g.driver, episodes))
         def lens_episode(episode):
           source_description = episode.source_description or ''
           lens_marker = ' [lens: '
@@ -379,6 +403,7 @@ defmodule Gralkor.GraphitiPool do
           source_description = episode.source_description or ''
           return (
             not direct_episode(episode)
+            and not source_description.endswith(' [gralkor: direct]')
             and not lens_episode(episode)
             and source_description.startswith('reflection:')
             and bool(source_description[len('reflection:'):])
@@ -766,6 +791,15 @@ defmodule Gralkor.GraphitiPool do
                     fence = guard.get()
                     if fence is not None and fence.get('writer') == 'direct':
                         self.__dict__['_gralkor_writer'] = 'direct'
+                        if not fence.get('distributed') and getattr(driver, 'provider', None) == GraphProvider.FALKORDB:
+                            episode = dict(self)
+                            episode['source'] = self.source.value
+                            episode.pop('labels', None)
+                            return await driver.execute_query(
+                                'MERGE (e:Episodic {uuid: $uuid}) SET e = $episode RETURN e.uuid AS uuid',
+                                uuid=self.uuid,
+                                episode=episode,
+                            )
                     if fence is None or self.uuid != fence['uuid'] or not fence['distributed']:
                         return await original_save(self, driver)
 
@@ -827,7 +861,7 @@ defmodule Gralkor.GraphitiPool do
                             episode.__dict__['_gralkor_writer'] = 'direct'
                     if (
                         fence is None
-                        or not fence['distributed']
+                        or (not fence.get('distributed') and fence.get('writer') != 'direct')
                         or getattr(driver, 'provider', None) != GraphProvider.FALKORDB
                     ):
                         return await original_add_nodes_and_edges_bulk(
@@ -896,11 +930,12 @@ defmodule Gralkor.GraphitiPool do
                                 edge_data[key] = value
                         relations.append(edge_data)
 
+                    distributed = bool(fence.get('distributed'))
                     params = dict(
                         claim_uuid=fence['uuid'],
                         owner=fence['owner'],
                         generation=fence['generation'],
-                    )
+                    ) if distributed else {}
                     clauses = [
                         '''
                         MATCH (claim:_GralkorEpisodeClaim {uuid: $claim_uuid})
@@ -908,7 +943,7 @@ defmodule Gralkor.GraphitiPool do
                         SET claim._gralkor_fenced_generation = $generation
                         WITH claim
                         '''
-                    ]
+                    ] if distributed else ['WITH 1 AS claim']
 
                     for index, episode in enumerate(episodes):
                         parameter = f'episode_{index}'
@@ -978,12 +1013,14 @@ defmodule Gralkor.GraphitiPool do
                     clauses.append(
                         'RETURN claim.generation AS generation '
                         '/* gralkor_claim_fenced_graph_effects */'
+                        if distributed else
+                        'RETURN claim AS completed /* gralkor_direct_graph_effects */'
                     )
                     records, _, _ = await driver.execute_query(
                         '\\n'.join(clauses),
                         **params,
                     )
-                    if not records:
+                    if distributed and not records:
                         raise ClaimLostError(
                             f'episode claim lost before graph effects for '
                             f'{fence["uuid"]} generation {fence["generation"]}'
@@ -1288,7 +1325,10 @@ defmodule Gralkor.GraphitiPool do
                             pass
                         await release_claim()
                 else:
-                    token = guard.set({'writer': 'direct' if direct_writer else None})
+                    token = guard.set(
+                        {'writer': 'direct', 'uuid': None, 'distributed': False}
+                        if direct_writer else None
+                    )
 
                 if not skip_empty_edge_candidates:
                     try:
@@ -1648,6 +1688,7 @@ defmodule Gralkor.GraphitiPool do
         from graphiti_core.errors import NodeNotFoundError
         from graphiti_core.nodes import EpisodicNode
 
+        #{@episode_writer_hydration}
         uid = episode_uuid.decode('utf-8') if isinstance(episode_uuid, (bytes, bytearray)) else episode_uuid
         async def get_episode():
             try:
@@ -1655,6 +1696,7 @@ defmodule Gralkor.GraphitiPool do
             except NodeNotFoundError:
                 return None
 
+            await hydrate_episode_writers(g.driver, [episode])
             if hasattr(g.driver, 'execute_query'):
                 records, _, _ = await g.driver.execute_query(
                     "MATCH (e:Episodic {uuid: $uuid}) RETURN coalesce(e._gralkor_extraction_complete, false) AS complete",
@@ -1674,7 +1716,7 @@ defmodule Gralkor.GraphitiPool do
                 'content': episode.content,
                 'source': episode.source.value,
                 'source_description': episode.source_description,
-                '_gralkor_writer': getattr(episode, '_gralkor_writer', None),
+                **({'_gralkor_writer': 'direct'} if getattr(episode, '_gralkor_writer', None) == 'direct' else {}),
                 'extraction_complete': extraction_complete,
             }
 
