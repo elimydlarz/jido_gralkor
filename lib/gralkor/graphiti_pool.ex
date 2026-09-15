@@ -1243,6 +1243,7 @@ defmodule Gralkor.GraphitiPool do
                             owner=claim_owner,
                             generation=claim_state['generation'],
                             distributed=claim_state['distributed'],
+                            writer='direct' if direct_writer else None,
                             synthesise_missing=existing is None,
                             episode=dict(
                                 uuid=uid,
@@ -1282,7 +1283,7 @@ defmodule Gralkor.GraphitiPool do
                             pass
                         await release_claim()
                 else:
-                    token = None
+                    token = guard.set({'writer': 'direct' if direct_writer else None})
 
                 if not skip_empty_edge_candidates:
                     try:
