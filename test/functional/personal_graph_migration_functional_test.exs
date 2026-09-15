@@ -1028,10 +1028,11 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert {:ok, _} = PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
       start_public_runtime(context)
 
-      assert {:ok, episodes} =
-               Gralkor.GraphitiPool.search_episodes("operator/owner", "orchard", 20)
+      assert {:ok, memory} =
+               Gralkor.Client.Native.recall("operator/owner", "TestAgent", nil, "orchard")
 
-      assert Enum.any?(episodes, &(&1[:content] == "remember amber orchard"))
+      assert memory =~ "amber grows in orchard"
+      assert memory =~ "captured [lens: operator]"
     end
 
     test "and only matching migration-owned target graphs are removed", context do
