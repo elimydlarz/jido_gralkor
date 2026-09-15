@@ -1359,8 +1359,7 @@ defmodule Gralkor.CaptureBufferTest do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
       capture_log(fn ->
-        :ok = CaptureBuffer.flush("s")
-        Process.sleep(80)
+        assert {:error, :exhausted} = CaptureBuffer.flush_and_await("s", 1_000)
       end)
 
       assert CaptureBuffer.turns_for("s") == []
@@ -1371,8 +1370,7 @@ defmodule Gralkor.CaptureBufferTest do
 
       log =
         capture_log(fn ->
-          :ok = CaptureBuffer.flush("s")
-          Process.sleep(80)
+          assert {:error, :exhausted} = CaptureBuffer.flush_and_await("s", 1_000)
         end)
 
       assert log =~ "[error]"
