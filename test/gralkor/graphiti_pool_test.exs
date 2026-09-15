@@ -941,37 +941,37 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GraphitiPool.for(pid, "g1")
 
-      on_exit(fn ->
+      try do
+        first = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "first", "manual", nil) end)
+        await_python_value(g, "first_started", true, 500)
+        second = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "second", "manual", nil) end)
+
+        await_episode_waiting(pid, 1)
+
+        Pythonx.eval(
+          "import asyncio; asyncio._gralkor_loop.call_soon_threadsafe(g.release_first.set)",
+          %{"g" => g}
+        )
+
+        assert Task.await(first, 5_000) == :ok
+        assert Task.await(second, 5_000) == :ok
+
+        {events, _} = Pythonx.eval("g.events", %{"g" => g})
+
+        assert Pythonx.decode(events) == [
+                 "start:first",
+                 "finish:first",
+                 "start:second",
+                 "finish:second"
+               ]
+      after
         Pythonx.eval(
           "import asyncio; asyncio._gralkor_loop.call_soon_threadsafe(g.release_first.set)",
           %{"g" => g}
         )
 
         if Process.alive?(pid), do: GenServer.stop(pid)
-      end)
-
-      first = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "first", "manual", nil) end)
-      await_python_value(g, "first_started", true, 500)
-      second = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "second", "manual", nil) end)
-
-      await_episode_waiting(pid, 1)
-
-      Pythonx.eval(
-        "import asyncio; asyncio._gralkor_loop.call_soon_threadsafe(g.release_first.set)",
-        %{"g" => g}
-      )
-
-      assert Task.await(first, 5_000) == :ok
-      assert Task.await(second, 5_000) == :ok
-
-      {events, _} = Pythonx.eval("g.events", %{"g" => g})
-
-      assert Pythonx.decode(events) == [
-               "start:first",
-               "finish:first",
-               "start:second",
-               "finish:second"
-             ]
+      end
     end
   end
 
