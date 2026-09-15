@@ -4,7 +4,23 @@ defmodule Gralkor.PythonTest do
   alias Gralkor.Python
 
   setup do
-    :persistent_term.erase({Python, :swept})
+    key = {Python, :swept}
+
+    previous =
+      case :persistent_term.get(key, :__missing__) do
+        :__missing__ -> :missing
+        value -> {:present, value}
+      end
+
+    :persistent_term.erase(key)
+
+    on_exit(fn ->
+      case previous do
+        :missing -> :persistent_term.erase(key)
+        {:present, value} -> :persistent_term.put(key, value)
+      end
+    end)
+
     :ok
   end
 
