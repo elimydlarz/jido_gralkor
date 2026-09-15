@@ -1323,6 +1323,7 @@ defmodule Gralkor.GraphitiPool do
               "ontology_dicts" => ontology_dicts,
               "uuid" => uuid,
               "source_kind" => source_kind && Atom.to_string(source_kind),
+              "direct_writer" => direct_writer,
               "extraction_instructions" => extraction_instructions,
               "skip_empty_edge_candidates" => skip_empty_edge_candidates
             }
