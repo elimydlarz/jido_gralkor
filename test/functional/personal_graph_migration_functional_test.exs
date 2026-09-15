@@ -30,6 +30,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
         from falkordb import FalkorDB
         server = Redis(dbfilename=path.decode(), serverconfig={'port': '0'})
         server.config_set('loglevel', 'warning')
+        server.config_set('save', '')
         database = FalkorDB(unix_socket_path=server.socket_file)
         server
         """,

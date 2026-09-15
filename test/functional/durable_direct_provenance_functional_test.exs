@@ -96,3 +96,102 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
   defp public_search(type) do
     Gralkor.Client.search(self(), %Gralkor.Search{operator_id: "owner", query: "amber", destinations: ["personal"], result_type: type})
   end
+
+  defp start_public_runtime(context) do
+    {telemetry, _} = Pythonx.eval("import os\nos.environ.get('GRAPHITI_TELEMETRY_ENABLED')", %{})
+
+    on_exit(fn ->
+      Pythonx.eval(
+        "import os\nos.environ.pop('GRAPHITI_TELEMETRY_ENABLED', None) if previous is None else os.environ.__setitem__('GRAPHITI_TELEMETRY_ENABLED', previous)",
+        %{"previous" => telemetry}
+      )
+    end)
+
+    keys = [:client, :destination_storage, :lens_storage]
+    previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
+    Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+    Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.Graphiti)
+    Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
+
+    on_exit(fn ->
+      Enum.each(previous, fn {key, value} ->
+        if is_nil(value),
+          do: Application.delete_env(:jido_gralkor, key),
+          else: Application.put_env(:jido_gralkor, key, value)
+      end)
+    end)
+
+    shared_clients = fn _, _ ->
+      {_, globals} =
+        Pythonx.eval(
+          """
+          import os
+          os.environ['GRAPHITI_TELEMETRY_ENABLED'] = 'false'
+          from graphiti_core.llm_client import OpenAIClient, LLMConfig
+          from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
+          from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
+          config = LLMConfig(api_key='isolated-fixture', base_url='http://127.0.0.1:1')
+          llm = OpenAIClient(config=config)
+          embedder = OpenAIEmbedder(config=OpenAIEmbedderConfig(api_key='isolated-fixture', base_url='http://127.0.0.1:1', embedding_dim=3))
+          cross_encoder = OpenAIRerankerClient(config=config)
+          async def generate_response(*args, **kwargs):
+              model = kwargs.get('response_model')
+              name = model.__name__ if model is not None else ''
+              if name == 'ExtractedEntities': return {'extracted_entities': []}
+              if name == 'ExtractedEdges': return {'edges': []}
+              raise AssertionError('unexpected external inference: ' + name)
+          async def create(*args, **kwargs): return [0.1, 0.2, 0.3]
+          async def create_batch(values): return [[0.1, 0.2, 0.3] for _ in values]
+          async def rank(query, passages): return [(passage, 1.0) for passage in passages]
+          llm.generate_response = generate_response
+          embedder.create = create
+          embedder.create_batch = create_batch
+          cross_encoder.rank = rank
+          """,
+          %{}
+        )
+
+      %{
+        llm_client: globals["llm"],
+        embedder: globals["embedder"],
+        cross_encoder: globals["cross_encoder"]
+      }
+    end
+
+    start_supervised!(
+      {Gralkor.GraphitiPool,
+       falkordb_spec: {:remote, []},
+       warmup: false,
+       construct_shared_clients: shared_clients,
+       initialise_instance: fn _ -> :ok end,
+       construct_falkor_db: fn _ ->
+         {database, _} =
+           Pythonx.eval(
+             "from falkordb.asyncio import FalkorDB\nFalkorDB(unix_socket_path=socket.decode())",
+             %{"socket" => context.connection[:unix_socket_path]}
+           )
+
+         database
+       end}
+    )
+
+    start_supervised!(
+      {JidoGralkor.Runtime,
+       owner: self(),
+       configuration: %{
+         destinations: [],
+         lenses: [],
+         reflections: [
+           %{
+             name: "review",
+             chain_of_thought: %{
+               steps: [%{label: "review", directions: "Review", output: %{"summary" => "string"}}]
+             },
+             outputs: [%{kind: :destination, destination: "personal"}]
+           }
+         ]
+       }}
+    )
+  end
+
+end
