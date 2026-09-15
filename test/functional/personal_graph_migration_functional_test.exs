@@ -756,6 +756,26 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when a private graph copy exceeds its connection deadline" do
+    test "then migration returns a bounded error without retrying its uncertain copy", context do
+      fixture = start_copy_fault(context)
+      journal = prepare_history(fixture)
+      started = System.monotonic_time(:millisecond)
+
+      assert {:error, message} =
+               PersonalGraphMigration.apply(fixture.proxy_connection, journal, @quiescence)
+
+      assert message =~ "GRAPH.COPY outcome is uncertain"
+      assert System.monotonic_time(:millisecond) - started < 2_000
+      assert proxy_state(fixture) == %{copies: 1, finished: false}
+
+      entry = hd(Jason.decode!(File.read!(journal))["graphs"])
+      assert entry["phase"] == "copying"
+      assert entry["copy_server_run_id"] == server_run_id(fixture)
+      assert graph_names(fixture.database) == [entry["source_physical"]]
+    end
+  end
+
   describe "when an interrupted private graph migration resumes from its persisted manifest" do
     test "then a copied graph resumes without duplicating nodes or relationships", context do
       journal = prepare_history(context)
@@ -1212,6 +1232,132 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       before: before,
       evidence: result["evidence"]
     }
+  end
+
+  defp start_copy_fault(context) do
+    path = Path.join(context.directory, "copy-fault-#{System.unique_integer([:positive])}.rdb")
+
+    {server, globals} =
+      Pythonx.eval(
+        """
+        from redislite import Redis
+        from falkordb import FalkorDB
+        server = Redis(dbfilename=path.decode(), serverconfig={'port': '0'})
+        server.config_set('save', '')
+        database = FalkorDB(unix_socket_path=server.socket_file)
+        server
+        """,
+        %{"path" => path}
+      )
+
+    stop_owned_server_on_exit(server)
+
+    {proxy, _} =
+      Pythonx.eval(
+        """
+        import socket, socketserver, threading, tempfile
+        from pathlib import Path
+
+        # This relay substitutes the external transport only. The upstream server
+        # still performs GRAPH.COPY and every graph query without a substitute.
+        def frame(stream):
+            line = stream.readline()
+            if not line:
+                raise EOFError()
+            if line[:1] == b'*':
+                return line + b''.join(frame(stream) for _ in range(int(line[1:])))
+            if line[:1] == b'$' and int(line[1:]) >= 0:
+                return line + stream.read(int(line[1:]) + 2)
+            return line
+
+        class Relay(socketserver.ThreadingUnixStreamServer):
+            daemon_threads = True
+
+        class Handler(socketserver.StreamRequestHandler):
+            def handle(self):
+                upstream = socket.socket(socket.AF_UNIX)
+                upstream.settimeout(5)
+                upstream.connect(self.server.upstream)
+                copied = False
+                try:
+                    with upstream.makefile('rb') as response:
+                        while True:
+                            request = frame(self.rfile)
+                            copied = b'$10\\r\\nGRAPH.COPY\\r\\n' in request.upper()
+                            if copied:
+                                self.server.copies += 1
+                                self.server.release.wait(10)
+                            upstream.sendall(request)
+                            reply = frame(response)
+                            if copied:
+                                self.server.finished.set()
+                            self.wfile.write(reply)
+                            self.wfile.flush()
+                except (OSError, EOFError):
+                    if copied:
+                        self.server.finished.set()
+                finally:
+                    upstream.close()
+
+        directory = tempfile.mkdtemp(prefix='jgr-copy-', dir='/private/tmp')
+        proxy = Relay(str(Path(directory) / 'relay.socket'), Handler)
+        proxy.upstream = server.socket_file
+        proxy.copies = 0
+        proxy.release = threading.Event()
+        proxy.finished = threading.Event()
+        threading.Thread(target=proxy.serve_forever, daemon=True).start()
+        proxy
+        """,
+        %{"server" => server}
+      )
+
+    on_exit(fn ->
+      Pythonx.eval(
+        """
+        import shutil
+        from pathlib import Path
+        proxy.release.set()
+        proxy.finished.wait(5)
+        proxy.shutdown()
+        proxy.server_close()
+        shutil.rmtree(Path(proxy.server_address).parent)
+        """,
+        %{"proxy" => proxy}
+      )
+    end)
+
+    {connections, _} =
+      Pythonx.eval("[server.socket_file, proxy.server_address]", %{
+        "server" => server,
+        "proxy" => proxy
+      })
+
+    [socket, relay] = Pythonx.decode(connections)
+
+    %{
+      server: server,
+      proxy: proxy,
+      rdb_path: path,
+      directory: context.directory,
+      database: globals["database"],
+      connection: [unix_socket_path: socket],
+      proxy_connection: [unix_socket_path: relay, socket_timeout: 0.2]
+    }
+  end
+
+  defp proxy_state(fixture) do
+    {result, _} =
+      Pythonx.eval("[proxy.copies, proxy.finished.is_set()]", %{"proxy" => fixture.proxy})
+
+    [copies, finished] = Pythonx.decode(result)
+    %{copies: copies, finished: finished}
+  end
+
+  defp server_run_id(fixture) do
+    {result, _} =
+      Pythonx.eval("server.info('server')['run_id']", %{"server" => fixture.server})
+
+    Pythonx.decode(result)
   end
 
   defp stop_owned_server_on_exit(server) do
