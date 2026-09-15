@@ -788,6 +788,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                     "body": kwargs.get("episode_body"),
                     "source": kwargs.get("source").value,
                     "source_description": kwargs.get("source_description"),
+                    "writer": "direct" if kwargs.get("source_description", "").endswith(" [gralkor: direct]") else None,
                     "custom_extraction_instructions": kwargs.get("custom_extraction_instructions"),
                 })
 
@@ -803,10 +804,11 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                 self.episodes = episodes
 
         class _StoredEpisode:
-            def __init__(self, uuid, content, source_description):
+        def __init__(self, uuid, content, source_description, writer=None):
                 self.uuid = uuid
                 self.content = content
                 self.source_description = source_description
+                self._gralkor_writer = writer
 
         class _Edge:
             def __init__(self, fact, episodes):
@@ -818,11 +820,12 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                 self.expired_at = None
 
         class _Episode:
-            def __init__(self, uuid, source, source_description):
+        def __init__(self, uuid, source, source_description, writer=None):
                 from graphiti_core.nodes import EpisodeType
                 self.uuid = uuid
                 self.source = EpisodeType(source)
                 self.source_description = source_description
+                self._gralkor_writer = writer
 
         class _GraphOperations:
             def __init__(self, graphiti):
@@ -889,8 +892,9 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
           for source in item['episodes']:
               episode = g.Episode(
                   _dec(source['id']),
-                  _dec(source['source_kind']),
-                  _dec(source['source_description']),
+              _dec(source['source_kind']),
+              _dec(source['source_description']),
+              _dec(source.get('writer')),
               )
               g.episodes[episode.uuid] = episode
               episode_ids.append(episode.uuid)
@@ -910,6 +914,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
               _dec(item.get('id', f'episode-{index}')),
               _dec(item['content']),
               _dec(item['source_description']),
+              _dec(item.get('writer')),
           )
           for index, item in enumerate(episodes)
       ]
