@@ -822,6 +822,9 @@ defmodule Gralkor.GraphitiPool do
                     embedder,
                 ):
                     fence = guard.get()
+                    if fence is not None and fence.get('writer') == 'direct':
+                        for episode in episodic_nodes:
+                            episode.__dict__['_gralkor_writer'] = 'direct'
                     if (
                         fence is None
                         or not fence['distributed']
