@@ -80,7 +80,7 @@ Remote wins when both are configured. Misconfiguration (non-keyword value, missi
 
 Deterministic Lens tests pin both `client: Gralkor.Client.InMemory` and `lens_storage: Gralkor.Lens.Storage.InMemory`.
 
-Private-memory rename and cutover tooling is documented in [PERSONAL_MEMORY_MIGRATION.md](PERSONAL_MEMORY_MIGRATION.md). Prepare and verify on isolated copies; publication, deployment, and live migration remain separately scoped actions. Historical routing must preserve snapshots, hashes, artefact IDs, and operator identities.
+Private-memory rename and cutover tooling is documented in [PERSONAL_MEMORY_MIGRATION.md](PERSONAL_MEMORY_MIGRATION.md). Prepare and verify on isolated copies; publication, deployment, and live migration remain separately scoped actions. Historical routing must preserve snapshots, hashes, artefact IDs, and operator identities. Migration journals bind operations to their recorded non-secret endpoint identity; controlled recovery rebinds are explicit and are journaled before subsequent work, while original `copy_server_run_id` values remain part of the copy history.
 
 ## Testing
 

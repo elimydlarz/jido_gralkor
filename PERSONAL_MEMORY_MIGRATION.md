@@ -27,6 +27,8 @@ Use `mix gralkor.migrate_personal <operation> <request.json>` or the exported `G
 
 `prepare` records a non-secret endpoint identity in the journal: TCP host and port or Unix socket path, together with database and username. Passwords and other credentials are excluded. Every `advance`, `apply`, and `rollback` request must use the recorded identity; a journal cannot be replayed against another endpoint even when its graphs happen to contain identical data. Journals created before endpoint binding are rejected and require a fresh preparation.
 
+For controlled recovery, the rebind acknowledgement is journaled before any subsequent copy, rewrite, or rollback step. That binding remains authoritative if the later operation fails, because a timeout may leave server-side work in progress; retry the operation against the rebound endpoint rather than reverting the journal to its retired endpoint. The journal retains the original `copy_server_run_id`. A new `GRAPH.COPY` records a new `copy_server_run_id`; adopting an already present matching target leaves the original copy run ID unchanged. The rebound server run is recorded separately as `endpoint_rebind_server_run_id`.
+
 Create an explicit request for the disposable restored endpoint:
 
 ```json
@@ -94,6 +96,8 @@ A timeout or lost connection during `GRAPH.COPY` leaves its outcome uncertain an
 When the original server has been retired or stopped and a consistent restore is available at a new endpoint, controlled recovery may explicitly rebind a journal. Supply `endpoint_rebind` with the journal's exact `endpoint_identity` as `prior_endpoint` and `prior_endpoint_retired: true`. The new endpoint must differ, and for an outstanding `copying` phase its server `run_id` must differ from the recorded `copy_server_run_id`. The migration still requires truthful quiescence and complete unchanged source and target inventories before recording the rebound identity and continuing. It never guesses a replacement endpoint.
 
 An older `copying` journal without `copy_server_run_id` can adopt a matching complete target through the same validation. If its target is absent, resume and rollback refuse even after the server changes. Retain that journal, perform controlled server recovery, and prepare a fresh migration at a new journal path from the recovered consistent state. Do not invent a server identity in the old journal or discard it while its copy outcome is uncertain.
+
+Journals created before endpoint binding, including journals without `endpoint_identity`, are unpublished legacy artifacts for this procedure. Do not add the missing field by hand; prepare a fresh journal on the explicitly selected recovered endpoint.
 
 ## Verify and activate together
 
