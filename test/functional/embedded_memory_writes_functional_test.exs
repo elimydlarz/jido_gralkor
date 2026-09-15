@@ -261,9 +261,12 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
     write = Task.async(fn -> Native.memory_add("owner", "episode", "manual") end)
 
     try do
-      Pythonx.eval("import asyncio\nasyncio._gralkor_run(asyncio.wait_for(graph.write_started.wait(), 5))", %{
-        "graph" => graph
-      })
+      Pythonx.eval(
+        "import asyncio\nasyncio._gralkor_run(asyncio.wait_for(graph.write_started.wait(), 5))",
+        %{
+          "graph" => graph
+        }
+      )
 
       search = Task.async(fn -> GraphitiPool.search(pool, "owner", "query", 10) end)
 
@@ -277,15 +280,21 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
             flunk("search did not complete while episode write was active")
         end
 
-      Pythonx.eval("import asyncio\nasyncio._gralkor_loop.call_soon_threadsafe(graph.release_write.set)", %{
-        "graph" => graph
-      })
+      Pythonx.eval(
+        "import asyncio\nasyncio._gralkor_loop.call_soon_threadsafe(graph.release_write.set)",
+        %{
+          "graph" => graph
+        }
+      )
 
       %{search_result: search_result, write_result: Task.await(write, 5_000)}
     after
-      Pythonx.eval("import asyncio\nasyncio._gralkor_loop.call_soon_threadsafe(graph.release_write.set)", %{
-        "graph" => graph
-      })
+      Pythonx.eval(
+        "import asyncio\nasyncio._gralkor_loop.call_soon_threadsafe(graph.release_write.set)",
+        %{
+          "graph" => graph
+        }
+      )
 
       Task.shutdown(write, :brutal_kill)
     end
