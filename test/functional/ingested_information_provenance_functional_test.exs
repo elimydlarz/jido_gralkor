@@ -487,6 +487,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         %{
           content: "Direct memory",
           source_description: "reflection:generalisations [gralkor: direct]",
+          writer: "direct",
           extraction_complete: false
         }
       ])
