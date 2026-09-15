@@ -1,6 +1,6 @@
 # Personal memory naming and capture correction
 
-Status: final independent review completed; its three material findings are corrected, with broad verification in progress, 2026-09-15. The operator explicitly authorized this document end to end across both repositories, including contract reconciliation, implementation, isolated migration/rollback verification, and final independent review. Publication, deployment, and live-data migration remain outside that authorization.
+Status: complete and verified, 2026-09-15. The final independent review completed, its three material findings are corrected, and every authorized verification gate passed. The operator explicitly authorized this document end to end across both repositories, including contract reconciliation, implementation, isolated migration/rollback verification, and final independent review. Publication, deployment, and live-data migration remain outside that authorization.
 
 Implemented decisions: `Gralkor.Capture` is the typed runtime-targeted request; `{:direct, destination}` and `{:lenses, names}` dispatch exclusively. Mounts require `capture_destination`. The packaged names are `personal-chat` and `personal`, with unchanged operator identifiers. Positional capture calls raise migration guidance. Direct provenance is storage-owned, and historical provenance remains unchanged. Phil has guarded persisted-configuration migration and archival delivery/projection routing that retains original snapshots and hashes.
 
@@ -285,7 +285,7 @@ Suggested independent ownership after the outer contract is established:
 
 Agree shared-file ownership and API contracts before concurrent edits; adapt to others' changes instead of reverting them. The primary agent reconciles the integrated result, runs the required completion gates, and obtains the applicable final independent review. Package publishing and live deployment are distinct from implementing and proving the change.
 
-The original handover left implementation and verification outstanding; the current status and evidence are recorded above and in section 9. Completion requires implemented behaviour, tested migration tooling, migrated consumer code, accurate trees/docs, and a precise record of passed and unperformed gates. Do not mark the work complete after a name replacement or compile-only check. If an unavailable release pin, a live migration, or an unauthorized Journey remains, name that exact remaining outcome and its reason.
+The original handover left implementation and verification outstanding; the completed status and current evidence are recorded above and in section 10. Completion requires implemented behaviour, tested migration tooling, migrated consumer code, accurate trees/docs, and a precise record of passed and unperformed gates. Do not mark the work complete after a name replacement or compile-only check. If an unavailable release pin, a live migration, or an unauthorized Journey remains, name that exact remaining outcome and its reason.
 
 ## 8. Suggested goal for the next session
 
@@ -294,7 +294,7 @@ Implement and verify the work in `/Users/eli/code/os/jido_gralkor/WIP_RENAME.md`
 
 ## 9. Historical isolated verification evidence and superseded checkpoints
 
-These results belong to earlier implementation and review checkpoints. They are historical evidence, not the current acceptance result. Section 10 records the latest observed status and remaining gates.
+These results belong to earlier implementation and review checkpoints. They are historical evidence, not the current acceptance result. Section 10 records the completed acceptance gates.
 
 | Check | Observed result | Evidence |
 |---|---|---|
@@ -353,7 +353,7 @@ The single independent review completed successfully through `gpt-5.6-sol` and w
 
 After correcting the shutdown-related fixture ownership and replacing fixed sleeps in the CaptureBuffer exhaustion-log fixture with terminal-result synchronization, the installed package Stop gate completed with exit 0 (`/private/tmp/jgr-rename-stop-final.log`). Successful hook output is intentionally suppressed. This verified Unit/Integration and Node at that historical checkpoint. Section 10 records acceptance after the review corrections.
 
-## 10. Current acceptance and remaining gates
+## 10. Completed acceptance
 
 The three independent review findings are corrected: journals bind endpoint identity, public rollback verification uses the public recall boundary, and direct authorship requires persisted `_gralkor_writer` metadata. Marker-like historical text remains full and unclassified.
 
@@ -366,10 +366,10 @@ The corrected production revision is `18819ba07200ebbec1e61abf04770aae4f8a44ba`,
 | Package single memory Journey | 44 passed; 226.7 seconds; exit 0 | `/private/tmp/jgr-review-journey-final.log` |
 | Phil affected Functional against the final dependency | 85 passed; 127.4 seconds | `/private/tmp/phil-rename-18819ba-affected-functional.log` |
 | Phil installed Stop against the final dependency | 796 passed, 620 excluded; 92.2 seconds; exit 0 | `/private/tmp/phil-rename-18819ba-stop.log` |
-| Phil isolated artefact Journey against the final dependency | 1 passed; 80.5 seconds | `/private/tmp/phil-rename-18819ba-synthetic-journey.log` |
+| Phil isolated artefact Journey against the final dependency | 1 passed; 80.5 seconds; exit 0 | `/private/tmp/phil-rename-18819ba-synthetic-journey.log` |
 | Formatting and documentation | Package-wide formatting, README sync, and whitespace checks passed; trees, README, CLAUDE and existing mental-model Invariants reconciled | `/private/tmp/jgr-review-format-final.log`, repository checks |
 
-The full Functional gate restored three synthetic historical graphs from a 10,056-byte backup into a distinct server. Source and restored snapshot SHA-256 was `ea4a96a52a967f89ea49feba2cb9bebe13c00c33358da1ab49198f068d663120`; source PID 9902 stopped before restored PID 10588 loaded it. Complete inventories, schema, migration, and public historical recall passed. Package Journey BEAM 79689 and Redis 80230 exited, and its disposable directory was removed. Cleanup evidence is recorded in `/private/tmp/jgr-review-verification-status.json`.
+The full Functional gate restored three synthetic historical graphs from a 10,056-byte backup into a distinct server. Source and restored snapshot SHA-256 was `ea4a96a52a967f89ea49feba2cb9bebe13c00c33358da1ab49198f068d663120`; source PID 9902 stopped before restored PID 10588 loaded it. Complete inventories, schema, migration, and public historical recall passed. Package Journey BEAM 79689 and Redis 80230 exited, and its disposable directory was removed. Phil's Journey launcher and VM exited, its temporary `.env` was removed, and the Docker check found no `phil-artefact-lifecycle-falkordb` containers. Cleanup evidence is recorded in `/private/tmp/jgr-review-verification-status.json` and `/private/tmp/phil-personal-rename-verification.md`. No authorized implementation or verification outcome remains incomplete.
 
 The package's earlier post-review 601/606 Functional result was not accepted: fake graph objects lacked newly read optional metadata, and those fixtures were corrected. Real storage coverage also reproduced an ordinary direct write receiving an unintended extraction-completion marker; the write now retains its original completion semantics while deterministic writes retain their completion fence. Timing-sensitive concurrency fixtures now use explicit event/admission barriers. The final complete gates above supersede those failed checkpoints. Phil's initial Stop run encountered an intermittent Jido teardown failure; its final complete rerun passed without a production change.
 
