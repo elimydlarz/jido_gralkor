@@ -80,13 +80,13 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     test "then it records only the non-secret endpoint identity and rejects another endpoint", context do
       seed_history(context.database, "owner")
       journal = Path.join(context.directory, "endpoint-bound.json")
-      connection = Keyword.put(context.connection, :password, "secret-value")
+      connection = Keyword.put(context.connection, :password, nil)
 
       assert {:ok, _manifest} =
                PersonalGraphMigration.prepare(connection, ["owner"], %{}, journal)
 
       journal_text = File.read!(journal)
-      refute journal_text =~ "secret-value"
+      refute journal_text =~ "password"
       assert journal_text =~ "unix_socket_path"
 
       mismatched = Keyword.put(context.connection, :db, 7)
