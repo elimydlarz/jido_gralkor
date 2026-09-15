@@ -292,9 +292,9 @@ The original handover left implementation and verification outstanding; the curr
 Implement and verify the work in `/Users/eli/code/os/jido_gralkor/WIP_RENAME.md` end to end across jido_gralkor and Phil. Replace the packaged operator Lens with personal-chat and the operator Destination with personal, resolving to personal/<the same identifier>. Establish explicit direct capture and optional genuine Lens processing without duplicate automatic writes; preserve truthful provenance, historical memory, operator isolation, flush/retry semantics, and private ERL delivery. Implement restartable graph and Phil configuration/job compatibility migrations and prove them on isolated data. Update trees, tests, documentation, and consumer integration; follow the project workflows, reconcile parallel work, and report material verification plus every remaining gate. Do not publish, deploy, or mutate live stores without separately scoped authorization.
 
 
-## 9. Current isolated verification evidence
+## 9. Historical isolated verification evidence and superseded checkpoints
 
-These results belong to the implementation session. Pending full gates are not implied by focused passes.
+These results belong to earlier implementation and review checkpoints. They are historical evidence, not the current acceptance result. Section 10 records the latest observed status and remaining gates.
 
 | Check | Observed result | Evidence |
 |---|---|---|
@@ -331,7 +331,7 @@ Phil's post-change Destination, Lens, and trigger screenshots were inspected at 
 
 Trees, executable coverage labels, and the corresponding implementation/docs have been reconciled across both repositories. Phil accounts for 1,416 executable leaves; the capture/storage lane accounts for 750 leaves in 32 trees, and the migration tree has 44 matching executable tests. These coverage audits are distinct from test execution.
 
-Remaining verification: rerun the complete package Functional and installed Stop gates, the single package Journey, and the isolated Phil regression/artefact Journey against the corrected package. Endpoint-bound recovery, public rollback recall, and durable provenance are implemented; the migration suite passed all 50 checks in the combined focused run, while its unrelated older provenance fixture initially failed parsing and was corrected separately.
+The earlier 44-test migration gate is superseded by the focused migration result recorded in section 10. The older provenance fixture initially failed parsing and was corrected separately; that failure is historical and is not an acceptance result.
 
 The operator explicitly approved all three test gates after automatic approval review requested payload/destination-specific authorization. The approved destination is `api.openai.com`; payloads are response/editor preferences, synthetic codenames/cities/support channels/scheduling conversations/deployment reviews/dependency graphs, controlled Atlas evidence, and generated Reflection/recall content. Normal inference charges and disposable local data are within this approval. Run the complete package Functional suite, package Journey, and Phil's isolated artefact Journey sequentially so their embedded runtimes cannot interfere.
 
