@@ -848,6 +848,7 @@ defmodule Gralkor.GraphitiPool do
                             entity_edges=episode.entity_edges,
                             created_at=episode.created_at,
                             valid_at=episode.valid_at,
+                            _gralkor_writer='direct' if guard.get() and guard.get().get('writer') == 'direct' else None,
                         ))
 
                     nodes = []
@@ -922,6 +923,7 @@ defmodule Gralkor.GraphitiPool do
                               entity_edges: ${parameter}.entity_edges,
                               created_at: ${parameter}.created_at,
                               valid_at: ${parameter}.valid_at,
+                              _gralkor_writer: ${parameter}._gralkor_writer,
                               _gralkor_extraction_complete: true
                             }}
                             WITH claim
