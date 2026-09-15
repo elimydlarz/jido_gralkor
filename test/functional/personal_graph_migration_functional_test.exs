@@ -76,6 +76,46 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when a migration journal is bound to a graph endpoint" do
+    test "then it records only the non-secret endpoint identity and rejects another endpoint", context do
+      seed_history(context.database, "owner")
+      journal = Path.join(context.directory, "endpoint-bound.json")
+      connection = Keyword.put(context.connection, :password, "secret-value")
+
+      assert {:ok, _manifest} =
+               PersonalGraphMigration.prepare(connection, ["owner"], %{}, journal)
+
+      journal_text = File.read!(journal)
+      refute journal_text =~ "secret-value"
+      assert journal_text =~ "unix_socket_path"
+
+      mismatched = Keyword.put(context.connection, :db, 7)
+
+      assert {:error, message} =
+               PersonalGraphMigration.apply(mismatched, journal, @quiescence)
+
+      assert message =~ "endpoint identity"
+    end
+
+    test "then controlled recovery requires an explicit retired prior endpoint", context do
+      seed_history(context.database, "owner")
+      journal = Path.join(context.directory, "endpoint-rebind.json")
+
+      assert {:ok, manifest} =
+               PersonalGraphMigration.prepare(context.connection, ["owner"], %{}, journal)
+
+      rebound = Keyword.put(context.connection, :db, 7)
+      prior = manifest["endpoint_identity"]
+
+      assert {:error, message} =
+               PersonalGraphMigration.advance(rebound, journal, @quiescence,
+                 endpoint_rebind: %{prior_endpoint: prior, prior_endpoint_retired: true}
+               )
+
+      assert message =~ "target" or message =~ "source"
+    end
+  end
+
   describe "when an application migrates a consistent backup restored into a separate FalkorDB server" do
     test "then restored graph content and operational schema remain intact through migration and public recall",
          context do
