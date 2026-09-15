@@ -921,9 +921,14 @@ defmodule Gralkor.GraphitiPoolTest do
           construct_instance: fn _db, _shared, _group_id -> g end,
           warmup: false,
           install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
+      )
 
       GraphitiPool.for(pid, "g1")
+
+      on_exit(fn ->
+        Pythonx.eval("g.release_first.set()", %{"g" => g})
+        if Process.alive?(pid), do: GenServer.stop(pid)
+      end)
 
       first = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "first", "manual", nil) end)
       await_python_value(g, "first_started", true, 500)
@@ -945,7 +950,6 @@ defmodule Gralkor.GraphitiPoolTest do
                "finish:second"
              ]
 
-      GenServer.stop(pid)
     end
   end
 
