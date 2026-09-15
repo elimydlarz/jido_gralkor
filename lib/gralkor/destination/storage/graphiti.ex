@@ -187,7 +187,7 @@ defmodule Gralkor.Destination.Storage.Graphiti do
   end
 
   defp episode_provenance(%{content: content, source_description: source_description} = episode) do
-    if String.ends_with?(source_description, " [gralkor: direct]") do
+    if Map.get(episode, :writer) == :direct do
       {:ok,
        episode
        |> Map.put(
