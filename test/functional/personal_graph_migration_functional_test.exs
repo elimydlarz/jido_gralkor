@@ -76,7 +76,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
-  describe "when an application requests a private graph migration > when a migration journal is prepared" do
+  describe "when a migration journal is prepared" do
     test "then the journal records the non-secret graph endpoint identity including host and port or Unix socket path, database, and username",
          context do
       fixture = start_endpoint_fixture(context)
@@ -109,7 +109,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
-  describe "when an application requests a private graph migration > if a journal is used with a different graph endpoint identity" do
+  describe "when a journal is used with a different graph endpoint identity" do
     test "then migration refuses before mutating, applying, or rolling back any graph", context do
       {original, clone, journal, _} = identical_migrated_graphs(context)
       before = File.read!(journal)
@@ -135,7 +135,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
-  describe "when an interrupted private graph migration resumes from its persisted manifest > if controlled server recovery explicitly supplies an endpoint rebind" do
+  describe "when controlled server recovery explicitly supplies an endpoint rebind" do
     test "then migration validates source and target inventories, quiescence evidence, and original endpoint identity before resuming",
          context do
       {_original, clone, journal, manifest} = identical_migrated_graphs(context)
@@ -225,7 +225,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
-  describe "when an interrupted private graph migration resumes from its persisted manifest > if the endpoint changes without an explicit controlled recovery rebind" do
+  describe "when the endpoint changes without an explicit controlled recovery rebind" do
     test "then migration refuses before inspecting or mutating the restored clone", context do
       fixture = start_endpoint_fixture(context)
       journal = prepare_history(fixture)
