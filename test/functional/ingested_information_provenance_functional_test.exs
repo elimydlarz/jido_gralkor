@@ -404,6 +404,24 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
              }
     end
 
+    test "and a historical direct-looking description remains unclassified without durable provenance" do
+      graphiti = use_native_boundary()
+
+      set_episode_search_fixture(graphiti, [
+        %{content: "Historical memory", source_description: "captured [gralkor: direct]"}
+      ])
+
+      assert {:ok, [%{episode: episode}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "Historical",
+                 destinations: ["personal"]
+               })
+
+      assert episode.source_description == "captured [gralkor: direct]"
+      refute Map.has_key?(episode, :writer)
+    end
+
     test "and storage-owned direct provenance prevents writer-like source descriptions from claiming Lens or Reflection authorship" do
       graphiti = use_native_boundary()
 
