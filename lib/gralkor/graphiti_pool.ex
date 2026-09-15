@@ -1622,20 +1622,7 @@ defmodule Gralkor.GraphitiPool do
           |> Map.put(:writer, :direct)
           |> Map.delete(:_gralkor_writer)
         else
-          source = Map.delete(source, :_gralkor_writer)
-
-          if String.ends_with?(description, " [gralkor: direct]") do
-            source
-          else
-            case Regex.run(~r/ \[lens: (.+)\]$/s, description) do
-              [_, lens] -> Map.put(source, :lens, lens)
-              _ ->
-                case description do
-                  "reflection:" <> reflection when reflection != "" -> Map.put(source, :reflection, reflection)
-                  _ -> source
-                end
-            end
-          end
+          Map.delete(source, :_gralkor_writer)
         end
 
       _ ->
