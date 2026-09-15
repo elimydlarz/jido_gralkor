@@ -1669,6 +1669,7 @@ defmodule Gralkor.GraphitiPool do
 
   @impl true
   def init(opts) do
+    Process.flag(:trap_exit, true)
     table = Keyword.get(opts, :table, @default_table)
     falkordb_spec = Keyword.fetch!(opts, :falkordb_spec)
     llm_model = Keyword.get(opts, :llm_model, Config.llm_model())
