@@ -624,16 +624,16 @@ defmodule Gralkor.ApplicationTest do
         start_supervised!(
           {Gralkor.GraphitiPool,
            [
-          name: Gralkor.GraphitiPool,
-          table: :gralkor_graphiti_instances,
-          falkordb_spec: {:embedded, "/tmp/never_used"},
-          construct_falkor_db: fn _spec -> :stub_falkor_db end,
-          construct_shared_clients: fn _llm, _embedder ->
-            %{llm_client: nil, embedder: nil, cross_encoder: nil}
-          end,
-          construct_instance: fn _db, _shared, _group_id -> g end,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+             name: Gralkor.GraphitiPool,
+             table: :gralkor_graphiti_instances,
+             falkordb_spec: {:embedded, "/tmp/never_used"},
+             construct_falkor_db: fn _spec -> :stub_falkor_db end,
+             construct_shared_clients: fn _llm, _embedder ->
+               %{llm_client: nil, embedder: nil, cross_encoder: nil}
+             end,
+             construct_instance: fn _db, _shared, _group_id -> g end,
+             warmup: false,
+             install_loop_fn: &Gralkor.Python.install_async_runtime/0
            ]}
         )
 
