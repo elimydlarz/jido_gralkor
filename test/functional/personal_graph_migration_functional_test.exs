@@ -776,6 +776,78 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     end
   end
 
+  describe "when a private graph copy exceeds its connection deadline > if the original copy completes after the caller times out" do
+    test "then a matching complete target resumes safely into public historical recall", context do
+      fixture = start_copy_fault(context)
+      journal = prepare_history(fixture)
+
+      assert {:error, _} =
+               PersonalGraphMigration.apply(fixture.proxy_connection, journal, @quiescence)
+
+      pending = File.read!(journal)
+
+      assert {:error, message} =
+               PersonalGraphMigration.apply(fixture.connection, journal, @quiescence)
+
+      assert message =~ "controlled server recovery"
+      assert File.read!(journal) == pending
+      finish_delayed_copy(fixture)
+
+      assert {:ok, completed} =
+               PersonalGraphMigration.apply(fixture.connection, journal, @quiescence)
+
+      assert proxy_state(fixture) == %{copies: 1, finished: true}
+      entry = hd(completed["graphs"])
+      assert entry["copy_server_run_id"] == server_run_id(fixture)
+      assert entry["target_inventory"]["node_count"] == 8
+      assert entry["target_inventory"]["relationship_count"] == 3
+      assert_public_history(fixture)
+    end
+  end
+
+  describe "when a private graph copy exceeds its connection deadline > if the target remains absent until the graph server is recovered" do
+    test "then migration refuses premature resume and rollback before safely retrying on the recovered server",
+         context do
+      fixture = start_copy_fault(context)
+      journal = prepare_history(fixture)
+      Pythonx.eval("server.save()", %{"server" => fixture.server})
+      original_run_id = server_run_id(fixture)
+
+      assert {:error, _} =
+               PersonalGraphMigration.apply(fixture.proxy_connection, journal, @quiescence)
+
+      pending = File.read!(journal)
+
+      for operation <- [:rollback, :advance, :apply] do
+        assert {:error, message} =
+                 apply(PersonalGraphMigration, operation, [
+                   fixture.connection,
+                   journal,
+                   @quiescence
+                 ])
+
+        assert message =~ "controlled server recovery"
+        assert File.read!(journal) == pending
+      end
+
+      recovered = recover_copy_server(fixture)
+      assert server_run_id(recovered) != original_run_id
+      assert graph_names(recovered.database) == [hd(Jason.decode!(pending)["graphs"])["source_physical"]]
+
+      assert {:ok, completed} =
+               PersonalGraphMigration.apply(recovered.connection, journal, @quiescence)
+
+      assert hd(completed["graphs"])["copy_server_run_id"] == server_run_id(recovered)
+      assert_public_history(recovered)
+
+      assert {:ok, rolled_back} =
+               PersonalGraphMigration.rollback(recovered.connection, journal, @quiescence)
+
+      assert rolled_back["phase"] == "rolled_back"
+      assert graph_names(recovered.database) == [hd(completed["graphs"])["source_physical"]]
+    end
+  end
+
   describe "when an interrupted private graph migration resumes from its persisted manifest" do
     test "then a copied graph resumes without duplicating nodes or relationships", context do
       journal = prepare_history(context)
@@ -1351,6 +1423,57 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
 
     [copies, finished] = Pythonx.decode(result)
     %{copies: copies, finished: finished}
+  end
+
+  defp finish_delayed_copy(fixture) do
+    {finished, _} =
+      Pythonx.eval("proxy.release.set()\nproxy.finished.wait(5)", %{"proxy" => fixture.proxy})
+
+    assert Pythonx.decode(finished)
+  end
+
+  defp recover_copy_server(fixture) do
+    Pythonx.eval("server.shutdown(save=False, now=True, force=True)", %{
+      "server" => fixture.server
+    })
+
+    finish_delayed_copy(fixture)
+
+    {server, globals} =
+      Pythonx.eval(
+        """
+        from redislite import Redis
+        from falkordb import FalkorDB
+        server = Redis(dbfilename=path.decode(), serverconfig={'port': '0'})
+        server.config_set('save', '')
+        database = FalkorDB(unix_socket_path=server.socket_file)
+        server
+        """,
+        %{"path" => fixture.rdb_path}
+      )
+
+    stop_owned_server_on_exit(server)
+    {socket, _} = Pythonx.eval("server.socket_file", %{"server" => server})
+
+    %{
+      fixture
+      | server: server,
+        database: globals["database"],
+        connection: [unix_socket_path: Pythonx.decode(socket)]
+    }
+  end
+
+  defp assert_public_history(fixture) do
+    start_public_runtime(fixture)
+
+    assert {:ok, results} =
+             Gralkor.Client.search(self(), %Gralkor.Search{
+               operator_id: "owner",
+               query: "amber",
+               destinations: ["personal"]
+             })
+
+    assert Enum.any?(results, &(&1.episode[:content] == "remember amber orchard"))
   end
 
   defp graph_names(database) do
