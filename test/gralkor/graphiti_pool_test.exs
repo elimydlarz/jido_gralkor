@@ -944,7 +944,9 @@ defmodule Gralkor.GraphitiPoolTest do
       try do
         first = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "first", "manual", nil) end)
         await_python_value(g, "first_started", true, 500)
-        second = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "second", "manual", nil) end)
+
+        second =
+          Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "second", "manual", nil) end)
 
         await_episode_waiting(pid, 1)
 
