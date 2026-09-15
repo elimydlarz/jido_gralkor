@@ -674,8 +674,10 @@ defmodule Gralkor.GraphitiPool do
              is_list(opts) do
     instance = __MODULE__.for(server, group_id)
 
+    direct_writer = Keyword.get(opts, :writer) == :direct
+
     source_description =
-      if Keyword.get(opts, :writer) == :direct do
+      if direct_writer do
         source_description <> " [gralkor: direct]"
       else
         lens_source_description(source_description, Keyword.get(opts, :lens))
@@ -762,6 +764,8 @@ defmodule Gralkor.GraphitiPool do
 
                 async def guarded_save(self, driver):
                     fence = guard.get()
+                    if fence is not None and fence.get('writer') == 'direct':
+                        self.__dict__['_gralkor_writer'] = 'direct'
                     if fence is None or self.uuid != fence['uuid'] or not fence['distributed']:
                         return await original_save(self, driver)
 
