@@ -1670,6 +1670,7 @@ defmodule Gralkor.GraphitiPool do
                 'content': episode.content,
                 'source': episode.source.value,
                 'source_description': episode.source_description,
+                '_gralkor_writer': getattr(episode, '_gralkor_writer', None),
                 'extraction_complete': extraction_complete,
             }
 
