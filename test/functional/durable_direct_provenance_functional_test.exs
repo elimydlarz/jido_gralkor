@@ -54,7 +54,7 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
   defp assert_direct_round_trip(context, deterministic) do
     description = "reflection:manual [lens: observations]"
     if deterministic do
-      assert :ok = Gralkor.GraphitiPool.add_episode("personal/owner", "amber orchard", description, nil, uuid: "stable-direct", writer: :direct)
+      assert :ok = Gralkor.GraphitiPool.add_episode(Gralkor.GraphitiPool, "personal/owner", "amber orchard", description, nil, uuid: "stable-direct", writer: :direct)
     else
       assert :ok = Gralkor.Client.Native.memory_add("personal/owner", "amber orchard", description)
     end
