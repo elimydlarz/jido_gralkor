@@ -898,12 +898,16 @@ defmodule Gralkor.GraphitiPoolTest do
               def __init__(self):
                   self.events = []
                   self.active_writes = 0
+                  self.first_started = asyncio.Event()
+                  self.release_first = asyncio.Event()
 
               async def add_episode(self, **kwargs):
                   body = kwargs['episode_body']
                   self.active_writes += 1
                   self.events.append(f'start:{body}')
-                  await asyncio.sleep(0.1)
+                  if body == 'first':
+                      self.first_started.set()
+                      await self.release_first.wait()
                   self.events.append(f'finish:{body}')
                   self.active_writes -= 1
 
@@ -922,8 +926,12 @@ defmodule Gralkor.GraphitiPoolTest do
       GraphitiPool.for(pid, "g1")
 
       first = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "first", "manual", nil) end)
-      await_python_value(g, "active_writes", 1, 500)
+      await_python_value(g, "first_started.is_set()", true, 500)
       second = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "second", "manual", nil) end)
+
+      assert Task.yield(second, 100) == nil
+
+      Pythonx.eval("g.release_first.set()", %{"g" => g})
 
       assert Task.await(first, 2_000) == :ok
       assert Task.await(second, 2_000) == :ok
