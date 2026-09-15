@@ -167,6 +167,7 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
                 self.searches_during_write = 0
                 self.write_started = asyncio.Event()
                 self.release_write = asyncio.Event()
+                self.hold_write = False
                 self.edge_vector_searches = 0
                 self.edge_fulltext_searches = 0
                 self.resolve_empty_candidates = False
@@ -189,7 +190,10 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
                             search_filter=SearchFilters(edge_uuids=[]),
                         )
                         self.episode_continued = result.edges == []
-                    await self.release_write.wait()
+                    if self.hold_write:
+                        await self.release_write.wait()
+                    else:
+                        await asyncio.sleep(0.1)
                 finally:
                     self.active_writes -= 1
 
@@ -253,6 +257,7 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
   end
 
   defp overlap_search_with_write(pool, graph) do
+    Pythonx.eval("graph.hold_write = True", %{"graph" => graph})
     write = Task.async(fn -> Native.memory_add("owner", "episode", "manual") end)
 
     try do
