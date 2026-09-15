@@ -91,7 +91,10 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
                  "personal/owner",
                  "amber orchard",
                  description,
-                 nil, uuid: "stable-direct", writer: :direct)
+                 nil,
+                 uuid: "stable-direct",
+                 writer: :direct
+               )
     else
       assert :ok =
                Gralkor.Client.Native.memory_add("personal/owner", "amber orchard", description)
@@ -110,6 +113,7 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
 
     assert {:ok, %{"_gralkor_writer" => "direct"} = stored} =
              Gralkor.GraphitiPool.get_episode("personal/owner", uuid)
+
     assert stored["extraction_complete"] == deterministic
 
     # A controlled extracted fact points to the episode actually written above.
