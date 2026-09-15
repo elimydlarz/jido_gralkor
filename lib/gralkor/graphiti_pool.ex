@@ -547,8 +547,13 @@ defmodule Gralkor.GraphitiPool do
       source_description: Map.get(m, "source_description")
     }
 
-    if Map.has_key?(m, "source_kind"),
-      do: Map.put(episode, :source_kind, m["source_kind"]),
+    episode =
+      if Map.has_key?(m, "source_kind"),
+        do: Map.put(episode, :source_kind, m["source_kind"]),
+        else: episode
+
+    if Map.get(m, "_gralkor_writer") == "direct",
+      do: Map.put(episode, :writer, :direct),
       else: episode
   end
 
@@ -1581,7 +1586,7 @@ defmodule Gralkor.GraphitiPool do
 
   @fact_keys ~w(fact created_at valid_at invalid_at expired_at sources)a
   @fact_keys_strings Enum.map(@fact_keys, &Atom.to_string/1)
-  @source_keys ~w(id source_kind source_description)a
+  @source_keys ~w(id source_kind source_description _gralkor_writer)a
   @source_keys_strings Enum.map(@source_keys, &Atom.to_string/1)
 
   defp atomize_keys(map) when is_map(map) do
@@ -1601,15 +1606,16 @@ defmodule Gralkor.GraphitiPool do
 
     case source do
       %{source_description: description} when is_binary(description) ->
-        if String.ends_with?(description, " [gralkor: direct]") do
+        if source[:_gralkor_writer] == "direct" do
           source
           |> Map.put(
             :source_description,
             String.replace_suffix(description, " [gralkor: direct]", "")
           )
           |> Map.put(:writer, :direct)
+          |> Map.delete(:_gralkor_writer)
         else
-          source
+          Map.delete(source, :_gralkor_writer)
         end
 
       _ ->
