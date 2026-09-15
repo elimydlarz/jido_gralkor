@@ -160,17 +160,17 @@ defmodule Gralkor.Destination.Storage.Graphiti do
       source
     else
       case Regex.run(~r/ \[lens: (.+)\]$/s, description) do
-      [_, lens] ->
-        Map.put(source, :lens, lens)
+        [_, lens] ->
+          Map.put(source, :lens, lens)
 
-      _ ->
-        case description do
-          "reflection:" <> reflection when reflection != "" ->
-            Map.put(source, :reflection, reflection)
+        _ ->
+          case description do
+            "reflection:" <> reflection when reflection != "" ->
+              Map.put(source, :reflection, reflection)
 
-          _ ->
-          source
-        end
+            _ ->
+              source
+          end
       end
     end
   end
