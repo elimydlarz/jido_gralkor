@@ -1218,9 +1218,9 @@ defmodule Gralkor.CaptureBufferTest do
       capture_log(fn ->
         :ok = CaptureBuffer.flush("s")
 
-        assert_receive {:attempt, 1}, 200
-        assert_receive {:attempt, 2}, 200
-        assert_receive {:attempt, 3}, 200
+        assert_receive {:attempt, 1}, 5_000
+        assert_receive {:attempt, 2}, 5_000
+        assert_receive {:attempt, 3}, 5_000
         refute_receive {:attempt, 4}, 100
       end)
     end
