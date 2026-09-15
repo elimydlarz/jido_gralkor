@@ -1,6 +1,6 @@
 # Personal memory naming and capture correction
 
-Status: implementation and all scoped verification gates passed; the explicitly approved final source-code review is running, 2026-09-15. The operator explicitly authorized this document end to end across both repositories, including contract reconciliation, implementation, isolated migration/rollback verification, and final independent review. Publication, deployment, and live-data migration remain outside that authorization.
+Status: final independent review completed; three material findings are being corrected and will be reverified, 2026-09-15. The operator explicitly authorized this document end to end across both repositories, including contract reconciliation, implementation, isolated migration/rollback verification, and final independent review. Publication, deployment, and live-data migration remain outside that authorization.
 
 Implemented decisions: `Gralkor.Capture` is the typed runtime-targeted request; `{:direct, destination}` and `{:lenses, names}` dispatch exclusively. Mounts require `capture_destination`. The packaged names are `personal-chat` and `personal`, with unchanged operator identifiers. Positional capture calls raise migration guidance. Direct provenance is storage-owned, and historical provenance remains unchanged. Phil has guarded persisted-configuration migration and archival delivery/projection routing that retains original snapshots and hashes.
 
@@ -333,7 +333,9 @@ Trees, executable coverage labels, and the corresponding implementation/docs hav
 
 Still pending:
 
-1. Complete and reconcile the single independent review, then record final completion. Workspace credits were restored and the operator explicitly approved the exact source-code packet. The first inference request is running; the two prior process-creation attempts were rejected before inference.
+1. Bind migration journals to their non-secret endpoints and explicitly validate controlled recovery rebinding.
+2. Store durable direct provenance so historical source-description text alone cannot invent authorship.
+3. Correct the package rollback test to exercise an actual public recall boundary, then reverify the affected and broad gates against the final changes.
 
 The operator explicitly approved all three test gates after automatic approval review requested payload/destination-specific authorization. The approved destination is `api.openai.com`; payloads are response/editor preferences, synthetic codenames/cities/support channels/scheduling conversations/deployment reviews/dependency graphs, controlled Atlas evidence, and generated Reflection/recall content. Normal inference charges and disposable local data are within this approval. Run the complete package Functional suite, package Journey, and Phil's isolated artefact Journey sequentially so their embedded runtimes cannot interfere.
 
@@ -354,5 +356,7 @@ Final review preparation completed after every scoped verification gate passed. 
 After the operator confirmed restored credits, automatic approval review again rejected process creation because it considered the existing authorization limited to synthetic fixtures and insufficient for repository source code. A separate, concrete approval request now discloses the 529,545-byte packet (176,515 conservatively estimated input tokens), its relevant package/private Phil code, governing tests/trees, documentation and evidence, the `api.openai.com` destination, `gpt-5.6-sol`, and normal inference charges. Credentials, live data, and unrelated changes are excluded. No inference request has executed; all completed verification remains valid.
 
 The operator subsequently explicitly approved that source-code review. The measured packet exactly matches the approved 529,545 bytes and is below the skill's 200,000 estimated-token ceiling. The first actual inference request is running through the selected endpoint; its log is `/private/tmp/jgr-rename-final-review.log`. All previous gate results remain valid.
+
+The single independent review completed successfully through `gpt-5.6-sol` and was surfaced verbatim once. Evidence: `/private/tmp/jgr-rename-review-response.json`, `/private/tmp/jgr-rename-review-critique.txt`, and `/private/tmp/jgr-rename-final-review.log` (terminal exit 0). It found missing journal endpoint binding, ambiguity between historical source text and direct provenance, and a package rollback test using an internal graph API despite claiming public recall. Those findings are accepted for correction; prior passing gates describe the pre-review checkpoint. The review's nonblocking suggestion to remove `trap_exit` is rejected: the supervisor leak was reproduced and its correction verified by the lifecycle Functional suite and Journey cleanup. Its intended shutdown behavior is now explicit in `CLAUDE.md`. No further independent review is requested for this logical change.
 
 After correcting the shutdown-related fixture ownership and replacing fixed sleeps in the CaptureBuffer exhaustion-log fixture with terminal-result synchronization, the installed package Stop gate completed with exit 0 (`/private/tmp/jgr-rename-stop-final.log`). Successful hook output is intentionally suppressed. This verifies Unit/Integration and Node at that checkpoint; the migration deadline/recovery additions still require their final gates.
