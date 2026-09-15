@@ -414,7 +414,16 @@ def execute(request: dict[str, object]) -> dict[str, object]:
         with open(path) as stream:
             manifest = json.load(stream)
         validate_manifest(manifest)
+        rebind = request.get("endpoint_rebind")
+        validate_endpoint_binding(manifest, connection, rebind)
         with FalkorDB(**connection) as database:
+            if isinstance(rebind, dict):
+                current_run_id = database.connection.info("server")["run_id"]
+                if any(entry["phase"] == "copying" and entry.get("copy_server_run_id") == current_run_id for entry in manifest["graphs"]):
+                    raise ValueError("controlled endpoint rebind requires a new server run identity for outstanding copy")
+                manifest["endpoint_identity"] = endpoint_identity(connection)
+                manifest["endpoint_rebound_from"] = rebind["prior_endpoint"]
+                persist(path, manifest)
             if action == "rollback":
                 return rollback(database, path, manifest)
             if action == "advance":
