@@ -267,7 +267,9 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
 
       search_result =
         case Task.yield(search, 1_000) do
-          {:ok, result} -> result
+          {:ok, result} ->
+            result
+
           nil ->
             Task.shutdown(search, :brutal_kill)
             flunk("search did not complete while episode write was active")
