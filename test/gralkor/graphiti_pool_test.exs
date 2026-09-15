@@ -921,7 +921,7 @@ defmodule Gralkor.GraphitiPoolTest do
           construct_instance: fn _db, _shared, _group_id -> g end,
           warmup: false,
           install_loop_fn: &Gralkor.Python.install_async_runtime/0
-      )
+        )
 
       GraphitiPool.for(pid, "g1")
 
@@ -949,7 +949,6 @@ defmodule Gralkor.GraphitiPoolTest do
                "start:second",
                "finish:second"
              ]
-
     end
   end
 
