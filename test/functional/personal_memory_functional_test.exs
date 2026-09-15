@@ -36,7 +36,11 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
                 return len(self.episodes)
             async def add_episode(self, **kwargs):
                 self.recorded.append(kwargs)
-                self.episodes.append(SimpleNamespace(uuid=str(len(self.episodes)), content=kwargs['episode_body'], source_description=kwargs['source_description'], source=kwargs['source']))
+                from graphiti_core.nodes import EpisodicNode
+                guard = getattr(EpisodicNode, '_gralkor_requested_uuid_guard', None)
+                context = guard.get() if guard is not None else None
+                writer = context.get('writer') if context is not None else None
+                self.episodes.append(SimpleNamespace(uuid=str(len(self.episodes)), content=kwargs['episode_body'], source_description=kwargs['source_description'], source=kwargs['source'], _gralkor_writer=writer))
             async def search_(self, query, config=None, group_ids=None, search_filter=None):
                 return SimpleNamespace(episodes=self.episodes[:config.limit])
         PersonalGraphFixture()
