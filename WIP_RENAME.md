@@ -1,6 +1,6 @@
 # Personal memory naming and capture correction
 
-Status: implementation complete; final approved verification in progress, 2026-09-14. The operator explicitly authorized this document end to end across both repositories, including contract reconciliation, implementation, isolated migration/rollback verification, and final independent review. Publication, deployment, and live-data migration remain outside that authorization.
+Status: implementation complete; final approved verification in progress, 2026-09-15. The operator explicitly authorized this document end to end across both repositories, including contract reconciliation, implementation, isolated migration/rollback verification, and final independent review. Publication, deployment, and live-data migration remain outside that authorization.
 
 Implemented decisions: `Gralkor.Capture` is the typed runtime-targeted request; `{:direct, destination}` and `{:lenses, names}` dispatch exclusively. Mounts require `capture_destination`. The packaged names are `personal-chat` and `personal`, with unchanged operator identifiers. Positional capture calls raise migration guidance. Direct provenance is storage-owned, and historical provenance remains unchanged. Phil has guarded persisted-configuration migration and archival delivery/projection routing that retains original snapshots and hashes.
 
@@ -307,13 +307,15 @@ These results belong to the implementation session. Pending full gates are not i
 | Synthetic backup restored into a separate server | Synchronous RDB SAVE, source shutdown, identical snapshot bytes, distinct server process/run identity, exact restored inventories and operational schema, migration, and three-identity public recall passed | `/private/tmp/gralkor-migration-restored-evidence.json` |
 | Graphiti stale-writer diagnostic | Delayed theft reproduced the fixture race; explicit extraction barrier passed the original-seed diagnostic | `/private/tmp/jgr-rename-stale-delayed-red.log`, `/private/tmp/jgr-rename-stale-green2.log` |
 | Native recall deadline diagnostic | Original-seed focused test passed after separating forwarding from fixture timing; production deadline unchanged | `/tmp/gralkor-native-deadline-verified.log` |
-| Complete package Functional suite | 593 passed, 887 excluded; 172.7 seconds; exit 0, including approved real OpenAI ontology extraction and all migration tests | `/private/tmp/jgr-rename-full-functional.log` |
-| Complete package memory Journey | 44 passed; 266.1 seconds; real approved OpenAI capture, Reflection, recall, isolation, provenance, and replacement lifecycle | `/tmp/gralkor-journey-rename.log` |
+| Package Functional suite before shutdown fix | 593 passed, 887 excluded; 172.7 seconds; exit 0, including approved real OpenAI ontology extraction and all migration tests | `/private/tmp/jgr-rename-full-functional.log` |
+| Package memory Journey before shutdown fix | 44 passed; 266.1 seconds; real approved OpenAI capture, Reflection, recall, isolation, provenance, and replacement lifecycle | `/tmp/gralkor-journey-rename.log` |
 | Phil full Functional | 608 passed, 798 excluded; 670.2 seconds | `/private/tmp/phil-rename-full-functional.log` |
 | Phil final installed Stop gate | 796 Unit/Integration passed, 620 excluded; 83.6 seconds; hook exit 0 | `/private/tmp/phil-rename-final-unit-integration.log` |
 | Phil actual pinned package consumer check | 85 affected Functional tests passed; 110.6 seconds; fetched dependency revision `d805d0d8e03b5740f9792f8ab60db19698017db4` | `/private/tmp/phil-rename-pinned-functional.log` |
 | Package installed Stop gate | Hook exit 0; complete hook-owned Unit/Integration and Node checks passed; successful hook suppresses individual output/counts | `/private/tmp/jgr-rename-stop-feedback.log` |
 | Package final formatting and documentation checks | Package-wide `mix format --check-formatted`, README sync, and `git diff --check` passed | Installed formatter and repository checks |
+| Application supervisor shutdown | Existing Functional contract reproduced a surviving server; trap-exit correction passed all 8 lifecycle tests | `/private/tmp/jgr-supervisor-shutdown-red.log`, `/private/tmp/jgr-supervisor-shutdown-green.log` |
+| Phil isolated synthetic artefact Journey before final pin | 1 passed; 153.4 seconds; controlled Atlas input and approved OpenAI calls; test handle subsequently absent and no test VM remained | `/private/tmp/phil-rename-synthetic-journey.log` |
 | Coordinated rollback | Graph apply, exact Phil target apply, graph rollback, exact original configuration restore, and actual prior application boot/read completed | `/private/tmp/phil-rollback-old-application-evidence.json` |
 
 The restored-backup fixture used three synthetic historical graphs. The source and restored RDB files were both 10,050 bytes with SHA-256 `0a2b9e8a39fd4af8c1e29cfa8e4e721120e9dda2a054b306300d73cc2491d8dc`. The source server stopped before an independent server loaded the backup; startup logs confirmed three restored keys. The test compared complete pre-backup and restored graph inventories, then translated target inventories and public reads. Both owned servers and temporary snapshots were removed afterward. This proves synthetic backup restoration; separate tests prove migration-client interruption recovery. Neither proves recovery from a FalkorDB server crash or validates a deployed backup.
@@ -326,9 +328,12 @@ Trees, executable coverage labels, and the corresponding implementation/docs hav
 
 Still pending:
 
-1. Phil's single isolated synthetic artefact Journey using the OpenAI API.
-2. Final completion reconciliation with those terminal results and the single independent review of the verified change.
+1. Repeat complete package Functional and Journey gates after the supervisor-shutdown correction.
+2. Pin Phil to the corrected upstream package revision and verify the affected Functional tests and isolated synthetic artefact Journey.
+3. Final completion reconciliation with those terminal results and the single independent review of the verified change.
 
 The operator explicitly approved all three test gates after automatic approval review requested payload/destination-specific authorization. The approved destination is `api.openai.com`; payloads are response/editor preferences, synthetic codenames/cities/support channels/scheduling conversations/deployment reviews/dependency graphs, controlled Atlas evidence, and generated Reflection/recall content. Normal inference charges and disposable local data are within this approval. Run the complete package Functional suite, package Journey, and Phil's isolated artefact Journey sequentially so their embedded runtimes cannot interfere.
 
 Live-data migration, publication, deployment, and Phil's eleven live-company-service Journey leaves are outside the isolated execution scope.
+
+The first approved package Journey passed all assertions but left its owned embedded server alive after supervisor shutdown. Cleanup identified and stopped only that fixture server. The existing application-shutdown test was strengthened to stop a real supervisor and reproduced the leak. `GraphitiPool` now traps supervisor exit signals so its existing termination cleanup executes. The focused lifecycle suite passed; final broad gates are being repeated against this correction.
