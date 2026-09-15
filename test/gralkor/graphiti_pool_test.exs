@@ -66,6 +66,22 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  defp await_episode_waiting(pid, expected, attempts \\ 500)
+
+  defp await_episode_waiting(_pid, _expected, 0), do: flunk("expected episode write to be queued")
+
+  defp await_episode_waiting(pid, expected, attempts) do
+    state = :sys.get_state(pid)
+    waiting = state.episode_write_admission.waiting |> :queue.len()
+
+    if waiting == expected do
+      :ok
+    else
+      Process.sleep(10)
+      await_episode_waiting(pid, expected, attempts - 1)
+    end
+  end
+
   describe "if adding an episode raises inside the graph library" do
     test "then an error carrying only the raised exception's class and message is returned" do
       err = %Pythonx.Error{
