@@ -424,6 +424,7 @@ def execute(request: dict[str, object]) -> dict[str, object]:
                 validate_progress(database, manifest)
                 manifest["endpoint_identity"] = endpoint_identity(connection)
                 manifest["endpoint_rebound_from"] = rebind["prior_endpoint"]
+                manifest["endpoint_rebind_server_run_id"] = current_run_id
                 persist(path, manifest)
             if action == "rollback":
                 return rollback(database, path, manifest)
