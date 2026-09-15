@@ -5,6 +5,8 @@ when an application requests a private graph migration
     then migration rejects the identities before connecting to a graph
   if no explicit graph endpoint is supplied
     then migration rejects the connection before opening a default store
+  if a connection deadline is not a finite positive duration
+    then migration rejects the deadline before connecting to a graph
   if the persisted manifest fails its integrity check
     then migration refuses before changing any graph
   if a manifest has inconsistent identity mappings or migration phases
@@ -66,6 +68,13 @@ when an interrupted private graph migration resumes from its persisted manifest
     then migration refuses without replacing either graph
   if a recorded target contains conflicting data
     then migration refuses without replacing the conflicting target
+
+when a private graph copy exceeds its connection deadline
+  then migration returns a bounded error without retrying its uncertain copy
+  if the original copy completes after the caller times out
+    then a matching complete target resumes safely into public historical recall
+  if the target remains absent until the graph server is recovered
+    then migration refuses premature resume and rollback before safely retrying on the recovered server
 
 when an application rolls back a private graph migration before admitting new writers
   then public historical recall through the original graph returns the original memory
