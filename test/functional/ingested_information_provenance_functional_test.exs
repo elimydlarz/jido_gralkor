@@ -813,11 +813,12 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                 self.driver = _Driver(self)
 
             async def add_episode(self, **kwargs):
+                from graphiti_core.nodes import EpisodicNode
                 self.added.append({
                     "body": kwargs.get("episode_body"),
                     "source": kwargs.get("source").value,
                     "source_description": kwargs.get("source_description"),
-                    "writer": "direct" if kwargs.get("source_description", "").endswith(" [gralkor: direct]") else None,
+                    "writer": (EpisodicNode._gralkor_requested_uuid_guard.get() or {}).get("writer"),
                     "custom_extraction_instructions": kwargs.get("custom_extraction_instructions"),
                 })
 
@@ -921,9 +922,9 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
           for source in item['episodes']:
               episode = g.Episode(
                   _dec(source['id']),
-              _dec(source['source_kind']),
-              _dec(source['source_description']),
-              _dec(source.get('writer')),
+                  _dec(source['source_kind']),
+                  _dec(source['source_description']),
+                  _dec(source.get('writer')),
               )
               g.episodes[episode.uuid] = episode
               episode_ids.append(episode.uuid)
