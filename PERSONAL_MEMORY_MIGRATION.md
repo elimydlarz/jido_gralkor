@@ -19,6 +19,8 @@ The mechanism is FalkorDB `GRAPH.COPY`, followed by restartable group-identity u
 
 The isolated verification environment reports Graphiti 0.29.3, Python FalkorDB client 1.7.1, falkordblite 0.10.0, Redis 8.6.2, and FalkorDB module 4.18.3. Verify the deployed versions and repeat the procedure on their restored copy before a live cutover. The manifest records the local client-library versions and connected server versions. Command references: [GRAPH.COPY](https://docs.falkordb.com/commands/graph.copy.html) and [GRAPH.CONSTRAINT](https://docs.falkordb.com/commands/graph.constraint.html).
 
+On the verified macOS 26.5.2 bundle, a copy child was observed blocked in `serverLogRaw -> strftime_l -> tzsetwall_basic` while emitting FalkorDB's notice message before graph serialization. The disposable migration servers use `loglevel warning` after startup to skip that observed logging path; startup restoration evidence remains available. For a restored macOS endpoint, record its original logging level and establish this setting during the controlled migration window, then restore it after every copy has completed or the server has been recovered. The migration client does not change server-wide configuration. This workaround addresses the observed notice path; bounded timeouts and uncertain-copy recovery remain necessary for other server failures.
+
 ## Inventory and prepare
 
 Use `mix gralkor.migrate_personal <operation> <request.json>` or the exported `Gralkor.PersonalGraphMigration` functions. The Mix task loads configuration and initializes Python as needed; it does not start application consumers. Every request must supply a specific TCP endpoint or Unix socket. Connections never fall back to the application's configured store.
