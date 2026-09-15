@@ -41,6 +41,8 @@ Create an explicit request for the disposable restored endpoint:
 
 `destinations` and `lenses` in configuration references are the complete consumer-defined names across every affected runtime. Include the exact saved configuration and revision references needed for rollback. The example identities and endpoint are placeholders to replace from the inventory. Connection fields also support `username`, `password`, `ssl`, `unix_socket_path`, `db`, `socket_timeout`, and `socket_connect_timeout`.
 
+The default socket read timeout is 30 seconds and the connection timeout is 5 seconds. Explicit timeout values must be finite positive numbers in seconds; `null`, zero, negative values, and nonnumeric values are rejected before connecting. These bound individual connection/read waits, not the duration of the whole migration. Automatic connection retries are disabled, so a lost response never triggers an automatic replay of a mutation.
+
 ```sh
 mix gralkor.migrate_personal plan /absolute/path/request.json
 mix gralkor.migrate_personal prepare /absolute/path/request.json
@@ -79,9 +81,13 @@ These counters are the operator's evidence from every consuming system; the migr
 mix gralkor.migrate_personal apply /absolute/path/apply-request.json
 ```
 
-`apply/3` completes the persisted phases. `advance/3` advances copy/rewrite work in bounded increments for interruption exercises. The journal records copy intent before issuing `GRAPH.COPY`, followed by copied graph, rewritten node groups, rewritten relationship groups, and verification states. The journal is locked, integrity-checked, atomically replaced, and fsynced between steps. Repeating apply after interruption resumes the recorded work; repeating verified apply confirms the same inventories. Do not edit a journal to bypass a conflict. The integrity checksum detects changes and corruption; it is not an authentication signature.
+`apply/3` completes the persisted phases. `advance/3` advances copy/rewrite work in bounded increments for interruption exercises. Before issuing `GRAPH.COPY`, the journal records the `copying` phase and the connected server's `run_id` as `copy_server_run_id`. Later states record the copied graph, rewritten node groups, rewritten relationship groups, and verification. The journal is locked, integrity-checked, atomically replaced, and fsynced between steps. Repeating apply after interruption validates progress before resuming; repeating verified apply confirms the same inventories. Do not edit a journal to bypass a conflict. The integrity checksum detects changes and corruption; it is not an authentication signature.
 
 Only the journal that recorded copy intent may resume a matching target after an interruption. Independent migration processes must use the same journal and quiescence boundary. Never run competing migrations through different journals against the same identities.
+
+A timeout or lost connection during `GRAPH.COPY` leaves its outcome uncertain and preserves the copy-intent journal. A client timeout does not cancel server work. If the target later appears on the same server, resume may adopt it only after its complete inventory matches and its schema is operational. If the target remains absent and the server's `run_id` is unchanged, both resume and rollback refuse: the original copy may still finish. Keep admission stopped and retain the journal, source graphs, and consistent backups. Wait for a matching complete target or perform controlled server recovery from the retained consistent data. A changed server `run_id` allows progress only after the normal source and target checks pass; it does not replace those checks.
+
+An older `copying` journal without `copy_server_run_id` can adopt a matching complete target through the same validation. If its target is absent, resume and rollback refuse even after the server changes. Retain that journal, perform controlled server recovery, and prepare a fresh migration at a new journal path from the recovered consistent state. Do not invent a server identity in the old journal or discard it while its copy outcome is uncertain.
 
 ## Verify and activate together
 
@@ -104,7 +110,7 @@ Keep admission stopped. Use the same endpoint, journal, and truthful quiescence 
 mix gralkor.migrate_personal rollback /absolute/path/apply-request.json
 ```
 
-`rollback/3` validates every source and target before deleting only matching migration-owned targets. It retains the unchanged sources and records its progress, so interruption or repeated rollback is safe. A changed target is preserved and reported as a conflict. Once new writers have modified the target, this pre-admission rollback no longer applies: stop and plan recovery from the retained data rather than discarding new writes.
+`rollback/3` validates every source and target, including the uncertain-copy checks above, before deleting only matching migration-owned targets. It retains the unchanged sources and records its progress, so interrupted rollback can resume after validation. A changed target is preserved and reported as a conflict. Once new writers have modified the target, this pre-admission rollback no longer applies: stop and plan recovery from the retained data rather than discarding new writes.
 
 Restore the exact original Phil configuration with `PersonalMemoryMigration.rollback!/1`, which locks the active row and refuses intervening changes. Restore the previous application **and dependency** revision before restarting; the corrected startup would otherwise migrate that original configuration again. Verify the original private graph through the previous application's public search and inspect durable jobs before enabling writers. Restoring graph names alone, configuration alone, or code alone is not a complete rollback.
 

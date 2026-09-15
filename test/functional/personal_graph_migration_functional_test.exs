@@ -777,7 +777,8 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
   end
 
   describe "when a private graph copy exceeds its connection deadline > if the original copy completes after the caller times out" do
-    test "then a matching complete target resumes safely into public historical recall", context do
+    test "then a matching complete target resumes safely into public historical recall",
+         context do
       fixture = start_copy_fault(context)
       journal = prepare_history(fixture)
 
@@ -832,7 +833,10 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
 
       recovered = recover_copy_server(fixture)
       assert server_run_id(recovered) != original_run_id
-      assert graph_names(recovered.database) == [hd(Jason.decode!(pending)["graphs"])["source_physical"]]
+
+      assert graph_names(recovered.database) == [
+               hd(Jason.decode!(pending)["graphs"])["source_physical"]
+             ]
 
       assert {:ok, completed} =
                PersonalGraphMigration.apply(recovered.connection, journal, @quiescence)
