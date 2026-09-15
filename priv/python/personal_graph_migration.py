@@ -132,6 +132,31 @@ def manifest_digest(manifest: dict[str, object]) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def endpoint_identity(connection: dict[str, object]) -> dict[str, object]:
+    socket = connection.get("unix_socket_path")
+    identity = {"db": connection.get("db", 0), "username": connection.get("username")}
+    if isinstance(socket, str) and socket.strip():
+        identity.update({"kind": "unix", "unix_socket_path": socket})
+    else:
+        identity.update({"kind": "tcp", "host": connection.get("host"), "port": connection.get("port")})
+    return canonical(identity)
+
+
+def validate_endpoint_binding(manifest: dict[str, object], connection: dict[str, object], rebind: object) -> None:
+    recorded = manifest.get("endpoint_identity")
+    current = endpoint_identity(connection)
+    if not isinstance(recorded, dict):
+        raise ValueError("journal lacks endpoint identity; prepare a fresh migration journal")
+    if current == recorded:
+        if rebind is not None:
+            raise ValueError("endpoint rebind requires a different graph endpoint")
+        return
+    if not isinstance(rebind, dict) or rebind.get("prior_endpoint") != recorded or rebind.get("prior_endpoint_retired") is not True:
+        raise ValueError("journal endpoint identity differs; require explicit controlled endpoint rebind")
+    if rebind.get("new_endpoint") not in (None, current):
+        raise ValueError("controlled endpoint rebind does not describe the supplied endpoint")
+
+
 def validate_manifest(manifest: dict[str, object]) -> None:
     if manifest.get("integrity") != manifest_digest(manifest):
         raise ValueError("manifest integrity check failed")
