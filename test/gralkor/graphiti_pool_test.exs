@@ -271,7 +271,7 @@ defmodule Gralkor.GraphitiPoolTest do
         )
 
       assert :ok =
-               GraphitiPool.add_episode(pid, "g1", "content", "manual [gralkor: direct]", nil,
+               GraphitiPool.add_episode(pid, "g1", "content", "manual", nil,
                  uuid: "direct-uuid",
                  writer: :direct
                )
