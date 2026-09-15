@@ -95,6 +95,11 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
                PersonalGraphMigration.apply(mismatched, journal, @quiescence)
 
       assert message =~ "endpoint identity"
+
+      assert {:error, message} =
+               PersonalGraphMigration.rollback(mismatched, journal, @quiescence)
+
+      assert message =~ "endpoint identity"
     end
 
     test "then controlled recovery requires an explicit retired prior endpoint", context do
