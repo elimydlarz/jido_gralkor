@@ -77,7 +77,8 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
   end
 
   describe "when an application requests a private graph migration > when a migration journal is prepared" do
-    test "then the journal records the non-secret graph endpoint identity including host and port or Unix socket path, database, and username", context do
+    test "then the journal records the non-secret graph endpoint identity including host and port or Unix socket path, database, and username",
+         context do
       fixture = start_endpoint_fixture(context)
       journal = prepare_history(fixture)
       manifest = Jason.decode!(File.read!(journal))
@@ -89,9 +90,10 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
                "username" => nil
              }
 
-      alias_connection = Keyword.update!(fixture.connection, :unix_socket_path, fn socket ->
-        Path.join([Path.dirname(socket), ".", Path.basename(socket)])
-      end)
+      alias_connection =
+        Keyword.update!(fixture.connection, :unix_socket_path, fn socket ->
+          Path.join([Path.dirname(socket), ".", Path.basename(socket)])
+        end)
 
       assert {:ok, _} = PersonalGraphMigration.apply(alias_connection, journal, @quiescence)
     end
@@ -112,61 +114,114 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       {original, clone, journal, _} = identical_migrated_graphs(context)
       before = File.read!(journal)
       assert {:ok, clone_before} = PersonalGraphMigration.plan(clone.connection, ["owner"], %{})
-      assert {:ok, original_before} = PersonalGraphMigration.plan(original.connection, ["owner"], %{})
+
+      assert {:ok, original_before} =
+               PersonalGraphMigration.plan(original.connection, ["owner"], %{})
+
       assert clone_before["graphs"] == original_before["graphs"]
 
       for operation <- [:advance, :apply, :rollback] do
-        assert {:error, message} = apply(PersonalGraphMigration, operation, [clone.connection, journal, @quiescence])
+        assert {:error, message} =
+                 apply(PersonalGraphMigration, operation, [clone.connection, journal, @quiescence])
+
         assert message =~ "endpoint identity differs"
         assert File.read!(journal) == before
       end
 
       assert {:ok, ^clone_before} = PersonalGraphMigration.plan(clone.connection, ["owner"], %{})
-      assert {:ok, ^original_before} = PersonalGraphMigration.plan(original.connection, ["owner"], %{})
+
+      assert {:ok, ^original_before} =
+               PersonalGraphMigration.plan(original.connection, ["owner"], %{})
     end
   end
 
   describe "when an interrupted private graph migration resumes from its persisted manifest > if controlled server recovery explicitly supplies an endpoint rebind" do
-    test "then migration validates source and target inventories, quiescence evidence, and original endpoint identity before resuming", context do
+    test "then migration validates source and target inventories, quiescence evidence, and original endpoint identity before resuming",
+         context do
       {_original, clone, journal, manifest} = identical_migrated_graphs(context)
       before = File.read!(journal)
       rebind = %{prior_endpoint: manifest["endpoint_identity"], prior_endpoint_retired: true}
 
-      for invalid <- [Map.put(rebind, :prior_endpoint, %{}), Map.put(rebind, :prior_endpoint_retired, false)] do
-        assert {:error, message} = PersonalGraphMigration.apply(clone.connection, journal, @quiescence, %{endpoint_rebind: invalid})
+      for invalid <- [
+            Map.put(rebind, :prior_endpoint, %{}),
+            Map.put(rebind, :prior_endpoint_retired, false)
+          ] do
+        assert {:error, message} =
+                 PersonalGraphMigration.apply(clone.connection, journal, @quiescence, %{
+                   endpoint_rebind: invalid
+                 })
+
         assert message =~ "endpoint identity differs"
         assert File.read!(journal) == before
       end
 
-      assert {:error, message} = PersonalGraphMigration.apply(clone.connection, journal, Map.put(@quiescence, :capture_buffers, 1), %{endpoint_rebind: rebind})
+      assert {:error, message} =
+               PersonalGraphMigration.apply(
+                 clone.connection,
+                 journal,
+                 Map.put(@quiescence, :capture_buffers, 1),
+                 %{endpoint_rebind: rebind}
+               )
+
       assert message =~ "quiescence requires capture_buffers=0"
       assert File.read!(journal) == before
 
-      for {graph, expected} <- [{"operator/owner", "source changed"}, {"personal/owner", "target contains conflicting data"}] do
-        query(clone.database, graph, "MATCH (e:Episodic {uuid: 'episode'}) SET e.content = 'conflicting memory'")
-        assert {:error, message} = PersonalGraphMigration.apply(clone.connection, journal, @quiescence, %{endpoint_rebind: rebind})
+      for {graph, expected} <- [
+            {"operator/owner", "source changed"},
+            {"personal/owner", "target contains conflicting data"}
+          ] do
+        query(
+          clone.database,
+          graph,
+          "MATCH (e:Episodic {uuid: 'episode'}) SET e.content = 'conflicting memory'"
+        )
+
+        assert {:error, message} =
+                 PersonalGraphMigration.apply(clone.connection, journal, @quiescence, %{
+                   endpoint_rebind: rebind
+                 })
+
         assert message =~ expected
         assert File.read!(journal) == before
-        query(clone.database, graph, "MATCH (e:Episodic {uuid: 'episode'}) SET e.content = 'remember amber orchard'")
+
+        query(
+          clone.database,
+          graph,
+          "MATCH (e:Episodic {uuid: 'episode'}) SET e.content = 'remember amber orchard'"
+        )
       end
     end
 
-    test "and migration records the rebound endpoint identity and recovered copy server run identity", context do
+    test "and migration records the rebound endpoint identity and recovered copy server run identity",
+         context do
       {original, clone, journal, manifest} = identical_migrated_graphs(context)
       original_copy_run = hd(manifest["graphs"])["copy_server_run_id"]
-      Pythonx.eval("server.shutdown(save=False, now=True, force=True)", %{"server" => original.server})
-      assert {:ok, resumed} = PersonalGraphMigration.apply(clone.connection, journal, @quiescence, %{
-        endpoint_rebind: %{prior_endpoint: manifest["endpoint_identity"], prior_endpoint_retired: true}
+
+      Pythonx.eval("server.shutdown(save=False, now=True, force=True)", %{
+        "server" => original.server
       })
 
+      assert {:ok, resumed} =
+               PersonalGraphMigration.apply(clone.connection, journal, @quiescence, %{
+                 endpoint_rebind: %{
+                   prior_endpoint: manifest["endpoint_identity"],
+                   prior_endpoint_retired: true
+                 }
+               })
+
       assert resumed["phase"] == "verified"
-      assert resumed["endpoint_identity"]["unix_socket_path"] == clone.connection[:unix_socket_path]
+
+      assert resumed["endpoint_identity"]["unix_socket_path"] ==
+               clone.connection[:unix_socket_path]
+
       assert resumed["endpoint_rebound_from"] == manifest["endpoint_identity"]
       assert resumed["endpoint_rebind_server_run_id"] == server_run_id(clone)
       assert hd(resumed["graphs"])["copy_server_run_id"] == original_copy_run
       assert original_copy_run != server_run_id(clone)
       assert Jason.decode!(File.read!(journal)) == resumed
-      assert {:ok, ^resumed} = PersonalGraphMigration.apply(clone.connection, journal, @quiescence)
+
+      assert {:ok, ^resumed} =
+               PersonalGraphMigration.apply(clone.connection, journal, @quiescence)
     end
   end
 
@@ -178,11 +233,14 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       absent = [unix_socket_path: Path.join(context.directory, "never-created.socket")]
 
       for operation <- [:advance, :apply, :rollback] do
-        assert {:error, message} = apply(PersonalGraphMigration, operation, [absent, journal, @quiescence])
+        assert {:error, message} =
+                 apply(PersonalGraphMigration, operation, [absent, journal, @quiescence])
+
         assert message =~ "endpoint identity differs"
         refute message =~ "ConnectionError"
         assert File.read!(journal) == before
       end
+
       refute File.exists?(absent[:unix_socket_path])
     end
   end
@@ -1285,25 +1343,39 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
 
   defp start_endpoint_fixture(context, password \\ nil) do
     path = Path.join(context.directory, "endpoint-#{System.unique_integer([:positive])}.rdb")
-    {server, globals} = Pythonx.eval("""
-    from redislite import Redis
-    from falkordb import FalkorDB
-    server = Redis(dbfilename=path.decode(), serverconfig={'port': '0'})
-    server.config_set('loglevel', 'warning')
-    server.config_set('save', '')
-    connection = {'unix_socket_path': server.socket_file}
-    if password is not None:
-        secret = password.decode()
-        server.execute_command('ACL', 'SETUSER', 'migration-fixture', 'on', '>' + secret, '~*', '+@all')
-        connection.update(username='migration-fixture', password=secret)
-    database = FalkorDB(**connection)
-    assert database.connection.ping()
-    server
-    """, %{"path" => path, "password" => password})
+
+    {server, globals} =
+      Pythonx.eval(
+        """
+        from redislite import Redis
+        from falkordb import FalkorDB
+        server = Redis(dbfilename=path.decode(), serverconfig={'port': '0'})
+        server.config_set('loglevel', 'warning')
+        server.config_set('save', '')
+        connection = {'unix_socket_path': server.socket_file}
+        if password is not None:
+            secret = password.decode()
+            server.execute_command('ACL', 'SETUSER', 'migration-fixture', 'on', '>' + secret, '~*', '+@all')
+            connection.update(username='migration-fixture', password=secret)
+        database = FalkorDB(**connection)
+        assert database.connection.ping()
+        server
+        """,
+        %{"path" => path, "password" => password}
+      )
+
     stop_owned_server_on_exit(server)
     {connection, _} = Pythonx.eval("connection", globals)
-    connection = for {key, value} <- Pythonx.decode(connection), do: {String.to_existing_atom(key), value}
-    %{server: server, database: globals["database"], connection: connection, directory: context.directory}
+
+    connection =
+      for {key, value} <- Pythonx.decode(connection), do: {String.to_existing_atom(key), value}
+
+    %{
+      server: server,
+      database: globals["database"],
+      connection: connection,
+      directory: context.directory
+    }
   end
 
   defp identical_migrated_graphs(context) do
@@ -1311,13 +1383,18 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     clone = start_endpoint_fixture(context)
     journal = prepare_history(original)
     clone_journal = prepare_history(clone)
-    assert {:ok, manifest} = PersonalGraphMigration.apply(original.connection, journal, @quiescence)
+
+    assert {:ok, manifest} =
+             PersonalGraphMigration.apply(original.connection, journal, @quiescence)
+
     assert {:ok, _} = PersonalGraphMigration.apply(clone.connection, clone_journal, @quiescence)
     {original, clone, journal, manifest}
   end
 
   defp restore_history(context) do
-    directory = Path.join(context.directory, "backup-restore-#{System.unique_integer([:positive])}")
+    directory =
+      Path.join(context.directory, "backup-restore-#{System.unique_integer([:positive])}")
+
     source_path = Path.join([directory, "source", "snapshot.rdb"])
     restored_path = Path.join([directory, "restored", "snapshot.rdb"])
     File.mkdir_p!(Path.dirname(source_path))
