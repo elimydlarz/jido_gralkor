@@ -617,26 +617,28 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     test "and historical fact sources retain their original source descriptions" do
       graphiti = use_native_boundary()
 
-      set_search_fixture(graphiti, [
-        %{
-          fact: "Historical fact",
-          episodes: [%{id: "old-one", source_kind: "text", source_description: "legacy source"}]
-        }
-      ])
+      for description <- ["legacy source", "reflection:old prose [gralkor: direct]"] do
+        set_search_fixture(graphiti, [
+          %{
+            fact: "Historical fact",
+            episodes: [%{id: "old-one", source_kind: "text", source_description: description}]
+          }
+        ])
 
-      assert {:ok, [%{fact: %{sources: [source]}}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "Historical",
-                 destinations: ["personal"],
-                 result_type: :facts
-               })
+        assert {:ok, [%{fact: %{sources: [source]}}]} =
+                 Client.search(%Search{
+                   operator_id: "operator-one",
+                   query: "Historical",
+                   destinations: ["personal"],
+                   result_type: :facts
+                 })
 
-      assert source == %{
-               id: "old-one",
-               source_kind: "document",
-               source_description: "legacy source"
-             }
+        assert source == %{
+                 id: "old-one",
+                 source_kind: "document",
+                 source_description: description
+               }
+      end
     end
   end
 
