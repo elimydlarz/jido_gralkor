@@ -1,6 +1,6 @@
 # Personal memory naming and capture correction
 
-Status: implementation and bounded copy recovery verified; final full gates in progress, 2026-09-15. The operator explicitly authorized this document end to end across both repositories, including contract reconciliation, implementation, isolated migration/rollback verification, and final independent review. Publication, deployment, and live-data migration remain outside that authorization.
+Status: implementation, complete package Functional, and both Stop gates verified; final Journeys and independent review in progress, 2026-09-15. The operator explicitly authorized this document end to end across both repositories, including contract reconciliation, implementation, isolated migration/rollback verification, and final independent review. Publication, deployment, and live-data migration remain outside that authorization.
 
 Implemented decisions: `Gralkor.Capture` is the typed runtime-targeted request; `{:direct, destination}` and `{:lenses, names}` dispatch exclusively. Mounts require `capture_destination`. The packaged names are `personal-chat` and `personal`, with unchanged operator identifiers. Positional capture calls raise migration guidance. Direct provenance is storage-owned, and historical provenance remains unchanged. Phil has guarded persisted-configuration migration and archival delivery/projection routing that retains original snapshots and hashes.
 
@@ -315,6 +315,7 @@ These results belong to the implementation session. Pending full gates are not i
 | Phil final installed Stop gate | 796 Unit/Integration passed, 620 excluded; 167.6 seconds; hook exit 0; actual dependency `59c3b9da439a545a645ce808bbe7fe861ebb431f` | `/private/tmp/phil-rename-59c3-unit-integration.log`, `/private/tmp/phil-rename-59c3-stop.log` |
 | Phil shutdown-corrected package consumer check | 85 affected Functional tests passed; 117.7 seconds; exit 0; fetched dependency revision `48b1de518feab8f5a52438db43434539cd17a08b` | `/private/tmp/phil-rename-final-shutdown-pin-functional-green.log` |
 | Package installed Stop gate | Hook exit 0; complete hook-owned Unit/Integration and Node checks passed; successful hook suppresses individual output/counts | `/private/tmp/jgr-rename-stop-feedback.log` |
+| Final package installed Stop gate | Hook exit 0 after the final complete Functional pass; complete Unit/Integration and Node checks passed | `/private/tmp/jgr-rename-complete-stop.log` |
 | Package final formatting and documentation checks | Package-wide `mix format --check-formatted`, README sync, and `git diff --check` passed | Installed formatter and repository checks |
 | Application supervisor shutdown | Existing Functional contract reproduced a surviving server; trap-exit correction passed all 8 lifecycle tests | `/private/tmp/jgr-supervisor-shutdown-red.log`, `/private/tmp/jgr-supervisor-shutdown-green.log` |
 | Phil isolated synthetic artefact Journey before final pin | 1 passed; 153.4 seconds; controlled Atlas input and approved OpenAI calls; test handle subsequently absent and no test VM remained | `/private/tmp/phil-rename-synthetic-journey.log` |
@@ -330,7 +331,7 @@ Trees, executable coverage labels, and the corresponding implementation/docs hav
 
 Still pending:
 
-1. Finish the final package Stop and Journey gates; complete Functional now passes all 597 tests.
+1. Finish the final package Journey; complete Functional now passes all 597 tests and the final Stop gate passed.
 2. Run Phil's isolated synthetic artefact Journey against its verified final dependency; the pin, affected Functional evidence, and final Stop are complete.
 3. Final completion reconciliation with those terminal results and the single independent review of the verified change.
 
