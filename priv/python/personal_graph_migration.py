@@ -74,7 +74,7 @@ def inventory(graph: Graph) -> dict[str, object]:
     })
 
 
-def plan(database: FalkorDB, identifiers: list[str], references: dict[str, object]) -> dict[str, object]:
+def plan(database: FalkorDB, identifiers: list[str], references: dict[str, object], identity: dict[str, object]) -> dict[str, object]:
     existing = set(database.list_graphs())
     graphs = []
     for identifier in identifiers:
@@ -99,6 +99,7 @@ def plan(database: FalkorDB, identifiers: list[str], references: dict[str, objec
         "phase": "planned",
         "graphs": graphs,
         "configuration_references": references,
+        "endpoint_identity": identity,
         "versions": {
             "graphiti": version("graphiti-core"),
             "falkordb_client": version("falkordb"),
@@ -399,13 +400,13 @@ def execute(request: dict[str, object]) -> dict[str, object]:
     connection["retry_on_error"] = []
     if action == "plan":
         with FalkorDB(**connection) as database:
-            return plan(database, request["operator_ids"], request["configuration_references"])
+            return plan(database, request["operator_ids"], request["configuration_references"], endpoint_identity(connection))
     path = Path(request["journal_path"])
     with open(path.with_suffix(path.suffix + ".lock"), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if action == "prepare":
             with FalkorDB(**connection) as database:
-                manifest = plan(database, request["operator_ids"], request["configuration_references"])
+                manifest = plan(database, request["operator_ids"], request["configuration_references"], endpoint_identity(connection))
                 validate_preparation(manifest)
                 persist(path, manifest, create=True)
                 return manifest
