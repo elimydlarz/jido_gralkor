@@ -1,7 +1,7 @@
 defmodule JidoGralkor.Runtime do
   @moduledoc false
 
-  use GenServer
+  use GenServer, restart: :temporary
 
   alias Gralkor.Destination
   alias Gralkor.Destination.Storage, as: DestinationStorage
@@ -12,6 +12,7 @@ defmodule JidoGralkor.Runtime do
 
   @reflection_retry_deadline_ms 86_400_000
   @maximum_reflection_backoff_ms 3_600_000
+  @consumer_reflection_options [:inference, :tool_executor, :tools, :tool_context]
 
   def start_link(opts) do
     owner = Keyword.fetch!(opts, :owner)
@@ -51,11 +52,6 @@ defmodule JidoGralkor.Runtime do
     owner
   end
 
-  def started?(owner) when is_pid(owner),
-    do: :global.whereis_name({__MODULE__, owner}) != :undefined
-
-  def started?(_owner), do: false
-
   def submit_reflection(owner, name, invocation, callback, opts) do
     call!(owner, {:submit_reflection, name, invocation, callback, opts})
   end
@@ -74,15 +70,20 @@ defmodule JidoGralkor.Runtime do
 
     with :ok <- validate_configuration(configuration),
          {:ok, definitions} <- resolve_configuration(configuration, validation_opts) do
+      owner = Keyword.fetch!(opts, :owner)
+      owner_monitor = Process.monitor(owner)
       {:ok, reflection_supervisor} = Task.Supervisor.start_link()
 
       {:ok,
        %{
-         owner: Keyword.fetch!(opts, :owner),
+         owner: owner,
+         owner_monitor: owner_monitor,
          configuration: configuration,
          definitions: definitions,
          validation_opts: validation_opts,
-         reflection_supervisor: reflection_supervisor
+         reflection_supervisor: reflection_supervisor,
+         run_reflection: Keyword.get(opts, :run_reflection, &Runner.run/3),
+         deliver_artefact: Keyword.get(opts, :deliver_artefact, &DestinationStorage.put_artefact/4)
        }}
     else
       {:error, reason} -> {:stop, reason}
@@ -141,13 +142,14 @@ defmodule JidoGralkor.Runtime do
 
   def handle_call({:submit_reflection, name, invocation, callback, opts}, _from, state) do
     reply =
-      with :ok <- validate_invocation_callback(callback),
+      with :ok <- validate_reflection_options(opts),
+           :ok <- validate_invocation_callback(callback),
            {:ok, invocation_id} <- invocation_id(invocation),
            :ok <- validate_operator_id(invocation),
            {:ok, reflection} <- Map.fetch(state.definitions.reflections, name),
            {:ok, _task} <-
              Task.Supervisor.start_child(state.reflection_supervisor, fn ->
-               process_reflection(reflection, invocation, callback, opts, state.owner)
+               process_reflection(reflection, invocation, callback, opts, state)
              end) do
         {:ok, invocation_id}
       else
@@ -156,6 +158,12 @@ defmodule JidoGralkor.Runtime do
       end
 
     {:reply, reply, state}
+  end
+
+  @impl GenServer
+  def handle_info({:DOWN, monitor, :process, owner, _reason}, %{owner_monitor: monitor} = state)
+      when owner == state.owner do
+    {:stop, :shutdown, state}
   end
 
   defp validate_configuration(configuration) when is_map(configuration) do
@@ -718,6 +726,19 @@ defmodule JidoGralkor.Runtime do
     fetch_definitions(definitions.destinations, :destinations, names)
   end
 
+  defp validate_reflection_options(opts) when is_list(opts) do
+    if Keyword.keyword?(opts) do
+      case Keyword.keys(opts) -- @consumer_reflection_options do
+        [] -> :ok
+        unsupported -> {:error, {:unsupported_reflection_options, Enum.uniq(unsupported)}}
+      end
+    else
+      {:error, {:invalid_reflection_options, opts}}
+    end
+  end
+
+  defp validate_reflection_options(opts), do: {:error, {:invalid_reflection_options, opts}}
+
   defp validate_invocation_callback(callback) when is_function(callback, 1), do: :ok
 
   defp validate_invocation_callback(callback),
@@ -745,27 +766,24 @@ defmodule JidoGralkor.Runtime do
       else: {:error, {:invalid_operator_id, operator_id}}
   end
 
-  defp process_reflection(reflection, invocation, callback, opts, runtime_owner) do
-    production_opts = Keyword.put(opts, :runtime_owner, runtime_owner)
-    run_reflection = Keyword.get(opts, :run_reflection, &Runner.run/3)
-    deliver_artefact = Keyword.get(opts, :deliver_artefact, &DestinationStorage.put_artefact/5)
-    production = fn -> run_reflection.(reflection, invocation, production_opts) end
+  defp process_reflection(reflection, invocation, callback, opts, state) do
+    production_opts = Keyword.put(opts, :runtime_owner, state.owner)
+    production = fn -> state.run_reflection.(reflection, invocation, production_opts) end
 
-    case retry(production, &match?({:ok, _artefact}, &1), opts) do
+    case retry(production, &match?({:ok, _artefact}, &1)) do
       {:ok, {:ok, artefact}} ->
         output = Enum.find(reflection.outputs, &(&1.kind == :destination))
 
         delivery = fn ->
-          deliver_artefact.(
+          state.deliver_artefact.(
             output,
             reflection.name,
             field(invocation, :operator_id),
-            artefact,
-            opts
+            artefact
           )
         end
 
-        case retry(delivery, &(&1 == :ok), opts) do
+        case retry(delivery, &(&1 == :ok)) do
           {:ok, :ok} ->
             callback.(%{
               invocation_id: field(invocation, :id),
@@ -797,16 +815,15 @@ defmodule JidoGralkor.Runtime do
     end
   end
 
-  defp retry(operation, success?, opts) do
-    clock = Keyword.get(opts, :clock, fn -> System.monotonic_time(:millisecond) end)
-    started_at = clock.()
-    retry(operation, success?, opts, clock, started_at, 1_000, :first_attempt)
+  defp retry(operation, success?) do
+    clock = Application.get_env(:jido_gralkor, :reflection_retry_clock, &monotonic_now/0)
+    sleep = Application.get_env(:jido_gralkor, :reflection_retry_sleep, &Process.sleep/1)
+    retry(operation, success?, clock, sleep, clock.(), 1_000, :first_attempt)
   end
 
-  defp retry(operation, success?, opts, clock, started_at, delay, previous_result) do
-    deadline = Keyword.get(opts, :retry_deadline_ms, @reflection_retry_deadline_ms)
-
-    if previous_result != :first_attempt and clock.() - started_at >= deadline do
+  defp retry(operation, success?, clock, sleep, started_at, delay, previous_result) do
+    if previous_result != :first_attempt and
+         clock.() - started_at >= @reflection_retry_deadline_ms do
       {:abandoned, previous_result}
     else
       result = operation.()
@@ -816,19 +833,18 @@ defmodule JidoGralkor.Runtime do
           {:ok, result}
 
         retryable_server_failure?(result) ->
-          remaining = deadline - (clock.() - started_at)
+          remaining = @reflection_retry_deadline_ms - (clock.() - started_at)
 
           if remaining <= 0 do
             {:abandoned, result}
           else
-            sleep = Keyword.get(opts, :sleep, &Process.sleep/1)
             sleep.(min(delay, remaining))
 
             retry(
               operation,
               success?,
-              opts,
               clock,
+              sleep,
               started_at,
               min(delay * 2, @maximum_reflection_backoff_ms),
               result
@@ -840,6 +856,8 @@ defmodule JidoGralkor.Runtime do
       end
     end
   end
+
+  defp monotonic_now, do: System.monotonic_time(:millisecond)
 
   defp retryable_server_failure?({:error, reason}), do: server_status(reason) in 500..599
   defp retryable_server_failure?(_result), do: false
