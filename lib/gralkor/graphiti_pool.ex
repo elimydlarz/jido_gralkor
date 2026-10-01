@@ -409,9 +409,6 @@ defmodule Gralkor.GraphitiPool do
             and bool(source_description[len('reflection:'):])
           )
 
-        def source_description_for(episode):
-          return episode.source_description or ''
-
         if require_extraction_complete or require_reflection_complete:
           episode_ids = [
             e.uuid
