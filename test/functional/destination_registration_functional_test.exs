@@ -298,7 +298,9 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
                      mount!(runtime_configuration([[name: " "]], [], [reflection_definition()]))
                    end
 
-      refute Runtime.started?(self())
+      assert_raise ArgumentError, ~r/Gralkor runtime unavailable/, fn ->
+        Client.search(self(), %Gralkor.Search{operator_id: "operator-one", query: "must not run"})
+      end
 
       assert_raise ArgumentError, ~r/Gralkor runtime unavailable/, fn ->
         Client.reflect(
@@ -414,6 +416,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       missing_lens = [
         name: "observations",
         destination: "missing",
+        write: :append,
         ontology: MemoryOntology,
         ingestion: StoreIngestion
       ]
