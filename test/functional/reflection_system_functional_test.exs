@@ -56,6 +56,33 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
+  defmodule GeneralisationProbeStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(destination, operator_id, query, result_type, _max_results, _opts) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
+        {:related_memory_search, destination.name, operator_id, query, result_type}
+      )
+
+      {:ok, []}
+    end
+
+    @impl true
+    def put_artefact(output, _reflection_name, _operator_id, artefact) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
+        {:generalisation_delivered, output.destination.name, artefact}
+      )
+
+      :ok
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+  end
+
   defmodule OutputProbeStorage do
     @behaviour Gralkor.Destination.Storage
 
@@ -372,7 +399,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "and generalisation declares one Destination output referencing the packaged `global` Destination" do
       generalisation = packaged_reflection("generalisations")
 
-      assert destination_output(generalisation).destination.name == "global"
+      assert [%{kind: :destination, destination: %Gralkor.Destination{name: "global"}}] =
+               generalisation.outputs
     end
   end
 
@@ -477,17 +505,52 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   describe "when the package-owned generalisation Reflection is installed" do
     test "then it retains related-memory search and normalized generalisation artefacts" do
-      reflection = packaged_reflection("generalisations")
+      Application.put_env(:jido_gralkor, :destination_storage, GeneralisationProbeStorage)
 
-      assert reflection.name == "generalisations"
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: AsyncConsumerAgent, id: "packaged-generalisation", register_global: false}
+        )
 
-      assert Enum.map(reflection.chain_of_thought.steps, & &1.label) ==
-               ["inspect-world", "evolve-generalisations"]
+      generalisations = [
+        %{
+          "content" => "Small releases reduce rollback risk.",
+          "level" => 1,
+          "evolves_from" => []
+        }
+      ]
 
-      assert List.last(reflection.chain_of_thought.steps).output == %{
-               "generalisations" =>
-                 "Array<{ content: string; level: integer; evolves_from: Array<{ content: string; level: integer }> }>"
-             }
+      inference = fn
+        %{step: %{label: "inspect-world"}} ->
+          {:ok, %{output: %{inspection: "Two observations agree."}}}
+
+        %{step: %{label: "evolve-generalisations"}} ->
+          {:ok, %{output: %{generalisations: generalisations}}}
+      end
+
+      test_pid = self()
+
+      assert {:ok, "packaged-generalisation-invocation"} =
+               Client.reflect(
+                 agent_server,
+                 "generalisations",
+                 %{invocation() | id: "packaged-generalisation-invocation"},
+                 &send(test_pid, {:generalisation_callback, &1}),
+                 inference: inference
+               )
+
+      assert_receive {:related_memory_search, "global", "operator-one", "fact one\nfact two",
+                      :episodes}
+
+      assert_receive {:generalisation_callback,
+                      %{
+                        outcome: :delivered,
+                        artefact: %Gralkor.Artefact{payload: payload}
+                      }}
+
+      assert payload == %{"generalisations" => generalisations}
+      assert_receive {:generalisation_delivered, "global", %Gralkor.Artefact{payload: ^payload}}
     end
   end
 
@@ -755,7 +818,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       }
 
       call = fn prompt, config, opts ->
-        params = %{prompt: prompt, model: config.model}
+        params = %{prompt: prompt, model: config.model, tools: config.tools}
         received = Keyword.fetch!(opts, :context)
         send(self(), {:default_inference, params, received})
         %{termination_reason: :final_answer, result: ~s({"artefact":"done"})}
@@ -763,12 +826,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert {:ok, %{output: %{"artefact" => "done"}}} = Runner.default_inference(request, call)
 
-      assert_receive {:default_inference, %{model: model, prompt: prompt}, received_context}
+      assert_receive {:default_inference, %{model: model, prompt: prompt, tools: ^tools},
+                      received_context}
 
       configured = Gralkor.Config.llm_model()
       assert model == "#{configured.provider}:#{configured.id}"
       assert prompt =~ ~s("lens":"observations")
-      assert received_context.tools == tools
+      assert received_context == Map.put(tool_context, :operator_id, "operator-one")
     end
 
     test "and the current step is the only step exposed to inference", context do
@@ -802,13 +866,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert {:ok, %{output: %{"artefact" => "done"}}} = Runner.default_inference(request, call)
 
-      assert_receive {:default_inference_context,
-                      %{
-                        operator_id: "invocation-operator",
-                        session_id: "session-one",
-                        custom: "kept",
-                        tools: []
-                      }}
+      assert_receive {:default_inference_context, received}
+
+      assert received == %{
+               operator_id: "invocation-operator",
+               session_id: "session-one",
+               custom: "kept"
+             }
     end
   end
 
@@ -1294,7 +1358,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
             "review",
             async_reflection_invocation("scheduled-callback-invocation"),
             callback,
-            inference: fn _ -> {:ok, %{output: %{"summary" => "scheduled"}}} end
+            inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end
           )
         end)
 
@@ -1303,9 +1367,32 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert_receive {:scheduled_reflection_callback,
                       %{
                         invocation_id: "scheduled-callback-invocation",
-                        artefact: %Gralkor.Artefact{payload: %{"summary" => "scheduled"}},
+                        artefact: %Gralkor.Artefact{payload: %{"summary" => "complete"}},
                         outcome: :delivered
-                      }}
+                      } = scheduled_success}
+
+      failing_job =
+        Task.async(fn ->
+          Client.reflect(
+            agent_server,
+            "review",
+            async_reflection_invocation("scheduled-failure-invocation"),
+            callback,
+            inference: fn _ -> {:error, :provider_unavailable} end
+          )
+        end)
+
+      assert {:ok, "scheduled-failure-invocation"} = Task.await(failing_job)
+      assert_receive {:scheduled_reflection_callback, scheduled_failure}
+
+      {_artefact, direct_success} = submit_successful_reflection("direct-success-invocation")
+      direct_failure = submit_failed_reflection("direct-failure-invocation")
+
+      assert scheduled_success.outcome == direct_success.outcome
+      assert scheduled_success.artefact.payload == direct_success.artefact.payload
+      assert scheduled_failure.outcome == direct_failure.outcome
+      assert Map.keys(scheduled_failure) == Map.keys(direct_failure)
+      assert scheduled_failure.invocation_id == "scheduled-failure-invocation"
     end
   end
 
@@ -1439,12 +1526,27 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then only that artefact is returned from the selected Destination",
          context do
       {reflection, artefact} = stored_artefact(context)
-      {:ok, other} = Runner.run(reflection, invocation(), inference: &output_for/1)
+
+      {:ok, other} =
+        Runner.run(reflection, %{invocation() | id: "ingestion-2"}, inference: &output_for/1)
+
+      refute other.id == artefact.id
 
       :ok =
         put_artefact(reflection, "operator-one", other,
           storage: Gralkor.Destination.Storage.InMemory
         )
+
+      assert {:ok, unselected} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "durable",
+                 destinations: [destination_output(reflection).destination.name],
+                 result_type: :artefacts
+               })
+
+      assert Enum.sort(Enum.map(unselected, & &1.artefact.id)) ==
+               Enum.sort([artefact.id, other.id])
 
       assert {:ok, [%{destination: "personal", artefact: ^artefact}]} =
                Client.search(%Search{
