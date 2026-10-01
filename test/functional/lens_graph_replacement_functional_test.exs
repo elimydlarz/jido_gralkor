@@ -495,7 +495,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
   defp use_graphiti_boundary do
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
 
-    {falkordb, _} =
+    {boundary, _} =
       Pythonx.eval(
         """
         def _text(value):
@@ -549,8 +549,8 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
         %{}
       )
 
-    {graphiti, _} = Pythonx.eval("pair[1]", %{"pair" => falkordb})
-    {falkordb, _} = Pythonx.eval("pair[0]", %{"pair" => falkordb})
+    {falkordb, _} = Pythonx.eval("boundary[0]", %{"boundary" => boundary})
+    {graphiti, _} = Pythonx.eval("boundary[1]", %{"boundary" => boundary})
 
     start_supervised!(
       {Gralkor.GraphitiPool,
