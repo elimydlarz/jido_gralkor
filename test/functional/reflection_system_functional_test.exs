@@ -1371,6 +1371,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                         outcome: :delivered
                       } = scheduled_success}
 
+      assert_receive {:destination_output_delivered, _output, "review", "operator-one",
+                      %Gralkor.Artefact{}}
+
       failing_job =
         Task.async(fn ->
           Client.reflect(
