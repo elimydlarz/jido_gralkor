@@ -1008,44 +1008,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     content = Jason.encode!(Map.from_struct(artefact))
     graph_group_id = Client.sanitize_group_id("observations")
 
-    Pythonx.eval(
-      """
-      import asyncio
-      from datetime import datetime, timezone
-      now = datetime.now(timezone.utc)
-      group_id = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
-      uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
-      body = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
-      asyncio._gralkor_run(graphiti.driver.execute_query(
-          '''
-          CREATE (episode:Episodic {
-            uuid: $uuid,
-            name: 'legacy deterministic episode',
-            group_id: $group_id,
-            source: 'text',
-            source_description: 'reflection:review',
-            content: $content,
-            entity_edges: [],
-            created_at: $created_at,
-            valid_at: $valid_at,
-            _gralkor_extraction_complete: false
-          })
-          RETURN episode.uuid AS uuid
-          ''',
-          uuid=uid,
-          content=body,
-          created_at=now,
-          valid_at=now,
-          group_id=group_id,
-      ))
-      """,
-      %{
-        "graphiti" => graphiti,
-        "uuid" => artefact_id,
-        "content" => content,
-        "group_id" => graph_group_id
-      }
-    )
+    seed_unmarked_reflection_episode(graphiti, artefact_id, content)
 
     assert {:error, {:episode_conflict, ^artefact_id}} =
              GraphitiPool.add_episode(
