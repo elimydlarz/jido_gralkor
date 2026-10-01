@@ -807,6 +807,16 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         source_description: "system dependency registry"
       })
 
+    :ok =
+      Client.ingest(agent, %Ingest{
+        id: "journey-operations-runbook",
+        operator_id: @operator_one,
+        lens: "runbooks",
+        source_kind: :document,
+        content: operations_runbook,
+        source_description: "migration runbook"
+      })
+
     :ok = Client.replace(agent, replacement("Ledger", "old"))
     :ok = Client.replace(agent, replacement("Clearing", "current"))
 
