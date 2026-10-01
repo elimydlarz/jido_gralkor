@@ -244,6 +244,10 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
                  },
                  %{agent_id: "01USER"}
                )
+
+      capture_log(fn ->
+        assert eventually(fn -> match?([[_, "something", _, _]], InMemory.adds()) end)
+      end)
     end
   end
 
