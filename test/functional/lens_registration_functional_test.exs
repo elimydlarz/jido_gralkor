@@ -241,7 +241,10 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     test "and a Lens name containing the reserved direct-writer delimiter is identified" do
       name = "review [gralkor: direct]"
       Application.put_env(:jido_gralkor, :lenses, [valid_lens(name)])
-      assert_raise ArgumentError, ~r/reserved provenance/, fn -> Client.lens!(name) end
+
+      assert_raise ArgumentError,
+                   ~r/invalid Lens "review \[gralkor: direct\]".*reserved provenance syntax.*" \[gralkor: "/,
+                   fn -> Client.lens!(name) end
     end
 
     test "and a duplicate Lens name is identified" do
@@ -264,9 +267,13 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     end
 
     test "and the retired `default` or `operator` Lens name identifies `personal-chat` as its replacement" do
-      Application.put_env(:jido_gralkor, :lenses, [valid_lens("default")])
+      for name <- ["default", "operator"] do
+        Application.put_env(:jido_gralkor, :lenses, [valid_lens(name)])
 
-      assert_raise ArgumentError, ~r/default.*personal-chat/, fn -> Client.lens!("default") end
+        assert_raise ArgumentError, ~r/invalid Lens "#{name}".*retired.*"personal-chat"/, fn ->
+          Client.lens!(name)
+        end
+      end
     end
 
     test "and a removed graph-format field is identified with its Lens" do
