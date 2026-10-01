@@ -1070,7 +1070,6 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
     artefact = Artefact.new(artefact_id, %{"summary" => "stored"})
     content = Jason.encode!(Map.from_struct(artefact))
-    graph_group_id = Client.sanitize_group_id("observations")
 
     seed_unmarked_reflection_episode(graphiti, artefact_id, content)
 
@@ -1182,70 +1181,30 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   defp start_preclaim_graphiti_pool(child_id) do
-    data_dir =
-      Path.join(
-        System.tmp_dir!(),
-        "reflection-preclaim-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
-      )
+    start_embedded_graphiti_pool(child_id, """
+    class PreclaimGraphitiContract:
+        def __init__(self):
+            self.driver = FalkorDriver(falkor_db=database, database=gid)
+            self.extractions = 0
 
-    File.mkdir_p!(data_dir)
-    on_exit(fn -> File.rm_rf!(data_dir) end)
-    start_supervised!(Gralkor.Python)
+        async def add_episode(self, **kwargs):
+            from graphiti_core.nodes import EpisodicNode
+            self.extractions += 1
+            episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+            await episode.save(self.driver)
 
-    construct_instance = fn database, _shared, group_id ->
-      {graphiti, _} =
-        Pythonx.eval(
-          """
-          from graphiti_core.driver.falkordb_driver import FalkorDriver
+        async def search_(self, query, config=None, group_ids=None, search_filter=None):
+            from graphiti_core.nodes import EpisodicNode
+            from graphiti_core.search.search_config import SearchResults
+            episodes = await EpisodicNode.get_by_group_ids(
+                self.driver,
+                list(group_ids or []),
+                limit=config.limit if config is not None else None,
+            )
+            return SearchResults(episodes=episodes)
 
-          gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
-
-          class PreclaimGraphitiContract:
-              def __init__(self):
-                  self.driver = FalkorDriver(falkor_db=database, database=gid)
-                  self.extractions = 0
-
-              async def add_episode(self, **kwargs):
-                  from graphiti_core.nodes import EpisodicNode
-                  self.extractions += 1
-                  episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
-                  await episode.save(self.driver)
-
-              async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                  from graphiti_core.nodes import EpisodicNode
-                  from graphiti_core.search.search_config import SearchResults
-                  episodes = await EpisodicNode.get_by_group_ids(
-                      self.driver,
-                      list(group_ids or []),
-                      limit=config.limit if config is not None else None,
-                  )
-                  return SearchResults(episodes=episodes)
-
-          PreclaimGraphitiContract()
-          """,
-          %{"database" => database, "group_id" => group_id}
-        )
-
-      graphiti
-    end
-
-    pool =
-      start_supervised!(
-        Supervisor.child_spec(
-          {GraphitiPool,
-           falkordb_spec: {:embedded, data_dir},
-           construct_shared_clients: fn _llm, _embedder ->
-             %{llm_client: nil, embedder: nil, cross_encoder: nil}
-           end,
-           construct_instance: construct_instance,
-           initialise_instance: fn _instance -> :ok end,
-           warmup: false,
-           embedded_falkordb_socket_timeout_ms: 60_000},
-          id: child_id
-        )
-      )
-
-    {pool, GraphitiPool.for(pool, "observations")}
+    PreclaimGraphitiContract()
+    """)
   end
 
   defp assert_shared_graph_claim_contract do
