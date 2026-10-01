@@ -1318,7 +1318,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
                  invocation_context: %{}
                },
                &send(parent, {:migration_delivery, &1}),
-               inference: fn _ -> {:ok, artefact.payload} end
+               inference: fn _ -> {:ok, %{output: artefact.payload}} end
              )
 
     assert_receive {:migration_delivery, %{outcome: :delivered, artefact: ^artefact}}, 30_000
