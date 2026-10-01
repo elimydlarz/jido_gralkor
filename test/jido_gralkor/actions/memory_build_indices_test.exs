@@ -16,7 +16,8 @@ defmodule JidoGralkor.Actions.MemoryBuildIndicesTest do
         |> Map.get(:description)
         |> to_string()
 
-      assert description =~ "DO NOT CALL unless the user has explicitly asked you to rebuild Gralkor's graph search indices"
+      assert description =~
+               "DO NOT CALL unless the user has explicitly asked you to rebuild Gralkor's graph search indices"
     end
   end
 

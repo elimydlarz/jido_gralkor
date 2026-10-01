@@ -85,11 +85,18 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     end
 
     test "and headings and omission notices count towards the 16384-character ceiling" do
-      content = String.duplicate("x", 16_384 - String.length("Lens: notes\n- "))
-      assert String.length(rendered([fact(content, [%{lens: "notes"}])])) == 16_384
+      heading = "Lens: notes\n- "
+      notice = "\n\nOmitted facts: 1 (response limit)."
+      oversized = fact(String.duplicate("y", 17_000), [%{lens: "notes"}])
+      content = String.duplicate("x", 16_384 - String.length(heading) - String.length(notice))
 
-      assert rendered([fact(content <> "x", [%{lens: "notes"}])]) ==
-               "Omitted facts: 1 (response limit)."
+      assert rendered([fact(content, [%{lens: "notes"}]), oversized]) ==
+               heading <> content <> notice
+
+      assert String.length(heading <> content <> "x") <= 16_384
+
+      assert rendered([fact(content <> "x", [%{lens: "notes"}]), oversized]) ==
+               "Omitted facts: 2 (response limit)."
     end
 
     test "and UTF-8 bytes and JSON escaping count towards the complete-envelope byte budget" do
@@ -150,9 +157,11 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   describe "when the action validates a model byte budget before search > if the budget is not a positive integer" do
     test "then an argument error identifies the invalid budget" do
       for invalid <- [0, -1, nil, "100", 1.5] do
-        assert_raise ArgumentError, ~r/memory_search_max_bytes.*positive integer/, fn ->
-          Presentation.for_model([], invalid)
-        end
+        message =
+          assert_raise ArgumentError, fn -> Presentation.validate_max_bytes!(invalid) end
+
+        assert message.message =~ "memory_search_max_bytes must be a positive integer"
+        assert message.message =~ inspect(invalid)
       end
     end
   end

@@ -349,8 +349,7 @@ defmodule JidoGralkor.PluginTest do
         |> put_in([:state, :__memory__], plugin_state)
 
       assert {:ok,
-              {:continue,
-               %Signal{data: %{tool_context: %{lens: "notes"}, extra_refs: refs}}}} =
+              {:continue, %Signal{data: %{tool_context: %{lens: "notes"}, extra_refs: refs}}}} =
                Plugin.handle_signal(signal, context(lens_agent))
 
       assert refs.jido_gralkor_lens == "notes"
