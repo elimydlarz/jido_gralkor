@@ -111,78 +111,6 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "when context rotation is requested > while the agent has no committed thread" do
-    test "then rotation succeeds without requesting any flush" do
-      InMemory.set_flush_and_await(:ok)
-      pid = start_agent()
-
-      assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
-      assert InMemory.flush_and_awaits() == []
-    end
-
-    test "and no session is committed as a side effect" do
-      InMemory.set_flush_and_await(:ok)
-      pid = start_agent()
-
-      assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
-      assert committed_thread_id(pid) == nil
-    end
-
-    test "and the agent process is still running afterwards" do
-      InMemory.set_flush_and_await(:ok)
-      pid = start_agent()
-
-      assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
-      assert Process.alive?(pid)
-    end
-  end
-
-  describe "when context rotation is requested > while the agent has a committed thread > if its session flush fails" do
-    test "then the failure reason is returned to the caller" do
-      InMemory.set_flush_and_await({:error, :backend_down})
-      pid = start_agent()
-      seed_thread(pid, "pre-rotation")
-
-      assert {:error, :backend_down} =
-               ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
-    end
-
-    test "and the active session id is left unchanged" do
-      InMemory.set_flush_and_await({:error, :backend_down})
-      pid = start_agent()
-      seed_thread(pid, "pre-rotation")
-
-      assert {:error, :backend_down} = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
-      assert committed_thread_id(pid) == "pre-rotation"
-    end
-
-    test "and the agent process is still running afterwards" do
-      InMemory.set_flush_and_await({:error, :backend_down})
-      pid = start_agent()
-      seed_thread(pid, "pre-rotation")
-
-      assert {:error, :backend_down} = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
-      assert Process.alive?(pid)
-    end
-  end
-
-  describe "when context rotation is requested > while the agent has a committed thread > if installing the fresh thread fails after flushing" do
-    test "then the failure reason is returned to the caller" do
-      pid = start_agent()
-      seed_thread(pid, "pre-rotation")
-
-      assert {:error, :thread_missing_after_flush} = rotate_after_thread_removed(pid)
-    end
-
-    test "and the agent process is still running afterwards" do
-      pid = start_agent()
-      seed_thread(pid, "pre-rotation")
-
-      assert {:error, :thread_missing_after_flush} = rotate_after_thread_removed(pid)
-      assert Process.alive?(pid)
-    end
-  end
-
   describe "when context rotation is requested > while the agent has a committed thread > while its session flush succeeds > while recent entries are retained > while the thread holds more" do
     test "then only that many newest entries seed the rotated thread" do
       InMemory.set_flush_and_await(:ok)
@@ -239,6 +167,78 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
       assert :ok = Task.await(rotation)
 
       assert [%{payload: %{content: "in-flight"}}] = committed_entries(pid)
+    end
+  end
+
+  describe "when context rotation is requested > while the agent has a committed thread > if installing the fresh thread fails after flushing" do
+    test "then the failure reason is returned to the caller" do
+      pid = start_agent()
+      seed_thread(pid, "pre-rotation")
+
+      assert {:error, :thread_missing_after_flush} = rotate_after_thread_removed(pid)
+    end
+
+    test "and the agent process is still running afterwards" do
+      pid = start_agent()
+      seed_thread(pid, "pre-rotation")
+
+      assert {:error, :thread_missing_after_flush} = rotate_after_thread_removed(pid)
+      assert Process.alive?(pid)
+    end
+  end
+
+  describe "when context rotation is requested > while the agent has a committed thread > if its session flush fails" do
+    test "then the failure reason is returned to the caller" do
+      InMemory.set_flush_and_await({:error, :backend_down})
+      pid = start_agent()
+      seed_thread(pid, "pre-rotation")
+
+      assert {:error, :backend_down} =
+               ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+    end
+
+    test "and the active session id is left unchanged" do
+      InMemory.set_flush_and_await({:error, :backend_down})
+      pid = start_agent()
+      seed_thread(pid, "pre-rotation")
+
+      assert {:error, :backend_down} = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+      assert committed_thread_id(pid) == "pre-rotation"
+    end
+
+    test "and the agent process is still running afterwards" do
+      InMemory.set_flush_and_await({:error, :backend_down})
+      pid = start_agent()
+      seed_thread(pid, "pre-rotation")
+
+      assert {:error, :backend_down} = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+      assert Process.alive?(pid)
+    end
+  end
+
+  describe "when context rotation is requested > while the agent has no committed thread" do
+    test "then rotation succeeds without requesting any flush" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+
+      assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+      assert InMemory.flush_and_awaits() == []
+    end
+
+    test "and no session is committed as a side effect" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+
+      assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+      assert committed_thread_id(pid) == nil
+    end
+
+    test "and the agent process is still running afterwards" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+
+      assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+      assert Process.alive?(pid)
     end
   end
 
