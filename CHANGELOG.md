@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Graphiti runtime bumped to `graphiti-core[falkordb,google-genai] == 0.30.2`. Graphiti now scopes the driver to each `add_episode` call instead of reassigning the shared driver. It also writes FalkorDB datetimes in UTC, stops storing a `labels` property on entity nodes, fixes the FalkorDB edge full-text search plan, and ranks node-mentions results by descending mention count. The packaged empty-edge-candidate guard and the explicit GPT-5.5/5.6 `reasoning: "none"` remain necessary because 0.30.2 leaves both code paths unchanged.
+
 ## [11.0.0] - 2026-09-15
 
 - **Breaking:** replace the packaged `operator` Destination with `personal` and the packaged `operator` Lens with `personal-chat`. Private graph identity is `personal/<same operator_id>`; `global` and ERL's extraction ontology remain unchanged.
