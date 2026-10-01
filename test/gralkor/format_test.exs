@@ -89,6 +89,8 @@ defmodule Gralkor.FormatTest do
     test "and a whole-hour zone offset drops zero-padding from its one- or two-digit hour" do
       assert "2020-01-02T03:04:05+5" = Format.format_timestamp("2020-01-02T03:04:05+05:00")
       assert "2020-01-02T03:04:05-8" = Format.format_timestamp("2020-01-02T03:04:05-08:00")
+      assert "2020-01-02T03:04:05+10" = Format.format_timestamp("2020-01-02T03:04:05+10:00")
+      assert "2020-01-02T03:04:05-11" = Format.format_timestamp("2020-01-02T03:04:05-11:00")
     end
 
     test "and a zone offset with non-zero minutes is preserved as \"+H:MM\" or \"-H:MM\"" do
