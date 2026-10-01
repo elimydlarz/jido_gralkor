@@ -28,6 +28,20 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     def replace_graph(_store, _graph), do: :ok
   end
 
+  defmodule RecordingIngestion do
+    @behaviour Gralkor.Lens.Ingestion
+
+    @impl true
+    def ingest(request, store) do
+      send(
+        Process.whereis(:ingested_information_provenance_functional),
+        {:ingestion_started, request.id}
+      )
+
+      Gralkor.Lens.Ingestion.Store.ingest(request, store)
+    end
+  end
+
   defmodule NativeBoundaryStorage do
     @behaviour Gralkor.Lens.Storage
 
@@ -94,25 +108,52 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
   describe "when information is submitted through public ingestion with a supported source kind" do
     test "then its stored episode retains the declared source kind" do
+      graphiti = use_native_boundary()
+
       assert :ok =
-               Client.ingest(%Ingest{
-                 id: "provenance-conversation",
+               Client.ingest(
+                 request(:conversation, "Mina: Atlas might launch Friday.", "planning chat")
+               )
+
+      assert :ok = Client.ingest(request(:document, "Atlas launch proposal", "Q3 Roadmap"))
+
+      assert Enum.map(added_episodes(graphiti), & &1["source"]) == ["message", "text"]
+
+      publish_added_episodes(graphiti, "Atlas might launch Friday.")
+
+      assert {:ok, [%{fact: %{sources: sources}}]} =
+               Client.search(%Search{
                  operator_id: "operator-one",
-                 lens: "observations",
-                 source_kind: :conversation,
-                 content: "Mina: Atlas might launch Friday.",
-                 source_description: "planning conversation"
+                 query: "Atlas launch",
+                 destinations: ["observations"],
+                 result_type: :facts
                })
 
-      assert_receive {:episode_added, %Gralkor.Lens.Store{source_kind: :conversation},
-                      "Mina: Atlas might launch Friday.", "planning conversation"}
+      assert Enum.map(sources, & &1.source_kind) == ["conversation", "document"]
     end
 
     test "and its stored episode retains the reported source description" do
+      graphiti = use_native_boundary()
+
       assert :ok = Client.ingest(request(:document, "Draft launch plan", "Q3 Roadmap — Draft"))
 
-      assert_receive {:episode_added, %Gralkor.Lens.Store{}, "Draft launch plan",
-                      "Q3 Roadmap — Draft"}
+      assert [%{"source_description" => "Q3 Roadmap — Draft [lens: observations]"}] =
+               added_episodes(graphiti)
+
+      publish_added_episodes(graphiti, "The launch plan is a draft.")
+
+      assert {:ok, [%{destination: "observations", episode: episode}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "launch",
+                 destinations: ["observations"]
+               })
+
+      assert episode == %{
+               content: "Draft launch plan",
+               source_description: "Q3 Roadmap — Draft",
+               lens: "observations"
+             }
     end
 
     test "and public episode search presents the originating Lens separately from episode content and source description" do
@@ -232,6 +273,23 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                )
 
       assert [_single_existing_extraction] = added_episodes(graphiti)
+      assert inference_requests(graphiti) == ["extraction"]
+
+      publish_added_episodes(graphiti, "Mina speculated that Atlas might launch Friday.")
+
+      assert {:ok, [%{fact: %{fact: "Mina speculated that Atlas might launch Friday."}}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "Atlas launch",
+                 destinations: ["observations"],
+                 result_type: :facts
+               })
+
+      assert {:ok, memory} =
+               Gralkor.Client.Native.recall("observations", "Gralkor", "session-one", "Atlas")
+
+      assert memory =~ "Mina speculated that Atlas might launch Friday."
+      assert inference_requests(graphiti) == ["extraction"]
     end
   end
 
@@ -285,56 +343,31 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
   describe "when captured conversation turns are ingested automatically" do
     test "then Gralkor supplies conversation as their source kind" do
-      test_pid = self()
+      graphiti = use_native_boundary()
+      use_capture_runtime()
 
-      callback =
-        Gralkor.Application.build_lens_flush_callback(
-          ingest_fn: fn request ->
-            send(test_pid, {:captured_ingest, request})
-            {:ok, []}
-          end
-        )
+      capture_turn("lens-capture", {:lenses, ["observations"]})
+      capture_turn("direct-capture", {:direct, "personal"})
 
-      assert {:ok, []} =
-               callback.(
-                 "operator-one",
-                 "Gralkor",
-                 "Mina",
-                 "observations",
-                 [[Gralkor.Message.new("user", "Atlas might launch Friday.")]],
-                 "ingestion-1",
-                 nil
-               )
-
-      assert_receive {:captured_ingest, %Ingest{id: "ingestion-1", source_kind: :conversation}}
+      assert [
+               %{"source" => "message", "source_description" => "captured [lens: observations]"},
+               %{"source" => "message", "source_description" => "captured [gralkor: direct]"}
+             ] = added_episodes(graphiti)
     end
 
     test "and their rendered speaker-attributed transcript is submitted as a conversational-message episode" do
-      test_pid = self()
+      graphiti = use_native_boundary()
+      use_capture_runtime()
 
-      callback =
-        Gralkor.Application.build_flush_callback(nil,
-          add_episode_fn: fn group_id, body, description, ontology, opts ->
-            send(test_pid, {:captured_episode, group_id, body, description, ontology, opts})
-            :ok
-          end
-        )
+      capture_turn("lens-capture", {:lenses, ["observations"]})
+      capture_turn("direct-capture", {:direct, "personal"})
 
-      assert :ok =
-               callback.(
-                 "operator-one",
-                 "Gralkor",
-                 "Mina",
-                 nil,
-                 [[Gralkor.Message.new("user", "Atlas might launch Friday.")]]
-               )
+      transcript = "Mina: Atlas might launch Friday.\nGralkor: I will remember that."
 
-      assert_receive {:captured_episode, "operator-one", "Mina: Atlas might launch Friday.",
-                      "captured", nil, opts}
-
-      assert opts[:source_kind] == :conversation
-      assert opts[:writer] == :direct
-      refute Keyword.has_key?(opts, :lens)
+      assert [
+               %{"body" => ^transcript, "source" => "message"},
+               %{"body" => ^transcript, "source" => "message", "writer" => "direct"}
+             ] = added_episodes(graphiti)
     end
   end
 
@@ -358,6 +391,36 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                }
              ] =
                added_episodes(graphiti)
+
+      publish_added_episodes(graphiti, "The launch plan should be remembered.")
+
+      assert {:ok, [%{destination: "personal", episode: episode}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "launch plan",
+                 destinations: ["personal"]
+               })
+
+      assert episode.content == "Remember the launch plan."
+      assert episode.source_description == "manual"
+      assert episode.writer == :direct
+      refute Map.has_key?(episode, :lens)
+      refute Map.has_key?(episode, :reflection)
+
+      assert {:ok, [%{fact: %{sources: [source]}}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "launch plan",
+                 destinations: ["personal"],
+                 result_type: :facts
+               })
+
+      assert source == %{
+               id: "added-0",
+               source_kind: "document",
+               source_description: "manual",
+               writer: :direct
+             }
     end
 
     test "and public episode and fact search include it without a Lens selector" do
@@ -652,11 +715,21 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
 
     test "and no Lens ingestion process or Graphiti operation begins" do
-      assert_raise ArgumentError, fn ->
-        Client.ingest(request(:rumour, "Atlas launches Friday.", "planning notes"))
+      graphiti = use_native_boundary()
+      use_recording_ingestion()
+
+      for source_kind <- [nil, :rumour] do
+        assert_raise ArgumentError, fn ->
+          Client.ingest(request(source_kind, "Atlas launches Friday.", "planning notes"))
+        end
       end
 
-      refute_receive {:episode_added, _, _, _}
+      refute_receive {:ingestion_started, _}
+      assert added_episodes(graphiti) == []
+
+      assert :ok = Client.ingest(request(:document, "Atlas launches Friday.", "planning notes"))
+      assert_receive {:ingestion_started, _}
+      assert [%{"body" => "Atlas launches Friday."}] = added_episodes(graphiti)
     end
   end
 
@@ -677,11 +750,25 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
 
     test "and no Lens ingestion process or Graphiti operation begins" do
-      assert_raise ArgumentError, fn ->
-        Client.ingest(request(:document, ["not document text"], "invalid fixture"))
+      graphiti = use_native_boundary()
+      use_recording_ingestion()
+
+      for {source_kind, content} <- [
+            {:conversation, %{"speaker" => "Mina"}},
+            {:document, ["not document text"]},
+            {:structured_record, "already encoded JSON"}
+          ] do
+        assert_raise ArgumentError, fn ->
+          Client.ingest(request(source_kind, content, "invalid fixture"))
+        end
       end
 
-      refute_receive {:episode_added, _, _, _}
+      refute_receive {:ingestion_started, _}
+      assert added_episodes(graphiti) == []
+
+      assert :ok = Client.ingest(request(:structured_record, %{"project" => "Atlas"}, "registry"))
+      assert_receive {:ingestion_started, _}
+      assert [%{"source" => "json"}] = added_episodes(graphiti)
     end
   end
 
@@ -789,6 +876,14 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     {graphiti, _} =
       Pythonx.eval(
         """
+        class _InferenceRecorder:
+            def __init__(self):
+                self.requests = []
+
+            async def generate_response(self, purpose):
+                self.requests.append(purpose)
+                return {}
+
         class _Graphiti:
             def __init__(self):
                 self.added = []
@@ -796,9 +891,12 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                 self.episode_results = []
                 self.episodes = {}
                 self.driver = _Driver(self)
+                self.inference = _InferenceRecorder()
+                self.llm_client = None
 
             async def add_episode(self, **kwargs):
                 from graphiti_core.nodes import EpisodicNode
+                await self.llm_client.generate_response("extraction")
                 self.added.append({
                     "body": kwargs.get("episode_body"),
                     "source": kwargs.get("source").value,
@@ -872,6 +970,8 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         %{}
       )
 
+    {inference, _} = Pythonx.eval("g.inference", %{"g" => graphiti})
+
     start_supervised!(
       {GraphitiPool,
        name: Gralkor.GraphitiPool,
@@ -879,15 +979,113 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
        falkordb_spec: {:embedded, "/tmp/never_used"},
        construct_falkor_db: fn _spec -> :stub_falkor_db end,
        construct_shared_clients: fn _llm, _embedder ->
-         %{llm_client: nil, embedder: nil, cross_encoder: nil}
+         %{llm_client: inference, embedder: nil, cross_encoder: nil}
        end,
-       construct_instance: fn _db, _shared, _group_id -> graphiti end,
+       construct_instance: fn _db, shared, _group_id ->
+         {instance, _} =
+           Pythonx.eval("g.llm_client = llm\ng", %{"g" => graphiti, "llm" => shared.llm_client})
+
+         instance
+       end,
        initialise_instance: fn _instance -> :ok end,
        warmup: false,
        install_loop_fn: &Gralkor.Python.install_async_runtime/0}
     )
 
     graphiti
+  end
+
+  defp use_recording_ingestion do
+    Application.put_env(:jido_gralkor, :lenses, [
+      [name: "observations", destination: "observations", ingestion: RecordingIngestion]
+    ])
+  end
+
+  defp use_capture_runtime do
+    previous_client = Application.get_env(:jido_gralkor, :client)
+    Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+    on_exit(fn -> restore_env(:client, previous_client) end)
+
+    start_supervised!(
+      {JidoGralkor.Runtime,
+       owner: self(),
+       configuration: %{
+         destinations: [%{name: "observations"}],
+         lenses: [
+           %{
+             name: "observations",
+             destination: "observations",
+             write: :append,
+             ingestion: Gralkor.Lens.Ingestion.Store
+           }
+         ],
+         reflections: []
+       }}
+    )
+
+    start_supervised!(
+      {Gralkor.CaptureBuffer,
+       flush_callback: Gralkor.Application.build_flush_callback(nil),
+       lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
+       lens_resolver: fn runtime_owner, names ->
+         {:ok, JidoGralkor.Runtime.lenses!(runtime_owner, names)}
+       end,
+       retries: []}
+    )
+  end
+
+  defp capture_turn(session_id, route) do
+    assert :ok =
+             Client.capture(self(), %Gralkor.Capture{
+               session_id: session_id,
+               operator_id: "operator-one",
+               agent_name: "Gralkor",
+               user_name: "Mina",
+               messages: [
+                 Gralkor.Message.new("user", "Atlas might launch Friday."),
+                 Gralkor.Message.new("assistant", "I will remember that.")
+               ],
+               route: route
+             })
+
+    assert :ok = Client.impl().flush_and_await(session_id, 5_000)
+  end
+
+  defp inference_requests(graphiti) do
+    {requests, _} = Pythonx.eval("g.inference.requests", %{"g" => graphiti})
+    Pythonx.decode(requests)
+  end
+
+  defp publish_added_episodes(graphiti, fact) do
+    Pythonx.eval(
+      """
+      def _dec(value):
+          return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
+      g.episode_results = [
+          g.StoredEpisode(
+              f'added-{index}',
+              added['body'],
+              added['source_description'],
+              added['writer'],
+          )
+          for index, added in enumerate(g.added)
+      ]
+      g.driver._gralkor_completed_episode_uuids = {
+          episode.uuid for episode in g.episode_results
+      }
+      g.episodes = {
+          f'added-{index}': g.Episode(
+              f'added-{index}',
+              added['source'],
+              added['source_description'],
+              added['writer'],
+          )
+          for index, added in enumerate(g.added)
+      }
+      g.facts = [g.Edge(_dec(fact), list(g.episodes))]
+      """,
+      %{"g" => graphiti, "fact" => fact}
+    )
   end
 
   defp added_episodes(graphiti) do
