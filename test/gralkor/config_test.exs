@@ -233,7 +233,6 @@ defmodule Gralkor.ConfigTest do
         assert_raise ArgumentError,
                      ~r/GRALKOR_EMBEDDER_MODEL.*got #{Regex.escape(inspect(value))}$/,
                      fn -> Config.embedder_model() end
-        end
       end
 
       for value <- ["google:", "google:   "] do
@@ -242,7 +241,6 @@ defmodule Gralkor.ConfigTest do
         assert_raise ArgumentError,
                      ~r/GRALKOR_LLM_MODEL.*got #{Regex.escape(inspect(value))}$/,
                      fn -> Config.llm_model() end
-        end
       end
     end
   end
