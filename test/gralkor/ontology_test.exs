@@ -99,7 +99,7 @@ defmodule Gralkor.OntologyTest do
 
   describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:entities` option is not provided" do
     test "then compilation fails with an error naming `:entities` and its allowed values `:strict` and `:open`" do
-      assert_raise CompileError, ~r/:entities/, fn ->
+      assert_raise CompileError, ~r/:entities.*\[:strict, :open\]/, fn ->
         defmodule UseMissingEntities do
           use Gralkor.Ontology, relationships: :scoped
         end
@@ -109,7 +109,7 @@ defmodule Gralkor.OntologyTest do
 
   describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:entities` option is any value other than `:strict` or `:open`" do
     test "then compilation fails with an error naming `:entities` and the rejected value" do
-      assert_raise CompileError, ~r/:entities/, fn ->
+      assert_raise CompileError, ~r/invalid value :loose for :entities/, fn ->
         defmodule UseBadEntities do
           use Gralkor.Ontology, entities: :loose, relationships: :scoped
         end
@@ -119,7 +119,7 @@ defmodule Gralkor.OntologyTest do
 
   describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:relationships` option is not provided" do
     test "then compilation fails with an error naming `:relationships` and its allowed values `:scoped` and `:open`" do
-      assert_raise CompileError, ~r/:relationships/, fn ->
+      assert_raise CompileError, ~r/:relationships.*\[:scoped, :open\]/, fn ->
         defmodule UseMissingRels do
           use Gralkor.Ontology, entities: :strict
         end
@@ -129,7 +129,7 @@ defmodule Gralkor.OntologyTest do
 
   describe "when a module declares an ontology with `use Gralkor.Ontology` > if the `:relationships` option is any value other than `:scoped` or `:open`" do
     test "then compilation fails with an error naming `:relationships` and the rejected value" do
-      assert_raise CompileError, ~r/:relationships/, fn ->
+      assert_raise CompileError, ~r/invalid value :loose for :relationships/, fn ->
         defmodule UseBadRels do
           use Gralkor.Ontology, entities: :strict, relationships: :loose
         end
@@ -180,7 +180,18 @@ defmodule Gralkor.OntologyTest do
     end
 
     test "and no module named Foo is defined by the declaration" do
-      refute Code.ensure_loaded?(Gralkor.OntologyTest.EntityNameOntology.User)
+      defmodule NoEntityModuleOntology do
+        use Gralkor.Ontology, entities: :open, relationships: :open
+
+        entity Foo do
+          field(:handle, :string)
+        end
+      end
+
+      assert [%{name: "Foo"}] = NoEntityModuleOntology.__ontology__().entity_types
+      refute Code.ensure_loaded?(Gralkor.OntologyTest.NoEntityModuleOntology.Foo)
+      refute Code.ensure_loaded?(Gralkor.OntologyTest.Foo)
+      refute Code.ensure_loaded?(Foo)
     end
 
     test "and the entity carries no description, so the extractor decides from the entity's name and fields alone" do
@@ -514,7 +525,7 @@ defmodule Gralkor.OntologyTest do
 
   describe "when an ontology declares an aliased relationship source > if repeated verbs have different edge-property schemas" do
     test "then compilation fails with an error naming the conflicting verb" do
-      assert_raise CompileError, ~r/conflicting/, fn ->
+      assert_raise CompileError, ~r/edge "PREFERS" .*conflicting field schemas/, fn ->
         defmodule ConflictEdgeOntology do
           use Gralkor.Ontology, entities: :open, relationships: :scoped
 
