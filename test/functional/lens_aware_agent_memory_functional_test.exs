@@ -65,26 +65,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     )
 
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-
-    Application.put_env(:jido_gralkor, :lenses, [
-      [
-        name: "observations",
-        destination: "observations",
-        ontology: MemoryOntology,
-        ingestion: StoreIngestion
-      ],
-      [
-        name: "decisions",
-        destination: "decisions",
-        ontology: MemoryOntology,
-        ingestion: StoreIngestion
-      ],
-      [
-        name: "shared-generalisations",
-        destination: "global",
-        ingestion: StoreIngestion
-      ]
-    ])
+    Application.delete_env(:jido_gralkor, :lenses)
 
     start_supervised!(
       {JidoGralkor.Runtime, owner: self(), configuration: runtime_configuration()}
@@ -131,7 +112,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
             {"decisions", "selected decision memory"}
           ] do
         assert :ok =
-                 Client.ingest(%Ingest{
+                 Client.ingest(self(), %Ingest{
                    id: "search-selector-#{lens}",
                    operator_id: "operator-one",
                    lens: lens,
@@ -198,7 +179,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
     test "and a turn-selected ingestion Lens neither defaults nor restricts memory search" do
       assert :ok =
-               Client.ingest(%Ingest{
+               Client.ingest(self(), %Ingest{
                  id: "turn-lens-independent-search",
                  operator_id: "operator-one",
                  lens: "observations",
@@ -232,7 +213,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, %{result: text}} =
                MemorySearch.run(
                  %{query: "provenance", destinations: ["observations", "global"]},
-                 %{agent_id: "operator-one"}
+                 mounted_search_context()
                )
 
       assert text ==
@@ -243,7 +224,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   describe "when an agent with a mounted memory plugin invokes memory search > where no conversation thread has been committed" do
     test "then memory search still runs for the current operator" do
       assert :ok =
-               Client.ingest(%Ingest{
+               Client.ingest(self(), %Ingest{
                  id: "first-turn-search",
                  operator_id: "operator-one",
                  lens: "observations",
@@ -282,7 +263,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
             {"decisions", "decision memory"}
           ] do
         assert :ok =
-                 Client.ingest(%Ingest{
+                 Client.ingest(self(), %Ingest{
                    id: "default-all-#{lens}",
                    operator_id: "operator-one",
                    lens: lens,
@@ -293,7 +274,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
 
       assert {:ok, %{result: result}} =
-               MemorySearch.run(%{query: "memory"}, %{agent_id: "operator-one"})
+               MemorySearch.run(%{query: "memory"}, mounted_search_context())
 
       assert result ==
                "Lens: personal-chat\n- operator memory\n\nLens: shared-generalisations\n- global memory\n\nLens: observations\n- observation memory\n\nLens: decisions\n- decision memory"
@@ -302,6 +283,15 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
   describe "when a mounted memory plugin has an ingestion Lens declared by its consuming agent's runtime configuration" do
     test "then automatic capture and memory addition use that runtime-owned Lens" do
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          destination: "decisions",
+          ontology: MemoryOntology,
+          ingestion: StoreIngestion
+        ]
+      ])
+
       assert {:ok, plugin_state} =
                mount(
                  agent_name: "Susu",
@@ -325,6 +315,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                destination_episodes("observations") != []
              end)
 
+      assert destination_episodes("decisions") == []
+
       completion = completion_agent(agent, "default-request", tool_context)
 
       assert {:ok, :continue} =
@@ -343,8 +335,17 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                  ingestion_lens: "observations"
                )
 
-      assert plugin_state.ingestion_lens == "observations"
-      refute Map.has_key?(plugin_state, :lens)
+      assert plugin_state == %{
+               agent_name: "Susu",
+               capture_destination: "personal",
+               ingestion_lens: "observations"
+             }
+
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context, extra_refs: refs}}}} =
+               query(agent(plugin_state))
+
+      assert tool_context.lens == "observations"
+      assert refs.jido_gralkor_lens == "observations"
     end
   end
 
@@ -525,9 +526,12 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
           data: %{query: "Remember this", tool_context: %{lens: invalid}}
         }
 
-        assert_raise ArgumentError, ~r/unknown.*lenses|unknown Lens|invalid Lens/, fn ->
-          Plugin.handle_signal(signal, %{agent: agent(plugin_state)})
-        end
+        error =
+          assert_raise ArgumentError, fn ->
+            Plugin.handle_signal(signal, %{agent: agent(plugin_state)})
+          end
+
+        assert Exception.message(error) =~ inspect(invalid)
       end
     end
   end
@@ -837,6 +841,14 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert Exception.message(error) =~ "missing"
     end
+  end
+
+  defp mounted_search_context do
+    assert {:ok, plugin_state} = mount(agent_name: "Susu", ingestion_lens: "observations")
+    mounted_agent = agent(plugin_state)
+    assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(mounted_agent)
+    assert tool_context.gralkor_runtime == self()
+    Map.put(tool_context, :agent_id, mounted_agent.id)
   end
 
   defp query_direct(agent, id) do
