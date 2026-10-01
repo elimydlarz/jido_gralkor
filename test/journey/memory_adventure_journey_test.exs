@@ -614,7 +614,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       "The Atlas Deployment requires the Rollback Checkpoint and a reversible canary to expose configuration faults before the Atlas release."
 
     operations_runbook =
-      "The Payments Database Migration runbook assigns the Ledger team as migration owner and schedules the cutover in the Sunday maintenance window."
+      "The Payments Database Migration runbook assigns the Platform team as migration owner and schedules the cutover in the Sunday maintenance window."
 
     structured_fact = %{
       "source_system" => "Payments",
