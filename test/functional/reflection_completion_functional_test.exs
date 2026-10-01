@@ -1312,7 +1312,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                           uuid=f'embedded-bulk-{suffix}-right',
                           name='right',
                           group_id=gid,
-                          labels=['Person', 'Team Member'],
+                          labels=['Person', 'TeamMember'],
                           created_at=now,
                           name_embedding=[0.2],
                       )
@@ -1586,7 +1586,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
            } = Pythonx.decode(bulk_created_proof)
 
     assert Enum.sort(left_labels) == ["Entity", "Person"]
-    assert Enum.sort(right_labels) == ["Entity", "Person", "Team Member"]
+    assert Enum.sort(right_labels) == ["Entity", "Person", "TeamMember"]
 
     Pythonx.eval(
       """
