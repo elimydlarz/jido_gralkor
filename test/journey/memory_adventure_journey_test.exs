@@ -28,6 +28,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   @operator_one "memory_adventure_operator_one"
   @operator_two "memory_adventure_operator_two"
   @reflection_callback_timeout_ms 300_000
+  @memory_only_checkpoint ~r/\bRollback\s+Checkpoints?\b/i
 
   defmodule JourneyOntology do
     use Gralkor.Ontology, entities: :open, relationships: :scoped
@@ -62,16 +63,11 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     @impl true
     def transform_request(_request, state, _config, _runtime_context) do
-      overrides = %{model: Gralkor.Config.llm_model()}
-
-      overrides =
-        if state.iteration == 1 do
-          JidoGralkor.ReAct.maybe_force_memory_search(overrides, state)
-        else
-          Map.put(overrides, :tools, %{})
-        end
-
-      {:ok, overrides}
+      {:ok,
+       JidoGralkor.ReAct.maybe_force_memory_search(
+         %{model: Gralkor.Config.llm_model()},
+         state
+       )}
     end
   end
 
@@ -95,6 +91,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                  ingestion: Gralkor.Lens.Ingestion.Store
                },
                %{name: "systems", destination: "personal", write: :replace_graph},
+               %{
+                 name: "runbooks",
+                 destination: "operations",
+                 write: :append,
+                 ingestion: Gralkor.Lens.Ingestion.Store
+               },
                %{
                  name: "published",
                  destination: "global",
@@ -143,9 +145,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   setup_all do
     keys = [
       :client,
-      :destinations,
       :destination_storage,
-      :lenses,
       :lens_storage,
       :recall_deadline_ms
     ]
@@ -166,28 +166,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :recall_deadline_ms, 90_000)
-
-    Application.put_env(:jido_gralkor, :destinations, [[name: "operations"]])
-
-    Application.put_env(:jido_gralkor, :lenses, [
-      [
-        name: "work-notes",
-        destination: "personal",
-        ontology: JourneyOntology,
-        ingestion: Gralkor.Lens.Ingestion.Store
-      ],
-      [
-        name: "systems",
-        destination: "personal",
-        write: :replace_graph
-      ],
-      [
-        name: "published",
-        destination: "global",
-        ontology: JourneyOntology,
-        ingestion: Gralkor.Lens.Ingestion.Store
-      ]
-    ])
 
     {:ok, _python} = start_supervised(Gralkor.Python)
 
@@ -458,13 +436,11 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                "generalisations"
              )
 
-      operations_results =
-        Enum.filter(
-          adventure.default_memory_search,
-          &(&1.destination == "operations")
-        )
-
-      assert has_declaring_reflection?(operations_results, "operations", "generalisations")
+      assert has_originating_lens?(
+               adventure.default_memory_search,
+               "operations",
+               "runbooks"
+             )
     end
 
     test "and its results include relevant Lens-authored memory and relevant stored generalisations",
@@ -473,12 +449,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                adventure.default_memory_search,
                "personal",
                "work-notes"
-             )
-
-      assert has_declaring_reflection?(
-               adventure.default_memory_search,
-               "global",
-               "generalisations"
              )
 
       assert has_declaring_reflection?(
@@ -497,7 +467,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     test "and the answer uses retrieved facts relevant to the requested migration",
          %{adventure: adventure} do
       recommendation = answer_field!(adventure.agent_answer, "RECOMMENDATION")
-      assert Regex.match?(~r/\b(?:Payments|migration)\b/i, recommendation)
+      rationale = answer_field!(adventure.agent_answer, "RATIONALE")
+
+      assert Regex.match?(@memory_only_checkpoint, recommendation <> " " <> rationale)
     end
 
     test "and the recommendation applies the retrieved reversible limited-scope lesson to the requested migration",
@@ -506,6 +478,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       rationale = answer_field!(adventure.agent_answer, "RATIONALE")
       application = recommendation <> " " <> rationale
 
+      assert Regex.match?(@memory_only_checkpoint, recommendation)
       assert Regex.match?(~r/\breversib\w*\b/i, application)
 
       assert Regex.match?(
@@ -672,8 +645,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     assert %Artefact{} =
              destination_artefact_until(
+               agent,
                @operator_one,
-               "operations",
+               "global",
                Artefact.id_for(
                  @operator_one,
                  "journey-generalisation-level-two",
@@ -683,6 +657,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     implicit_episodes =
       search_until(
+        agent,
         @operator_one,
         ["personal"],
         :episodes,
@@ -740,6 +715,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     direct_capture_episodes =
       search_until(
+        agent,
         @operator_one,
         ["personal"],
         :episodes,
@@ -750,6 +726,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     personal_chat_episodes =
       search_until(
+        agent,
         @operator_one,
         ["personal"],
         :episodes,
@@ -795,12 +772,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         published_representations
       )
 
-    store_artefact!(
-      published_generalisation_artefact,
-      "generalisations",
-      @operator_one,
-      "operations"
-    )
 
     consumer_reflection_result =
       invoke_reflection_result!(
@@ -816,6 +787,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     consumer_destination_artefact =
       destination_artefact_until(
+        agent,
         @operator_one,
         "global",
         consumer_artefact_id
@@ -851,6 +823,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     shared_episodes =
       search_until(
+        agent,
         @operator_one,
         ["personal"],
         :episodes,
@@ -860,6 +833,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     global_for_first =
       search_until(
+        agent,
         @operator_one,
         ["global"],
         :episodes,
@@ -869,6 +843,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     global_for_second =
       search_until(
+        agent,
         @operator_two,
         ["global"],
         :episodes,
@@ -897,6 +872,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     work_notes_input =
       search_until(
+        agent,
         @operator_one,
         ["personal"],
         :episodes,
@@ -908,6 +884,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     private_for_first =
       search_until(
+        agent,
         @operator_one,
         [],
         :episodes,
@@ -917,6 +894,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     private_for_second =
       search_until(
+        agent,
         @operator_two,
         [],
         :episodes,
@@ -926,6 +904,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     erl_artefacts =
       search_until(
+        agent,
         @operator_one,
         ["personal"],
         :artefacts,
@@ -935,10 +914,11 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       )
 
     other_operator_erl =
-      search(@operator_two, ["personal"], :artefacts, "backup vacuum scheduling conflict")
+      search(agent, @operator_two, ["personal"], :artefacts, "backup vacuum scheduling conflict")
 
     current_graph =
       search_until(
+        agent,
         @operator_one,
         ["personal"],
         :facts,
@@ -946,10 +926,11 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         &contains_fact?(&1, "Clearing")
       )
 
-    superseded_graph = search(@operator_one, ["personal"], :facts, "settlement ledger")
+    superseded_graph = search(agent, @operator_one, ["personal"], :facts, "settlement ledger")
 
     conversation_facts =
       attributed_facts(
+        agent,
         @operator_one,
         "personal",
         "backup vacuum overlap",
@@ -960,6 +941,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     document_facts =
       search_until(
+        agent,
         @operator_two,
         ["global"],
         :facts,
@@ -977,6 +959,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     structured_record_facts =
       attributed_facts(
+        agent,
         @operator_one,
         "personal",
         "payments ledger dependency",
@@ -1059,12 +1042,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         first_representations
       )
 
-    store_artefact!(
-      first_generalisation_artefact,
-      "generalisations",
-      @operator_one,
-      "operations"
-    )
 
     first_generalisation =
       first_generalisation_artefact
@@ -1092,8 +1069,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     assert first_generalisation_artefact ==
              destination_artefact_until(
+               agent,
                @operator_one,
-               "operations",
+               "global",
                first_generalisation_artefact.id
              )
 
@@ -1116,12 +1094,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         later_representations
       )
 
-    store_artefact!(
-      later_generalisation_artefact,
-      "generalisations",
-      @operator_one,
-      "operations"
-    )
 
     later_generalisation =
       find_generalisation(later_generalisation_artefact, fn generalisation ->
@@ -1181,29 +1153,13 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  defp store_artefact!(artefact, reflection_name, operator_id, destination_name) do
-    output = %{
-      kind: :destination,
-      destination: Gralkor.Destination.Registry.fetch!(destination_name),
-      ontology: Gralkor.DefaultOntology
-    }
+  defp destination_artefact_until(agent, operator_id, destination, artefact_id, attempts \\ 120)
 
-    :ok =
-      Gralkor.Destination.Storage.put_artefact(
-        output,
-        reflection_name,
-        operator_id,
-        artefact
-      )
-  end
+  defp destination_artefact_until(_agent, _operator_id, _destination, _artefact_id, 0), do: nil
 
-  defp destination_artefact_until(operator_id, destination, artefact_id, attempts \\ 120)
-
-  defp destination_artefact_until(_operator_id, _destination, _artefact_id, 0), do: nil
-
-  defp destination_artefact_until(operator_id, destination, artefact_id, attempts) do
+  defp destination_artefact_until(agent, operator_id, destination, artefact_id, attempts) do
     assert {:ok, results} =
-             Client.search(%Search{
+             Client.search(agent, %Search{
                operator_id: operator_id,
                query: artefact_id,
                destinations: [destination],
@@ -1218,7 +1174,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
       nil ->
         Process.sleep(1_000)
-        destination_artefact_until(operator_id, destination, artefact_id, attempts - 1)
+        destination_artefact_until(agent, operator_id, destination, artefact_id, attempts - 1)
     end
   end
 
@@ -1271,9 +1227,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     }
   end
 
-  defp search(operator_id, destinations, result_type, query) do
+  defp search(agent, operator_id, destinations, result_type, query) do
     assert {:ok, results} =
-             Client.search(%Search{
+             Client.search(agent, %Search{
                operator_id: operator_id,
                query: query,
                destinations: destinations,
@@ -1350,10 +1306,16 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     results
   end
 
-  defp search_until(operator_id, destinations, result_type, query, predicate, attempts \\ 60)
-
-  defp search_until(operator_id, destinations, result_type, query, predicate, attempts) do
-    results = search(operator_id, destinations, result_type, query)
+  defp search_until(
+         agent,
+         operator_id,
+         destinations,
+         result_type,
+         query,
+         predicate,
+         attempts \\ 60
+       ) do
+    results = search(agent, operator_id, destinations, result_type, query)
 
     cond do
       predicate.(results) ->
@@ -1364,7 +1326,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
       true ->
         Process.sleep(1_000)
-        search_until(operator_id, destinations, result_type, query, predicate, attempts - 1)
+        search_until(agent, operator_id, destinations, result_type, query, predicate, attempts - 1)
     end
   end
 
@@ -1435,6 +1397,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   defp attributed_facts(
+         agent,
          operator_id,
          destination,
          query,
@@ -1444,8 +1407,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          attempts \\ 10
        ) do
     facts =
-      operator_id
-      |> search([destination], :facts, query)
+      agent
+      |> search(operator_id, [destination], :facts, query)
       |> Enum.filter(fact_from_episode?)
 
     cond do
@@ -1459,6 +1422,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         Process.sleep(1_000)
 
         attributed_facts(
+          agent,
           operator_id,
           destination,
           query,
