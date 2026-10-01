@@ -57,14 +57,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     def search(_store, _query, _max_results), do: {:ok, []}
 
     @impl true
-    def replace_graph(_store, _graph) do
-      if state = Application.get_env(:jido_gralkor, :replacement_graph_state) do
-        Agent.update(state, fn _graph -> %{nodes: [], relationships: []} end)
-      end
-
-      send(Process.whereis(:lens_graph_replacement_functional), :removed_without_restore)
-      {:error, :import_failed}
-    end
+    def replace_graph(_store, _graph), do: {:error, :import_failed}
   end
 
   defmodule DestinationSearchStorage do
@@ -91,7 +84,6 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     previous_destinations = Application.get_env(:jido_gralkor, :destinations)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
     previous_destination_storage = Application.get_env(:jido_gralkor, :destination_storage)
-    previous_replacement_state = Application.get_env(:jido_gralkor, :replacement_graph_state)
 
     start_supervised!(InMemory)
 
@@ -106,7 +98,6 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       restore_env(:destinations, previous_destinations)
       restore_env(:lens_storage, previous_storage)
       restore_env(:destination_storage, previous_destination_storage)
-      restore_env(:replacement_graph_state, previous_replacement_state)
     end)
 
     :ok
@@ -187,13 +178,54 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
         replaceable_lens("catalogue", :global)
       ])
 
-      assert :ok = Client.replace(request(graph("catalogue"), "catalogue"))
-      assert :ok = Client.replace(request(graph("systems")))
+      assert :ok = Client.replace(request(connected_graph("catalogue"), "catalogue"))
+      catalogue = InMemory.graph(group(:global, "systems"))
 
-      assert Enum.map(InMemory.graph(group(:global, "systems")).nodes, & &1.id) == [
-               "catalogue",
-               "systems"
-             ]
+      assert :ok = Client.replace(request(connected_graph("systems")))
+
+      assert InMemory.graph(group(:global, "systems")) == %{
+               nodes: [
+                 %{
+                   id: "catalogue",
+                   labels: ["System"],
+                   properties: %{name: "catalogue", _gralkor_lens: "catalogue"}
+                 },
+                 %{
+                   id: "catalogue-target",
+                   labels: ["System"],
+                   properties: %{name: "target", _gralkor_lens: "catalogue"}
+                 },
+                 %{
+                   id: "systems",
+                   labels: ["System"],
+                   properties: %{name: "systems", _gralkor_lens: "systems"}
+                 },
+                 %{
+                   id: "systems-target",
+                   labels: ["System"],
+                   properties: %{name: "target", _gralkor_lens: "systems"}
+                 }
+               ],
+               relationships: [
+                 %{
+                   from: "catalogue",
+                   to: "catalogue-target",
+                   type: "DEPENDS_ON",
+                   properties: %{protocol: "events", _gralkor_lens: "catalogue"}
+                 },
+                 %{
+                   from: "systems",
+                   to: "systems-target",
+                   type: "DEPENDS_ON",
+                   properties: %{protocol: "events", _gralkor_lens: "systems"}
+                 }
+               ]
+             }
+
+      assert Enum.take(InMemory.graph(group(:global, "systems")).nodes, 2) == catalogue.nodes
+
+      assert Enum.take(InMemory.graph(group(:global, "systems")).relationships, 1) ==
+               catalogue.relationships
     end
 
     test "and artefacts written through Destination outputs at the resolved destination remain unchanged" do
@@ -277,11 +309,50 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     test "then every supplied node carries a unique identifier, labels, and properties" do
       use_in_memory(:personal)
       assert :ok = Client.replace(request(graph("systems")))
+
+      complete_node = %{id: "node", labels: ["System"], properties: %{}}
+
+      for {reason, node} <- [
+            {"invalid node", Map.delete(complete_node, :id)},
+            {"invalid node", %{complete_node | id: " "}},
+            {"invalid node", Map.delete(complete_node, :labels)},
+            {"invalid node", %{complete_node | labels: [" "]}},
+            {"invalid node", Map.delete(complete_node, :properties)},
+            {"invalid node", %{complete_node | properties: []}}
+          ] do
+        assert_raise ArgumentError, ~r/invalid graph data: #{reason}/, fn ->
+          Client.replace(request(%Graph{nodes: [node], relationships: []}))
+        end
+      end
+
+      assert_raise ArgumentError, ~r/invalid graph data: duplicate node identifier "node"/, fn ->
+        Client.replace(request(%Graph{nodes: [complete_node, complete_node], relationships: []}))
+      end
+
+      assert %{nodes: [%{id: "systems"}]} = InMemory.graph(group(:personal, "systems"))
     end
 
     test "and every supplied relationship carries source and destination node identifiers, a type, and properties" do
       use_in_memory(:personal)
       assert :ok = Client.replace(request(connected_graph("systems")))
+
+      %Graph{nodes: nodes, relationships: [complete_relationship]} = connected_graph("candidate")
+
+      for relationship <- [
+            Map.delete(complete_relationship, :from),
+            Map.delete(complete_relationship, :to),
+            Map.delete(complete_relationship, :type),
+            %{complete_relationship | type: " "},
+            Map.delete(complete_relationship, :properties),
+            %{complete_relationship | properties: []}
+          ] do
+        assert_raise ArgumentError, ~r/invalid graph data: invalid relationship/, fn ->
+          Client.replace(request(%Graph{nodes: nodes, relationships: [relationship]}))
+        end
+      end
+
+      assert %{nodes: [%{id: "systems"}, %{id: "systems-target"}], relationships: [_]} =
+               InMemory.graph(group(:personal, "systems"))
     end
   end
 
@@ -383,13 +454,25 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
 
     test "and graph content already removed by the replacement is not restored" do
-      existing = graph("existing")
-      {:ok, graph_state} = Agent.start_link(fn -> Map.from_struct(existing) end)
-      Application.put_env(:jido_gralkor, :replacement_graph_state, graph_state)
-      Application.put_env(:jido_gralkor, :lens_storage, FailingStorage)
+      falkordb = use_graphiti_boundary()
+      assert :ok = Client.replace(request(connected_graph("existing")))
 
-      assert {:error, :import_failed} = Client.replace(request(graph("systems")))
-      assert Agent.get(graph_state, & &1) == %{nodes: [], relationships: []}
+      assert %{"nodes" => [_, _], "relationships" => [_]} = falkordb_graph(falkordb)
+
+      Pythonx.eval("falkordb.fail_creates = True", %{"falkordb" => falkordb})
+      Pythonx.eval("falkordb.queries = []", %{"falkordb" => falkordb})
+
+      assert {:error, {:python, _reason}} = Client.replace(request(graph("systems")))
+
+      assert falkordb_graph(falkordb) == %{
+               "nodes" => [%{"labels" => ["External"], "properties" => %{"id" => "manual"}}],
+               "relationships" => []
+             }
+
+      assert [delete_relationships, delete_nodes, failed_create] = falkordb_queries(falkordb)
+      assert delete_relationships =~ "DELETE relationship"
+      assert delete_nodes =~ "DELETE node"
+      assert failed_create =~ "CREATE (node"
     end
   end
 
@@ -406,6 +489,99 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       assert_receive {:searched_destination, %Gralkor.Destination{name: "personal"},
                       "operator-one", "How does settlement work?", 20}
     end
+  end
+
+  defp use_graphiti_boundary do
+    Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
+
+    {falkordb, _} =
+      Pythonx.eval(
+        """
+        def _text(value):
+            return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
+
+        class _FalkorDB:
+            def __init__(self):
+                self.nodes = [{'labels': ['External'], 'properties': {'id': 'manual'}}]
+                self.relationships = []
+                self.queries = []
+                self.fail_creates = False
+
+            async def execute_query(self, query, **params):
+                query = _text(query)
+                self.queries.append(query)
+                lens = _text(params.get('lens'))
+                if query.startswith('MATCH ()-[relationship]->()'):
+                    self.relationships = [
+                        item for item in self.relationships
+                        if item['properties'].get('_gralkor_lens') != lens
+                    ]
+                elif query.startswith('MATCH (node)'):
+                    self.nodes = [
+                        item for item in self.nodes
+                        if item['properties'].get('_gralkor_lens') != lens
+                    ]
+                elif self.fail_creates:
+                    raise RuntimeError('import failed after deletion')
+                elif query.startswith('CREATE (node'):
+                    labels = query.split('(node', 1)[1].split(')', 1)[0]
+                    self.nodes.append({
+                        'labels': [label.strip('`') for label in labels.split(':') if label],
+                        'properties': params['properties'],
+                    })
+                else:
+                    self.relationships.append({
+                        'from': _text(params['source_id']),
+                        'to': _text(params['destination_id']),
+                        'properties': params['properties'],
+                    })
+                return [], None, None
+
+        class _Graphiti:
+            def __init__(self, driver):
+                self.driver = driver
+
+        falkordb = _FalkorDB()
+        graphiti = _Graphiti(falkordb)
+        (falkordb, graphiti)
+        """,
+        %{}
+      )
+
+    {graphiti, _} = Pythonx.eval("pair[1]", %{"pair" => falkordb})
+    {falkordb, _} = Pythonx.eval("pair[0]", %{"pair" => falkordb})
+
+    start_supervised!(
+      {Gralkor.GraphitiPool,
+       name: Gralkor.GraphitiPool,
+       table: :gralkor_graphiti_instances,
+       falkordb_spec: {:embedded, "/tmp/never_used"},
+       construct_falkor_db: fn _spec -> :stub_falkor_db end,
+       construct_shared_clients: fn _llm, _embedder ->
+         %{llm_client: nil, embedder: nil, cross_encoder: nil}
+       end,
+       construct_instance: fn _database, _shared, _group_id -> graphiti end,
+       initialise_instance: fn _instance -> :ok end,
+       warmup: false,
+       install_loop_fn: &Gralkor.Python.install_async_runtime/0}
+    )
+
+    falkordb
+  end
+
+  defp falkordb_graph(falkordb) do
+    {graph, _} =
+      Pythonx.eval(
+        "{'nodes': falkordb.nodes, 'relationships': falkordb.relationships}",
+        %{"falkordb" => falkordb}
+      )
+
+    Pythonx.decode(graph)
+  end
+
+  defp falkordb_queries(falkordb) do
+    {queries, _} = Pythonx.eval("falkordb.queries", %{"falkordb" => falkordb})
+    Pythonx.decode(queries)
   end
 
   defp use_in_memory(scope, lenses \\ nil) do
