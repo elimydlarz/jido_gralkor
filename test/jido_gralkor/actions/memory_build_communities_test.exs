@@ -16,7 +16,7 @@ defmodule JidoGralkor.Actions.MemoryBuildCommunitiesTest do
         |> Map.get(:description)
         |> to_string()
 
-      assert description =~ "DO NOT CALL"
+      assert description =~ "DO NOT CALL unless the user has explicitly asked you to build Gralkor communities"
     end
   end
 
