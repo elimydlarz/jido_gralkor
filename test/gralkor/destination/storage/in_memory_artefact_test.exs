@@ -16,6 +16,19 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
       artefact = artefact("new-id", %{"summary" => "new"})
 
       assert :ok = InMemory.put_artefact(output, "review", "operator-one", artefact)
+
+      assert {:ok, [^artefact]} =
+               InMemory.search(output.destination, "operator-one", "", :artefacts, 20, [])
+
+      assert {:ok, []} =
+               InMemory.search(
+                 %Destination{name: "global"},
+                 "operator-one",
+                 "",
+                 :artefacts,
+                 20,
+                 []
+               )
     end
 
     test "and exact lookup returns that artefact" do
@@ -28,11 +41,13 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
 
     test "and Destination search returns it in insertion order" do
       output = output()
+      earlier = artefact("earlier-id", %{"summary" => "earlier"})
       artefact = artefact("new-id", %{"summary" => "new"})
 
+      assert :ok = InMemory.put_artefact(output, "review", "operator-one", earlier)
       assert :ok = InMemory.put_artefact(output, "review", "operator-one", artefact)
 
-      assert {:ok, [^artefact]} =
+      assert {:ok, [^earlier, ^artefact]} =
                InMemory.search(output.destination, "operator-one", "", :artefacts, 20, [])
     end
   end
