@@ -10,11 +10,11 @@ defmodule JidoGralkor.ContextRotatorTest do
     def start_link(thread), do: GenServer.start_link(__MODULE__, thread)
 
     @impl true
-    def init(thread), do: {:ok, thread}
+    def init(thread), do: {:ok, %{agent: %{state: %{__thread__: thread}}}}
 
     @impl true
-    def handle_call(:get_state, _from, thread) do
-      {:reply, {:ok, %{agent: %{state: %{__thread__: thread}}}}, thread}
+    def handle_call(:get_state, _from, server_state) do
+      {:reply, {:ok, server_state}, server_state}
     end
   end
 
@@ -107,12 +107,7 @@ defmodule JidoGralkor.ContextRotatorTest do
       {:ok, agent} = AgentServerDouble.start_link(%{id: "session-one", entries: entries})
       InMemory.set_flush_and_await(:ok)
 
-      assert :ok =
-               ContextRotator.rotate_now(agent,
-                 install_thread_fn: fn _pid, _new_id, _pre, keep_last_n ->
-                   {:ok, keep_last_n}
-                 end
-               )
+      assert :ok = ContextRotator.rotate_now(agent)
 
       assert InMemory.flush_and_awaits() == [["session-one", 30_000]]
     end
@@ -121,19 +116,14 @@ defmodule JidoGralkor.ContextRotatorTest do
       entries = Enum.map(0..5, &entry(&1, "entry-#{&1}"))
       {:ok, agent} = AgentServerDouble.start_link(%{id: "session-one", entries: entries})
       InMemory.set_flush_and_await(:ok)
-      test_pid = self()
 
-      assert :ok =
-               ContextRotator.rotate_now(agent,
-                 install_thread_fn: fn _pid, _new_id, pre, keep_last_n ->
-                   seed = ContextRotator.compute_seed(pre, pre, keep_last_n)
-                   send(test_pid, {:seed, seed})
-                   {:ok, length(seed)}
-                 end
-               )
+      assert :ok = ContextRotator.rotate_now(agent)
 
-      expected = Enum.map(2..5, &entry(&1, "entry-#{&1}"))
-      assert_receive {:seed, ^expected}
+      {:ok, %{agent: %{state: %{__thread__: fresh_thread}}}} = Jido.AgentServer.state(agent)
+      refute fresh_thread.id == "session-one"
+
+      assert Enum.map(fresh_thread.entries, & &1.payload.content) ==
+               Enum.map(2..5, &"entry-#{&1}")
     end
   end
 
