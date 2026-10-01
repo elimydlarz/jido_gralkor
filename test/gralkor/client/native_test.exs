@@ -1140,6 +1140,7 @@ defmodule Gralkor.Client.NativeTest do
     setup :start_recording_pool
 
     test "then the rebuild is applied to the whole graph rather than to a single group" do
+      :ok = stop_supervised(GraphitiPool)
       start_per_group_pool()
       assert :ok = Native.memory_add("g1", "content", "manual")
       assert :ok = Native.memory_add("g2", "content", "manual")
@@ -1182,6 +1183,7 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "and community building is scoped to that physical group" do
+      :ok = stop_supervised(GraphitiPool)
       start_per_group_pool()
       assert :ok = Native.memory_add("other-group", "content", "manual")
       assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("with-hyphens")
