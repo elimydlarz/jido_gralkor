@@ -1,4 +1,4 @@
-Unit: publish-jido-gralkor (src: .agents/skills/publish/SKILL.md, .agents/skills/publish/agents/openai.yaml, .env.example, mix.exs, README.md, DESTINATIONS.md; unit: test/publish_skill_test.mjs)
+Unit: publish-jido-gralkor (src: .agents/skills/publish/SKILL.md, .agents/skills/publish/agents/openai.yaml, .env.example, mix.exs, README.md, DESTINATIONS.md, PERSONAL_MEMORY_MIGRATION.md; unit: test/publish_skill_test.mjs)
 
 when an operator asks to publish jido_gralkor with a semantic-version change kind or the current version
   then the version selection is the only required operator input
