@@ -957,7 +957,10 @@ defmodule Gralkor.GraphitiPool do
                     for index, node in enumerate(nodes):
                         parameter = f'entity_node_{index}'
                         variable = f'entity_node_{index}'
-                        labels = ':'.join(node.pop('labels'))
+                        labels = ':'.join(
+                            '`' + label.replace('`', '``') + '`'
+                            for label in node.pop('labels')
+                        )
                         params[parameter] = node
                         clauses.append(f'''
                             MERGE ({variable}:Entity {{uuid: ${parameter}.uuid}})
