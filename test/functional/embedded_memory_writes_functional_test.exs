@@ -305,13 +305,10 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
 
     start_pool(
       :embedded,
-      Keyword.merge(Keyword.take(application_opts, [:falkordb_spec]),
-        construct_falkor_db: fn spec, socket_timeout ->
-          send(parent, {:constructed_falkordb, spec, socket_timeout})
-          :stub_falkor_db
-        end
-      )
-      |> Keyword.merge(Keyword.drop(application_opts, [:llm_model, :embedder_model]))
+      Keyword.put(application_opts, :construct_falkor_db, fn spec, socket_timeout ->
+        send(parent, {:constructed_falkordb, spec, socket_timeout})
+        :stub_falkor_db
+      end)
     )
   end
 
