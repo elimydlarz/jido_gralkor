@@ -157,11 +157,11 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   describe "when the action validates a model byte budget before search > if the budget is not a positive integer" do
     test "then an argument error identifies the invalid budget" do
       for invalid <- [0, -1, nil, "100", 1.5] do
-        message =
+        error =
           assert_raise ArgumentError, fn -> Presentation.validate_max_bytes!(invalid) end
 
-        assert message.message =~ "memory_search_max_bytes must be a positive integer"
-        assert message.message =~ inspect(invalid)
+        assert error.message =~ "memory_search_max_bytes must be a positive integer"
+        assert error.message =~ inspect(invalid)
       end
     end
   end
