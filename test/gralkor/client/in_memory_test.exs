@@ -24,8 +24,6 @@ defmodule Gralkor.Client.InMemoryTest do
   defp configure_build_indices(response), do: InMemory.set_build_indices(response)
   defp configure_build_communities(response), do: InMemory.set_build_communities(response)
 
-  run_contract(do: fn -> :ok end)
-
   describe "when recall, capture, flush-and-await, memory addition, index rebuilding, or community building is called" do
     @describetag :integration
     test "then the call is recorded with every argument it was given, so a consumer's exact request can be inspected afterwards" do
@@ -85,23 +83,6 @@ defmodule Gralkor.Client.InMemoryTest do
     end
   end
 
-  describe "if flush-and-await receives a timeout that is not a positive integer" do
-    test "then an argument error is raised" do
-      assert_raise ArgumentError, fn -> InMemory.flush_and_await("session", 0) end
-    end
-
-    test "and the error identifies the invalid timeout" do
-      error = assert_raise ArgumentError, fn -> InMemory.flush_and_await("session", 0) end
-      assert Exception.message(error) =~ "timeout_ms"
-      assert Exception.message(error) =~ "0"
-    end
-
-    test "and no backend call is made" do
-      assert_raise ArgumentError, fn -> InMemory.flush_and_await("session", -1) end
-      assert InMemory.flush_and_awaits() == []
-    end
-  end
-
   describe "when the double is reset" do
     test "then every configured response is cleared" do
       InMemory.set_recall({:ok, "x"})
@@ -120,8 +101,39 @@ defmodule Gralkor.Client.InMemoryTest do
 
   describe "when the client implementation is resolved > while a client module is configured" do
     test "then that configured module is returned" do
-      assert Application.get_env(:jido_gralkor, :client) == Gralkor.Client.InMemory
+      original = Application.get_env(:jido_gralkor, :client)
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:jido_gralkor, :client)
+          value -> Application.put_env(:jido_gralkor, :client, value)
+        end
+      end)
+
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+      assert Gralkor.Client.impl() == Gralkor.Client.Native
+
+      Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
       assert Gralkor.Client.impl() == Gralkor.Client.InMemory
+    end
+  end
+
+  run_contract(do: fn -> :ok end)
+
+  describe "if flush-and-await receives a timeout that is not a positive integer" do
+    test "then an argument error is raised" do
+      assert_raise ArgumentError, fn -> InMemory.flush_and_await("session", 0) end
+    end
+
+    test "and the error identifies the invalid timeout" do
+      error = assert_raise ArgumentError, fn -> InMemory.flush_and_await("session", 0) end
+      assert Exception.message(error) =~ "timeout_ms"
+      assert Exception.message(error) =~ "0"
+    end
+
+    test "and no backend call is made" do
+      assert_raise ArgumentError, fn -> InMemory.flush_and_await("session", -1) end
+      assert InMemory.flush_and_awaits() == []
     end
   end
 
