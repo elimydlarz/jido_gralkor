@@ -96,7 +96,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           :fresh,
           :uncertain,
           :failed_extraction,
-          :preclaim_complete,
+          :upgrade_partial,
           :preclaim_incomplete,
           :shared
         ],
@@ -273,7 +273,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
 
     test "and upgrade behavior does not expose a possibly partial episode as completed" do
-      assert_verified(:preclaim_complete, &assert_preclaim_complete_contract/0)
+      assert_verified(:upgrade_partial, &assert_upgrade_partial_contract/0)
     end
   end
 
@@ -926,16 +926,90 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     :ok
   end
 
-  defp assert_preclaim_complete_contract do
-    {pool, graphiti} = start_preclaim_graphiti_pool(:reflection_preclaim_complete_graphiti)
-    graph_group_id = Client.sanitize_group_id("observations")
+  defp assert_upgrade_partial_contract do
+    {pool, graphiti} = start_preclaim_graphiti_pool(:reflection_upgrade_partial_graphiti)
+    reflection = hd(Application.fetch_env!(:jido_gralkor, :reflections))
+    output = Enum.find(reflection.outputs, &(&1.kind == :destination))
+    artefact_id = Artefact.id_for("operator-one", "ingestion-partial", "review")
+    artefact = Artefact.new(artefact_id, %{"summary" => "stored"})
+    content = Jason.encode!(Map.from_struct(artefact))
 
+    seed_unmarked_reflection_episode(graphiti, artefact_id, content)
+
+    Pythonx.eval(
+      """
+      import asyncio
+      uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
+      asyncio._gralkor_run(graphiti.driver.execute_query(
+          '''
+          MATCH (episode:Episodic {uuid: $uuid})
+          CREATE (entity:Entity {uuid: $entity, name: 'partial', group_id: episode.group_id})
+          CREATE (episode)-[:MENTIONS {uuid: $mention, group_id: episode.group_id}]->(entity)
+          RETURN entity.uuid AS uuid
+          ''',
+          uuid=uid,
+          entity=f'{uid}-partial-entity',
+          mention=f'{uid}-partial-mention',
+      ))
+      """,
+      %{"graphiti" => graphiti, "uuid" => artefact_id}
+    )
+
+    assert {:ok, %{"extraction_complete" => false}} =
+             GraphitiPool.get_episode(pool, "observations", artefact_id)
+
+    assert {:error, {:incomplete_artefact, ^artefact}} =
+             Gralkor.Destination.Storage.Graphiti.get_artefact(
+               output,
+               reflection.name,
+               "operator-one",
+               artefact_id
+             )
+
+    Application.put_env(
+      :jido_gralkor,
+      :destination_storage,
+      Gralkor.Destination.Storage.Graphiti
+    )
+
+    assert {:ok, []} =
+             Client.search(%Search{
+               operator_id: "operator-one",
+               query: "stored",
+               destinations: ["observations"],
+               result_type: :artefacts,
+               artefact_id: artefact_id
+             })
+
+    assert {:ok, []} =
+             Client.search(%Search{
+               operator_id: "operator-one",
+               query: "stored",
+               destinations: ["observations"],
+               result_type: :artefacts
+             })
+
+    assert {:ok, []} =
+             Client.search(%Search{
+               operator_id: "operator-one",
+               query: "stored",
+               destinations: ["observations"]
+             })
+
+    assert unmarked_episode?(graphiti, artefact_id)
+
+    :ok
+  end
+
+  defp seed_unmarked_reflection_episode(graphiti, artefact_id, content) do
     Pythonx.eval(
       """
       import asyncio
       from datetime import datetime, timezone
       now = datetime.now(timezone.utc)
       group_id = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+      uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
+      body = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
       asyncio._gralkor_run(graphiti.driver.execute_query(
           '''
           CREATE (episode:Episodic {
@@ -947,57 +1021,47 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             content: $content,
             entity_edges: [],
             created_at: $created_at,
-            valid_at: $valid_at,
-            _gralkor_extraction_complete: true
+            valid_at: $valid_at
           })
           RETURN episode.uuid AS uuid
           ''',
-          uuid='preclaim-complete',
-          content='original',
+          uuid=uid,
+          content=body,
           created_at=now,
           valid_at=now,
           group_id=group_id,
       ))
       """,
-      %{"graphiti" => graphiti, "group_id" => graph_group_id}
+      %{
+        "graphiti" => graphiti,
+        "uuid" => artefact_id,
+        "content" => content,
+        "group_id" => Client.sanitize_group_id("observations")
+      }
     )
 
-    assert {:error, {:episode_conflict, "preclaim-complete"}} =
-             GraphitiPool.add_episode(
-               pool,
-               "observations",
-               "conflicting",
-               "reflection:review",
-               nil,
-               uuid: "preclaim-complete"
-             )
+    assert unmarked_episode?(graphiti, artefact_id)
+  end
 
-    {proof, _} =
+  defp unmarked_episode?(graphiti, artefact_id) do
+    {unmarked, _} =
       Pythonx.eval(
         """
         import asyncio
+        uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
         records, _, _ = asyncio._gralkor_run(graphiti.driver.execute_query(
             '''
-            MATCH (episode:Episodic {uuid: 'preclaim-complete'})
-            OPTIONAL MATCH (claim:_GralkorEpisodeClaim {uuid: 'preclaim-complete'})
-            RETURN episode.content AS episode_content,
-                   claim.content AS claim_content
-            '''
+            MATCH (episode:Episodic {uuid: $uuid})
+            RETURN NOT '_gralkor_extraction_complete' IN keys(episode) AS unmarked
+            ''',
+            uuid=uid,
         ))
-        [records[0], graphiti.extractions]
+        records[0]['unmarked']
         """,
-        %{"graphiti" => graphiti}
+        %{"graphiti" => graphiti, "uuid" => artefact_id}
       )
 
-    assert Pythonx.decode(proof) == [
-             %{
-               "claim_content" => "original",
-               "episode_content" => "original"
-             },
-             0
-           ]
-
-    :ok
+    Pythonx.decode(unmarked)
   end
 
   defp assert_preclaim_incomplete_contract do
