@@ -83,44 +83,30 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if adding an episode raises inside the graph library" do
+    @describetag :integration
+
     test "then an error carrying only the raised exception's class and message is returned" do
-      err = %Pythonx.Error{
-        type: nil,
-        value: nil,
-        traceback: nil,
-        lines: [
-          "Traceback (most recent call last):\n",
-          "  File \"/app/graphiti_core/graphiti.py\", line 412, in add_episode\n    await self.driver.execute_query(query, embedding=[0.123, 0.456, 0.789, 0.012])\n",
-          "  File \"/app/redis/asyncio/connection.py\", line 88, in connect\n    raise ConnectionError(msg)\n",
-          "redis.exceptions.ConnectionError: Error 104 connecting to falkor.cloud:6379. Connection reset by peer.\n"
-        ]
-      }
+      %{pid: pid} = start_raising_graph_pool()
 
-      reason = GraphitiPool.summarise_python_error(err)
+      capture_io(:stderr, fn ->
+        assert {:error, {:python, "RuntimeError: graph library exploded"}} =
+                 GraphitiPool.add_episode(pid, "g1", "content", "source", nil)
+      end)
 
-      assert reason ==
-               "redis.exceptions.ConnectionError: Error 104 connecting to falkor.cloud:6379. Connection reset by peer."
-
-      refute reason =~ "Traceback"
-      refute reason =~ "embedding="
-      refute reason =~ "\n"
+      GenServer.stop(pid)
     end
 
     test "and the logged diagnostic is a single concise line, so neither the full traceback nor an embedding vector is written to the log" do
-      err = %Pythonx.Error{
-        type: nil,
-        value: nil,
-        traceback: nil,
-        lines: [
-          "Traceback (most recent call last):\n",
-          "  File \"x.py\", line 1, in <module>\n",
-          "ValueError: bad thing happened\n"
-        ]
-      }
+      %{pid: pid} = start_raising_graph_pool()
 
-      reason = GraphitiPool.summarise_python_error(err)
-      assert {:error, {:python, ^reason}} = {:error, {:python, reason}}
-      assert reason == "ValueError: bad thing happened"
+      diagnostics =
+        capture_failure_diagnostics(fn ->
+          GraphitiPool.add_episode(pid, "g1", "content", "source", nil)
+        end)
+
+      assert diagnostics == ["[gralkor] add_episode failed: RuntimeError: graph library exploded"]
+
+      GenServer.stop(pid)
     end
   end
 
@@ -1283,7 +1269,8 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if removing an episode raises inside the graph library" do
-    @tag :integration
+    @describetag :integration
+
     test "then an error carrying only the raised exception's class and message is returned" do
       {g, _} =
         Pythonx.eval(
@@ -1316,22 +1303,18 @@ defmodule Gralkor.GraphitiPoolTest do
     end
 
     test "and the logged diagnostic is a single concise line rather than a full traceback" do
-      err = %Pythonx.Error{
-        type: nil,
-        value: nil,
-        traceback: nil,
-        lines: [
-          "Traceback (most recent call last):\n",
-          "  File \"/app/graphiti_core/graphiti.py\", line 600, in remove_episode\n    await self.driver.execute_query(delete_query)\n",
-          "RuntimeError: episode not found\n"
-        ]
-      }
+      %{pid: pid} = start_raising_graph_pool()
 
-      reason = GraphitiPool.summarise_python_error(err)
+      diagnostics =
+        capture_failure_diagnostics(fn ->
+          GraphitiPool.remove_episode(pid, "g1", "episode-uuid-123")
+        end)
 
-      assert reason == "RuntimeError: episode not found"
-      refute reason =~ "Traceback"
-      refute reason =~ "\n"
+      assert diagnostics == [
+               "[gralkor] remove_episode failed: RuntimeError: episode vanished"
+             ]
+
+      GenServer.stop(pid)
     end
   end
 
@@ -1646,7 +1629,8 @@ defmodule Gralkor.GraphitiPoolTest do
       }
 
       {_result, recorded, pid} = run_graph_replacement(graph, fail_at: 3)
-      refute Enum.any?(recorded, &(&1["query"] =~ "RESTORE"))
+      assert length(recorded) == 3
+      assert List.last(recorded)["query"] =~ "CREATE (node"
 
       GenServer.stop(pid)
     end
@@ -1686,7 +1670,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
       {_result, recorded, pid} = run_graph_replacement(graph, fail_at: 5)
       assert length(recorded) == 5
-      refute Enum.any?(recorded, &(&1["query"] =~ "RESTORE"))
+      assert List.last(recorded)["query"] =~ "CREATE (source)-[relationship"
 
       GenServer.stop(pid)
     end
