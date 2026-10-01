@@ -340,7 +340,7 @@ defmodule JidoGralkor.PluginTest do
       signal =
         Signal.new!(
           "ai.react.query",
-          %{query: "hi", tool_context: %{lens: "observations"}},
+          %{query: "hi", tool_context: %{lens: "notes"}},
           source: "/test"
         )
 
@@ -350,10 +350,10 @@ defmodule JidoGralkor.PluginTest do
 
       assert {:ok,
               {:continue,
-               %Signal{data: %{tool_context: %{lens: "observations"}, extra_refs: refs}}}} =
+               %Signal{data: %{tool_context: %{lens: "notes"}, extra_refs: refs}}}} =
                Plugin.handle_signal(signal, context(lens_agent))
 
-      assert refs.jido_gralkor_lens == "observations"
+      assert refs.jido_gralkor_lens == "notes"
     end
 
     test "and the selected Lens remains available to completion and failure capture" do
@@ -364,7 +364,7 @@ defmodule JidoGralkor.PluginTest do
       signal =
         Signal.new!(
           "ai.react.query",
-          %{query: "hi", tool_context: %{lens: "observations"}},
+          %{query: "hi", tool_context: %{lens: "notes"}},
           source: "/test"
         )
 
@@ -392,7 +392,7 @@ defmodule JidoGralkor.PluginTest do
 
       assert {:ok, :continue} = Plugin.handle_signal(completed, context(completion_agent))
 
-      assert [[_, %Gralkor.Capture{route: {:lenses, ["observations"]}}]] = InMemory.captures()
+      assert [[_, %Gralkor.Capture{route: {:lenses, ["notes"]}}]] = InMemory.captures()
 
       InMemory.reset()
       InMemory.set_capture(:ok)
@@ -401,7 +401,7 @@ defmodule JidoGralkor.PluginTest do
         Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
 
       assert {:ok, :continue} = Plugin.handle_signal(failed, context(completion_agent))
-      assert [[_, %Gralkor.Capture{route: {:lenses, ["observations"]}}]] = InMemory.captures()
+      assert [[_, %Gralkor.Capture{route: {:lenses, ["notes"]}}]] = InMemory.captures()
     end
   end
 
