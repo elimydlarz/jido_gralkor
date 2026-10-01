@@ -1227,9 +1227,23 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
           gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
 
+          class ClaimAdmissionRecordingDriver(FalkorDriver):
+              async def execute_query(self, cypher_query_, **kwargs):
+                  if 'MERGE (c:_GralkorEpisodeClaim' in cypher_query_:
+                      constraints = await self._get_graph(self._database).list_constraints()
+                      self.claim_admissions.append(any(
+                          constraint.get('type') == 'UNIQUE'
+                          and constraint.get('label') == '_GralkorEpisodeClaim'
+                          and constraint.get('properties') == ['uuid']
+                          and str(constraint.get('status')).upper() == 'OPERATIONAL'
+                          for constraint in constraints
+                      ))
+                  return await super().execute_query(cypher_query_, **kwargs)
+
           class SharedClaimGraphitiContract:
               def __init__(self):
-                  self.driver = FalkorDriver(falkor_db=database, database=gid)
+                  self.driver = ClaimAdmissionRecordingDriver(falkor_db=database, database=gid)
+                  self.driver.claim_admissions = []
                   self.extractions = 0
                   self.wait_for_replacement_owner = False
 
@@ -1239,6 +1253,26 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                   from graphiti_core.graphiti import add_nodes_and_edges_bulk
                   from graphiti_core.nodes import EntityNode, EpisodicNode
                   self.extractions += 1
+
+                  if kwargs['uuid'] == 'embedded-marker-fenced':
+                      episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                      await episode.save(self.driver)
+                      await self.driver.execute_query(
+                          '''
+                          CREATE (entity:Entity {uuid: 'embedded-marker-fenced-entity', group_id: $group_id})
+                          RETURN entity.uuid AS uuid
+                          ''',
+                          group_id=gid,
+                      )
+                      await self.driver.execute_query(
+                          '''
+                          MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+                          SET c.owner = 'replacement-owner', c.generation = c.generation + 1
+                          RETURN c.generation AS generation
+                          ''',
+                          uuid=kwargs['uuid'],
+                      )
+                      return
 
                   if (
                       kwargs['uuid'] == 'embedded-stolen-claim'
