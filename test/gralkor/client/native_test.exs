@@ -523,7 +523,8 @@ defmodule Gralkor.Client.NativeTest do
       :ok = stop_supervised(CaptureBuffer)
 
       start_supervised!(
-        {CaptureBuffer, flush_callback: Gralkor.Application.build_flush_callback(nil), retries: []}
+        {CaptureBuffer,
+         flush_callback: Gralkor.Application.build_flush_callback(nil), retries: []}
       )
 
       :ok =
