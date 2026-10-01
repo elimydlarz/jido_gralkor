@@ -51,10 +51,15 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
                 if self.add_delay:
                     import asyncio
                     await asyncio.sleep(self.add_delay)
+                from graphiti_core.nodes import EpisodicNode
+                guard = getattr(EpisodicNode, '_gralkor_requested_uuid_guard', None)
+                context = guard.get() if guard is not None else None
                 self.recorded["episodes"].append({
                     "group_id": kwargs.get("group_id"),
                     "body": kwargs.get("episode_body"),
                     "source_description": kwargs.get("source_description"),
+                    "source": getattr(kwargs.get("source"), "value", None),
+                    "writer": context.get("writer") if context is not None else None,
                     "entity_types": sorted((kwargs.get("entity_types") or {}).keys()),
                 })
 
@@ -249,6 +254,8 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       assert episode, "expected a captured episode to reach the graph"
       assert episode["group_id"] == Client.sanitize_group_id("personal/operator-one")
       assert episode["body"] =~ "teal"
+      assert episode["writer"] == "direct"
+      assert episode["source"] == "message"
     end
 
     test "and a second flush writes no duplicate transcript", %{g: g} do
