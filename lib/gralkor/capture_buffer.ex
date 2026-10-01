@@ -745,15 +745,14 @@ defmodule Gralkor.CaptureBuffer do
     end)
   end
 
-  defp do_flush_lenses(entry, callback, retries) when is_function(callback) do
+  defp do_flush_lenses(entry, callback, retries) when is_function(callback, 7) do
     first_error =
       Enum.reduce(entry.lens_order, nil, fn lens_name, first_error ->
         turns = Map.fetch!(entry.batches, lens_name)
         lens = Map.get(entry, :resolved_lenses, %{}) |> Map.get(lens_name, lens_name)
 
         invoke = fn operator_id, agent_name, user_name, lens_name, lens_turns ->
-          invoke_lens_callback(
-            callback,
+          callback.(
             operator_id,
             agent_name,
             user_name,
@@ -905,31 +904,6 @@ defmodule Gralkor.CaptureBuffer do
           Logger.error("[gralkor] capture flush worker exited — #{inspect(reason)}")
       end
     end)
-  end
-
-  defp invoke_lens_callback(
-         callback,
-         operator_id,
-         agent_name,
-         user_name,
-         lens,
-         turns,
-         ingestion_id,
-         runtime_owner
-       ) do
-    cond do
-      is_function(callback, 7) ->
-        callback.(operator_id, agent_name, user_name, lens, turns, ingestion_id, runtime_owner)
-
-      is_function(callback, 6) ->
-        callback.(operator_id, agent_name, user_name, lens, turns, ingestion_id)
-
-      is_function(callback, 5) ->
-        callback.(operator_id, agent_name, user_name, lens, turns)
-
-      true ->
-        {:error, {:invalid_lens_flush_callback, callback}}
-    end
   end
 
   defp ingestion_id(session_id) do
