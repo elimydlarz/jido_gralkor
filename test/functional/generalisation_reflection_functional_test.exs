@@ -316,8 +316,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                reflect!(start_agent(), fn request ->
                  send(
                    parent,
-                   {:empty_search_inference, request.representations,
-                    request.stored_information}
+                   {:empty_search_inference, request.representations, request.stored_information}
                  )
 
                  output_for(request)
@@ -362,8 +361,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       assert %{
                outcome:
-                 {:production_failed,
-                  %{reason: {:related_memory_search, :memory_unavailable}}}
+                 {:production_failed, %{reason: {:related_memory_search, :memory_unavailable}}}
              } = reflect!(agent, &output_for/1)
 
       assert representation_memory(agent) == before
@@ -475,7 +473,8 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       influencing =
         Gralkor.Artefact.new("influencing-generalisations", %{
-          "generalisations" => Enum.map(influencing_generalisations(), &Map.put(&1, "evolves_from", []))
+          "generalisations" =>
+            Enum.map(influencing_generalisations(), &Map.put(&1, "evolves_from", []))
         })
 
       assert :ok = put_prior_generalisation("operator-one", influencing)
