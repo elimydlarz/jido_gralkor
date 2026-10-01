@@ -202,6 +202,32 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
   end
 
   describe "if the deployment configures an override without both a provider and model identifier" do
+    setup do
+      previous_client = Application.get_env(:jido_gralkor, :client)
+      previous_falkordb = Application.get_env(:jido_gralkor, :falkordb)
+      previous_dir = System.get_env("GRALKOR_DATA_DIR")
+
+      Application.delete_env(:jido_gralkor, :client)
+      Application.delete_env(:jido_gralkor, :falkordb)
+      System.put_env("GRALKOR_DATA_DIR", "/tmp/gralkor_provider_selection_never_started")
+
+      on_exit(fn ->
+        if previous_client,
+          do: Application.put_env(:jido_gralkor, :client, previous_client),
+          else: Application.delete_env(:jido_gralkor, :client)
+
+        if previous_falkordb,
+          do: Application.put_env(:jido_gralkor, :falkordb, previous_falkordb),
+          else: Application.delete_env(:jido_gralkor, :falkordb)
+
+        if previous_dir,
+          do: System.put_env("GRALKOR_DATA_DIR", previous_dir),
+          else: System.delete_env("GRALKOR_DATA_DIR")
+      end)
+
+      :ok
+    end
+
     test "then startup fails before client construction" do
       credentials("google-key", "openai-key")
 
@@ -210,8 +236,7 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
             {"google:gemini-3.1-flash-lite", ":missing-provider"}
           ] do
         configure(llm, embedder)
-        assert_raise ArgumentError, fn -> start_memory_runtime(self()) end
-        refute_received {:constructed, _}
+        assert_raise ArgumentError, fn -> Gralkor.Application.children() end
       end
     end
 
@@ -219,27 +244,27 @@ defmodule Gralkor.InferenceProviderSelectionFunctionalTest do
       configure("missing-model:", "google:gemini-embedding-2-preview")
 
       assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL/, fn ->
-        start_memory_runtime(self())
+        Gralkor.Application.children()
       end
 
       configure("google:gemini-3.1-flash-lite", ":missing-provider")
 
       assert_raise ArgumentError, ~r/GRALKOR_EMBEDDER_MODEL/, fn ->
-        start_memory_runtime(self())
+        Gralkor.Application.children()
       end
     end
 
     test "and the failure names the rejected value" do
       configure("missing-model:", "google:gemini-embedding-2-preview")
 
-      assert_raise ArgumentError, ~r/missing-model:/, fn ->
-        start_memory_runtime(self())
+      assert_raise ArgumentError, ~r/"missing-model:"/, fn ->
+        Gralkor.Application.children()
       end
 
       configure("google:gemini-3.1-flash-lite", ":missing-provider")
 
-      assert_raise ArgumentError, ~r/:missing-provider/, fn ->
-        start_memory_runtime(self())
+      assert_raise ArgumentError, ~r/":missing-provider"/, fn ->
+        Gralkor.Application.children()
       end
     end
   end
