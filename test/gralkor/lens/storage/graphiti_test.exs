@@ -247,34 +247,31 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
   describe "when a Lens store adds an episode to the `global` Destination" do
     test "then graph add receives the group named `global` for every operator" do
-      store = %Store{
-        operator_id: "operator-one",
-        lens: lens("published-observations", "global")
-      }
-
       test_pid = self()
 
-      add_episode_fn = fn group_id, content, source_description, ontology, opts ->
-        send(
-          test_pid,
-          {:graph_add, group_id, content, source_description, ontology, opts}
-        )
-
+      add_episode_fn = fn group_id, _content, _source_description, _ontology, _opts ->
+        send(test_pid, {:graph_add, group_id})
         :ok
       end
 
-      assert :ok =
-               Graphiti.add_episode(store, "public fact", "publication",
-                 add_episode_fn: add_episode_fn
-               )
+      for operator_id <- ["operator-one", "operator-two"] do
+        store = %Store{
+          operator_id: operator_id,
+          lens: lens("published-observations", "global")
+        }
 
-      assert_receive {:graph_add, "global", _, _, _, _}
+        assert :ok =
+                 Graphiti.add_episode(store, "public fact", "publication",
+                   add_episode_fn: add_episode_fn
+                 )
+
+        assert_receive {:graph_add, "global"}
+      end
     end
   end
 
   describe "when a Lens store adds an episode to an application Destination" do
     test "then graph add receives the group named for that Destination for every operator" do
-      store = %Store{operator_id: "operator-one", lens: lens("observations", "observations")}
       test_pid = self()
 
       add_episode_fn = fn group_id, _, _, _, _ ->
@@ -282,8 +279,14 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
         :ok
       end
 
-      assert :ok = Graphiti.add_episode(store, "fact", "source", add_episode_fn: add_episode_fn)
-      assert_receive {:graph_add, "observations"}
+      for operator_id <- ["operator-one", "operator-two"] do
+        store = %Store{operator_id: operator_id, lens: lens("observations", "observations")}
+
+        assert :ok =
+                 Graphiti.add_episode(store, "fact", "source", add_episode_fn: add_episode_fn)
+
+        assert_receive {:graph_add, "observations"}
+      end
     end
   end
 
@@ -358,12 +361,14 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
         :ok
       end
 
-      assert :ok =
-               Graphiti.replace_graph(replaceable_store(:global), property_graph(),
-                 replace_graph_fn: replace_graph_fn
-               )
+      for operator_id <- ["operator-one", "operator-two"] do
+        assert :ok =
+                 Graphiti.replace_graph(replaceable_store(:global, operator_id), property_graph(),
+                   replace_graph_fn: replace_graph_fn
+                 )
 
-      assert_receive {:graph_replaced, "global"}
+        assert_receive {:graph_replaced, "global"}
+      end
     end
 
     test "and graph replacement receives the selected Lens name" do
@@ -421,12 +426,16 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
         :ok
       end
 
-      assert :ok =
-               Graphiti.replace_graph(replaceable_store(:application), property_graph(),
-                 replace_graph_fn: replace_graph_fn
-               )
+      for operator_id <- ["operator-one", "operator-two"] do
+        assert :ok =
+                 Graphiti.replace_graph(
+                   replaceable_store(:application, operator_id),
+                   property_graph(),
+                   replace_graph_fn: replace_graph_fn
+                 )
 
-      assert_receive {:graph_replaced, "systems"}
+        assert_receive {:graph_replaced, "systems"}
+      end
     end
 
     test "and graph replacement receives the selected Lens name" do
@@ -496,9 +505,9 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  defp replaceable_store(scope) do
+  defp replaceable_store(scope, operator_id \\ "operator-one") do
     %Store{
-      operator_id: "operator-one",
+      operator_id: operator_id,
       lens: %Replaceable{
         name: "systems",
         destination: destination(destination_name(scope))
