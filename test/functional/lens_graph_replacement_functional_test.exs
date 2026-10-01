@@ -457,7 +457,8 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
       falkordb = use_graphiti_boundary()
       assert :ok = Client.replace(request(connected_graph("existing")))
 
-      assert %{"nodes" => [_, _], "relationships" => [_]} = falkordb_graph(falkordb)
+      assert %{"nodes" => [_manual, _existing, _target], "relationships" => [_]} =
+               falkordb_graph(falkordb)
 
       Pythonx.eval("falkordb.fail_creates = True", %{"falkordb" => falkordb})
       Pythonx.eval("falkordb.queries = []", %{"falkordb" => falkordb})
