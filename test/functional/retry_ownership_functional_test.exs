@@ -472,8 +472,11 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
       production = retryable_production_abandonment("retryable-production-callback")
       refute Map.has_key?(production, :artefact)
 
-      assert {:abandoned, %{stage: :production, reason: %{status: 503}}} =
-               production.outcome
+      assert {:abandoned,
+              %{
+                stage: :production,
+                reason: %{reflection: "review", step: "review", reason: %{status: 503}}
+              }} = production.outcome
 
       related_memory = retryable_related_memory_abandonment("retryable-related-callback")
       refute Map.has_key?(related_memory, :artefact)
