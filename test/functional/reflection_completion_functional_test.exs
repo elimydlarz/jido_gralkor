@@ -1564,7 +1564,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                        mention.uuid AS mention,
                        relation.uuid AS relation,
                        labels(left) AS left_labels,
-                       left.labels AS left_labels_property
+                       left.labels AS left_labels_property,
+                       labels(right) AS right_labels,
+                       right.labels AS right_labels_property
                 '''
             )
             return records[0]
@@ -1578,10 +1580,13 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
              "mention" => "embedded-bulk-created-mention",
              "relation" => "embedded-bulk-created-relation",
              "left_labels" => left_labels,
-             "left_labels_property" => nil
+             "left_labels_property" => nil,
+             "right_labels" => right_labels,
+             "right_labels_property" => nil
            } = Pythonx.decode(bulk_created_proof)
 
     assert Enum.sort(left_labels) == ["Entity", "Person"]
+    assert Enum.sort(right_labels) == ["Entity", "Person", "Team Member"]
 
     Pythonx.eval(
       """
@@ -1615,10 +1620,113 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                "embedded-stolen-claim"
              )
 
+    assert_completion_marker_fenced(first_pool, first_graph, graph_group_id)
+    assert_graph_server_time_expiry(first_pool, first_graph, graph_group_id)
+    assert_claim_uniqueness_constraint(first_graph, second_graph)
+
+    :ok
+  end
+
+  defp assert_completion_marker_fenced(pool, graph, graph_group_id) do
+    Pythonx.eval(
+      """
+      import asyncio
+      from datetime import datetime, timezone
+      now = datetime.now(timezone.utc)
+      group_id = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+      asyncio._gralkor_run(graph.driver.execute_query(
+          '''
+          CREATE (episode:Episodic {
+            uuid: 'embedded-marker-fenced',
+            name: 'committed graph effects',
+            group_id: $group_id,
+            source: 'text',
+            source_description: 'source',
+            content: 'same',
+            entity_edges: [],
+            created_at: $now,
+            valid_at: $now
+          })
+          RETURN episode.uuid AS uuid
+          ''',
+          group_id=group_id,
+          now=now,
+      ))
+      """,
+      %{"graph" => graph, "group_id" => graph_group_id}
+    )
+
+    assert {:error, {:python, marker_error}} =
+             GraphitiPool.add_episode(pool, "observations", "same", "source", nil,
+               uuid: "embedded-marker-fenced"
+             )
+
+    assert marker_error =~ "episode claim lost before completion"
+
+    assert {:ok, %{"extraction_complete" => false}} =
+             GraphitiPool.get_episode(pool, "observations", "embedded-marker-fenced")
+
+    {marker_proof, _} =
+      Pythonx.eval(
+        """
+        import asyncio
+        records, _, _ = asyncio._gralkor_run(graph.driver.execute_query(
+            '''
+            MATCH (episode:Episodic {uuid: 'embedded-marker-fenced'})
+            MATCH (entity:Entity {uuid: 'embedded-marker-fenced-entity'})
+            MATCH (claim:_GralkorEpisodeClaim {uuid: 'embedded-marker-fenced'})
+            RETURN episode._gralkor_extraction_complete AS complete,
+                   claim.owner AS owner
+            '''
+        ))
+        records[0]
+        """,
+        %{"graph" => graph}
+      )
+
+    assert Pythonx.decode(marker_proof) == %{"complete" => nil, "owner" => "replacement-owner"}
+  end
+
+  defp assert_graph_server_time_expiry(pool, graph, graph_group_id) do
+    seed_server_lease(graph, graph_group_id, "embedded-server-expired", "expired-owner", -1)
+
+    with_python_clock_offset(-1_000_000, fn ->
+      assert :ok =
+               GraphitiPool.add_episode(pool, "observations", "same", "source", nil,
+                 uuid: "embedded-server-expired"
+               )
+    end)
+
+    assert server_claim(graph, "embedded-server-expired")["generation"] == 8
+
+    seed_server_lease(graph, graph_group_id, "embedded-server-live", "live-owner", 1_500)
+
+    with_python_clock_offset(1_000_000, fn ->
+      live_write =
+        Task.async(fn ->
+          GraphitiPool.add_episode(pool, "observations", "same", "source", nil,
+            uuid: "embedded-server-live"
+          )
+        end)
+
+      Process.sleep(500)
+
+      assert %{"owner" => "live-owner", "generation" => 7} =
+               server_claim(graph, "embedded-server-live")
+
+      assert :ok = Task.await(live_write, 30_000)
+    end)
+
+    assert server_claim(graph, "embedded-server-live")["generation"] == 8
+  end
+
+  defp seed_server_lease(graph, graph_group_id, uuid, owner, lease_offset_ms) do
     Pythonx.eval(
       """
       import asyncio
       group_id = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+      uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
+      holder = owner.decode('utf-8') if isinstance(owner, (bytes, bytearray)) else owner
       asyncio._gralkor_run(graph.driver.execute_query(
           '''
           MERGE (c:_GralkorEpisodeClaim {uuid: $uuid})
@@ -1627,44 +1735,103 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             c.content = 'same',
             c.source = 'text',
             c.source_description = 'source',
-            c.owner = 'expired-owner',
+            c.owner = $owner,
             c.generation = 7,
-            c.lease_until_ms = timestamp() - 1
+            c.lease_until_ms = timestamp() + $lease_offset_ms
           RETURN c.generation AS generation
           ''',
-          uuid='embedded-server-expired',
+          uuid=uid,
           group_id=group_id,
+          owner=holder,
+          lease_offset_ms=lease_offset_ms,
       ))
       """,
-      %{"graph" => first_graph, "group_id" => graph_group_id}
+      %{
+        "graph" => graph,
+        "group_id" => graph_group_id,
+        "uuid" => uuid,
+        "owner" => owner,
+        "lease_offset_ms" => lease_offset_ms
+      }
+    )
+  end
+
+  defp server_claim(graph, uuid) do
+    {claim, _} =
+      Pythonx.eval(
+        """
+        import asyncio
+        uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
+        records, _, _ = asyncio._gralkor_run(graph.driver.execute_query(
+            'MATCH (c:_GralkorEpisodeClaim {uuid: $uuid}) RETURN c.owner AS owner, c.generation AS generation',
+            uuid=uid,
+        ))
+        records[0]
+        """,
+        %{"graph" => graph, "uuid" => uuid}
+      )
+
+    Pythonx.decode(claim)
+  end
+
+  defp with_python_clock_offset(offset_seconds, operation) do
+    Pythonx.eval(
+      """
+      import time
+      if not hasattr(time, '_gralkor_test_real_time'):
+          time._gralkor_test_real_time = time.time
+      real_time = time._gralkor_test_real_time
+      time.time = lambda: real_time() + offset_seconds
+      None
+      """,
+      %{"offset_seconds" => offset_seconds}
     )
 
-    assert :ok =
-             GraphitiPool.add_episode(
-               first_pool,
-               "observations",
-               "same",
-               "source",
-               nil,
-               uuid: "embedded-server-expired"
-             )
+    try do
+      operation.()
+    after
+      Pythonx.eval("import time\ntime.time = time._gralkor_test_real_time\nNone", %{})
+    end
+  end
 
+  defp assert_claim_uniqueness_constraint(first_graph, second_graph) do
     {proof, _} =
       Pythonx.eval(
         """
         import asyncio
-        records, _, _ = asyncio._gralkor_run(first.driver.execute_query(
-            'MATCH (c:_GralkorEpisodeClaim {uuid: $uuid}) RETURN c.generation AS generation',
-            uuid='embedded-server-expired',
-        ))
-        records[0]['generation']
+        async def constraint_proof():
+            graph = first.driver._get_graph(first.driver._database)
+            constraints = await graph.list_constraints()
+            matching = [
+                [constraint['type'], constraint['label'], constraint['properties'], str(constraint['status']).upper()]
+                for constraint in constraints
+                if constraint.get('label') == '_GralkorEpisodeClaim'
+            ]
+            try:
+                await graph.query(
+                    "CREATE (:_GralkorEpisodeClaim {uuid: 'embedded-shared-equal'})"
+                )
+                duplicate_rejected = False
+            except Exception:
+                duplicate_rejected = True
+            return {
+                'constraints': matching,
+                'duplicate_rejected': duplicate_rejected,
+                'admissions': first.driver.claim_admissions + second.driver.claim_admissions,
+            }
+        asyncio._gralkor_run(constraint_proof())
         """,
         %{"first" => first_graph, "second" => second_graph}
       )
 
-    assert Pythonx.decode(proof) == 8
+    assert %{
+             "constraints" => [["UNIQUE", "_GralkorEpisodeClaim", ["uuid"], "OPERATIONAL"]],
+             "duplicate_rejected" => true,
+             "admissions" => admissions
+           } = Pythonx.decode(proof)
 
-    :ok
+    assert admissions != []
+    assert Enum.all?(admissions)
   end
 
   defp eventually(assertion, attempts \\ 100)
