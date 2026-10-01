@@ -229,6 +229,11 @@ test(
     await context.test("then publishing stops before changing release state", async () => {
       const skill = await readFile(skillUrl, "utf8");
 
+      assert.match(skill, /Reject a version selection other than `major`, `minor`, `patch`, or `current`\./);
+      assert.match(skill, /Require non-empty `HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>\/\.env`\./);
+      assert.match(skill, /Require the authenticated Hex user to equal `elimydlarz`\./);
+      assert.match(skill, /Require the current branch to be the remote default branch\./);
+      assert.match(skill, /Require the local commit to equal the remote branch tip\./);
       assert.match(skill, /Stop if the worktree contains changes outside the current trunk-sync session/);
       assert.match(skill, /Require no other active trunk-sync session on the current branch/);
       assert.match(skill, /Require both credentials before running tests or editing files/);
