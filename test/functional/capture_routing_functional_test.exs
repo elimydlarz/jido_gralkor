@@ -6,7 +6,30 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
   alias Gralkor.Client
   alias Gralkor.Message
 
+  defmodule RoutingOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity Routine, "A recurring routine the user follows." do
+      field(:name, :string, required: true)
+    end
+  end
+
+  defmodule RecordingIngestion do
+    @behaviour Gralkor.Lens.Ingestion
+
+    @impl true
+    def ingest(request, store) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :capture_routing_test_pid),
+        {:lens_ingested, store.lens.name, store.lens.destination.name, store.lens.ontology}
+      )
+
+      Gralkor.Lens.Store.add(store, request.content, request.source_description)
+    end
+  end
+
   setup do
+    Application.put_env(:jido_gralkor, :capture_routing_test_pid, self())
     previous_client = Application.get_env(:jido_gralkor, :client)
     previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
@@ -41,6 +64,8 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
     )
 
     on_exit(fn ->
+      Application.delete_env(:jido_gralkor, :capture_routing_test_pid)
+
       if previous_storage,
         do: Application.put_env(:jido_gralkor, :lens_storage, previous_storage),
         else: Application.delete_env(:jido_gralkor, :lens_storage)
@@ -91,6 +116,7 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
       assert [%{content: "Eli: one", lens: "shared"}] =
                Gralkor.Lens.Storage.InMemory.episodes("shared")
 
+      assert_receive {:lens_ingested, "shared", "shared", RoutingOntology}
       assert episodes() == []
     end
 
@@ -150,6 +176,7 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
       stop_supervised!(JidoGralkor.Runtime)
       assert :ok = Client.impl().flush_and_await("capture-session", 1_000)
       assert [%{lens: "first", content: "Eli: old configuration"}] = episodes()
+      assert_receive {:lens_ingested, "first", "personal", RoutingOntology}
 
       assert_receive {:direct_write, "personal/Owner:Case/001", "Eli: private", _,
                       Gralkor.DefaultOntology, _}
@@ -353,7 +380,8 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
             name: &1,
             destination: if(&1 == "shared", do: "shared", else: "personal"),
             write: :append,
-            ingestion: Gralkor.Lens.Ingestion.Store
+            ontology: if(&1 == "second", do: Gralkor.DefaultOntology, else: RoutingOntology),
+            ingestion: if(&1 == "second", do: Gralkor.Lens.Ingestion.Store, else: RecordingIngestion)
           }
         ),
       reflections: []
