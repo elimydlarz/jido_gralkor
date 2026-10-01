@@ -163,15 +163,18 @@ defmodule Gralkor.CaptureRequestIntegrationTest do
 
   describe "when a capture request resolves through its owning runtime > if a selected Destination or Lens is unknown or retired" do
     test "then resolution fails before any turn can be buffered" do
-      for route <- [
-            {:direct, "unknown"},
-            {:direct, "operator"},
-            {:lenses, ["unknown"]},
-            {:lenses, ["operator"]}
+      for {route, rejected} <- [
+            {{:direct, "unknown"}, "unknown"},
+            {{:direct, "operator"}, "operator"},
+            {{:lenses, ["unknown"]}, "unknown"},
+            {{:lenses, ["operator"]}, "operator"}
           ] do
-        assert_raise ArgumentError, fn ->
-          Capture.resolve!(self(), %{request() | route: route})
-        end
+        error =
+          assert_raise ArgumentError, fn ->
+            Capture.resolve!(self(), %{request() | route: route})
+          end
+
+        assert Exception.message(error) =~ inspect(rejected)
       end
     end
   end
