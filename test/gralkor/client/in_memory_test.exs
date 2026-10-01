@@ -110,11 +110,8 @@ defmodule Gralkor.Client.InMemoryTest do
         end
       end)
 
-      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
-      assert Gralkor.Client.impl() == Gralkor.Client.Native
-
-      Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
-      assert Gralkor.Client.impl() == Gralkor.Client.InMemory
+      Application.put_env(:jido_gralkor, :client, __MODULE__)
+      assert Gralkor.Client.impl() == __MODULE__
     end
   end
 
