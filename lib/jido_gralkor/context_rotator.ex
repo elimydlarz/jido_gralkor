@@ -69,7 +69,6 @@ defmodule JidoGralkor.ContextRotator do
   def rotate_now(agent_pid, opts \\ []) when is_pid(agent_pid) do
     flush_timeout_ms = Keyword.get(opts, :flush_timeout_ms, @default_flush_timeout_ms)
     keep_last_n = Keyword.get(opts, :keep_last_n, @default_keep_last_n)
-    install_thread_fn = Keyword.get(opts, :install_thread_fn, &install_thread/4)
 
     case fetch_thread(agent_pid) do
       {:ok, nil} ->
@@ -84,12 +83,7 @@ defmodule JidoGralkor.ContextRotator do
             new_session_id = mint_session_id()
             retained_count = length(retain_tail(pre_flush_entries, keep_last_n))
 
-            case install_thread_fn.(
-                   agent_pid,
-                   new_session_id,
-                   pre_flush_entries,
-                   keep_last_n
-                 ) do
+            case install_thread(agent_pid, new_session_id, pre_flush_entries, keep_last_n) do
               {:ok, seed_count} ->
                 Logger.info(
                   "[jido_gralkor] context rotated — session:#{session_id}→#{new_session_id} kept:#{retained_count} inflight:#{seed_count - retained_count}"
@@ -179,9 +173,7 @@ defmodule JidoGralkor.ContextRotator do
     Enum.take(entries, -n)
   end
 
-  @doc false
-  def install_thread(agent_pid, new_session_id, pre_flush_entries, keep_last_n)
-      when is_pid(agent_pid) do
+  defp install_thread(agent_pid, new_session_id, pre_flush_entries, keep_last_n) do
     try do
       updated_state =
         :sys.replace_state(agent_pid, fn server_state ->
