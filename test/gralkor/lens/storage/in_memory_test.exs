@@ -8,18 +8,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
   alias Gralkor.Lens.Store
 
   setup do
-    previous_storage = Application.get_env(:jido_gralkor, :lens_storage)
-    Application.put_env(:jido_gralkor, :lens_storage, InMemory)
     start_supervised!(InMemory)
-
-    on_exit(fn ->
-      if previous_storage do
-        Application.put_env(:jido_gralkor, :lens_storage, previous_storage)
-      else
-        Application.delete_env(:jido_gralkor, :lens_storage)
-      end
-    end)
-
     :ok
   end
 
@@ -29,10 +18,10 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       decisions = application_store("operator-one", "decisions")
       global = global_store("published-observations")
 
-      assert :ok = Store.add(operator, "first observation", "test")
-      assert :ok = Store.add(decisions, "one decision", "test")
-      assert :ok = Store.add(operator, "second observation", "test")
-      assert :ok = Store.add(global, "public observation", "test")
+      assert :ok = InMemory.add_episode(operator, "first observation", "test")
+      assert :ok = InMemory.add_episode(decisions, "one decision", "test")
+      assert :ok = InMemory.add_episode(operator, "second observation", "test")
+      assert :ok = InMemory.add_episode(global, "public observation", "test")
 
       assert Enum.map(InMemory.episodes(key(operator)), & &1.content) ==
                ["first observation", "second observation"]
@@ -49,9 +38,9 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       published = global_store("published-observations")
       generalisations = global_store("generalisations")
 
-      assert :ok = Store.add(observations, "private", "test")
-      assert :ok = Store.add(published, "public", "test")
-      assert :ok = Store.add(generalisations, "durable", "test")
+      assert :ok = InMemory.add_episode(observations, "private", "test")
+      assert :ok = InMemory.add_episode(published, "public", "test")
+      assert :ok = InMemory.add_episode(generalisations, "durable", "test")
 
       assert [%{lens: "observations"}] =
                InMemory.episodes(key(observations))
@@ -66,20 +55,20 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       observations = application_store("operator-one", "observations")
 
       Enum.each(["first", "second", "third"], fn content ->
-        assert :ok = Store.add(observations, content, "test")
+        assert :ok = InMemory.add_episode(observations, content, "test")
       end)
 
-      assert {:ok, ["first", "second"]} = Store.search(observations, "anything", 2)
+      assert {:ok, ["first", "second"]} = InMemory.search(observations, "anything", 2)
     end
 
     test "and the retained insertion order is preserved" do
       global = global_store("published-observations")
 
       Enum.each(["first", "second", "third"], fn content ->
-        assert :ok = Store.add(global, content, "test")
+        assert :ok = InMemory.add_episode(global, content, "test")
       end)
 
-      assert {:ok, ["first", "second", "third"]} = Store.search(global, "anything", 3)
+      assert {:ok, ["first", "second", "third"]} = InMemory.search(global, "anything", 3)
     end
   end
 
@@ -89,8 +78,8 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       global = replaceable_store("operator-one", "catalogue", :global)
       graph = graph(graph_data("system"))
 
-      assert :ok = Store.replace_graph(local, graph)
-      assert :ok = Store.replace_graph(global, graph)
+      assert :ok = InMemory.replace_graph(local, graph)
+      assert :ok = InMemory.replace_graph(global, graph)
 
       assert %{nodes: [%{id: "system"}]} = InMemory.graph(key(local))
       assert %{nodes: [%{id: "system"}]} = InMemory.graph(key(global))
@@ -124,7 +113,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
           ]
         })
 
-      assert :ok = Store.replace_graph(store, graph)
+      assert :ok = InMemory.replace_graph(store, graph)
 
       assert %{
                nodes: [
@@ -164,7 +153,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
           ]
         })
 
-      assert :ok = Store.replace_graph(store, graph)
+      assert :ok = InMemory.replace_graph(store, graph)
 
       assert %{
                nodes: [
@@ -189,10 +178,10 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
           ]
         })
 
-      assert :ok = Store.replace_graph(systems, first)
+      assert :ok = InMemory.replace_graph(systems, first)
 
       assert :ok =
-               Store.replace_graph(
+               InMemory.replace_graph(
                  systems,
                  graph(graph_data("current"))
                )
@@ -205,13 +194,13 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       systems = replaceable_store("operator-one", "systems", :global)
 
       assert :ok =
-               Store.replace_graph(
+               InMemory.replace_graph(
                  catalogue,
                  graph(graph_data("catalogue"))
                )
 
       assert :ok =
-               Store.replace_graph(
+               InMemory.replace_graph(
                  systems,
                  graph(graph_data("systems"))
                )
@@ -234,7 +223,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       :sys.replace_state(InMemory, &Map.put(&1, {:graph, key(systems)}, unowned_graph))
 
       assert :ok =
-               Store.replace_graph(
+               InMemory.replace_graph(
                  systems,
                  graph(graph_data("systems"))
                )
@@ -260,7 +249,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       )
 
       assert :ok =
-               Store.replace_graph(
+               InMemory.replace_graph(
                  systems,
                  graph(graph_data("systems"))
                )
@@ -276,19 +265,19 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       systems = replaceable_store("operator-one", "systems", :global)
 
       assert :ok =
-               Store.replace_graph(
+               InMemory.replace_graph(
                  systems,
                  graph(graph_data("old"))
                )
 
-      assert :ok = Store.replace_graph(systems, empty_graph())
+      assert :ok = InMemory.replace_graph(systems, empty_graph())
       assert InMemory.graph(key(systems)) == %{nodes: [], relationships: []}
     end
 
     test "and no replacement graph content is stored" do
       systems = replaceable_store("operator-one", "systems", :global)
 
-      assert :ok = Store.replace_graph(systems, empty_graph())
+      assert :ok = InMemory.replace_graph(systems, empty_graph())
       assert InMemory.graph(key(systems)) == %{nodes: [], relationships: []}
     end
   end
@@ -299,7 +288,7 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
 
       for id <- ["first", "second", "current"] do
         assert :ok =
-                 Store.replace_graph(
+                 InMemory.replace_graph(
                    systems,
                    graph(graph_data(id))
                  )
@@ -314,8 +303,13 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       local = replaceable_store("operator-one", "systems", :personal)
       global = replaceable_store("operator-one", "systems", :global)
 
-      assert {:ok, []} = Store.search(local, "settlement", 5)
-      assert {:ok, []} = Store.search(global, "settlement", 5)
+      assert :ok = InMemory.add_episode(operator_store("operator-one"), "personal fact", "test")
+
+      assert :ok =
+               InMemory.add_episode(global_store("published-observations"), "global fact", "test")
+
+      assert {:ok, ["personal fact"]} = InMemory.search(local, "settlement", 5)
+      assert {:ok, ["global fact"]} = InMemory.search(global, "settlement", 5)
     end
   end
 
