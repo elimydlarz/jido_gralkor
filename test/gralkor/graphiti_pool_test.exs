@@ -1,6 +1,7 @@
 defmodule Gralkor.GraphitiPoolTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureIO
   import ExUnit.CaptureLog
 
   alias Gralkor.Client
@@ -28,6 +29,43 @@ defmodule Gralkor.GraphitiPoolTest do
 
     {:ok, pid} = GraphitiPool.start_link(Keyword.merge(defaults, opts))
     %{pid: pid, table: table}
+  end
+
+  defp start_raising_graph_pool do
+    {g, _} =
+      Pythonx.eval(
+        """
+        class _FakeGraphiti:
+            async def _write(self, message, embedding):
+                raise RuntimeError(message)
+
+            async def add_episode(self, **kwargs):
+                await self._write("graph library exploded", embedding=[0.123, 0.456, 0.789])
+
+            async def remove_episode(self, uuid):
+                await self._write("episode vanished", embedding=[0.123, 0.456, 0.789])
+
+        _FakeGraphiti()
+        """,
+        %{}
+      )
+
+    start_pool(
+      construct_instance: fn _db, _shared, _group_id -> g end,
+      install_loop_fn: &Gralkor.Python.install_async_runtime/0
+    )
+  end
+
+  defp capture_failure_diagnostics(operation) do
+    parent = self()
+
+    log =
+      capture_log(fn ->
+        send(parent, {:captured_stderr, capture_io(:stderr, operation)})
+      end)
+
+    assert_received {:captured_stderr, stderr}
+    String.split(stderr <> log, "\n", trim: true)
   end
 
   defp start_embedded_pool(data_dir, opts \\ []) do
