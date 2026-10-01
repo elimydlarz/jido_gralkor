@@ -557,7 +557,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     test "and the manifest reports the installed Graphiti and connected FalkorDB versions",
          context do
       assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
-      assert manifest["versions"]["graphiti"] == "0.29.3"
+      assert manifest["versions"]["graphiti"] == "0.30.2"
 
       assert Enum.any?(
                manifest["versions"]["modules"],
