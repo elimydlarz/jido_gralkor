@@ -13,7 +13,6 @@ defmodule JidoGralkor.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       aliases: aliases(),
-      test_coverage: [summary: [threshold: 0]],
       description: description(),
       package: package(),
       source_url: @source_url,
