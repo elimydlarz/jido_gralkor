@@ -45,18 +45,24 @@ The test kind identifies the consumer seam. Hook timing does not change a test's
 ## Commands and lifecycle
 
 - `mix test` runs every Unit and Integration test and excludes Functional and Journey.
+- `mix test.unit` runs Unit tests only by excluding the `integration`, `functional`, and `journey` tags.
+- `mix test.integration` runs only tests tagged `integration`.
 - `mix test.functional` runs every Functional test.
 - `mix test.journey` owns the complete production-like Journey lifecycle.
 - `mix test.changed` uses ExUnit's stale dependency tracking to select changed or related Unit, Integration, and Functional tests and excludes Journey.
 - `mix test.fast` uses ExUnit's stale dependency tracking to select changed or related Unit and Integration tests and excludes Functional and Journey.
 - `mix test.all` runs Unit, Integration, Functional, Journey, and Node tests and fails when either runner fails.
-- `PostToolUse` after `Edit` or `Write` starts `mix test.fast` followed by `node --test` optimistically and returns without waiting.
-- `Stop` first delivers saved optimistic failures and returns failure immediately when any are delivered. A subsequent Stop without saved failures waits for active optimistic work, then runs `mix test` followed by `node --test` synchronously.
+- `PostToolUse` after `Edit` or `Write` starts `mix test.fast` optimistically and returns without waiting. The check script uses `set -e`, so `node --test` runs only after `mix test.fast` passes. A failure is saved for later delivery.
+- An edit made while optimistic feedback is running does not start a second run; it marks the active run, which runs its checks again after the current pass finishes.
+- `Stop` first delivers saved failures and returns failure immediately when any are delivered. When the Stop input reports `stop_hook_active`, Stop then exits without running further checks.
+- Otherwise Stop waits for active optimistic work, then runs every Stop check synchronously in file-name order: `readme-sync` runs `.fasset-harness/scripts/check-readme-sync.sh`, and `unit-integration-tests` runs `mix test` and then, because its script uses `set -e`, runs `node --test` only after `mix test` passes. Stop then delivers every saved failure.
+- Saved failures are delivered together in file-name order. A combined report larger than 8192 bytes is written to `.fasset-harness/state/optimistic-feedback/diagnostics/`, and only its path is delivered.
 - During Functional RED and GREEN, the coding agent runs only the current focused Functional test.
 - When implementation appears finished, the coding agent runs `mix test.functional`.
 - After a Journey tree or test change, the coding agent runs `mix test.journey`.
 - After a substantive production change affecting operator-visible behavior, a public interface, persistence, an external-system boundary, architecture boundaries, or orchestration spanning components, the coding agent runs `mix test.journey`.
 - Documentation, formatting, and behavior-preserving local refactors do not trigger Journey.
 - Setup and CI own `mix test.all`; ordinary coding-agent work does not duplicate it.
+- Do not run two test VMs against the embedded backend at the same time. The first `Gralkor.Python` boot in each VM kills every `redislite/bin/redis-server` process, and it cannot distinguish another VM's live server from an orphan. This applies to Functional and Journey runs that use the embedded backend.
 
 The shared ExUnit helper initializes the packaged Python interpreter before tag selection. This test infrastructure initialization does not make a Unit subject's dependencies real: Unit tests still substitute every dependency outside their subject. Tests that execute the real embedded Python or Graphiti boundary are Integration or Functional tests, according to their consumer seam.
