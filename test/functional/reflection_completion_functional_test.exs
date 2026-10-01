@@ -247,6 +247,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
 
     @tag timeout: 120_000
+    test "and each derived entity node's entity types persist only as graph labels" do
+      assert_verified(:shared, &assert_shared_graph_claim_contract/0)
+    end
+
+    @tag timeout: 120_000
     test "and loss of ownership aborts that transaction before any graph effect commits" do
       assert_verified(:shared, &assert_shared_graph_claim_contract/0)
     end
@@ -1425,7 +1430,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                 MATCH (left)-[relation:RELATES_TO {uuid: 'embedded-bulk-created-relation'}]->(right)
                 RETURN episode._gralkor_extraction_complete AS complete,
                        mention.uuid AS mention,
-                       relation.uuid AS relation
+                       relation.uuid AS relation,
+                       labels(left) AS left_labels,
+                       left.labels AS left_labels_property
                 '''
             )
             return records[0]
@@ -1434,11 +1441,15 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         %{"graph" => first_graph}
       )
 
-    assert Pythonx.decode(bulk_created_proof) == %{
+    assert %{
              "complete" => true,
              "mention" => "embedded-bulk-created-mention",
-             "relation" => "embedded-bulk-created-relation"
-           }
+             "relation" => "embedded-bulk-created-relation",
+             "left_labels" => left_labels,
+             "left_labels_property" => nil
+           } = Pythonx.decode(bulk_created_proof)
+
+    assert Enum.sort(left_labels) == ["Entity", "Person"]
 
     Pythonx.eval(
       """

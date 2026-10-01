@@ -36,6 +36,7 @@ where Graphiti stores a Destination artefact output
     while a claim lease changes owner
       then graph-server time determines expiry
       and the episode plus every derived node and edge persist in one claim-fenced graph transaction
+      and each derived entity node's entity types persist only as graph labels
       and loss of ownership aborts that transaction before any graph effect commits
       and the completion marker is fenced by the current claim generation
       and a stale owner cannot mutate or finish the artefact output
