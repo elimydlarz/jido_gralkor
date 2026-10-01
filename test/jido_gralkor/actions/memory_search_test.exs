@@ -44,24 +44,31 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       end
 
     Application.put_env(:jido_gralkor, :destination_storage, RecordingStorage)
+    Application.put_env(:jido_gralkor, :destinations, [])
+    Application.put_env(:jido_gralkor, :lenses, [])
 
-    Application.put_env(:jido_gralkor, :destinations, [
-      [name: "observations"],
-      [name: "decisions"]
-    ])
-
-    Application.put_env(:jido_gralkor, :lenses, [
-      [
-        name: "observations",
-        destination: "observations",
-        ingestion: Gralkor.Lens.Ingestion.Store
-      ],
-      [
-        name: "decisions",
-        destination: "decisions",
-        ingestion: Gralkor.Lens.Ingestion.Store
-      ]
-    ])
+    start_supervised!(
+      {JidoGralkor.Runtime,
+       owner: self(),
+       configuration: %{
+         destinations: [[name: "observations"], [name: "decisions"]],
+         lenses: [
+           [
+             name: "observations",
+             destination: "observations",
+             write: :append,
+             ingestion: Gralkor.Lens.Ingestion.Store
+           ],
+           [
+             name: "decisions",
+             destination: "decisions",
+             write: :append,
+             ingestion: Gralkor.Lens.Ingestion.Store
+           ]
+         ],
+         reflections: []
+       }}
+    )
 
     on_exit(fn ->
       Enum.each(previous, fn
@@ -75,10 +82,10 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
   describe "when the memory search tool runs with a usable query" do
     test "then the existing public Search capability is invoked once" do
-      assert {:ok, _result} = run_search(%{query: "launch", destinations: ["observations"]})
+      assert {:ok, _result} = run_search(%{query: "launch"})
 
-      assert_receive {:destination_search, "observations", _, _, _, _, _}
-      refute_receive {:destination_search, _, _, _, _, _, _}
+      assert Enum.sort(received_destination_searches()) ==
+               Enum.sort(["personal", "global", "observations", "decisions"])
     end
 
     test "and the Search request carries the current operator" do
@@ -260,32 +267,43 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   end
 
   defp run_search(params) do
-    MemorySearch.run(params, %{agent_id: "operator-one"})
+    MemorySearch.run(params, %{agent_id: "operator-one", gralkor_runtime: self()})
+  end
+
+  defp received_destination_searches do
+    receive do
+      {:destination_search, destination, _, _, _, _, _} ->
+        [destination | received_destination_searches()]
+    after
+      100 -> []
+    end
   end
 
   defp prove_runtime_targeted_search do
-    configure_application_destinations()
+    owner = spawn(fn -> receive do: (:stop -> :ok) end)
+    on_exit(fn -> send(owner, :stop) end)
 
     start_supervised!(
       {JidoGralkor.Runtime,
-       owner: self(),
+       owner: owner,
        configuration: %{
          destinations: [[name: "runtime-notes"]],
          lenses: [],
          reflections: []
-       }}
+       }},
+      id: :targeted_runtime
     )
 
     assert {:ok, _result} =
              MemorySearch.run(
                %{query: "launch", destinations: ["runtime-notes"]},
-               %{agent_id: "operator-one", gralkor_runtime: self()}
+               %{agent_id: "operator-one", gralkor_runtime: owner}
              )
 
     assert_receive {:destination_search, "runtime-notes", "operator-one", "launch", :facts, 20,
                     []}
 
-    refute_receive {:destination_search, "compat-notes", _, _, _, _, _}
+    refute_receive {:destination_search, _, _, _, _, _, _}
   end
 
   defp prove_application_compatibility_search do
