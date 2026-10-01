@@ -298,8 +298,7 @@ defmodule Gralkor.GraphitiPool do
   selected identifier is then enumerated independently of BM25 so conflicts
   outside the ranked window remain visible to the caller. Mixed public episode
   searches may require completion only for Reflection-authored episodes while
-  leaving ordinary historical episodes visible, or require trusted Lens or
-  Reflection writer provenance.
+  leaving ordinary historical episodes visible.
   """
   @spec search_episodes(String.t(), String.t(), pos_integer()) ::
           {:ok, [map()]} | {:error, term()}
@@ -324,7 +323,6 @@ defmodule Gralkor.GraphitiPool do
     instance = __MODULE__.for(server, group_id)
     require_extraction_complete = Keyword.get(opts, :require_extraction_complete, false)
     require_reflection_complete = Keyword.get(opts, :require_reflection_complete, false)
-    require_trusted_provenance = Keyword.get(opts, :require_trusted_provenance, false)
     converge_by_identity = Keyword.get(opts, :converge_by_identity, false)
     lenses = Keyword.get(opts, :lenses, [])
 
@@ -361,7 +359,7 @@ defmodule Gralkor.GraphitiPool do
           max_supported_terms = (MAX_QUERY_LENGTH - 1) // 2
           q = ' '.join(supported_query_terms[:max_supported_terms])
         search_limit = max_results
-        if converge_by_identity or lens_names or require_reflection_complete or require_trusted_provenance:
+        if converge_by_identity or lens_names or require_reflection_complete:
           if hasattr(g.driver, 'execute_query'):
             records, _, _ = asyncio._gralkor_run(
               g.driver.execute_query(
@@ -414,9 +412,6 @@ defmodule Gralkor.GraphitiPool do
         def source_description_for(episode):
           return episode.source_description or ''
 
-        def trusted_writer_provenance(episode):
-          return direct_episode(episode) or lens_episode(episode) or reflection_episode(episode)
-
         if require_extraction_complete or require_reflection_complete:
           episode_ids = [
             e.uuid
@@ -443,13 +438,6 @@ defmodule Gralkor.GraphitiPool do
               or (require_reflection_complete and reflection_episode(e))
             )
             or e.uuid in completed_ids
-          ]
-
-        if require_trusted_provenance:
-          episodes = [
-            episode
-            for episode in episodes
-            if trusted_writer_provenance(episode)
           ]
 
         if lens_names:
@@ -557,7 +545,6 @@ defmodule Gralkor.GraphitiPool do
           "max_results" => max_results,
           "require_extraction_complete" => require_extraction_complete,
           "require_reflection_complete" => require_reflection_complete,
-          "require_trusted_provenance" => require_trusted_provenance,
           "converge_by_identity" => converge_by_identity,
           "lenses" => lenses
         }
