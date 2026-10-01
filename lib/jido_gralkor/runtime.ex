@@ -71,7 +71,7 @@ defmodule JidoGralkor.Runtime do
     with :ok <- validate_configuration(configuration),
          {:ok, definitions} <- resolve_configuration(configuration, validation_opts) do
       owner = Keyword.fetch!(opts, :owner)
-      owner_monitor = make_ref()
+      owner_monitor = Process.monitor(owner)
       {:ok, reflection_supervisor} = Task.Supervisor.start_link()
 
       {:ok,
