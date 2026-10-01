@@ -114,15 +114,23 @@ defmodule Gralkor.ConfigTest do
     test "then resolving the connection raises, naming the offending value" do
       for host <- ["", "   "] do
         Application.put_env(:jido_gralkor, :falkordb, host: host, port: 6379)
-        assert_raise ArgumentError, ~r/host/, fn -> Config.falkordb_spec() end
+
+        assert_raise ArgumentError, ~r/:host.*got #{Regex.escape(inspect(host))}$/, fn ->
+          Config.falkordb_spec()
+        end
       end
     end
   end
 
   describe "if the remote FalkorDB port is not a positive integer" do
     test "then resolving the connection raises, naming the offending value" do
-      Application.put_env(:jido_gralkor, :falkordb, host: "h", port: 0)
-      assert_raise ArgumentError, ~r/0/, fn -> Config.falkordb_spec() end
+      for port <- [0, -1, "6379", 6379.0] do
+        Application.put_env(:jido_gralkor, :falkordb, host: "h", port: port)
+
+        assert_raise ArgumentError, ~r/:port.*got #{Regex.escape(inspect(port))}$/, fn ->
+          Config.falkordb_spec()
+        end
+      end
     end
   end
 
@@ -175,10 +183,12 @@ defmodule Gralkor.ConfigTest do
 
       stderr =
         capture_io(:stderr, fn ->
-          assert {:ok, %LLMDB.Model{}} = ReqLLM.model(Config.llm_model())
+          spec = Config.llm_model()
+          refute is_struct(spec)
+          assert spec == %{provider: :google, id: "not-yet-catalogued"}
         end)
 
-      refute stderr =~ "Using unverified model"
+      assert stderr == ""
     end
 
     test "and surrounding whitespace around the provider and model id is ignored" do
@@ -220,16 +230,18 @@ defmodule Gralkor.ConfigTest do
       for value <- [":gemini-embedding-2-preview", "  :gemini-embedding-2-preview"] do
         System.put_env("GRALKOR_EMBEDDER_MODEL", value)
 
-        assert_raise ArgumentError, ~r/GRALKOR_EMBEDDER_MODEL/, fn ->
-          Config.embedder_model()
+        assert_raise ArgumentError,
+                     ~r/GRALKOR_EMBEDDER_MODEL.*got #{Regex.escape(inspect(value))}$/,
+                     fn -> Config.embedder_model() end
         end
       end
 
       for value <- ["google:", "google:   "] do
         System.put_env("GRALKOR_LLM_MODEL", value)
 
-        assert_raise ArgumentError, ~r/GRALKOR_LLM_MODEL/, fn ->
-          Config.llm_model()
+        assert_raise ArgumentError,
+                     ~r/GRALKOR_LLM_MODEL.*got #{Regex.escape(inspect(value))}$/,
+                     fn -> Config.llm_model() end
         end
       end
     end
