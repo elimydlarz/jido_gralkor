@@ -45,7 +45,9 @@ defmodule Gralkor.Client.NativeTest do
         end
       end
 
-      assert CaptureBuffer.turns_for("s1") == []
+      assert CaptureBuffer.turns_for("") == []
+      assert :ok = CaptureBuffer.flush_all()
+      refute_receive {:flushed, _, _, _, _, _}, 100
     end
   end
 
@@ -206,6 +208,10 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own" do
+      refute Map.has_key?(%Gralkor.Capture{}, :ontology)
+      Code.ensure_loaded!(Native)
+      refute Enum.any?(Native.__info__(:functions), &(&1 == {:capture, 3}))
+
       :ok =
         Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
           Message.new("user", "x")
@@ -218,11 +224,20 @@ defmodule Gralkor.Client.NativeTest do
     test "and that built-in ontology is buffered alongside the turn" do
       :ok =
         Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
-          Message.new("user", "x")
+          Message.new("user", "first")
+        ])
+
+      :ok =
+        Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
+          Message.new("user", "second")
         ])
 
       assert :ok = Native.flush("s1")
-      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology, _turns}
+
+      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology,
+                      [[%Message{content: "first"}], [%Message{content: "second"}]]}
+
+      refute_receive {:flushed, _, _, _, _, _}, 100
     end
 
     test "and the buffer receives the session, logical group, names, ontology and messages" do
@@ -500,15 +515,22 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "and immediate recall for the bound group surfaces the flushed turns" do
+      start_recalling_pool()
+      :ok = stop_supervised(CaptureBuffer)
+
+      start_supervised!(
+        {CaptureBuffer, flush_callback: Gralkor.Application.build_flush_callback(nil), retries: []}
+      )
+
       :ok =
         Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
-          Message.new("user", "x")
+          Message.new("user", "the deploy window is Tuesday")
         ])
 
       assert :ok = Native.flush_and_await("s1", 1_000)
 
-      assert_receive {:flushed, "g", "Susu", "Eli", Gralkor.DefaultOntology,
-                      [[%Message{content: "x"}]]}
+      assert {:ok, block} = Native.recall("g", "Susu", "s1", "deploy window")
+      assert block =~ "the deploy window is Tuesday"
     end
   end
 
@@ -715,6 +737,121 @@ defmodule Gralkor.Client.NativeTest do
     end
   end
 
+  defp start_recalling_pool do
+    {g, _} =
+      Pythonx.eval(
+        """
+        import types
+
+        class _RecallingGraphiti:
+            def __init__(self):
+                self.bodies = []
+
+            async def add_episode(self, **kwargs):
+                self.bodies.append(kwargs.get("episode_body"))
+
+            async def search(self, query, num_results=10, search_filter=None):
+                return [
+                    types.SimpleNamespace(
+                        fact=body,
+                        created_at=None,
+                        valid_at=None,
+                        invalid_at=None,
+                        expired_at=None,
+                        episodes=None,
+                    )
+                    for body in self.bodies[:num_results]
+                ]
+
+            async def build_indices_and_constraints(self):
+                return None
+
+        _RecallingGraphiti()
+        """,
+        %{}
+      )
+
+    start_supervised!(
+      {GraphitiPool,
+       name: Gralkor.GraphitiPool,
+       table: :gralkor_graphiti_instances,
+       falkordb_spec: {:embedded, "/tmp/never_used"},
+       construct_falkor_db: fn _spec -> :stub_falkor_db end,
+       construct_shared_clients: fn _llm, _embedder ->
+         %{llm_client: nil, embedder: nil, cross_encoder: nil}
+       end,
+       construct_instance: fn _db, _shared, _group_id -> g end,
+       warmup: false,
+       install_loop_fn: &Gralkor.Python.install_async_runtime/0}
+    )
+
+    g
+  end
+
+  defp start_per_group_pool do
+    {fake_class, _} =
+      Pythonx.eval(
+        """
+        class _GroupGraphiti:
+            def __init__(self):
+                self.recorded = {"episodes": 0, "communities": 0, "indices": 0}
+
+            async def add_episode(self, **kwargs):
+                self.recorded["episodes"] += 1
+
+            async def build_indices_and_constraints(self):
+                self.recorded["indices"] += 1
+
+            async def build_communities(self):
+                self.recorded["communities"] += 1
+                return ([1, 2, 3], [4])
+
+        _GroupGraphiti
+        """,
+        %{}
+      )
+
+    test_pid = self()
+
+    start_supervised!(
+      {GraphitiPool,
+       name: Gralkor.GraphitiPool,
+       table: :gralkor_graphiti_instances,
+       falkordb_spec: {:embedded, "/tmp/never_used"},
+       construct_falkor_db: fn _spec -> :stub_falkor_db end,
+       construct_shared_clients: fn _llm, _embedder ->
+         %{llm_client: nil, embedder: nil, cross_encoder: nil}
+       end,
+       construct_instance: fn _db, _shared, group_id ->
+         {instance, _} = Pythonx.eval("fake_class()", %{"fake_class" => fake_class})
+         send(test_pid, {:constructed_instance, group_id, instance})
+         instance
+       end,
+       warmup: false,
+       install_loop_fn: &Gralkor.Python.install_async_runtime/0}
+    )
+  end
+
+  defp instances_by_group(instances \\ %{}) do
+    receive do
+      {:constructed_instance, group_id, instance} ->
+        instances_by_group(Map.put(instances, group_id, instance))
+    after
+      0 -> instances
+    end
+  end
+
+  defp recorded(instance) do
+    {recorded, _} = Pythonx.eval("instance.recorded", %{"instance" => instance})
+    Pythonx.decode(recorded)
+  end
+
+  defp tcp_ports do
+    Port.list()
+    |> Enum.filter(&(Port.info(&1, :name) == {:name, ~c"tcp_inet"}))
+    |> MapSet.new()
+  end
+
   describe "when memory is added with a group and content" do
     @describetag :integration
     setup :start_recording_pool
@@ -858,11 +995,13 @@ defmodule Gralkor.Client.NativeTest do
 
     test "then the work runs in the calling node's own processes, no HTTP request or other network transport being involved",
          %{g: g} do
-      assert Application.get_env(:jido_gralkor, :client_http) != nil
+      tcp_ports_before = tcp_ports()
 
       assert :ok = Native.memory_add("g1", "written in-process", "manual")
 
+      assert node(Process.whereis(Gralkor.GraphitiPool)) == node()
       assert [%{"body" => "written in-process"}] = episodes(g)
+      assert tcp_ports() == tcp_ports_before
     end
   end
 
@@ -1000,12 +1139,17 @@ defmodule Gralkor.Client.NativeTest do
     @describetag :integration
     setup :start_recording_pool
 
-    test "then the rebuild is applied to the whole graph rather than to a single group", %{g: g} do
-      Native.memory_add("g1", "content", "manual")
+    test "then the rebuild is applied to the whole graph rather than to a single group" do
+      start_per_group_pool()
+      assert :ok = Native.memory_add("g1", "content", "manual")
+      assert :ok = Native.memory_add("g2", "content", "manual")
+      instances = instances_by_group()
+
       assert {:ok, %{status: "built"}} = Native.build_indices()
 
-      {recorded, _} = Pythonx.eval("g.recorded['indices']", %{"g" => g})
-      assert Pythonx.decode(recorded) == 2
+      for group <- ["g1", "g2"] do
+        assert recorded(Map.fetch!(instances, Client.sanitize_group_id(group)))["indices"] == 2
+      end
     end
 
     test "and a status is returned once the rebuild completes" do
@@ -1032,17 +1176,24 @@ defmodule Gralkor.Client.NativeTest do
     test "then the logical group reaches the physical Graphiti boundary unchanged and is encoded exactly once there" do
       assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("with-hyphens")
 
-      assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
-               group == Client.sanitize_group_id("with-hyphens")
-             end)
+      assert Enum.map(:ets.tab2list(:gralkor_graphiti_instances), &elem(&1, 0)) == [
+               Client.sanitize_group_id("with-hyphens")
+             ]
     end
 
     test "and community building is scoped to that physical group" do
+      start_per_group_pool()
+      assert :ok = Native.memory_add("other-group", "content", "manual")
       assert {:ok, %{communities: 3, edges: 1}} = Native.build_communities("with-hyphens")
+      instances = instances_by_group()
 
-      assert Enum.any?(:ets.tab2list(:gralkor_graphiti_instances), fn {group, _} ->
-               group == Client.sanitize_group_id("with-hyphens")
-             end)
+      assert recorded(Map.fetch!(instances, Client.sanitize_group_id("with-hyphens")))[
+               "communities"
+             ] == 1
+
+      assert recorded(Map.fetch!(instances, Client.sanitize_group_id("other-group")))[
+               "communities"
+             ] == 0
     end
 
     test "and the number of communities and the number of edges built are returned" do
@@ -1137,9 +1288,15 @@ defmodule Gralkor.Client.NativeTest do
     @describetag :integration
     setup :start_recall_recording_pool
 
+    @tag :capture_log
     test "then the recall pipeline is invoked without one" do
-      assert {:ok, block} = Native.recall("g", "TestAgent", nil, "raw query")
-      assert block =~ "<gralkor-memory"
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, block} = Native.recall("g", "TestAgent", nil, "raw query")
+          assert block =~ "<gralkor-memory"
+        end)
+
+      assert log =~ "[gralkor] recall — session: group:g "
     end
   end
 
