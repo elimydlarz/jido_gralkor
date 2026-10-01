@@ -82,13 +82,8 @@ defmodule Gralkor.Reflection.Runner do
 
     case result do
       {:ok, outputs} ->
-        case List.last(reflection.chain_of_thought.steps) do
-          nil ->
-            {:error, %{reflection: reflection.name, reason: :missing_artefact}}
-
-          final ->
-            build_artefact(reflection, ingestion, outputs, final, opts)
-        end
+        final = List.last(reflection.chain_of_thought.steps)
+        build_artefact(reflection, ingestion, outputs, final, opts)
 
       {:error, _} = error ->
         error
@@ -118,45 +113,22 @@ defmodule Gralkor.Reflection.Runner do
       result_type: :episodes
     }
 
-    case Keyword.fetch(opts, :related_memory_search) do
-      {:ok, search} ->
-        search.(Keyword.get(opts, :runtime_owner), request)
-
-      :error ->
-        default_related_memory_search(opts, request)
-    end
-  end
-
-  defp default_related_memory_search(opts, request) do
-    case Keyword.fetch(opts, :runtime_owner) do
-      {:ok, runtime_owner} -> Client.search(runtime_owner, request)
-      :error -> Client.search(request)
-    end
+    search = Keyword.get(opts, :related_memory_search, &Client.search/2)
+    search.(Keyword.fetch!(opts, :runtime_owner), request)
   end
 
   defp build_artefact(reflection, ingestion, outputs, final, opts) do
-    payload = artefact_payload(reflection, outputs, final)
+    payload = Map.take(outputs, Map.keys(final.output))
 
-    if map_size(payload) == 0 do
-      {:error, %{reflection: reflection.name, reason: :missing_artefact}}
-    else
-      id =
-        Keyword.get_lazy(opts, :artefact_id, fn ->
-          derive_artefact_id(
-            opts,
-            field(ingestion, :operator_id),
-            field(ingestion, :id),
-            reflection.name
-          )
-        end)
+    id =
+      derive_artefact_id(
+        opts,
+        field(ingestion, :operator_id),
+        field(ingestion, :id),
+        reflection.name
+      )
 
-      {:ok, Artefact.new(id, payload)}
-    end
-  end
-
-  defp artefact_payload(%Reflection{} = reflection, outputs, final) do
-    _reflection = reflection
-    Map.take(outputs, Map.keys(final.output))
+    {:ok, Artefact.new(id, payload)}
   end
 
   defp packaged_generalisation?(%Reflection{name: "generalisations"}), do: true
@@ -174,19 +146,7 @@ defmodule Gralkor.Reflection.Runner do
           tool_executor
         )
 
-      {:tool_calls, calls} when is_list(calls) and calls != [] ->
-        results = Enum.map(calls, &execute_tool(&1, request, tool_executor))
-
-        infer_step(
-          %{request | tool_results: request.tool_results ++ results},
-          inference,
-          tool_executor
-        )
-
       {:ok, %{output: output}} when is_map(output) ->
-        {:ok, output}
-
-      {:ok, output} when is_map(output) ->
         {:ok, output}
 
       {:error, reason} ->
@@ -287,10 +247,7 @@ defmodule Gralkor.Reflection.Runner do
     model = model_resolver.()
     model_spec = "#{model.provider}:#{model.id}"
 
-    context =
-      request.tool_context
-      |> Map.put(:operator_id, request.operator_id)
-      |> Map.put(:tools, request.tools)
+    context = Map.put(request.tool_context, :operator_id, request.operator_id)
 
     case run_step.(
            prompt,
