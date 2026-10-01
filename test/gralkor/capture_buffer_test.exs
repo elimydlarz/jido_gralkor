@@ -610,8 +610,8 @@ defmodule Gralkor.CaptureBufferTest do
           assert {:error, :exhausted} = CaptureBuffer.flush_and_await("session", 1_000)
         end)
 
-      assert_receive {:lens_attempted, "observations", [^turn]}
-      assert_receive {:lens_attempted, "decisions", [^turn]}
+      assert_received {:lens_attempted, "observations", [^turn]}
+      assert_received {:lens_attempted, "decisions", [^turn]}
       assert log =~ "outcome:error reason::exhausted"
     end
   end
@@ -1024,7 +1024,17 @@ defmodule Gralkor.CaptureBufferTest do
 
   describe "when a session holding turns is flushed and awaited > while the flush callback fails for any other reason" do
     setup do
-      flush_callback = fn _g, _a, _u, _o, _t -> raise "internal: still broken" end
+      test_pid = self()
+      attempts = :counters.new(1, [])
+
+      flush_callback = fn _g, _a, _u, _o, _t ->
+        :counters.add(attempts, 1, 1)
+        attempt = :counters.get(attempts, 1)
+        send(test_pid, {:attempt, attempt, System.monotonic_time(:millisecond)})
+
+        if attempt == 1, do: raise("internal: transient"), else: :ok
+      end
+
       :ok = stop_supervised(CaptureBuffer)
 
       {:ok, _} =
@@ -1036,7 +1046,14 @@ defmodule Gralkor.CaptureBufferTest do
     test "then the same configured backoff schedule applies, bounded by the caller's timeout" do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
-      assert {:error, :timeout} = CaptureBuffer.flush_and_await("s1", 80)
+      capture_log(fn ->
+        assert :ok = CaptureBuffer.flush_and_await("s1", 1_000)
+      end)
+
+      assert_received {:attempt, 1, first_at}
+      assert_received {:attempt, 2, second_at}
+      refute_received {:attempt, 3, _}
+      assert second_at - first_at >= 50
     end
   end
 
@@ -1157,6 +1174,7 @@ defmodule Gralkor.CaptureBufferTest do
 
       flush_callback = fn group_id, agent_name, user_name, ontology, turns ->
         if group_id == "bad" do
+          send(test_pid, {:attempted, group_id})
           {:error, :boom}
         else
           send(test_pid, {:flushed, group_id, agent_name, user_name, ontology, turns})
@@ -1182,7 +1200,12 @@ defmodule Gralkor.CaptureBufferTest do
       :ok = CaptureBuffer.append("failing", "bad", "Susu", "Eli", nil, [Message.new("user", "x")])
       :ok = CaptureBuffer.append("ok", "g", "Susu", "Eli", nil, [Message.new("user", "y")])
 
-      assert :ok = CaptureBuffer.flush_all()
+      capture_log(fn ->
+        assert :ok = CaptureBuffer.flush_all()
+      end)
+
+      assert_received {:attempted, "bad"}
+      assert_received {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "y"}]]}
     end
   end
 
@@ -1212,6 +1235,7 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
+    @tag timeout: 30_000
     test "then the flush is retried on the configured backoff schedule, which defaults to 1s, then 2s, then 4s" do
       :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
 
@@ -1223,6 +1247,31 @@ defmodule Gralkor.CaptureBufferTest do
         assert_receive {:attempt, 3}, 5_000
         refute_receive {:attempt, 4}, 100
       end)
+
+      test_pid = self()
+
+      timed_callback = fn _g, _a, _u, _o, _t ->
+        send(test_pid, {:timed_attempt, System.monotonic_time(:millisecond)})
+        {:error, :still_failing}
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+      {:ok, _} = start_supervised({CaptureBuffer, flush_callback: timed_callback})
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      capture_log(fn ->
+        assert {:error, :exhausted} = CaptureBuffer.flush_and_await("s", 20_000)
+      end)
+
+      assert_received {:timed_attempt, first_at}
+      assert_received {:timed_attempt, second_at}
+      assert_received {:timed_attempt, third_at}
+      assert_received {:timed_attempt, fourth_at}
+      refute_received {:timed_attempt, _}
+
+      assert_in_delta second_at - first_at, 1_000, 250
+      assert_in_delta third_at - second_at, 2_000, 250
+      assert_in_delta fourth_at - third_at, 4_000, 250
     end
   end
 
