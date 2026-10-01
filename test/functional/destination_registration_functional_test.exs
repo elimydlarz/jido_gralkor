@@ -79,7 +79,28 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
     end
 
     test "and globally shared memory references the Destination named `global`" do
-      assert Gralkor.Destination.Registry.fetch!("global").name == "global"
+      Application.put_env(:jido_gralkor, :lenses, [
+        [
+          name: "observations",
+          destination: "global",
+          ontology: MemoryOntology,
+          ingestion: StoreIngestion
+        ]
+      ])
+
+      assert Client.lens!("observations").destination == %Gralkor.Destination{name: "global"}
+
+      [reflection] =
+        configured_reflections!([
+          reflection_definition(
+            outputs: [[kind: :destination, destination: "global", ontology: MemoryOntology]]
+          )
+        ])
+
+      assert [%{destination: %Gralkor.Destination{name: "global"}}] = reflection.outputs
+
+      assert [%{destination: %Gralkor.Destination{name: "global"}}] =
+               Runtime.reflection!(self(), "generalisations").outputs
     end
   end
 
@@ -235,14 +256,28 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       assert_raise ArgumentError, ~r/Destination registry must be a list.*%{not: "a list"}/, fn ->
         Client.lens!("observations")
       end
+
+      assert_raise ArgumentError,
+                   ~r/invalid Gralkor runtime configuration: \{:invalid_collection, :destinations, %\{not: "a list"\}\}/,
+                   fn -> mount!(runtime_configuration(%{not: "a list"})) end
     end
   end
 
   describe "if an application registers an invalid Destination" do
     test "then configuration resolution raises `ArgumentError` before ingestion, Reflection, or search begins" do
+      start_supervised!(Gralkor.Lens.Storage.InMemory)
+      start_supervised!(Gralkor.Destination.Storage.InMemory)
+      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
+
+      Application.put_env(
+        :jido_gralkor,
+        :destination_storage,
+        Gralkor.Destination.Storage.InMemory
+      )
+
       Application.put_env(:jido_gralkor, :destinations, [[name: " "]])
 
-      assert_raise ArgumentError, fn ->
+      assert_raise ArgumentError, ~r/invalid Destination name " "/, fn ->
         Client.ingest(%Gralkor.Ingest{
           id: "invalid-destination-ingestion",
           operator_id: "operator-one",
@@ -253,13 +288,37 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
         })
       end
 
-      assert_raise ArgumentError, fn ->
-        configured_reflections!([reflection_definition()])
-      end
-
-      assert_raise ArgumentError, fn ->
+      assert_raise ArgumentError, ~r/invalid Destination name " "/, fn ->
         Client.search(%Gralkor.Search{operator_id: "operator-one", query: "must not run"})
       end
+
+      assert_raise ArgumentError,
+                   ~r/invalid Gralkor runtime configuration: \{:blank_definition_name, :destinations, " "\}/,
+                   fn ->
+                     mount!(
+                       runtime_configuration([[name: " "]], [], [reflection_definition()])
+                     )
+                   end
+
+      refute Runtime.started?(self())
+
+      assert_raise ArgumentError, ~r/Gralkor runtime unavailable/, fn ->
+        Client.reflect(
+          self(),
+          "review",
+          %{
+            id: "must-not-run",
+            operator_id: "operator-one",
+            representations: [],
+            invocation_context: %{}
+          },
+          fn _outcome -> :ok end,
+          inference: fn _ -> flunk("Reflection inference must not begin") end
+        )
+      end
+
+      assert :sys.get_state(Gralkor.Lens.Storage.InMemory) == %{}
+      assert Agent.get(Gralkor.Destination.Storage.InMemory, & &1) == %{}
     end
 
     test "and a blank Destination name is identified" do
@@ -270,16 +329,26 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       assert_raise ArgumentError, ~r/invalid Destination name " "/, fn ->
         Client.lens!("observations")
       end
+
+      assert_raise ArgumentError, ~r/\{:blank_definition_name, :destinations, " "\}/, fn ->
+        mount!(runtime_configuration([[name: " "]]))
+      end
     end
 
     test "and a Destination name beginning `personal/` or `operator/` is identified as reserved" do
-      Application.put_env(:jido_gralkor, :destinations, [
-        [name: "operator/shared"]
-      ])
+      for name <- ["personal/shared", "operator/shared"] do
+        Application.put_env(:jido_gralkor, :destinations, [[name: name]])
+        escaped = Regex.escape(name)
+        namespace = Regex.escape(hd(String.split(name, "/")) <> "/")
 
-      assert_raise ArgumentError,
-                   ~r/invalid Destination "operator\/shared".*reserved.*"operator\/"/,
-                   fn -> Gralkor.Destination.Registry.configured!() end
+        assert_raise ArgumentError,
+                     ~r/invalid Destination "#{escaped}".*reserved.*"#{namespace}"/,
+                     fn -> Gralkor.Destination.Registry.configured!() end
+
+        assert_raise ArgumentError,
+                     ~r/\{:reserved_destination_namespace, "#{escaped}"\}/,
+                     fn -> mount!(runtime_configuration([[name: name]])) end
+      end
     end
 
     test "and a duplicate Destination name is identified" do
@@ -291,6 +360,10 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       assert_raise ArgumentError, ~r/duplicate Destination "shared"/, fn ->
         Client.lens!("observations")
       end
+
+      assert_raise ArgumentError,
+                   ~r/\{:duplicate_definition_name, :destinations, "shared"\}/,
+                   fn -> mount!(runtime_configuration([[name: "shared"], [name: "shared"]])) end
     end
 
     test "and an invalid Destination definition shape is identified" do
@@ -299,6 +372,10 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       assert_raise ArgumentError, ~r/invalid Destination definition/, fn ->
         Client.lens!("observations")
       end
+
+      assert_raise ArgumentError,
+                   ~r/\{:invalid_definition, :destinations, \[:not_a_keyword_entry\]\}/,
+                   fn -> mount!(runtime_configuration([[:not_a_keyword_entry]])) end
     end
 
     test "and an address setting is identified as unsupported with its Destination" do
@@ -309,6 +386,12 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       assert_raise ArgumentError, ~r/shared.*address/, fn ->
         Client.lens!("observations")
       end
+
+      assert_raise ArgumentError,
+                   ~r/\{:unknown_definition_fields, :destinations, "shared", \[:address\]\}/,
+                   fn ->
+                     mount!(runtime_configuration([[name: "shared", address: "tenant/shared"]]))
+                   end
     end
 
     test "and an ontology setting is identified as unsupported with its Destination" do
@@ -318,6 +401,43 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       assert_raise ArgumentError, ~r/shared.*ontology/, fn ->
         Client.lens!("observations")
+      end
+
+      assert_raise ArgumentError,
+                   ~r/\{:unknown_definition_fields, :destinations, "shared", \[:ontology\]\}/,
+                   fn ->
+                     mount!(runtime_configuration([[name: "shared", ontology: MemoryOntology]]))
+                   end
+    end
+  end
+
+  describe "if a Lens or Reflection references an unknown Destination" do
+    test "then configuration resolution raises `ArgumentError` identifying the Lens or Reflection and Destination" do
+      missing_lens = [
+        name: "observations",
+        destination: "missing",
+        ontology: MemoryOntology,
+        ingestion: StoreIngestion
+      ]
+
+      Application.put_env(:jido_gralkor, :lenses, [missing_lens])
+
+      assert_raise ArgumentError, ~r/observations.*Destination.*missing/, fn ->
+        Client.lens!("observations")
+      end
+
+      assert_raise ArgumentError,
+                   ~r/\{:unknown_destination, :lenses, "observations", "missing"\}/,
+                   fn -> mount!(runtime_configuration([[name: "shared"]], [missing_lens])) end
+
+      assert_raise ArgumentError, ~r/unknown_destination.*review.*missing/, fn ->
+        configured_reflections!([
+          reflection_definition(
+            outputs: [
+              [kind: :destination, destination: "missing", ontology: MemoryOntology]
+            ]
+          )
+        ])
       end
     end
   end
@@ -329,6 +449,10 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       assert_raise ArgumentError, ~r/operator.*retired.*personal/, fn ->
         Gralkor.Destination.Registry.configured!()
       end
+
+      assert_raise ArgumentError,
+                   ~r/\{:retired_definition_name, :destinations, "operator", "personal"\}/,
+                   fn -> mount!(runtime_configuration([[name: "operator"]])) end
     end
   end
 
@@ -339,6 +463,10 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       assert_raise ArgumentError, ~r/(reserved|duplicate).*personal|personal.*reserved/, fn ->
         Gralkor.Destination.Registry.configured!()
       end
+
+      assert_raise ArgumentError,
+                   ~r/\{:reserved_definition_name, :destinations, "personal"\}/,
+                   fn -> mount!(runtime_configuration([[name: "personal"]])) end
     end
   end
 
@@ -357,31 +485,16 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
     }
   end
 
-  describe "if a Lens or Reflection references an unknown Destination" do
-    test "then configuration resolution raises `ArgumentError` identifying the Lens or Reflection and Destination" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        [
-          name: "observations",
-          destination: "missing",
-          ontology: MemoryOntology,
-          ingestion: StoreIngestion
-        ]
-      ])
+  defp runtime_configuration(destinations, lenses \\ [], reflections \\ []) do
+    %{destinations: destinations, lenses: lenses, reflections: reflections}
+  end
 
-      assert_raise ArgumentError, ~r/observations.*Destination.*missing/, fn ->
-        Client.lens!("observations")
-      end
-
-      assert_raise ArgumentError, ~r/unknown_destination.*review.*missing/, fn ->
-        configured_reflections!([
-          reflection_definition(
-            outputs: [
-              [kind: :destination, destination: "missing", ontology: MemoryOntology]
-            ]
-          )
-        ])
-      end
-    end
+  defp mount!(configuration) do
+    JidoGralkor.Plugin.mount(%{},
+      agent_name: "Destination registration",
+      capture_destination: "personal",
+      runtime_config: configuration
+    )
   end
 
   defp configured_reflections!(definitions) do
