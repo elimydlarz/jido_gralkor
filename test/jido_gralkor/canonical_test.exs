@@ -106,8 +106,7 @@ defmodule JidoGralkor.CanonicalTest do
       [_user, behaviour, _assistant] = Canonical.to_messages("q", events, {:completed, "a"})
 
       assert behaviour.role == "behaviour"
-      assert behaviour.content =~ "tool memory_search"
-      assert behaviour.content =~ "ok 3 facts"
+      assert behaviour.content == "tool memory_search → ok 3 facts"
     end
   end
 
