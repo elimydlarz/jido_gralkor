@@ -1312,7 +1312,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                           uuid=f'embedded-bulk-{suffix}-right',
                           name='right',
                           group_id=gid,
-                          labels=['Person'],
+                          labels=['Person', 'Team Member'],
                           created_at=now,
                           name_embedding=[0.2],
                       )
