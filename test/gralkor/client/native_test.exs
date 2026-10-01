@@ -208,7 +208,7 @@ defmodule Gralkor.Client.NativeTest do
     end
 
     test "and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own" do
-      refute Map.has_key?(%Gralkor.Capture{}, :ontology)
+      refute Map.has_key?(Gralkor.Capture.__struct__(), :ontology)
       Code.ensure_loaded!(Native)
       refute Enum.any?(Native.__info__(:functions), &(&1 == {:capture, 3}))
 
