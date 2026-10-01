@@ -2446,7 +2446,7 @@ defmodule Gralkor.GraphitiPoolTest do
     @describetag :integration
 
     test "then it is restricted to the physically encoded group id the episodes were written under, so a group id carrying hyphens still matches" do
-      {_node, recorded} = node_search_result()
+      {_nodes, recorded} = node_search_result()
       assert recorded["group_ids"] == [physical("group-with-hyphens")]
     end
   end
@@ -2526,10 +2526,25 @@ defmodule Gralkor.GraphitiPoolTest do
     end
 
     test "and each returned node is rendered with its name, summary, and attributes, ordered by relevance" do
-      {node, _recorded} = node_search_result()
-      assert node.name == "resource contention"
-      assert node.summary == "rescheduled the vacuum job to 04:00"
-      assert node.attributes["lesson"] == "reschedule overlapping jobs"
+      {nodes, _recorded} = node_search_result()
+
+      assert Enum.map(nodes, &Map.take(&1, [:name, :summary, :attributes])) == [
+               %{
+                 name: "resource contention",
+                 summary: "rescheduled the vacuum job to 04:00",
+                 attributes: %{"lesson" => "reschedule overlapping jobs"}
+               },
+               %{
+                 name: "lock timeout",
+                 summary: "raised the lock wait limit",
+                 attributes: %{"lesson" => "bound lock waits"}
+               },
+               %{
+                 name: "disk pressure",
+                 summary: "moved archives to cold storage",
+                 attributes: %{"lesson" => "archive early"}
+               }
+             ]
     end
   end
 
@@ -3888,14 +3903,21 @@ defmodule Gralkor.GraphitiPoolTest do
       Pythonx.eval(
         """
         class _Node:
-            def __init__(self):
-                self.name = "resource contention"
-                self.summary = "rescheduled the vacuum job to 04:00"
-                self.attributes = {"lesson": "reschedule overlapping jobs"}
+            def __init__(self, name, summary, attributes):
+                self.name = name
+                self.summary = summary
+                self.attributes = attributes
 
         class _Results:
             def __init__(self):
-                self.nodes = [_Node()]
+                self.nodes = [
+                    _Node("resource contention", "rescheduled the vacuum job to 04:00",
+                          {"lesson": "reschedule overlapping jobs"}),
+                    _Node("lock timeout", "raised the lock wait limit",
+                          {"lesson": "bound lock waits"}),
+                    _Node("disk pressure", "moved archives to cold storage",
+                          {"lesson": "archive early"}),
+                ]
 
         class _FakeGraphiti:
             def __init__(self):
@@ -3916,14 +3938,14 @@ defmodule Gralkor.GraphitiPoolTest do
         install_loop_fn: &Gralkor.Python.install_async_runtime/0
       )
 
-    assert {:ok, [node]} =
+    assert {:ok, nodes} =
              GraphitiPool.search_nodes(pid, "group-with-hyphens", "conflict", 5,
                node_labels: ["Learning"]
              )
 
     {group_ids, _} = Pythonx.eval("g.group_ids", %{"g" => graph})
     GenServer.stop(pid)
-    {node, %{"group_ids" => Pythonx.decode(group_ids)}}
+    {nodes, %{"group_ids" => Pythonx.decode(group_ids)}}
   end
 
   defp start_episode_identity_pool do

@@ -207,6 +207,50 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
+  defmodule BlockingOutputStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_, _, _, _, _, _), do: {:ok, []}
+
+    @impl true
+    def put_artefact(_output, _reflection_name, _operator_id, _artefact) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid),
+        {:blocked_reflection_delivery, self()}
+      )
+
+      receive do
+        :continue_reflection_delivery -> :ok
+      end
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+  end
+
+  defmodule BlockingSearchStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(destination, _operator_id, _query, _result_type, _max_results, opts) do
+      send(
+        Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid),
+        {:blocked_runtime_search, self(), destination, Keyword.get(opts, :lenses)}
+      )
+
+      receive do
+        :continue_runtime_search -> {:ok, []}
+      end
+    end
+
+    @impl true
+    def put_artefact(_, _, _, _), do: {:error, :unsupported}
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :unsupported}
+  end
+
   setup do
     keys = [:runtime_configuration_test_pid, :destination_storage, :client]
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
@@ -264,34 +308,61 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
            register_global: false}
         )
 
+      Application.put_env(:jido_gralkor, :destination_storage, BlockingOutputStorage)
+
       assert :ok =
                JidoGralkor.Runtime.replace(agent_server, reflection_configuration("reviews"))
 
-      test_pid = self()
-      release = make_ref()
+      {:ok, state} = Jido.AgentServer.state(agent_server)
 
-      inference = fn _request ->
+      %{pid: runtime} =
+        Map.fetch!(state.children, {:plugin, JidoGralkor.Plugin, JidoGralkor.Runtime})
+
+      test_pid = self()
+      callback = &send(test_pid, {:supervised_reflection_callback, &1})
+
+      blocked_inference = fn _request ->
         send(test_pid, {:supervised_reflection_started, self()})
 
         receive do
-          {^release, :continue} -> {:ok, %{output: %{"summary" => "complete"}}}
+          :never -> {:ok, %{output: %{"summary" => "never"}}}
         end
       end
 
-      assert {:ok, "supervised-reflection"} =
+      assert {:ok, "supervised-production"} =
                Gralkor.Client.reflect(
                  agent_server,
                  "review",
-                 reflection_invocation("supervised-reflection"),
-                 &send(test_pid, {:supervised_reflection_callback, &1}),
-                 inference: inference,
-                 storage: SnapshotOutputStorage
+                 reflection_invocation("supervised-production"),
+                 callback,
+                 inference: blocked_inference
                )
 
-      assert_receive {:supervised_reflection_started, worker}
-      assert Process.alive?(worker)
-      send(worker, {release, :continue})
-      assert_receive {:supervised_reflection_callback, %{outcome: :delivered}}
+      assert_receive {:supervised_reflection_started, production_worker}
+
+      assert {:ok, "supervised-delivery"} =
+               Gralkor.Client.reflect(
+                 agent_server,
+                 "review",
+                 reflection_invocation("supervised-delivery"),
+                 callback,
+                 inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end
+               )
+
+      assert_receive {:blocked_reflection_delivery, delivery_worker}
+
+      for worker <- [production_worker, delivery_worker] do
+        {:dictionary, dictionary} = Process.info(worker, :dictionary)
+        assert runtime in Keyword.fetch!(dictionary, :"$ancestors")
+      end
+
+      production_monitor = Process.monitor(production_worker)
+      delivery_monitor = Process.monitor(delivery_worker)
+      Process.exit(runtime, :kill)
+
+      assert_receive {:DOWN, ^production_monitor, :process, ^production_worker, _}
+      assert_receive {:DOWN, ^delivery_monitor, :process, ^delivery_worker, _}
+      refute_receive {:supervised_reflection_callback, _}
     end
 
     test "and it installs package-owned structured definitions for the `personal` and `global` Destinations" do
@@ -662,7 +733,17 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
 
     test "and the restarted plugin installs that configuration before accepting memory work" do
+      Application.put_env(:jido_gralkor, :destination_storage, RecordingDestinationStorage)
       replacement_agent = restart_consuming_agent("runtime-configuration-restart-install")
+
+      assert {:ok, []} =
+               Gralkor.Client.search(replacement_agent, %Gralkor.Search{
+                 operator_id: "operator-one",
+                 query: "memory",
+                 destinations: ["durable-memory"]
+               })
+
+      assert_receive {:runtime_search, "durable-memory"}
 
       assert %{
                destinations: [%{name: "durable-memory"}],
@@ -813,18 +894,48 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
            agent: ConsumerAgent, id: "runtime-configuration-atomic-search", register_global: false}
         )
 
-      assert :ok =
-               JidoGralkor.Runtime.replace(
-                 agent_server,
-                 ingestion_configuration("project")
-               )
+      Application.put_env(:jido_gralkor, :destination_storage, BlockingSearchStorage)
+      original = ingestion_configuration("project")
 
-      assert {[%Gralkor.Lens{name: "observations"}], [%Gralkor.Destination{name: "project"}]} =
-               JidoGralkor.Runtime.resolve_search!(
-                 agent_server,
-                 ["observations"],
-                 ["project"]
-               )
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, %{
+                 original
+                 | destinations: [%{name: "project"}, %{name: "archive"}]
+               })
+
+      search =
+        Task.async(fn ->
+          Gralkor.Client.search(agent_server, %Gralkor.Search{
+            operator_id: "operator-one",
+            query: "memory",
+            lenses: ["observations"],
+            destinations: ["project", "archive"]
+          })
+        end)
+
+      assert_receive {:blocked_runtime_search, first_search, first_destination, first_lenses}
+      assert_receive {:blocked_runtime_search, second_search, second_destination, second_lenses}
+
+      assert :ok =
+               JidoGralkor.Runtime.replace(agent_server, ingestion_configuration("replacement"))
+
+      assert {[%Gralkor.Lens{destination: %{name: "replacement"}}], _destinations} =
+               JidoGralkor.Runtime.resolve_search!(agent_server, ["observations"], [])
+
+      send(first_search, :continue_runtime_search)
+      send(second_search, :continue_runtime_search)
+
+      assert {:ok, []} = Task.await(search)
+
+      assert Enum.sort([first_destination, second_destination]) ==
+               Enum.sort([
+                 %Gralkor.Destination{name: "project"},
+                 %Gralkor.Destination{name: "archive"}
+               ])
+
+      assert first_lenses == ["observations"]
+      assert second_lenses == ["observations"]
+      refute_receive {:blocked_runtime_search, _, _, _}
     end
 
     test "and later search uses any subsequently installed Destination definitions" do
@@ -1243,13 +1354,27 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
   describe "if consumer configuration claims the packaged personal Destination or personal-chat Lens" do
     test "then validation rejects the conflicting consumer definition before activating it" do
+      active = %{destinations: [%{name: "consumer-memory"}], lenses: [], reflections: []}
+      start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: active})
+
       for {collection, name} <- [{:destinations, "personal"}, {:lenses, "personal-chat"}] do
         config =
           %{destinations: [], lenses: [], reflections: []} |> Map.put(collection, [%{name: name}])
 
         assert {:error, {:reserved_definition_name, ^collection, ^name}} =
                  JidoGralkor.Runtime.validate(config)
+
+        assert {:error, {:reserved_definition_name, ^collection, ^name}} =
+                 JidoGralkor.Runtime.replace(self(), config)
+
+        assert JidoGralkor.Runtime.snapshot(self()) == active
       end
+
+      assert %Gralkor.Destination{name: "personal"} =
+               JidoGralkor.Runtime.destination!(self(), "personal")
+
+      assert %Gralkor.Lens{ingestion: Gralkor.Lens.Ingestion.Store} =
+               JidoGralkor.Runtime.lens!(self(), "personal-chat")
     end
   end
 
@@ -1268,10 +1393,35 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
   describe "when a caller selects the retired operator Destination or Lens" do
     test "then the operation fails with an explicit migration error before reading or writing memory" do
+      Application.put_env(:jido_gralkor, :destination_storage, RecordingDestinationStorage)
+
       start_supervised!(
         {JidoGralkor.Runtime,
          owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}}
       )
+
+      assert_raise ArgumentError, ~r/retired.*personal/, fn ->
+        Gralkor.Client.search(self(), %Gralkor.Search{
+          operator_id: "operator-one",
+          query: "memory",
+          destinations: ["operator"]
+        })
+      end
+
+      assert_raise ArgumentError, ~r/retired.*personal-chat/, fn ->
+        Gralkor.Client.search(self(), %Gralkor.Search{
+          operator_id: "operator-one",
+          query: "memory",
+          lenses: ["operator"]
+        })
+      end
+
+      assert_raise ArgumentError, ~r/retired.*personal-chat/, fn ->
+        Gralkor.Client.ingest(self(), %{ingestion_request("retired-ingestion") | lens: "operator"})
+      end
+
+      refute_receive {:runtime_search, _}
+      refute_receive {:runtime_ingestion, _}
 
       for {collection, replacement} <- [{:destination!, "personal"}, {:lens!, "personal-chat"}] do
         assert_raise ArgumentError, ~r/retired/, fn ->
