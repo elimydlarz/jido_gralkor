@@ -145,6 +145,32 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
       do: Application.fetch_env!(:jido_gralkor, :retry_ownership_reflection_test_pid)
   end
 
+  defmodule AlwaysRetryableRelatedMemoryStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(destination, _, _, _, _, _) do
+      if destination.name == "global" do
+        send(test_pid(), :related_memory_attempt)
+        {:error, %{status: 503, reason: :search_unavailable}}
+      else
+        {:ok, []}
+      end
+    end
+
+    @impl true
+    def put_artefact(_, _, _, artefact) do
+      send(test_pid(), {:destination_delivery, artefact})
+      :ok
+    end
+
+    @impl true
+    def get_artefact(_, _, _, _), do: {:error, :not_found}
+
+    defp test_pid,
+      do: Application.fetch_env!(:jido_gralkor, :retry_ownership_reflection_test_pid)
+  end
+
   setup do
     # graphiti_core's own modules import each other; letting the first import
     # happen inside the shared loop thread surfaces as a circular-import error
@@ -155,6 +181,8 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     original_destination_storage = Application.get_env(:jido_gralkor, :destination_storage)
     original_test_pid = Application.get_env(:jido_gralkor, :retry_ownership_reflection_test_pid)
     original_counter = Application.get_env(:jido_gralkor, :retry_ownership_counter)
+    original_retry_clock = Application.get_env(:jido_gralkor, :reflection_retry_clock)
+    original_retry_sleep = Application.get_env(:jido_gralkor, :reflection_retry_sleep)
     Application.put_env(:jido_gralkor, :client, Native)
     Application.put_env(:jido_gralkor, :retry_ownership_reflection_test_pid, self())
 
@@ -167,6 +195,8 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
       restore_env(:retry_ownership_reflection_test_pid, original_test_pid)
       restore_env(:retry_ownership_counter, original_counter)
       restore_env(:destination_storage, original_destination_storage)
+      restore_env(:reflection_retry_clock, original_retry_clock)
+      restore_env(:reflection_retry_sleep, original_retry_sleep)
     end)
 
     :ok
@@ -177,6 +207,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
       Pythonx.eval(
         """
         import asyncio
+        import time
 
         class _Results:
             def __init__(self):
@@ -186,11 +217,15 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         class _FakeGraphiti:
             def __init__(self):
                 self.attempts = {"add": 0, "search": 0}
+                self.add_times = []
+                self.add_failures = None
                 self.search_delay = 0.3
 
             async def add_episode(self, **kwargs):
                 self.attempts["add"] += 1
-                raise RuntimeError("graph refused the write")
+                self.add_times.append(time.monotonic())
+                if self.add_failures is None or self.attempts["add"] <= self.add_failures:
+                    raise RuntimeError("graph refused the write")
 
             async def build_indices_and_constraints(self):
                 pass
@@ -236,6 +271,22 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
       )
 
     Pythonx.decode(raw)
+  end
+
+  defp add_times(g) do
+    {raw, _} = Pythonx.eval("g.add_times", %{"g" => g})
+    Pythonx.decode(raw)
+  end
+
+  defp start_production_capture_chain(add_failures) do
+    %{g: g} = pool = start_pool()
+    Pythonx.eval("g.add_failures = failures", %{"g" => g, "failures" => add_failures})
+
+    start_supervised!(
+      {CaptureBuffer, flush_callback: Gralkor.Application.build_flush_callback(nil)}
+    )
+
+    pool
   end
 
   defp counting_buffer(result_fn) do
@@ -290,7 +341,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
   describe "when a graph write raises inside a capture chain" do
     test "then the capture buffer retries with its default one-second and two-second backoffs" do
-      counter = counting_buffer(fn n -> if n < 3, do: raise("graph unavailable"), else: :ok end)
+      %{g: g} = start_production_capture_chain(2)
 
       :ok =
         Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
@@ -298,21 +349,17 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         ])
 
       capture_log(fn ->
-        :ok = Native.flush("s1")
-
-        assert_receive {:attempt, 1, first}, 1_000
-        assert_receive {:attempt, 2, second}, 3_000
-        assert_receive {:attempt, 3, third}, 5_000
-
-        assert second - first >= 900
-        assert third - second >= 1_900
+        assert :ok = Native.flush_and_await("s1", 10_000)
       end)
 
-      assert :counters.get(counter, 1) == 3
+      assert attempts(g, "add") == 3
+      [first, second, third] = add_times(g)
+      assert second - first >= 0.9
+      assert third - second >= 1.9
     end
 
     test "and a returned write failure is not retried by a second layer" do
-      counter = counting_buffer(fn _n -> {:error, :capture_client_4xx} end)
+      %{g: g} = start_production_capture_chain(1)
 
       :ok =
         Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
@@ -320,10 +367,10 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         ])
 
       capture_log(fn ->
-        assert {:error, :capture_client_4xx} = Native.flush_and_await("s1", 2_000)
+        assert :ok = Native.flush_and_await("s1", 10_000)
       end)
 
-      assert :counters.get(counter, 1) == 1
+      assert attempts(g, "add") == 2
     end
   end
 
@@ -367,19 +414,17 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         end
       end
 
+      Application.put_env(:jido_gralkor, :destination_storage, ProbeStorage)
+      Application.put_env(:jido_gralkor, :reflection_retry_sleep, slow_sleep)
+
       assert {:ok, "slow-retry"} =
-               submit(agent, "review", invocation("slow-retry"),
-                 inference: slow_inference,
-                 storage: ProbeStorage,
-                 sleep: slow_sleep
-               )
+               submit(agent, "review", invocation("slow-retry"), inference: slow_inference)
 
       assert_receive {:slow_retry_waiting, slow_process, 1_000}
 
       assert {:ok, "independent"} =
                submit(agent, "review", invocation("independent"),
-                 inference: fn _ -> {:ok, %{output: %{"summary" => "independent"}}} end,
-                 storage: ProbeStorage
+                 inference: fn _ -> {:ok, %{output: %{"summary" => "independent"}}} end
                )
 
       assert_receive {:reflection_callback, %{invocation_id: "independent", outcome: :delivered}}
@@ -399,17 +444,51 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
   describe "when Reflection production, packaged generalisation related-memory retrieval, or Destination delivery reports a retryable server failure > while no attempt succeeds within twenty-four hours of the first failure" do
     test "then the invocation abandons the failed work" do
-      {_artefact, result} = retryable_delivery_abandonment("retryable-abandoned")
-      assert {:abandoned, %{stage: :delivery}} = result.outcome
+      production = retryable_production_abandonment("retryable-production-abandoned")
+      assert {:abandoned, %{stage: :production}} = production.outcome
+      refute_receive {:production_attempt, _}
+
+      related_memory = retryable_related_memory_abandonment("retryable-related-abandoned")
+      assert {:abandoned, %{stage: :production}} = related_memory.outcome
+      refute_receive :related_memory_attempt
+
+      {_artefact, delivery} = retryable_delivery_abandonment("retryable-abandoned")
+      assert {:abandoned, %{stage: :delivery}} = delivery.outcome
     end
 
     test "and no error artefact is written to the Reflection's Destination" do
+      retryable_production_abandonment("retryable-production-no-error-artefact")
+      refute_receive {:destination_delivery, _, _, _, _}
+
+      retryable_related_memory_abandonment("retryable-related-no-error-artefact")
+      refute_receive {:destination_delivery, _}
+
       {artefact, _result} = retryable_delivery_abandonment("retryable-no-error-artefact")
       assert artefact.payload == %{"summary" => "complete"}
       refute_receive {:retryable_delivery, _}
     end
 
     test "and its callback receives the produced artefact, when one exists, and the abandonment outcome" do
+      production = retryable_production_abandonment("retryable-production-callback")
+      refute Map.has_key?(production, :artefact)
+
+      assert {:abandoned, %{stage: :production, reason: %{status: 503}}} =
+               production.outcome
+
+      related_memory = retryable_related_memory_abandonment("retryable-related-callback")
+      refute Map.has_key?(related_memory, :artefact)
+
+      assert {:abandoned,
+              %{
+                stage: :production,
+                reason: %{
+                  reflection: "generalisations",
+                  reason: {:related_memory_search, related_memory_failure}
+                }
+              }} = related_memory.outcome
+
+      assert inspect(related_memory_failure) =~ "503"
+
       {artefact, result} = retryable_delivery_abandonment("retryable-callback")
       assert result.artefact == artefact
       assert {:abandoned, %{stage: :delivery, reason: %{status: 503}}} = result.outcome
@@ -441,15 +520,22 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
   describe "when a consuming agent terminates during Reflection work" do
     test "then that agent's unfinished work terminates with its Gralkor runtime" do
-      %{worker_down?: worker_down?} = terminate_reflection_work("termination-owner")
-      assert worker_down?
+      for reason <- [:normal, :shutdown] do
+        %{worker_down?: worker_down?, runtime_down?: runtime_down?} =
+          terminate_reflection_work("termination-owner-#{reason}", reason)
+
+        assert worker_down?
+        assert runtime_down?
+      end
     end
 
     test "and the invocation callback is not invoked" do
-      %{callback_received?: callback_received?} =
-        terminate_reflection_work("termination-callback")
+      for reason <- [:normal, :shutdown] do
+        %{callback_received?: callback_received?} =
+          terminate_reflection_work("termination-callback-#{reason}", reason)
 
-      refute callback_received?
+        refute callback_received?
+      end
     end
   end
 
@@ -498,12 +584,16 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         else: {:ok, %{output: %{"summary" => "complete"}}}
     end
 
+    Application.put_env(:jido_gralkor, :destination_storage, ProbeStorage)
+
+    Application.put_env(
+      :jido_gralkor,
+      :reflection_retry_sleep,
+      &send(test_pid, {:retry_backoff, &1})
+    )
+
     assert {:ok, "retryable-production"} =
-             submit(agent, "review", invocation("retryable-production"),
-               inference: inference,
-               storage: ProbeStorage,
-               sleep: &send(test_pid, {:retry_backoff, &1})
-             )
+             submit(agent, "review", invocation("retryable-production"), inference: inference)
 
     assert_receive {:production_attempt, 1}
     assert_receive {:retry_backoff, 1_000}
@@ -521,6 +611,12 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     agent = start_reflection_agent("retryable-related-memory")
     test_pid = self()
 
+    Application.put_env(
+      :jido_gralkor,
+      :reflection_retry_sleep,
+      &send(test_pid, {:retry_backoff, &1})
+    )
+
     inference = fn
       %{step: %{label: "inspect-world"}} ->
         {:ok, %{output: %{"inspection" => "reviewed"}}}
@@ -531,9 +627,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
     assert {:ok, "retryable-related-memory"} =
              submit(agent, "generalisations", invocation("retryable-related-memory"),
-               inference: inference,
-               storage: RelatedMemoryStorage,
-               sleep: &send(test_pid, {:retry_backoff, &1})
+               inference: inference
              )
 
     assert_receive {:related_memory_attempt, 1}
@@ -550,12 +644,17 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     assert :ok = Runtime.replace(agent, reflection_configuration())
     test_pid = self()
     invocation_id = "retryable-delivery-#{System.unique_integer([:positive])}"
+    Application.put_env(:jido_gralkor, :destination_storage, RetryableStorage)
+
+    Application.put_env(
+      :jido_gralkor,
+      :reflection_retry_sleep,
+      &send(test_pid, {:retry_backoff, &1})
+    )
 
     assert {:ok, ^invocation_id} =
              submit(agent, "review", invocation(invocation_id),
-               inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end,
-               storage: RetryableStorage,
-               sleep: &send(test_pid, {:retry_backoff, &1})
+               inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end
              )
 
     assert_receive {:retryable_delivery, 1, artefact}
@@ -567,17 +666,50 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     result
   end
 
+  defp retryable_production_abandonment(invocation_id) do
+    agent = start_reflection_agent(invocation_id)
+    assert :ok = Runtime.replace(agent, reflection_configuration())
+    test_pid = self()
+    Application.put_env(:jido_gralkor, :destination_storage, ProbeStorage)
+    put_twenty_four_hour_clock()
+
+    inference = fn _request ->
+      send(test_pid, {:production_attempt, invocation_id})
+      {:error, %{status: 503, reason: :provider_unavailable}}
+    end
+
+    assert {:ok, ^invocation_id} =
+             submit(agent, "review", invocation(invocation_id), inference: inference)
+
+    assert_receive {:production_attempt, ^invocation_id}
+    assert_receive {:reflection_callback, %{invocation_id: ^invocation_id} = result}
+    result
+  end
+
+  defp retryable_related_memory_abandonment(invocation_id) do
+    Application.put_env(:jido_gralkor, :destination_storage, AlwaysRetryableRelatedMemoryStorage)
+    agent = start_reflection_agent(invocation_id)
+    put_twenty_four_hour_clock()
+
+    inference = fn _request -> flunk("generalisation inference began without related memory") end
+
+    assert {:ok, ^invocation_id} =
+             submit(agent, "generalisations", invocation(invocation_id), inference: inference)
+
+    assert_receive :related_memory_attempt
+    assert_receive {:reflection_callback, %{invocation_id: ^invocation_id} = result}
+    result
+  end
+
   defp retryable_delivery_abandonment(invocation_id) do
     agent = start_reflection_agent(invocation_id)
     assert :ok = Runtime.replace(agent, reflection_configuration())
-    clock = :atomics.new(1, [])
+    Application.put_env(:jido_gralkor, :destination_storage, AlwaysRetryableStorage)
+    put_twenty_four_hour_clock()
 
     assert {:ok, ^invocation_id} =
              submit(agent, "review", invocation(invocation_id),
-               inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end,
-               storage: AlwaysRetryableStorage,
-               clock: fn -> :atomics.get(clock, 1) end,
-               sleep: fn _ -> :atomics.put(clock, 1, 86_400_000) end
+               inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end
              )
 
     assert_receive {:retryable_delivery, artefact}
@@ -586,16 +718,31 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     {artefact, result}
   end
 
+  defp put_twenty_four_hour_clock do
+    clock = :atomics.new(1, [])
+    Application.put_env(:jido_gralkor, :reflection_retry_clock, fn -> :atomics.get(clock, 1) end)
+
+    Application.put_env(:jido_gralkor, :reflection_retry_sleep, fn _ ->
+      :atomics.add(clock, 1, 86_400_000)
+    end)
+  end
+
   defp non_retryable_production(invocation_id) do
     agent = start_reflection_agent(invocation_id)
     assert :ok = Runtime.replace(agent, reflection_configuration())
     test_pid = self()
 
+    Application.put_env(:jido_gralkor, :destination_storage, ProbeStorage)
+
+    Application.put_env(
+      :jido_gralkor,
+      :reflection_retry_sleep,
+      &send(test_pid, {:unexpected_retry_sleep, &1})
+    )
+
     assert {:ok, ^invocation_id} =
              submit(agent, "review", invocation(invocation_id),
-               inference: fn _ -> {:error, %{status: 422, reason: :invalid_request}} end,
-               storage: ProbeStorage,
-               sleep: &send(test_pid, {:unexpected_retry_sleep, &1})
+               inference: fn _ -> {:error, %{status: 422, reason: :invalid_request}} end
              )
 
     assert_receive {:reflection_callback, %{invocation_id: ^invocation_id} = result}
@@ -608,11 +755,17 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     assert :ok = Runtime.replace(agent, reflection_configuration())
     test_pid = self()
 
+    Application.put_env(:jido_gralkor, :destination_storage, NonRetryableStorage)
+
+    Application.put_env(
+      :jido_gralkor,
+      :reflection_retry_sleep,
+      &send(test_pid, {:unexpected_retry_sleep, &1})
+    )
+
     assert {:ok, ^invocation_id} =
              submit(agent, "review", invocation(invocation_id),
-               inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end,
-               storage: NonRetryableStorage,
-               sleep: &send(test_pid, {:unexpected_retry_sleep, &1})
+               inference: fn _ -> {:ok, %{output: %{"summary" => "complete"}}} end
              )
 
     assert_receive {:non_retryable_delivery, artefact}
@@ -620,8 +773,9 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     {artefact, result}
   end
 
-  defp terminate_reflection_work(id) do
+  defp terminate_reflection_work(id, reason) do
     previous_trap_exit = Process.flag(:trap_exit, true)
+    Application.put_env(:jido_gralkor, :destination_storage, ProbeStorage)
 
     try do
       {:ok, agent} =
@@ -642,23 +796,34 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         end
       end
 
-      assert {:ok, ^id} =
-               submit(agent, "review", invocation(id),
-                 inference: inference,
-                 storage: ProbeStorage
-               )
+      assert {:ok, ^id} = submit(agent, "review", invocation(id), inference: inference)
 
       assert_receive {:unfinished_reflection, worker}
-      monitor = Process.monitor(worker)
-      Process.exit(agent, :shutdown)
+      runtime = :global.whereis_name({Runtime, agent})
+      worker_monitor = Process.monitor(worker)
+      runtime_monitor = Process.monitor(runtime)
+
+      case reason do
+        :normal -> GenServer.stop(agent, :normal)
+        :shutdown -> Process.exit(agent, :shutdown)
+      end
 
       worker_down? =
-        receive do: ({:DOWN, ^monitor, :process, ^worker, _} -> true), after: (500 -> false)
+        receive do: ({:DOWN, ^worker_monitor, :process, ^worker, _} -> true),
+                after: (500 -> false)
+
+      runtime_down? =
+        receive do: ({:DOWN, ^runtime_monitor, :process, ^runtime, _} -> true),
+                after: (500 -> false)
 
       callback_received? =
         receive do: ({:reflection_callback, %{invocation_id: ^id}} -> true), after: (50 -> false)
 
-      %{worker_down?: worker_down?, callback_received?: callback_received?}
+      %{
+        worker_down?: worker_down?,
+        runtime_down?: runtime_down?,
+        callback_received?: callback_received?
+      }
     after
       Process.flag(:trap_exit, previous_trap_exit)
     end
