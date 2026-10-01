@@ -75,17 +75,71 @@ defmodule Gralkor.ApplicationTest do
       assert {Gralkor.CaptureBuffer, _} = third
     end
 
+    @tag :integration
     test "and startup returns only once all three have initialised, so a consumer needs no separate readiness gate" do
-      System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
+      data_dir =
+        Path.join(
+          System.tmp_dir!(),
+          "ex_app_ready_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+        )
+
+      on_exit(fn -> File.rm_rf!(data_dir) end)
+      System.put_env("GRALKOR_DATA_DIR", data_dir)
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
+      test_pid = self()
 
-      assert [
-               {Gralkor.Python, [reap_orphans: true]},
-               {Gralkor.GraphitiPool, _},
-               {Gralkor.CaptureBuffer, opts}
-             ] = App.children()
+      [
+        {Gralkor.Python, python_opts},
+        {Gralkor.GraphitiPool, pool_opts},
+        {Gralkor.CaptureBuffer, buffer_opts}
+      ] = App.children()
 
-      assert is_function(Keyword.fetch!(opts, :flush_callback), 5)
+      python_opts =
+        Keyword.merge(python_opts,
+          list_orphans: fn -> [] end,
+          kill_pid: fn pid -> flunk("unexpected orphan kill #{pid}") end,
+          uv_init: fn -> :ok end,
+          smoke_import: fn -> :ok end,
+          smoke_import_provider: fn _provider -> :ok end,
+          install_loop_fn: fn ->
+            Process.sleep(50)
+            send(test_pid, {:initialised, Gralkor.Python})
+            :ok
+          end
+        )
+
+      pool_opts =
+        Keyword.merge(pool_opts,
+          install_loop_fn: fn -> :ok end,
+          construct_shared_clients: fn _llm, _embedder ->
+            %{llm_client: nil, embedder: nil, cross_encoder: nil}
+          end,
+          construct_falkor_db: fn _spec ->
+            Process.sleep(50)
+            send(test_pid, {:initialised, Gralkor.GraphitiPool})
+            :stub_falkor_db
+          end,
+          warmup: false
+        )
+
+      start_supervised!(%{
+        id: :gralkor_application_children,
+        type: :supervisor,
+        start:
+          {Supervisor, :start_link,
+           [
+             [
+               {Gralkor.Python, python_opts},
+               {Gralkor.GraphitiPool, pool_opts},
+               {Gralkor.CaptureBuffer, buffer_opts}
+             ],
+             [strategy: :one_for_one]
+           ]}
+      })
+
+      assert_received {:initialised, Gralkor.Python}
+      assert_received {:initialised, Gralkor.GraphitiPool}
+      assert :ok = Gralkor.CaptureBuffer.flush_all()
     end
 
     test "and the graph pool is constructed with the embedded connection" do
@@ -246,6 +300,7 @@ defmodule Gralkor.ApplicationTest do
                         id: "ingestion-one",
                         operator_id: "operator-one",
                         lens: "observations",
+                        source_kind: :conversation,
                         content: "Eli: Remember this\nSusu: I will",
                         source_description: "captured"
                       }}
