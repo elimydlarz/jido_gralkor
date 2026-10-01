@@ -161,8 +161,10 @@ defmodule JidoGralkor.Runtime do
   end
 
   @impl GenServer
-  def handle_info({:DOWN, monitor, :process, owner, _reason}, %{owner_monitor: monitor} = state)
-      when owner == state.owner do
+  def handle_info(
+        {:DOWN, monitor, :process, owner, _reason},
+        %{owner_monitor: monitor, owner: owner} = state
+      ) do
     {:stop, :shutdown, state}
   end
 
