@@ -219,7 +219,14 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       }
 
       artefact = Gralkor.Artefact.new("amber-review", %{"lesson" => "amber artefact memory"})
-      assert :ok = Gralkor.Destination.Storage.put_artefact(output, "review", "operator-one", artefact)
+
+      assert :ok =
+               Gralkor.Destination.Storage.put_artefact(
+                 output,
+                 "review",
+                 "operator-one",
+                 artefact
+               )
 
       assert {:ok, results} = Client.search(%Search{operator_id: "operator-one", query: "amber"})
 
@@ -237,7 +244,10 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert Enum.any?(
                results,
                &match?(
-                 %{destination: "first", episode: %{content: "amber lens memory", lens: "first-alpha"}},
+                 %{
+                   destination: "first",
+                   episode: %{content: "amber lens memory", lens: "first-alpha"}
+                 },
                  &1
                )
              )
@@ -248,7 +258,10 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  %{
                    destination: "second",
                    episode: %{
-                     artefact: %{id: "amber-review", payload: %{"lesson" => "amber artefact memory"}},
+                     artefact: %{
+                       id: "amber-review",
+                       payload: %{"lesson" => "amber artefact memory"}
+                     },
                      reflection: "review"
                    }
                  },
@@ -885,7 +898,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                "amber project owns amber lesson"
              ]
 
-      assert {:ok, [%{destination: "first", fact: %{fact: "amber lesson learns from amber project"}}]} =
+      assert {:ok,
+              [%{destination: "first", fact: %{fact: "amber lesson learns from amber project"}}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "amber",
@@ -988,7 +1002,12 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     test "then search fails before any Destination query is started" do
       for {selection, message, _dimension, _value} <- invalid_selections() do
         assert_raise ArgumentError, ~r/#{Regex.escape(message)}/, fn ->
-          Client.search(struct!(Search, Map.merge(selection, %{operator_id: "operator-one", query: "question"})))
+          Client.search(
+            struct!(
+              Search,
+              Map.merge(selection, %{operator_id: "operator-one", query: "question"})
+            )
+          )
         end
 
         refute_receive {:destination_search, _, _, _, _, _, _}
@@ -998,7 +1017,12 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     test "and no valid subset is searched" do
       for {selection, _message, _dimension, _value} <- invalid_selections() do
         assert_raise ArgumentError, fn ->
-          Client.search(struct!(Search, Map.merge(selection, %{operator_id: "operator-one", query: "question"})))
+          Client.search(
+            struct!(
+              Search,
+              Map.merge(selection, %{operator_id: "operator-one", query: "question"})
+            )
+          )
         end
 
         refute_receive {:destination_search, "first", _, _, _, _, _}
@@ -1009,7 +1033,12 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       for {selection, _message, dimension, _value} <- invalid_selections() do
         error =
           assert_raise ArgumentError, fn ->
-            Client.search(struct!(Search, Map.merge(selection, %{operator_id: "operator-one", query: "question"})))
+            Client.search(
+              struct!(
+                Search,
+                Map.merge(selection, %{operator_id: "operator-one", query: "question"})
+              )
+            )
           end
 
         case dimension do
@@ -1024,11 +1053,19 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       end
 
       assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
-        Client.search(%Search{operator_id: "operator-one", query: "question", destinations: ["missing"]})
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "question",
+          destinations: ["missing"]
+        })
       end
 
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
-        Client.search(%Search{operator_id: "operator-one", query: "question", lenses: ["missing"]})
+        Client.search(%Search{
+          operator_id: "operator-one",
+          query: "question",
+          lenses: ["missing"]
+        })
       end
     end
 
@@ -1036,7 +1073,12 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       for {selection, _message, _dimension, value} <- invalid_selections() do
         error =
           assert_raise ArgumentError, fn ->
-            Client.search(struct!(Search, Map.merge(selection, %{operator_id: "operator-one", query: "question"})))
+            Client.search(
+              struct!(
+                Search,
+                Map.merge(selection, %{operator_id: "operator-one", query: "question"})
+              )
+            )
           end
 
         assert error.message =~ inspect(value)

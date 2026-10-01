@@ -15,8 +15,12 @@ defmodule Gralkor.Client.NativeTest do
       :ok
     end
 
+    lens_callback = fn operator_id, agent, user, lens, turns, _ingestion_id, _runtime_owner ->
+      callback.(operator_id, agent, user, lens, turns)
+    end
+
     start_supervised!(
-      {CaptureBuffer, flush_callback: callback, lens_flush_callback: callback, retries: []}
+      {CaptureBuffer, flush_callback: callback, lens_flush_callback: lens_callback, retries: []}
     )
 
     :ok

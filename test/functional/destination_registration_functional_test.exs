@@ -295,9 +295,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       assert_raise ArgumentError,
                    ~r/invalid Gralkor runtime configuration: \{:blank_definition_name, :destinations, " "\}/,
                    fn ->
-                     mount!(
-                       runtime_configuration([[name: " "]], [], [reflection_definition()])
-                     )
+                     mount!(runtime_configuration([[name: " "]], [], [reflection_definition()]))
                    end
 
       refute Runtime.started?(self())
