@@ -306,6 +306,10 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     end
 
     test "and the error identifies the invalid graph data" do
+      assert_raise ArgumentError,
+                   ~r/invalid graph data: expected a Gralkor.Graph; got %\{nodes: \[\], relationships: \[\]\}/,
+                   fn -> Client.replace(request(%{nodes: [], relationships: []})) end
+
       assert_raise ArgumentError, ~r/invalid graph data.*missing/, fn ->
         Client.replace(
           request(%Graph{
