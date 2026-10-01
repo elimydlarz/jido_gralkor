@@ -221,6 +221,9 @@ defmodule Gralkor.Client do
     validate_graph_data!(graph)
   end
 
+  defp validate_graph!(%ReplaceableLens{}, graph),
+    do: invalid_graph!("expected a Gralkor.Graph", graph)
+
   defp validate_graph_data!(%Gralkor.Graph{nodes: nodes, relationships: relationships} = graph)
        when is_list(nodes) and is_list(relationships) do
     node_ids = validate_graph_nodes!(nodes, graph)
@@ -516,9 +519,13 @@ defmodule Gralkor.Client do
       raise ArgumentError, "invalid Lens name #{inspect(name)}"
     end
 
-    if String.contains?(name, [" [lens: ", " [gralkor: "]) do
-      raise ArgumentError,
-            "invalid Lens #{inspect(name)}: name contains reserved provenance syntax \" [lens: \""
+    case Enum.find([" [lens: ", " [gralkor: "], &String.contains?(name, &1)) do
+      nil ->
+        :ok
+
+      delimiter ->
+        raise ArgumentError,
+              "invalid Lens #{inspect(name)}: name contains reserved provenance syntax #{inspect(delimiter)}"
     end
 
     if name in ["default", "operator"] do
