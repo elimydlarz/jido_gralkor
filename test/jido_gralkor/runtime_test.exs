@@ -3,47 +3,6 @@ defmodule JidoGralkor.RuntimeTest do
 
   alias JidoGralkor.Runtime
 
-  describe "if Destination delivery reports a retryable server failure > while no retry succeeds within twenty-four hours" do
-    test "then delivery is abandoned without another attempt and the callback receives the artefact and abandonment" do
-      clock = start_supervised!({Agent, fn -> 0 end})
-      start_runtime(reflection_configuration())
-      test_pid = self()
-      artefact = Gralkor.Artefact.new("deadline-artefact", %{"summary" => "complete"})
-
-      run_reflection = fn _reflection, _invocation, _opts -> {:ok, artefact} end
-
-      deliver_artefact = fn _output, _reflection, _operator, delivered, _opts ->
-        send(test_pid, {:delivery_attempt, delivered})
-        {:error, %{status: 503, reason: :unavailable}}
-      end
-
-      assert {:ok, "deadline-invocation"} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("deadline-invocation"),
-                 &send(test_pid, {:reflection_callback, &1}),
-                 run_reflection: run_reflection,
-                 deliver_artefact: deliver_artefact,
-                 clock: fn -> Agent.get(clock, & &1) end,
-                 sleep: fn _delay -> Agent.update(clock, &(&1 + 86_400_000)) end
-               )
-
-      assert_receive {:delivery_attempt, artefact}
-
-      assert_receive {:reflection_callback,
-                      %{
-                        invocation_id: "deadline-invocation",
-                        artefact: ^artefact,
-                        outcome:
-                          {:abandoned,
-                           %{stage: :delivery, reason: %{status: 503, reason: :unavailable}}}
-                      }}
-
-      refute_receive {:delivery_attempt, _}
-    end
-  end
-
   describe "when a runtime starts for an owning AgentServer PID with valid complete configuration" do
     test "then one runtime owns that agent's active configuration" do
       configuration = reflection_configuration()
@@ -68,8 +27,24 @@ defmodule JidoGralkor.RuntimeTest do
     end
 
     test "and admitted Reflection production and delivery run asynchronously under that runtime" do
-      start_runtime(reflection_configuration())
       test_pid = self()
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts ->
+          send(test_pid, {:production_started, self()})
+
+          receive do
+            :release -> {:ok, Gralkor.Artefact.new("async", %{})}
+          end
+        end,
+        deliver_artefact: fn _output, _reflection, _operator, _artefact ->
+          send(test_pid, {:delivery_process, self()})
+          :ok
+        end
+      )
+
+      runtime = :global.whereis_name({Runtime, self()})
+      {:links, runtime_links} = Process.info(runtime, :links)
 
       assert {:ok, "async-invocation"} =
                Runtime.submit_reflection(
@@ -77,33 +52,53 @@ defmodule JidoGralkor.RuntimeTest do
                  "review",
                  invocation("async-invocation"),
                  &send(test_pid, {:reflection_callback, &1}),
-                 run_reflection: fn _reflection, _invocation, _opts ->
-                   send(test_pid, {:production_started, self()})
-
-                   receive do
-                     :release -> {:ok, Gralkor.Artefact.new("async", %{})}
-                   end
-                 end,
-                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
-                   :ok
-                 end
+                 []
                )
 
       assert_receive {:production_started, worker}
+      refute worker == runtime
+      assert {:dictionary, dictionary} = Process.info(worker, :dictionary)
+      assert Enum.any?(Keyword.get(dictionary, :"$ancestors", []), &(&1 in runtime_links))
       refute_receive {:reflection_callback, _}
       send(worker, :release)
+      assert_receive {:delivery_process, ^worker}
       assert_receive {:reflection_callback, %{outcome: :delivered}}
     end
   end
 
   describe "when a consumer replaces complete valid configuration" do
     test "then every definition is validated and resolved before activation" do
-      start_runtime(reflection_configuration())
-      replacement = replacement_configuration("new")
+      configuration = reflection_configuration()
+      start_runtime(configuration)
 
-      assert :ok = Runtime.replace(self(), replacement)
-      assert Runtime.snapshot(self()) == replacement
-      assert Runtime.destination!(self(), "new").name == "new"
+      late_failure = %{
+        replacement_configuration("new")
+        | lenses: [%{lens_configuration() | destination: "new"}],
+          reflections: [
+            hd(replacement_configuration("new").reflections),
+            %{
+              name: "late",
+              outputs: [%{kind: :destination, destination: "undeclared"}],
+              chain_of_thought: %{steps: []}
+            }
+          ]
+      }
+
+      assert {:error, {:unknown_destination, :reflections, "late", "undeclared"}} =
+               Runtime.replace(self(), late_failure)
+
+      assert Runtime.snapshot(self()) == configuration
+
+      assert_raise ArgumentError, ~r/unknown_definition/, fn ->
+        Runtime.destination!(self(), "new")
+      end
+
+      assert_raise ArgumentError, ~r/unknown_definition/, fn ->
+        Runtime.lens!(self(), "custom")
+      end
+
+      assert Runtime.reflection!(self(), "review").outputs |> hd() |> get_in([:destination]) |> Map.fetch!(:name) ==
+               "reviews"
     end
 
     test "and the complete configuration becomes active as one snapshot" do
@@ -118,14 +113,6 @@ defmodule JidoGralkor.RuntimeTest do
       assert :ok = Runtime.replace(self(), replacement_configuration("new"))
       assert Runtime.destination!(self(), "personal").name == "personal"
       assert Runtime.reflection!(self(), "generalisations").name == "generalisations"
-    end
-
-    test "and replacement returns only after the new snapshot is active" do
-      start_runtime(reflection_configuration())
-      replacement = replacement_configuration("new")
-
-      assert :ok = Runtime.replace(self(), replacement)
-      assert Runtime.destination!(self(), "new").name == "new"
     end
 
     test "and another owner's runtime remains unchanged" do
@@ -150,6 +137,14 @@ defmodule JidoGralkor.RuntimeTest do
       assert :ok = Runtime.replace(self(), replacement_configuration("new"))
       assert Runtime.destination!(owner, "reviews").name == "reviews"
       send(owner, :stop)
+    end
+
+    test "and replacement returns only after the new snapshot is active" do
+      start_runtime(reflection_configuration())
+      replacement = replacement_configuration("new")
+
+      assert :ok = Runtime.replace(self(), replacement)
+      assert Runtime.destination!(self(), "new").name == "new"
     end
   end
 
@@ -201,498 +196,40 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "when search definitions are resolved from an active runtime > if any selected name is unknown" do
-    test "then resolution fails without returning a partial result" do
-      start_runtime(reflection_configuration())
-
-      assert_raise ArgumentError, ~r/unknown_definition/, fn ->
-        Runtime.resolve_search!(self(), [], ["missing"])
-      end
-    end
-  end
-
   describe "when search definitions are resolved from an active runtime" do
     test "and later replacement does not mutate the returned definitions" do
-      start_runtime(reflection_configuration())
-      original = Runtime.destination!(self(), "reviews")
-      assert :ok = Runtime.replace(self(), replacement_configuration("new"))
-      assert original.name == "reviews"
-      assert Runtime.destination!(self(), "new").name == "new"
+      start_runtime(%{reflection_configuration() | lenses: [lens_configuration()]})
+
+      {lenses, destinations} = Runtime.resolve_search!(self(), ["custom"], [])
+
+      replacement = %{
+        replacement_configuration("new")
+        | lenses: [%{lens_configuration() | destination: "new"}]
+      }
+
+      assert :ok = Runtime.replace(self(), replacement)
+
+      assert [%Gralkor.Lens{name: "custom", destination: %{name: "reviews"}}] = lenses
+      assert Enum.map(destinations, & &1.name) == ["personal", "global", "reviews"]
+
+      assert {[%Gralkor.Lens{destination: %{name: "new"}}], current_destinations} =
+               Runtime.resolve_search!(self(), ["custom"], [])
+
+      assert Enum.map(current_destinations, & &1.name) == ["personal", "global", "new"]
     end
   end
 
-  describe "when Reflection production and Destination delivery succeed" do
-    test "then the artefact is written once through the declared Destination output" do
-      start_runtime(reflection_configuration())
-      test_pid = self()
-      artefact = Gralkor.Artefact.new("success", %{})
-
-      assert {:ok, "success-invocation"} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("success-invocation"),
-                 &send(test_pid, {:reflection_callback, &1}),
-                 run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
-                 deliver_artefact: fn output, "review", "operator-one", ^artefact, _opts ->
-                   send(test_pid, {:delivered, output.destination.name})
-                   :ok
-                 end
-               )
-
-      assert_receive {:delivered, "reviews"}
-
-      assert_receive {:reflection_callback,
-                      %{
-                        invocation_id: "success-invocation",
-                        artefact: ^artefact,
-                        outcome: :delivered
-                      }}
-    end
-
-    test "and the callback receives the invocation identifier, artefact, and delivered outcome" do
-      start_runtime(reflection_configuration())
-      test_pid = self()
-      artefact = Gralkor.Artefact.new("success", %{})
-
-      assert {:ok, "success-callback"} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("success-callback"),
-                 &send(test_pid, {:reflection_callback, &1}),
-                 run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
-                 deliver_artefact: fn _output, _reflection, _operator, ^artefact, _opts -> :ok end
-               )
-
-      assert_receive {:reflection_callback,
-                      %{
-                        invocation_id: "success-callback",
-                        artefact: ^artefact,
-                        outcome: :delivered
-                      }}
-    end
-  end
-
-  describe "when a valid named Reflection submission is admitted" do
-    test "then callback, invocation identifier, operator identifier, and Reflection existence are validated before work starts" do
-      start_runtime(reflection_configuration())
-      parent = self()
-
-      assert {:ok, "valid"} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("valid"),
-                 fn result -> send(parent, {:callback, result}) end,
-                 run_reflection: fn reflection,
-                                    %{id: "valid", operator_id: "operator-one"},
-                                    _opts ->
-                   send(parent, {:producer, reflection.name})
-                   {:ok, Gralkor.Artefact.new("valid", %{})}
-                 end,
-                 deliver_artefact: fn _output, "review", "operator-one", _artefact, _opts ->
-                   :ok
-                 end
-               )
-
-      assert_receive {:producer, "review"}
-      assert_receive {:callback, %{invocation_id: "valid", outcome: :delivered}}
-    end
-
-    test "and submission returns the invocation identifier without waiting for production" do
-      start_runtime(reflection_configuration())
-      parent = self()
-
-      assert {:ok, "admitted"} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("admitted"),
-                 fn result -> send(parent, {:callback, result}) end,
-                 run_reflection: fn _reflection, _invocation, _opts ->
-                   send(parent, {:ran, self()})
-
-                   receive do
-                     :release -> {:ok, Gralkor.Artefact.new("admitted", %{})}
-                   end
-                 end,
-                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
-                   :ok
-                 end
-               )
-
-      assert_receive {:ran, worker}
-      refute_receive {:callback, _}
-      send(worker, :release)
-      assert_receive {:callback, %{invocation_id: "admitted"}}
-    end
-
-    test "and the work retains the Reflection definition active at admission" do
-      start_runtime(reflection_configuration())
-      parent = self()
-
-      assert {:ok, "retained"} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("retained"),
-                 &send(parent, {:callback, &1}),
-                 run_reflection: fn reflection, _invocation, _opts ->
-                   destination =
-                     reflection.outputs |> hd() |> Map.fetch!(:destination) |> Map.fetch!(:name)
-
-                   send(parent, {:reflection, destination, self()})
-
-                   receive do
-                     :release -> {:ok, Gralkor.Artefact.new("retained", %{})}
-                   end
-                 end,
-                 deliver_artefact: fn output, _reflection, _operator, _artefact, _opts ->
-                   send(parent, {:delivered_destination, output.destination.name})
-                   :ok
-                 end
-               )
-
-      assert_receive {:reflection, "reviews", worker}
-      assert :ok = Runtime.replace(self(), replacement_configuration("new"))
-      send(worker, :release)
-      assert_receive {:delivered_destination, "reviews"}
-      assert_receive {:callback, %{outcome: :delivered}}
-    end
-
-    test "and later submission uses a subsequently installed definition" do
-      start_runtime(reflection_configuration())
-      assert :ok = Runtime.replace(self(), replacement_configuration("new"))
-
-      parent = self()
-
-      assert {:ok, "later"} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("later"),
-                 &send(parent, {:callback, &1}),
-                 run_reflection: fn reflection, _invocation, _opts ->
-                   destination =
-                     reflection.outputs |> hd() |> Map.fetch!(:destination) |> Map.fetch!(:name)
-
-                   send(parent, {:reflection, destination})
-                   {:error, :stop}
-                 end
-               )
-
-      assert_receive {:reflection, "new"}
-    end
-  end
-
-  describe "if the callback is invalid, an invocation or operator identifier is missing or blank, or the Reflection is unknown" do
-    test "then submission returns the identified failure before production starts" do
-      start_runtime(reflection_configuration())
-
-      assert {:error, {:invalid_invocation_callback, :invalid}} =
-               Runtime.submit_reflection(self(), "review", invocation("bad"), :invalid, [])
-
-      assert {:error, {:invalid_operator_id, nil}} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 %{id: "missing-operator"},
-                 fn _ -> :ok end,
-                 []
-               )
-
-      assert {:error, {:invalid_invocation_id, "  "}} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 %{id: "  ", operator_id: "operator-one"},
-                 fn _ -> :ok end,
-                 []
-               )
-
-      assert {:error, {:invalid_invocation_id, nil}} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 %{operator_id: "operator-one"},
-                 fn _ -> :ok end,
-                 []
-               )
-
-      assert {:error, {:unknown_definition, :reflections, "missing"}} =
-               Runtime.submit_reflection(
-                 self(),
-                 "missing",
-                 invocation("unknown"),
-                 fn _ -> :ok end,
-                 []
-               )
-    end
-  end
-
-  describe "if Reflection production reports a retryable server failure" do
-    test "then production retries with exponential backoff" do
-      start_runtime(reflection_configuration())
-      parent = self()
-      attempts = Agent.start_link(fn -> 0 end) |> elem(1)
-      sleeps = Agent.start_link(fn -> [] end) |> elem(1)
-
-      assert {:ok, _} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("retry-success"),
-                 fn result -> send(parent, {:callback, result}) end,
-                 run_reflection: fn _reflection, _invocation, _opts ->
-                   attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
-
-                   if attempt <= 2,
-                     do: {:error, %{status: 503}},
-                     else: {:ok, Gralkor.Artefact.new("retry", %{})}
-                 end,
-                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
-                   :ok
-                 end,
-                 sleep: fn delay -> Agent.update(sleeps, &[delay | &1]) end
-               )
-
-      assert_receive {:callback, %{outcome: :delivered}}
-      assert Agent.get(attempts, & &1) == 3
-      assert Agent.get(sleeps, &Enum.reverse/1) == [1_000, 2_000]
-    end
-  end
-
-  describe "if Reflection production reports a retryable server failure > while a retry succeeds before twenty-four hours" do
-    test "then delivery proceeds and the callback receives the terminal outcome" do
-      start_runtime(reflection_configuration())
-      parent = self()
-      attempts = start_supervised!({Agent, fn -> 0 end})
-
-      assert {:ok, _} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("retry-terminal"),
-                 &send(parent, {:callback, &1}),
-                 run_reflection: fn _r, _i, _o ->
-                   attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
-
-                   if attempt == 1,
-                     do: {:error, %{status: 503}},
-                     else: {:ok, Gralkor.Artefact.new("terminal", %{})}
-                 end,
-                 sleep: fn _ -> :ok end,
-                 deliver_artefact: fn _o, _r, _op, _a, _opts -> :ok end
-               )
-
-      assert_receive {:callback, %{outcome: :delivered}}
-    end
-  end
-
-  describe "if Reflection production fails without a retryable server or non-retryable client status" do
-    test "then no Destination output is attempted and the callback receives the production failure" do
-      start_runtime(reflection_configuration())
-      test_pid = self()
-
-      assert {:ok, _} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("production-failure"),
-                 &send(test_pid, {:reflection_callback, &1}),
-                 run_reflection: fn _reflection, _invocation, _opts -> {:error, :bad_output} end,
-                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
-                   send(test_pid, :unexpected_delivery)
-                   :ok
-                 end
-               )
-
-      assert_receive {:reflection_callback, %{outcome: {:production_failed, :bad_output}}}
-      refute_receive :unexpected_delivery
-    end
-  end
-
-  describe "if Reflection production reports a non-retryable client failure" do
-    test "then it is not retried or delivered and the callback receives immediate production abandonment" do
-      start_runtime(reflection_configuration())
-      parent = self()
-
-      assert {:ok, _} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("production-client"),
-                 &send(parent, {:callback, &1}),
-                 run_reflection: fn _reflection, _invocation, _opts ->
-                   {:error, %{status: 400, reason: :invalid}}
-                 end,
-                 deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts ->
-                   send(parent, :unexpected_delivery)
-                   :ok
-                 end
-               )
-
-      assert_receive {:callback,
-                      %{outcome: {:abandoned, %{stage: :production, reason: %{status: 400}}}}}
-
-      refute_receive :unexpected_delivery
-    end
-  end
-
-  describe "if Reflection production reports a retryable server failure > while no retry succeeds within twenty-four hours" do
-    test "then production is abandoned without another attempt and the callback receives abandonment" do
-      start_runtime(reflection_configuration())
-      parent = self()
-      clock = start_supervised!({Agent, fn -> 0 end})
-
-      assert {:ok, _} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("production-deadline"),
-                 &send(parent, {:callback, &1}),
-                 run_reflection: fn _reflection, _invocation, _opts ->
-                   send(parent, :production_attempt)
-                   {:error, %{status: 503}}
-                 end,
-                 clock: fn -> Agent.get(clock, & &1) end,
-                 sleep: fn _delay -> Agent.update(clock, &(&1 + 86_400_000)) end
-               )
-
-      assert_receive :production_attempt
-      assert_receive {:callback, %{outcome: {:abandoned, %{stage: :production}}}}
-      refute_receive :production_attempt
-    end
-  end
-
-  describe "if Destination delivery reports a retryable server failure" do
-    test "then delivery retries the same artefact with exponential backoff" do
-      start_runtime(reflection_configuration())
-      parent = self()
-      attempts = start_supervised!({Agent, fn -> 0 end})
-      sleeps = start_supervised!({Agent, fn -> [] end}, id: :delivery_retry_sleeps)
-      artefact = Gralkor.Artefact.new("delivery-retry", %{})
-
-      assert {:ok, _} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("delivery-retry"),
-                 &send(parent, {:callback, &1}),
-                 run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
-                 deliver_artefact: fn _output, _reflection, _operator, ^artefact, _opts ->
-                   attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
-                   if attempt <= 2, do: {:error, %{status: 503}}, else: :ok
-                 end,
-                 sleep: fn delay -> Agent.update(sleeps, &[delay | &1]) end
-               )
-
-      assert_receive {:callback, %{artefact: ^artefact, outcome: :delivered}}
-      assert Agent.get(attempts, & &1) == 3
-      assert Agent.get(sleeps, &Enum.reverse/1) == [1_000, 2_000]
-    end
-  end
-
-  describe "if Destination delivery reports a retryable server failure > while a retry succeeds before twenty-four hours" do
-    test "then the callback receives the delivered outcome" do
-      start_runtime(reflection_configuration())
-      parent = self()
-
-      assert {:ok, _} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("delivery-terminal"),
-                 &send(parent, {:callback, &1}),
-                 run_reflection: fn _r, _i, _o -> {:ok, Gralkor.Artefact.new("terminal", %{})} end,
-                 deliver_artefact: fn _o, _r, _op, _a, _opts -> :ok end
-               )
-
-      assert_receive {:callback, %{outcome: :delivered}}
-    end
-  end
-
-  describe "if Destination delivery reports a non-retryable client failure" do
-    test "then no retry or error artefact is written and the callback receives abandonment with the produced artefact" do
-      start_runtime(reflection_configuration())
-      test_pid = self()
-      artefact = Gralkor.Artefact.new("client-failure", %{})
-
-      assert {:ok, _} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("client-failure"),
-                 &send(test_pid, {:reflection_callback, &1}),
-                 run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
-                 deliver_artefact: fn _output, _reflection, _operator, ^artefact, _opts ->
-                   send(test_pid, :delivery_attempt)
-                   {:error, %{status: 400, reason: :invalid}}
-                 end
-               )
-
-      assert_receive :delivery_attempt
-
-      assert_receive {:reflection_callback,
-                      %{artefact: ^artefact, outcome: {:abandoned, %{stage: :delivery}}}}
-
-      refute_receive :delivery_attempt
-    end
-  end
-
-  describe "when the owning runtime terminates during unfinished Reflection work" do
-    test "then the unfinished work terminates with that runtime" do
-      start_runtime(reflection_configuration())
-      runtime = :global.whereis_name({Runtime, self()})
-      test_pid = self()
-
-      assert {:ok, _} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("cancelled"),
-                 &send(test_pid, {:reflection_callback, &1}),
-                 run_reflection: fn _reflection, _invocation, _opts ->
-                   send(test_pid, {:work_started, self()})
-
-                   receive do
-                     :never -> {:ok, Gralkor.Artefact.new("never", %{})}
-                   end
-                 end
-               )
-
-      assert_receive {:work_started, worker}
-      monitor_ref = Process.monitor(worker)
-      Process.exit(runtime, :kill)
-      assert_receive {:DOWN, ^monitor_ref, :process, ^worker, _reason}
-    end
-
-    test "and its invocation callback is not invoked" do
-      start_runtime(reflection_configuration())
-      runtime = :global.whereis_name({Runtime, self()})
-      test_pid = self()
-
-      assert {:ok, _} =
-               Runtime.submit_reflection(
-                 self(),
-                 "review",
-                 invocation("cancelled-callback"),
-                 &send(test_pid, {:reflection_callback, &1}),
-                 run_reflection: fn _reflection, _invocation, _opts ->
-                   send(test_pid, {:work_started, self()})
-
-                   receive do
-                     :never -> {:ok, Gralkor.Artefact.new("never", %{})}
-                   end
-                 end
-               )
-
-      assert_receive {:work_started, worker}
-      monitor_ref = Process.monitor(worker)
-      Process.exit(runtime, :kill)
-      assert_receive {:DOWN, ^monitor_ref, :process, ^worker, _reason}
-      refute_receive {:reflection_callback, _}, 100
+  describe "when search definitions are resolved from an active runtime > if any selected name is unknown" do
+    test "then resolution fails without returning a partial result" do
+      start_runtime(%{reflection_configuration() | lenses: [lens_configuration()]})
+
+      assert_raise ArgumentError, ~r/unknown_definition, :destinations, "missing"/, fn ->
+        Runtime.resolve_search!(self(), [], ["reviews", "missing"])
+      end
+
+      assert_raise ArgumentError, ~r/unknown_definition, :lenses, "missing"/, fn ->
+        Runtime.resolve_search!(self(), ["custom", "missing"], ["reviews"])
+      end
     end
   end
 
@@ -743,27 +280,577 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "when independently submitted Reflection invocations run" do
-    test "then each invocation progresses without waiting for another invocation" do
-      start_runtime(reflection_configuration())
+  describe "when a valid named Reflection submission is admitted" do
+    test "then callback, invocation identifier, operator identifier, and Reflection existence are validated before work starts" do
       parent = self()
 
-      run_reflection = fn _reflection, invocation, _opts ->
-        case invocation.id do
-          "one" ->
-            send(parent, {:blocked, self()})
+      start_runtime(reflection_configuration(),
+        run_reflection: fn reflection, %{id: "valid", operator_id: "operator-one"}, _opts ->
+          send(parent, {:producer, reflection.name})
+          {:ok, Gralkor.Artefact.new("valid", %{})}
+        end,
+        deliver_artefact: fn _output, "review", "operator-one", _artefact -> :ok end
+      )
 
-            receive do
-              :release -> {:ok, Gralkor.Artefact.new(invocation.id, %{})}
-            end
+      assert {:ok, "valid"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("valid"),
+                 fn result -> send(parent, {:callback, result}) end,
+                 []
+               )
 
-          "two" ->
-            send(parent, :second_started)
-            {:ok, Gralkor.Artefact.new(invocation.id, %{})}
+      assert_receive {:producer, "review"}
+      assert_receive {:callback, %{invocation_id: "valid", outcome: :delivered}}
+    end
+
+    test "and submission returns the invocation identifier without waiting for production" do
+      parent = self()
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts ->
+          send(parent, {:ran, self()})
+
+          receive do
+            :release -> {:ok, Gralkor.Artefact.new("admitted", %{})}
+          end
+        end,
+        deliver_artefact: fn _output, _reflection, _operator, _artefact -> :ok end
+      )
+
+      assert {:ok, "admitted"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("admitted"),
+                 fn result -> send(parent, {:callback, result}) end,
+                 []
+               )
+
+      assert_receive {:ran, worker}
+      refute_receive {:callback, _}
+      send(worker, :release)
+      assert_receive {:callback, %{invocation_id: "admitted"}}
+    end
+
+    test "and the work retains the Reflection definition active at admission" do
+      parent = self()
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn reflection, _invocation, _opts ->
+          destination =
+            reflection.outputs |> hd() |> Map.fetch!(:destination) |> Map.fetch!(:name)
+
+          send(parent, {:reflection, destination, self()})
+
+          receive do
+            :release -> {:ok, Gralkor.Artefact.new("retained", %{})}
+          end
+        end,
+        deliver_artefact: fn output, _reflection, _operator, _artefact ->
+          send(parent, {:delivered_destination, output.destination.name})
+          :ok
         end
-      end
+      )
 
-      deliver_artefact = fn _output, _reflection, _operator, _artefact, _opts -> :ok end
+      assert {:ok, "retained"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("retained"),
+                 &send(parent, {:callback, &1}),
+                 []
+               )
+
+      assert_receive {:reflection, "reviews", worker}
+      assert :ok = Runtime.replace(self(), replacement_configuration("new"))
+      send(worker, :release)
+      assert_receive {:delivered_destination, "reviews"}
+      assert_receive {:callback, %{outcome: :delivered}}
+    end
+
+    test "and later submission uses a subsequently installed definition" do
+      parent = self()
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn reflection, _invocation, _opts ->
+          destination =
+            reflection.outputs |> hd() |> Map.fetch!(:destination) |> Map.fetch!(:name)
+
+          send(parent, {:reflection, destination})
+          {:error, :stop}
+        end
+      )
+
+      assert :ok = Runtime.replace(self(), replacement_configuration("new"))
+
+      assert {:ok, "later"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("later"),
+                 &send(parent, {:callback, &1}),
+                 []
+               )
+
+      assert_receive {:reflection, "new"}
+    end
+  end
+
+  describe "if the callback is invalid, an invocation or operator identifier is missing or blank, or the Reflection is unknown" do
+    test "then submission returns the identified failure before production starts" do
+      parent = self()
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, invocation, _opts ->
+          send(parent, {:production_started, invocation})
+          {:error, :unexpected_production}
+        end
+      )
+
+      assert {:error, {:invalid_invocation_callback, :invalid}} =
+               Runtime.submit_reflection(self(), "review", invocation("bad"), :invalid, [])
+
+      assert {:error, {:invalid_operator_id, nil}} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 %{id: "missing-operator"},
+                 fn _ -> :ok end,
+                 []
+               )
+
+      assert {:error, {:invalid_operator_id, "  "}} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 %{id: "blank-operator", operator_id: "  "},
+                 fn _ -> :ok end,
+                 []
+               )
+
+      assert {:error, {:invalid_invocation_id, "  "}} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 %{id: "  ", operator_id: "operator-one"},
+                 fn _ -> :ok end,
+                 []
+               )
+
+      assert {:error, {:invalid_invocation_id, nil}} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 %{operator_id: "operator-one"},
+                 fn _ -> :ok end,
+                 []
+               )
+
+      assert {:error, {:unknown_definition, :reflections, "missing"}} =
+               Runtime.submit_reflection(
+                 self(),
+                 "missing",
+                 invocation("unknown"),
+                 fn _ -> :ok end,
+                 []
+               )
+
+      assert {:error, {:unsupported_reflection_options, [:artefact_id, :retry_deadline_ms]}} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("unsupported-options"),
+                 fn _ -> :ok end,
+                 artefact_id: "consumer-chosen",
+                 retry_deadline_ms: 1
+               )
+
+      refute_receive {:production_started, _}
+    end
+  end
+
+  describe "when Reflection production and Destination delivery succeed" do
+    test "then the artefact is written once through the declared Destination output" do
+      test_pid = self()
+      artefact = Gralkor.Artefact.new("success", %{})
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
+        deliver_artefact: fn output, "review", "operator-one", ^artefact ->
+          send(test_pid, {:delivered, output.destination.name})
+          :ok
+        end
+      )
+
+      assert {:ok, "success-invocation"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("success-invocation"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 []
+               )
+
+      assert_receive {:delivered, "reviews"}
+
+      assert_receive {:reflection_callback,
+                      %{
+                        invocation_id: "success-invocation",
+                        artefact: ^artefact,
+                        outcome: :delivered
+                      }}
+
+      refute_receive {:delivered, _}
+    end
+
+    test "and the callback receives the invocation identifier, artefact, and delivered outcome" do
+      test_pid = self()
+      artefact = Gralkor.Artefact.new("success", %{})
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
+        deliver_artefact: fn _output, _reflection, _operator, ^artefact -> :ok end
+      )
+
+      assert {:ok, "success-callback"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("success-callback"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 []
+               )
+
+      assert_receive {:reflection_callback,
+                      %{
+                        invocation_id: "success-callback",
+                        artefact: ^artefact,
+                        outcome: :delivered
+                      }}
+    end
+  end
+
+  describe "if Reflection production fails without a retryable server or non-retryable client status" do
+    test "then no Destination output is attempted and the callback receives the production failure" do
+      test_pid = self()
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts -> {:error, :bad_output} end,
+        deliver_artefact: fn _output, _reflection, _operator, _artefact ->
+          send(test_pid, :unexpected_delivery)
+          :ok
+        end
+      )
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("production-failure"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 []
+               )
+
+      assert_receive {:reflection_callback, %{outcome: {:production_failed, :bad_output}}}
+      refute_receive :unexpected_delivery
+    end
+  end
+
+  describe "if Reflection production reports a non-retryable client failure" do
+    test "then it is not retried or delivered and the callback receives immediate production abandonment" do
+      parent = self()
+      put_retry_timing(sleep: fn delay -> send(parent, {:unexpected_sleep, delay}) end)
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts ->
+          send(parent, :production_attempt)
+          {:error, %{status: 400, reason: :invalid}}
+        end,
+        deliver_artefact: fn _output, _reflection, _operator, _artefact ->
+          send(parent, :unexpected_delivery)
+          :ok
+        end
+      )
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("production-client"),
+                 &send(parent, {:callback, &1}),
+                 []
+               )
+
+      assert_receive :production_attempt
+
+      assert_receive {:callback,
+                      %{outcome: {:abandoned, %{stage: :production, reason: %{status: 400}}}}}
+
+      refute_receive :production_attempt
+      refute_receive {:unexpected_sleep, _}
+      refute_receive :unexpected_delivery
+    end
+  end
+
+  describe "if Reflection production reports a retryable server failure" do
+    test "then production retries with exponential backoff" do
+      parent = self()
+      attempts = start_supervised!({Agent, fn -> 0 end}, id: :production_attempts)
+      sleeps = start_supervised!({Agent, fn -> [] end}, id: :production_sleeps)
+      put_retry_timing(sleep: fn delay -> Agent.update(sleeps, &[delay | &1]) end)
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts ->
+          attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
+
+          if attempt <= 2,
+            do: {:error, %{status: 503}},
+            else: {:ok, Gralkor.Artefact.new("retry", %{})}
+        end,
+        deliver_artefact: fn _output, _reflection, _operator, _artefact -> :ok end
+      )
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("retry-success"),
+                 fn result -> send(parent, {:callback, result}) end,
+                 []
+               )
+
+      assert_receive {:callback, %{outcome: :delivered}}
+      assert Agent.get(attempts, & &1) == 3
+      assert Agent.get(sleeps, &Enum.reverse/1) == [1_000, 2_000]
+    end
+  end
+
+  describe "if Reflection production reports a retryable server failure > while a retry succeeds before twenty-four hours" do
+    test "then delivery proceeds and the callback receives the terminal outcome" do
+      parent = self()
+      attempts = start_supervised!({Agent, fn -> 0 end})
+      put_retry_timing(sleep: fn _ -> :ok end)
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _r, _i, _o ->
+          attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
+
+          if attempt == 1,
+            do: {:error, %{status: 503}},
+            else: {:ok, Gralkor.Artefact.new("terminal", %{})}
+        end,
+        deliver_artefact: fn _o, _r, _op, artefact ->
+          send(parent, {:delivered, artefact})
+          :ok
+        end
+      )
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("retry-terminal"),
+                 &send(parent, {:callback, &1}),
+                 []
+               )
+
+      assert_receive {:delivered, %Gralkor.Artefact{id: "terminal"}}
+      assert_receive {:callback, %{outcome: :delivered}}
+      assert Agent.get(attempts, & &1) == 2
+    end
+  end
+
+  describe "if Reflection production reports a retryable server failure > while no retry succeeds within twenty-four hours" do
+    test "then production is abandoned without another attempt and the callback receives abandonment" do
+      parent = self()
+      clock = start_supervised!({Agent, fn -> 0 end})
+
+      put_retry_timing(
+        clock: fn -> Agent.get(clock, & &1) end,
+        sleep: fn _delay -> Agent.update(clock, &(&1 + 86_400_000)) end
+      )
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts ->
+          send(parent, :production_attempt)
+          {:error, %{status: 503}}
+        end
+      )
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("production-deadline"),
+                 &send(parent, {:callback, &1}),
+                 []
+               )
+
+      assert_receive :production_attempt
+      assert_receive {:callback, %{outcome: {:abandoned, %{stage: :production}}}}
+      refute_receive :production_attempt
+    end
+  end
+
+  describe "if Destination delivery reports a non-retryable client failure" do
+    test "then no retry or error artefact is written and the callback receives abandonment with the produced artefact" do
+      test_pid = self()
+      artefact = Gralkor.Artefact.new("client-failure", %{})
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
+        deliver_artefact: fn _output, _reflection, _operator, ^artefact ->
+          send(test_pid, :delivery_attempt)
+          {:error, %{status: 400, reason: :invalid}}
+        end
+      )
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("client-failure"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 []
+               )
+
+      assert_receive :delivery_attempt
+
+      assert_receive {:reflection_callback,
+                      %{artefact: ^artefact, outcome: {:abandoned, %{stage: :delivery}}}}
+
+      refute_receive :delivery_attempt
+    end
+  end
+
+  describe "if Destination delivery reports a retryable server failure" do
+    test "then delivery retries the same artefact with exponential backoff" do
+      parent = self()
+      attempts = start_supervised!({Agent, fn -> 0 end})
+      sleeps = start_supervised!({Agent, fn -> [] end}, id: :delivery_retry_sleeps)
+      artefact = Gralkor.Artefact.new("delivery-retry", %{})
+      put_retry_timing(sleep: fn delay -> Agent.update(sleeps, &[delay | &1]) end)
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
+        deliver_artefact: fn _output, _reflection, _operator, ^artefact ->
+          attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
+          if attempt <= 2, do: {:error, %{status: 503}}, else: :ok
+        end
+      )
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("delivery-retry"),
+                 &send(parent, {:callback, &1}),
+                 []
+               )
+
+      assert_receive {:callback, %{artefact: ^artefact, outcome: :delivered}}
+      assert Agent.get(attempts, & &1) == 3
+      assert Agent.get(sleeps, &Enum.reverse/1) == [1_000, 2_000]
+    end
+  end
+
+  describe "if Destination delivery reports a retryable server failure > while a retry succeeds before twenty-four hours" do
+    test "then the callback receives the delivered outcome" do
+      parent = self()
+      artefact = Gralkor.Artefact.new("terminal", %{})
+      attempts = start_supervised!({Agent, fn -> 0 end})
+      put_retry_timing(sleep: fn _ -> :ok end)
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _r, _i, _o -> {:ok, artefact} end,
+        deliver_artefact: fn _o, _r, _op, ^artefact ->
+          attempt = Agent.get_and_update(attempts, fn n -> {n + 1, n + 1} end)
+          send(parent, {:delivery_attempt, attempt})
+          if attempt == 1, do: {:error, %{status: 503}}, else: :ok
+        end
+      )
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("delivery-terminal"),
+                 &send(parent, {:callback, &1}),
+                 []
+               )
+
+      assert_receive {:delivery_attempt, 1}
+      assert_receive {:delivery_attempt, 2}
+      assert_receive {:callback, %{artefact: ^artefact, outcome: :delivered}}
+    end
+  end
+
+  describe "if Destination delivery reports a retryable server failure > while no retry succeeds within twenty-four hours" do
+    test "then delivery is abandoned without another attempt and the callback receives the artefact and abandonment" do
+      clock = start_supervised!({Agent, fn -> 0 end})
+      test_pid = self()
+      artefact = Gralkor.Artefact.new("deadline-artefact", %{"summary" => "complete"})
+
+      put_retry_timing(
+        clock: fn -> Agent.get(clock, & &1) end,
+        sleep: fn _delay -> Agent.update(clock, &(&1 + 86_400_000)) end
+      )
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
+        deliver_artefact: fn _output, _reflection, _operator, delivered ->
+          send(test_pid, {:delivery_attempt, delivered})
+          {:error, %{status: 503, reason: :unavailable}}
+        end
+      )
+
+      assert {:ok, "deadline-invocation"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("deadline-invocation"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 []
+               )
+
+      assert_receive {:delivery_attempt, ^artefact}
+
+      assert_receive {:reflection_callback,
+                      %{
+                        invocation_id: "deadline-invocation",
+                        artefact: ^artefact,
+                        outcome:
+                          {:abandoned,
+                           %{stage: :delivery, reason: %{status: 503, reason: :unavailable}}}
+                      }}
+
+      refute_receive {:delivery_attempt, _}
+    end
+  end
+
+  describe "when independently submitted Reflection invocations run" do
+    test "then each invocation progresses without waiting for another invocation" do
+      parent = self()
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, invocation, _opts ->
+          case invocation.id do
+            "one" ->
+              send(parent, {:blocked, self()})
+
+              receive do
+                :release -> {:ok, Gralkor.Artefact.new(invocation.id, %{})}
+              end
+
+            "two" ->
+              send(parent, :second_started)
+              {:ok, Gralkor.Artefact.new(invocation.id, %{})}
+          end
+        end,
+        deliver_artefact: fn _output, _reflection, _operator, _artefact -> :ok end
+      )
 
       assert {:ok, "one"} =
                Runtime.submit_reflection(
@@ -771,8 +858,7 @@ defmodule JidoGralkor.RuntimeTest do
                  "review",
                  invocation("one"),
                  &send(parent, {:callback, &1}),
-                 run_reflection: run_reflection,
-                 deliver_artefact: deliver_artefact
+                 []
                )
 
       assert {:ok, "two"} =
@@ -781,8 +867,7 @@ defmodule JidoGralkor.RuntimeTest do
                  "review",
                  invocation("two"),
                  &send(parent, {:callback, &1}),
-                 run_reflection: run_reflection,
-                 deliver_artefact: deliver_artefact
+                 []
                )
 
       assert_receive {:blocked, first_worker}
@@ -794,16 +879,91 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  defp start_runtime(configuration) do
+  describe "when the owning runtime terminates during unfinished Reflection work" do
+    test "then the unfinished work terminates with that runtime" do
+      test_pid = self()
+      start_runtime(reflection_configuration(), run_reflection: blocking_reflection(test_pid))
+      runtime = :global.whereis_name({Runtime, self()})
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("cancelled"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 []
+               )
+
+      assert_receive {:work_started, worker}
+      monitor_ref = Process.monitor(worker)
+      Process.exit(runtime, :kill)
+      assert_receive {:DOWN, ^monitor_ref, :process, ^worker, _reason}
+    end
+
+    test "and its invocation callback is not invoked" do
+      test_pid = self()
+      start_runtime(reflection_configuration(), run_reflection: blocking_reflection(test_pid))
+      runtime = :global.whereis_name({Runtime, self()})
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("cancelled-callback"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 []
+               )
+
+      assert_receive {:work_started, worker}
+      monitor_ref = Process.monitor(worker)
+      Process.exit(runtime, :kill)
+      assert_receive {:DOWN, ^monitor_ref, :process, ^worker, _reason}
+      refute_receive {:reflection_callback, _}, 100
+    end
+  end
+
+  defp blocking_reflection(test_pid) do
+    fn _reflection, _invocation, _opts ->
+      send(test_pid, {:work_started, self()})
+
+      receive do
+        :never -> {:ok, Gralkor.Artefact.new("never", %{})}
+      end
+    end
+  end
+
+  defp start_runtime(configuration, seams \\ []) do
     start_supervised!(
       {Runtime,
-       owner: self(),
-       configuration: configuration,
-       packaged_reflections: fn -> [packaged_reflection()] end,
-       parse_chain_of_thought: fn _configuration ->
-         {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}}
-       end}
+       [
+         owner: self(),
+         configuration: configuration,
+         packaged_reflections: fn -> [packaged_reflection()] end,
+         parse_chain_of_thought: fn _configuration ->
+           {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}}
+         end
+       ] ++ seams}
     )
+  end
+
+  defp put_retry_timing(timing) do
+    previous = %{
+      reflection_retry_clock: Application.get_env(:jido_gralkor, :reflection_retry_clock),
+      reflection_retry_sleep: Application.get_env(:jido_gralkor, :reflection_retry_sleep)
+    }
+
+    if clock = Keyword.get(timing, :clock),
+      do: Application.put_env(:jido_gralkor, :reflection_retry_clock, clock)
+
+    if sleep = Keyword.get(timing, :sleep),
+      do: Application.put_env(:jido_gralkor, :reflection_retry_sleep, sleep)
+
+    on_exit(fn ->
+      Enum.each(previous, fn
+        {key, nil} -> Application.delete_env(:jido_gralkor, key)
+        {key, value} -> Application.put_env(:jido_gralkor, key, value)
+      end)
+    end)
   end
 
   defp packaged_reflection do
