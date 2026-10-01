@@ -143,11 +143,33 @@ defmodule Gralkor.Reflection.RunnerTest do
 
   describe "when inference returns wrapped structured output satisfying the current step's exact contract" do
     test "then that output is added to the shared output space" do
-      assert {:ok, %Artefact{}} = run_successful_sequence()
-      assert_receive {:inference_request, %{step: %{label: "collect"}}}
+      test_pid = self()
 
-      assert_receive {:inference_request,
-                      %{step: %{label: "decide", directions: "Decide from gathered evidence."}}}
+      reflection =
+        reflection([
+          step("collect", "Collect evidence.", %{"evidence" => "string"}),
+          step("decide", "Decide.", %{"answer" => "string"}),
+          step("finish", "Finish with {{ evidence }} and {{ answer }}.", %{
+            "confidence" => "integer"
+          })
+        ])
+
+      inference = fn
+        %{step: %{label: "collect"}} ->
+          {:ok, %{output: %{"evidence" => "gathered evidence"}}}
+
+        %{step: %{label: "decide"}} ->
+          {:ok, %{output: %{"answer" => "ship"}}}
+
+        %{step: %{label: "finish", directions: directions}} ->
+          send(test_pid, {:finish_directions, directions})
+          {:ok, %{output: %{"confidence" => 3}}}
+      end
+
+      assert {:ok, %Artefact{payload: %{"confidence" => 3}}} =
+               Runner.run(reflection, invocation(), inference: inference)
+
+      assert_receive {:finish_directions, "Finish with gathered evidence and ship."}
     end
 
     test "and the next step begins with it available for interpolation" do
@@ -172,7 +194,10 @@ defmodule Gralkor.Reflection.RunnerTest do
                 reflection: "review",
                 step: "collect",
                 reason: {:missing_output, "required"}
-              }} = Runner.run(reflection, invocation(), inference: fn _request -> {:ok, %{}} end)
+              }} =
+               Runner.run(reflection, invocation(),
+                 inference: fn _request -> {:ok, %{output: %{}}} end
+               )
     end
   end
 
@@ -188,7 +213,7 @@ defmodule Gralkor.Reflection.RunnerTest do
               }} =
                Runner.run(reflection, invocation(),
                  inference: fn _request ->
-                   {:ok, %{"summary" => "ready", "extra" => "undeclared"}}
+                   {:ok, %{output: %{"summary" => "ready", "extra" => "undeclared"}}}
                  end
                )
     end
@@ -206,7 +231,7 @@ defmodule Gralkor.Reflection.RunnerTest do
                 reason: {:output_type_mismatch, "count", "integer"}
               }} =
                Runner.run(reflection, invocation(),
-                 inference: fn _request -> {:ok, %{"count" => "many"}} end,
+                 inference: fn _request -> {:ok, %{output: %{"count" => "many"}}} end,
                  type_matcher: fn value, type ->
                    send(test_pid, {:type_match, value, type})
                    false
@@ -252,10 +277,15 @@ defmodule Gralkor.Reflection.RunnerTest do
 
   describe "if the Chain of Thought completes without valid final structured output" do
     test "then the Runner failure identifies the Reflection and missing artefact" do
-      reflection = reflection([])
+      inference = fn
+        %{step: %{label: "collect"}} -> {:ok, %{output: %{"evidence" => "gathered evidence"}}}
+        %{step: %{label: "decide"}} -> {:ok, %{output: %{"confidence" => 3}}}
+      end
 
-      assert {:error, %{reflection: "review", reason: :missing_artefact}} =
-               Runner.run(reflection, invocation(), inference: fn _request -> flunk() end)
+      assert {:error, %{reflection: "review", reason: :missing_artefact} = failure} =
+               Runner.run(reflection(sequence_steps()), invocation(), inference: inference)
+
+      assert failure == %{reflection: "review", reason: :missing_artefact}
     end
   end
 
@@ -320,7 +350,7 @@ defmodule Gralkor.Reflection.RunnerTest do
     context = %{request_source: "scheduled"}
 
     assert {:ok, %Artefact{}} =
-             run_successful_sequence(invocation_context: context, artefact_id: "fixed")
+             run_successful_sequence(invocation_context: context)
 
     assert_receive {:inference_request,
                     %{
@@ -413,7 +443,7 @@ defmodule Gralkor.Reflection.RunnerTest do
 
     inference = fn
       %{tool_results: []} ->
-        {:tool_calls, [call]}
+        {:ok, %{tool_calls: [call]}}
 
       %{tool_results: results} ->
         send(test_pid, {:returned_tool_results, results})
@@ -484,6 +514,26 @@ defmodule Gralkor.Reflection.RunnerTest do
               reason: {:invalid_inference_response, :not_a_response}
             }} =
              Runner.run(reflection, invocation(), inference: fn _request -> :not_a_response end)
+
+    assert {:error,
+            %{
+              reflection: "review",
+              step: "finish",
+              reason: {:invalid_inference_response, {:ok, %{"answer" => "ready"}}}
+            }} =
+             Runner.run(reflection, invocation(),
+               inference: fn _request -> {:ok, %{"answer" => "ready"}} end
+             )
+
+    assert {:error,
+            %{
+              reflection: "review",
+              step: "finish",
+              reason: {:invalid_inference_response, {:tool_calls, [%{name: "lookup"}]}}
+            }} =
+             Runner.run(reflection, invocation(),
+               inference: fn _request -> {:tool_calls, [%{name: "lookup"}]} end
+             )
   end
 
   defp prove_runtime_targeted_related_memory_search do
@@ -686,8 +736,7 @@ defmodule Gralkor.Reflection.RunnerTest do
     assert context == %{
              operator_id: "operator-one",
              session_id: "thread-one",
-             tenant: "alpha",
-             tools: [SampleTool]
+             tenant: "alpha"
            }
   end
 
@@ -725,7 +774,7 @@ defmodule Gralkor.Reflection.RunnerTest do
 
     runner_opts =
       opts
-      |> Keyword.take([:tools, :tool_context, :artefact_id, :artefact_id_for, :type_matcher])
+      |> Keyword.take([:tools, :tool_context, :artefact_id_for, :type_matcher])
       |> Keyword.put(:inference, inference)
 
     runner_opts =
