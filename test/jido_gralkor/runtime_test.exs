@@ -44,7 +44,6 @@ defmodule JidoGralkor.RuntimeTest do
       )
 
       runtime = :global.whereis_name({Runtime, self()})
-      {:links, runtime_links} = Process.info(runtime, :links)
 
       assert {:ok, "async-invocation"} =
                Runtime.submit_reflection(
@@ -57,8 +56,8 @@ defmodule JidoGralkor.RuntimeTest do
 
       assert_receive {:production_started, worker}
       refute worker == runtime
-      assert {:dictionary, dictionary} = Process.info(worker, :dictionary)
-      assert Enum.any?(Keyword.get(dictionary, :"$ancestors", []), &(&1 in runtime_links))
+      {:dictionary, dictionary} = Process.info(worker, :dictionary)
+      assert runtime in Keyword.fetch!(dictionary, :"$ancestors")
       refute_receive {:reflection_callback, _}
       send(worker, :release)
       assert_receive {:delivery_process, ^worker}
@@ -97,8 +96,7 @@ defmodule JidoGralkor.RuntimeTest do
         Runtime.lens!(self(), "custom")
       end
 
-      assert Runtime.reflection!(self(), "review").outputs |> hd() |> get_in([:destination]) |> Map.fetch!(:name) ==
-               "reviews"
+      assert [%{destination: %{name: "reviews"}}] = Runtime.reflection!(self(), "review").outputs
     end
 
     test "and the complete configuration becomes active as one snapshot" do

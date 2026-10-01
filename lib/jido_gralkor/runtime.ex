@@ -83,7 +83,8 @@ defmodule JidoGralkor.Runtime do
          validation_opts: validation_opts,
          reflection_supervisor: reflection_supervisor,
          run_reflection: Keyword.get(opts, :run_reflection, &Runner.run/3),
-         deliver_artefact: Keyword.get(opts, :deliver_artefact, &DestinationStorage.put_artefact/4)
+         deliver_artefact:
+           Keyword.get(opts, :deliver_artefact, &DestinationStorage.put_artefact/4)
        }}
     else
       {:error, reason} -> {:stop, reason}
