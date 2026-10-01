@@ -715,8 +715,7 @@ defmodule Gralkor.CaptureBuffer do
 
           {:lens, lens} ->
             callback = fn operator_id, agent_name, user_name, lens, turns ->
-              invoke_lens_callback(
-                state.lens_flush_callback,
+              state.lens_flush_callback.(
                 operator_id,
                 agent_name,
                 user_name,
