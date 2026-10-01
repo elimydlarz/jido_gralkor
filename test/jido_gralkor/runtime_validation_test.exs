@@ -189,6 +189,8 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   describe "if an appending Lens has a missing or invalid ingestion module or an invalid ontology" do
     test "then validation identifies the Lens and invalid field" do
+      c = update_in(config(), [:lenses, Access.at(0)], &Keyword.delete(&1, :ingestion))
+      assert {:error, {:invalid_lens_ingestion, "notes", nil}} = validate(c)
       c = update_in(config(), [:lenses, Access.at(0)], &Keyword.put(&1, :ingestion, String))
       assert {:error, {:invalid_lens_ingestion, "notes", String}} = validate(c)
       c = update_in(config(), [:lenses, Access.at(0)], &Keyword.put(&1, :ontology, String))
