@@ -14,7 +14,7 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    lens_flush_callback = fn operator_id, agent_name, user_name, lens, turns ->
+    lens_flush_callback = fn operator_id, agent_name, user_name, lens, turns, _ingestion_id, _runtime_owner ->
       send(test_pid, {:lens_flushed, operator_id, agent_name, user_name, lens, turns})
       :ok
     end
@@ -523,7 +523,7 @@ defmodule Gralkor.CaptureBufferTest do
       test_pid = self()
       attempts = :atomics.new(1, [])
 
-      lens_flush_callback = fn _, _, _, lens, _, ingestion_id ->
+      lens_flush_callback = fn _, _, _, lens, _, ingestion_id, _runtime_owner ->
         attempt = :atomics.add_get(attempts, 1, 1)
         send(test_pid, {:ingestion_attempt, attempt, ingestion_id})
 
@@ -635,7 +635,7 @@ defmodule Gralkor.CaptureBufferTest do
     stop_supervised(CaptureBuffer)
     test_pid = self()
 
-    lens_flush_callback = fn _operator_id, _agent_name, _user_name, lens, turns ->
+    lens_flush_callback = fn _operator_id, _agent_name, _user_name, lens, turns, _ingestion_id, _runtime_owner ->
       send(test_pid, {:lens_attempted, lens, turns})
       if lens == "observations", do: {:error, :primary_failed}, else: :ok
     end
@@ -1448,7 +1448,7 @@ defmodule Gralkor.CaptureBufferTest do
   defp restart_with_ingestion_id_capture do
     test_pid = self()
 
-    lens_flush_callback = fn _, _, _, _, _, ingestion_id ->
+    lens_flush_callback = fn _, _, _, _, _, ingestion_id, _runtime_owner ->
       send(test_pid, {:lens_flushed, ingestion_id})
       :ok
     end
@@ -1557,7 +1557,7 @@ defmodule Gralkor.CaptureBufferTest do
     test "and every already-started fire-and-forget flush worker finishes before termination returns" do
       test_pid = self()
 
-      lens_flush_callback = fn _operator, _agent, _user, lens, _turns, _ingestion_id ->
+      lens_flush_callback = fn _operator, _agent, _user, lens, _turns, _ingestion_id, _runtime_owner ->
         send(test_pid, {:fire_and_forget_started, self()})
 
         receive do
