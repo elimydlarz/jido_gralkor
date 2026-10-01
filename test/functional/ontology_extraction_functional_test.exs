@@ -1,10 +1,10 @@
-defmodule Gralkor.OntologyExtractionTest do
+defmodule Gralkor.OntologyExtractionFunctionalTest do
   @moduledoc """
   End-to-end functional test for the ontology DSL. Real Pythonx + real
-  graphiti-core + real embedded falkordblite + real LLM. Three scenarios:
-  strict ontology, open ontology, no ontology — same fixture episode each
-  time, asserting against the actual node/edge labels in the graph via
-  raw Cypher.
+  graphiti-core + real embedded falkordblite + real LLM. Strict, open,
+  implicit-default, and application-owned Lens ontologies extract the same
+  fixture episode, asserting against the actual entity labels and edge names
+  in the graph via raw Cypher.
 
   Reifies `test-trees/functional/ontology-extraction_TEST_TREES.md`.
   """
@@ -132,6 +132,9 @@ defmodule Gralkor.OntologyExtractionTest do
       assert Enum.all?(node_labels, fn labels -> labels -- ["Entity"] != [] end),
              "expected every node to carry at least one label other than Entity (strict mode); got node labels: #{inspect(node_labels)}"
 
+      assert Enum.all?(node_labels, &(&1 -- ["Entity", "User", "Preference"] == [])),
+             "expected every node label within the declared ontology; got node labels: #{inspect(node_labels)}"
+
       assert "PREFERS" in edge_types,
              "expected at least one PREFERS edge; got edge types: #{inspect(edge_types)}"
     end
@@ -148,6 +151,9 @@ defmodule Gralkor.OntologyExtractionTest do
 
       assert Enum.any?(node_labels, fn labels -> "Preference" in labels end),
              "expected at least one node with the Preference label; got node labels: #{inspect(node_labels)}"
+
+      assert Enum.all?(node_labels, &(&1 -- ["Entity", "User", "Preference"] == [])),
+             "expected every node label within the declared ontology or generic Entity; got node labels: #{inspect(node_labels)}"
     end
   end
 
@@ -165,8 +171,11 @@ defmodule Gralkor.OntologyExtractionTest do
       refute Enum.any?(node_labels, fn labels -> "Preference" in labels end),
              "expected no Preference-labelled nodes when no ontology is configured; got: #{inspect(node_labels)}"
 
-      assert Enum.any?(node_labels, fn labels -> "Entity" in labels end),
+      assert node_labels != [],
              "expected at least one generic Entity node; got: #{inspect(node_labels)}"
+
+      assert Enum.all?(node_labels, &(&1 == ["Entity"])),
+             "expected only generic Entity labels without undeclared custom labels; got: #{inspect(node_labels)}"
     end
   end
 
@@ -177,6 +186,9 @@ defmodule Gralkor.OntologyExtractionTest do
       node_labels = node_labels(group_id)
       assert Enum.any?(node_labels, fn labels -> "User" in labels end)
       assert Enum.any?(node_labels, fn labels -> "Preference" in labels end)
+
+      assert Enum.all?(node_labels, &(&1 -- ["Entity", "User", "Preference"] == [])),
+             "expected only the application-owned ontology's labels; got node labels: #{inspect(node_labels)}"
     end
   end
 
@@ -219,7 +231,7 @@ defmodule Gralkor.OntologyExtractionTest do
         """
         import asyncio
         records, _, _ = asyncio._gralkor_run(
-            g.driver.execute_query("MATCH (n) RETURN labels(n) AS labels")
+            g.driver.execute_query("MATCH (n:Entity) RETURN labels(n) AS labels")
         )
         [r['labels'] for r in records]
         """,
