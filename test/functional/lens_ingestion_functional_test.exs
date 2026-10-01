@@ -208,11 +208,37 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     end
 
     test "and completed ingestion neither resolves nor invokes configured Reflections" do
-      Application.put_env(:jido_gralkor, :lenses, [lens(VariableIngestion)])
-      Application.put_env(:jido_gralkor, :reflections, :invalid_if_resolved)
+      test_pid = self()
 
-      assert :ok = Client.ingest(request("one"))
+      start_supervised!(
+        {JidoGralkor.Runtime,
+         owner: test_pid,
+         configuration: runtime_configuration(),
+         run_reflection: fn reflection, invocation, _opts ->
+           send(test_pid, {:reflection_ran, reflection.name, invocation.id})
+           {:ok, Gralkor.Artefact.new("review-artefact", %{"summary" => "reviewed"})}
+         end,
+         deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts -> :ok end}
+      )
+
+      assert :ok = Client.ingest(test_pid, request("one"))
       assert_receive {:episode_added, _, "first", "functional"}
+      refute_receive {:reflection_ran, _, _}
+
+      assert {:ok, "review-invocation"} =
+               Client.reflect(
+                 test_pid,
+                 "review",
+                 %{
+                   id: "review-invocation",
+                   operator_id: "operator-one",
+                   invocation_context: %{},
+                   representations: []
+                 },
+                 fn _outcome -> :ok end
+               )
+
+      assert_receive {:reflection_ran, "review", "review-invocation"}
     end
   end
 
@@ -307,6 +333,32 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       ontology: MemoryOntology,
       ingestion: ingestion
     ]
+  end
+
+  defp runtime_configuration do
+    %{
+      destinations: [%{name: "observations"}],
+      lenses: [
+        %{
+          name: "observations",
+          destination: "observations",
+          write: :append,
+          ontology: MemoryOntology,
+          ingestion: VariableIngestion
+        }
+      ],
+      reflections: [
+        %{
+          name: "review",
+          outputs: [%{kind: :destination, destination: "observations"}],
+          chain_of_thought: %{
+            steps: [
+              %{label: "review", directions: "Review.", output: %{"summary" => "string"}}
+            ]
+          }
+        }
+      ]
+    }
   end
 
   defp request(content) do
