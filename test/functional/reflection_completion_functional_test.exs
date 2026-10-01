@@ -291,125 +291,237 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   defp assert_fresh_graphiti_contract do
-    {graphiti, _} =
+    reflection = hd(Application.fetch_env!(:jido_gralkor, :reflections))
+    output = Enum.find(reflection.outputs, &(&1.kind == :destination))
+    artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
+    artefact = Artefact.new(artefact_id, %{"summary" => "stored"})
+
+    {_pool, graphiti} =
+      start_embedded_graphiti_pool(:reflection_fresh_graphiti, """
+      class FreshGraphitiContract:
+          def __init__(self):
+              self.driver = FalkorDriver(falkor_db=database, database=gid)
+              self.extractions = 0
+              self.fail_next_effect = True
+
+          async def add_episode(self, **kwargs):
+              from datetime import datetime, timezone
+              from graphiti_core.edges import EntityEdge, EpisodicEdge
+              from graphiti_core.graphiti import add_nodes_and_edges_bulk
+              from graphiti_core.nodes import EntityNode, EpisodicNode
+              self.extractions += 1
+              episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+              await episode.save(self.driver)
+              now = datetime.now(timezone.utc)
+              subject = EntityNode(
+                  uuid=f'{episode.uuid}-subject',
+                  name='subject',
+                  group_id=gid,
+                  labels=['Topic'],
+                  created_at=now,
+                  name_embedding=[0.1],
+              )
+              detail = EntityNode(
+                  uuid=f'{episode.uuid}-detail',
+                  name='detail',
+                  group_id=gid,
+                  labels=['Topic'],
+                  created_at=now,
+                  name_embedding=[0.2],
+              )
+              mention = EpisodicEdge(
+                  uuid=f'{episode.uuid}-mention',
+                  group_id=gid,
+                  source_node_uuid=episode.uuid,
+                  target_node_uuid=subject.uuid,
+                  created_at=now,
+              )
+              relation = EntityEdge(
+                  uuid=f'{episode.uuid}-relation',
+                  group_id=gid,
+                  source_node_uuid=subject.uuid,
+                  target_node_uuid=detail.uuid,
+                  created_at=now,
+                  name='HAS',
+                  fact='subject has detail',
+                  fact_embedding=[0.3],
+                  episodes=[episode.uuid],
+              )
+              if self.fail_next_effect:
+                  self.fail_next_effect = False
+                  relation.__dict__['fact_embedding'] = 'not-a-vector'
+              await add_nodes_and_edges_bulk(
+                  self.driver,
+                  [episode],
+                  [mention],
+                  [subject, detail],
+                  [relation],
+                  None,
+              )
+
+          async def search_(self, query, config=None, group_ids=None, search_filter=None):
+              from graphiti_core.nodes import EpisodicNode
+              from graphiti_core.search.search_config import SearchResults
+              episodes = await EpisodicNode.get_by_group_ids(
+                  self.driver,
+                  list(group_ids or []),
+                  limit=config.limit if config is not None else None,
+              )
+              return SearchResults(episodes=episodes)
+
+      FreshGraphitiContract()
+      """)
+
+    assert {:error, {:python, _reason}} =
+             Gralkor.Destination.Storage.Graphiti.put_artefact(
+               output,
+               reflection.name,
+               "operator-one",
+               artefact
+             )
+
+    assert fresh_graph_effects(graphiti, artefact_id) == %{
+             "complete" => false,
+             "subject" => false,
+             "detail" => false,
+             "mention" => false,
+             "relation" => false
+           }
+
+    assert :ok =
+             Gralkor.Destination.Storage.Graphiti.put_artefact(
+               output,
+               reflection.name,
+               "operator-one",
+               artefact
+             )
+
+    assert fresh_graph_effects(graphiti, artefact_id) == %{
+             "complete" => true,
+             "subject" => true,
+             "detail" => true,
+             "mention" => true,
+             "relation" => true
+           }
+
+    assert :ok =
+             Gralkor.Destination.Storage.Graphiti.put_artefact(
+               output,
+               reflection.name,
+               "operator-one",
+               artefact
+             )
+
+    {episodes, _} =
       Pythonx.eval(
         """
-        from graphiti_core.errors import NodeNotFoundError
-
-        class GraphOperations:
-            async def episodic_node_get_by_uuid(self, cls, driver, uuid):
-                if uuid not in driver.episodes:
-                    raise NodeNotFoundError(uuid)
-                return driver.episodes[uuid]
-
-            async def episodic_node_save(self, episode, driver):
-                driver.episodes[episode.uuid] = episode
-
-        class Driver:
-            def __init__(self):
-                self.graph_operations_interface = GraphOperations()
-                self.episodes = {}
-
-            @property
-            def _gralkor_episode_count(self):
-                return len(self.episodes)
-
-        class PinnedGraphitiContract:
-            def __init__(self):
-                self.driver = Driver()
-                self.extractions = 0
-
-            async def add_episode(self, **kwargs):
-                from graphiti_core.nodes import EpisodicNode
-                self.extractions += 1
-                episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
-                await episode.save(self.driver)
-
-            async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                from graphiti_core.search.search_config import SearchResults
-                groups = set(group_ids or [])
-                episodes = [
-                    episode for episode in self.driver.episodes.values()
-                    if not groups or episode.group_id in groups
-                ]
-                if config is not None:
-                    episodes = episodes[:config.limit]
-                return SearchResults(episodes=episodes)
-
-        PinnedGraphitiContract()
+        import asyncio
+        records, _, _ = asyncio._gralkor_run(graphiti.driver.execute_query(
+            '''
+            MATCH (episode:Episodic)
+            RETURN episode.uuid AS uuid,
+                   episode.group_id AS group_id,
+                   episode.content AS content
+            '''
+        ))
+        [[record['uuid'], record['group_id'], record['content']] for record in records]
         """,
-        %{}
+        %{"graphiti" => graphiti}
       )
 
-    table = :"reflection_graphiti_#{System.unique_integer([:positive])}"
+    assert [[episode_uuid, group_id, content]] = Pythonx.decode(episodes)
+    assert episode_uuid == Artefact.id_for("operator-one", "ingestion-one", "review")
+    assert episode_uuid == artefact_id
+    assert group_id == Client.sanitize_group_id("observations")
+
+    assert Jason.decode!(content) == %{
+             "id" => artefact_id,
+             "payload" => %{"summary" => "stored"}
+           }
+
+    {extractions, _} = Pythonx.eval("graphiti.extractions", %{"graphiti" => graphiti})
+    assert Pythonx.decode(extractions) == 2
+
+    :ok
+  end
+
+  defp fresh_graph_effects(graphiti, artefact_id) do
+    {effects, _} =
+      Pythonx.eval(
+        """
+        import asyncio
+        uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
+        records, _, _ = asyncio._gralkor_run(graphiti.driver.execute_query(
+            '''
+            OPTIONAL MATCH (episode:Episodic {uuid: $uuid})
+            OPTIONAL MATCH (subject:Entity {uuid: $subject})
+            OPTIONAL MATCH (detail:Entity {uuid: $detail})
+            OPTIONAL MATCH ()-[mention:MENTIONS {uuid: $mention}]->()
+            OPTIONAL MATCH ()-[relation:RELATES_TO {uuid: $relation}]->()
+            RETURN coalesce(episode._gralkor_extraction_complete, false) AS complete,
+                   subject IS NOT NULL AS subject,
+                   detail IS NOT NULL AS detail,
+                   mention IS NOT NULL AS mention,
+                   relation IS NOT NULL AS relation
+            ''',
+            uuid=uid,
+            subject=f'{uid}-subject',
+            detail=f'{uid}-detail',
+            mention=f'{uid}-mention',
+            relation=f'{uid}-relation',
+        ))
+        records[0]
+        """,
+        %{"graphiti" => graphiti, "uuid" => artefact_id}
+      )
+
+    Pythonx.decode(effects)
+  end
+
+  defp start_embedded_graphiti_pool(child_id, graphiti_source) do
+    data_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "reflection-graphiti-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+      )
+
+    File.mkdir_p!(data_dir)
+    on_exit(fn -> File.rm_rf!(data_dir) end)
+    start_supervised!(Gralkor.Python)
+
+    construct_instance = fn database, _shared, group_id ->
+      {graphiti, _} =
+        Pythonx.eval(
+          """
+          from graphiti_core.driver.falkordb_driver import FalkorDriver
+
+          gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
+
+          #{graphiti_source}
+          """,
+          %{"database" => database, "group_id" => group_id}
+        )
+
+      graphiti
+    end
 
     pool =
       start_supervised!(
         Supervisor.child_spec(
           {GraphitiPool,
-           name: nil,
-           table: table,
-           falkordb_spec: {:remote, []},
-           construct_falkor_db: fn _spec -> :stub_falkor_db end,
-           close_falkor_db: fn _database -> :ok end,
+           falkordb_spec: {:embedded, data_dir},
            construct_shared_clients: fn _llm, _embedder ->
              %{llm_client: nil, embedder: nil, cross_encoder: nil}
            end,
-           construct_instance: fn _database, _shared, _group -> graphiti end,
+           construct_instance: construct_instance,
            initialise_instance: fn _instance -> :ok end,
            warmup: false,
-           install_loop_fn: &Gralkor.Python.install_async_runtime/0},
-          id: table
+           embedded_falkordb_socket_timeout_ms: 60_000},
+          id: child_id
         )
       )
 
-    assert :ok =
-             GraphitiPool.add_episode(
-               pool,
-               "observations",
-               ~s({"id":"stable-id","payload":{"summary":"stored"}}),
-               "reflection:review",
-               nil,
-               uuid: "stable-id"
-             )
-
-    assert :ok =
-             GraphitiPool.add_episode(
-               pool,
-               "observations",
-               ~s({"id":"stable-id","payload":{"summary":"stored"}}),
-               "reflection:review",
-               nil,
-               uuid: "stable-id"
-             )
-
-    assert {:error, {:episode_conflict, "stable-id"}} =
-             GraphitiPool.add_episode(
-               pool,
-               "observations",
-               ~s({"id":"stable-id","payload":{"summary":"changed"}}),
-               "reflection:review",
-               nil,
-               uuid: "stable-id"
-             )
-
-    {proof, _} =
-      Pythonx.eval(
-        """
-        episode = graphiti.driver.episodes['stable-id']
-        [len(graphiti.driver.episodes), graphiti.extractions, episode.uuid, episode.content]
-        """,
-        %{"graphiti" => graphiti}
-      )
-
-    assert Pythonx.decode(proof) == [
-             1,
-             1,
-             "stable-id",
-             ~s({"id":"stable-id","payload":{"summary":"stored"}})
-           ]
-
-    :ok
+    {pool, GraphitiPool.for(pool, "observations")}
   end
 
   defp assert_uncertain_response_contract do
