@@ -2,6 +2,7 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Client.InMemory
+  alias JidoGralkor.BlockingFlushClient
   alias JidoGralkor.ContextRotator
   alias JidoGralkor.LifecycleTestAgent
   alias JidoGralkor.LifecycleTestJido
@@ -69,33 +70,18 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
     end
 
     test "and every entry arriving during the flush is retained exactly once" do
-      InMemory.set_flush_and_await(:ok)
       pid = start_agent()
       seed_thread(pid, "before-rotation", [%{role: :user, content: "flushed"}])
-      test_pid = self()
-
-      install_thread_fn = fn agent_pid, new_session_id, entries, keep_last_n ->
-        send(test_pid, :before_installation)
-
-        receive do
-          :continue_rotation -> :ok
-        end
-
-        ContextRotator.install_thread(agent_pid, new_session_id, entries, keep_last_n)
-      end
+      BlockingFlushClient.install(self())
 
       rotation =
         Task.async(fn ->
-          ContextRotator.rotate_now(pid,
-            flush_timeout_ms: 1_000,
-            keep_last_n: 0,
-            install_thread_fn: install_thread_fn
-          )
+          ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000, keep_last_n: 0)
         end)
 
-      assert_receive :before_installation
+      assert_receive {:flush_started, flusher, "before-rotation", 1_000}
       append_thread_entry(pid, %{role: :assistant, content: "in-flight"})
-      send(rotation.pid, :continue_rotation)
+      BlockingFlushClient.release(flusher, :ok)
       assert :ok = Task.await(rotation)
 
       assert Enum.map(thread_entries(pid), & &1.payload.content) == ["in-flight"]
@@ -126,47 +112,27 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
 
   describe "when an application rotates a running agent whose flush succeeds but fresh-session installation fails" do
     test "then the application receives the installation failure" do
-      InMemory.set_flush_and_await(:ok)
       pid = start_agent()
       seed_thread(pid, "before-rotation")
 
-      assert {:error, :install_failed} =
-               ContextRotator.rotate_now(pid,
-                 flush_timeout_ms: 1_000,
-                 install_thread_fn: fn _pid, _new_id, _entries, _keep_last_n ->
-                   {:error, :install_failed}
-                 end
-               )
+      assert {:error, :thread_missing_after_flush} = rotate_while_thread_removed(pid)
     end
 
     test "and the active session remains unchanged" do
-      InMemory.set_flush_and_await(:ok)
       pid = start_agent()
       seed_thread(pid, "before-rotation")
 
-      ContextRotator.rotate_now(pid,
-        flush_timeout_ms: 1_000,
-        install_thread_fn: fn _pid, _new_id, _entries, _keep_last_n ->
-          {:error, :install_failed}
-        end
-      )
-
-      assert thread_id(pid) == "before-rotation"
+      assert {:error, :thread_missing_after_flush} = rotate_while_thread_removed(pid)
+      assert thread_id(pid) == nil
     end
 
     test "and the running agent remains available" do
-      InMemory.set_flush_and_await(:ok)
       pid = start_agent()
       seed_thread(pid, "before-rotation")
 
-      ContextRotator.rotate_now(pid,
-        flush_timeout_ms: 1_000,
-        install_thread_fn: fn _pid, _new_id, _entries, _keep_last_n ->
-          {:error, :install_failed}
-        end
-      )
-
+      assert {:error, :thread_missing_after_flush} = rotate_while_thread_removed(pid)
       assert Process.alive?(pid)
+      assert {:ok, _state} = Jido.AgentServer.state(pid)
     end
   end
 
@@ -201,6 +167,24 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
       assert {:error, {:state_read_failed, _reason}} = ContextRotator.rotate_now(pid)
       assert InMemory.flush_and_awaits() == []
     end
+  end
+
+  defp rotate_while_thread_removed(pid) do
+    BlockingFlushClient.install(self())
+
+    rotation =
+      Task.async(fn ->
+        ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+      end)
+
+    assert_receive {:flush_started, flusher, "before-rotation", 1_000}
+
+    :sys.replace_state(pid, fn state ->
+      put_in(state.agent.state[:__thread__], nil)
+    end)
+
+    BlockingFlushClient.release(flusher, :ok)
+    Task.await(rotation)
   end
 
   defp start_agent do
