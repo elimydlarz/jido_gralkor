@@ -6,9 +6,14 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
   alias Gralkor.Client
   alias Gralkor.Search
 
-  setup do
+  setup context do
     keys = [:client, :destination_storage, :lens_storage, :ontology]
     previous = Map.new(keys, &{&1, Application.get_env(:jido_gralkor, &1)})
+
+    if ontology = context[:retained_deployment_ontology] do
+      Application.put_env(:jido_gralkor, :ontology, ontology)
+    end
+
     Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
@@ -127,7 +132,8 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
       assert group == Client.sanitize_group_id("personal/owner")
     end
 
-    test "and its built-in ontology applies to conversation and other supported source kinds" do
+    test "and its built-in ontology applies to conversation and other supported source kinds",
+         context do
       for {kind, content} <- [
             {:conversation, "Eli: hello"},
             {:document, "hello"},
@@ -144,8 +150,14 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
                  })
       end
 
-      assert JidoGralkor.Runtime.lens!(self(), "personal-chat").ontology ==
-               Gralkor.DefaultOntology
+      records = recorded(context.graphiti)
+      assert length(records) == 3
+
+      for record <- records do
+        assert record["group_id"] == Client.sanitize_group_id("personal/owner")
+        assert record["has_entity_types"] == false
+        assert record["has_edge_types"] == false
+      end
     end
 
     test "and its stored episode identifies personal-chat as the originating Lens" do
@@ -188,11 +200,14 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
   end
 
   describe "if an application retains the removed deployment-wide `:jido_gralkor, :ontology` setting" do
-    test "then personal-chat still uses jido_gralkor's built-in ontology" do
-      Application.put_env(:jido_gralkor, :ontology, Gralkor.TestOntologies.Strict)
+    @tag retained_deployment_ontology: Gralkor.TestOntologies.Strict
+    test "then personal-chat still uses jido_gralkor's built-in ontology", context do
+      capture({:lenses, ["personal-chat"]})
 
-      assert JidoGralkor.Runtime.lens!(self(), "personal-chat").ontology ==
-               Gralkor.DefaultOntology
+      assert [record] = recorded(context.graphiti)
+      assert record["source_description"] == "captured [lens: personal-chat]"
+      assert record["has_entity_types"] == false
+      assert record["has_edge_types"] == false
     end
   end
 
@@ -221,7 +236,7 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
   defp recorded(graphiti) do
     {raw, _} =
       Pythonx.eval(
-        "[{ 'group_id': item['group_id'], 'source_description': item['source_description'], 'has_entity_types': 'entity_types' in item } for item in g.recorded]",
+        "[{ 'group_id': item['group_id'], 'source_description': item['source_description'], 'has_entity_types': 'entity_types' in item, 'has_edge_types': 'edge_types' in item } for item in g.recorded]",
         %{"g" => graphiti}
       )
 
