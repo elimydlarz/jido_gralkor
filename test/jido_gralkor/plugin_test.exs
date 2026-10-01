@@ -926,6 +926,12 @@ defmodule JidoGralkor.PluginTest do
           write: :append,
           ontology: LensOntology,
           ingestion: Gralkor.Lens.Ingestion.Store
+        },
+        %{
+          name: "notes",
+          destination: "memory",
+          write: :append,
+          ingestion: Gralkor.Lens.Ingestion.Store
         }
       ],
       reflections: []
