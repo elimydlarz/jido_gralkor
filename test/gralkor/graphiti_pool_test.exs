@@ -68,6 +68,26 @@ defmodule Gralkor.GraphitiPoolTest do
     String.split(stderr <> log, "\n", trim: true)
   end
 
+  defp failing_warmup_opts do
+    {g, _} =
+      Pythonx.eval(
+        """
+        class _FakeGraphiti:
+            async def search(self, query, num_results=10, search_filter=None):
+                raise RuntimeError("warmup search exploded")
+
+        _FakeGraphiti()
+        """,
+        %{}
+      )
+
+    [
+      construct_instance: fn _db, _shared, _group_id -> g end,
+      warmup: true,
+      install_loop_fn: &Gralkor.Python.install_async_runtime/0
+    ]
+  end
+
   defp start_embedded_pool(data_dir, opts \\ []) do
     defaults = [
       name: nil,
@@ -3460,17 +3480,17 @@ defmodule Gralkor.GraphitiPoolTest do
     test "then the failure is logged as non-fatal, naming the stage and the reason" do
       log =
         capture_log(fn ->
-          %{pid: pid} = start_pool(warmup: true)
-          assert Process.alive?(pid), "boot proceeded after warmup failure"
+          %{pid: pid} = start_pool(failing_warmup_opts())
           GenServer.stop(pid)
         end)
 
       assert log =~ "[gralkor] warmup failed (non-fatal) — search:"
+      assert log =~ "RuntimeError: warmup search exploded"
     end
 
     test "and startup completes anyway" do
       capture_log(fn ->
-        %{pid: pid} = start_pool(warmup: true)
+        %{pid: pid} = start_pool(failing_warmup_opts())
         assert Process.alive?(pid)
         GenServer.stop(pid)
       end)
