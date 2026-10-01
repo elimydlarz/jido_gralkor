@@ -568,8 +568,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   describe "when an agent invokes memory search with a usable query > where no conversation thread has been committed" do
     test "then search still runs for the current operator" do
-      assert :ok = ingest_memory("observations", "current operator memory")
-      assert :ok = ingest_memory("observations", "second operator memory", "operator-two")
+      assert :ok = ingest_memory("personal-chat", "current operator memory")
+      assert :ok = ingest_memory("personal-chat", "second operator memory", "operator-two")
 
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
@@ -594,11 +594,11 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert {:ok, %{result: text}} =
                MemorySearch.run(
-                 %{query: "memory", destinations: ["observations"]},
+                 %{query: "memory", destinations: ["personal"]},
                  Map.put(tool_context, :agent_id, fresh_agent.id)
                )
 
-      assert text == "Lens: observations\n- current operator memory"
+      assert text == "Lens: personal-chat\n- current operator memory"
     end
   end
 
@@ -665,11 +665,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   describe "when a mounted plugin completes a memory-worthy turn with a committed thread > if agent state has no non-blank user name" do
     test "then completion raises an ArgumentError naming the missing user name" do
-      {agent, signal, delivery_error, log} = complete_mounted_turn(%{}, :ok)
+      {agent, signal, log} = complete_mounted_turn(%{}, :ok)
 
-      assert delivery_error.details.exception =~ "user_name"
-      assert log =~ "JidoGralkor.Plugin handle_signal crashed"
-      assert log =~ "user_name"
+      assert log =~ ~r/JidoGralkor.Plugin handle_signal crashed: .*user_name/
 
       assert_raise ArgumentError, ~r/user_name/, fn ->
         Plugin.handle_signal(signal, %{agent: agent})
@@ -681,11 +679,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   describe "when a mounted plugin completes a memory-worthy turn with a committed thread > if capture fails" do
     test "then completion raises reporting the capture failure" do
-      {agent, signal, delivery_error, log} =
+      {agent, signal, log} =
         complete_mounted_turn(%{user_name: "Eli"}, {:error, :unavailable})
 
-      assert delivery_error.details.exception =~ ~r/capture failed.*unavailable/
-      assert log =~ "JidoGralkor.Plugin handle_signal crashed"
+      assert log =~ ~r/JidoGralkor.Plugin handle_signal crashed: .*capture failed.*unavailable/
 
       assert_raise RuntimeError, ~r/capture failed.*unavailable/, fn ->
         Plugin.handle_signal(signal, %{agent: agent})
@@ -913,6 +910,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         :lenses,
         Enum.map(names, &[name: &1, destination: &1, ingestion: Gralkor.Lens.Ingestion.Store])
       )
+
+      assert :ok = JidoGralkor.Runtime.replace(self(), setup_runtime_configuration())
 
       for index <- 0..100,
           do: assert(:ok = ingest_memory(Enum.at(names, div(index, 20)), "record-#{index}"))
@@ -1172,16 +1171,14 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         source: "/functional"
       )
 
-    test_pid = self()
-
     log =
       ExUnit.CaptureLog.capture_log(fn ->
-        send(test_pid, {:delivery, Jido.AgentServer.call(pid, signal)})
+        assert :ok = Jido.AgentServer.cast(pid, signal)
+        assert {:ok, _state} = Jido.AgentServer.state(pid)
       end)
 
-    assert_received {:delivery, {:error, delivery_error}}
     assert {:ok, %{agent: agent}} = Jido.AgentServer.state(pid)
-    {agent, signal, delivery_error, log}
+    {agent, signal, log}
   end
 
   defp deterministic_evolved_generalisation_answer do
