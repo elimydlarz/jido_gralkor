@@ -218,7 +218,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
            send(test_pid, {:reflection_ran, reflection.name, invocation.id})
            {:ok, Gralkor.Artefact.new("review-artefact", %{"summary" => "reviewed"})}
          end,
-         deliver_artefact: fn _output, _reflection, _operator, _artefact, _opts -> :ok end}
+         deliver_artefact: fn _output, _reflection, _operator, _artefact -> :ok end}
       )
 
       assert :ok = Client.ingest(test_pid, request("one"))
