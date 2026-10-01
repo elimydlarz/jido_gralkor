@@ -2,7 +2,6 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Client.Native
-  alias Gralkor.Config
   alias Gralkor.GraphitiPool
 
   @moduletag :functional
@@ -95,35 +94,32 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
     test "then the embedded connection uses a sixty-second socket read timeout" do
       delete_env_restored(:embedded_falkordb_socket_timeout_ms)
 
-      assert Config.embedded_falkordb_socket_timeout_ms() == 60_000
+      start_application_pool()
+
+      assert_receive {:constructed_falkordb, {:embedded, _data_dir}, 60.0}
     end
   end
 
   describe "when the embedded runtime starts > while a positive `:embedded_falkordb_socket_timeout_ms` is configured" do
     test "then the embedded connection uses that timeout" do
       put_env_restored(:embedded_falkordb_socket_timeout_ms, 90_000)
-      parent = self()
 
-      start_pool(:embedded,
-        embedded_falkordb_socket_timeout_ms: Config.embedded_falkordb_socket_timeout_ms(),
-        construct_falkor_db: fn spec, socket_timeout ->
-          send(parent, {:constructed_falkordb, spec, socket_timeout})
-          :stub_falkor_db
-        end
-      )
+      start_application_pool()
 
-      assert_receive {:constructed_falkordb, {:embedded, "/tmp/never_used"}, 90.0}
+      assert_receive {:constructed_falkordb, {:embedded, _data_dir}, 90.0}
     end
   end
 
   describe "if `:embedded_falkordb_socket_timeout_ms` is not a positive integer" do
     test "then application startup raises naming the setting and its offending value" do
+      use_embedded_application_backend()
+
       Enum.each([0, -1, "60000"], fn invalid ->
         put_env_restored(:embedded_falkordb_socket_timeout_ms, invalid)
 
         assert_raise ArgumentError,
                      ~r/embedded_falkordb_socket_timeout_ms.*#{Regex.escape(inspect(invalid))}/,
-                     fn -> Config.embedded_falkordb_socket_timeout_ms() end
+                     fn -> Gralkor.Application.children() end
       end)
     end
   end
@@ -298,6 +294,47 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
 
       Task.shutdown(write, :brutal_kill)
     end
+  end
+
+  defp start_application_pool do
+    use_embedded_application_backend()
+    parent = self()
+
+    {GraphitiPool, application_opts} =
+      Enum.find(Gralkor.Application.children(), &match?({GraphitiPool, _opts}, &1))
+
+    start_pool(
+      :embedded,
+      Keyword.merge(Keyword.take(application_opts, [:falkordb_spec]),
+        construct_falkor_db: fn spec, socket_timeout ->
+          send(parent, {:constructed_falkordb, spec, socket_timeout})
+          :stub_falkor_db
+        end
+      )
+      |> Keyword.merge(Keyword.drop(application_opts, [:llm_model, :embedder_model]))
+    )
+  end
+
+  defp use_embedded_application_backend do
+    data_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "embedded-writes-#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+      )
+
+    original_data_dir = System.get_env("GRALKOR_DATA_DIR")
+    System.put_env("GRALKOR_DATA_DIR", data_dir)
+
+    on_exit(fn ->
+      case original_data_dir do
+        nil -> System.delete_env("GRALKOR_DATA_DIR")
+        value -> System.put_env("GRALKOR_DATA_DIR", value)
+      end
+
+      File.rm_rf!(data_dir)
+    end)
+
+    delete_env_restored(:falkordb)
   end
 
   defp put_env_restored(key, value) do
