@@ -44,6 +44,7 @@ defmodule Gralkor.PythonTest do
                    send(test_pid, :imported)
                    :ok
                  end,
+                 smoke_import_provider: fn _provider -> :ok end,
                  install_loop: false
                )
 
@@ -147,6 +148,7 @@ defmodule Gralkor.PythonTest do
                    :ok
                  end,
                  smoke_import: fn -> :ok end,
+                 smoke_import_provider: fn _provider -> :ok end,
                  install_loop: false
                )
 
@@ -181,6 +183,7 @@ defmodule Gralkor.PythonTest do
           kill_pid: fn pid -> :ets.insert(killed, {pid, true}) end,
           uv_init: fn -> :ok end,
           smoke_import: fn -> :ok end,
+          smoke_import_provider: fn _provider -> :ok end,
           install_loop: false
         )
       end
@@ -204,6 +207,7 @@ defmodule Gralkor.PythonTest do
                  kill_pid: fn _ -> send(test_pid, :killed) end,
                  uv_init: fn -> :ok end,
                  smoke_import: fn -> :ok end,
+                 smoke_import_provider: fn _provider -> :ok end,
                  install_loop: false
                )
 
