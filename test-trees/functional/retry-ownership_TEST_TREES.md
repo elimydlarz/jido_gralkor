@@ -1,4 +1,4 @@
-Functional: retry-ownership (src: lib/gralkor/capture_buffer.ex, lib/gralkor/client.ex, lib/gralkor/destination/storage.ex, lib/gralkor/reflection/runner.ex, lib/jido_gralkor/runtime.ex; functional: test/functional/retry_ownership_functional_test.exs)
+Functional: retry-ownership (src: lib/gralkor/capture_buffer.ex, lib/gralkor/client.ex, lib/gralkor/destination/storage.ex, lib/gralkor/reflection/runner.ex, lib/jido_gralkor/runtime.ex, lib/gralkor/recall.ex, lib/gralkor/client/native.ex, lib/gralkor/graphiti_pool.ex, lib/gralkor/application.ex; functional: test/functional/retry_ownership_functional_test.exs)
 
 when a capture callback returns an upstream rate-limit failure
   then the capture buffer does not retry the returned failure and logs it

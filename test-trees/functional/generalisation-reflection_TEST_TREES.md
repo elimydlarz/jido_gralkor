@@ -1,4 +1,4 @@
-Functional: generalisation-reflection (src: lib/gralkor/reflection/runner.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex, lib/gralkor/destination/storage/in_memory.ex; functional: test/functional/generalisation_reflection_functional_test.exs)
+Functional: generalisation-reflection (src: lib/gralkor/reflection/runner.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex, lib/gralkor/destination/storage/in_memory.ex, lib/jido_gralkor/runtime.ex, lib/gralkor/reflection/packaged.ex; functional: test/functional/generalisation_reflection_functional_test.exs)
 
 when the packaged generalisation Reflection inspects a completed ingestion
   then one default related-memory episode search completes before generalisation inference begins
