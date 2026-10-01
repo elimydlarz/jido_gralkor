@@ -3477,6 +3477,8 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when the pool has constructed its database > if a warmup call raises or returns an error" do
+    @describetag :integration
+
     test "then the failure is logged as non-fatal, naming the stage and the reason" do
       log =
         capture_log(fn ->
