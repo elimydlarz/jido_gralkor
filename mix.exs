@@ -1,7 +1,7 @@
 defmodule JidoGralkor.MixProject do
   use Mix.Project
 
-  @version "11.0.0"
+  @version "11.1.0"
   @source_url "https://github.com/elimydlarz/jido_gralkor"
 
   def project do
