@@ -716,6 +716,46 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
+  describe "when an agent turn completes > while a thread has committed to agent state > while the completed turn's request trace holds no events" do
+    test "then no capture is sent at all" do
+      InMemory.set_capture(:ok)
+      request_id = "req-empty"
+
+      ag =
+        agent("user-01",
+          thread_id: "thr-empty",
+          request_traces: %{request_id => %{events: [], truncated?: false}},
+          requests: %{request_id => %{query: "q", status: :pending, result: nil}}
+        )
+
+      signal =
+        Signal.new!("ai.request.completed", %{request_id: request_id, result: "a"},
+          source: "/test"
+        )
+
+      Plugin.handle_signal(signal, context(ag))
+
+      assert InMemory.captures() == []
+    end
+  end
+
+  describe "when an agent turn completes > while a thread has committed to agent state > where the plugin was mounted with Lens selections" do
+    test "then the capture carries the selected Lens" do
+      assert [
+               [
+                 _,
+                 %Gralkor.Capture{
+                   session_id: "thread-one",
+                   operator_id: "operator-one",
+                   agent_name: "Susu",
+                   user_name: "Eli",
+                   route: {:lenses, ["observations"]}
+                 }
+               ]
+             ] = lens_capture()
+    end
+  end
+
   describe "when an agent turn completes > while a thread has committed to agent state > if the completed result is not text" do
     test "then nothing is captured" do
       InMemory.set_capture(:ok)
@@ -808,6 +848,31 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
+  describe "when an agent turn completes > while a thread has committed to agent state > if the capture call fails" do
+    test "then the callback raises, reporting the capture failure" do
+      InMemory.set_capture({:error, :gralkor_unreachable})
+      request_id = "req-err"
+
+      ag =
+        agent("user-01",
+          thread_id: "thr-err",
+          request_traces: %{
+            request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
+          },
+          requests: %{request_id => %{query: "q", status: :pending, result: nil}}
+        )
+
+      signal =
+        Signal.new!("ai.request.completed", %{request_id: request_id, result: "a"},
+          source: "/test"
+        )
+
+      assert_raise RuntimeError, ~r/Gralkor capture failed.*gralkor_unreachable/, fn ->
+        Plugin.handle_signal(signal, context(ag))
+      end
+    end
+  end
+
   describe "when an agent turn completes > while no thread has committed to agent state" do
     test "then capture is skipped" do
       {_log, captures} = completed_without_thread()
@@ -817,46 +882,6 @@ defmodule JidoGralkor.PluginTest do
     test "and a warning naming the operator is logged" do
       {log, _captures} = completed_without_thread()
       assert log =~ "user-01"
-    end
-  end
-
-  describe "when an agent turn completes > while a thread has committed to agent state > while the completed turn's request trace holds no events" do
-    test "then no capture is sent at all" do
-      InMemory.set_capture(:ok)
-      request_id = "req-empty"
-
-      ag =
-        agent("user-01",
-          thread_id: "thr-empty",
-          request_traces: %{request_id => %{events: [], truncated?: false}},
-          requests: %{request_id => %{query: "q", status: :pending, result: nil}}
-        )
-
-      signal =
-        Signal.new!("ai.request.completed", %{request_id: request_id, result: "a"},
-          source: "/test"
-        )
-
-      Plugin.handle_signal(signal, context(ag))
-
-      assert InMemory.captures() == []
-    end
-  end
-
-  describe "when an agent turn completes > while a thread has committed to agent state > where the plugin was mounted with Lens selections" do
-    test "then the capture carries the selected Lens" do
-      assert [
-               [
-                 _,
-                 %Gralkor.Capture{
-                   session_id: "thread-one",
-                   operator_id: "operator-one",
-                   agent_name: "Susu",
-                   user_name: "Eli",
-                   route: {:lenses, ["observations"]}
-                 }
-               ]
-             ] = lens_capture()
     end
   end
 
@@ -943,31 +968,6 @@ defmodule JidoGralkor.PluginTest do
       signal = Signal.new!("ai.llm.delta", %{token: "x"}, source: "/test")
       Plugin.handle_signal(signal, context(ag))
       assert InMemory.recalls() == []
-    end
-  end
-
-  describe "when an agent turn completes > while a thread has committed to agent state > if the capture call fails" do
-    test "then the callback raises, reporting the capture failure" do
-      InMemory.set_capture({:error, :gralkor_unreachable})
-      request_id = "req-err"
-
-      ag =
-        agent("user-01",
-          thread_id: "thr-err",
-          request_traces: %{
-            request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
-          },
-          requests: %{request_id => %{query: "q", status: :pending, result: nil}}
-        )
-
-      signal =
-        Signal.new!("ai.request.completed", %{request_id: request_id, result: "a"},
-          source: "/test"
-        )
-
-      assert_raise RuntimeError, ~r/Gralkor capture failed.*gralkor_unreachable/, fn ->
-        Plugin.handle_signal(signal, context(ag))
-      end
     end
   end
 

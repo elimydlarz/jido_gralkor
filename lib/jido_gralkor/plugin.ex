@@ -183,8 +183,7 @@ defmodule JidoGralkor.Plugin do
       end
       |> Map.merge(lens_context(agent))
 
-    {:ok,
-     {:continue, signal |> merge_tool_context(extras, owner) |> retain_request_context()}}
+    {:ok, {:continue, signal |> merge_tool_context(extras, owner) |> retain_request_context()}}
   end
 
   def handle_signal(
