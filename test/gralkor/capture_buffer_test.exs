@@ -14,7 +14,13 @@ defmodule Gralkor.CaptureBufferTest do
       :ok
     end
 
-    lens_flush_callback = fn operator_id, agent_name, user_name, lens, turns, _ingestion_id, _runtime_owner ->
+    lens_flush_callback = fn operator_id,
+                             agent_name,
+                             user_name,
+                             lens,
+                             turns,
+                             _ingestion_id,
+                             _runtime_owner ->
       send(test_pid, {:lens_flushed, operator_id, agent_name, user_name, lens, turns})
       :ok
     end
@@ -635,7 +641,13 @@ defmodule Gralkor.CaptureBufferTest do
     stop_supervised(CaptureBuffer)
     test_pid = self()
 
-    lens_flush_callback = fn _operator_id, _agent_name, _user_name, lens, turns, _ingestion_id, _runtime_owner ->
+    lens_flush_callback = fn _operator_id,
+                             _agent_name,
+                             _user_name,
+                             lens,
+                             turns,
+                             _ingestion_id,
+                             _runtime_owner ->
       send(test_pid, {:lens_attempted, lens, turns})
       if lens == "observations", do: {:error, :primary_failed}, else: :ok
     end
@@ -1112,6 +1124,35 @@ defmodule Gralkor.CaptureBufferTest do
       :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
       assert :ok = CaptureBuffer.flush_all()
       assert_received {:flushed, "g", "Susu", "Eli", nil, [[%Message{content: "1"}]]}
+    end
+
+    test "and the call returns only once every already-started flush has finished" do
+      test_pid = self()
+
+      flush_callback = fn _group, _agent, _user, _ontology, _turns ->
+        send(test_pid, {:started_flush, self()})
+
+        receive do
+          :release -> send(test_pid, :started_flush_finished)
+        end
+
+        :ok
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+      start_supervised!({CaptureBuffer, flush_callback: flush_callback, retries: []})
+
+      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "1")])
+      :ok = CaptureBuffer.flush("s1")
+      assert_receive {:started_flush, worker}, 1_000
+
+      flush_all = Task.async(fn -> CaptureBuffer.flush_all() end)
+      assert Task.yield(flush_all, 100) == nil
+
+      send(worker, :release)
+
+      assert Task.await(flush_all, 1_000) == :ok
+      assert_received :started_flush_finished
     end
 
     test "and every Lens-selected entry is resolved through the configured Lens resolver before its Lens flush callback runs" do
@@ -1606,7 +1647,13 @@ defmodule Gralkor.CaptureBufferTest do
     test "and every already-started fire-and-forget flush worker finishes before termination returns" do
       test_pid = self()
 
-      lens_flush_callback = fn _operator, _agent, _user, lens, _turns, _ingestion_id, _runtime_owner ->
+      lens_flush_callback = fn _operator,
+                               _agent,
+                               _user,
+                               lens,
+                               _turns,
+                               _ingestion_id,
+                               _runtime_owner ->
         send(test_pid, {:fire_and_forget_started, self()})
 
         receive do
@@ -1713,6 +1760,50 @@ defmodule Gralkor.CaptureBufferTest do
       end
 
       assert CaptureBuffer.turns_for("typed-session") == [request.messages]
+    end
+  end
+
+  describe "when a typed capture request supplies resolved direct and Lens routes > if one route's flush fails" do
+    test "then every other route's batch is attempted" do
+      test_pid = self()
+
+      flush_callback = fn group_id, _agent, _user, _ontology, turns ->
+        send(test_pid, {:direct_attempted, group_id, turns})
+        if group_id == "failing", do: {:error, :boom}, else: :ok
+      end
+
+      lens_flush_callback = fn _operator, _agent, _user, lens, turns, _ingestion_id, _owner ->
+        send(test_pid, {:lens_attempted, lens.name, turns})
+        :ok
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      start_supervised!(
+        {CaptureBuffer,
+         flush_callback: flush_callback, lens_flush_callback: lens_flush_callback, retries: []}
+      )
+
+      lens = %Gralkor.Lens{
+        name: "notes",
+        destination: %Gralkor.Destination{name: "personal"},
+        ontology: Gralkor.DefaultOntology,
+        ingestion: String
+      }
+
+      failing = {:direct, "failing", Gralkor.DefaultOntology}
+      succeeding = {:direct, "succeeding", Gralkor.DefaultOntology}
+      assert :ok = CaptureBuffer.append_capture(self(), typed_request("first"), [failing])
+      assert :ok = CaptureBuffer.append_capture(self(), typed_request("second"), [{:lens, lens}])
+      assert :ok = CaptureBuffer.append_capture(self(), typed_request("third"), [succeeding])
+
+      capture_log(fn ->
+        assert {:error, _reason} = CaptureBuffer.flush_and_await("typed-session", 1_000)
+      end)
+
+      assert_received {:direct_attempted, "failing", [[%{content: "first"}]]}
+      assert_received {:lens_attempted, "notes", [[%{content: "second"}]]}
+      assert_received {:direct_attempted, "succeeding", [[%{content: "third"}]]}
     end
   end
 
