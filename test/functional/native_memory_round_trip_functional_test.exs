@@ -45,6 +45,8 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
                 self.recorded = {"episodes": []}
                 self.facts = []
                 self.search_fails = False
+                self.search_delay = 0
+                self.searches = 0
                 self.add_delay = 0
 
             async def add_episode(self, **kwargs):
@@ -67,6 +69,10 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
                 pass
 
             async def search(self, query, num_results=10, search_filter=None):
+                self.searches += 1
+                if self.search_delay:
+                    import asyncio
+                    await asyncio.sleep(self.search_delay)
                 if self.search_fails:
                     raise RuntimeError("graph refused the search")
                 return [_Edge(f) for f in self.facts]
@@ -77,12 +83,18 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       )
 
     original_client = Application.get_env(:jido_gralkor, :client)
+    original_recall_deadline = Application.get_env(:jido_gralkor, :recall_deadline_ms)
     Application.put_env(:jido_gralkor, :client, Native)
 
     on_exit(fn ->
       case original_client do
         nil -> Application.delete_env(:jido_gralkor, :client)
         mod -> Application.put_env(:jido_gralkor, :client, mod)
+      end
+
+      case original_recall_deadline do
+        nil -> Application.delete_env(:jido_gralkor, :recall_deadline_ms)
+        ms -> Application.put_env(:jido_gralkor, :recall_deadline_ms, ms)
       end
     end)
 
@@ -123,6 +135,14 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   defp put_facts(g, facts), do: Pythonx.eval("g.facts = facts", %{"g" => g, "facts" => facts})
 
   defp fail_search(g), do: Pythonx.eval("g.search_fails = True", %{"g" => g})
+
+  defp delay_search(g, seconds),
+    do: Pythonx.eval("g.search_delay = seconds", %{"g" => g, "seconds" => seconds})
+
+  defp search_count(g) do
+    {count, _} = Pythonx.eval("g.searches", %{"g" => g})
+    Pythonx.decode(count)
+  end
 
   defp delay_add(g, seconds),
     do: Pythonx.eval("g.add_delay = seconds", %{"g" => g, "seconds" => seconds})
@@ -266,6 +286,33 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
       Process.sleep(200)
 
       assert Enum.count(episodes(g), &(&1["source_description"] == @captured_source)) == 1
+    end
+  end
+
+  describe "where the deployment configures a recall deadline > if recall outlasts that deadline" do
+    test "then recall returns the expired deadline without a memory block", %{g: g} do
+      put_facts(g, ["Eli works at Anthropic."])
+      delay_search(g, 0.5)
+      Application.put_env(:jido_gralkor, :recall_deadline_ms, 50)
+
+      assert {:error, :recall_deadline_expired} =
+               Native.recall("operator_one", "TestAgent", "slow-session", "Where does Eli work?")
+    end
+  end
+
+  describe "if the deployment configures a recall deadline that is not a positive integer" do
+    test "then recall fails naming the recall deadline before any graph search", %{g: g} do
+      for invalid <- [0, -5, "12000", 1.5] do
+        Application.put_env(:jido_gralkor, :recall_deadline_ms, invalid)
+
+        assert_raise ArgumentError,
+                     ~r/recall_deadline_ms must be a positive integer, got #{Regex.escape(inspect(invalid))}/,
+                     fn ->
+                       Native.recall("operator_one", "TestAgent", nil, "Where does Eli work?")
+                     end
+      end
+
+      assert search_count(g) == 0
     end
   end
 
