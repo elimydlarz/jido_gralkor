@@ -33,23 +33,26 @@ defmodule Gralkor.GraphitiPoolTest do
     %{pid: pid, table: table}
   end
 
-  defp start_raising_graph_pool do
+  defp start_raising_graph_pool(add_message \\ "graph library exploded") do
     {g, _} =
       Pythonx.eval(
         """
         class _FakeGraphiti:
+            def __init__(self, add_message):
+                self.add_message = add_message
+
             async def _write(self, message, embedding):
                 raise RuntimeError(message)
 
             async def add_episode(self, **kwargs):
-                await self._write("graph library exploded", embedding=[0.123, 0.456, 0.789])
+                await self._write(self.add_message, embedding=[0.123, 0.456, 0.789])
 
             async def remove_episode(self, uuid):
                 await self._write("episode vanished", embedding=[0.123, 0.456, 0.789])
 
-        _FakeGraphiti()
+        _FakeGraphiti(add_message.decode('utf-8'))
         """,
-        %{}
+        %{"add_message" => add_message}
       )
 
     start_pool(
@@ -199,6 +202,20 @@ defmodule Gralkor.GraphitiPoolTest do
       assert diagnostics == ["[gralkor] add_episode failed: RuntimeError: graph library exploded"]
 
       GenServer.stop(pid)
+
+      %{pid: multiline_pid} =
+        start_raising_graph_pool("graph library exploded\nembedding=[0.123, 0.456, 0.789]")
+
+      multiline_diagnostics =
+        capture_failure_diagnostics(fn ->
+          GraphitiPool.add_episode(multiline_pid, "g1", "content", "source", nil)
+        end)
+
+      assert multiline_diagnostics == [
+               "[gralkor] add_episode failed: RuntimeError: graph library exploded"
+             ]
+
+      GenServer.stop(multiline_pid)
     end
   end
 
