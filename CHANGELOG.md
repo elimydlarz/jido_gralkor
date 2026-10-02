@@ -2,7 +2,23 @@
 
 ## [Unreleased]
 
-- Graphiti runtime bumped to `graphiti-core[falkordb,google-genai] == 0.30.2`. Graphiti now scopes the driver to each `add_episode` call instead of reassigning the shared driver. It also writes FalkorDB datetimes in UTC, stops storing a `labels` property on entity nodes, fixes the FalkorDB edge full-text search plan, and ranks node-mentions results by descending mention count. The packaged empty-edge-candidate guard and the explicit GPT-5.5/5.6 `reasoning: "none"` remain necessary because 0.30.2 leaves both code paths unchanged.
+### Changed
+- Graphiti runtime bumped to `graphiti-core[falkordb,google-genai] == 0.30.2`. Graphiti now scopes the driver to each `add_episode` call, writes FalkorDB datetimes in UTC, stops storing a `labels` property on entity nodes, fixes the FalkorDB edge full-text search plan, and ranks node-mentions results by descending mention count. The packaged empty-edge-candidate guard is still required; the explicit `reasoning: "none"` is still required for GPT-5.6 and remains explicit for GPT-5.5.
+- Gralkor's claim-fenced and direct-writer graph writes store entity types only as (quoted) graph labels, matching graphiti 0.30.2.
+- `Gralkor.Client.reflect/5` accepts only `:inference`, `:tool_executor`, `:tools`, and `:tool_context`; other options return `{:error, {:unsupported_reflection_options, keys}}` instead of silently overriding artefact identity, storage, or the retry window.
+- Mounting `JidoGralkor.Plugin` rejects an `:ingestion_lens` that accepts only whole-graph replacement.
+- `GraphitiPool.add_episode` reports inference-provider failures as `{:upstream_llm, {:rate_limited | :provider, detail}}`; capture no longer retries them on top of the provider client's own retries.
+- `Gralkor.Lens.Storage.Graphiti.search/4` rejects unknown options; a blank or whitespace-only `GRALKOR_DATA_DIR` counts as unset.
+- Runtime validation names the offending provenance delimiter, and Chain-of-Thought parsing names the innermost unsupported type.
+- Private-graph migration: `advance` persists at most one durable graph phase per call across graphs, `prepare` refuses an existing journal, a journal held by another operation is refused with a clear error, and journals stay owner-only even when a stale temporary file is reused.
+- `RUNTIME_CONFIG.md` is folded into the README; the Hex package maintainer is `elimydlarz`.
+
+### Fixed
+- A JidoGralkor runtime outlived its AgentServer after a normal stop, so admitted Reflection work kept running and invoked callbacks. The runtime now monitors its owner and stops with it for any reason.
+- Plugin hooks delivered through `Jido.AgentServer.call` targeted the hook task instead of the AgentServer, so capture failed with "runtime unavailable". The plugin resolves its owning AgentServer through Jido's registry.
+- Built-in Reflection inference crashed on unexpected ReAct terminations; it now returns the termination reason as an error.
+- `Gralkor.Client.replace` with a non-graph value now raises the documented "invalid graph data" error.
+- The capture flush warning no longer claims a retry that the capture buffer may not perform.
 
 ## [11.0.0] - 2026-09-15
 
