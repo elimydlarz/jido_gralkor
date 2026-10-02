@@ -37,38 +37,6 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
     end
   end
 
-  describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected type carries a description" do
-    test "then that type's entry carries `\"description\" =>` that string" do
-      spec =
-        GraphitiPool.graphiti_boundary_spec(
-          payload(%{
-            entity_types: [
-              %{name: "User", description: "A person who talks to the agent.", fields: []}
-            ]
-          })
-        )
-
-      assert spec[:entity_types] == [
-               %{
-                 "name" => "User",
-                 "description" => "A person who talks to the agent.",
-                 "fields" => []
-               }
-             ]
-    end
-  end
-
-  describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected type carries no description" do
-    test "then that type's entry omits `\"description\"` entirely" do
-      spec =
-        GraphitiPool.graphiti_boundary_spec(
-          payload(%{entity_types: [%{name: "Preference", description: nil, fields: []}]})
-        )
-
-      assert spec[:entity_types] == [%{"name" => "Preference", "fields" => []}]
-    end
-  end
-
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while the payload declares no entities" do
     test "then the spec omits `:entity_types` entirely" do
       refute Map.has_key?(GraphitiPool.graphiti_boundary_spec(payload()), :entity_types)
@@ -97,6 +65,26 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while the payload declares no relationship verbs" do
     test "then the spec omits `:edge_types` entirely" do
       refute Map.has_key?(GraphitiPool.graphiti_boundary_spec(payload()), :edge_types)
+    end
+  end
+
+  describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected type carries a field" do
+    test "then that field's entry carries its name and type as strings" do
+      spec =
+        GraphitiPool.graphiti_boundary_spec(
+          payload(%{
+            edge_types: [
+              %{
+                name: "PREFERS",
+                fields: [%{name: :strength, type: :integer, required: false, doc: nil}]
+              }
+            ]
+          })
+        )
+
+      [%{"fields" => [field]}] = spec[:edge_types]
+      assert field["name"] == "strength"
+      assert field["type"] == "integer"
     end
   end
 
@@ -167,6 +155,38 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
 
       [%{"fields" => [field]}] = spec[:entity_types]
       assert field["doc"] == nil
+    end
+  end
+
+  describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected type carries a description" do
+    test "then that type's entry carries `\"description\" =>` that string" do
+      spec =
+        GraphitiPool.graphiti_boundary_spec(
+          payload(%{
+            entity_types: [
+              %{name: "User", description: "A person who talks to the agent.", fields: []}
+            ]
+          })
+        )
+
+      assert spec[:entity_types] == [
+               %{
+                 "name" => "User",
+                 "description" => "A person who talks to the agent.",
+                 "fields" => []
+               }
+             ]
+    end
+  end
+
+  describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected type carries no description" do
+    test "then that type's entry omits `\"description\"` entirely" do
+      spec =
+        GraphitiPool.graphiti_boundary_spec(
+          payload(%{entity_types: [%{name: "Preference", description: nil, fields: []}]})
+        )
+
+      assert spec[:entity_types] == [%{"name" => "Preference", "fields" => []}]
     end
   end
 
