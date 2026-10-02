@@ -3,6 +3,13 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
   @moduletag :functional
   @moduletag timeout: 120_000
 
+  defmodule FruitOntology do
+    use Gralkor.Ontology, entities: :open, relationships: :open
+
+    entity Fruit, "A fruit named in the episode." do
+    end
+  end
+
   setup do
     directory =
       Path.join(System.tmp_dir!(), "direct-provenance-#{System.unique_integer([:positive])}")
@@ -36,7 +43,8 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
     }
 
     start_public_runtime(context)
-    context
+    assert_receive {:fixture_llm, llm}
+    Map.put(context, :llm, llm)
   end
 
   describe "when direct memory is stored in a real graph" do
@@ -78,6 +86,37 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
       refute Map.has_key?(episode, :writer)
       refute Map.has_key?(episode, :lens)
       refute Map.has_key?(episode, :reflection)
+    end
+
+    test "and entities extracted from a direct write carry their entity types as graph labels without a `labels` property",
+         context do
+      Pythonx.eval(
+        "llm.extracted_entities = [{'name': 'amber', 'entity_type_id': 1}]",
+        %{"llm" => context.llm}
+      )
+
+      assert :ok =
+               Gralkor.GraphitiPool.add_episode(
+                 Gralkor.GraphitiPool,
+                 "personal/owner",
+                 "amber orchard",
+                 "manual",
+                 FruitOntology,
+                 writer: :direct
+               )
+
+      {result, _} =
+        Pythonx.eval(
+          """
+          graph = database.select_graph('g_' + b'personal/owner'.hex())
+          graph.query('MATCH (n:Entity) RETURN n.name, labels(n), keys(n)').result_set
+          """,
+          %{"database" => context.database}
+        )
+
+      assert [["amber", labels, properties]] = Pythonx.decode(result)
+      assert Enum.sort(labels) == ["Entity", "Fruit"]
+      refute "labels" in properties
     end
   end
 
@@ -179,6 +218,8 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
       end)
     end)
 
+    test_pid = self()
+
     shared_clients = fn _, _ ->
       {_, globals} =
         Pythonx.eval(
@@ -192,11 +233,13 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
           llm = OpenAIClient(config=config)
           embedder = OpenAIEmbedder(config=OpenAIEmbedderConfig(api_key='isolated-fixture', base_url='http://127.0.0.1:1', embedding_dim=3))
           cross_encoder = OpenAIRerankerClient(config=config)
+          llm.extracted_entities = []
           async def generate_response(*args, **kwargs):
               model = kwargs.get('response_model')
               name = model.__name__ if model is not None else ''
-              if name == 'ExtractedEntities': return {'extracted_entities': []}
+              if name == 'ExtractedEntities': return {'extracted_entities': llm.extracted_entities}
               if name == 'ExtractedEdges': return {'edges': []}
+              if name == 'SummarizedEntities': return {'summaries': []}
               raise AssertionError('unexpected external inference: ' + name)
           async def create(*args, **kwargs): return [0.1, 0.2, 0.3]
           async def create_batch(values): return [[0.1, 0.2, 0.3] for _ in values]
@@ -208,6 +251,8 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
           """,
           %{}
         )
+
+      send(test_pid, {:fixture_llm, globals["llm"]})
 
       %{
         llm_client: globals["llm"],
