@@ -1,6 +1,8 @@
 defmodule JidoGralkor.Actions.MemoryAddTest do
   use ExUnit.Case, async: false
 
+  @moduletag :integration
+
   import ExUnit.CaptureLog
 
   alias Gralkor.Client.InMemory
@@ -15,6 +17,10 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
       send(Process.whereis(:memory_add_lens_test), {:lens_ingest, request, store})
       :ok
     end
+  end
+
+  defmodule FailingIngestion do
+    def ingest(_request, _store), do: {:error, :lens_boom}
   end
 
   defmodule BlockingMemoryAddClient do
@@ -62,6 +68,19 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
     :ok
   end
 
+  describe "when a model reads the memory add tool's description" do
+    test "then it is told to store higher-level conclusions because conversations are captured automatically" do
+      description = MemoryAdd.description()
+      assert description =~ "Conversations are already captured automatically"
+      assert description =~ "higher-level reasoning and conclusions"
+    end
+
+    test "and the source kind is limited to conversation, document, or structured record" do
+      assert Keyword.fetch!(MemoryAdd.schema(), :source_kind)[:type] ==
+               {:in, [:conversation, :document, :structured_record]}
+    end
+  end
+
   describe "when the memory add tool runs with content, a source kind, and a source description" do
     test "then it returns an acknowledgement immediately, without waiting on the write" do
       Process.register(self(), :memory_add_blocking_test)
@@ -83,8 +102,10 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
       send(worker, :release)
       assert_receive :memory_add_finished
     end
+  end
 
-    test "and the background write uses the graph named `personal/<operator id>`" do
+  describe "when the memory add tool runs with content, a source kind, and a source description > where the tool context selects no Lens" do
+    test "then the background write uses the graph named `personal/<operator id>`" do
       InMemory.set_memory_add(:ok)
 
       MemoryAdd.run(
@@ -203,7 +224,7 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
     end
   end
 
-  describe "when the memory add tool runs with content, a source kind, and a source description > if the background write fails" do
+  describe "when the memory add tool runs with content, a source kind, and a source description > if the background write or Lens ingestion fails" do
     test "then the failure is logged" do
       InMemory.set_memory_add({:error, :boom})
 
@@ -230,6 +251,24 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
 
       assert log =~ "[gralkor] memory_add failed"
       assert log =~ ":boom"
+
+      Process.register(self(), :memory_add_lens_test)
+      start_failing_lens_runtime()
+
+      lens_log =
+        capture_log(fn ->
+          assert {:ok, %{result: "Ingesting."}} =
+                   MemoryAdd.run(memory_add_params(), %{
+                     agent_id: "operator-one",
+                     lens: "failing",
+                     gralkor_runtime: self()
+                   })
+
+          Process.sleep(100)
+        end)
+
+      assert lens_log =~ "[gralkor] memory_add failed"
+      assert lens_log =~ ":lens_boom"
     end
 
     test "and the caller's acknowledgement is unaffected" do
@@ -248,7 +287,40 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
       capture_log(fn ->
         assert eventually(fn -> match?([[_, "something", _, _]], InMemory.adds()) end)
       end)
+
+      start_failing_lens_runtime()
+
+      capture_log(fn ->
+        assert {:ok, %{result: "Ingesting."}} =
+                 MemoryAdd.run(memory_add_params(), %{
+                   agent_id: "operator-one",
+                   lens: "failing",
+                   gralkor_runtime: self()
+                 })
+
+        Process.sleep(100)
+      end)
     end
+  end
+
+  defp start_failing_lens_runtime do
+    start_supervised!(
+      {JidoGralkor.Runtime,
+       owner: self(),
+       configuration: %{
+         destinations: [[name: "failing-decisions"]],
+         lenses: [
+           [
+             name: "failing",
+             destination: "failing-decisions",
+             write: :append,
+             ontology: LensOntology,
+             ingestion: FailingIngestion
+           ]
+         ],
+         reflections: []
+       }}
+    )
   end
 
   defp prove_runtime_targeted_lens_ingestion do
