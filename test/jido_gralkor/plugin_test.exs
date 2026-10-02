@@ -1,6 +1,6 @@
 defmodule JidoGralkor.PluginTest do
-  @moduletag :integration
   use ExUnit.Case, async: false
+  @moduletag :integration
 
   import ExUnit.CaptureLog
 
