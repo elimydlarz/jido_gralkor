@@ -50,6 +50,16 @@ defmodule Gralkor.Reflection.RunnerTest do
 
   alias Gralkor.Search
 
+  defmodule LookupTool do
+    use Jido.Action,
+      name: "lookup",
+      description: "Looks up stored evidence.",
+      schema: [query: [type: :string, required: true]]
+
+    @impl true
+    def run(%{query: query}, _context), do: {:ok, %{evidence: query}}
+  end
+
   defmodule ProbeDestinationStorage do
     @behaviour Gralkor.Destination.Storage
 
@@ -141,6 +151,32 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
   end
 
+  describe "where inference returns wrapped tool calls > if a requested tool is not among the supplied tools" do
+    test "then the unknown tool name is returned to inference as that call's result" do
+      test_pid = self()
+      call = %{name: "missing_tool", arguments: %{"query" => "deployment"}}
+
+      inference = fn
+        %{tool_results: []} ->
+          {:ok, %{tool_calls: [call]}}
+
+        %{tool_results: results} ->
+          send(test_pid, {:returned_tool_results, results})
+          {:ok, %{output: %{"answer" => "ready"}}}
+      end
+
+      assert {:ok, %Artefact{}} =
+               Runner.run(single_step_reflection(), invocation(),
+                 inference: inference,
+                 tools: [LookupTool],
+                 tool_context: %{session_id: "thread-one"}
+               )
+
+      assert_receive {:returned_tool_results,
+                      [%{call: ^call, result: {:error, {:unknown_tool, "missing_tool"}}}]}
+    end
+  end
+
   describe "when inference returns wrapped structured output satisfying the current step's exact contract" do
     test "then that output is added to the shared output space" do
       test_pid = self()
@@ -181,7 +217,7 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
   end
 
-  describe "if inference omits a declared output" do
+  describe "if inference omits a declared output > while the step is not the final step" do
     test "then the Runner failure identifies the Reflection, step, and missing key" do
       reflection =
         reflection([
@@ -198,6 +234,20 @@ defmodule Gralkor.Reflection.RunnerTest do
                Runner.run(reflection, invocation(),
                  inference: fn _request -> {:ok, %{output: %{}}} end
                )
+    end
+  end
+
+  describe "if inference omits a declared output > while the step is the final step" do
+    test "then the Runner failure identifies the Reflection and missing artefact" do
+      inference = fn
+        %{step: %{label: "collect"}} -> {:ok, %{output: %{"evidence" => "gathered evidence"}}}
+        %{step: %{label: "decide"}} -> {:ok, %{output: %{"confidence" => 3}}}
+      end
+
+      assert {:error, failure} =
+               Runner.run(reflection(sequence_steps()), invocation(), inference: inference)
+
+      assert failure == %{reflection: "review", reason: :missing_artefact}
     end
   end
 
@@ -275,20 +325,6 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
   end
 
-  describe "if the Chain of Thought completes without valid final structured output" do
-    test "then the Runner failure identifies the Reflection and missing artefact" do
-      inference = fn
-        %{step: %{label: "collect"}} -> {:ok, %{output: %{"evidence" => "gathered evidence"}}}
-        %{step: %{label: "decide"}} -> {:ok, %{output: %{"confidence" => 3}}}
-      end
-
-      assert {:error, %{reflection: "review", reason: :missing_artefact} = failure} =
-               Runner.run(reflection(sequence_steps()), invocation(), inference: inference)
-
-      assert failure == %{reflection: "review", reason: :missing_artefact}
-    end
-  end
-
   describe "if inference fails or returns an invalid response" do
     test "then the Runner failure identifies the Reflection, current step, and reason" do
       prove_inference_failures_are_identified()
@@ -343,6 +379,19 @@ defmodule Gralkor.Reflection.RunnerTest do
   describe "when built-in inference is invoked for a step > if the provider fails or returns invalid JSON or a non-object JSON value" do
     test "then built-in inference returns the identified error" do
       prove_built_in_inference_errors()
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > if the ReAct runtime ends without a final answer" do
+    test "then built-in inference returns its termination reason as an error" do
+      request = default_inference_request()
+
+      for termination_reason <- [:max_iterations, :cancelled, :completed, nil] do
+        assert {:error, ^termination_reason} =
+                 Runner.default_inference(request, fn _action, _args, _context ->
+                   %{termination_reason: termination_reason, result: nil}
+                 end)
+      end
     end
   end
 
