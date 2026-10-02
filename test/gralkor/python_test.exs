@@ -1,6 +1,8 @@
 defmodule Gralkor.PythonTest do
   use ExUnit.Case, async: false
 
+  @moduletag :integration
+
   alias Gralkor.Python
 
   setup do
@@ -134,29 +136,39 @@ defmodule Gralkor.PythonTest do
       {after_id, _} = Pythonx.eval("import asyncio; id(asyncio._gralkor_loop)", %{})
       assert Pythonx.decode(before_id) == Pythonx.decode(after_id)
     end
-  end
 
-  describe "when the Python runtime initialises > while the managed virtual environment is absent" do
-    test "then it is materialised" do
+    test "and the managed environment is materialised from the packaged manifest" do
       test_pid = self()
+      initialised = {Python, :uv_inited}
+      previous = :persistent_term.get(initialised, :__missing__)
+      :persistent_term.erase(initialised)
+
+      on_exit(fn ->
+        case previous do
+          :__missing__ -> :persistent_term.erase(initialised)
+          value -> :persistent_term.put(initialised, value)
+        end
+      end)
 
       assert {:ok, _} =
                Python.init(
                  reap_orphans: false,
                  uv_init: fn ->
-                   send(test_pid, :materialised)
-                   :ok
+                   Python.ensure_initialised(fn manifest ->
+                     send(test_pid, {:materialised, manifest})
+                   end)
                  end,
                  smoke_import: fn -> :ok end,
                  smoke_import_provider: fn _provider -> :ok end,
                  install_loop: false
                )
 
-      assert_receive :materialised
+      packaged_manifest = File.read!(Path.expand("../../priv/python/pyproject.toml", __DIR__))
+      assert_receive {:materialised, ^packaged_manifest}
     end
   end
 
-  describe "when the Python runtime initialises > while the embedded backend is configured" do
+  describe "when the Python runtime initialises > while orphan reaping is requested" do
     test "then every process identified as its bundled server is killed before startup" do
       killed = :ets.new(:killed, [:public, :set])
 
@@ -196,7 +208,7 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  describe "when the Python runtime initialises > while the remote backend is configured" do
+  describe "when the Python runtime initialises > while orphan reaping is not requested" do
     test "then no orphaned-server sweep runs" do
       test_pid = self()
 
