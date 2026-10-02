@@ -58,12 +58,13 @@ defmodule JidoGralkor.PluginTest do
     requests = Keyword.get(opts, :requests, %{})
     agent_name = Keyword.get(opts, :agent_name, "TestAgent")
     user_name = Keyword.get(opts, :user_name, "Eli")
+    capture_destination = Keyword.get(opts, :capture_destination, "personal")
 
     state =
       %{
         __strategy__: %{request_traces: request_traces, config: %{}},
         requests: requests,
-        __memory__: %{agent_name: agent_name, capture_destination: "personal"},
+        __memory__: %{agent_name: agent_name, capture_destination: capture_destination},
         user_name: user_name
       }
       |> maybe_put(:__thread__, if(thread_id, do: %{id: thread_id}, else: nil))
@@ -864,12 +865,13 @@ defmodule JidoGralkor.PluginTest do
     {log, InMemory.captures()}
   end
 
-  defp completed_capture do
+  defp completed_capture(opts \\ []) do
     InMemory.set_capture(:ok)
     request_id = "req-xyz"
 
     ag =
       agent("user-42",
+        capture_destination: Keyword.get(opts, :capture_destination, "personal"),
         thread_id: "thr-42",
         request_traces: %{
           request_id => %{
