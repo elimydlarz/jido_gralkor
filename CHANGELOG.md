@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [11.1.0] - 2026-10-03
 
 ### Changed
 - Graphiti runtime bumped to `graphiti-core[falkordb,google-genai] == 0.30.2`. Graphiti now scopes the driver to each `add_episode` call, writes FalkorDB datetimes in UTC, stops storing a `labels` property on entity nodes, fixes the FalkorDB edge full-text search plan, and ranks node-mentions results by descending mention count. The packaged empty-edge-candidate guard is still required; the explicit `reasoning: "none"` is still required for GPT-5.6 and remains explicit for GPT-5.5.
