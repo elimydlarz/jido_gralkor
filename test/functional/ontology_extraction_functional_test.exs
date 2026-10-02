@@ -117,26 +117,26 @@ defmodule Gralkor.OntologyExtractionFunctionalTest do
   end
 
   describe "when an episode is ingested through a named Lens with a strict ontology" do
-    test "then extraction conforms every node and relationship to the declared ontology" do
-      group_id = ingest_through_named_lens("strict", StrictOntology)
+    test "then every extracted entity carries only declared entity types" do
+      node_labels = node_labels(strict_group_id())
 
-      node_labels = node_labels(group_id)
-      edge_types = edge_types(group_id)
-
-      assert Enum.any?(node_labels, fn labels -> "User" in labels end),
-             "expected at least one node with the User label; got node labels: #{inspect(node_labels)}"
-
-      assert Enum.any?(node_labels, fn labels -> "Preference" in labels end),
-             "expected at least one node with the Preference label; got node labels: #{inspect(node_labels)}"
+      assert node_labels != [],
+             "expected at least one extracted entity; got node labels: #{inspect(node_labels)}"
 
       assert Enum.all?(node_labels, fn labels -> labels -- ["Entity"] != [] end),
-             "expected every node to carry at least one label other than Entity (strict mode); got node labels: #{inspect(node_labels)}"
+             "expected every entity to carry a declared entity type; got node labels: #{inspect(node_labels)}"
 
       assert Enum.all?(node_labels, &(&1 -- ["Entity", "User", "Preference"] == [])),
-             "expected every node label within the declared ontology; got node labels: #{inspect(node_labels)}"
+             "expected every entity type within the declared ontology; got node labels: #{inspect(node_labels)}"
+    end
 
-      assert "PREFERS" in edge_types,
-             "expected at least one PREFERS edge; got edge types: #{inspect(edge_types)}"
+    test "and a relationship between declared endpoint types carries its declared relationship name" do
+      relationships = relationships(strict_group_id())
+
+      assert Enum.any?(relationships, fn {source_labels, name, target_labels} ->
+               "User" in source_labels and "Preference" in target_labels and name == "PREFERS"
+             end),
+             "expected a User to Preference relationship named PREFERS; got relationships: #{inspect(relationships)}"
     end
   end
 
