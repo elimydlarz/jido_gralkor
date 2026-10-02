@@ -1368,6 +1368,8 @@ defmodule Gralkor.GraphitiPool do
 
     case result do
       "conflict" -> {:error, {:episode_conflict, uuid}}
+      ["rate_limited", detail] -> {:error, {:upstream_llm, {:rate_limited, detail}}}
+      ["provider", detail] -> {:error, {:upstream_llm, {:provider, detail}}}
       _ -> :ok
     end
   rescue
