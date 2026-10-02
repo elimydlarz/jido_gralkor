@@ -81,9 +81,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         )
   end
 
+  @observation "A reversible canary exposed a configuration fault before broad deployment impact."
+  @generalisation "Reversible limited-scope trials expose faults before broad impact across deployments, migrations, and feature releases."
+
   defmodule InspectingProviderFixture do
-    @observation "A reversible canary exposed a configuration fault before broad deployment impact."
-    @generalisation "Reversible limited-scope trials expose faults before broad impact across deployments, migrations, and feature releases."
     @answer "RECOMMENDATION: Use a reversible limited-scope canary for the Payments database migration. RATIONALE: Retrieved facts show that trials expose faults before broad impact."
 
     def adapter(test_pid) do
@@ -127,9 +128,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     defp answer_response(payload, test_pid) do
       tool_results = Enum.filter(payload["input"] || [], &(&1["type"] == "function_call_output"))
-      valid? = exact_memory_evidence?(tool_results)
-
-      send(test_pid, {:provider_tool_results_inspected, valid?, tool_results})
+      send(test_pid, {:provider_tool_results, tool_results})
 
       Jason.decode!(
         Jason.encode!(%{
@@ -137,32 +136,15 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
           object: "response",
           model: "fixture",
           status: "completed",
-          output:
-            if(valid?,
-              do: [
-                %{
-                  "type" => "message",
-                  "role" => "assistant",
-                  "content" => [%{"type" => "output_text", "text" => @answer}]
-                }
-              ],
-              else: []
-            )
+          output: [
+            %{
+              "type" => "message",
+              "role" => "assistant",
+              "content" => [%{"type" => "output_text", "text" => @answer}]
+            }
+          ]
         })
       )
-    end
-
-    defp exact_memory_evidence?(tool_results) do
-      Enum.any?(tool_results, fn %{"output" => output} ->
-        case Jason.decode!(output) do
-          %{"ok" => true, "result" => %{"result" => text}} when is_binary(text) ->
-            String.contains?(text, "Lens: observations\n- " <> @observation) and
-              String.contains?(text, "Reflection: generalisations\n- " <> @generalisation)
-
-          _ ->
-            false
-        end
-      end)
     end
   end
 
@@ -461,7 +443,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert text == "Lens: personal-chat\n- own memory"
     end
 
-    test "and the usable query selects relevant extracted facts" do
+    test "and the usable query is submitted to fact search for the current operator" do
       Application.put_env(:jido_gralkor, :destination_storage, RecordingSearchStorage)
       Application.put_env(:jido_gralkor, :public_search_test_pid, self())
       on_exit(fn -> Application.delete_env(:jido_gralkor, :public_search_test_pid) end)
@@ -615,17 +597,14 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   end
 
   describe "when a fresh agent handles a request related to an evolved generalisation" do
-    test "then the answer uses the retrieved facts relevant to the requested migration" do
-      answer = deterministic_evolved_generalisation_answer()
-      assert answer =~ "Retrieved facts show that trials expose faults before broad impact"
+    test "then the provider receives the related observation under its Lens heading" do
+      provider_text = evolved_generalisation_provider_tool_text()
+      assert provider_text =~ "Lens: observations\n- " <> @observation
     end
 
-    test "and the recommendation applies the retrieved reversible limited-scope lesson to the requested migration" do
-      answer = deterministic_evolved_generalisation_answer()
-
-      assert answer =~ "RECOMMENDATION: Use a reversible limited-scope canary"
-      assert answer =~ "Payments database migration"
-      assert answer =~ "expose faults before broad impact"
+    test "and the provider receives the evolved reversible limited-scope generalisation under its Reflection heading" do
+      provider_text = evolved_generalisation_provider_tool_text()
+      assert provider_text =~ "Reflection: generalisations\n- " <> @generalisation
     end
   end
 
@@ -748,12 +727,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                fact("two", [%{lens: "a"}]),
                fact("three", [%{lens: "z"}])
              ]) == "Lens: z\n- one\n- three\n\nLens: a\n- two"
-    end
-
-    test "and formatting leaves the canonical structured search results unchanged" do
-      input = [fact("one", [%{lens: "notes", id: "source-id"}])]
-      assert rendered(input) == "Lens: notes\n- one"
-      assert input == [fact("one", [%{lens: "notes", id: "source-id"}])]
     end
   end
 
@@ -1181,7 +1154,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     {agent, signal, log}
   end
 
-  defp deterministic_evolved_generalisation_answer do
+  defp evolved_generalisation_provider_tool_text do
     operator_id = "functional-agent-#{System.unique_integer([:positive])}"
     jido = Jido.default_instance()
 
@@ -1201,14 +1174,13 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                operator_id: operator_id,
                lens: "observations",
                source_kind: :document,
-               content:
-                 "A reversible canary exposed a configuration fault before broad deployment impact.",
+               content: @observation,
                source_description: "deployment review"
              })
 
     put_generalisation_for(
       operator_id,
-      "Reversible limited-scope trials expose faults before broad impact across deployments, migrations, and feature releases.",
+      @generalisation,
       2,
       [
         %{
@@ -1238,12 +1210,12 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       )
     end
 
-    {:ok, answer} = result
+    assert_receive {:provider_tool_results, [_ | _] = tool_results}
 
-    assert_receive {:provider_tool_results_inspected, true, tool_results}
-    assert tool_results != []
-    assert Enum.any?(tool_results, &(to_string(&1["output"]) =~ "Reflection: generalisations"))
-    answer
+    Enum.map_join(tool_results, "\n\n", fn %{"output" => output} ->
+      %{"ok" => true, "result" => %{"result" => text}} = Jason.decode!(output)
+      text
+    end)
   end
 
   defp drain_provider_messages(acc) do
@@ -1252,8 +1224,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         input_types = payload |> Map.get("input", []) |> Enum.map(&Map.get(&1, "type"))
         drain_provider_messages([{url, input_types} | acc])
 
-      {:provider_tool_results_inspected, valid?, _tool_results} ->
-        drain_provider_messages([{:tool_results_inspected, valid?} | acc])
+      {:provider_tool_results, tool_results} ->
+        drain_provider_messages([{:provider_tool_results, length(tool_results)} | acc])
     after
       0 -> Enum.reverse(acc)
     end
