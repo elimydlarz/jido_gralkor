@@ -40,6 +40,9 @@ where Graphiti stores a Destination artefact output
       and loss of ownership aborts that transaction before any graph effect commits
       and the completion marker is fenced by the current claim generation
       and a stale owner cannot mutate or finish the artefact output
+    while extraction outlasts one claim lease
+      then the owner keeps its claim by renewing the lease
+      and no other runtime acquires the claim while it is renewed
   when upgrading from an unmarked pre-completion-marker artefact
     then it remains hidden until an explicit replay or migration establishes durable extraction completion
     and upgrade behavior does not expose a possibly partial episode as completed

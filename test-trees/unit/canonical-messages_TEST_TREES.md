@@ -5,6 +5,8 @@ when a turn becomes canonical messages
   and the messages run user first, then the behaviour trace in order, then the turn's outcome last
   while query, outcome, and trace are empty
     then nothing is rendered at all, so the caller can skip the write
+  while the query is only whitespace
+    then no user message is emitted
   while a tool-requesting llm event completes
     then it renders as a behaviour message reading `thought: …`
     while its content is blocks
@@ -19,8 +21,10 @@ when a turn becomes canonical messages
     then those events contribute no messages
   while the turn completed
     then the completed answer terminates the messages as the assistant message
-    while the completed answer is empty
+    while the completed answer is empty or only whitespace
       then no assistant message is emitted
+    while the completed answer has surrounding whitespace
+      then the assistant message carries the trimmed answer
   while the turn failed
     then a terminal behaviour message reading `request failed: …` takes the place of the assistant answer
     and no assistant message is emitted

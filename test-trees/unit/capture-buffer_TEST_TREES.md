@@ -138,6 +138,7 @@ when a session holding no turns is flushed and awaited
 when every buffered session is flushed at once
   then each session's turns go through the same flush callback and retry schedule
   and the call returns only once every one of those flushes has been awaited
+  and the call returns only once every already-started flush has finished
   and every Lens-selected entry is resolved through the configured Lens resolver before its Lens flush callback runs
   if one session's flush fails
     then the other sessions' flushes still complete
@@ -163,6 +164,8 @@ when a typed capture request supplies resolved direct and Lens routes
   then each route buffers only its selected turns while session reads retain append order
   and distinct resolved definitions for the same Lens name remain separate batches
   and a session rejects changes to its runtime owner, operator, agent, or user before buffering
+  if one route's flush fails
+    then every other route's batch is attempted
 
 if typed capture and compatibility buffer calls reuse one session
   then the second mode is rejected without changing accepted turns

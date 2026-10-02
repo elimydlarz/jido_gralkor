@@ -4,3 +4,4 @@ when direct memory is stored in a real graph
   then ordinary direct writes retain durable writer metadata through public episode and fact search
   and deterministic direct writes retain durable writer metadata through public episode and fact search
   and historical marker-like text without durable metadata stays unchanged and unclassified
+  and entities extracted from a direct write carry their entity types as graph labels without a `labels` property

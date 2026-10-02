@@ -16,6 +16,14 @@ where completed representations are requested
   then each successful Store write yields one `Gralkor.IngestedRepresentation`
   and the representations are returned in Store write order
 
+when a Lens ingestion process searches through its bound Store
+  then only the selected Lens's Destination graph for the request's operator is searched
+  and no more than the requested number of results is returned
+
+if ingestion has a missing or blank ingestion identifier or operator identifier
+  then ingestion raises an argument error naming the rejected identifier
+  and no Lens ingestion process runs
+
 if ingestion selects an invalid Lens
   then ingestion fails before an ingestion process runs or memory is stored
 

@@ -17,5 +17,12 @@ when a captured turn is flushed for its session
   and the rendered transcript eventually reaches the selected personal graph with direct conversation provenance
   and a second flush writes no duplicate transcript
 
+where the deployment configures a recall deadline
+  if recall outlasts that deadline
+    then recall returns the expired deadline without a memory block
+
+if the deployment configures a recall deadline that is not a positive integer
+  then recall fails naming the recall deadline before any graph search
+
 if the graph fails a recall search
   then recall returns the graph failure without a memory block

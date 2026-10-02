@@ -9,6 +9,8 @@ when a caller projects an ontology payload into the graphiti boundary spec
     then the spec carries `:edge_types` as a list of string-keyed name/fields maps in first-declaration order
   while the payload declares no relationship verbs
     then the spec omits `:edge_types` entirely
+  while a projected type carries a field
+    then that field's entry carries its name and type as strings
   while a projected type carries a required field
     then that field's entry carries `"required" => true`
   while a projected type carries an optional field

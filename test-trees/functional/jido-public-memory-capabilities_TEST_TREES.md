@@ -20,7 +20,7 @@ when an agent invokes memory addition and its background write fails
 
 when an agent invokes memory search with a usable query
   then returned results are scoped to the current operator
-  and the usable query selects relevant extracted facts
+  and the usable query is submitted to fact search for the current operator
   and returned results obey the optional `destinations` and `lenses` selectors supplied for that invocation
   and the action returns one readable string with fact bullets grouped under named Lens or Reflection headings
   and relevant stored generalisations can contribute beside related ingested information
@@ -39,8 +39,8 @@ when an agent invokes memory search with a usable query
     then the failure is returned unchanged
 
 when a fresh agent handles a request related to an evolved generalisation
-  then the answer uses the retrieved facts relevant to the requested migration
-  and the recommendation applies the retrieved reversible limited-scope lesson to the requested migration
+  then the provider receives the related observation under its Lens heading
+  and the provider receives the evolved reversible limited-scope generalisation under its Reflection heading
 
 when an agent receives the memory search tool
   then its description directs the agent to search related observations and generalisations
@@ -69,7 +69,6 @@ when a consumer explicitly formats structured fact search results
   and each source heading is followed by bullets containing its returned fact text
   and source groups retain first-appearance order
   and facts retain retrieval order within each source group
-  and formatting leaves the canonical structured search results unchanged
   while a fact has several named sources
     then the fact appears once under each distinct named source
   while a Lens and a Reflection share a name

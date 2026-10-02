@@ -5,6 +5,10 @@ when a runtime starts for an owning AgentServer PID with valid complete configur
   and the packaged Destinations, personal-chat Lens, and Reflections are available beside consumer definitions
   and admitted Reflection production and delivery run asynchronously under that runtime
 
+when the owning AgentServer stops for any reason
+  then the runtime stops
+  and unfinished Reflection work ends without invoking its callback
+
 when a consumer replaces complete valid configuration
   then every definition is validated and resolved before activation
   and the complete configuration becomes active as one snapshot
@@ -40,10 +44,13 @@ if a Destination, Lens, or Reflection name is missing, blank, or duplicated
 if a consumer definition uses a name reserved by a package-owned definition
   then validation identifies its collection and reserved name
 
-if a Destination name uses the reserved `operator/` namespace or a Lens uses the retired `default` name
-  then validation identifies the reserved or retired name
+if a Destination name uses the reserved `personal/` or `operator/` namespace
+  then validation identifies the reserved name
 
-if a Lens or Reflection name contains the reserved provenance delimiter ` [lens: `
+if a Destination or Lens uses a retired name
+  then validation identifies the retired name and its replacement
+
+if a Lens or Reflection name contains a reserved provenance delimiter
   then validation identifies the collection and name
 
 if a Lens or Reflection references an unknown Destination
@@ -121,6 +128,9 @@ when a valid named Reflection submission is admitted
 if the callback is invalid, an invocation or operator identifier is missing or blank, or the Reflection is unknown
   then submission returns the identified failure before production starts
 
+if submission options include anything other than inference, tool executor, tools, or tool context
+  then submission returns the unsupported options before production starts
+
 when Reflection production and Destination delivery succeed
   then the artefact is written once through the declared Destination output
   and the callback receives the invocation identifier, artefact, and delivered outcome
@@ -140,6 +150,10 @@ if Reflection production reports a retryable server failure
 
 if Destination delivery reports a non-retryable client failure
   then no retry or error artefact is written and the callback receives abandonment with the produced artefact
+
+if Destination delivery fails without a status
+  then delivery is not retried
+  and the callback receives abandonment with the produced artefact
 
 if Destination delivery reports a retryable server failure
   then delivery retries the same artefact with exponential backoff

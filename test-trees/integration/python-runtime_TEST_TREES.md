@@ -1,4 +1,4 @@
-Unit: python-runtime (src: lib/gralkor/python.ex, priv/python/pyproject.toml; integration: test/gralkor/python_test.exs; unit: test/gralkor/python_test.exs)
+Integration: python-runtime (src: lib/gralkor/python.ex, priv/python/pyproject.toml; integration: test/gralkor/python_test.exs)
 
 when the Python runtime initialises
   then the call blocks until the runtime is ready
@@ -10,12 +10,11 @@ when the Python runtime initialises
   and the packaged clients for every supported provider import successfully
   and a shared asyncio event loop and submission helper are installed
   and reinstalling the loop leaves the installed loop in place
-  while the managed virtual environment is absent
-    then it is materialised
-  while the embedded backend is configured
+  and the managed environment is materialised from the packaged manifest
+  while orphan reaping is requested
     then every process identified as its bundled server is killed before startup
     and only the first initialisation in a virtual machine sweeps for orphaned servers
-  while the remote backend is configured
+  while orphan reaping is not requested
     then no orphaned-server sweep runs
 
 if an initialisation step fails

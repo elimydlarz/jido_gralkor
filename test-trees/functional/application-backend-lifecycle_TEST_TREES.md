@@ -10,6 +10,9 @@ when an application starts with an embedded memory backend
   when the application stops
     then the owned embedded server exits before shutdown completes
 
+when an application configures both a remote backend and a data directory
+  then the native memory runtime uses the remote backend without owning an embedded server
+
 if an application starts with invalid remote memory-backend configuration
   then startup raises before the native memory runtime starts
   and the error identifies the invalid configuration

@@ -27,6 +27,12 @@ if mount is given no agent name
 if mount is given a blank agent name
   then it raises ArgumentError
 
+if mount's capture Destination is missing, unregistered, or retired
+  then it raises an ArgumentError identifying the rejected capture Destination
+
+if mount's runtime configuration is invalid
+  then it raises an ArgumentError identifying the invalid configuration
+
 when mount selects an ingestion Lens
   then the selected Lens name is stored on the plugin state without copying its definition
   where the selected Lens is packaged
@@ -35,6 +41,10 @@ when mount selects an ingestion Lens
     then mounting accepts the Lens
   if the ingestion Lens is unknown
     then mounting raises an ArgumentError identifying the unknown Lens
+  if the ingestion Lens is retired
+    then mounting raises an ArgumentError naming `personal-chat` as its replacement
+  if the ingestion Lens accepts only whole-graph replacement
+    then mounting raises an ArgumentError identifying that Lens
   if the Lens exists only in the application compatibility registry
     then mounting raises an ArgumentError identifying the unknown Lens
   if the removed `:default_lens` option is supplied
@@ -56,6 +66,8 @@ when an agent turn begins
       and the selected Lens remains available to completion and failure capture
       if the Lens is unknown or invalid
         then the callback raises identifying the invalid Lens
+    where the incoming tool context explicitly selects no Lens
+      then completion and failure capture use direct storage
   while no thread has committed to agent state
     then the mounted agent name and Gralkor runtime target are planted on the tool context, with no session id
     and no recall is issued on the plugin's own initiative
@@ -68,7 +80,7 @@ when an agent turn begins
 when an agent turn completes
   while a thread has committed to agent state
     then the turn is sent for capture as canonical messages under that thread's session id
-    and capture explicitly selects personal for the unchanged operator identity
+    and capture selects the mounted capture Destination for the unchanged operator identity
     and the user name held in agent state is forwarded with the capture
     and the user's query opens the captured messages
     and the completed answer closes them
@@ -76,6 +88,8 @@ when an agent turn completes
       then no capture is sent at all
     where the plugin was mounted with Lens selections
       then the capture carries the selected Lens
+    if the completed result is not text
+      then nothing is captured
     if agent state holds no user name
       then the callback raises ArgumentError naming the missing user name
     if agent state holds a blank user name

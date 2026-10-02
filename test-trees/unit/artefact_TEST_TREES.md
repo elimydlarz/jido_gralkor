@@ -8,3 +8,4 @@ when an artefact identifier is derived from an operator, invocation, and Reflect
   then the same ordered identity tuple always produces the same identifier
   and boundaries between identity components remain unambiguous
   and changing any identity component changes the derived identifier
+  and the derived identifier is a version-5 UUID string

@@ -148,7 +148,10 @@ when inference returns a structured output for the current step
     and the next step begins with those outputs available for interpolation
 
   if a declared output key is missing
-    then the Reflection fails identifying its name, current step, and missing key
+    while the step is not the final step
+      then the Reflection fails identifying its name, current step, and missing key
+    while the step is the final step
+      then the Reflection fails identifying its name and missing artefact
 
   if an undeclared output key is returned
     then the Reflection fails identifying its name, current step, and unexpected key
@@ -187,9 +190,6 @@ if Reflection production fails
 when a consumer-owned scheduled job triggers a Reflection
   then the scheduled job does not wait for the Reflection to finish
   and its invocation callback eventually receives the same completion or failure outcome as any other consumer trigger
-
-if a Reflection's Chain of Thought completes without a valid final structured output
-  then the Reflection fails identifying its name and missing artefact
 
 if a Reflection's Chain of Thought fails
   then the Reflection failure identifies its name and reason

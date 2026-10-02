@@ -1,4 +1,4 @@
-Unit: gralkor-client-in-memory (src: lib/gralkor/client.ex, lib/gralkor/client/in_memory.ex; integration: test/gralkor/client/in_memory_test.exs, test/support/gralkor_client_contract.ex; unit: test/gralkor/client/in_memory_test.exs, test/support/gralkor_client_contract.ex)
+Integration: gralkor-client-in-memory (src: lib/gralkor/client.ex, lib/gralkor/client/in_memory.ex; integration: test/gralkor/client/in_memory_test.exs, test/support/gralkor_client_contract.ex)
 
 when recall, capture, flush-and-await, memory addition, index rebuilding, or community building is called
   then the call is recorded with every argument it was given, so a consumer's exact request can be inspected afterwards

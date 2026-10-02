@@ -1,11 +1,11 @@
 Journey: memory-adventure (journey: test/journey/memory_adventure_journey_test.exs)
 
-# Adventure: one operator adds ontology-free direct personal memory, captures direct and personal-chat turns without duplicate writes, flushes completed turns through an appending Lens, asynchronously triggers an ERL Learning, evolves a shared generalisation, and publishes global memory.
+# Adventure: one operator adds default-ontology direct personal memory, captures direct and personal-chat turns without duplicate writes, flushes completed turns through an appending Lens, asynchronously triggers an ERL Learning, evolves a shared generalisation, and publishes global memory.
 # The same operator's appending and replaceable Lenses save to one Destination before the replaceable Lens replaces its earlier graph.
 # Fresh sessions then use default and selected memory search across packaged and application Destinations; both operators check shared and personal visibility.
 
 when two operators use direct personal memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement
-  then ontology-free direct personal memory remains recallable
+  then default-ontology direct personal memory remains recallable
   and direct conversation capture remains searchable without Lens or Reflection authorship
   and personal-chat processing records its actual Lens provenance
   and alternating direct and personal-chat turns writes one episode for each selected route

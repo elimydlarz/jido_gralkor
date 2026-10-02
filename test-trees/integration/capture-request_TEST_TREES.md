@@ -19,10 +19,9 @@ when a capture request resolves through its owning runtime
   and a shared direct Destination uses that exact shared graph
   and each distinct selected Lens resolves in first-selection order
   and different Lenses sharing a Destination retain their own definitions
-  and accepted Lens definitions survive later runtime replacement
   if a selected Lens only accepts whole-graph replacement
     then resolution rejects conversation capture through that Lens
   if a selected Destination or Lens is unknown or retired
-    then resolution fails before any turn can be buffered
+    then resolution fails identifying the rejected name
   if the owning runtime is unavailable
     then resolution fails instead of using application configuration

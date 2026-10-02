@@ -11,9 +11,9 @@ when an application rotates a running agent whose committed thread fails to flus
   then the application receives the failure
   and the active session remains unchanged
 
-when an application rotates a running agent whose flush succeeds but fresh-session installation fails
+when an application rotates a running agent whose committed thread disappears during the flush
   then the application receives the installation failure
-  and the active session remains unchanged
+  and no fresh session is installed
   and the running agent remains available
 
 when an application rotates a running agent with no committed thread

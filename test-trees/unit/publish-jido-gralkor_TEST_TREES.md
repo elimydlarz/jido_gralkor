@@ -12,6 +12,7 @@ when an operator asks to publish jido_gralkor with a semantic-version change kin
   and Hex receives the synchronized version as a personally owned public package
   and every repository-relative document linked from the published README is included in the Hex package
   and every repository-relative document linked from the published README is included in the ExDoc extras
+  and the Hex package names `elimydlarz` as its maintainer
   and GitHub receives a new lightweight release tag for the synchronized release commit
   and remote inspection proves the release tag resolves to the synchronized release commit
   and the remote branch contains the synchronized release commit even if trunk-sync bookkeeping advances the branch after publication

@@ -1,4 +1,4 @@
-Unit: graphiti-pool (src: lib/gralkor/graphiti_pool.ex; integration: test/gralkor/graphiti_pool_test.exs; unit: test/gralkor/graphiti_pool_test.exs)
+Integration: graphiti-pool (src: lib/gralkor/graphiti_pool.ex; integration: test/gralkor/graphiti_pool_test.exs)
 
 when the graph library needs inference
   then its own provider client issues the call
@@ -22,6 +22,7 @@ when the pool starts
       and startup completes
   while an embedded connection is configured
     then stale embedded resume state is removed before database construction
+    and an absent data directory is created before database construction
     and the embedded database is constructed once and held for the pool's lifetime
   while a remote connection is configured
     then the remote database is constructed once and held for the pool's lifetime
@@ -72,6 +73,8 @@ when an episode is added
   while an embedded connection is configured
     while another episode addition is in progress
       then the graph library receives the episode only after the in-progress addition finishes
+      if the in-progress addition's caller exits
+        then the next waiting addition proceeds
   while no ontology is supplied
     then the graph library receives no entity types, edge types, edge type map, or excluded entity types
   while an ontology module is supplied

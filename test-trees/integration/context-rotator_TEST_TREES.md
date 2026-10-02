@@ -6,6 +6,7 @@ when context rotation is requested
       then exactly one flush is requested, naming the pre-rotation session id and the caller's flush timeout
       and the agent's active session id becomes a new one
       and the agent process is still running afterwards
+      and the rotation is logged naming both session ids
       while recent entries are retained
         while the thread holds more
           then only that many newest entries seed the rotated thread
@@ -14,14 +15,18 @@ when context rotation is requested
           then the rotated thread is empty
       while entries arrive before installation
         then each arrives in the fresh thread once
-    if installing the fresh thread fails after flushing
-      then the failure reason is returned to the caller
+    if the committed thread disappears during the flush
+      then the installation failure is returned to the caller
       and the agent process is still running afterwards
+      and the failure is logged naming the pre-rotation session id
     if its session flush fails
       then the failure reason is returned to the caller
       and the active session id is left unchanged
       and the agent process is still running afterwards
+      and the failure is logged naming the pre-rotation session id
   while the agent has no committed thread
     then rotation succeeds without requesting any flush
     and no session is committed as a side effect
     and the agent process is still running afterwards
+  if the agent's state cannot be read
+    then the read failure is returned without requesting any flush

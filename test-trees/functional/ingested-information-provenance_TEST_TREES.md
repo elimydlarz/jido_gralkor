@@ -32,6 +32,12 @@ when information is added or captured directly without a selected Lens
   and public episode and fact search include it without a Lens selector
   and storage-owned direct provenance prevents writer-like source descriptions from claiming Lens or Reflection authorship
   and writer-like source descriptions do not impose Reflection completion requirements
+  where a direct addition omits its source kind
+    then the episode is stored as a document
+
+if a direct addition supplies an unsupported source kind or content that does not fit its source kind
+  then the addition raises an argument error identifying the rejected value
+  and no Graphiti operation begins
 
 when public search reads historical operator-labelled episodes
   then their recorded operator Lens provenance remains visible without registering that Lens

@@ -15,6 +15,12 @@ when an application requests a private graph migration
 when a migration journal is prepared
   then the journal records the non-secret graph endpoint identity including host and port or Unix socket path, database, and username
   and the journal excludes graph credentials from its endpoint identity
+  and the journal is readable and writable only by its owner
+  if a journal already exists at that path
+    then preparation refuses without overwriting it
+
+when another migration operation holds the same journal
+  then migration refuses before changing any graph
 
 when a journal is used with a different graph endpoint identity
   then migration refuses before mutating, applying, or rolling back any graph
@@ -22,6 +28,8 @@ when a journal is used with a different graph endpoint identity
 when controlled server recovery explicitly supplies an endpoint rebind
   then migration validates source and target inventories, quiescence evidence, and original endpoint identity before resuming
   and migration records the rebound endpoint identity and recovered copy server run identity
+  if the rebind does not describe a real change from the journal's recorded endpoint
+    then migration refuses before changing any graph
 
 when the endpoint changes without an explicit controlled recovery rebind
   then migration refuses before inspecting or mutating the restored clone
@@ -31,6 +39,12 @@ when the migration command receives an unsupported operation
 
 when the migration command receives explicit JSON requests for a private graph
   then plan, prepare, advance, apply, and rollback return their durable graph phases
+  and advance persists at most one further durable phase per call
+  and apply continues through every durable phase to verified
+  if the request's connection names an unsupported field
+    then the command reports that field without connecting to a graph
+  if the migration operation fails
+    then the command exits with the failure reason
 
 when an application migrates a consistent backup restored into a separate FalkorDB server
   then restored graph content and operational schema remain intact through migration and public recall
@@ -94,5 +108,6 @@ when an application rolls back a private graph migration before admitting new wr
   then public historical recall through the original graph returns the original memory
   and only matching migration-owned target graphs are removed
   and a repeated rollback returns the same rolled-back result
+  and a later advance or apply refuses
   if a target changed after verification
     then rollback refuses without deleting the changed graph

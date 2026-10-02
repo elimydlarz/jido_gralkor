@@ -4,12 +4,13 @@ when a Lens store adds an episode to the `personal` Destination
   then Graphiti receives the group named `personal/<operator id>`
   and changing the operator produces a distinct group
   and the graph add receives the episode content, source description, and Lens ontology
+  and the graph add receives the originating Lens name
   and the graph add result is returned to the ingestion process
 
 when a Lens store adds an episode carrying a source kind
   then Graphiti receives that source kind unchanged
 
-if a Lens store receives an unsupported addition or replacement option
+if a Lens store receives an unsupported addition, replacement, or search option
   then an `ArgumentError` is raised
   and the error identifies the unsupported option
   and no Graphiti operation begins

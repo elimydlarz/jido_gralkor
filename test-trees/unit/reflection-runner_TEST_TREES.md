@@ -14,13 +14,18 @@ where inference returns wrapped tool calls
   then each call is executed with its model-produced arguments and the current tool context
   and each result is returned to inference within the same step
   and further calls continue that step in sequence
+  if a requested tool is not among the supplied tools
+    then the unknown tool name is returned to inference as that call's result
 
 when inference returns wrapped structured output satisfying the current step's exact contract
   then that output is added to the shared output space
   and the next step begins with it available for interpolation
 
 if inference omits a declared output
-  then the Runner failure identifies the Reflection, step, and missing key
+  while the step is not the final step
+    then the Runner failure identifies the Reflection, step, and missing key
+  while the step is the final step
+    then the Runner failure identifies the Reflection and missing artefact
 
 if inference returns an undeclared output
   then the Runner failure identifies the Reflection, step, and unexpected key
@@ -33,9 +38,6 @@ when the final step returns valid wrapped structured output
   and its identifier is derived from the operator, invocation, and Reflection identity
   and its payload contains exactly the final step's outputs
   and the Runner performs no Destination delivery
-
-if the Chain of Thought completes without valid final structured output
-  then the Runner failure identifies the Reflection and missing artefact
 
 if inference fails or returns an invalid response
   then the Runner failure identifies the Reflection, current step, and reason
@@ -56,3 +58,5 @@ when built-in inference is invoked for a step
   and a final JSON object is returned as wrapped structured output
   if the provider fails or returns invalid JSON or a non-object JSON value
     then built-in inference returns the identified error
+  if the ReAct runtime ends without a final answer
+    then built-in inference returns its termination reason as an error

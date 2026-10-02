@@ -25,7 +25,7 @@ if a Chain of Thought step has a missing or empty structured-output declaration
 if a structured-output declaration has a blank output name
   then parsing identifies that step and invalid declaration
 
-if a structured-output declaration uses an unsupported type
+if any type within a structured-output declaration is unsupported
   then parsing identifies that step and type
 
 if an output name is declared by more than one step

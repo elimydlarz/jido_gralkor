@@ -21,6 +21,8 @@ when the memory search tool runs with a usable query
   while Search returns results
     then the action result is readable source-grouped fact text
     and each named originating Lens or Reflection is identified by its source heading
+    while the tool context supplies no byte budget
+      then the response fits within 65,536 bytes
   if Search fails
     then the failure reason is returned to the caller unchanged
 

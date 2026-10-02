@@ -67,6 +67,8 @@ when an ontology declares an aliased relationship source
     and the endpoint map preserves each distinct declared source-target pair in order
   if the verb's target is not an alias
     then compilation fails with an error showing the expected `verb Target` form
+  if two properties of one relationship share a name
+    then compilation fails with an error naming the duplicated property
   if repeated verbs have different edge-property schemas
     then compilation fails with an error naming the conflicting verb
   if the source alias does not name a declared entity
@@ -76,7 +78,7 @@ when an ontology declares an aliased relationship source
 
 when a consumer reads a declared ontology
   then it returns a map whose keys are exactly `:entity_types`, `:edge_types`, `:edge_type_map` and `:excluded_entity_types`
-  and `:entity_types` lists one `%{name: String.t(), fields: [field()]}` entry per declared entity, in declaration order
+  and `:entity_types` lists one `%{name: String.t(), description: String.t() | nil, fields: [field()]}` entry per declared entity, in declaration order
   and `:edge_types` lists one `%{name: String.t(), fields: [field()]}` entry per declared verb, deduplicated across `from` blocks
   and `:edge_types` preserves the verbs' first-declaration order
   and `:edge_type_map` lists `{{source_name, target_name}, [edge_name]}` pairs preserving declaration order across `from` blocks
