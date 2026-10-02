@@ -621,8 +621,7 @@ defmodule Gralkor.ApplicationTest do
         |> String.split("\n")
         |> Enum.find("", &String.contains?(&1, "capture flush failed"))
 
-      assert flush_line =~ "disk_full"
-      assert flush_line =~ "group:g1"
+      assert flush_line =~ ~r/\[gralkor\] capture flush failed — group:g1 :disk_full$/
     end
 
     @tag :capture_log
