@@ -1641,8 +1641,108 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     assert_completion_marker_fenced(first_pool, first_graph, graph_group_id)
     assert_graph_server_time_expiry(first_pool, first_graph, graph_group_id)
     assert_claim_uniqueness_constraint(first_graph, second_graph)
+    assert_lease_renewal(first_pool, second_pool, first_graph, second_graph)
 
     :ok
+  end
+
+  defp assert_lease_renewal(first_pool, second_pool, first_graph, second_graph) do
+    set_claim_lease_ms([first_graph, second_graph], 300)
+    extractions_before = extraction_count(first_graph, second_graph)
+
+    owner_write =
+      Task.async(fn ->
+        GraphitiPool.add_episode(first_pool, "observations", "same", "source", nil,
+          uuid: "embedded-renewed-claim"
+        )
+      end)
+
+    assert eventually(fn -> python_flag?(first_graph, "long_extraction_started") end)
+    acquired = server_lease(first_graph, "embedded-renewed-claim")
+
+    contender_write =
+      Task.async(fn ->
+        GraphitiPool.add_episode(second_pool, "observations", "same", "source", nil,
+          uuid: "embedded-renewed-claim"
+        )
+      end)
+
+    Process.sleep(1_200)
+    renewed = server_lease(first_graph, "embedded-renewed-claim")
+
+    assert renewed["owner"] == acquired["owner"]
+    assert renewed["generation"] == acquired["generation"]
+    assert renewed["lease_until_ms"] > acquired["lease_until_ms"]
+    assert renewed["lease_until_ms"] > renewed["now_ms"]
+    assert Task.yield(contender_write, 0) == nil
+    refute python_flag?(second_graph, "long_extraction_started")
+
+    Pythonx.eval(
+      "import asyncio\nasyncio._gralkor_loop.call_soon_threadsafe(graph.release_long_extraction.set)",
+      %{"graph" => first_graph}
+    )
+
+    assert :ok = Task.await(owner_write, 30_000)
+    assert :ok = Task.await(contender_write, 30_000)
+    assert extraction_count(first_graph, second_graph) == extractions_before + 1
+
+    assert server_lease(first_graph, "embedded-renewed-claim")["generation"] ==
+             acquired["generation"]
+
+    set_claim_lease_ms([first_graph, second_graph], 30_000)
+  end
+
+  defp set_claim_lease_ms(graphs, lease_ms) do
+    Enum.each(graphs, fn graph ->
+      Pythonx.eval("graph._gralkor_claim_lease_ms = lease_ms", %{
+        "graph" => graph,
+        "lease_ms" => lease_ms
+      })
+    end)
+  end
+
+  defp extraction_count(first_graph, second_graph) do
+    {count, _} =
+      Pythonx.eval(
+        "first.extractions + second.extractions",
+        %{"first" => first_graph, "second" => second_graph}
+      )
+
+    Pythonx.decode(count)
+  end
+
+  defp server_lease(graph, uuid) do
+    {lease, _} =
+      Pythonx.eval(
+        """
+        import asyncio
+        uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
+        records, _, _ = asyncio._gralkor_run(graph.driver.execute_query(
+            '''
+            MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+            RETURN c.owner AS owner,
+                   c.generation AS generation,
+                   c.lease_until_ms AS lease_until_ms,
+                   timestamp() AS now_ms
+            ''',
+            uuid=uid,
+        ))
+        records[0]
+        """,
+        %{"graph" => graph, "uuid" => uuid}
+      )
+
+    Pythonx.decode(lease)
+  end
+
+  defp python_flag?(graph, attribute) do
+    {value, _} =
+      Pythonx.eval(
+        "bool(getattr(graph, attribute.decode('utf-8')))",
+        %{"graph" => graph, "attribute" => attribute}
+      )
+
+    Pythonx.decode(value)
   end
 
   defp assert_completion_marker_fenced(pool, graph, graph_group_id) do
