@@ -334,7 +334,7 @@ defmodule JidoGralkor.PluginTest do
       pid = start_server_agent("server-operator-query")
 
       :sys.replace_state(pid, fn server_state ->
-        put_in(server_state.agent.state[:__thread__], %{id: "thr-xyz"})
+        put_in(server_state.agent.state[:__thread__], Jido.Thread.new(id: "thr-xyz"))
       end)
 
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
@@ -542,7 +542,7 @@ defmodule JidoGralkor.PluginTest do
       :sys.replace_state(pid, fn server_state ->
         update_in(server_state.agent.state, fn agent_state ->
           agent_state
-          |> Map.put(:__thread__, %{id: "thr-42"})
+          |> Map.put(:__thread__, Jido.Thread.new(id: "thr-42"))
           |> Map.put(:user_name, "Eli")
           |> Map.put(:__strategy__, %{
             request_traces: %{
