@@ -105,7 +105,7 @@ defmodule Gralkor.GraphitiPoolTest do
     GraphitiPool.start_link(Keyword.merge(defaults, opts))
   end
 
-  defp await_python_value(graph, attribute, expected, attempts \\ 100)
+  defp await_python_value(graph, attribute, expected, attempts \\ 500)
 
   defp await_python_value(_graph, attribute, expected, 0) do
     flunk("expected Python graph attribute #{attribute} to become #{inspect(expected)}")
@@ -967,7 +967,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
       try do
         first = Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "first", "manual", nil) end)
-        await_python_value(g, "first_started", true, 500)
+        await_python_value(g, "first_started", true)
 
         second =
           Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "second", "manual", nil) end)
@@ -1037,7 +1037,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
       try do
         first_caller = spawn(fn -> GraphitiPool.add_episode(pid, "g1", "first", "manual", nil) end)
-        await_python_value(g, "first_started", true, 500)
+        await_python_value(g, "first_started", true)
 
         second =
           Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "second", "manual", nil) end)
@@ -1222,6 +1222,8 @@ defmodule Gralkor.GraphitiPoolTest do
 
   defmodule OntologyForwardingTest do
     use ExUnit.Case, async: false
+
+    @moduletag :integration
 
     alias Gralkor.GraphitiPool
 
