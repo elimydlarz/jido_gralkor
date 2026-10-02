@@ -330,12 +330,18 @@ defmodule JidoGralkor.PluginTest do
     end
 
     test "and the owning AgentServer is planted as the Gralkor runtime target" do
+      pid = start_server_agent("server-operator-query")
+
+      :sys.replace_state(pid, fn server_state ->
+        put_in(server_state.agent.state[:__thread__], %{id: "thr-xyz"})
+      end)
+
       signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
 
-      assert {:ok, {:continue, %Signal{data: data}}} =
-               Plugin.handle_signal(signal, context(agent("user-abc", thread_id: "thr-xyz")))
+      assert {:ok, %{state: %{recorded_tool_context: tool_context}}} =
+               Jido.AgentServer.call(pid, signal)
 
-      assert data.tool_context.gralkor_runtime == self()
+      assert tool_context.gralkor_runtime == pid
     end
 
     test "and no recall is issued on the plugin's own initiative" do
