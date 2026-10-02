@@ -194,6 +194,29 @@ defmodule Gralkor.RecallTest do
     end
   end
 
+  describe "while a deadline budget governs recall > if the budget expires before recall returns > where upstream is ordinary BEAM work" do
+    test "then that work is stopped" do
+      test_pid = self()
+
+      search_fn = fn _, _, _ ->
+        Process.sleep(200)
+        send(test_pid, :search_finished)
+        {:ok, []}
+      end
+
+      assert {:error, :recall_deadline_expired} =
+               Recall.recall(
+                 "g",
+                 "TestAgent",
+                 nil,
+                 "q",
+                 default_opts(search_fn: search_fn, deadline_ms: 20)
+               )
+
+      refute_receive :search_finished, 300
+    end
+  end
+
   describe "while a deadline budget governs recall > if recall finishes within the budget" do
     test "then the memory block is returned normally" do
       assert {:ok, _} =
@@ -204,6 +227,28 @@ defmodule Gralkor.RecallTest do
                  "q",
                  default_opts(search_fn: ok_search([]), deadline_ms: 1_000)
                )
+    end
+  end
+
+  describe "when no deadline budget is supplied" do
+    test "then a twelve-second budget governs recall" do
+      blocked_search = fn _g, _q, _max -> Process.sleep(:infinity) end
+      started = System.monotonic_time(:millisecond)
+
+      logs =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:error, :recall_deadline_expired} =
+                   Recall.recall(
+                     "g",
+                     "TestAgent",
+                     "default-budget-session",
+                     "q",
+                     default_opts(search_fn: blocked_search)
+                   )
+        end)
+
+      assert System.monotonic_time(:millisecond) - started >= 12_000
+      assert logs =~ "after:12000ms"
     end
   end
 
@@ -302,29 +347,6 @@ defmodule Gralkor.RecallTest do
         end)
 
       refute logs =~ "[gralkor] [test]"
-    end
-  end
-
-  describe "while a deadline budget governs recall > if the budget expires before recall returns > where upstream is ordinary BEAM work" do
-    test "then that work is stopped" do
-      test_pid = self()
-
-      search_fn = fn _, _, _ ->
-        Process.sleep(200)
-        send(test_pid, :search_finished)
-        {:ok, []}
-      end
-
-      assert {:error, :recall_deadline_expired} =
-               Recall.recall(
-                 "g",
-                 "TestAgent",
-                 nil,
-                 "q",
-                 default_opts(search_fn: search_fn, deadline_ms: 20)
-               )
-
-      refute_receive :search_finished, 300
     end
   end
 
