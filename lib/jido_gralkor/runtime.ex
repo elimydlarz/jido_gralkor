@@ -167,7 +167,7 @@ defmodule JidoGralkor.Runtime do
         {:DOWN, monitor, :process, owner, _reason},
         %{owner_monitor: monitor, owner: owner} = state
       ) do
-    {:stop, :shutdown, state}
+    {:noreply, state}
   end
 
   defp validate_configuration(configuration) when is_map(configuration) do
