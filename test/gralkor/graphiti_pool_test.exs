@@ -141,8 +141,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if adding an episode raises inside the graph library" do
-    @describetag :integration
-
     test "then an error carrying only the raised exception's class and message is returned" do
       %{pid: pid} = start_raising_graph_pool()
 
@@ -178,8 +176,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when the graph library needs inference" do
-    @describetag :integration
-
     test "then its own provider client issues the call" do
       {g, _} =
         Pythonx.eval(
@@ -213,8 +209,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added > while an episode identifier is supplied > when that identifier does not exist" do
-    @describetag :integration
-
     test "then one episode is created under that identifier through the normal extraction path" do
       {g, _} =
         Pythonx.eval(
@@ -303,8 +297,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added > while an episode identifier is supplied > when that identifier exists with equal immutable episode content > while durable extraction completion is absent" do
-    @describetag :integration
-
     test "then the normal extraction path runs again" do
       {g, _} =
         Pythonx.eval(
@@ -395,8 +387,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added > while an episode identifier is supplied > when that identifier exists with equal immutable episode content > while durable extraction completion is recorded" do
-    @describetag :integration
-
     test "then the add succeeds without invoking extraction again" do
       {pid, g} = start_episode_identity_pool()
 
@@ -413,8 +403,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added > while an episode identifier is supplied > when that identifier exists with conflicting immutable episode content" do
-    @describetag :integration
-
     test "then the add returns an episode conflict and leaves the original unchanged" do
       {pid, _g} = start_episode_identity_pool()
 
@@ -432,8 +420,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added > while an episode identifier is supplied" do
-    @describetag :integration
-
     test "and concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent" do
       {g, _} =
         Pythonx.eval(
@@ -864,8 +850,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added" do
-    @describetag :integration
-
     test "then its name combines the current millisecond timestamp with a positive monotonic unique integer, so concurrent writes remain distinguishable without claiming an episode UUID" do
       {g, _} =
         Pythonx.eval(
@@ -903,8 +887,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when one episode is requested by exact identifier" do
-    @describetag :integration
-
     test "then the matching episode content and immutable source fields are returned" do
       {pid, _g} = start_episode_identity_pool()
 
@@ -936,8 +918,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when one episode is requested by exact identifier > while that identifier is absent" do
-    @describetag :integration
-
     test "then lookup reports not found" do
       {pid, _g} = start_episode_identity_pool()
       assert {:error, :not_found} = GraphitiPool.get_episode(pid, "g1", "missing-uuid")
@@ -946,8 +926,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added > while an embedded connection is configured > while another episode addition is in progress" do
-    @describetag :integration
-
     test "then the graph library receives the episode only after the in-progress addition finishes" do
       {g, _} =
         Pythonx.eval(
@@ -1022,8 +1000,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added > while no ontology is supplied" do
-    @describetag :integration
-
     test "then the graph library receives no entity types, edge types, edge type map, or excluded entity types" do
       {g, _} =
         Pythonx.eval(
@@ -1066,8 +1042,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added > where a supported source kind is supplied" do
-    @describetag :integration
-
     test "then conversation, document, and structured-record sources reach the graph library as message, text, and JSON episodes respectively" do
       {g, _} =
         Pythonx.eval(
@@ -1191,8 +1165,6 @@ defmodule Gralkor.GraphitiPoolTest do
     alias Gralkor.GraphitiPool
 
     describe "when an episode is added > while an ontology module is supplied" do
-      @describetag :integration
-
       defmodule OntologyForwardingOntology do
         use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
@@ -1291,8 +1263,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is removed" do
-    @describetag :integration
-
     test "then the graph library deletes that episode along with the nodes and edges it orphans" do
       {g, _} =
         Pythonx.eval(
@@ -1327,8 +1297,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if removing an episode raises inside the graph library" do
-    @describetag :integration
-
     test "then an error carrying only the raised exception's class and message is returned" do
       {g, _} =
         Pythonx.eval(
@@ -1377,8 +1345,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a complete property graph replaces content owned by a Lens in a group" do
-    @describetag :integration
-
     test "then every relationship carrying that Lens's reserved ownership field is removed before owned nodes are removed" do
       {g, _} = replacement_graphiti()
 
@@ -1603,8 +1569,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "where the supplied complete property graph is empty" do
-    @describetag :integration
-
     test "then every node and relationship owned by the Lens is removed" do
       {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
 
@@ -1625,8 +1589,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if removing Lens-owned graph content fails" do
-    @describetag :integration
-
     test "then the graph failure is returned" do
       {result, _recorded, pid} =
         run_graph_replacement(%{nodes: [], relationships: []}, fail_at: 1)
@@ -1651,8 +1613,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if inserting a supplied node fails" do
-    @describetag :integration
-
     test "then the graph failure is returned" do
       graph = %{
         nodes: [%{id: "payments", labels: ["System"], properties: %{}}],
@@ -1695,8 +1655,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if inserting a supplied relationship fails" do
-    @describetag :integration
-
     test "then the graph failure is returned" do
       graph = %{
         nodes: [
@@ -1735,8 +1693,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a fact search is run for a group" do
-    @describetag :integration
-
     test "then the graph library's edge search is invoked with the requested result count" do
       # A Pythonx-built fake graphiti whose search coroutine records its kwargs on the
       # instance, so they survive across Pythonx.eval scopes. The pool's construct_instance
@@ -1803,8 +1759,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a fact search is run for a group > where edge types are supplied" do
-    @describetag :integration
-
     test "then the graph library's edge search is restricted to those ontology relationship types" do
       {g, _} =
         Pythonx.eval(
@@ -1976,8 +1930,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if running a fact search raises inside the graph library" do
-    @describetag :integration
-
     test "then an error carrying the raised exception is returned" do
       {g, _} =
         Pythonx.eval(
@@ -2006,8 +1958,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an index and constraint rebuild is requested for the whole graph" do
-    @describetag :integration
-
     test "then every group the pool holds an instance for is rebuilt, each group being its own database" do
       {instance, _} =
         Pythonx.eval(
@@ -2074,8 +2024,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when community building is requested for a group" do
-    @describetag :integration
-
     test "then the logical group is physically encoded before its graph instance is selected" do
       test_pid = self()
       instance = community_graph()
@@ -2122,8 +2070,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if community building raises inside the graph library" do
-    @describetag :integration
-
     test "then an error carrying the raised exception is returned" do
       {instance, _} =
         Pythonx.eval(
@@ -2149,8 +2095,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode search is run for a group" do
-    @describetag :integration
-
     test "then the graph library is asked for episodes only, with the requested result count" do
       {g, _} =
         Pythonx.eval(
@@ -2233,8 +2177,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode search is run for a group > when the query exceeds the graph library's full-text limit" do
-    @describetag :integration
-
     test "then the graph library receives a bounded non-empty query containing the earliest supported terms" do
       {g, _} =
         Pythonx.eval(
@@ -2282,8 +2224,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode search is run for a group > when only durably extraction-complete episodes are requested" do
-    @describetag :integration
-
     test "then every unmarked episode is excluded" do
       {g, _} =
         Pythonx.eval(
@@ -2336,8 +2276,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode search is run for a group > when Lens names are supplied" do
-    @describetag :integration
-
     test "then writer filtering occurs before the requested result count" do
       {g, _} =
         Pythonx.eval(
@@ -2433,8 +2371,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if running an episode search raises inside the graph library" do
-    @describetag :integration
-
     test "then an error carrying the raised exception is returned" do
       {g, _} =
         Pythonx.eval(
@@ -2463,8 +2399,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a node search is run for a group" do
-    @describetag :integration
-
     test "then it is restricted to the physically encoded group id the episodes were written under, so a group id carrying hyphens still matches" do
       {_nodes, recorded} = node_search_result()
       assert recorded["group_ids"] == [physical("group-with-hyphens")]
@@ -2472,8 +2406,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a node search is run for a group > while node labels are supplied" do
-    @describetag :integration
-
     test "then the graph library's node search is invoked with the requested result count and a filter carrying those labels" do
       {g, _} =
         Pythonx.eval(
@@ -2569,8 +2501,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a node search is run for a group > while no node labels are supplied" do
-    @describetag :integration
-
     test "then the graph library's node search is invoked with every node eligible" do
       {g, _} =
         Pythonx.eval(
@@ -2615,8 +2545,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if running a node search raises inside the graph library" do
-    @describetag :integration
-
     test "then an error carrying the raised exception is returned" do
       {g, _} =
         Pythonx.eval(
@@ -2718,7 +2646,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert :counters.get(construction_count, 1) == 1
     end
 
-    @tag :integration
     test "and index and constraint building is invoked before the instance is cached and returned" do
       {instance, _} =
         Pythonx.eval(
@@ -2756,7 +2683,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a graph instance is requested for a group > while no instance is cached for that group > if index and constraint building fails" do
-    @tag :integration
     test "then the failure is non-fatal" do
       {instance, _} =
         Pythonx.eval(
@@ -3052,8 +2978,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when the pool has constructed its database" do
-    @describetag :integration
-
     test "then a warmup search runs once against a throwaway query and group, paying the cold-start cost before any consumer can recall" do
       test_pid = self()
 
@@ -3313,7 +3237,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert GraphitiPool.api_key!(:openai) == "openai-secret"
     end
 
-    @tag :integration
     test "and the embedded Python environment cannot read that BEAM-only value directly" do
       previous_openai = System.get_env("OPENAI_API_KEY")
       beam_only_value = "beam-only-#{System.unique_integer([:positive])}"
@@ -3355,8 +3278,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when the pool terminates > while a remote connection is configured" do
-    @describetag :integration
-
     test "then the remote database client is closed before termination completes" do
       previous_key = System.get_env("OPENAI_API_KEY")
       System.put_env("OPENAI_API_KEY", "test-key")
@@ -3414,8 +3335,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when the pool terminates > while an embedded connection is configured" do
-    @describetag :integration
-
     setup do
       data_dir =
         Path.join(
@@ -3477,8 +3396,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when the pool has constructed its database > if a warmup call raises or returns an error" do
-    @describetag :integration
-
     test "then the failure is logged as non-fatal, naming the stage and the reason" do
       log =
         capture_log(fn ->
@@ -3500,8 +3417,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when the pool starts > while an embedded connection is configured" do
-    @describetag :integration
-
     test "then stale embedded resume state is removed before database construction" do
       data_dir =
         Path.join(
@@ -3602,8 +3517,6 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added > while an ontology module is supplied" do
-    @describetag :integration
-
     defmodule StrictOntologyForGraphitiTest do
       use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
