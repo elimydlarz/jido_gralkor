@@ -3530,6 +3530,30 @@ defmodule Gralkor.GraphitiPoolTest do
       File.rm_rf!(stale_tmp)
     end
 
+    test "and an absent data directory is created before database construction" do
+      data_dir =
+        Path.join([
+          System.tmp_dir!(),
+          "gralkor_pool_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}",
+          "absent"
+        ])
+
+      refute File.exists?(data_dir)
+      test_pid = self()
+
+      construct_falkor_db = fn {:embedded, ^data_dir} ->
+        send(test_pid, {:data_dir_present_at_construction, File.dir?(data_dir)})
+        :stub_falkor_db
+      end
+
+      {:ok, pid} = start_embedded_pool(data_dir, construct_falkor_db: construct_falkor_db)
+
+      assert_receive {:data_dir_present_at_construction, true}
+
+      GenServer.stop(pid)
+      File.rm_rf!(Path.dirname(data_dir))
+    end
+
     test "and the embedded database is constructed once and held for the pool's lifetime" do
       first_physical = physical("one")
       second_physical = physical("two")
