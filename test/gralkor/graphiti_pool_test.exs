@@ -1001,6 +1001,65 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when an episode is added > while an embedded connection is configured > while another episode addition is in progress > if the in-progress addition's caller exits" do
+    test "then the next waiting addition proceeds" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          import asyncio
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.events = []
+                  self.first_started = False
+                  self.release_first = asyncio.Event()
+
+              async def add_episode(self, **kwargs):
+                  body = kwargs['episode_body']
+                  self.events.append(f'start:{body}')
+                  if body == 'first':
+                      self.first_started = True
+                      await self.release_first.wait()
+                  self.events.append(f'finish:{body}')
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      GraphitiPool.for(pid, "g1")
+
+      try do
+        first_caller = spawn(fn -> GraphitiPool.add_episode(pid, "g1", "first", "manual", nil) end)
+        await_python_value(g, "first_started", true, 500)
+
+        second =
+          Task.async(fn -> GraphitiPool.add_episode(pid, "g1", "second", "manual", nil) end)
+
+        await_episode_waiting(pid, 1)
+        Process.exit(first_caller, :kill)
+
+        assert Task.await(second, 5_000) == :ok
+
+        {events, _} = Pythonx.eval("g.events", %{"g" => g})
+        assert Pythonx.decode(events) == ["start:first", "start:second", "finish:second"]
+      after
+        Pythonx.eval(
+          "import asyncio; asyncio._gralkor_loop.call_soon_threadsafe(g.release_first.set)",
+          %{"g" => g}
+        )
+
+        if Process.alive?(pid), do: GenServer.stop(pid)
+      end
+    end
+  end
+
   describe "when an episode is added > while no ontology is supplied" do
     test "then the graph library receives no entity types, edge types, edge type map, or excluded entity types" do
       {g, _} =
