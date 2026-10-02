@@ -58,6 +58,51 @@ defmodule Gralkor.GraphitiPoolTest do
     )
   end
 
+  defp start_provider_failing_graph_pool(kind) do
+    {g, _} =
+      Pythonx.eval(
+        """
+        import httpx
+        import openai
+        from google.genai.errors import ClientError
+        from graphiti_core.llm_client.errors import RateLimitError
+
+        class _FakeGraphiti:
+            def __init__(self, kind):
+                self.kind = kind
+
+            async def add_episode(self, **kwargs):
+                if self.kind == "rate_limit":
+                    try:
+                        raise openai.RateLimitError(
+                            "Error code: 429 - rate limit reached",
+                            response=httpx.Response(
+                                429,
+                                request=httpx.Request("POST", "https://api.openai.com/v1/chat/completions"),
+                            ),
+                            body=None,
+                        )
+                    except openai.RateLimitError as error:
+                        raise RateLimitError from error
+                try:
+                    raise ClientError(
+                        400,
+                        {"error": {"code": 400, "message": "API key not valid", "status": "INVALID_ARGUMENT"}},
+                    )
+                except ClientError as error:
+                    raise Exception from error
+
+        _FakeGraphiti(kind.decode('utf-8'))
+        """,
+        %{"kind" => kind}
+      )
+
+    start_pool(
+      construct_instance: fn _db, _shared, _group_id -> g end,
+      install_loop_fn: &Gralkor.Python.install_async_runtime/0
+    )
+  end
+
   defp capture_failure_diagnostics(operation) do
     parent = self()
 
@@ -143,18 +188,7 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "if adding an episode raises inside the graph library" do
-    test "then an error carrying only the raised exception's class and message is returned" do
-      %{pid: pid} = start_raising_graph_pool()
-
-      capture_io(:stderr, fn ->
-        assert {:error, {:python, "RuntimeError: graph library exploded"}} =
-                 GraphitiPool.add_episode(pid, "g1", "content", "source", nil)
-      end)
-
-      GenServer.stop(pid)
-    end
-
-    test "and the logged diagnostic is a single concise line, so neither the full traceback nor an embedding vector is written to the log" do
+    test "then the logged diagnostic is a single concise line, so neither the full traceback nor an embedding vector is written to the log" do
       %{pid: pid} = start_raising_graph_pool()
 
       diagnostics =
@@ -168,7 +202,52 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "if adding an episode raises inside the graph library > if the raised exception carries no detail" do
+  describe "if adding an episode raises inside the graph library > while the exception is an inference provider's rate limit" do
+    test "then an upstream rate-limit failure carrying the exception's class and message is returned" do
+      %{pid: pid} = start_provider_failing_graph_pool("rate_limit")
+
+      capture_io(:stderr, fn ->
+        assert {:error, {:upstream_llm, {:rate_limited, detail}}} =
+                 GraphitiPool.add_episode(pid, "g1", "content", "source", nil)
+
+        assert detail =~ "RateLimitError"
+        assert detail =~ "rate limit reached"
+      end)
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "if adding an episode raises inside the graph library > while the exception is any other inference provider failure" do
+    test "then an upstream provider failure carrying the exception's class and message is returned" do
+      %{pid: pid} = start_provider_failing_graph_pool("provider")
+
+      capture_io(:stderr, fn ->
+        assert {:error, {:upstream_llm, {:provider, detail}}} =
+                 GraphitiPool.add_episode(pid, "g1", "content", "source", nil)
+
+        assert detail =~ "ClientError"
+        assert detail =~ "API key not valid"
+      end)
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "if adding an episode raises inside the graph library > while the exception is not an inference provider failure" do
+    test "then an error carrying only the raised exception's class and message is returned" do
+      %{pid: pid} = start_raising_graph_pool()
+
+      capture_io(:stderr, fn ->
+        assert {:error, {:python, "RuntimeError: graph library exploded"}} =
+                 GraphitiPool.add_episode(pid, "g1", "content", "source", nil)
+      end)
+
+      GenServer.stop(pid)
+    end
+  end
+
+  describe "if adding an episode raises inside the graph library > while the exception is not an inference provider failure > if the raised exception carries no detail" do
     test "then the returned reason falls back to a message stating that a Python exception was raised with no detail available" do
       err = %Pythonx.Error{type: nil, value: nil, traceback: nil, lines: []}
 
