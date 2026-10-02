@@ -536,13 +536,25 @@ defmodule JidoGralkor.PluginTest do
         agent("operator-one", thread_id: "thread-one")
         |> put_in([:state, :__memory__], plugin_state)
 
-      for invalid <- ["missing", 42] do
+      :ok =
+        JidoGralkor.Runtime.replace(
+          self(),
+          Map.update!(runtime_configuration(), :lenses, fn lenses ->
+            lenses ++ [%{name: "snapshot", destination: "memory", write: :replace_graph}]
+          end)
+        )
+
+      for {invalid, message} <- [
+            {"missing", ~r/unknown_definition, :lenses, "missing"/},
+            {42, ~r/invalid Lens 42/},
+            {"snapshot", ~r/invalid Lens "snapshot": it accepts only whole-graph replacement/}
+          ] do
         signal =
           Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: invalid}},
             source: "/test"
           )
 
-        assert_raise ArgumentError, ~r/invalid Lens|unknown_definition, :lenses/, fn ->
+        assert_raise ArgumentError, message, fn ->
           Plugin.handle_signal(signal, context(lens_agent))
         end
       end
