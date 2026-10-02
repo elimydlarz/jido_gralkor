@@ -81,7 +81,7 @@ defmodule Gralkor.Lens.Storage.Graphiti do
         max_results,
         opts
       ) do
-    search_fn = Keyword.get(opts, :search_fn, &graph_search/3)
+    search_fn = search_option(opts)
     search_fn.(Destination.graph_id(destination, operator_id), query, max_results)
   end
 
@@ -109,6 +109,16 @@ defmodule Gralkor.Lens.Storage.Graphiti do
 
       {_replace_graph_fn, unsupported} ->
         raise ArgumentError, "unsupported replace options #{inspect(unsupported)}"
+    end
+  end
+
+  defp search_option(opts) do
+    case Keyword.pop(opts, :search_fn, &graph_search/3) do
+      {search_fn, []} ->
+        search_fn
+
+      {_search_fn, unsupported} ->
+        raise ArgumentError, "unsupported search options #{inspect(unsupported)}"
     end
   end
 

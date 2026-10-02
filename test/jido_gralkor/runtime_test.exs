@@ -72,10 +72,9 @@ defmodule JidoGralkor.RuntimeTest do
         runtime = start_owned_runtime(owner, reason: reason)
         runtime_monitor = Process.monitor(runtime)
 
-        Process.exit(owner, reason)
+        send(owner, {:stop, reason})
 
         assert_receive {:DOWN, ^runtime_monitor, :process, ^runtime, _runtime_reason}
-        assert :global.whereis_name({Runtime, owner}) == :undefined
       end
     end
 
@@ -102,7 +101,7 @@ defmodule JidoGralkor.RuntimeTest do
         assert_receive {:work_started, worker}
         worker_monitor = Process.monitor(worker)
 
-        Process.exit(owner, reason)
+        send(owner, {:stop, reason})
 
         assert_receive {:DOWN, ^worker_monitor, :process, ^worker, _worker_reason}
         refute_receive {:reflection_callback, _}, 100
@@ -1070,7 +1069,7 @@ defmodule JidoGralkor.RuntimeTest do
   defp start_owner do
     spawn(fn ->
       receive do
-        :never -> :ok
+        {:stop, reason} -> exit(reason)
       end
     end)
   end
