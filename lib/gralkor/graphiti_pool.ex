@@ -1279,7 +1279,7 @@ defmodule Gralkor.GraphitiPool do
                         await release_claim()
                         return claim
 
-                    heartbeat = asyncio.create_task(asyncio.sleep(0))
+                    heartbeat = asyncio.create_task(renew_claim())
                     try:
                         try:
                             existing = await EpisodicNode.get_by_uuid(g.driver, uid)
