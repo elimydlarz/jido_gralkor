@@ -125,6 +125,20 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert {:ok, _} = PersonalGraphMigration.advance(context.connection, journal, @quiescence)
       assert permissions(journal) == 0o600
     end
+
+    test "and journal updates never write through a link left beside the journal", context do
+      journal = prepare_history(context)
+      unrelated = Path.join(context.directory, "#{System.unique_integer([:positive])}-unrelated")
+      File.write!(unrelated, "unrelated content")
+      File.chmod!(unrelated, 0o644)
+      File.ln_s!(unrelated, journal <> ".tmp")
+
+      assert {:ok, _} = PersonalGraphMigration.advance(context.connection, journal, @quiescence)
+
+      assert File.read!(unrelated) == "unrelated content"
+      assert permissions(unrelated) == 0o644
+      assert {:ok, %File.Stat{type: :regular}} = File.lstat(journal)
+    end
   end
 
   describe "when a migration journal is prepared > if a journal already exists at that path" do

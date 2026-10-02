@@ -16,6 +16,7 @@ when a migration journal is prepared
   then the journal records the non-secret graph endpoint identity including host and port or Unix socket path, database, and username
   and the journal excludes graph credentials from its endpoint identity
   and the journal is readable and writable only by its owner
+  and journal updates never write through a link left beside the journal
   if a journal already exists at that path
     then preparation refuses without overwriting it
 
