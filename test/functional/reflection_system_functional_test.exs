@@ -221,7 +221,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then validation fails identifying the Reflection and reserved provenance syntax" do
       name = "review [lens: observations]"
 
-      assert {:error, {:reserved_provenance_syntax, :reflections, ^name}} =
+      assert {:error, {:reserved_provenance_syntax, :reflections, ^name, " [lens: "}} =
                validate_reflections([valid_definition(name: name)])
     end
   end
@@ -373,7 +373,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   describe "when an agent runtime validates Reflection declarations > if a Reflection name contains the reserved direct-writer delimiter" do
     test "then validation fails identifying the Reflection and reserved provenance syntax" do
-      assert {:error, {:reserved_provenance_syntax, :reflections, _}} =
+      assert {:error,
+              {:reserved_provenance_syntax, :reflections, "review [gralkor: direct]",
+               " [gralkor: "}} =
                Runtime.validate(%{
                  destinations: [],
                  lenses: [],
