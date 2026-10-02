@@ -1246,6 +1246,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                   self.driver.claim_admissions = []
                   self.extractions = 0
                   self.wait_for_replacement_owner = False
+                  self.long_extraction_started = False
+                  self.release_long_extraction = asyncio.Event()
 
               async def add_episode(self, **kwargs):
                   from datetime import datetime, timezone
@@ -1253,6 +1255,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                   from graphiti_core.graphiti import add_nodes_and_edges_bulk
                   from graphiti_core.nodes import EntityNode, EpisodicNode
                   self.extractions += 1
+
+                  if kwargs['uuid'] == 'embedded-renewed-claim':
+                      self.long_extraction_started = True
+                      await self.release_long_extraction.wait()
 
                   if kwargs['uuid'] == 'embedded-marker-fenced':
                       episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
