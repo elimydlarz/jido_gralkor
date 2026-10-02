@@ -110,7 +110,7 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
     end
   end
 
-  describe "when an application rotates a running agent whose flush succeeds but fresh-session installation fails" do
+  describe "when an application rotates a running agent whose committed thread disappears during the flush" do
     test "then the application receives the installation failure" do
       pid = start_agent()
       seed_thread(pid, "before-rotation")
@@ -118,7 +118,7 @@ defmodule JidoGralkor.ContextRotationFunctionalTest do
       assert {:error, :thread_missing_after_flush} = rotate_while_thread_removed(pid)
     end
 
-    test "and the active session remains unchanged" do
+    test "and no fresh session is installed" do
       pid = start_agent()
       seed_thread(pid, "before-rotation")
 
