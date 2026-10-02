@@ -597,6 +597,27 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
+  describe "when an agent turn begins > while no thread has committed to agent state" do
+    test "then the mounted agent name and Gralkor runtime target are planted on the tool context, with no session id" do
+      signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
+
+      assert {:ok, {:continue, %Signal{data: data}}} =
+               Plugin.handle_signal(signal, context(agent("user-abc", thread_id: nil)))
+
+      assert data.tool_context.agent_name == "TestAgent"
+      assert data.tool_context.gralkor_runtime == self()
+      refute Map.has_key?(data.tool_context, :session_id)
+    end
+
+    test "and no recall is issued on the plugin's own initiative" do
+      signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
+
+      Plugin.handle_signal(signal, context(agent("user-abc", thread_id: nil)))
+
+      assert InMemory.recalls() == []
+    end
+  end
+
   describe "when an agent turn begins > where the plugin was mounted with an ingestion Lens > while a thread has committed to agent state" do
     test "then the Lens selection and committed session id are planted on the tool context beside the agent name" do
       plugin_state = lens_plugin_state()
@@ -635,27 +656,6 @@ defmodule JidoGralkor.PluginTest do
                gralkor_runtime: self(),
                lens: "observations"
              }
-    end
-  end
-
-  describe "when an agent turn begins > while no thread has committed to agent state" do
-    test "then the mounted agent name and Gralkor runtime target are planted on the tool context, with no session id" do
-      signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
-
-      assert {:ok, {:continue, %Signal{data: data}}} =
-               Plugin.handle_signal(signal, context(agent("user-abc", thread_id: nil)))
-
-      assert data.tool_context.agent_name == "TestAgent"
-      assert data.tool_context.gralkor_runtime == self()
-      refute Map.has_key?(data.tool_context, :session_id)
-    end
-
-    test "and no recall is issued on the plugin's own initiative" do
-      signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
-
-      Plugin.handle_signal(signal, context(agent("user-abc", thread_id: nil)))
-
-      assert InMemory.recalls() == []
     end
   end
 
