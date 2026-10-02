@@ -1,6 +1,8 @@
 defmodule Gralkor.Client.InMemoryTest do
   use ExUnit.Case, async: false
 
+  @moduletag :integration
+
   alias Gralkor.Client.InMemory
 
   import Gralkor.ClientContract

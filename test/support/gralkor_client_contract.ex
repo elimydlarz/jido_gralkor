@@ -4,7 +4,7 @@ defmodule Gralkor.ClientContract do
 
   `Gralkor.Client.InMemory` imports this executable contract; the Native
   adapter proves the same public port through its integration tests. Reifies
-  `test-trees/unit/gralkor-client-in-memory_TEST_TREES.md`. The describe/it hierarchy
+  `test-trees/integration/gralkor-client-in-memory_TEST_TREES.md`. The describe/it hierarchy
   mirrors the tree verbatim.
 
   Usage from a per-adapter test file:

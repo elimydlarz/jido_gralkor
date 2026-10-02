@@ -1,6 +1,8 @@
 defmodule Gralkor.Client.NativeTest do
   use ExUnit.Case, async: false
 
+  @moduletag :integration
+
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Client.Native
