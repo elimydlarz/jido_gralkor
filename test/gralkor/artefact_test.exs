@@ -54,7 +54,7 @@ defmodule Gralkor.ArtefactTest do
       end
     end
 
-    test "and the derived identifier is a version-5 UUID string" do
+    test "and the derived identifier is a valid UUID string" do
       identifier = Artefact.id_for("operator", "invocation", "reflection")
 
       assert identifier =~
