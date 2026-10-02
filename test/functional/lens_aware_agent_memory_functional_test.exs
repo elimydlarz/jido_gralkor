@@ -10,6 +10,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   alias JidoGralkor.Actions.MemorySearch
   alias JidoGralkor.Plugin
 
+  @plugin_jido JidoGralkor.LensAwareAgentMemoryFunctionalTest.PluginJido
+
   defmodule MemoryOntology do
     use Gralkor.Ontology, entities: :open, relationships: :open
 
@@ -70,6 +72,9 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     start_supervised!(
       {JidoGralkor.Runtime, owner: self(), configuration: runtime_configuration()}
     )
+
+    start_supervised!({Registry, keys: :unique, name: Jido.registry_name(@plugin_jido)})
+    {:ok, _owner} = Registry.register(Jido.registry_name(@plugin_jido), "operator-one", %{})
 
     InMemory.reset()
     InMemory.set_capture(:ok)
@@ -322,7 +327,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, :continue} =
                Plugin.handle_signal(
                  completion_signal("default-request", "remembered"),
-                 %{agent: completion}
+                 %{jido_instance: @plugin_jido, partition: nil, agent: completion}
                )
 
       assert [[_, %Gralkor.Capture{route: {:lenses, ["observations"]}}]] = InMemory.captures()
@@ -421,7 +426,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       }
 
       assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
-               Plugin.handle_signal(query_signal, %{agent: query_agent})
+               Plugin.handle_signal(query_signal, %{jido_instance: @plugin_jido, partition: nil, agent: query_agent})
 
       completion_agent = %{
         query_agent
@@ -448,7 +453,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       }
 
       assert {:ok, :continue} =
-               Plugin.handle_signal(completion_signal, %{agent: completion_agent})
+               Plugin.handle_signal(completion_signal, %{jido_instance: @plugin_jido, partition: nil, agent: completion_agent})
 
       assert [
                [
@@ -487,7 +492,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         data: %{request_id: request_id, error: :rejected}
       }
 
-      assert {:ok, :continue} = Plugin.handle_signal(failure_signal, %{agent: failed_agent})
+      assert {:ok, :continue} = Plugin.handle_signal(failure_signal, %{jido_instance: @plugin_jido, partition: nil, agent: failed_agent})
       assert [[_, %Gralkor.Capture{route: {:lenses, ["decisions"]}}]] = InMemory.captures()
     end
   end
@@ -506,7 +511,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         }
 
         assert_raise ArgumentError, ~r/unknown.*lenses|unknown Lens|invalid Lens/, fn ->
-          Plugin.handle_signal(signal, %{agent: agent(plugin_state)})
+          Plugin.handle_signal(signal, %{jido_instance: @plugin_jido, partition: nil, agent: agent(plugin_state)})
         end
       end
 
@@ -528,7 +533,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
         error =
           assert_raise ArgumentError, fn ->
-            Plugin.handle_signal(signal, %{agent: agent(plugin_state)})
+            Plugin.handle_signal(signal, %{jido_instance: @plugin_jido, partition: nil, agent: agent(plugin_state)})
           end
 
         assert Exception.message(error) =~ inspect(invalid)
@@ -558,7 +563,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         assert {:ok, :continue} =
                  Plugin.handle_signal(
                    completion_signal(request_id, result),
-                   %{agent: completed_agent}
+                   %{jido_instance: @plugin_jido, partition: nil, agent: completed_agent}
                  )
       end
 
@@ -599,7 +604,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         assert {:ok, :continue} =
                  Plugin.handle_signal(
                    completion_signal(request_id, "#{lens} result"),
-                   %{agent: completion_agent(base_agent, request_id, retained_refs)}
+                   %{jido_instance: @plugin_jido, partition: nil, agent: completion_agent(base_agent, request_id, retained_refs)}
                  )
       end
 
@@ -636,7 +641,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         assert {:ok, :continue} =
                  Plugin.handle_signal(
                    completion_signal(request_id, request_id),
-                   %{agent: completion_agent(base_agent, request_id, retained_refs)}
+                   %{jido_instance: @plugin_jido, partition: nil, agent: completion_agent(base_agent, request_id, retained_refs)}
                  )
       end
 
@@ -701,6 +706,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert {:ok, :continue} =
                Plugin.handle_signal(completion_signal("request-one", "Direct"), %{
+                 jido_instance: @plugin_jido,
+                 partition: nil,
                  agent: completion_agent(base, "request-one", refs)
                })
 
@@ -725,6 +732,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert {:ok, :continue} =
                Plugin.handle_signal(completion_signal("direct-request", "Direct"), %{
+                 jido_instance: @plugin_jido,
+                 partition: nil,
                  agent: completion_agent(base, "direct-request", refs)
                })
 
@@ -747,6 +756,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert {:ok, :continue} =
                Plugin.handle_signal(signal, %{
+                 jido_instance: @plugin_jido,
+                 partition: nil,
                  agent: completion_agent(base, "direct-request", refs)
                })
 
@@ -769,6 +780,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
         assert {:ok, :continue} =
                  Plugin.handle_signal(completion_signal(id, id), %{
+                   jido_instance: @plugin_jido,
+                   partition: nil,
                    agent: completion_agent(base, id, refs)
                  })
       end
@@ -859,7 +872,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       data: %{request_id: id, query: "Remember direct", tool_context: %{lens: nil}}
     }
 
-    Plugin.handle_signal(signal, %{agent: agent})
+    Plugin.handle_signal(signal, %{jido_instance: @plugin_jido, partition: nil, agent: agent})
   end
 
   defp agent(plugin_state) do
@@ -929,7 +942,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       }
     }
 
-    Plugin.handle_signal(signal, %{agent: agent})
+    Plugin.handle_signal(signal, %{jido_instance: @plugin_jido, partition: nil, agent: agent})
   end
 
   defp completion_agent(agent, request_id, retained_refs) do
