@@ -1367,7 +1367,7 @@ defmodule Gralkor.GraphitiPool do
             try:
                 result = asyncio._gralkor_run(add_episode())
             except BaseException as e:
-                print(f"[gralkor] add_episode failed: {type(e).__name__}: {e}", file=sys.stderr)
+                print(f"[gralkor] add_episode failed: {type(e).__name__}: {(str(e).splitlines() or [''])[0]}", file=sys.stderr)
                 upstream = upstream_failure(e)
                 if upstream is None:
                     raise
@@ -1456,7 +1456,7 @@ defmodule Gralkor.GraphitiPool do
       try:
           asyncio._gralkor_run(g.remove_episode(uid))
       except BaseException as e:
-          print(f"[gralkor] remove_episode failed: {type(e).__name__}: {e}", file=sys.stderr)
+          print(f"[gralkor] remove_episode failed: {type(e).__name__}: {(str(e).splitlines() or [''])[0]}", file=sys.stderr)
           raise
       None
       """,
