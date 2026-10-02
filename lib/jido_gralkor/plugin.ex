@@ -400,7 +400,14 @@ defmodule JidoGralkor.Plugin do
   defp runtime_lens!(_owner, nil), do: :ok
 
   defp runtime_lens!(owner, lens) when is_binary(lens) do
-    Runtime.lens!(owner, lens)
+    case Runtime.lens!(owner, lens) do
+      %Gralkor.Lens.Replaceable{} ->
+        raise ArgumentError,
+              "invalid Lens #{inspect(lens)}: it accepts only whole-graph replacement and cannot ingest conversation capture"
+
+      definition ->
+        definition
+    end
   end
 
   defp runtime_lens!(_owner, lens), do: raise(ArgumentError, "invalid Lens #{inspect(lens)}")
