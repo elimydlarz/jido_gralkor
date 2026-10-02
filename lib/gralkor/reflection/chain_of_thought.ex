@@ -76,8 +76,15 @@ defmodule Gralkor.Reflection.ChainOfThought do
     reference = Enum.find(interpolations(directions), &(not Map.has_key?(prior_outputs, &1)))
 
     invalid_output =
-      Enum.find(output, fn {name, type} ->
-        not non_blank?(name) or match?({:error, _}, parse_type(type))
+      Enum.find_value(output, fn {name, type} ->
+        if non_blank?(name) do
+          case parse_type(type) do
+            {:ok, _parsed} -> nil
+            {:error, unsupported} -> {:invalid_output_type, unsupported}
+          end
+        else
+          {:invalid_output_name, name}
+        end
       end)
 
     cond do
@@ -88,13 +95,8 @@ defmodule Gralkor.Reflection.ChainOfThought do
         {:error, {:unknown_interpolation, reference, label}}
 
       invalid_output ->
-        {name, type} = invalid_output
-
-        if non_blank?(name) do
-          {:error, {:invalid_output_type, label, type}}
-        else
-          {:error, {:invalid_output_name, label, name}}
-        end
+        {reason, value} = invalid_output
+        {:error, {reason, label, value}}
 
       true ->
         step = %Step{label: label, directions: directions, output: output}
@@ -148,7 +150,8 @@ defmodule Gralkor.Reflection.ChainOfThought do
 
           case parse_type(type) do
             {:ok, parsed} when name != "" -> {:cont, {:ok, Map.put(acc, name, parsed)}}
-            _ -> {:halt, {:error, field}}
+            {:ok, _parsed} -> {:halt, {:error, field}}
+            {:error, unsupported} -> {:halt, {:error, unsupported}}
           end
 
         _ ->
