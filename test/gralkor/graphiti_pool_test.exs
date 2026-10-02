@@ -207,11 +207,10 @@ defmodule Gralkor.GraphitiPoolTest do
       %{pid: pid} = start_provider_failing_graph_pool("rate_limit")
 
       capture_io(:stderr, fn ->
-        assert {:error, {:upstream_llm, {:rate_limited, detail}}} =
+        assert {:error,
+                {:upstream_llm,
+                 {:rate_limited, "RateLimitError: Rate limit exceeded. Please try again later."}}} =
                  GraphitiPool.add_episode(pid, "g1", "content", "source", nil)
-
-        assert detail =~ "RateLimitError"
-        assert detail =~ "rate limit reached"
       end)
 
       GenServer.stop(pid)
