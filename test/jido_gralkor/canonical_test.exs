@@ -46,6 +46,14 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
+  describe "when a turn becomes canonical messages > while the query is only whitespace" do
+    test "then no user message is emitted" do
+      messages = Canonical.to_messages(" \n\t ", [], {:completed, "a"})
+      refute Enum.any?(messages, &(&1.role == "user"))
+      assert messages == [Message.new("assistant", "a")]
+    end
+  end
+
   describe "when a turn becomes canonical messages > while a tool-requesting llm event completes" do
     test "then it renders as a behaviour message reading `thought: …`" do
       events = [
@@ -110,6 +118,18 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
+  describe "when a turn becomes canonical messages > while a tool event completes > while it carries no result" do
+    test "then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing" do
+      for result <- [nil, ""] do
+        events = [%{kind: :tool_completed, data: %{tool_name: "memory_search", result: result}}]
+
+        [_user, behaviour] = Canonical.to_messages("q", events, {:completed, ""})
+
+        assert behaviour == Message.new("behaviour", "tool memory_search")
+      end
+    end
+  end
+
   describe "when a turn becomes canonical messages > while events are not memory-worthy" do
     test "then those events contribute no messages" do
       events = [
@@ -139,22 +159,19 @@ defmodule JidoGralkor.CanonicalTest do
     end
   end
 
-  describe "when a turn becomes canonical messages > while a tool event completes > while it carries no result" do
-    test "then it renders as `tool NAME` alone, rather than as an arrow pointing at nothing" do
-      for result <- [nil, ""] do
-        events = [%{kind: :tool_completed, data: %{tool_name: "memory_search", result: result}}]
-
-        [_user, behaviour] = Canonical.to_messages("q", events, {:completed, ""})
-
-        assert behaviour == Message.new("behaviour", "tool memory_search")
+  describe "when a turn becomes canonical messages > while the turn completed > while the completed answer is empty or only whitespace" do
+    test "then no assistant message is emitted" do
+      for answer <- ["", " \n\t "] do
+        messages = Canonical.to_messages("q", [], {:completed, answer})
+        refute Enum.any?(messages, &(&1.role == "assistant"))
       end
     end
   end
 
-  describe "when a turn becomes canonical messages > while the turn completed > while the completed answer is empty" do
-    test "then no assistant message is emitted" do
-      messages = Canonical.to_messages("q", [], {:completed, ""})
-      refute Enum.any?(messages, &(&1.role == "assistant"))
+  describe "when a turn becomes canonical messages > while the turn completed > while the completed answer has surrounding whitespace" do
+    test "then the assistant message carries the trimmed answer" do
+      messages = Canonical.to_messages("q", [], {:completed, "  \n the answer \t "})
+      assert List.last(messages) == Message.new("assistant", "the answer")
     end
   end
 
