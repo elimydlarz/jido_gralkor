@@ -95,7 +95,11 @@ defmodule Gralkor.OntologyExtractionFunctionalTest do
          ]}
       )
 
-    on_exit(fn -> File.rm_rf!(data_dir) end)
+    on_exit(fn ->
+      :persistent_term.erase({__MODULE__, :strict_group_id})
+      File.rm_rf!(data_dir)
+    end)
+
     :ok
   end
 
