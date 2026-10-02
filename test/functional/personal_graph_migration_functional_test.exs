@@ -574,7 +574,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
         end
 
       assert Exception.message(error) =~ "source graph missing"
-      assert error.exit_status == 1
+      assert error.mix == 1
       refute File.exists?(journal)
     end
   end

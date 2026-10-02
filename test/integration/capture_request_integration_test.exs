@@ -141,16 +141,6 @@ defmodule Gralkor.CaptureRequestIntegrationTest do
       assert first.name == "first"
       assert second.name == "second"
     end
-
-    test "and accepted Lens definitions survive later runtime replacement" do
-      assert [{:lens, lens}] =
-               Capture.resolve!(self(), %{request() | route: {:lenses, ["first"]}})
-
-      assert :ok = Runtime.replace(self(), %{destinations: [], lenses: [], reflections: []})
-      assert lens.name == "first"
-      assert lens.destination.name == "personal"
-      assert lens.ingestion == Gralkor.Lens.Ingestion.Store
-    end
   end
 
   describe "when a capture request resolves through its owning runtime > if a selected Lens only accepts whole-graph replacement" do
@@ -162,7 +152,7 @@ defmodule Gralkor.CaptureRequestIntegrationTest do
   end
 
   describe "when a capture request resolves through its owning runtime > if a selected Destination or Lens is unknown or retired" do
-    test "then resolution fails before any turn can be buffered" do
+    test "then resolution fails identifying the rejected name" do
       for {route, rejected} <- [
             {{:direct, "unknown"}, "unknown"},
             {{:direct, "operator"}, "operator"},

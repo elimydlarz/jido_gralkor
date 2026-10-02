@@ -311,7 +311,9 @@ def advance(database: FalkorDB, path: Path, manifest: dict[str, object]) -> dict
                 raise ValueError(f"target differs from translated source: {target.name}")
             entry["target_inventory"] = target_inventory
             entry["phase"] = "verified"
-            persist(path, manifest)
+            if any(other["phase"] != "verified" for other in manifest["graphs"]):
+                persist(path, manifest)
+                return manifest
     manifest["phase"] = "verified"
     persist(path, manifest)
     return manifest
@@ -403,8 +405,13 @@ def execute(request: dict[str, object]) -> dict[str, object]:
             return plan(database, request["operator_ids"], request["configuration_references"], endpoint_identity(connection))
     path = Path(request["journal_path"])
     with open(path.with_suffix(path.suffix + ".lock"), "a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ValueError(f"migration journal is held by another migration operation: {path}") from error
         if action == "prepare":
+            if path.exists():
+                raise ValueError(f"migration journal already exists: {path}")
             with FalkorDB(**connection) as database:
                 manifest = plan(database, request["operator_ids"], request["configuration_references"], endpoint_identity(connection))
                 validate_preparation(manifest)
