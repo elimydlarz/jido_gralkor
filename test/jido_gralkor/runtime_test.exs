@@ -65,6 +65,51 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
+  describe "when the owning AgentServer stops for any reason" do
+    test "then the runtime stops" do
+      for reason <- [:normal, :shutdown, :kill, {:failure, :crashed}] do
+        owner = start_owner()
+        runtime = start_owned_runtime(owner, reason: reason)
+        runtime_monitor = Process.monitor(runtime)
+
+        Process.exit(owner, reason)
+
+        assert_receive {:DOWN, ^runtime_monitor, :process, ^runtime, _runtime_reason}
+        assert :global.whereis_name({Runtime, owner}) == :undefined
+      end
+    end
+
+    test "and unfinished Reflection work ends without invoking its callback" do
+      test_pid = self()
+
+      for reason <- [:normal, :shutdown, :kill, {:failure, :crashed}] do
+        owner = start_owner()
+
+        start_owned_runtime(owner,
+          reason: reason,
+          run_reflection: blocking_reflection(test_pid)
+        )
+
+        assert {:ok, _} =
+                 Runtime.submit_reflection(
+                   owner,
+                   "review",
+                   invocation("owner-stopped"),
+                   &send(test_pid, {:reflection_callback, &1}),
+                   []
+                 )
+
+        assert_receive {:work_started, worker}
+        worker_monitor = Process.monitor(worker)
+
+        Process.exit(owner, reason)
+
+        assert_receive {:DOWN, ^worker_monitor, :process, ^worker, _worker_reason}
+        refute_receive {:reflection_callback, _}, 100
+      end
+    end
+  end
+
   describe "when a consumer replaces complete valid configuration" do
     test "then every definition is validated and resolved before activation" do
       configuration = reflection_configuration()
@@ -455,12 +500,31 @@ defmodule JidoGralkor.RuntimeTest do
                  []
                )
 
+      refute_receive {:production_started, _}
+    end
+  end
+
+  describe "if submission options include anything other than inference, tool executor, tools, or tool context" do
+    test "then submission returns the unsupported options before production starts" do
+      parent = self()
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, invocation, _opts ->
+          send(parent, {:production_started, invocation})
+          {:error, :unexpected_production}
+        end
+      )
+
       assert {:error, {:unsupported_reflection_options, [:artefact_id, :retry_deadline_ms]}} =
                Runtime.submit_reflection(
                  self(),
                  "review",
                  invocation("unsupported-options"),
                  fn _ -> :ok end,
+                 inference: fn _request -> {:error, :unused} end,
+                 tool_executor: fn _call, _context -> {:error, :unused} end,
+                 tools: [],
+                 tool_context: %{},
                  artefact_id: "consumer-chosen",
                  retry_deadline_ms: 1
                )
@@ -723,6 +787,65 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
+  describe "if Destination delivery fails without a status" do
+    test "then delivery is not retried" do
+      test_pid = self()
+      artefact = Gralkor.Artefact.new("statusless-failure", %{})
+      put_retry_timing(sleep: fn delay -> send(test_pid, {:unexpected_sleep, delay}) end)
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
+        deliver_artefact: fn _output, _reflection, _operator, ^artefact ->
+          send(test_pid, :delivery_attempt)
+          {:error, :connection_closed}
+        end
+      )
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("statusless-retry"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 []
+               )
+
+      assert_receive :delivery_attempt
+      assert_receive {:reflection_callback, _}
+      refute_receive :delivery_attempt
+      refute_receive {:unexpected_sleep, _}
+    end
+
+    test "and the callback receives abandonment with the produced artefact" do
+      test_pid = self()
+      artefact = Gralkor.Artefact.new("statusless-failure", %{})
+
+      start_runtime(reflection_configuration(),
+        run_reflection: fn _reflection, _invocation, _opts -> {:ok, artefact} end,
+        deliver_artefact: fn _output, _reflection, _operator, ^artefact ->
+          {:error, :connection_closed}
+        end
+      )
+
+      assert {:ok, "statusless-callback"} =
+               Runtime.submit_reflection(
+                 self(),
+                 "review",
+                 invocation("statusless-callback"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 []
+               )
+
+      assert_receive {:reflection_callback,
+                      %{
+                        invocation_id: "statusless-callback",
+                        artefact: ^artefact,
+                        outcome:
+                          {:abandoned, %{stage: :delivery, reason: :connection_closed}}
+                      }}
+    end
+  end
+
   describe "if Destination delivery reports a retryable server failure" do
     test "then delivery retries the same artefact with exponential backoff" do
       parent = self()
@@ -941,6 +1064,31 @@ defmodule JidoGralkor.RuntimeTest do
            {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}}
          end
        ] ++ seams}
+    )
+  end
+
+  defp start_owner do
+    spawn(fn ->
+      receive do
+        :never -> :ok
+      end
+    end)
+  end
+
+  defp start_owned_runtime(owner, opts) do
+    {reason, seams} = Keyword.pop!(opts, :reason)
+
+    start_supervised!(
+      {Runtime,
+       [
+         owner: owner,
+         configuration: reflection_configuration(),
+         packaged_reflections: fn -> [packaged_reflection()] end,
+         parse_chain_of_thought: fn _configuration ->
+           {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}}
+         end
+       ] ++ seams},
+      id: {:owned_runtime, reason}
     )
   end
 
