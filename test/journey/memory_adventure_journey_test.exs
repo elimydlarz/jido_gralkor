@@ -218,7 +218,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   describe "when two operators use direct personal memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement" do
-    test "then default-ontology direct personal memory remains recallable", %{adventure: adventure} do
+    test "then default-ontology direct personal memory remains recallable", %{
+      adventure: adventure
+    } do
       assert adventure.implicit_memory
     end
 
@@ -775,7 +777,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         published_representations
       )
 
-
     consumer_reflection_result =
       invoke_reflection_result!(
         agent,
@@ -1055,7 +1056,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         first_representations
       )
 
-
     first_generalisation =
       first_generalisation_artefact
       |> find_generalisation(fn generalisation ->
@@ -1106,7 +1106,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         later_ingestion_id,
         later_representations
       )
-
 
     later_generalisation =
       find_generalisation(later_generalisation_artefact, fn generalisation ->
@@ -1339,7 +1338,16 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
       true ->
         Process.sleep(1_000)
-        search_until(agent, operator_id, destinations, result_type, query, predicate, attempts - 1)
+
+        search_until(
+          agent,
+          operator_id,
+          destinations,
+          result_type,
+          query,
+          predicate,
+          attempts - 1
+        )
     end
   end
 

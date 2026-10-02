@@ -1149,7 +1149,9 @@ defmodule Gralkor.GraphitiPoolTest do
       GraphitiPool.for(pid, "g1")
 
       try do
-        first_caller = spawn(fn -> GraphitiPool.add_episode(pid, "g1", "first", "manual", nil) end)
+        first_caller =
+          spawn(fn -> GraphitiPool.add_episode(pid, "g1", "first", "manual", nil) end)
+
         await_python_value(g, "first_started", true)
 
         second =
