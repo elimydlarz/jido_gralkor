@@ -557,6 +557,94 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
+  describe "when information is added or captured directly without a selected Lens > where a direct addition omits its source kind" do
+    test "then the episode is stored as a document" do
+      graphiti = use_native_boundary()
+
+      assert :ok =
+               Gralkor.Client.Native.memory_add(
+                 "personal/operator-one",
+                 "Remember the launch plan.",
+                 "manual"
+               )
+
+      assert [%{"body" => "Remember the launch plan.", "source" => "text"}] =
+               added_episodes(graphiti)
+
+      publish_added_episodes(graphiti, "The launch plan should be remembered.")
+
+      assert {:ok, [%{fact: %{sources: [%{source_kind: "document"}]}}]} =
+               Client.search(%Search{
+                 operator_id: "operator-one",
+                 query: "launch plan",
+                 destinations: ["personal"],
+                 result_type: :facts
+               })
+    end
+  end
+
+  describe "if a direct addition supplies an unsupported source kind or content that does not fit its source kind" do
+    test "then the addition raises an argument error identifying the rejected value" do
+      assert_raise ArgumentError, ~r/source kind :rumour/, fn ->
+        Gralkor.Client.Native.memory_add(
+          "personal/operator-one",
+          "Atlas launches Friday.",
+          "manual",
+          :rumour
+        )
+      end
+
+      for {source_kind, content} <- [
+            {:document, ["draft"]},
+            {:conversation, %{"speaker" => "Mina"}},
+            {:structured_record, "already encoded JSON"}
+          ] do
+        assert_raise ArgumentError,
+                     ~r/source content for #{source_kind}: #{Regex.escape(inspect(content))}/,
+                     fn ->
+                       Gralkor.Client.Native.memory_add(
+                         "personal/operator-one",
+                         content,
+                         "manual",
+                         source_kind
+                       )
+                     end
+      end
+    end
+
+    test "and no Graphiti operation begins" do
+      graphiti = use_native_boundary()
+
+      for {source_kind, content} <- [
+            {:rumour, "Atlas launches Friday."},
+            {:document, ["draft"]},
+            {:conversation, %{"speaker" => "Mina"}},
+            {:structured_record, "already encoded JSON"}
+          ] do
+        assert_raise ArgumentError, fn ->
+          Gralkor.Client.Native.memory_add(
+            "personal/operator-one",
+            content,
+            "manual",
+            source_kind
+          )
+        end
+      end
+
+      assert added_episodes(graphiti) == []
+
+      assert :ok =
+               Gralkor.Client.Native.memory_add(
+                 "personal/operator-one",
+                 %{"project" => "Atlas"},
+                 "registry",
+                 :structured_record
+               )
+
+      assert [%{"source" => "json"}] = added_episodes(graphiti)
+    end
+  end
+
   describe "when public search reads historical operator-labelled episodes" do
     test "then their recorded operator Lens provenance remains visible without registering that Lens" do
       graphiti = use_native_boundary()
