@@ -84,7 +84,7 @@ defmodule JidoGralkor.MixProject do
 
   defp package do
     [
-      maintainers: ["susu-eng"],
+      maintainers: ["elimydlarz"],
       licenses: ["MIT"],
       links: %{
         "GitHub" => @source_url,
