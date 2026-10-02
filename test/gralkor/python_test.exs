@@ -170,15 +170,24 @@ defmodule Gralkor.PythonTest do
 
   describe "when the Python runtime initialises > while orphan reaping is requested" do
     test "then every process identified as its bundled server is killed before startup" do
-      killed = :ets.new(:killed, [:public, :set])
+      test_pid = self()
 
-      assert :ok =
-               Python.reap_redislite_orphans(fn -> [1234, 5678] end, fn pid ->
-                 :ets.insert(killed, {pid, true})
-               end)
+      assert {:ok, _} =
+               Python.init(
+                 reap_orphans: true,
+                 list_orphans: fn -> [1234, 5678] end,
+                 kill_pid: fn pid -> send(test_pid, {:killed, pid}) end,
+                 uv_init: fn ->
+                   send(test_pid, :uv_init)
+                   :ok
+                 end,
+                 smoke_import: fn -> :ok end,
+                 smoke_import_provider: fn _provider -> :ok end,
+                 install_loop: false
+               )
 
-      assert :ets.lookup(killed, 1234) == [{1234, true}]
-      assert :ets.lookup(killed, 5678) == [{5678, true}]
+      assert {:messages, [{:killed, 1234}, {:killed, 5678}, :uv_init]} =
+               Process.info(self(), :messages)
     end
 
     test "and only the first initialisation in a virtual machine sweeps for orphaned servers" do
