@@ -1337,11 +1337,15 @@ defmodule Gralkor.GraphitiPool do
                     empty_edge_guard.reset(empty_edge_token)
                     if token is not None:
                         guard.reset(token)
+            #{@upstream_failure_classification}
             try:
                 result = asyncio._gralkor_run(add_episode())
             except BaseException as e:
                 print(f"[gralkor] add_episode failed: {type(e).__name__}: {e}", file=sys.stderr)
-                raise
+                upstream = upstream_failure(e)
+                if upstream is None:
+                    raise
+                result = upstream
             result
             """,
             %{
