@@ -32,8 +32,6 @@ defmodule Gralkor.GraphitiPool do
 
   @default_table :gralkor_graphiti_instances
 
-  # Graphiti 0.30.2's EpisodicNode loader selects a fixed set of properties.
-  # Read our storage-owned field from the graph before classifying provenance.
   @episode_writer_hydration """
   async def hydrate_episode_writers(driver, episodes):
       from graphiti_core.driver.driver import GraphProvider
