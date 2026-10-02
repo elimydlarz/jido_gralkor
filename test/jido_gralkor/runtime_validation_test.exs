@@ -40,20 +40,6 @@ defmodule JidoGralkor.RuntimeValidationTest do
     end
   end
 
-  describe "if a Destination, Lens, or Reflection name is missing, blank, or duplicated" do
-    test "then validation identifies the collection and invalid name" do
-      for collection <- [:destinations, :lenses, :reflections], value <- [nil, false, "", "  "] do
-        assert {:error, {:blank_definition_name, ^collection, ^value}} =
-                 validate(named(collection, value))
-      end
-
-      for collection <- [:destinations, :lenses, :reflections] do
-        assert {:error, {:duplicate_definition_name, ^collection, "same"}} =
-                 validate(named(collection, "same", true))
-      end
-    end
-  end
-
   describe "if runtime configuration contains an unknown top-level field" do
     test "then validation identifies every unknown field" do
       assert {:error, {:unknown_configuration_fields, [:extra, :other]}} =
@@ -99,6 +85,20 @@ defmodule JidoGralkor.RuntimeValidationTest do
     end
   end
 
+  describe "if a Destination, Lens, or Reflection name is missing, blank, or duplicated" do
+    test "then validation identifies the collection and invalid name" do
+      for collection <- [:destinations, :lenses, :reflections], value <- [nil, false, "", "  "] do
+        assert {:error, {:blank_definition_name, ^collection, ^value}} =
+                 validate(named(collection, value))
+      end
+
+      for collection <- [:destinations, :lenses, :reflections] do
+        assert {:error, {:duplicate_definition_name, ^collection, "same"}} =
+                 validate(named(collection, "same", true))
+      end
+    end
+  end
+
   describe "if a consumer definition uses a name reserved by a package-owned definition" do
     test "then validation identifies its collection and reserved name" do
       assert {:error, {:reserved_definition_name, :destinations, "personal"}} =
@@ -116,45 +116,55 @@ defmodule JidoGralkor.RuntimeValidationTest do
     end
   end
 
-  describe "if a Destination name uses the reserved `operator/` namespace or a Lens uses the retired `default` name" do
-    test "then validation identifies the reserved or retired name" do
-      assert {:error, {:reserved_destination_namespace, "operator/custom"}} =
-               validate(Map.put(config(), :destinations, [[name: "operator/custom"]]))
-
-      lens = [
-        [
-          name: "default",
-          destination: "memory",
-          write: :append,
-          ingestion: Gralkor.Lens.Ingestion.Store,
-          ontology: Gralkor.DefaultOntology
-        ]
-      ]
-
-      assert {:error, {:retired_definition_name, :lenses, "default", "personal-chat"}} =
-               validate(Map.put(config(), :lenses, lens))
+  describe "if a Destination name uses the reserved `personal/` or `operator/` namespace" do
+    test "then validation identifies the reserved name" do
+      for name <- ["personal/custom", "operator/custom"] do
+        assert {:error, {:reserved_destination_namespace, ^name}} =
+                 validate(Map.put(config(), :destinations, [[name: name]]))
+      end
     end
   end
 
-  describe "if a Lens or Reflection name contains the reserved provenance delimiter ` [lens: `" do
+  describe "if a Destination or Lens uses a retired name" do
+    test "then validation identifies the retired name and its replacement" do
+      assert {:error, {:retired_definition_name, :destinations, "operator", "personal"}} =
+               validate(Map.put(config(), :destinations, [[name: "operator"]]))
+
+      for name <- ["default", "operator"] do
+        c = update_in(config(), [:lenses, Access.at(0)], &Keyword.put(&1, :name, name))
+
+        assert {:error, {:retired_definition_name, :lenses, ^name, "personal-chat"}} =
+                 validate(c)
+      end
+
+      c = update_in(config(), [:lenses, Access.at(0)], &Keyword.put(&1, :destination, "operator"))
+
+      assert {:error, {:retired_definition_name, :destinations, "operator", "personal"}} =
+               validate(c)
+    end
+  end
+
+  describe "if a Lens or Reflection name contains a reserved provenance delimiter" do
     test "then validation identifies the collection and name" do
-      lens = [
-        [
-          name: "notes [lens: old",
-          destination: "memory",
-          write: :append,
-          ingestion: Gralkor.Lens.Ingestion.Store,
-          ontology: Gralkor.DefaultOntology
-        ]
-      ]
+      for delimiter <- [" [lens: ", " [gralkor: "] do
+        lens_name = "notes#{delimiter}old"
+        c = update_in(config(), [:lenses, Access.at(0)], &Keyword.put(&1, :name, lens_name))
 
-      assert {:error, {:reserved_provenance_syntax, :lenses, "notes [lens: old"}} =
-               validate(Map.put(config(), :lenses, lens))
+        assert {:error, {:reserved_provenance_syntax, :lenses, ^lens_name, ^delimiter}} =
+                 validate(c)
 
-      reflection = [[name: "review [lens: old", outputs: [], chain_of_thought: [steps: []]]]
+        reflection_name = "review#{delimiter}old"
 
-      assert {:error, {:reserved_provenance_syntax, :reflections, "review [lens: old"}} =
-               validate(Map.put(config(), :reflections, reflection))
+        c =
+          update_in(
+            config(),
+            [:reflections, Access.at(0)],
+            &Keyword.put(&1, :name, reflection_name)
+          )
+
+        assert {:error, {:reserved_provenance_syntax, :reflections, ^reflection_name, ^delimiter}} =
+                 validate(c)
+      end
     end
   end
 
