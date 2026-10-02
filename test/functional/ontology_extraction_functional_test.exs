@@ -243,7 +243,21 @@ defmodule Gralkor.OntologyExtractionFunctionalTest do
     |> Enum.map(fn labels -> Enum.map(labels, &to_string/1) end)
   end
 
-  defp edge_types(group_id) do
+  defp strict_group_id do
+    key = {__MODULE__, :strict_group_id}
+
+    case :persistent_term.get(key, nil) do
+      nil ->
+        group_id = ingest_through_named_lens("strict", StrictOntology)
+        :persistent_term.put(key, group_id)
+        group_id
+
+      group_id ->
+        group_id
+    end
+  end
+
+  defp relationships(group_id) do
     instance = GraphitiPool.for(group_id)
 
     {raw, _} =
@@ -251,16 +265,20 @@ defmodule Gralkor.OntologyExtractionFunctionalTest do
         """
         import asyncio
         records, _, _ = asyncio._gralkor_run(
-            g.driver.execute_query("MATCH ()-[r:RELATES_TO]->() WHERE r.name IS NOT NULL RETURN r.name AS name")
+            g.driver.execute_query(
+                "MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity) "
+                "RETURN labels(s) AS source, r.name AS name, labels(t) AS target"
+            )
         )
-        [r['name'] for r in records]
+        [[r['source'], r['name'], r['target']] for r in records]
         """,
         %{"g" => instance}
       )
 
     raw
     |> Pythonx.decode()
-    |> Enum.map(&to_string/1)
-    |> Enum.uniq()
+    |> Enum.map(fn [source, name, target] ->
+      {Enum.map(source, &to_string/1), name && to_string(name), Enum.map(target, &to_string/1)}
+    end)
   end
 end
