@@ -140,12 +140,19 @@ defmodule JidoGralkor.Plugin do
             "Lens #{inspect(lens_name)} was retired; select \"personal-chat\" or explicit direct capture"
     end
 
-    names =
-      ["personal-chat"] ++
-        Enum.map(Map.fetch!(runtime_config, :lenses), &fetch_opt(&1, :name))
+    declared = Map.fetch!(runtime_config, :lenses)
+    names = ["personal-chat"] ++ Enum.map(declared, &fetch_opt(&1, :name))
 
     unless lens_name in names do
       raise ArgumentError, "unknown Lens #{inspect(lens_name)}"
+    end
+
+    if Enum.any?(
+         declared,
+         &(fetch_opt(&1, :name) == lens_name and fetch_opt(&1, :write) == :replace_graph)
+       ) do
+      raise ArgumentError,
+            "ingestion Lens #{inspect(lens_name)} accepts only whole-graph replacement and cannot ingest conversation capture"
     end
   end
 
