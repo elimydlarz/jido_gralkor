@@ -218,7 +218,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   describe "when two operators use direct personal memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement" do
-    test "then ontology-free direct personal memory remains recallable", %{adventure: adventure} do
+    test "then default-ontology direct personal memory remains recallable", %{adventure: adventure} do
       assert adventure.implicit_memory
     end
 
