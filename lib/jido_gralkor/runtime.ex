@@ -13,6 +13,7 @@ defmodule JidoGralkor.Runtime do
   @reflection_retry_deadline_ms 86_400_000
   @maximum_reflection_backoff_ms 3_600_000
   @consumer_reflection_options [:inference, :tool_executor, :tools, :tool_context]
+  @provenance_delimiters [" [lens: ", " [gralkor: "]
 
   def start_link(opts) do
     owner = Keyword.fetch!(opts, :owner)
