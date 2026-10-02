@@ -52,6 +52,34 @@ defmodule Gralkor.GraphitiPool do
               episode.__dict__.pop('_gralkor_writer', None)
   """
 
+  @upstream_failure_classification """
+  def upstream_failure(error):
+      import openai
+      from google.genai.errors import APIError as GoogleAPIError
+      from graphiti_core.llm_client.errors import (
+          EmptyResponseError,
+          RateLimitError,
+          RefusalError,
+      )
+      chain = []
+      current = error
+      while current is not None and all(current is not seen for seen in chain):
+          chain.append(current)
+          current = current.__cause__
+      for candidate in chain:
+          if isinstance(candidate, (RateLimitError, openai.RateLimitError)) or (
+              isinstance(candidate, GoogleAPIError) and candidate.code == 429
+          ):
+              return ['rate_limited', f'{type(candidate).__name__}: {candidate}']
+      for candidate in chain:
+          if isinstance(
+              candidate,
+              (openai.OpenAIError, GoogleAPIError, RefusalError, EmptyResponseError),
+          ):
+              return ['provider', f'{type(candidate).__name__}: {candidate}']
+      return None
+  """
+
   # ── Public API ──────────────────────────────────────────────
 
   @spec replace_graph(
