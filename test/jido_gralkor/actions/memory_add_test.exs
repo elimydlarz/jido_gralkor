@@ -252,7 +252,6 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
       assert log =~ "[gralkor] memory_add failed"
       assert log =~ ":boom"
 
-      Process.register(self(), :memory_add_lens_test)
       start_failing_lens_runtime()
 
       lens_log =
