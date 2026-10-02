@@ -1764,6 +1764,7 @@ defmodule Gralkor.GraphitiPool do
 
     case falkordb_spec do
       {:embedded, data_dir} ->
+        File.mkdir_p!(data_dir)
         File.rm(Path.join(data_dir, "gralkor.db.settings"))
 
       {:remote, _opts} ->
@@ -1894,7 +1895,7 @@ defmodule Gralkor.GraphitiPool do
         {:DOWN, monitor, :process, owner, _reason},
         %{episode_write_admission: %{owner: owner, monitor: monitor} = admission} = state
       ) do
-    {:noreply, state}
+    {:noreply, admit_next_episode_write(state, admission)}
   end
 
   def handle_info({:DOWN, monitor, :process, owner, _reason}, state) do
