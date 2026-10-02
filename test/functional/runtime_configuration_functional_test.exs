@@ -1010,6 +1010,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
     test "and it never falls back to application compatibility configuration" do
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
+      Gralkor.Client.InMemory.reset()
       Gralkor.Client.InMemory.set_capture(:ok)
 
       {dead_owner, monitor} = spawn_monitor(fn -> :ok end)
