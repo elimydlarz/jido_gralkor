@@ -37,50 +37,13 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
 
   describe "when an application starts with a remote memory backend" do
     test "then the native memory runtime starts without owning an embedded server" do
-      data_dir = unique_data_dir()
-      System.put_env("GRALKOR_DATA_DIR", data_dir)
       Application.put_env(:jido_gralkor, :falkordb, host: "memory.example", port: 6379)
-      test_pid = self()
 
-      assert [
-               {Gralkor.Python, [reap_orphans: false]} = python,
-               {GraphitiPool, pool_options},
-               {Gralkor.CaptureBuffer, _capture_options} = capture
-             ] = GralkorApplication.children()
+      %{pool: pool} = start_remote_runtime()
 
-      pool_options =
-        Keyword.merge(pool_options,
-          name: nil,
-          table: :"application_backend_remote_#{System.unique_integer([:positive])}",
-          construct_falkor_db: fn spec ->
-            send(test_pid, {:falkor_db_constructed, spec})
-            :remote_falkor_db
-          end,
-          construct_shared_clients: fn _llm, _embedder ->
-            %{llm_client: nil, embedder: nil, cross_encoder: nil}
-          end,
-          warmup: false
-        )
-
-      supervisor =
-        start_supervised!(%{
-          id: :remote_application_children,
-          start:
-            {Supervisor, :start_link,
-             [[python, {GraphitiPool, pool_options}, capture], [strategy: :one_for_one]]},
-          type: :supervisor
-        })
-
-      assert [
-               {CaptureBuffer, capture_pid, :worker, _},
-               {GraphitiPool, pool, :worker, _},
-               {Gralkor.Python, python_pid, :worker, _}
-             ] = Supervisor.which_children(supervisor)
-
-      assert Enum.all?([capture_pid, pool, python_pid], &Process.alive?/1)
+      assert :sys.get_state(pool).falkordb_spec == {:remote, [host: "memory.example", port: 6379]}
       assert_received {:falkor_db_constructed, {:remote, [host: "memory.example", port: 6379]}}
       assert :sys.get_state(pool).falkor_db == :remote_falkor_db
-      refute File.exists?(data_dir)
     end
 
     test "and application compatibility capture does not require an owning agent runtime" do
@@ -214,6 +177,22 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
     end
   end
 
+  describe "when an application configures both a remote backend and a data directory" do
+    test "then the native memory runtime uses the remote backend without owning an embedded server" do
+      data_dir = unique_data_dir()
+      System.put_env("GRALKOR_DATA_DIR", data_dir)
+      Application.put_env(:jido_gralkor, :falkordb, host: "memory.example", port: 6379)
+
+      %{pool: pool} = start_remote_runtime()
+
+      assert :sys.get_state(pool).falkordb_spec == {:remote, [host: "memory.example", port: 6379]}
+      assert_received {:falkor_db_constructed, {:remote, [host: "memory.example", port: 6379]}}
+      refute_received {:falkor_db_constructed, {:embedded, _}}
+      assert :sys.get_state(pool).falkor_db == :remote_falkor_db
+      refute File.exists?(data_dir)
+    end
+  end
+
   describe "if an application starts with invalid remote memory-backend configuration" do
     test "then startup raises before the native memory runtime starts" do
       Application.put_env(:jido_gralkor, :falkordb, host: "memory.example")
@@ -242,6 +221,49 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       System.tmp_dir!(),
       "application_backend_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
     )
+  end
+
+  defp start_remote_runtime do
+    test_pid = self()
+
+    assert [
+             {Gralkor.Python, [reap_orphans: false]} = python,
+             {GraphitiPool, pool_options},
+             {Gralkor.CaptureBuffer, _capture_options} = capture
+           ] = GralkorApplication.children()
+
+    pool_options =
+      Keyword.merge(pool_options,
+        name: nil,
+        table: :"application_backend_remote_#{System.unique_integer([:positive])}",
+        construct_falkor_db: fn spec ->
+          send(test_pid, {:falkor_db_constructed, spec})
+          :remote_falkor_db
+        end,
+        construct_shared_clients: fn _llm, _embedder ->
+          %{llm_client: nil, embedder: nil, cross_encoder: nil}
+        end,
+        warmup: false
+      )
+
+    supervisor =
+      start_supervised!(%{
+        id: :remote_application_children,
+        start:
+          {Supervisor, :start_link,
+           [[python, {GraphitiPool, pool_options}, capture], [strategy: :one_for_one]]},
+        type: :supervisor
+      })
+
+    assert [
+             {CaptureBuffer, capture_pid, :worker, _},
+             {GraphitiPool, pool, :worker, _},
+             {Gralkor.Python, python_pid, :worker, _}
+           ] = Supervisor.which_children(supervisor)
+
+    assert Enum.all?([capture_pid, pool, python_pid], &Process.alive?/1)
+
+    %{pool: pool}
   end
 
   defp start_embedded_runtime do
