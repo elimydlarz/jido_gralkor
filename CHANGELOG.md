@@ -9,6 +9,7 @@
 - Mounting `JidoGralkor.Plugin` rejects an `:ingestion_lens` that accepts only whole-graph replacement.
 - `GraphitiPool.add_episode` reports inference-provider failures as `{:upstream_llm, {:rate_limited | :provider, detail}}`; capture no longer retries them on top of the provider client's own retries.
 - `Gralkor.Lens.Storage.Graphiti.search/4` rejects unknown options; a blank or whitespace-only `GRALKOR_DATA_DIR` counts as unset.
+- A custom Reflection `:inference` callback must return `{:ok, %{output: map}}`, `{:ok, %{tool_calls: list}}`, or `{:error, reason}`; the former `{:tool_calls, calls}` and bare `{:ok, map}` shapes now fail as `{:invalid_inference_response, _}`. Built-in inference no longer adds `:tools` to the tool context.
 - Runtime validation names the offending provenance delimiter, and Chain-of-Thought parsing names the innermost unsupported type.
 - Private-graph migration: `advance` persists at most one durable graph phase per call across graphs, `prepare` refuses an existing journal, a journal held by another operation is refused with a clear error, and journals stay owner-only even when a stale temporary file is reused.
 - `RUNTIME_CONFIG.md` is folded into the README; the Hex package maintainer is `elimydlarz`.

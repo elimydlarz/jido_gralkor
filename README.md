@@ -180,7 +180,7 @@ request = %Gralkor.Capture{
 :ok = Gralkor.Client.impl().flush_and_await(request.session_id, 30_000)
 ```
 
-Use `route: {:lenses, ["personal-chat", "observations"]}` to process a turn through selected Lenses. Repeated names run once; different Lenses sharing a Destination remain independent. Direct and Lens turns may alternate in one session. Each accepted turn retains its route definitions and identity across later runtime replacement or termination. Turns keep their append order within each route batch, and batches run in first-selection order. For example, direct A, Lens B, direct C flushes the direct batch A/C and then the Lens batch B. Capture retries are not exactly-once delivery: an uncertain write or await timeout can produce duplicates.
+Use `route: {:lenses, ["personal-chat", "observations"]}` to process a turn through selected Lenses. Repeated names run once; different Lenses sharing a Destination remain independent. Direct and Lens turns may alternate in one session. Each accepted turn retains its route definitions and identity across later runtime replacement or termination. Turns keep their append order within each route batch, and batches run in first-selection order. For example, direct A, Lens B, direct C flushes the direct batch A/C and then the Lens batch B. Capture retries are not exactly-once delivery: an uncertain write or await timeout can produce duplicates. Inference-provider failures during a capture write (rate limits, provider or refusal errors) are logged and dropped rather than retried by the capture buffer, because the provider clients already retry them.
 
 Positional capture adapters are retired and raise migration guidance. `Client.personal_graph_id/1` resolves the private graph for the same identifier. The deprecated `operator_graph_id/1` helper delegates to that corrected resolution. Do not pass a resolved graph as `operator_id`.
 
@@ -864,7 +864,7 @@ The Jido glue:
 - `JidoGralkor.Canonical` — normalises a Jido/ReAct turn into the canonical `[%Gralkor.Message{role, content}]` shape.
 - `JidoGralkor.Lifecycle` — `Jido.AgentServer.Lifecycle` impl whose sole job is the death-triggered flush.
 - `JidoGralkor.ContextRotator` — synchronous `rotate_now/2` for in-life context consolidation.
-- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that always calls runtime-targeted `Gralkor.Client.search/2` for the current operator, using optional Destination and Lens selectors from that invocation. It works before a thread is committed and short-circuits only a blank query.
+- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls runtime-targeted `Gralkor.Client.search/2` for the current operator (or untargeted `search/1` when the tool context carries no runtime) for the current operator, using optional Destination and Lens selectors from that invocation. It works before a thread is committed and short-circuits only a blank query.
 - `JidoGralkor.Actions.MemoryAdd` — fire-and-forget ReAct tool.
 - `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
 - `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's `personal/<operator id>` graph.
