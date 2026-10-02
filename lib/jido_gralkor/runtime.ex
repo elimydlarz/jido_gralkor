@@ -391,7 +391,8 @@ defmodule JidoGralkor.Runtime do
           {:halt, {:error, {:retired_definition_name, :destinations, "operator", "personal"}}}
 
         reserved_provenance ->
-          {:halt, {:error, {:reserved_provenance_syntax, collection, reserved_provenance}}}
+          {name, delimiter} = reserved_provenance
+          {:halt, {:error, {:reserved_provenance_syntax, collection, name, delimiter}}}
 
         true ->
           {:cont, :ok}
