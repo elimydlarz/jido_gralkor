@@ -58,8 +58,7 @@ defmodule Gralkor.Config do
   defp embedded_spec do
     case System.get_env("GRALKOR_DATA_DIR") do
       nil -> nil
-      "" -> nil
-      dir -> {:embedded, Path.expand(dir)}
+      dir -> if String.trim(dir) == "", do: nil, else: {:embedded, Path.expand(dir)}
     end
   end
 
