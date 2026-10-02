@@ -534,15 +534,43 @@ defmodule JidoGralkor.PluginTest do
 
   describe "when an agent turn completes > while a thread has committed to agent state" do
     test "then the turn is sent for capture as canonical messages under that thread's session id" do
-      %Gralkor.Capture{session_id: session_id, messages: messages} = completed_capture()
-      assert session_id == "thr-42"
+      InMemory.set_capture(:ok)
+      request_id = "req-server"
+      pid = start_server_agent("server-operator-completion")
+
+      :sys.replace_state(pid, fn server_state ->
+        update_in(server_state.agent.state, fn agent_state ->
+          agent_state
+          |> Map.put(:__thread__, %{id: "thr-42"})
+          |> Map.put(:user_name, "Eli")
+          |> Map.put(:__strategy__, %{
+            request_traces: %{
+              request_id => %{events: [%{kind: :llm_completed, data: %{text: "thinking"}}]}
+            }
+          })
+          |> Map.put(:requests, %{request_id => %{query: "what did I say?"}})
+        end)
+      end)
+
+      signal =
+        Signal.new!("ai.request.completed", %{request_id: request_id, result: "you said hi"},
+          source: "/test"
+        )
+
+      assert {:ok, _agent} = Jido.AgentServer.call(pid, signal)
+
+      assert [[^pid, %Gralkor.Capture{session_id: "thr-42", messages: messages}]] =
+               InMemory.captures()
+
       assert Enum.all?(messages, &match?(%Message{}, &1))
     end
 
-    test "and capture explicitly selects personal for the unchanged operator identity" do
-      %Gralkor.Capture{operator_id: operator_id, route: route} = completed_capture()
+    test "and capture selects the mounted capture Destination for the unchanged operator identity" do
+      %Gralkor.Capture{operator_id: operator_id, route: route} =
+        completed_capture(capture_destination: "memory")
+
       assert operator_id == "user-42"
-      assert route == {:direct, "personal"}
+      assert route == {:direct, "memory"}
     end
 
     test "and the user name held in agent state is forwarded with the capture" do
