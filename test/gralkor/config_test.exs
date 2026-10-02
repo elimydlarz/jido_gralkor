@@ -61,6 +61,15 @@ defmodule Gralkor.ConfigTest do
     end
   end
 
+  describe "when the FalkorDB connection is resolved > while the data directory is blank or only whitespace" do
+    test "then it counts as unset" do
+      for blank <- ["", "   ", "\t\n "] do
+        System.put_env("GRALKOR_DATA_DIR", blank)
+        assert Config.falkordb_spec() == nil
+      end
+    end
+  end
+
   describe "when the FalkorDB connection is resolved > while a remote configuration carrying a host and a port is set" do
     test "then a remote connection carrying that configuration unchanged is returned" do
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
