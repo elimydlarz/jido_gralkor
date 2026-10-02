@@ -115,3 +115,6 @@ when a signal of any other type arrives
   then the plugin lets the signal continue untouched
   and nothing is captured
   and nothing is recalled
+
+if a memory signal hook cannot identify its owning AgentServer
+  then the callback raises identifying the missing owner

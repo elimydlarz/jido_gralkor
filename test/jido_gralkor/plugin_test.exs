@@ -984,6 +984,25 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
+  describe "if a memory signal hook cannot identify its owning AgentServer" do
+    test "then the callback raises identifying the missing owner" do
+      ag =
+        agent("unregistered-operator", thread_id: "thread-one")
+        |> put_in([:state, :__memory__], lens_plugin_state())
+
+      signal = Signal.new!("ai.react.query", %{query: "hi"}, source: "/test")
+
+      for hook_context <- [
+            %{agent: ag, jido_instance: nil, partition: nil},
+            %{agent: ag, jido_instance: PluginTestJido, partition: nil}
+          ] do
+        assert_raise ArgumentError, ~r/cannot identify its owning Jido.AgentServer/, fn ->
+          Plugin.handle_signal(signal, hook_context)
+        end
+      end
+    end
+  end
+
   defp completed_without_thread do
     InMemory.set_capture(:ok)
     request_id = "req-first-complete"
