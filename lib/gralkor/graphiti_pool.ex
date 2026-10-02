@@ -14,7 +14,7 @@ defmodule Gralkor.GraphitiPool do
   use monitored admission through the GenServer because every group shares one
   locally owned Redis connection; searches do not enter that queue.
 
-  See `test-trees/unit/graphiti-pool_TEST_TREES.md`.
+  See `test-trees/integration/graphiti-pool_TEST_TREES.md`.
   """
 
   use GenServer
