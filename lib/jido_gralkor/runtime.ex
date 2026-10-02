@@ -796,14 +796,14 @@ defmodule JidoGralkor.Runtime do
 
         case retry(delivery, &(&1 == :ok)) do
           {:ok, :ok} ->
-            callback.(%{
+            report_outcome(state.owner, callback, %{
               invocation_id: field(invocation, :id),
               artefact: artefact,
               outcome: :delivered
             })
 
           {:abandoned, {:error, reason}} ->
-            callback.(%{
+            report_outcome(state.owner, callback, %{
               invocation_id: field(invocation, :id),
               artefact: artefact,
               outcome: {:abandoned, %{stage: :delivery, reason: reason}}
@@ -819,11 +819,15 @@ defmodule JidoGralkor.Runtime do
             {:production_failed, failure}
           end
 
-        callback.(%{
+        report_outcome(state.owner, callback, %{
           invocation_id: field(invocation, :id),
           outcome: outcome
         })
     end
+  end
+
+  defp report_outcome(owner, callback, outcome) do
+    if Process.alive?(owner), do: callback.(outcome), else: :ok
   end
 
   defp retry(operation, success?) do
