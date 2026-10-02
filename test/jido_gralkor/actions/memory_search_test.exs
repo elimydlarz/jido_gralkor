@@ -27,6 +27,21 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     end
   end
 
+  defmodule LargeResultStorage do
+    @behaviour Gralkor.Destination.Storage
+
+    @impl true
+    def search(_destination, _operator_id, _query, _result_type, _max_results, _opts) do
+      {:ok,
+       for index <- 1..200 do
+         %{
+           fact: "fact #{index} " <> String.duplicate("𝄞", 300),
+           sources: [%{lens: "observations"}]
+         }
+       end}
+    end
+  end
+
   defmodule FailingDestinationStorage do
     @behaviour Gralkor.Destination.Storage
 
@@ -199,6 +214,18 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
 
       assert text =~ "Lens: observations\n"
       assert text =~ "Reflection: generalisations\n"
+    end
+  end
+
+  describe "when the memory search tool runs with a usable query > while Search returns results > while the tool context supplies no byte budget" do
+    test "then the response fits within 65,536 bytes" do
+      Application.put_env(:jido_gralkor, :destination_storage, LargeResultStorage)
+
+      assert {:ok, %{result: text} = result} =
+               run_search(%{query: "launch", destinations: ["observations"]})
+
+      assert text =~ "Omitted facts:"
+      assert byte_size(Jason.encode!(%{ok: true, result: result})) <= 65_536
     end
   end
 
