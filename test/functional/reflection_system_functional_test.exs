@@ -975,7 +975,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when inference returns a structured output for the current step > if a declared output key is missing" do
+  describe "when inference returns a structured output for the current step > if a declared output key is missing > while the step is not the final step" do
     test "then the Reflection fails identifying its name, current step, and missing key",
          context do
       assert {:error,
@@ -983,6 +983,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Runner.run(reflection(context), invocation(),
                  inference: fn _ -> {:ok, %{output: %{}}} end
                )
+    end
+  end
+
+  describe "when inference returns a structured output for the current step > if a declared output key is missing > while the step is the final step" do
+    test "then the Reflection fails identifying its name and missing artefact", context do
+      inference = fn
+        %{step: %{label: "gather"}} -> {:ok, %{output: %{"facts" => ["fact one"]}}}
+        %{step: %{label: "synthesise"}} -> {:ok, %{output: %{}}}
+      end
+
+      assert {:error, failure} =
+               Runner.run(reflection(context), invocation(), inference: inference)
+
+      assert failure == %{reflection: "generalisation", reason: :missing_artefact}
     end
   end
 
@@ -1452,15 +1466,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  {:production_failed,
                   %{reflection: "review", step: "review", reason: :provider_unavailable}}
              }
-    end
-  end
-
-  describe "if a Reflection's Chain of Thought completes without a valid final structured output" do
-    test "then the Reflection fails identifying its name and missing artefact", context do
-      assert {:error, %{reflection: "generalisation", reason: :missing_artefact}} =
-               Runner.run(one_step_reflection(context), invocation(),
-                 inference: fn _ -> {:ok, %{output: %{}}} end
-               )
     end
   end
 
