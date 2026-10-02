@@ -96,7 +96,27 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
                )
 
       assert_receive {:graph_add, _, "The launch window moved to Friday.", "project update",
-                      Strict, [lens: "observations"]}
+                      Strict, _}
+    end
+
+    test "and the graph add receives the originating Lens name" do
+      store = %Store{
+        operator_id: "operator-one",
+        lens: lens("observations", "personal")
+      }
+
+      test_pid = self()
+
+      add_episode_fn = fn _group_id, _content, _source_description, _ontology, opts ->
+        send(test_pid, {:graph_opts, opts})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.add_episode(store, "content", "source", add_episode_fn: add_episode_fn)
+
+      assert_receive {:graph_opts, opts}
+      assert opts[:lens] == "observations"
     end
 
     test "and the graph add result is returned to the ingestion process" do
@@ -137,7 +157,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  describe "if a Lens store receives an unsupported addition or replacement option" do
+  describe "if a Lens store receives an unsupported addition, replacement, or search option" do
     test "then an `ArgumentError` is raised" do
       Enum.each(unsupported_operations(self()), fn operation ->
         assert_raise ArgumentError, operation
@@ -546,6 +566,11 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       :ok
     end
 
+    search_fn = fn _, _, _ ->
+      send(test_pid, :graphiti_operation_began)
+      {:ok, []}
+    end
+
     [
       fn ->
         Graphiti.add_episode(
@@ -559,6 +584,15 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
       fn ->
         Graphiti.replace_graph(replaceable_store(:personal), property_graph(),
           replace_graph_fn: replace_graph_fn,
+          unsupported_option: true
+        )
+      end,
+      fn ->
+        Graphiti.search(
+          %Store{operator_id: "operator-one", lens: lens("observations", "personal")},
+          "launch window",
+          5,
+          search_fn: search_fn,
           unsupported_option: true
         )
       end
