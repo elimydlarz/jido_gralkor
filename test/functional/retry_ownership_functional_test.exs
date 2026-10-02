@@ -208,6 +208,10 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         """
         import asyncio
         import time
+        import httpx
+        import openai
+        from google.genai.errors import ClientError
+        from graphiti_core.llm_client.errors import RateLimitError
 
         class _Results:
             def __init__(self):
@@ -219,11 +223,32 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
                 self.attempts = {"add": 0, "search": 0}
                 self.add_times = []
                 self.add_failures = None
+                self.upstream_failure = None
                 self.search_delay = 0.3
 
             async def add_episode(self, **kwargs):
                 self.attempts["add"] += 1
                 self.add_times.append(time.monotonic())
+                if self.upstream_failure == b"rate_limit":
+                    try:
+                        raise openai.RateLimitError(
+                            "Error code: 429 - rate limit reached",
+                            response=httpx.Response(
+                                429,
+                                request=httpx.Request("POST", "https://api.openai.com/v1/chat/completions"),
+                            ),
+                            body=None,
+                        )
+                    except openai.RateLimitError as error:
+                        raise RateLimitError from error
+                if self.upstream_failure == b"provider":
+                    try:
+                        raise ClientError(
+                            400,
+                            {"error": {"code": 400, "message": "API key not valid", "status": "INVALID_ARGUMENT"}},
+                        )
+                    except ClientError as error:
+                        raise Exception from error
                 if self.add_failures is None or self.attempts["add"] <= self.add_failures:
                     raise RuntimeError("graph refused the write")
 
@@ -289,24 +314,20 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     pool
   end
 
-  defp counting_buffer(result_fn) do
-    counter = :counters.new(1, [])
-    test_pid = self()
+  defp start_upstream_failing_capture_chain(upstream_failure) do
+    %{g: g} = pool = start_pool()
+    Pythonx.eval("g.upstream_failure = failure", %{"g" => g, "failure" => upstream_failure})
 
-    callback = fn _group, _agent, _user, _ontology, _turns ->
-      :counters.add(counter, 1, 1)
-      send(test_pid, {:attempt, :counters.get(counter, 1), System.monotonic_time(:millisecond)})
-      result_fn.(:counters.get(counter, 1))
-    end
+    start_supervised!(
+      {CaptureBuffer, flush_callback: Gralkor.Application.build_flush_callback(nil)}
+    )
 
-    start_supervised!({CaptureBuffer, flush_callback: callback})
-
-    counter
+    pool
   end
 
   describe "when a capture callback returns an upstream rate-limit failure" do
     test "then the capture buffer does not retry the returned failure and logs it" do
-      counter = counting_buffer(fn _n -> {:error, {:upstream_llm, :rate_limited}} end)
+      %{g: g} = start_upstream_failing_capture_chain("rate_limit")
 
       :ok =
         Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
@@ -315,27 +336,38 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
       logs =
         capture_log(fn ->
-          :ok = Native.flush("s1")
-          assert_receive {:attempt, 1, _}, 1_000
-          refute_receive {:attempt, 2, _}, 1_500
+          assert {:error, {:upstream_llm, {:rate_limited, _detail}}} =
+                   Native.flush_and_await("s1", 5_000)
         end)
 
-      assert :counters.get(counter, 1) == 1
-      assert logs =~ "upstream error"
+      assert attempts(g, "add") == 1
+      assert logs =~ "capture dropped (upstream error)"
     end
   end
 
   describe "when a capture callback returns another upstream failure" do
     test "then the capture buffer does not retry it and returns it unchanged" do
-      counter = counting_buffer(fn _n -> {:error, {:upstream_llm, :bad_request}} end)
+      %{g: g} = start_upstream_failing_capture_chain("provider")
+
+      returned =
+        GraphitiPool.add_episode(GraphitiPool, "g", "x", "captured", nil,
+          source_kind: :conversation,
+          writer: :direct
+        )
+
+      assert {:error, {:upstream_llm, {:provider, detail}}} = returned
+      assert detail =~ "API key not valid"
 
       :ok =
         Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
           Message.new("user", "x")
         ])
 
-      assert {:error, {:upstream_llm, :bad_request}} = Native.flush_and_await("s1", 2_000)
-      assert :counters.get(counter, 1) == 1
+      capture_log(fn ->
+        assert Native.flush_and_await("s1", 5_000) == returned
+      end)
+
+      assert attempts(g, "add") == 2
     end
   end
 
