@@ -839,8 +839,7 @@ defmodule JidoGralkor.RuntimeTest do
                       %{
                         invocation_id: "statusless-callback",
                         artefact: ^artefact,
-                        outcome:
-                          {:abandoned, %{stage: :delivery, reason: :connection_closed}}
+                        outcome: {:abandoned, %{stage: :delivery, reason: :connection_closed}}
                       }}
     end
   end
