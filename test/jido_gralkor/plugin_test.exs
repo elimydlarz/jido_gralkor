@@ -12,6 +12,30 @@ defmodule JidoGralkor.PluginTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
   end
 
+  defmodule PluginTestJido do
+    use Jido, otp_app: :jido_gralkor
+  end
+
+  defmodule RecordToolContext do
+    use Jido.Action, name: "record_tool_context", schema: []
+
+    def run(params, _context),
+      do: {:ok, %{recorded_tool_context: Map.get(params, :tool_context)}}
+  end
+
+  defmodule ServerAgent do
+    use Jido.Agent,
+      name: "plugin_test_server_agent",
+      default_plugins: %{__memory__: false},
+      plugins: [
+        {JidoGralkor.Plugin, %{agent_name: "Susu", capture_destination: "personal"}}
+      ],
+      signal_routes: [
+        {"ai.react.query", RecordToolContext},
+        {"ai.request.completed", RecordToolContext}
+      ]
+  end
+
   setup_all do
     {:ok, _applications} = Application.ensure_all_started(:jido_signal)
     :ok
@@ -19,6 +43,7 @@ defmodule JidoGralkor.PluginTest do
 
   setup do
     InMemory.reset()
+    start_supervised!({Jido, name: PluginTestJido, otp_app: :jido_gralkor})
 
     start_supervised!(
       {JidoGralkor.Runtime, owner: self(), configuration: runtime_configuration()}
