@@ -4,6 +4,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
   @moduletag :integration
   @moduletag timeout: 10_000
 
+  import ExUnit.CaptureLog
+
   alias Gralkor.Client.InMemory
   alias JidoGralkor.BlockingFlushClient
   alias JidoGralkor.ContextRotator
@@ -109,6 +111,19 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
 
       assert Process.alive?(pid)
     end
+
+    test "and the rotation is logged naming both session ids" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+      seed_thread(pid, "pre-rotation")
+
+      log =
+        capture_log(fn ->
+          assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+        end)
+
+      assert log =~ "context rotated — session:pre-rotation→#{committed_thread_id(pid)}"
+    end
   end
 
   describe "when context rotation is requested > while the agent has a committed thread > while its session flush succeeds > while recent entries are retained > while the thread holds more" do
@@ -170,8 +185,8 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
     end
   end
 
-  describe "when context rotation is requested > while the agent has a committed thread > if installing the fresh thread fails after flushing" do
-    test "then the failure reason is returned to the caller" do
+  describe "when context rotation is requested > while the agent has a committed thread > if the committed thread disappears during the flush" do
+    test "then the installation failure is returned to the caller" do
       pid = start_agent()
       seed_thread(pid, "pre-rotation")
 
@@ -184,6 +199,19 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
 
       assert {:error, :thread_missing_after_flush} = rotate_after_thread_removed(pid)
       assert Process.alive?(pid)
+    end
+
+    test "and the failure is logged naming the pre-rotation session id" do
+      pid = start_agent()
+      seed_thread(pid, "pre-rotation")
+
+      log =
+        capture_log(fn ->
+          assert {:error, :thread_missing_after_flush} = rotate_after_thread_removed(pid)
+        end)
+
+      assert log =~ "failed to swap thread — session:pre-rotation"
+      assert log =~ ":thread_missing_after_flush"
     end
   end
 
@@ -214,6 +242,21 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
       assert {:error, :backend_down} = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
       assert Process.alive?(pid)
     end
+
+    test "and the failure is logged naming the pre-rotation session id" do
+      InMemory.set_flush_and_await({:error, :backend_down})
+      pid = start_agent()
+      seed_thread(pid, "pre-rotation")
+
+      log =
+        capture_log(fn ->
+          assert {:error, :backend_down} =
+                   ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+        end)
+
+      assert log =~ "flush failed — session:pre-rotation"
+      assert log =~ ":backend_down"
+    end
   end
 
   describe "when context rotation is requested > while the agent has no committed thread" do
@@ -239,6 +282,19 @@ defmodule JidoGralkor.ContextRotatorIntegrationTest do
 
       assert :ok = ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
       assert Process.alive?(pid)
+    end
+  end
+
+  describe "when context rotation is requested > if the agent's state cannot be read" do
+    test "then the read failure is returned without requesting any flush" do
+      InMemory.set_flush_and_await(:ok)
+      pid = start_agent()
+      :ok = Jido.stop_agent(LifecycleTestJido, pid)
+
+      assert {:error, {:state_read_failed, _reason}} =
+               ContextRotator.rotate_now(pid, flush_timeout_ms: 1_000)
+
+      assert InMemory.flush_and_awaits() == []
     end
   end
 
