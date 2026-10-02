@@ -289,6 +289,8 @@ Replacement supplies all three consumer collections, not a patch. Include every 
 
 The consumer owns persistence and scheduling. Save the configuration in the application's durable store and supply it again through the plugin's `runtime_config` when starting a replacement agent. Work interrupted by agent termination does not survive the restart; use stable invocation IDs when resubmitting it.
 
+Validation rejects the complete candidate when it contains a blank or duplicate name, an unknown definition field, a name reserved by a packaged definition, a Destination under the reserved `personal/` or `operator/` namespaces, a retired `operator` or `default` name, a Lens or Reflection name containing a provenance delimiter, a reference to an unregistered Destination, a Lens mixing appending and replacement fields, an invalid ingestion module, ontology, or Chain of Thought, or a custom entity kind named `Entity`, `Episodic`, or `Community`. Reads observe either the complete previous snapshot or the complete replacement, never a mixture. Changing or removing a definition never migrates or deletes stored memory: stored provenance keeps the Lens or Reflection name it was written under, delivered artefacts stay unchanged, and graphs remain in place.
+
 ### `JidoGralkor.ContextRotator.rotate_now/2`
 
 | Option | Default | What it does |
@@ -777,9 +779,11 @@ callback = fn result -> send(review_consumer, {:release_review, result}) end
   )
 ```
 
+`reflect/5` accepts only `:tools`, `:tool_context`, `:inference`, and `:tool_executor` options; any other option returns `{:error, {:unsupported_reflection_options, keys}}` before production starts, so callers cannot override artefact identity or the retry window.
+
 The callback eventually receives a map with `:invocation_id`, the terminal `:outcome`, and `:artefact` when production succeeded. A successful delivery reports `outcome: :delivered`. A production failure outside the HTTP 4xx/5xx classifications reports `{:production_failed, reason}`. An HTTP 4xx production failure or exhausted HTTP 5xx retries reports `{:abandoned, %{stage: :production, reason: reason}}`. Delivery abandonment reports `{:abandoned, %{stage: :delivery, reason: reason}}` and still includes the produced artefact.
 
-Each admitted invocation progresses independently. A 5xx failure from inference, packaged-generalisation related-memory retrieval, or Destination delivery retries with exponential backoff until success or twenty-four hours from the first failed attempt. A 4xx failure is abandoned immediately. Unfinished work terminates with the agent without invoking its callback; the consumer owns durable scheduling and may resubmit after its supervisor starts a replacement agent.
+Each admitted invocation progresses independently. A 5xx failure from inference, packaged-generalisation related-memory retrieval, or Destination delivery retries with exponential backoff until success or twenty-four hours from that stage's first failed attempt. A 4xx failure, or a delivery failure carrying no HTTP status, is abandoned immediately. Unfinished work terminates with the agent, whether it stops normally or crashes, without invoking its callback; the consumer owns durable scheduling and may resubmit after its supervisor starts a replacement agent.
 
 Each inline Chain of Thought contains an ordered, non-empty `steps` list. A step declares a non-blank `label`, natural-language `directions`, and an exact non-empty structured `output` schema. Output types are `string`, `boolean`, `integer`, recursively typed arrays such as `Array<string>`, and exact objects such as `{ content: string; level: integer }`. Later directions may interpolate only prior outputs with `{{output_name}}`. Each step receives the invocation identity and context, completed lensed representations, host tools, and tool context. The final step becomes one `%Gralkor.Artefact{}` whose fields are exactly `id` and `payload`.
 

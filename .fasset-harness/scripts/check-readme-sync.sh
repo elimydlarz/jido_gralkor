@@ -57,7 +57,6 @@ surface_files=(
   .agents/skills/publish/SKILL.md
   DESTINATIONS.md
   PERSONAL_MEMORY_MIGRATION.md
-  RUNTIME_CONFIG.md
 )
 files=("README.md" "${surface_files[@]}")
 
