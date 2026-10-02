@@ -88,6 +88,7 @@ when an episode is added
     and the existing episode extraction is instructed to preserve source attribution and epistemic wording
     and no separate presentation-classification operation is invoked
   while an episode identifier is supplied
+    then concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent
     when that identifier does not exist
       then one episode is created under that identifier through the normal extraction path
       and durable extraction completion is recorded after the normal path succeeds
@@ -99,7 +100,6 @@ when an episode is added
         and durable extraction completion is recorded after it succeeds
     when that identifier exists with conflicting immutable episode content
       then the add returns an episode conflict and leaves the original unchanged
-    and concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent
 
 when one episode is requested by exact identifier
   then the matching episode content and immutable source fields are returned
@@ -154,24 +154,24 @@ if inserting a supplied relationship fails
 
 when a fact search is run for a group
   then the graph library's edge search is invoked with the requested result count
-  where edge types are supplied
-    then the graph library's edge search is restricted to those ontology relationship types
   and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps
   and each returned edge identifies its originating episodes by identifier, source kind, and source description
   and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints
+  where edge types are supplied
+    then the graph library's edge search is restricted to those ontology relationship types
 
 if running a fact search raises inside the graph library
   then an error carrying the raised exception is returned
 
 when an episode search is run for a group
   then the graph library is asked for episodes only, with the requested result count
+  and it is restricted to the physically encoded group id the episodes were written under
+  and each returned episode is rendered with the body that was written and its source description
+  and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned
   when the query exceeds the graph library's full-text limit
     then the graph library receives a bounded non-empty query containing the earliest supported terms
   when Lens names are supplied
     then writer filtering occurs before the requested result count
-  and it is restricted to the physically encoded group id the episodes were written under
-  and each returned episode is rendered with the body that was written and its source description
-  and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned
   when only durably extraction-complete episodes are requested
     then every unmarked episode is excluded
 

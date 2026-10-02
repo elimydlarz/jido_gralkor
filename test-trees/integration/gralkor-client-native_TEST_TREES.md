@@ -88,6 +88,7 @@ when memory is added with a group and content
   and storage-owned direct writer provenance is recorded without a Lens
   and the generated name combines the millisecond timestamp with a positive monotonic integer
   and success is returned once the graph accepts the write
+  and generic entity and relationship extraction remains enabled without an application-owned schema
   if the graph fails
     then that failure is returned unchanged
   then jido_gralkor's built-in ontology is applied, so a caller neither supplies nor configures one
@@ -99,7 +100,6 @@ when memory is added with a group and content
       then the supplied map or list is forwarded as its JSON encoding
   where no source description is supplied
     then the source retained beneath storage-owned direct provenance is "manual"
-  and generic entity and relationship extraction remains enabled without an application-owned schema
 
 when an index and constraint rebuild is requested
   then the rebuild is applied to the whole graph rather than to a single group

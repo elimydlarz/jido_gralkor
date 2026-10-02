@@ -14,13 +14,13 @@ where Graphiti stores a Destination artefact output
     and the episode body contains exactly the artefact identifier and payload
     and Graphiti records durable extraction completion only after every graph effect succeeds
   when that artefact is written again after an uncertain response
+    then exactly one episode carrying that artefact remains searchable
     while durable extraction completion was recorded
       then Graphiti confirms the existing episode without repeating extraction
     while the episode exists but extraction completion was not recorded
       then canonical lookup retains the exact episode artefact as incomplete rather than reporting success
       and public artefact search excludes that incomplete artefact
       and Graphiti resumes the normal extraction path before reporting success
-    and exactly one episode carrying that artefact remains searchable
   when artefact search encounters historical complete episodes carrying the same artefact identifier
     while their immutable payloads are equal
       then search returns one artefact

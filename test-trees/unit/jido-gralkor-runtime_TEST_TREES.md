@@ -100,11 +100,11 @@ when a configured ontology declares another entity kind
   then it remains eligible for configuration
 
 when search definitions are resolved from an active runtime
+  then later replacement does not mutate the returned definitions
   while no Destination names are supplied
     then every accessible Destination and every selected Lens resolve from one snapshot
   while Destination and Lens names are supplied
     then those definitions resolve from one snapshot in first-selected order without duplicates
-  and later replacement does not mutate the returned definitions
   if any selected name is unknown
     then resolution fails without returning a partial result
 
