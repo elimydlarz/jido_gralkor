@@ -108,10 +108,15 @@ when one episode is requested by exact identifier
     then lookup reports not found
 
 if adding an episode raises inside the graph library
-  then an error carrying only the raised exception's class and message is returned
-  and the logged diagnostic is a single concise line, so neither the full traceback nor an embedding vector is written to the log
-  if the raised exception carries no detail
-    then the returned reason falls back to a message stating that a Python exception was raised with no detail available
+  then the logged diagnostic is a single concise line, so neither the full traceback nor an embedding vector is written to the log
+  while the exception is an inference provider's rate limit
+    then an upstream rate-limit failure carrying the exception's class and message is returned
+  while the exception is any other inference provider failure
+    then an upstream provider failure carrying the exception's class and message is returned
+  while the exception is not an inference provider failure
+    then an error carrying only the raised exception's class and message is returned
+    if the raised exception carries no detail
+      then the returned reason falls back to a message stating that a Python exception was raised with no detail available
 
 when an episode is removed
   then the graph library deletes that episode along with the nodes and edges it orphans
