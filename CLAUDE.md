@@ -84,7 +84,7 @@ Private-memory rename and cutover tooling is documented in [PERSONAL_MEMORY_MIGR
 
 ## Testing
 
-Legacy tests use `Gralkor.Client.InMemory` and reset it per scenario. Lens tests additionally configure `lens_storage: Gralkor.Lens.Storage.InMemory` and start a fresh storage process per test; pinning only the client does not intercept `Client.ingest/1` or `search/1`.
+Legacy tests use `Gralkor.Client.InMemory` and reset it per scenario. Reflection retry timing is substituted in tests through the test-only `:jido_gralkor` settings `:reflection_retry_clock` and `:reflection_retry_sleep`; production leaves both unset. Lens tests additionally configure `lens_storage: Gralkor.Lens.Storage.InMemory` and start a fresh storage process per test; pinning only the client does not intercept `Client.ingest/1` or `search/1`.
 
 Any test that starts a `Gralkor.GraphitiPool` needs a credential present for each provider its model specs select, because `validate_native_models!/2` refuses to start without one — even when client construction is stubbed and no provider is called. `Gralkor.TestEnv.load/1` therefore sets an obvious placeholder for `GOOGLE_API_KEY` and `OPENAI_API_KEY` when the variable is genuinely absent, after loading `.env`; a real configured key always wins.
 

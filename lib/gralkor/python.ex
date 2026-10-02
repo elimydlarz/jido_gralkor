@@ -94,8 +94,12 @@ defmodule Gralkor.Python do
   `:persistent_term` short-circuits the second call so we never hit the NIF's
   "already been initialized" guard when more than one `Gralkor.Python` boots.
   """
+  @spec ensure_initialised() :: :ok | {:error, term()}
+  def ensure_initialised, do: ensure_initialised(&Pythonx.uv_init/1)
+
+  @doc false
   @spec ensure_initialised((String.t() -> any())) :: :ok | {:error, term()}
-  def ensure_initialised(initialise \\ &Pythonx.uv_init/1) do
+  def ensure_initialised(initialise) do
     if :persistent_term.get({__MODULE__, :uv_inited}, false) do
       :ok
     else
