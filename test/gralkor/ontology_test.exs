@@ -523,6 +523,31 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
+  describe "when an ontology declares an aliased relationship source > if two properties of one relationship share a name" do
+    test "then compilation fails with an error naming the duplicated property" do
+      assert_raise CompileError, ~r/field :since is declared more than once/, fn ->
+        defmodule DuplicateEdgePropertyOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+          entity User do
+            field(:handle, :string)
+          end
+
+          entity Preference do
+            field(:description, :string)
+          end
+
+          from User do
+            prefers Preference do
+              field(:since, :string)
+              field(:since, :string)
+            end
+          end
+        end
+      end
+    end
+  end
+
   describe "when an ontology declares an aliased relationship source > if repeated verbs have different edge-property schemas" do
     test "then compilation fails with an error naming the conflicting verb" do
       assert_raise CompileError, ~r/edge "PREFERS" .*conflicting field schemas/, fn ->
@@ -655,7 +680,7 @@ defmodule Gralkor.OntologyTest do
     defmodule SusuLikeOntology do
       use Gralkor.Ontology, entities: :strict, relationships: :scoped
 
-      entity User do
+      entity User, "A person who talks to the agent." do
         field(:handle, :string, required: true, doc: "stable login handle")
         field(:timezone, :string, doc: "IANA tz")
       end
@@ -678,9 +703,24 @@ defmodule Gralkor.OntologyTest do
                [:edge_type_map, :edge_types, :entity_types, :excluded_entity_types]
     end
 
-    test "and `:entity_types` lists one `%{name: String.t(), fields: [field()]}` entry per declared entity, in declaration order" do
+    test "and `:entity_types` lists one `%{name: String.t(), description: String.t() | nil, fields: [field()]}` entry per declared entity, in declaration order" do
       ontology = SusuLikeOntology.__ontology__()
-      assert Enum.map(ontology.entity_types, & &1.name) == ["User", "Preference"]
+
+      assert ontology.entity_types == [
+               %{
+                 name: "User",
+                 description: "A person who talks to the agent.",
+                 fields: [
+                   %{name: :handle, type: :string, required: true, doc: "stable login handle"},
+                   %{name: :timezone, type: :string, required: false, doc: "IANA tz"}
+                 ]
+               },
+               %{
+                 name: "Preference",
+                 description: nil,
+                 fields: [%{name: :description, type: :string, required: true, doc: nil}]
+               }
+             ]
     end
 
     test "and `:edge_types` lists one `%{name: String.t(), fields: [field()]}` entry per declared verb, deduplicated across `from` blocks" do
