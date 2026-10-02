@@ -113,8 +113,9 @@ def plan(database: FalkorDB, identifiers: list[str], references: dict[str, objec
 def persist(path: Path, manifest: dict[str, object], create: bool = False) -> None:
     manifest["integrity"] = manifest_digest(manifest)
     destination = path if create else path.with_suffix(path.suffix + ".tmp")
-    flags = os.O_WRONLY | os.O_CREAT | (os.O_EXCL if create else os.O_TRUNC)
-    descriptor = os.open(destination, flags, 0o600)
+    if not create and os.path.lexists(destination):
+        os.unlink(destination)
+    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     os.fchmod(descriptor, 0o600)
     with os.fdopen(descriptor, "w") as stream:
         json.dump(manifest, stream, sort_keys=True, ensure_ascii=False)
