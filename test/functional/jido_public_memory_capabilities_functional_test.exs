@@ -84,6 +84,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   @observation "A reversible canary exposed a configuration fault before broad deployment impact."
   @generalisation "Reversible limited-scope trials expose faults before broad impact across deployments, migrations, and feature releases."
 
+  defmodule FreshAgentJido do
+  end
+
   defmodule InspectingProviderFixture do
     @answer "RECOMMENDATION: Use a reversible limited-scope canary for the Payments database migration. RATIONALE: Retrieved facts show that trials expose faults before broad impact."
 
@@ -569,8 +572,15 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
           source: "/functional"
         )
 
+      start_supervised!({Registry, keys: :unique, name: Jido.registry_name(FreshAgentJido)})
+      {:ok, _owner} = Registry.register(Jido.registry_name(FreshAgentJido), fresh_agent.id, %{})
+
       assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
-               Plugin.handle_signal(query, %{agent: fresh_agent})
+               Plugin.handle_signal(query, %{
+                 agent: fresh_agent,
+                 jido_instance: FreshAgentJido,
+                 partition: nil
+               })
 
       refute Map.has_key?(tool_context, :session_id)
 
@@ -664,7 +674,11 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert log =~ ~r/JidoGralkor.Plugin handle_signal crashed: .*capture failed.*unavailable/
 
       assert_raise RuntimeError, ~r/capture failed.*unavailable/, fn ->
-        Plugin.handle_signal(signal, %{agent: agent})
+        Plugin.handle_signal(signal, %{
+          agent: agent,
+          jido_instance: Jido.default_instance(),
+          partition: nil
+        })
       end
     end
   end
@@ -1117,10 +1131,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     start_supervised!({Jido, name: jido, otp_app: :jido_gralkor})
 
     assert {:ok, pid} =
-             Jido.start_agent(jido, CompletionMemoryAgent,
-               id: "operator-one",
-               register_global: false
-             )
+             Jido.start_agent(jido, CompletionMemoryAgent, id: "operator-one")
 
     :sys.replace_state(pid, fn server_state ->
       update_in(server_state.agent.state, fn agent_state ->

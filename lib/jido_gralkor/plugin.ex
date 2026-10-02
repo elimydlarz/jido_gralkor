@@ -349,7 +349,7 @@ defmodule JidoGralkor.Plugin do
       Process.get(:"$initial_call") == {Jido.AgentServer, :init, 1} ->
         self()
 
-      is_atom(Map.get(context, :jido_instance)) and not is_nil(context.jido_instance) ->
+      match?(%{jido_instance: instance} when is_atom(instance) and not is_nil(instance), context) ->
         registered_agent_server!(context)
 
       true ->

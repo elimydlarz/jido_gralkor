@@ -117,6 +117,13 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
 
       assert {:ok, _} = PersonalGraphMigration.advance(context.connection, journal, @quiescence)
       assert permissions(journal) == 0o600
+
+      leftover = journal <> ".tmp"
+      File.write!(leftover, "interrupted write")
+      File.chmod!(leftover, 0o644)
+
+      assert {:ok, _} = PersonalGraphMigration.advance(context.connection, journal, @quiescence)
+      assert permissions(journal) == 0o600
     end
   end
 
