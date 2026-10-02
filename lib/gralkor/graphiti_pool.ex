@@ -987,7 +987,7 @@ defmodule Gralkor.GraphitiPool do
                         variable = f'entity_node_{index}'
                         labels = ':'.join(
                             '`' + label.replace('`', '``') + '`'
-                            for label in node.pop('labels')
+                            for label in node['labels']
                         )
                         params[parameter] = node
                         clauses.append(f'''
