@@ -53,5 +53,12 @@ defmodule Gralkor.ArtefactTest do
         refute Artefact.id_for(operator, invocation, reflection) == original
       end
     end
+
+    test "and the derived identifier is a version-5 UUID string" do
+      identifier = Artefact.id_for("operator", "invocation", "reflection")
+
+      assert identifier =~
+               ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
+    end
   end
 end
