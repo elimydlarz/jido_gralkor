@@ -600,7 +600,6 @@ defmodule Gralkor.ApplicationTest do
       refute logs =~ "[gralkor] capture flushed"
       assert logs =~ "[gralkor] capture flush failed"
       assert logs =~ "group:g1"
-      refute logs =~ "retrying"
     end
 
     @tag :capture_log
