@@ -1,6 +1,8 @@
 defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
   use ExUnit.Case, async: false
 
+  import Bitwise
+
   alias Gralkor.PersonalGraphMigration
 
   @quiescence %{
@@ -107,6 +109,65 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       refute text =~ "synthetic-migration-secret"
       refute text =~ "password"
       assert {:ok, _} = PersonalGraphMigration.apply(fixture.connection, journal, @quiescence)
+    end
+
+    test "and the journal is readable and writable only by its owner", context do
+      journal = prepare_history(context)
+      assert permissions(journal) == 0o600
+
+      assert {:ok, _} = PersonalGraphMigration.advance(context.connection, journal, @quiescence)
+      assert permissions(journal) == 0o600
+    end
+  end
+
+  describe "when a migration journal is prepared > if a journal already exists at that path" do
+    test "then preparation refuses without overwriting it", context do
+      seed_history(context.database, "owner")
+      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+      File.write!(journal, "existing journal")
+      graphs_before = graph_names(context.database)
+
+      assert {:error, message} =
+               PersonalGraphMigration.prepare(context.connection, ["owner"], %{}, journal)
+
+      assert message =~ "migration journal already exists"
+      assert File.read!(journal) == "existing journal"
+      assert graph_names(context.database) == graphs_before
+    end
+  end
+
+  describe "when another migration operation holds the same journal" do
+    test "then migration refuses before changing any graph", context do
+      journal = prepare_history(context)
+      before = File.read!(journal)
+      graphs_before = graph_names(context.database)
+
+      {holder, _} =
+        Pythonx.eval(
+          """
+          import fcntl
+          holder = open(path.decode() + '.lock', 'a')
+          fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+          holder
+          """,
+          %{"path" => journal}
+        )
+
+      on_exit(fn -> Pythonx.eval("holder.close()", %{"holder" => holder}) end)
+
+      for operation <- [:advance, :apply, :rollback] do
+        assert {:error, message} =
+                 apply(PersonalGraphMigration, operation, [
+                   context.connection,
+                   journal,
+                   @quiescence
+                 ])
+
+        assert message =~ "migration journal is held by another migration operation"
+      end
+
+      assert File.read!(journal) == before
+      assert graph_names(context.database) == graphs_before
     end
   end
 
@@ -223,6 +284,42 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
 
       assert {:ok, ^resumed} =
                PersonalGraphMigration.apply(clone.connection, journal, @quiescence)
+    end
+  end
+
+  describe "when controlled server recovery explicitly supplies an endpoint rebind > if the rebind does not describe a real change from the journal's recorded endpoint" do
+    test "then migration refuses before changing any graph", context do
+      original = start_endpoint_fixture(context)
+      clone = start_endpoint_fixture(context)
+      journal = prepare_history(original)
+      seed_history(clone.database, "owner")
+      before = File.read!(journal)
+      recorded = Jason.decode!(before)["endpoint_identity"]
+      original_graphs = graph_names(original.database)
+      clone_graphs = graph_names(clone.database)
+
+      for {connection, rebind, expected} <- [
+            {original.connection, %{prior_endpoint: recorded, prior_endpoint_retired: true},
+             "endpoint rebind requires a different graph endpoint"},
+            {clone.connection,
+             %{prior_endpoint: recorded, prior_endpoint_retired: true, new_endpoint: recorded},
+             "controlled endpoint rebind does not describe the supplied endpoint"}
+          ],
+          operation <- [:advance, :apply, :rollback] do
+        assert {:error, message} =
+                 apply(PersonalGraphMigration, operation, [
+                   connection,
+                   journal,
+                   @quiescence,
+                   %{endpoint_rebind: rebind}
+                 ])
+
+        assert message =~ expected
+      end
+
+      assert File.read!(journal) == before
+      assert graph_names(original.database) == original_graphs
+      assert graph_names(clone.database) == clone_graphs
     end
   end
 
@@ -401,6 +498,84 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
         assert manifest["phase"] == phase
         assert hd(manifest["graphs"])["phase"] == graph_phase
       end
+    end
+
+    test "and advance persists at most one further durable phase per call", context do
+      {journal, request_path} = command_request(context, ["owner", "partner"])
+      run_command("prepare", request_path)
+
+      for expected <- [
+            {"planned", ["copied", "planned"]},
+            {"planned", ["nodes_rewritten", "planned"]},
+            {"planned", ["relationships_rewritten", "planned"]},
+            {"planned", ["verified", "planned"]},
+            {"planned", ["verified", "copied"]},
+            {"planned", ["verified", "nodes_rewritten"]},
+            {"planned", ["verified", "relationships_rewritten"]},
+            {"verified", ["verified", "verified"]},
+            {"verified", ["verified", "verified"]}
+          ] do
+        manifest = run_command("advance", request_path)
+        assert phases(manifest) == expected
+        assert Jason.decode!(File.read!(journal)) == manifest
+      end
+    end
+
+    test "and apply continues through every durable phase to verified", context do
+      {journal, request_path} = command_request(context, ["owner", "partner"])
+      run_command("prepare", request_path)
+      assert phases(run_command("advance", request_path)) == {"planned", ["copied", "planned"]}
+
+      manifest = run_command("apply", request_path)
+      assert phases(manifest) == {"verified", ["verified", "verified"]}
+      assert Jason.decode!(File.read!(journal)) == manifest
+    end
+  end
+
+  describe "when the migration command receives explicit JSON requests for a private graph > if the request's connection names an unsupported field" do
+    test "then the command reports that field without connecting to a graph", context do
+      absent_socket = Path.join(context.directory, "never-created.socket")
+      journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+      request_path = journal <> ".request"
+
+      File.write!(
+        request_path,
+        Jason.encode!(%{
+          connection: %{unix_socket_path: absent_socket, sentinel_field: true},
+          operator_ids: ["owner"],
+          configuration_references: %{},
+          journal_path: journal,
+          quiescence: @quiescence
+        })
+      )
+
+      for operation <- ["plan", "prepare"] do
+        assert_raise Mix.Error, "unsupported graph connection field: sentinel_field", fn ->
+          Mix.Tasks.Gralkor.MigratePersonal.run([operation, request_path])
+        end
+      end
+
+      refute File.exists?(journal)
+      refute File.exists?(absent_socket)
+    end
+  end
+
+  describe "when the migration command receives explicit JSON requests for a private graph > if the migration operation fails" do
+    test "then the command exits with the failure reason", context do
+      {journal, request_path} = command_request(context, ["owner"])
+
+      Pythonx.eval("[database.select_graph(name).delete() for name in database.list_graphs()]", %{
+        "database" => context.database
+      })
+
+      error =
+        assert_raise Mix.Error, fn ->
+          Mix.Tasks.Gralkor.MigratePersonal.run(["prepare", request_path])
+        end
+
+      assert Exception.message(error) =~ "source graph missing"
+      assert error.exit_status == 1
+      refute File.exists?(journal)
     end
   end
 
@@ -1200,6 +1375,33 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert {:ok, ^restored} =
                PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
     end
+
+    test "and a later advance or apply refuses", context do
+      journal = prepare_history(context)
+
+      assert {:ok, _result} =
+               PersonalGraphMigration.apply(context.connection, journal, @quiescence)
+
+      assert {:ok, %{"phase" => "rolled_back"}} =
+               PersonalGraphMigration.rollback(context.connection, journal, @quiescence)
+
+      rolled_back = File.read!(journal)
+      graphs_before = graph_names(context.database)
+
+      for operation <- [:advance, :apply] do
+        assert {:error, message} =
+                 apply(PersonalGraphMigration, operation, [
+                   context.connection,
+                   journal,
+                   @quiescence
+                 ])
+
+        assert message =~ "migration has entered rollback"
+      end
+
+      assert File.read!(journal) == rolled_back
+      assert graph_names(context.database) == graphs_before
+    end
   end
 
   describe "when an application rolls back a private graph migration before admitting new writers > if a target changed after verification" do
@@ -1223,6 +1425,40 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert message =~ "target contains conflicting data"
       assert {:ok, ^before} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
     end
+  end
+
+  defp permissions(path), do: File.stat!(path).mode &&& 0o777
+
+  defp command_request(context, operator_ids) do
+    Enum.each(operator_ids, &seed_history(context.database, &1))
+    original_shell = Mix.shell()
+    Mix.shell(Mix.Shell.Process)
+    on_exit(fn -> Mix.shell(original_shell) end)
+    journal = Path.join(context.directory, "#{System.unique_integer([:positive])}.json")
+    request_path = journal <> ".request"
+
+    File.write!(
+      request_path,
+      Jason.encode!(%{
+        connection: Map.new(context.connection),
+        operator_ids: operator_ids,
+        configuration_references: %{},
+        journal_path: journal,
+        quiescence: @quiescence
+      })
+    )
+
+    {journal, request_path}
+  end
+
+  defp run_command(operation, request_path) do
+    Mix.Tasks.Gralkor.MigratePersonal.run([operation, request_path])
+    assert_receive {:mix_shell, :info, [json]}
+    Jason.decode!(json)
+  end
+
+  defp phases(manifest) do
+    {manifest["phase"], Enum.map(manifest["graphs"], & &1["phase"])}
   end
 
   defp episode(inventory, uuid) do
