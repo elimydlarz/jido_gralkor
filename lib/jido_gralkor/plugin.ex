@@ -165,17 +165,19 @@ defmodule JidoGralkor.Plugin do
   defp has_opt?(_, _), do: false
 
   @impl Jido.Plugin
-  def handle_signal(%Signal{type: "ai.react.query"} = signal, %{agent: agent}) do
+  def handle_signal(%Signal{type: "ai.react.query"} = signal, %{agent: agent} = context) do
     agent_name = agent_name(agent)
+    owner = owning_agent_server!(context)
 
     extras =
       case thread_id(agent) do
-        nil -> %{agent_name: agent_name, gralkor_runtime: self()}
-        id -> %{session_id: id, agent_name: agent_name, gralkor_runtime: self()}
+        nil -> %{agent_name: agent_name, gralkor_runtime: owner}
+        id -> %{session_id: id, agent_name: agent_name, gralkor_runtime: owner}
       end
       |> Map.merge(lens_context(agent))
 
-    {:ok, {:continue, signal |> merge_tool_context(extras) |> retain_request_context()}}
+    {:ok,
+     {:continue, signal |> merge_tool_context(extras, owner) |> retain_request_context()}}
   end
 
   def handle_signal(
@@ -183,10 +185,10 @@ defmodule JidoGralkor.Plugin do
           type: "ai.request.completed",
           data: %{request_id: request_id, result: result}
         },
-        %{agent: agent}
+        %{agent: agent} = context
       )
       when is_binary(request_id) and is_binary(result) do
-    capture_turn(agent, request_id, {:completed, result}, selected_lens(agent, request_id))
+    capture_turn(context, request_id, {:completed, result}, selected_lens(agent, request_id))
     {:ok, :continue}
   end
 
@@ -195,16 +197,16 @@ defmodule JidoGralkor.Plugin do
           type: "ai.request.failed",
           data: %{request_id: request_id, error: error}
         },
-        %{agent: agent}
+        %{agent: agent} = context
       )
       when is_binary(request_id) do
-    capture_turn(agent, request_id, {:failed, error}, selected_lens(agent, request_id))
+    capture_turn(context, request_id, {:failed, error}, selected_lens(agent, request_id))
     {:ok, :continue}
   end
 
   def handle_signal(_signal, _context), do: {:ok, :continue}
 
-  defp capture_turn(agent, request_id, outcome, lens) do
+  defp capture_turn(%{agent: agent} = context, request_id, outcome, lens) do
     events =
       agent.state
       |> Map.get(:__strategy__, %{})
@@ -246,7 +248,7 @@ defmodule JidoGralkor.Plugin do
               end
 
             result =
-              Client.capture(self(), %Gralkor.Capture{
+              Client.capture(owning_agent_server!(context), %Gralkor.Capture{
                 session_id: session_id,
                 operator_id: agent.id,
                 agent_name: agent_name(agent),
@@ -336,13 +338,38 @@ defmodule JidoGralkor.Plugin do
     end
   end
 
-  defp merge_tool_context(%Signal{data: data} = signal, extras) when is_map(extras) do
+  defp owning_agent_server!(context) do
+    cond do
+      Process.get(:"$initial_call") == {Jido.AgentServer, :init, 1} ->
+        self()
+
+      is_atom(Map.get(context, :jido_instance)) and not is_nil(context.jido_instance) ->
+        registered_agent_server!(context)
+
+      true ->
+        raise ArgumentError,
+              "JidoGralkor.Plugin cannot identify its owning Jido.AgentServer: synchronous signal delivery runs plugin hooks outside the AgentServer and requires a Jido instance"
+    end
+  end
+
+  defp registered_agent_server!(%{agent: agent, jido_instance: jido_instance} = context) do
+    case Jido.whereis(jido_instance, agent.id, partition: Map.get(context, :partition)) do
+      pid when is_pid(pid) ->
+        pid
+
+      nil ->
+        raise ArgumentError,
+              "JidoGralkor.Plugin cannot identify its owning Jido.AgentServer: agent #{inspect(agent.id)} is not registered in Jido instance #{inspect(jido_instance)}"
+    end
+  end
+
+  defp merge_tool_context(%Signal{data: data} = signal, extras, owner) when is_map(extras) do
     existing_context = Map.get(data, :tool_context, %{})
 
     new_context =
       case Map.fetch(existing_context, :lens) do
         {:ok, lens} ->
-          runtime_lens!(lens)
+          runtime_lens!(owner, lens)
           extras |> Map.merge(existing_context) |> Map.merge(extras) |> Map.put(:lens, lens)
 
         :error ->
@@ -364,13 +391,13 @@ defmodule JidoGralkor.Plugin do
 
   defp retain_request_context(signal), do: signal
 
-  defp runtime_lens!(nil), do: :ok
+  defp runtime_lens!(_owner, nil), do: :ok
 
-  defp runtime_lens!(lens) when is_binary(lens) do
-    Runtime.lens!(self(), lens)
+  defp runtime_lens!(owner, lens) when is_binary(lens) do
+    Runtime.lens!(owner, lens)
   end
 
-  defp runtime_lens!(lens), do: raise(ArgumentError, "invalid Lens #{inspect(lens)}")
+  defp runtime_lens!(_owner, lens), do: raise(ArgumentError, "invalid Lens #{inspect(lens)}")
 
   defp maybe_put_lens_ref(refs, lens) when is_binary(lens) or is_nil(lens),
     do: Map.put(refs, :jido_gralkor_lens, lens)
