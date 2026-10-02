@@ -100,7 +100,7 @@ defmodule Gralkor.Application do
 
           {:error, reason} ->
             Logger.warning(
-              "[gralkor] capture flush failed — group:#{group_id} #{inspect(reason)}"
+              "[gralkor] capture flush failed — group:#{group_id} #{inspect(reason)} (retrying)"
             )
         end
 
