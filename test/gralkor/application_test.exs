@@ -156,6 +156,15 @@ defmodule Gralkor.ApplicationTest do
       assert Keyword.fetch!(opts, :falkordb_spec) == {:embedded, Path.expand(data_dir)}
     end
 
+    test "and the graph pool receives the configured embedded socket timeout" do
+      configure_embedded_socket_timeout(12_345)
+      System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
+
+      [_python, {Gralkor.GraphitiPool, opts}, _buffer] = App.children()
+
+      assert Keyword.fetch!(opts, :embedded_falkordb_socket_timeout_ms) == 12_345
+    end
+
     test "and the Python runtime is told to sweep for orphaned embedded servers, this deployment spawning one of its own" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
 
@@ -189,6 +198,15 @@ defmodule Gralkor.ApplicationTest do
       assert Keyword.fetch!(opts, :falkordb_spec) ==
                {:remote,
                 [host: "falkor.example", port: 6379, username: "alice", password: "secret"]}
+    end
+
+    test "and the graph pool receives no embedded socket timeout" do
+      configure_embedded_socket_timeout(12_345)
+      Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
+
+      [_python, {Gralkor.GraphitiPool, opts}, _buffer] = App.children()
+
+      refute Keyword.has_key?(opts, :embedded_falkordb_socket_timeout_ms)
     end
 
     test "and the Python runtime is told not to sweep for orphaned embedded servers, this deployment never having spawned one" do
@@ -730,5 +748,18 @@ defmodule Gralkor.ApplicationTest do
       rec = Pythonx.decode(rec)
       assert rec["group_id"] == Client.sanitize_group_id("operator/one")
     end
+  end
+
+  defp configure_embedded_socket_timeout(timeout_ms) do
+    original = Application.get_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms)
+
+    on_exit(fn ->
+      case original do
+        nil -> Application.delete_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms)
+        value -> Application.put_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms, value)
+      end
+    end)
+
+    Application.put_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms, timeout_ms)
   end
 end
