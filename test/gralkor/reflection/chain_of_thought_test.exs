@@ -89,14 +89,28 @@ defmodule Gralkor.Reflection.ChainOfThoughtTest do
     end
   end
 
-  describe "if a structured-output declaration uses an unsupported type" do
+  describe "if any type within a structured-output declaration is unsupported" do
     test "then parsing identifies that step and type" do
-      for type <- ["float", "number", "map", "object", "'yes' | 'no'", "date", nil] do
+      for {declaration, unsupported} <- [
+            {"float", "float"},
+            {"number", "number"},
+            {"map", "map"},
+            {"object", "object"},
+            {"'yes' | 'no'", "'yes' | 'no'"},
+            {"date", "date"},
+            {nil, nil},
+            {"Array<float>", "float"},
+            {"{ verdict: string; score: float }", "float"},
+            {"Array<{ verdict: string; weight: number }>", "number"},
+            {"{ evidence: Array<date> }", "date"}
+          ] do
         configuration = %{
-          steps: [%{label: "review", directions: "Review evidence.", output: %{"result" => type}}]
+          steps: [
+            %{label: "review", directions: "Review evidence.", output: %{"result" => declaration}}
+          ]
         }
 
-        assert {:error, {:invalid_output_type, "review", ^type}} =
+        assert {:error, {:invalid_output_type, "review", ^unsupported}} =
                  ChainOfThought.from_config(configuration)
       end
     end
