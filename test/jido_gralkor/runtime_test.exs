@@ -106,6 +106,37 @@ defmodule JidoGralkor.RuntimeTest do
         assert_receive {:DOWN, ^worker_monitor, :process, ^worker, _worker_reason}
         refute_receive {:reflection_callback, _}, 100
       end
+
+      owner = start_owner()
+      owner_monitor = Process.monitor(owner)
+
+      runtime =
+        start_owned_runtime(owner,
+          reason: :finishing_after_owner_stopped,
+          run_reflection: releasable_reflection(test_pid),
+          deliver_artefact: fn _output, _name, _operator_id, _artefact -> :ok end
+        )
+
+      assert {:ok, _} =
+               Runtime.submit_reflection(
+                 owner,
+                 "review",
+                 invocation("owner-stopped-while-finishing"),
+                 &send(test_pid, {:reflection_callback, &1}),
+                 []
+               )
+
+      assert_receive {:work_started, worker}
+      worker_monitor = Process.monitor(worker)
+      :ok = :sys.suspend(runtime)
+      send(owner, {:stop, :normal})
+      assert_receive {:DOWN, ^owner_monitor, :process, ^owner, :normal}
+
+      send(worker, :release)
+
+      assert_receive {:DOWN, ^worker_monitor, :process, ^worker, _worker_reason}
+      refute_receive {:reflection_callback, _}, 100
+      :ok = :sys.resume(runtime)
     end
   end
 
@@ -1047,6 +1078,16 @@ defmodule JidoGralkor.RuntimeTest do
 
       receive do
         :never -> {:ok, Gralkor.Artefact.new("never", %{})}
+      end
+    end
+  end
+
+  defp releasable_reflection(test_pid) do
+    fn _reflection, _invocation, _opts ->
+      send(test_pid, {:work_started, self()})
+
+      receive do
+        :release -> {:ok, Gralkor.Artefact.new("released", %{})}
       end
     end
   end
