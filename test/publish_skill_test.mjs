@@ -159,6 +159,12 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
     },
   );
 
+  await context.test("and the Hex package names `elimydlarz` as its maintainer", async () => {
+    const mix = await readFile(mixUrl, "utf8");
+
+    assert.match(mix, /maintainers:\s*\["elimydlarz"\]/);
+  });
+
   await context.test(
     "and GitHub receives a new lightweight release tag for the synchronized release commit",
     async () => {

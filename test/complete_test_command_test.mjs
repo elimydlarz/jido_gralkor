@@ -49,7 +49,7 @@ async function runAllTests({ mixStatus = 0, nodeStatus = 0 } = {}) {
 
 test("when a maintainer asks Mix to run all tests", async (context) => {
   await context.test(
-    "then `mix test.all` runs all Unit, Integration, Functional, Journey, and publish-skill contract tests",
+    "then `mix test.all` runs all Unit, Integration, Functional, Journey, and Node contract tests",
     async () => {
       const { calls } = await runAllTests();
 
