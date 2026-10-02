@@ -74,7 +74,21 @@ defmodule JidoGralkor.PluginTest do
   defp maybe_put(map, _k, nil), do: map
   defp maybe_put(map, k, v), do: Map.put(map, k, v)
 
-  defp context(agent), do: %{agent: agent}
+  defp context(agent) do
+    registry = Jido.registry_name(PluginTestJido)
+
+    case Registry.lookup(registry, agent.id) do
+      [] -> {:ok, _owner} = Registry.register(registry, agent.id, %{})
+      [{owner, _value}] when owner == self() -> :ok
+    end
+
+    %{agent: agent, jido_instance: PluginTestJido, partition: nil}
+  end
+
+  defp start_server_agent(id) do
+    {:ok, pid} = Jido.start_agent(PluginTestJido, ServerAgent, id: id)
+    pid
+  end
 
   describe "when a consumer reads the plugin's advertised actions" do
     test "then memory search, memory add, build indices, and build communities are exposed in that order for the consumer to pass as agent tools" do
