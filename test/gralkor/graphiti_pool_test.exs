@@ -500,7 +500,7 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when an episode is added > while an episode identifier is supplied" do
-    test "and concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent" do
+    test "then concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent" do
       {g, _} =
         Pythonx.eval(
           """

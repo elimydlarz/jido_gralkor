@@ -239,7 +239,7 @@ defmodule JidoGralkor.RuntimeTest do
   end
 
   describe "when search definitions are resolved from an active runtime" do
-    test "and later replacement does not mutate the returned definitions" do
+    test "then later replacement does not mutate the returned definitions" do
       start_runtime(%{reflection_configuration() | lenses: [lens_configuration()]})
 
       {lenses, destinations} = Runtime.resolve_search!(self(), ["custom"], [])

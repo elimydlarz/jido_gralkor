@@ -191,7 +191,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   describe "where Graphiti stores a Destination artefact output > when that artefact is written again after an uncertain response" do
-    test "and exactly one episode carrying that artefact remains searchable" do
+    test "then exactly one episode carrying that artefact remains searchable" do
       assert_verified(:uncertain, &assert_uncertain_response_contract/0)
     end
   end
