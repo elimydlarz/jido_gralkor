@@ -20,6 +20,9 @@
 - Built-in Reflection inference crashed on unexpected ReAct terminations; it now returns the termination reason as an error.
 - `Gralkor.Client.replace` with a non-graph value now raises the documented "invalid graph data" error.
 - The capture flush warning no longer claims a retry that the capture buffer may not perform.
+- A Reflection finishing in the instant after its AgentServer stopped could still invoke its callback; outcomes are now reported only while the owner is alive.
+- Graphiti failure diagnostics stay on one line even when an exception message spans several lines.
+- Migration journal updates no longer follow a symbolic link left at the temporary journal path.
 
 ## [11.0.0] - 2026-09-15
 
