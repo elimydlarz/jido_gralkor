@@ -524,18 +524,30 @@ defmodule Gralkor.GraphitiPoolTest do
           class _FakeGraphiti:
               def __init__(self):
                   self.driver = _Driver()
-                  self.extractions = 0
+                  self.extractions = {}
                   self.active = 0
                   self.max_active = 0
+                  self.active_by_uuid = {}
+                  self.max_active_by_uuid = {}
 
               async def add_episode(self, **kwargs):
                   from graphiti_core.nodes import EpisodicNode
-                  self.extractions += 1
+                  uid = kwargs['uuid']
+                  self.extractions[uid] = self.extractions.get(uid, 0) + 1
                   self.active += 1
                   self.max_active = max(self.max_active, self.active)
-                  await asyncio.sleep(0.05)
-                  episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                  self.active_by_uuid[uid] = self.active_by_uuid.get(uid, 0) + 1
+                  self.max_active_by_uuid[uid] = max(
+                      self.max_active_by_uuid.get(uid, 0), self.active_by_uuid[uid]
+                  )
+                  for _ in range(200):
+                      if self.active >= 2:
+                          break
+                      await asyncio.sleep(0.01)
+                  await asyncio.sleep(0.1)
+                  episode = await EpisodicNode.get_by_uuid(self.driver, uid)
                   await episode.save(self.driver)
+                  self.active_by_uuid[uid] -= 1
                   self.active -= 1
 
           _FakeGraphiti()
@@ -545,27 +557,33 @@ defmodule Gralkor.GraphitiPoolTest do
 
       %{pid: pid} =
         start_pool(
+          falkordb_spec: {:remote, host: "h", port: 1},
           construct_instance: fn _db, _shared, _group_id -> g end,
           warmup: false,
           install_loop_fn: &Gralkor.Python.install_async_runtime/0
         )
 
       writes =
-        Enum.map(1..2, fn _index ->
+        Enum.map(["shared-uuid", "shared-uuid", "other-uuid"], fn uuid ->
           Task.async(fn ->
-            GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "concurrent-uuid")
+            GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: uuid)
           end)
         end)
 
-      assert [:ok, :ok] = Task.await_many(writes)
+      assert [:ok, :ok, :ok] = Task.await_many(writes)
 
       {proof, _} =
         Pythonx.eval(
-          "[len(g.driver.episodes), g.extractions, g.max_active]",
+          "[len(g.driver.episodes), g.extractions, g.max_active_by_uuid, g.max_active]",
           %{"g" => g}
         )
 
-      assert Pythonx.decode(proof) == [1, 1, 1]
+      assert Pythonx.decode(proof) == [
+               2,
+               %{"shared-uuid" => 1, "other-uuid" => 1},
+               %{"shared-uuid" => 1, "other-uuid" => 1},
+               2
+             ]
 
       GenServer.stop(pid)
       assert_independent_pool_admission()
