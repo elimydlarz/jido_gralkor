@@ -267,6 +267,18 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
+  describe "where Graphiti stores a Destination artefact output > when independent application runtimes write the same artefact UUID concurrently > while extraction outlasts one claim lease" do
+    @tag timeout: 120_000
+    test "then the owner keeps its claim by renewing the lease" do
+      assert_verified(:shared, &assert_shared_graph_claim_contract/0)
+    end
+
+    @tag timeout: 120_000
+    test "and no other runtime acquires the claim while it is renewed" do
+      assert_verified(:shared, &assert_shared_graph_claim_contract/0)
+    end
+  end
+
   describe "where Graphiti stores a Destination artefact output > when upgrading from an unmarked pre-completion-marker artefact" do
     test "then it remains hidden until an explicit replay or migration establishes durable extraction completion" do
       assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/0)
