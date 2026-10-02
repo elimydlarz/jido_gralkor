@@ -55,8 +55,8 @@ defmodule Gralkor.Python do
     install_loop_fn = Keyword.get(opts, :install_loop_fn, &install_async_runtime/0)
     reap_orphans? = Keyword.get(opts, :reap_orphans, true)
 
-    with :ok <- maybe_reap(reap_orphans?, list_orphans, kill_pid),
-         :ok <- uv_init.(),
+    with :ok <- uv_init.(),
+         :ok <- maybe_reap(reap_orphans?, list_orphans, kill_pid),
          :ok <- smoke_import.(),
          :ok <- smoke_import_supported_providers(smoke_import_provider),
          :ok <- maybe_install_loop(install_loop?, install_loop_fn) do
