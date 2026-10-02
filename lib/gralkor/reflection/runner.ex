@@ -265,7 +265,7 @@ defmodule Gralkor.Reflection.Runner do
          ) do
       %{termination_reason: :final_answer, result: result} -> decode_final_output(%{text: result})
       %{termination_reason: :failed, result: reason} -> {:error, reason}
-      %{termination_reason: :max_iterations} -> {:error, :max_iterations}
+      %{termination_reason: termination_reason} -> {:error, termination_reason}
     end
   end
 
