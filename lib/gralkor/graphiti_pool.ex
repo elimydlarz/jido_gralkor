@@ -1422,7 +1422,9 @@ defmodule Gralkor.GraphitiPool do
 
   defp with_uuid_write_admission(_server, nil, operation), do: operation.()
 
-  defp with_uuid_write_admission(server, uuid, operation) do
+  defp with_uuid_write_admission(_server, _uuid, operation), do: operation.()
+
+  defp with_uuid_write_admission_disabled(server, uuid, operation) do
     :acquired = GenServer.call(server, {:acquire_episode_uuid, uuid}, :infinity)
 
     try do
