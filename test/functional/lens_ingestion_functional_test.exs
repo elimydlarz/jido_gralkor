@@ -58,6 +58,20 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     end
   end
 
+  defmodule SearchingIngestion do
+    @behaviour Gralkor.Lens.Ingestion
+
+    @impl true
+    def ingest(%{content: query}, store) do
+      send(
+        Process.whereis(:lens_ingestion_functional),
+        {:searched, Gralkor.Lens.Store.search(store, query, 2)}
+      )
+
+      :ok
+    end
+  end
+
   defmodule RecordingStorage do
     @behaviour Gralkor.Lens.Storage
 
@@ -259,6 +273,50 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     end
   end
 
+  describe "when a Lens ingestion process searches through its bound Store" do
+    test "then only the selected Lens's Destination graph for the request's operator is searched" do
+      use_searchable_graph()
+
+      assert :ok = Client.ingest(request("launch window"))
+
+      assert_receive {:searched, {:ok, _facts}}
+      assert_received {:graph_instance, group_id}
+      assert group_id == Client.sanitize_group_id("personal/operator-one")
+      refute_received {:graph_instance, _other_group}
+    end
+
+    test "and no more than the requested number of results is returned" do
+      graphiti = use_searchable_graph()
+
+      assert :ok = Client.ingest(request("launch window"))
+
+      assert_receive {:searched, {:ok, facts}}
+      assert length(facts) == 2
+      {limits, _} = Pythonx.eval("g.requested_limits", %{"g" => graphiti})
+      assert Pythonx.decode(limits) == [2]
+    end
+  end
+
+  describe "if ingestion has a missing or blank ingestion identifier or operator identifier" do
+    test "then ingestion raises an argument error naming the rejected identifier" do
+      for {field, value} <- rejected_identifiers() do
+        assert_raise ArgumentError,
+                     ~r/\A#{field} must be a non-blank string, got #{Regex.escape(inspect(value))}/,
+                     fn -> Client.ingest(Map.put(request("information"), field, value)) end
+      end
+    end
+
+    test "and no Lens ingestion process runs" do
+      for {field, value} <- rejected_identifiers() do
+        assert_raise ArgumentError, fn ->
+          Client.ingest(Map.put(request("information"), field, value))
+        end
+      end
+
+      refute_receive {:ingested, _, _}
+    end
+  end
+
   describe "if ingestion selects an invalid Lens" do
     test "then ingestion fails before an ingestion process runs or memory is stored" do
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
@@ -322,6 +380,72 @@ defmodule Gralkor.LensIngestionFunctionalTest do
       assert {:error, :rejected} = Client.ingest_with_representation(request("partial"))
       assert_receive {:episode_added, _, "stored before failure", "functional"}
     end
+  end
+
+  defp rejected_identifiers do
+    [{:id, nil}, {:id, "  "}, {:operator_id, nil}, {:operator_id, ""}]
+  end
+
+  defp use_searchable_graph do
+    test_pid = self()
+    Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
+
+    Application.put_env(:jido_gralkor, :lenses, [
+      [
+        name: "observations",
+        destination: "personal",
+        ontology: MemoryOntology,
+        ingestion: SearchingIngestion
+      ]
+    ])
+
+    {graphiti, _} =
+      Pythonx.eval(
+        """
+        class _Edge:
+            def __init__(self, fact):
+                self.fact = fact
+                self.episodes = []
+                self.created_at = None
+                self.valid_at = None
+                self.invalid_at = None
+                self.expired_at = None
+
+        class _Graphiti:
+            def __init__(self):
+                self.requested_limits = []
+                self.facts = [_Edge(f"launch fact {index}") for index in range(5)]
+                self.driver = None
+                self.llm_client = None
+
+            async def search(self, query, num_results=10, search_filter=None):
+                self.requested_limits.append(num_results)
+                return self.facts[:num_results]
+
+        _Graphiti()
+        """,
+        %{}
+      )
+
+    start_supervised!(
+      {Gralkor.GraphitiPool,
+       name: Gralkor.GraphitiPool,
+       table: :gralkor_graphiti_instances,
+       falkordb_spec: {:embedded, "/tmp/never_used"},
+       construct_falkor_db: fn _spec -> :stub_falkor_db end,
+       construct_shared_clients: fn _llm, _embedder ->
+         %{llm_client: nil, embedder: nil, cross_encoder: nil}
+       end,
+       construct_instance: fn _db, _shared, group_id ->
+         send(test_pid, {:graph_instance, group_id})
+         graphiti
+       end,
+       initialise_instance: fn _instance -> :ok end,
+       warmup: false,
+       install_loop_fn: &Gralkor.Python.install_async_runtime/0}
+    )
+
+    graphiti
   end
 
   defp lens(ingestion) do
