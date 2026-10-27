@@ -558,7 +558,7 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
        table: :gralkor_graphiti_instances,
        falkordb_spec: {:embedded, "/tmp/never_used"},
        construct_falkor_db: fn _spec -> :stub_falkor_db end,
-       construct_shared_clients: fn _llm, _embedder ->
+       construct_shared_clients: fn _spec ->
          %{llm_client: nil, embedder: nil, cross_encoder: nil}
        end,
        construct_instance: fn _database, _shared, _group_id -> graphiti end,

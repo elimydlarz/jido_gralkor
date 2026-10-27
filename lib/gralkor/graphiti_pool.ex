@@ -736,7 +736,7 @@ defmodule Gralkor.GraphitiPool do
     extraction_instructions = @provenance_extraction_instructions
 
     result =
-      with_episode_write_admission(server, uuid, fn skip_empty_edge_candidates ->
+      with_episode_write_admission(server, uuid, fn ->
         {raw, _} =
           Pythonx.eval(
             """
@@ -747,7 +747,6 @@ defmodule Gralkor.GraphitiPool do
             from graphiti_core.driver.driver import GraphProvider
             from graphiti_core.errors import NodeNotFoundError
             import graphiti_core.graphiti as graphiti_module
-            from graphiti_core.utils.maintenance import edge_operations
             from graphiti_core.nodes import EpisodeType, EpisodicNode
             c = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
             s = source.decode('utf-8') if isinstance(source, (bytes, bytearray)) else source
@@ -1316,22 +1315,11 @@ defmodule Gralkor.GraphitiPool do
                             ),
                         ))
 
-                        if not skip_empty_edge_candidates:
-                            try:
-                                await g.add_episode(**kwargs)
-                                await record_extraction_complete()
-                                return 'created'
-                            finally:
-                                guard.reset(token)
-
-                        empty_edge_guard = edge_operations._gralkor_skip_empty_edge_candidates
-                        empty_edge_token = empty_edge_guard.set(True)
                         try:
                             await g.add_episode(**kwargs)
                             await record_extraction_complete()
                             return 'created'
                         finally:
-                            empty_edge_guard.reset(empty_edge_token)
                             guard.reset(token)
                     finally:
                         heartbeat.cancel()
@@ -1346,21 +1334,10 @@ defmodule Gralkor.GraphitiPool do
                         if direct_writer else None
                     )
 
-                if not skip_empty_edge_candidates:
-                    try:
-                        await g.add_episode(**kwargs)
-                        return 'created'
-                    finally:
-                        if token is not None:
-                            guard.reset(token)
-
-                empty_edge_guard = edge_operations._gralkor_skip_empty_edge_candidates
-                empty_edge_token = empty_edge_guard.set(True)
                 try:
                     await g.add_episode(**kwargs)
                     return 'created'
                 finally:
-                    empty_edge_guard.reset(empty_edge_token)
                     if token is not None:
                         guard.reset(token)
             #{@upstream_failure_classification}
@@ -1384,8 +1361,7 @@ defmodule Gralkor.GraphitiPool do
               "uuid" => uuid,
               "source_kind" => source_kind && Atom.to_string(source_kind),
               "direct_writer" => direct_writer,
-              "extraction_instructions" => extraction_instructions,
-              "skip_empty_edge_candidates" => skip_empty_edge_candidates
+              "extraction_instructions" => extraction_instructions
             }
           )
 
@@ -1406,11 +1382,11 @@ defmodule Gralkor.GraphitiPool do
     with_uuid_write_admission(server, uuid, fn ->
       case GenServer.call(server, :acquire_episode_write, :infinity) do
         :unbounded ->
-          operation.(false)
+          operation.()
 
         :acquired ->
           try do
-            operation.(true)
+            operation.()
           after
             GenServer.cast(server, {:release_episode_write, self()})
           end
@@ -1551,70 +1527,138 @@ defmodule Gralkor.GraphitiPool do
     :ok
   end
 
-  # Each role — llm and embedder — picks its provider from its own spec, so an
-  # OpenAI LLM alongside a Google embedder is a supported pair. The cross-encoder
-  # has no spec of its own and follows the llm role.
+  # Each role — llm, LLM route, reranker, and embedder — picks its provider from
+  # its own spec, so an OpenAI LLM alongside a Google embedder is a supported
+  # pair. An unconfigured reranker follows the llm role's provider.
   @supported_providers [:openai, :google]
   @credential_env %{openai: "OPENAI_API_KEY", google: "GOOGLE_API_KEY"}
+
+  # Which providers' clients accept each LLM tuning setting.
+  @tuning_providers %{
+    temperature: [:openai, :google],
+    max_tokens: [:openai, :google],
+    reasoning: [:openai],
+    verbosity: [:openai],
+    thinking_budget: [:google]
+  }
 
   @doc false
   @spec supported_providers() :: [atom()]
   def supported_providers, do: @supported_providers
 
   @doc """
-  Decide which provider builds each shared client, from the two configured model
-  specs. Pure — no Pythonx, no credentials read — so the per-role dispatch is
-  pinned deterministically and `default_construct_shared_clients/2` is left with
-  nothing to decide.
-
-  Each role takes its own spec's provider. The cross-encoder has no spec of its
-  own and follows the llm role. A Google embedder carries `:batch_size` of 1;
-  the OpenAI embedder takes no batch size at all, its client having no such
-  parameter and no equivalent of the Gemini batching defect.
+  The inference settings the pool builds its clients from: the LLM and embedder
+  specs plus the optional reranker, LLM routes, LLM tuning, embedder dimension,
+  and embedder batch size. Each option absent from `opts` is read from
+  `Gralkor.Config`.
   """
-  @spec shared_client_spec(map(), map()) :: %{
-          llm: map(),
-          embedder: map(),
-          cross_encoder: map()
-        }
-  def shared_client_spec(llm_model, embedder_model) do
+  @spec inference_settings(keyword()) :: map()
+  def inference_settings(opts) do
     %{
-      llm: llm_spec(llm_model),
-      embedder: embedder_spec(embedder_model),
-      cross_encoder: %{provider: llm_model[:provider]}
+      llm: Keyword.get_lazy(opts, :llm_model, &Config.llm_model/0),
+      embedder: Keyword.get_lazy(opts, :embedder_model, &Config.embedder_model/0),
+      reranker: Keyword.get_lazy(opts, :reranker_model, &Config.reranker_model/0),
+      llm_routes: Keyword.get_lazy(opts, :llm_routes, &Config.llm_routes/0),
+      llm_tuning: Keyword.get_lazy(opts, :llm_tuning, &Config.llm_tuning/0),
+      embedder_dimension:
+        Keyword.get_lazy(opts, :embedder_dimension, &Config.embedder_dimension/0),
+      embedder_batch_size:
+        Keyword.get_lazy(opts, :embedder_batch_size, &Config.embedder_batch_size/0)
     }
   end
 
-  defp llm_spec(%{provider: :openai, id: id}) do
-    reasoning =
-      if String.starts_with?(id, ["gpt-5.5", "gpt-5.6"]), do: "none", else: "auto"
+  @doc """
+  Decide how each shared client is built. Pure — no Pythonx, no credentials
+  read — so the per-role dispatch is pinned deterministically and
+  `default_construct_shared_clients/1` is left with nothing to decide.
 
-    %{provider: :openai, id: id, reasoning: reasoning}
+  Accepts the two role specs plus optional settings (see
+  `inference_settings/1`), or a complete settings map.
+
+  Each role takes its own spec's provider. `:llm_clients` lists one client per
+  distinct provider and tuning; the LLM and every route name theirs by index,
+  so routes sharing a provider and tuning share one client, and the LLM's own
+  tuning reaches only the LLM's client. An unconfigured reranker follows the
+  LLM's provider with no model of its own. A Google embedder carries
+  `:batch_size`, 1 unless configured; the OpenAI embedder takes none.
+  """
+  @spec shared_client_spec(map(), map(), map()) :: map()
+  def shared_client_spec(llm_model, embedder_model, settings \\ %{}) do
+    settings
+    |> Map.merge(%{llm: llm_model, embedder: embedder_model})
+    |> shared_client_spec()
   end
 
-  defp llm_spec(llm_model) do
-    %{provider: llm_model[:provider], id: llm_model[:id]}
+  @spec shared_client_spec(map()) :: map()
+  def shared_client_spec(settings) do
+    llm = model_spec(settings.llm)
+    llm_tuning = Map.get(settings, :llm_tuning, %{})
+
+    routes =
+      settings
+      |> Map.get(:llm_routes, %{})
+      |> Enum.sort_by(fn {key, _route} -> key end)
+      |> Enum.map(fn {key, route} ->
+        Map.merge(model_spec(route.model), %{key: key, tuning: route.tuning})
+      end)
+
+    llm = Map.put(llm, :tuning, llm_tuning)
+
+    llm_clients =
+      [llm | routes]
+      |> Enum.map(&%{provider: &1.provider, id: &1.id, tuning: &1.tuning})
+      |> Enum.uniq_by(&{&1.provider, &1.tuning})
+
+    client_index = fn model ->
+      Enum.find_index(llm_clients, &(&1.provider == model.provider and &1.tuning == model.tuning))
+    end
+
+    %{
+      llm: Map.put(llm, :client, client_index.(llm)),
+      routes: Enum.map(routes, &Map.put(&1, :client, client_index.(&1))),
+      llm_clients: llm_clients,
+      cross_encoder: cross_encoder_spec(Map.get(settings, :reranker), llm),
+      embedder: embedder_spec(settings)
+    }
   end
+
+  defp model_spec(model), do: %{provider: model[:provider], id: model[:id]}
+
+  defp cross_encoder_spec(nil, llm), do: %{provider: llm.provider, id: nil}
+  defp cross_encoder_spec(reranker, _llm), do: model_spec(reranker)
 
   # gemini-embedding-2-preview returns ONE embedding for N inputs in a single
   # call — graphiti's batched create_batch then fails with "zip() argument 2 is
-  # shorter than argument 1". Force batch_size=1 so each input becomes its own
-  # request. Filed upstream as getzep/graphiti#1467. OpenAI's embedder unpacks
-  # result.data 1:1 and exposes no batch_size, so the workaround is Google-only.
-  defp embedder_spec(%{provider: :google} = embedder_model) do
-    %{provider: :google, id: embedder_model[:id], batch_size: 1}
-  end
+  # shorter than argument 1". An unconfigured Google embedder therefore sends
+  # one input per request (getzep/graphiti#1467). OpenAI's embedder unpacks
+  # result.data 1:1 and exposes no batch_size.
+  defp embedder_spec(settings) do
+    embedder = settings.embedder
 
-  defp embedder_spec(embedder_model) do
-    %{provider: embedder_model[:provider], id: embedder_model[:id]}
+    base = %{
+      provider: embedder[:provider],
+      id: embedder[:id],
+      dimension: Map.get(settings, :embedder_dimension)
+    }
+
+    case embedder[:provider] do
+      :google -> Map.put(base, :batch_size, Map.get(settings, :embedder_batch_size) || 1)
+      _ -> base
+    end
   end
 
   @doc false
   @spec validate_native_models!(map(), map()) :: :ok
-  def validate_native_models!(llm_model, embedder_model) do
-    roles = [{"llm", llm_model}, {"embedder", embedder_model}]
+  def validate_native_models!(llm_model, embedder_model),
+    do: validate_native_models!(%{llm: llm_model, embedder: embedder_model})
 
-    validate_supported_providers!(roles, llm_model, embedder_model)
+  @doc false
+  @spec validate_native_models!(map()) :: :ok
+  def validate_native_models!(settings) do
+    roles = model_roles(settings)
+
+    validate_supported_providers!(roles)
+    validate_tuning!(settings)
     # Only a provider some role actually selected needs a credential — an unused
     # provider's absent key is not a misconfiguration.
     Enum.each(roles, &validate_credential!/1)
@@ -1622,16 +1666,76 @@ defmodule Gralkor.GraphitiPool do
     :ok
   end
 
-  defp validate_supported_providers!(roles, llm_model, embedder_model) do
+  defp model_roles(settings) do
+    reranker =
+      case Map.get(settings, :reranker) do
+        nil -> []
+        model -> [{"reranker", model}]
+      end
+
+    routes =
+      settings
+      |> Map.get(:llm_routes, %{})
+      |> Enum.sort_by(fn {key, _route} -> key end)
+      |> Enum.map(fn {key, route} -> {"llm route #{inspect(key)}", route.model} end)
+
+    [{"llm", settings.llm}, {"embedder", settings.embedder}] ++ reranker ++ routes
+  end
+
+  defp validate_supported_providers!(roles) do
     unless Enum.all?(roles, fn {_role, model} -> model[:provider] in @supported_providers end) do
       supported = Enum.map_join(@supported_providers, ", ", &inspect/1)
+      specs = Enum.map_join(roles, ", ", fn {role, model} -> "#{role}=#{inspect(model)}" end)
 
       raise ArgumentError,
-            "Gralkor.GraphitiPool native Graphiti supports #{supported} models; " <>
-              "got llm=#{inspect(llm_model)}, embedder=#{inspect(embedder_model)}"
+            "Gralkor.GraphitiPool native Graphiti supports #{supported} models; got #{specs}"
     end
 
     :ok
+  end
+
+  defp validate_tuning!(settings) do
+    Enum.each(Map.get(settings, :llm_tuning, %{}), fn {setting, _value} ->
+      validate_tuning_setting!(
+        setting,
+        settings.llm,
+        "GRALKOR_LLM_#{setting |> Atom.to_string() |> String.upcase()} is configured",
+        "the llm model spec"
+      )
+    end)
+
+    Enum.each(Map.get(settings, :llm_routes, %{}), fn {key, route} ->
+      Enum.each(route.tuning, fn {setting, _value} ->
+        validate_tuning_setting!(
+          setting,
+          route.model,
+          "GRALKOR_LLM_ROUTES route #{inspect(key)} sets #{setting}",
+          "its model spec"
+        )
+      end)
+    end)
+
+    if Map.get(settings, :embedder_batch_size) != nil and settings.embedder[:provider] != :google do
+      raise_rejected_tuning!(
+        "GRALKOR_EMBEDDER_BATCH_SIZE is configured",
+        "the embedder model spec",
+        settings.embedder
+      )
+    end
+
+    :ok
+  end
+
+  defp validate_tuning_setting!(setting, model, configured, role) do
+    unless model[:provider] in Map.fetch!(@tuning_providers, setting) do
+      raise_rejected_tuning!(configured, role, model)
+    end
+  end
+
+  defp raise_rejected_tuning!(configured, role, model) do
+    raise ArgumentError,
+          "#{configured}, but the #{inspect(model[:provider])} provider of #{role} " <>
+            "#{inspect(model)} does not accept it"
   end
 
   defp validate_credential!({role, model}) do
@@ -1762,9 +1866,8 @@ defmodule Gralkor.GraphitiPool do
     Process.flag(:trap_exit, true)
     table = Keyword.get(opts, :table, @default_table)
     falkordb_spec = Keyword.fetch!(opts, :falkordb_spec)
-    llm_model = Keyword.get(opts, :llm_model, Config.llm_model())
-    embedder_model = Keyword.get(opts, :embedder_model, Config.embedder_model())
-    validate_native_models!(llm_model, embedder_model)
+    inference = inference_settings(opts)
+    validate_native_models!(inference)
 
     socket_timeout = embedded_falkordb_socket_timeout(falkordb_spec, opts)
     construct_falkor_db = Keyword.get(opts, :construct_falkor_db, &default_construct_falkor_db/2)
@@ -1779,7 +1882,7 @@ defmodule Gralkor.GraphitiPool do
       end)
 
     construct_shared_clients =
-      Keyword.get(opts, :construct_shared_clients, &default_construct_shared_clients/2)
+      Keyword.get(opts, :construct_shared_clients, &default_construct_shared_clients/1)
 
     construct_instance = Keyword.get(opts, :construct_instance, &default_construct_instance/3)
     initialise_instance = Keyword.get(opts, :initialise_instance, &initialise_instance/1)
@@ -1790,9 +1893,8 @@ defmodule Gralkor.GraphitiPool do
     register_table(self(), table)
 
     :ok = install_loop_fn.()
-    :ok = install_empty_edge_candidate_guard(falkordb_spec)
 
-    shared = construct_shared_clients.(llm_model, embedder_model)
+    shared = construct_shared_clients.(shared_client_spec(inference))
 
     case falkordb_spec do
       {:embedded, data_dir} ->
@@ -1952,42 +2054,6 @@ defmodule Gralkor.GraphitiPool do
   end
 
   defp episode_write_admission({:remote, _options}), do: :unbounded
-
-  defp install_empty_edge_candidate_guard({:remote, _options}), do: :ok
-
-  defp install_empty_edge_candidate_guard({:embedded, _data_dir}) do
-    Pythonx.eval(
-      """
-      from contextvars import ContextVar
-      from graphiti_core.search.search_config import SearchResults
-      from graphiti_core.utils.maintenance import edge_operations
-
-      guard = getattr(edge_operations, '_gralkor_skip_empty_edge_candidates', None)
-      if guard is None:
-          guard = ContextVar('_gralkor_skip_empty_edge_candidates', default=False)
-          edge_operations._gralkor_skip_empty_edge_candidates = guard
-
-      current_search = edge_operations.search
-      if not getattr(current_search, '_gralkor_empty_edge_candidate_guard', False):
-          async def guarded_search(*args, **kwargs):
-              search_filter = kwargs.get('search_filter')
-              if (
-                  guard.get()
-                  and search_filter is not None
-                  and search_filter.edge_uuids == []
-              ):
-                  return SearchResults()
-              return await current_search(*args, **kwargs)
-
-          guarded_search._gralkor_empty_edge_candidate_guard = True
-          edge_operations.search = guarded_search
-      None
-      """,
-      %{}
-    )
-
-    :ok
-  end
 
   defp embedded_falkordb_socket_timeout({:embedded, _data_dir}, opts) do
     opts
@@ -2283,6 +2349,9 @@ defmodule Gralkor.GraphitiPool do
     :ok
   end
 
+  # Graphiti refuses an LLM runtime combined with an LLM client, so an instance
+  # receives exactly one: the runtime when routes are configured, otherwise the
+  # LLM client, which keeps Graphiti's own main/small model split.
   defp default_construct_instance(falkor_db, shared, sanitized_group_id) do
     {instance, _} =
       Pythonx.eval(
@@ -2292,11 +2361,15 @@ defmodule Gralkor.GraphitiPool do
         from graphiti_core.driver.falkordb_driver import FalkorDriver
         gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
         driver = FalkorDriver(falkor_db=falkor_db, database=gid)
+        if llm_runtime is not None:
+            inference = dict(llm_runtime=llm_runtime)
+        else:
+            inference = dict(llm_client=llm_client)
         g = Graphiti(
           graph_driver=driver,
-          llm_client=llm_client,
           embedder=embedder,
           cross_encoder=cross_encoder,
+          **inference,
         )
         g
         """,
@@ -2304,6 +2377,7 @@ defmodule Gralkor.GraphitiPool do
           "falkor_db" => falkor_db,
           "group_id" => sanitized_group_id,
           "llm_client" => Map.get(shared, :llm_client),
+          "llm_runtime" => Map.get(shared, :llm_runtime),
           "embedder" => Map.get(shared, :embedder),
           "cross_encoder" => Map.get(shared, :cross_encoder)
         }
@@ -2312,21 +2386,26 @@ defmodule Gralkor.GraphitiPool do
     instance
   end
 
-  defp default_construct_shared_clients(llm_model, embedder_model) do
-    spec = shared_client_spec(llm_model, embedder_model)
-
+  defp default_construct_shared_clients(spec) do
     # A Google role needs one shared genai.Client threaded through its
     # constructors; the OpenAI clients build their own AsyncOpenAI internally.
     genai_client = if :google in providers(spec), do: construct_genai_client()
 
-    llm = construct_llm_client(spec.llm, genai_client)
-    embedder = construct_embedder(spec.embedder, genai_client)
-    cross_encoder = construct_cross_encoder(spec.cross_encoder, genai_client, llm)
+    llm_clients = Enum.map(spec.llm_clients, &construct_llm_client(&1, genai_client))
+    llm = Enum.at(llm_clients, spec.llm.client)
 
-    %{llm_client: llm, embedder: embedder, cross_encoder: cross_encoder}
+    %{
+      llm_client: llm,
+      llm_runtime: construct_llm_runtime(spec, llm_clients),
+      embedder: construct_embedder(spec.embedder, genai_client),
+      cross_encoder: construct_cross_encoder(spec.cross_encoder, genai_client)
+    }
   end
 
-  defp providers(spec), do: [spec.llm.provider, spec.embedder.provider]
+  defp providers(spec) do
+    Enum.map(spec.llm_clients, & &1.provider) ++
+      [spec.embedder.provider, spec.cross_encoder.provider]
+  end
 
   @doc """
   The credential for `provider`, read on the Elixir side.
@@ -2357,112 +2436,183 @@ defmodule Gralkor.GraphitiPool do
     client
   end
 
-  defp construct_llm_client(%{provider: :google, id: llm_name}, genai_client) do
+  # Elixir binaries cross into Python as bytes.
+  @python_text "text = lambda value: value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value"
+
+  # One client per distinct provider and tuning. Only configured tuning is
+  # passed, so every unset setting keeps the graph library's own default.
+  defp construct_llm_client(%{provider: :google, id: id, tuning: tuning}, genai_client) do
     {llm, _} =
       Pythonx.eval(
         """
+        #{@python_text}
+        import json
+        from google.genai import types
         from graphiti_core.llm_client.config import LLMConfig
         from graphiti_core.llm_client.gemini_client import GeminiClient
-        ln = llm_name.decode('utf-8') if isinstance(llm_name, (bytes, bytearray)) else llm_name
-        GeminiClient(config=LLMConfig(model=ln), client=client)
+        t = json.loads(tuning)
+        config = dict(model=text(model_id))
+        if 'temperature' in t:
+            config['temperature'] = t['temperature']
+        if 'max_tokens' in t:
+            config['max_tokens'] = t['max_tokens']
+        options = {}
+        if 'max_tokens' in t:
+            options['max_tokens'] = t['max_tokens']
+        if 'thinking_budget' in t:
+            options['thinking_config'] = types.ThinkingConfig(thinking_budget=t['thinking_budget'])
+        GeminiClient(config=LLMConfig(**config), client=client, **options)
         """,
-        %{"llm_name" => llm_name, "client" => genai_client}
+        %{"model_id" => id, "client" => genai_client, "tuning" => Jason.encode!(tuning)}
       )
 
     llm
   end
 
-  defp construct_llm_client(
-         %{provider: :openai, id: llm_name, reasoning: reasoning},
-         _genai_client
-       ) do
+  defp construct_llm_client(%{provider: :openai, id: id, tuning: tuning}, _genai_client) do
     {llm, _} =
       Pythonx.eval(
         """
+        #{@python_text}
+        import json
         from graphiti_core.llm_client.config import LLMConfig
         from graphiti_core.llm_client.openai_client import OpenAIClient
-        ln = llm_name.decode('utf-8') if isinstance(llm_name, (bytes, bytearray)) else llm_name
-        k = api_key.decode('utf-8') if isinstance(api_key, (bytes, bytearray)) else api_key
-        r = reasoning.decode('utf-8') if isinstance(reasoning, (bytes, bytearray)) else reasoning
-        OpenAIClient(config=LLMConfig(model=ln, api_key=k), reasoning=r)
+        t = json.loads(tuning)
+        config = dict(model=text(model_id), api_key=text(api_key))
+        if 'temperature' in t:
+            config['temperature'] = t['temperature']
+        if 'max_tokens' in t:
+            config['max_tokens'] = t['max_tokens']
+        options = {key: t[key] for key in ('max_tokens', 'reasoning', 'verbosity') if key in t}
+        OpenAIClient(config=LLMConfig(**config), **options)
+        """,
+        %{"model_id" => id, "api_key" => api_key!(:openai), "tuning" => Jason.encode!(tuning)}
+      )
+
+    llm
+  end
+
+  # Without routes Graphiti receives the LLM client alone. With routes, one
+  # LLMTransport wraps each distinct client; the LLM spec is the runtime's
+  # default model and each route key becomes a whole-group route or, for a
+  # group-qualified prompt, a field of that group's nested routes class whose
+  # `default` is the group-level route.
+  defp construct_llm_runtime(%{routes: []}, _llm_clients), do: nil
+
+  defp construct_llm_runtime(spec, llm_clients) do
+    {runtime, _} =
+      Pythonx.eval(
+        """
+        #{@python_text}
+        import json
+        from graphiti_core.llm_client import LLMRuntime, LLMTransport, PromptRoutes
+        transports = [LLMTransport(client) for client in clients]
+        default = json.loads(default_model)
+        groups = {}
+        for route in json.loads(routes):
+            group, _, prompt = route['key'].partition('.')
+            model = transports[route['client']].model(route['id'])
+            groups.setdefault(group, {})[prompt or 'default'] = model
+        group_routes = {}
+        for group, models in groups.items():
+            if list(models) == ['default']:
+                group_routes[group] = models['default']
+            else:
+                nested = getattr(PromptRoutes, ''.join(part.capitalize() for part in group.split('_')))
+                group_routes[group] = nested(**models)
+        LLMRuntime(
+            model=transports[default['client']].model(default['id']),
+            routes=PromptRoutes(**group_routes),
+        )
         """,
         %{
-          "llm_name" => llm_name,
-          "api_key" => api_key!(:openai),
-          "reasoning" => reasoning
+          "clients" => llm_clients,
+          "default_model" => Jason.encode!(Map.take(spec.llm, [:id, :client])),
+          "routes" => Jason.encode!(Enum.map(spec.routes, &Map.take(&1, [:key, :id, :client])))
         }
       )
 
-    llm
+    runtime
   end
 
-  # batch_size=1 is the Google-only workaround decided in shared_client_spec/2:
-  # gemini-embedding-2-preview returns ONE embedding for N inputs, and graphiti's
-  # batched create_batch then fails with "zip() argument 2 is shorter than
-  # argument 1". Filed upstream as getzep/graphiti#1467 — drop it once the fix
-  # lands and we've bumped past the affected version.
-  defp construct_embedder(
-         %{provider: :google, id: embedder_name, batch_size: batch_size},
-         genai_client
-       ) do
-    {embedder, _} =
+  defp construct_embedder(%{provider: :google} = embedder, genai_client) do
+    {client, _} =
       Pythonx.eval(
         """
+        #{@python_text}
         from graphiti_core.embedder.gemini import GeminiEmbedder, GeminiEmbedderConfig
-        en = embedder_name.decode('utf-8') if isinstance(embedder_name, (bytes, bytearray)) else embedder_name
-        GeminiEmbedder(GeminiEmbedderConfig(embedding_model=en), client=client, batch_size=batch_size)
+        config = dict(embedding_model=text(embedder_id))
+        if dimension is not None:
+            config['embedding_dim'] = dimension
+        GeminiEmbedder(GeminiEmbedderConfig(**config), client=client, batch_size=batch_size)
         """,
-        %{"embedder_name" => embedder_name, "client" => genai_client, "batch_size" => batch_size}
+        %{
+          "embedder_id" => embedder.id,
+          "dimension" => embedder.dimension,
+          "batch_size" => embedder.batch_size,
+          "client" => genai_client
+        }
       )
 
-    embedder
+    client
   end
 
   # OpenAIEmbedder unpacks result.data 1:1 from a single batched call and takes
   # no batch_size parameter. It slices each vector to EmbedderConfig's
-  # embedding_dim (1024 by default), which text-embedding-3's Matryoshka
-  # training makes safe, but the truncation is silent — unlike Gemini, which
-  # asks for the dimension explicitly via output_dimensionality.
-  defp construct_embedder(%{provider: :openai, id: embedder_name}, _genai_client) do
-    {embedder, _} =
+  # embedding_dim (the graph library's default unless a dimension is
+  # configured), which text-embedding-3's Matryoshka training makes safe, but
+  # the truncation is silent — unlike Gemini, which asks for the dimension
+  # explicitly via output_dimensionality.
+  defp construct_embedder(%{provider: :openai} = embedder, _genai_client) do
+    {client, _} =
       Pythonx.eval(
         """
+        #{@python_text}
         from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
-        en = embedder_name.decode('utf-8') if isinstance(embedder_name, (bytes, bytearray)) else embedder_name
-        k = api_key.decode('utf-8') if isinstance(api_key, (bytes, bytearray)) else api_key
-        OpenAIEmbedder(OpenAIEmbedderConfig(embedding_model=en, api_key=k))
+        config = dict(embedding_model=text(embedder_id), api_key=text(api_key))
+        if dimension is not None:
+            config['embedding_dim'] = dimension
+        OpenAIEmbedder(OpenAIEmbedderConfig(**config))
         """,
-        %{"embedder_name" => embedder_name, "api_key" => api_key!(:openai)}
+        %{
+          "embedder_id" => embedder.id,
+          "dimension" => embedder.dimension,
+          "api_key" => api_key!(:openai)
+        }
       )
 
-    embedder
+    client
   end
 
-  defp construct_cross_encoder(%{provider: :google}, genai_client, _llm) do
+  # A reranker without a configured model passes none, so the graph library's
+  # default reranker model applies.
+  defp construct_cross_encoder(%{provider: :google, id: id}, genai_client) do
     {cross_encoder, _} =
       Pythonx.eval(
         """
+        #{@python_text}
         from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
-        GeminiRerankerClient(client=client)
+        from graphiti_core.llm_client.config import LLMConfig
+        model = text(model_id)
+        GeminiRerankerClient(config=LLMConfig(model=model), client=client)
         """,
-        %{"client" => genai_client}
+        %{"model_id" => id, "client" => genai_client}
       )
 
     cross_encoder
   end
 
-  # Reusing the already-constructed OpenAIClient avoids re-authenticating: the
-  # reranker unwraps it to the underlying AsyncOpenAI. Left without a model of
-  # its own, it falls back to its own small classifier default rather than
-  # forcing the main LLM model onto every rerank.
-  defp construct_cross_encoder(%{provider: :openai}, _genai_client, llm) do
+  defp construct_cross_encoder(%{provider: :openai, id: id}, _genai_client) do
     {cross_encoder, _} =
       Pythonx.eval(
         """
+        #{@python_text}
         from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
-        OpenAIRerankerClient(client=llm_client)
+        from graphiti_core.llm_client.config import LLMConfig
+        model = text(model_id)
+        OpenAIRerankerClient(config=LLMConfig(model=model, api_key=text(api_key)))
         """,
-        %{"llm_client" => llm}
+        %{"model_id" => id, "api_key" => api_key!(:openai)}
       )
 
     cross_encoder

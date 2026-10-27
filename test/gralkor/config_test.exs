@@ -5,11 +5,18 @@ defmodule Gralkor.ConfigTest do
 
   alias Gralkor.Config
 
+  @settings ~w(
+    GRALKOR_RERANKER_MODEL GRALKOR_LLM_ROUTES GRALKOR_LLM_TEMPERATURE GRALKOR_LLM_MAX_TOKENS
+    GRALKOR_LLM_REASONING GRALKOR_LLM_VERBOSITY GRALKOR_LLM_THINKING_BUDGET
+    GRALKOR_EMBEDDER_DIMENSION GRALKOR_EMBEDDER_BATCH_SIZE
+  )
+
   setup do
     original_data_dir = System.get_env("GRALKOR_DATA_DIR")
     original_llm = System.get_env("GRALKOR_LLM_MODEL")
     original_embedder = System.get_env("GRALKOR_EMBEDDER_MODEL")
     original_falkordb = Application.get_env(:jido_gralkor, :falkordb)
+    original_settings = Map.new(@settings, &{&1, System.get_env(&1)})
 
     original_socket_timeout =
       Application.get_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms)
@@ -18,6 +25,7 @@ defmodule Gralkor.ConfigTest do
       restore_env("GRALKOR_DATA_DIR", original_data_dir)
       restore_env("GRALKOR_LLM_MODEL", original_llm)
       restore_env("GRALKOR_EMBEDDER_MODEL", original_embedder)
+      Enum.each(original_settings, fn {key, value} -> restore_env(key, value) end)
 
       case original_falkordb do
         nil -> Application.delete_env(:jido_gralkor, :falkordb)
@@ -33,6 +41,7 @@ defmodule Gralkor.ConfigTest do
     System.delete_env("GRALKOR_DATA_DIR")
     System.delete_env("GRALKOR_LLM_MODEL")
     System.delete_env("GRALKOR_EMBEDDER_MODEL")
+    Enum.each(@settings, &System.delete_env/1)
     Application.delete_env(:jido_gralkor, :falkordb)
     Application.delete_env(:jido_gralkor, :embedded_falkordb_socket_timeout_ms)
     :ok
@@ -250,6 +259,269 @@ defmodule Gralkor.ConfigTest do
         assert_raise ArgumentError,
                      ~r/GRALKOR_LLM_MODEL.*got #{Regex.escape(inspect(value))}$/,
                      fn -> Config.llm_model() end
+      end
+    end
+  end
+
+  describe "when the reranker model is resolved > while a provider and a model id joined by a colon are configured" do
+    test "then a spec carrying that provider as an atom and that model id as a string is returned" do
+      System.put_env("GRALKOR_RERANKER_MODEL", " openai : gpt-4.1-nano ")
+      assert Config.reranker_model() == %{provider: :openai, id: "gpt-4.1-nano"}
+    end
+  end
+
+  describe "when the reranker model is resolved > while no reranker model is configured, or it is blank" do
+    test "then nothing is returned" do
+      assert Config.reranker_model() == nil
+
+      for blank <- ["", "  \t "] do
+        System.put_env("GRALKOR_RERANKER_MODEL", blank)
+        assert Config.reranker_model() == nil
+      end
+    end
+  end
+
+  describe "if the reranker model omits the colon separator or leaves the provider or the model id blank" do
+    test "then resolving the reranker model raises, naming the environment variable and the offending value" do
+      for value <- ["gpt-4.1-nano", ":gpt-4.1-nano", "openai:  "] do
+        System.put_env("GRALKOR_RERANKER_MODEL", value)
+
+        assert_raise ArgumentError,
+                     ~r/GRALKOR_RERANKER_MODEL.*got #{Regex.escape(inspect(value))}$/,
+                     fn -> Config.reranker_model() end
+      end
+    end
+  end
+
+  describe "when the LLM routes are resolved > while they are configured as a JSON object keyed by prompt group or group-qualified prompt name" do
+    test "then each key's route is returned carrying its model spec and the tuning it sets" do
+      System.put_env(
+        "GRALKOR_LLM_ROUTES",
+        Jason.encode!(%{
+          "extract_edges" => %{"model" => "google:gemini-3-flash", "thinking_budget" => 512},
+          "extract_edges.extract_timestamps" => %{
+            "model" => "openai:gpt-5.4-nano",
+            "max_tokens" => 2048,
+            "temperature" => 0.5,
+            "reasoning" => "low",
+            "verbosity" => "high"
+          },
+          "eval" => %{"model" => " openai : gpt-5.4-mini "},
+          "dedupe_nodes" => %{"model" => "google:gemini-3-flash", "thinking_budget" => 0},
+          "summarize_nodes" => %{"model" => "google:gemini-3-flash", "thinking_budget" => -1}
+        })
+      )
+
+      assert Config.llm_routes() == %{
+               "extract_edges" => %{
+                 model: %{provider: :google, id: "gemini-3-flash"},
+                 tuning: %{thinking_budget: 512}
+               },
+               "extract_edges.extract_timestamps" => %{
+                 model: %{provider: :openai, id: "gpt-5.4-nano"},
+                 tuning: %{
+                   max_tokens: 2048,
+                   temperature: 0.5,
+                   reasoning: "low",
+                   verbosity: "high"
+                 }
+               },
+               "eval" => %{model: %{provider: :openai, id: "gpt-5.4-mini"}, tuning: %{}},
+               "dedupe_nodes" => %{
+                 model: %{provider: :google, id: "gemini-3-flash"},
+                 tuning: %{thinking_budget: 0}
+               },
+               "summarize_nodes" => %{
+                 model: %{provider: :google, id: "gemini-3-flash"},
+                 tuning: %{thinking_budget: -1}
+               }
+             }
+    end
+  end
+
+  describe "when the LLM routes are resolved > while no LLM routes are configured, or they are blank" do
+    test "then no routes are returned" do
+      assert Config.llm_routes() == %{}
+
+      for blank <- ["", "   "] do
+        System.put_env("GRALKOR_LLM_ROUTES", blank)
+        assert Config.llm_routes() == %{}
+      end
+    end
+  end
+
+  describe "if the LLM routes are not a JSON object" do
+    test "then resolving them raises, naming the environment variable and the offending value" do
+      for value <- ["[]", "\"extract_edges\"", "{not json"] do
+        System.put_env("GRALKOR_LLM_ROUTES", value)
+
+        assert_raise ArgumentError,
+                     ~r/GRALKOR_LLM_ROUTES.*got #{Regex.escape(inspect(value))}$/,
+                     fn -> Config.llm_routes() end
+      end
+    end
+  end
+
+  describe "if an LLM route's key names neither a prompt group nor a prompt of that group" do
+    test "then resolving them raises, naming the key and the accepted prompt names" do
+      for key <- ["extract_everything", "extract_edges.resolve_edge", "extract_edges."] do
+        System.put_env("GRALKOR_LLM_ROUTES", Jason.encode!(%{key => %{"model" => "openai:m"}}))
+
+        error = assert_raise ArgumentError, fn -> Config.llm_routes() end
+        message = Exception.message(error)
+        assert message =~ inspect(key)
+        assert message =~ "dedupe_edges.resolve_edge"
+        assert message =~ "extract_edges.extract_timestamps"
+        assert message =~ "summarize_sagas"
+      end
+    end
+  end
+
+  describe "if an LLM route's model is not a provider and a model id joined by a colon" do
+    test "then resolving them raises, naming the key and the offending value" do
+      for model <- ["gpt-5.4-nano", ":gpt-5.4-nano", "openai: ", 42, nil] do
+        System.put_env("GRALKOR_LLM_ROUTES", Jason.encode!(%{"eval" => %{"model" => model}}))
+
+        error = assert_raise ArgumentError, fn -> Config.llm_routes() end
+        assert Exception.message(error) =~ ~s("eval")
+        assert Exception.message(error) =~ inspect(model)
+      end
+
+      System.put_env("GRALKOR_LLM_ROUTES", Jason.encode!(%{"eval" => %{"max_tokens" => 10}}))
+      error = assert_raise ArgumentError, fn -> Config.llm_routes() end
+      assert Exception.message(error) =~ ~s("eval")
+      assert Exception.message(error) =~ "nil"
+
+      System.put_env("GRALKOR_LLM_ROUTES", Jason.encode!(%{"eval" => "openai:gpt-5.4-nano"}))
+      error = assert_raise ArgumentError, fn -> Config.llm_routes() end
+      assert Exception.message(error) =~ ~s("eval")
+      assert Exception.message(error) =~ ~s("openai:gpt-5.4-nano")
+    end
+  end
+
+  describe "if an LLM route sets a field that is neither its model nor a tuning setting" do
+    test "then resolving them raises, naming the key and the field" do
+      System.put_env(
+        "GRALKOR_LLM_ROUTES",
+        Jason.encode!(%{"dedupe_nodes" => %{"model" => "openai:m", "top_p" => 0.9}})
+      )
+
+      error = assert_raise ArgumentError, fn -> Config.llm_routes() end
+      assert Exception.message(error) =~ ~s("dedupe_nodes")
+      assert Exception.message(error) =~ ~s("top_p")
+    end
+  end
+
+  describe "if an LLM route's tuning value does not parse as its setting's type" do
+    test "then resolving them raises, naming the key, the setting, and the offending value" do
+      for {setting, value} <- [
+            {"max_tokens", 0},
+            {"max_tokens", "100"},
+            {"max_tokens", 1.5},
+            {"thinking_budget", -2},
+            {"thinking_budget", 1.5},
+            {"thinking_budget", "0"},
+            {"temperature", "warm"},
+            {"reasoning", 3},
+            {"reasoning", " "},
+            {"verbosity", false}
+          ] do
+        System.put_env(
+          "GRALKOR_LLM_ROUTES",
+          Jason.encode!(%{"summarize_nodes" => %{"model" => "openai:m", setting => value}})
+        )
+
+        error = assert_raise ArgumentError, fn -> Config.llm_routes() end
+        message = Exception.message(error)
+        assert message =~ ~s("summarize_nodes")
+        assert message =~ setting
+        assert message =~ inspect(value)
+      end
+    end
+  end
+
+  describe "when an inference tuning setting is resolved > while it is configured" do
+    test "then its value is returned parsed as that setting's type" do
+      System.put_env("GRALKOR_LLM_TEMPERATURE", " 0.25 ")
+      System.put_env("GRALKOR_LLM_MAX_TOKENS", "4096")
+      System.put_env("GRALKOR_LLM_REASONING", "low")
+      System.put_env("GRALKOR_LLM_VERBOSITY", " high ")
+      System.put_env("GRALKOR_LLM_THINKING_BUDGET", "1024")
+      System.put_env("GRALKOR_EMBEDDER_DIMENSION", "768")
+      System.put_env("GRALKOR_EMBEDDER_BATCH_SIZE", "16")
+
+      assert Config.llm_tuning() == %{
+               temperature: 0.25,
+               max_tokens: 4096,
+               reasoning: "low",
+               verbosity: "high",
+               thinking_budget: 1024
+             }
+
+      assert Config.embedder_dimension() == 768
+      assert Config.embedder_batch_size() == 16
+
+      System.put_env("GRALKOR_LLM_TEMPERATURE", "1")
+      assert Config.llm_tuning().temperature == 1.0
+
+      for budget <- [0, -1] do
+        System.put_env("GRALKOR_LLM_THINKING_BUDGET", " #{budget} ")
+        assert Config.llm_tuning().thinking_budget == budget
+      end
+    end
+  end
+
+  describe "when an inference tuning setting is resolved > while it is not configured, or it is blank" do
+    test "then nothing is returned" do
+      assert Config.llm_tuning() == %{}
+      assert Config.embedder_dimension() == nil
+      assert Config.embedder_batch_size() == nil
+
+      for setting <- @settings, do: System.put_env(setting, "  ")
+
+      assert Config.llm_tuning() == %{}
+      assert Config.embedder_dimension() == nil
+      assert Config.embedder_batch_size() == nil
+    end
+  end
+
+  describe "if the max tokens, embedder dimension, or embedder batch size is not a positive integer" do
+    test "then resolving it raises, naming the environment variable and the offending value" do
+      for {var, resolve} <- [
+            {"GRALKOR_LLM_MAX_TOKENS", &Config.llm_tuning/0},
+            {"GRALKOR_EMBEDDER_DIMENSION", &Config.embedder_dimension/0},
+            {"GRALKOR_EMBEDDER_BATCH_SIZE", &Config.embedder_batch_size/0}
+          ],
+          value <- ["0", "-5", "1.5", "many"] do
+        System.put_env(var, value)
+
+        assert_raise ArgumentError, ~r/#{var}.*got #{Regex.escape(inspect(value))}$/, resolve
+
+        System.delete_env(var)
+      end
+    end
+  end
+
+  describe "if the thinking budget is not an integer of at least -1" do
+    test "then resolving it raises, naming the environment variable and the offending value" do
+      for value <- ["-2", "-50", "1.5", "-1.0", "many"] do
+        System.put_env("GRALKOR_LLM_THINKING_BUDGET", value)
+
+        assert_raise ArgumentError,
+                     ~r/GRALKOR_LLM_THINKING_BUDGET.*got #{Regex.escape(inspect(value))}$/,
+                     fn -> Config.llm_tuning() end
+      end
+    end
+  end
+
+  describe "if the LLM temperature is not a number" do
+    test "then resolving it raises, naming the environment variable and the offending value" do
+      for value <- ["warm", "0.2x", "."] do
+        System.put_env("GRALKOR_LLM_TEMPERATURE", value)
+
+        assert_raise ArgumentError,
+                     ~r/GRALKOR_LLM_TEMPERATURE.*got #{Regex.escape(inspect(value))}$/,
+                     fn -> Config.llm_tuning() end
       end
     end
   end

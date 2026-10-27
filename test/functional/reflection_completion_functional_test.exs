@@ -522,7 +522,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         Supervisor.child_spec(
           {GraphitiPool,
            falkordb_spec: {:embedded, data_dir},
-           construct_shared_clients: fn _llm, _embedder ->
+           construct_shared_clients: fn _spec ->
              %{llm_client: nil, embedder: nil, cross_encoder: nil}
            end,
            construct_instance: construct_instance,
@@ -599,7 +599,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
          falkordb_spec: {:remote, []},
          construct_falkor_db: fn _spec -> :stub_falkor_db end,
          close_falkor_db: fn _database -> :ok end,
-         construct_shared_clients: fn _llm, _embedder ->
+         construct_shared_clients: fn _spec ->
            %{llm_client: nil, embedder: nil, cross_encoder: nil}
          end,
          construct_instance: fn _database, _shared, _group -> graphiti end,
@@ -834,7 +834,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         Supervisor.child_spec(
           {GraphitiPool,
            falkordb_spec: {:embedded, data_dir},
-           construct_shared_clients: fn _llm, _embedder ->
+           construct_shared_clients: fn _spec ->
              %{llm_client: nil, embedder: nil, cross_encoder: nil}
            end,
            construct_instance: construct_instance,
@@ -1391,7 +1391,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
 
     common_options = [
-      construct_shared_clients: fn _llm, _embedder ->
+      construct_shared_clients: fn _spec ->
         %{llm_client: nil, embedder: nil, cross_encoder: nil}
       end,
       construct_instance: construct_instance,

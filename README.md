@@ -36,15 +36,15 @@ export GRALKOR_DATA_DIR=/var/lib/<your-app>/gralkor   # writable
 export GOOGLE_API_KEY=...                             # the default LLM and embedder are Google
 ```
 
-Native Graphiti supports `google:` and `openai:` models, and each of its two
-roles picks its provider independently. `GRALKOR_LLM_MODEL` selects the LLM
-(default `google:gemini-3.1-flash-lite`) and `GRALKOR_EMBEDDER_MODEL` selects
-the embedder (default `google:gemini-embedding-2-preview`). The
-cross-encoder/reranker has no spec of its own and follows the LLM role's
-provider.
+Native Graphiti supports `google:` and `openai:` models, and each role picks
+its provider independently. `GRALKOR_LLM_MODEL` selects the LLM (default
+`google:gemini-3.1-flash-lite`) and `GRALKOR_EMBEDDER_MODEL` selects the
+embedder (default `google:gemini-embedding-2-preview`). `GRALKOR_RERANKER_MODEL`
+optionally selects the cross-encoder/reranker; unset, reranking uses the LLM's
+provider with Graphiti's own default reranker model.
 
-Mixing the two roles is supported. An OpenAI LLM with a Google embedder builds
-an OpenAI LLM client, an OpenAI reranker, and a Google embedder:
+Mixing roles is supported. An OpenAI LLM with a Google embedder builds an
+OpenAI LLM client, an OpenAI reranker, and a Google embedder:
 
 ```bash
 export GRALKOR_LLM_MODEL=openai:gpt-4.1-mini
@@ -53,15 +53,48 @@ export OPENAI_API_KEY=...   # the llm role selected openai
 export GOOGLE_API_KEY=...   # the embedder role selected google
 ```
 
-Set only the credential(s) for the providers your two specs actually select: an
-all-Google pair needs `GOOGLE_API_KEY` alone, an all-OpenAI pair needs
+Set only the credential(s) for the providers your specs actually select — the
+LLM, the embedder, the reranker, and every LLM route: an all-Google
+configuration needs `GOOGLE_API_KEY` alone, an all-OpenAI one needs
 `OPENAI_API_KEY` alone. Startup raises `ArgumentError` before any inference
-client is constructed when a spec names a provider outside `:openai` / `:google`
-(naming both specs and the supported providers), or when the credential for a
-provider a spec selects is missing or blank (naming the variable and the role,
-`"llm"` or `"embedder"`). Nothing checks that an LLM and an embedder from
-different providers are otherwise compatible — embedding dimensions and the like
-are yours to keep consistent.
+client is constructed when a spec names a provider outside `:openai` /
+`:google` (naming every spec and the supported providers), when a tuning
+setting is configured for a model whose provider does not accept it (naming the
+setting and the provider), or when the credential for a provider a spec selects
+is missing or blank (naming the variable and the role: `"llm"`, `"embedder"`,
+`"reranker"`, or `llm route "<key>"`). Nothing checks that an LLM and an
+embedder from different providers are otherwise compatible — embedding
+dimensions and the like are yours to keep consistent.
+
+Every other inference setting is optional: unset (or blank) means Graphiti's
+own default, set means your value, and you may set a value equal to the default
+explicitly. See [Environment variables](#environment-variables).
+
+**Prompt routes.** `GRALKOR_LLM_ROUTES` runs chosen Graphiti prompts on other
+models. It is a JSON object keyed by a prompt group (`extract_nodes`,
+`dedupe_nodes`, `extract_edges`, `extract_nodes_and_edges`, `dedupe_edges`,
+`summarize_nodes`, `summarize_sagas`, `eval`) or a group-qualified prompt name
+from graphiti-core 0.31.2's `PromptName` (for example
+`extract_edges.extract_timestamps`). Each value carries a required `"model"`
+(`"provider:model"`) and optional tuning: `max_tokens` (positive integer),
+`temperature` (number), `reasoning` and `verbosity` (OpenAI only), and
+`thinking_budget` (Google only, an integer of at least -1: `0` turns
+thinking off, `-1` asks for a dynamic budget). A prompt-level route wins
+over its group's route; every unrouted prompt runs on `GRALKOR_LLM_MODEL`.
+Routes sharing a provider and tuning share one client, and a route's tuning
+applies only to the prompts it routes.
+
+```bash
+export GRALKOR_LLM_MODEL=openai:gpt-6-luna
+export GRALKOR_LLM_ROUTES='{
+  "extract_edges": {"model": "google:gemini-3-flash-preview", "thinking_budget": 1024},
+  "extract_edges.extract_timestamps": {"model": "openai:gpt-6-luna", "reasoning": "low"}
+}'
+```
+
+With routes configured Graphiti's `model_size` no longer selects a small model:
+route lightweight prompts to a smaller model explicitly. Without routes Graphiti
+keeps its own main/small split and its default small model.
 
 ```elixir
 # Remote — point at a managed FalkorDB. config/runtime.exs
@@ -193,9 +226,20 @@ Migration journals bind operations to the recorded endpoint identity. Recovery a
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `GRALKOR_DATA_DIR` | unset | Writable directory for the embedded `falkordblite` backend (it spawns a `redis-server` grandchild there). Ignored when `:falkordb` is configured. A blank or whitespace-only value counts as unset. With neither set, no native runtime starts. |
-| `GOOGLE_API_KEY` / `OPENAI_API_KEY` | — | Provider credentials for Graphiti's Python-side clients. Which one you need follows from the two model specs: each of `GRALKOR_LLM_MODEL` and `GRALKOR_EMBEDDER_MODEL` selects a provider, and only a provider some role selects needs its key. A provider selected by neither role needs no key at all. When the native runtime starts, a missing or blank key for a selected provider raises `ArgumentError` before any inference client is constructed, naming the variable and the role (`"llm"` or `"embedder"`). |
-| `GRALKOR_LLM_MODEL` | `google:gemini-3.1-flash-lite` | `"provider:model"` spec for the Graphiti LLM. `google:` and `openai:` are supported; another provider raises at native startup, naming both specs and the supported providers. This role's provider also builds the cross-encoder/reranker. GPT-5.5 and GPT-5.6 clients receive `reasoning: "none"` explicitly so Graphiti writes do not inherit an incompatible reasoning tier. |
-| `GRALKOR_EMBEDDER_MODEL` | `google:gemini-embedding-2-preview` | Same form and same supported providers, for the embedder — chosen independently of the LLM role, so `openai:` LLM + `google:` embedder is a valid pair (it needs both keys). A Google embedder is constructed with `batch_size: 1`; the OpenAI embedder takes no batch size. |
+| `GOOGLE_API_KEY` / `OPENAI_API_KEY` | — | Provider credentials for Graphiti's Python-side clients. Which ones you need follow from the model specs: `GRALKOR_LLM_MODEL`, `GRALKOR_EMBEDDER_MODEL`, `GRALKOR_RERANKER_MODEL`, and every `GRALKOR_LLM_ROUTES` model each select a provider, and only a selected provider needs its key. When the native runtime starts, a missing or blank key for a selected provider raises `ArgumentError` before any inference client is constructed, naming the variable and the role (`"llm"`, `"embedder"`, `"reranker"`, or `llm route "<key>"`). |
+| `GRALKOR_LLM_MODEL` | `google:gemini-3.1-flash-lite` | `"provider:model"` spec for the Graphiti LLM, which runs every prompt no route claims. `google:` and `openai:` are supported; another provider raises at native startup, naming every spec and the supported providers. |
+| `GRALKOR_LLM_ROUTES` | unset (no routes) | JSON object routing Graphiti prompt groups or group-qualified prompts to their own models and tuning (see [Prompt routes](#required-configuration)). Without routes Graphiti receives the LLM client alone and keeps its own small-model choice. An unknown key or field, a malformed model, or an unparsable tuning value raises at startup naming the key, field, and value. |
+| `GRALKOR_LLM_TEMPERATURE` | Graphiti's default | Sampling temperature (a number) for the `GRALKOR_LLM_MODEL` client. Graphiti omits temperature for OpenAI reasoning models. |
+| `GRALKOR_LLM_MAX_TOKENS` | Graphiti's default | Positive integer: the `GRALKOR_LLM_MODEL` client's response token limit when a prompt sets none. |
+| `GRALKOR_LLM_REASONING` | Graphiti's default (`auto`, which sends `none` for GPT-5.1 and later) | OpenAI reasoning effort for the `GRALKOR_LLM_MODEL` client. OpenAI only. |
+| `GRALKOR_LLM_VERBOSITY` | Graphiti's default | OpenAI verbosity for the `GRALKOR_LLM_MODEL` client. OpenAI only. |
+| `GRALKOR_LLM_THINKING_BUDGET` | Graphiti's default (no thinking config) | Gemini thinking budget for the `GRALKOR_LLM_MODEL` client: an integer of at least -1, where `0` turns thinking off and `-1` asks for a dynamic budget. Google only. |
+| `GRALKOR_RERANKER_MODEL` | unset (the LLM's provider with Graphiti's default reranker model) | `"provider:model"` spec for the cross-encoder/reranker, built with its own provider's credential. |
+| `GRALKOR_EMBEDDER_MODEL` | `google:gemini-embedding-2-preview` | Same form and same supported providers, for the embedder — chosen independently of the LLM, so `openai:` LLM + `google:` embedder is a valid pair (it needs both keys). |
+| `GRALKOR_EMBEDDER_DIMENSION` | Graphiti's default | Positive integer embedding dimension (OpenAI truncates to it; Gemini requests it as `output_dimensionality`). Keep it consistent with existing graphs. |
+| `GRALKOR_EMBEDDER_BATCH_SIZE` | `1` for a Google embedder | Positive integer: the most inputs a Google embedder sends per request (unset keeps one, avoiding the gemini-embedding-2-preview batching defect, getzep/graphiti#1467). Google only. |
+
+A tuning setting configured for a provider that does not accept it — `GRALKOR_LLM_REASONING` or `GRALKOR_LLM_VERBOSITY` with a Google LLM, `GRALKOR_LLM_THINKING_BUDGET` with an OpenAI LLM, `GRALKOR_EMBEDDER_BATCH_SIZE` with an OpenAI embedder, or the same fields on a route — raises at startup naming the setting and the provider. A value that does not parse (a non-number temperature, an integer setting that is not a positive integer) raises naming the variable and the value.
 
 ### Plugin mount options
 

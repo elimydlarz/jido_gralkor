@@ -6,18 +6,37 @@ when the graph library needs inference
 when the pool starts
   then the shared asyncio runtime is installed, so the pool can be started on its own
   and the LLM client, the embedder, and the cross-encoder are each constructed once and shared by every graph instance for the pool's lifetime
-  while both configured model specs name a supported inference provider
+  while every configured model spec names a supported inference provider
     then client construction proceeds using the configured model ids
     and the LLM client is built for the provider the LLM spec names
     and the embedder is built for the provider the embedder spec names
-    and the cross-encoder is built for the provider the LLM spec names
     and each provider credential is passed explicitly from the BEAM side
     where the credential exists only in the BEAM environment
       then the BEAM-side credential lookup returns the configured value
       and the embedded Python environment cannot read that BEAM-only value directly
+    while LLM routes are configured
+      then graph instances receive an LLM runtime whose default model is the LLM spec's
+      and each routed group or prompt runs on its route's model
+      and routes sharing a provider and tuning share one client
+      and a route's tuning applies only to the prompts it routes
+    while no LLM routes are configured
+      then graph instances receive the LLM client without an LLM runtime
+    while a reranker model is configured
+      then the cross-encoder is built for the provider and model it names
+    while no reranker model is configured
+      then the cross-encoder is built for the LLM's provider with the graph library's default reranker model
+    while an LLM tuning setting is configured
+      then the LLM spec's client receives it
+    while no LLM tuning setting is configured
+      then the LLM spec's client receives the graph library's default for it
+    while an embedder dimension is configured
+      then the embedder is configured with that dimension
     while the embedder spec names Google
-      then the embedder sends one input per request
-    while the two specs name different providers
+      while no embedder batch size is configured
+        then the embedder sends one input per request
+      while an embedder batch size is configured
+        then the embedder sends at most that many inputs per request
+    while the role specs name different providers
       then each client is still built for its own role's provider
       and startup completes
   while an embedded connection is configured
@@ -27,17 +46,21 @@ when the pool starts
   while a remote connection is configured
     then the remote database is constructed once and held for the pool's lifetime
 
-if either configured model spec names a provider that is neither OpenAI nor Google
+if any configured model spec names a provider that is neither OpenAI nor Google
   then startup raises before any inference client is constructed
-  and the failure names both configured model specs
+  and the failure names every configured model spec
   and the failure names the providers that are supported
+
+if a tuning setting is configured for a model whose provider does not accept it
+  then startup raises before any inference client is constructed
+  and the failure names the setting and the model's provider
 
 if the credential for a provider named by a configured model spec is absent or blank
   then startup raises before any inference client is constructed
   and the failure names the absent credential
   and the failure names the role whose spec required it
 
-where a provider is named by neither configured model spec
+where a provider is named by no configured model spec
   then its absent credential does not prevent startup
 
 when the pool has constructed its database

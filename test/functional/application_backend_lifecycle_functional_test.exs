@@ -240,7 +240,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
           send(test_pid, {:falkor_db_constructed, spec})
           :remote_falkor_db
         end,
-        construct_shared_clients: fn _llm, _embedder ->
+        construct_shared_clients: fn _spec ->
           %{llm_client: nil, embedder: nil, cross_encoder: nil}
         end,
         warmup: false
@@ -281,7 +281,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       Keyword.merge(pool_options,
         name: nil,
         table: table,
-        construct_shared_clients: fn _llm, _embedder ->
+        construct_shared_clients: fn _spec ->
           %{llm_client: nil, embedder: nil, cross_encoder: nil}
         end,
         warmup: false

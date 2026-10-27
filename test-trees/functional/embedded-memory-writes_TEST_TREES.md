@@ -23,8 +23,3 @@ when the embedded runtime starts
 
 if `:embedded_falkordb_socket_timeout_ms` is not a positive integer
   then application startup raises naming the setting and its offending value
-
-when an episode relationship has no existing edge candidates
-  then no vector edge search carrying an empty candidate filter is executed
-  and no full-text edge search carrying an empty candidate filter is executed
-  and episode addition continues

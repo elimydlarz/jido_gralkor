@@ -111,7 +111,7 @@ defmodule Gralkor.ApplicationTest do
       pool_opts =
         Keyword.merge(pool_opts,
           install_loop_fn: fn -> :ok end,
-          construct_shared_clients: fn _llm, _embedder ->
+          construct_shared_clients: fn _spec ->
             %{llm_client: nil, embedder: nil, cross_encoder: nil}
           end,
           construct_falkor_db: fn _spec ->
@@ -698,7 +698,7 @@ defmodule Gralkor.ApplicationTest do
            table: :gralkor_graphiti_instances,
            falkordb_spec: {:embedded, "/tmp/never_used"},
            construct_falkor_db: fn _spec -> :stub_falkor_db end,
-           construct_shared_clients: fn _llm, _embedder ->
+           construct_shared_clients: fn _spec ->
              %{llm_client: nil, embedder: nil, cross_encoder: nil}
            end,
            construct_instance: fn _db, _shared, _group_id -> g end,

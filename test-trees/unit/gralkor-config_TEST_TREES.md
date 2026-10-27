@@ -57,3 +57,48 @@ if a role's model override omits the colon separator
 
 if a role's model override leaves the provider or the model id blank after surrounding whitespace is removed
   then resolving that role's model raises, naming the environment variable and the offending value
+
+when the reranker model is resolved
+  while a provider and a model id joined by a colon are configured
+    then a spec carrying that provider as an atom and that model id as a string is returned
+  while no reranker model is configured, or it is blank
+    then nothing is returned
+
+if the reranker model omits the colon separator or leaves the provider or the model id blank
+  then resolving the reranker model raises, naming the environment variable and the offending value
+
+when the LLM routes are resolved
+  while they are configured as a JSON object keyed by prompt group or group-qualified prompt name
+    then each key's route is returned carrying its model spec and the tuning it sets
+  while no LLM routes are configured, or they are blank
+    then no routes are returned
+
+if the LLM routes are not a JSON object
+  then resolving them raises, naming the environment variable and the offending value
+
+if an LLM route's key names neither a prompt group nor a prompt of that group
+  then resolving them raises, naming the key and the accepted prompt names
+
+if an LLM route's model is not a provider and a model id joined by a colon
+  then resolving them raises, naming the key and the offending value
+
+if an LLM route sets a field that is neither its model nor a tuning setting
+  then resolving them raises, naming the key and the field
+
+if an LLM route's tuning value does not parse as its setting's type
+  then resolving them raises, naming the key, the setting, and the offending value
+
+when an inference tuning setting is resolved
+  while it is configured
+    then its value is returned parsed as that setting's type
+  while it is not configured, or it is blank
+    then nothing is returned
+
+if the max tokens, embedder dimension, or embedder batch size is not a positive integer
+  then resolving it raises, naming the environment variable and the offending value
+
+if the thinking budget is not an integer of at least -1
+  then resolving it raises, naming the environment variable and the offending value
+
+if the LLM temperature is not a number
+  then resolving it raises, naming the environment variable and the offending value

@@ -20,7 +20,7 @@ defmodule Gralkor.GraphitiPoolTest do
       table: table,
       falkordb_spec: {:embedded, "/tmp/never_used"},
       construct_falkor_db: fn _spec -> :stub_falkor_db end,
-      construct_shared_clients: fn _llm, _embedder ->
+      construct_shared_clients: fn _spec ->
         %{llm_client: nil, embedder: nil, cross_encoder: nil}
       end,
       construct_instance: fn _db, _shared, group_id -> {:stub_graphiti, group_id} end,
@@ -144,7 +144,7 @@ defmodule Gralkor.GraphitiPoolTest do
       falkordb_spec: {:embedded, data_dir},
       warmup: false,
       construct_falkor_db: fn _spec -> :stub_falkor_db end,
-      construct_shared_clients: fn _llm, _embedder ->
+      construct_shared_clients: fn _spec ->
         %{llm_client: nil, embedder: nil, cross_encoder: nil}
       end,
       initialise_instance: fn _instance -> :ok end
@@ -3018,7 +3018,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
       shared = %{llm_client: :the_llm, embedder: :the_embedder, cross_encoder: :the_xenc}
 
-      construct_shared_clients = fn _llm, _embedder ->
+      construct_shared_clients = fn _spec ->
         :counters.add(shared_count, 1, 1)
         shared
       end
@@ -3046,7 +3046,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when the pool starts > while both configured model specs name a supported inference provider" do
+  describe "when the pool starts > while every configured model spec names a supported inference provider" do
     test "then client construction proceeds using the configured model ids" do
       test_pid = self()
 
@@ -3062,13 +3062,15 @@ defmodule Gralkor.GraphitiPoolTest do
           start_pool(
             llm_model: llm_model,
             embedder_model: embedder_model,
-            construct_shared_clients: fn received_llm, received_embedder ->
-              send(test_pid, {:construct_shared, received_llm, received_embedder})
+            construct_shared_clients: fn spec ->
+              send(test_pid, {:construct_shared, spec})
               %{llm_client: nil, embedder: nil, cross_encoder: nil}
             end
           )
 
-        assert_receive {:construct_shared, ^llm_model, ^embedder_model}
+        assert_receive {:construct_shared, spec}
+        assert Map.take(spec.llm, [:provider, :id]) == llm_model
+        assert Map.take(spec.embedder, [:provider, :id]) == embedder_model
         assert Process.alive?(pid)
       end)
     end
@@ -3095,16 +3097,6 @@ defmodule Gralkor.GraphitiPoolTest do
       assert spec.embedder.id == "gemini-embedding-2-preview"
     end
 
-    test "and the cross-encoder is built for the provider the LLM spec names" do
-      spec =
-        GraphitiPool.shared_client_spec(
-          %{provider: :openai, id: "gpt-4.1-mini"},
-          %{provider: :google, id: "gemini-embedding-2-preview"}
-        )
-
-      assert spec.cross_encoder.provider == :openai
-    end
-
     test "and each provider credential is passed explicitly from the BEAM side" do
       previous_openai = System.get_env("OPENAI_API_KEY")
       previous_google = System.get_env("GOOGLE_API_KEY")
@@ -3122,7 +3114,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when the pool starts > while both configured model specs name a supported inference provider > while the two specs name different providers" do
+  describe "when the pool starts > while every configured model spec names a supported inference provider > while the role specs name different providers" do
     test "and startup completes" do
       test_pid = self()
       llm_model = %{provider: :openai, id: "gpt-4.1-mini"}
@@ -3132,13 +3124,15 @@ defmodule Gralkor.GraphitiPoolTest do
         start_pool(
           llm_model: llm_model,
           embedder_model: embedder_model,
-          construct_shared_clients: fn received_llm, received_embedder ->
-            send(test_pid, {:construct_shared, received_llm, received_embedder})
+          construct_shared_clients: fn spec ->
+            send(test_pid, {:construct_shared, spec})
             %{llm_client: nil, embedder: nil, cross_encoder: nil}
           end
         )
 
-      assert_receive {:construct_shared, ^llm_model, ^embedder_model}
+      assert_receive {:construct_shared, spec}
+      assert Map.take(spec.llm, [:provider, :id]) == llm_model
+      assert Map.take(spec.embedder, [:provider, :id]) == embedder_model
       assert Process.alive?(pid)
     end
 
@@ -3152,6 +3146,253 @@ defmodule Gralkor.GraphitiPoolTest do
       assert spec.llm.provider == :google
       assert spec.embedder.provider == :openai
       assert spec.cross_encoder.provider == :google
+    end
+  end
+
+  describe "when the pool starts > while every configured model spec names a supported inference provider > while LLM routes are configured" do
+    setup do
+      %{shared: shared, instance: instance} =
+        constructed_clients(
+          llm_model: %{provider: :openai, id: "gpt-5.4-mini"},
+          llm_tuning: %{reasoning: "low"},
+          llm_routes: %{
+            "extract_edges" => %{model: %{provider: :google, id: "gemini-3-flash"}, tuning: %{}},
+            "extract_edges.extract_timestamps" => %{
+              model: %{provider: :openai, id: "gpt-5.4-nano"},
+              tuning: %{reasoning: "low"}
+            },
+            "dedupe_nodes" => %{
+              model: %{provider: :openai, id: "gpt-5.4"},
+              tuning: %{max_tokens: 2048}
+            },
+            "summarize_nodes" => %{model: %{provider: :google, id: "gemini-3-pro"}, tuning: %{}}
+          }
+        )
+
+      %{shared: shared, instance: instance}
+    end
+
+    test "then graph instances receive an LLM runtime whose default model is the LLM spec's", %{
+      instance: instance
+    } do
+      assert python(%{"g" => instance}, "type(g.llm_runtime).__name__") == "LLMRuntime"
+      assert python(%{"g" => instance}, "g.clients.llm_runtime is g.llm_runtime")
+      assert python(%{"g" => instance}, "g.llm_runtime.model.id") == "gpt-5.4-mini"
+
+      assert python(%{"g" => instance}, "type(g.llm_runtime.model.transport.client).__name__") ==
+               "OpenAIClient"
+    end
+
+    test "and each routed group or prompt runs on its route's model", %{shared: shared} do
+      for {prompt, model} <- [
+            {"extract_edges.edge", "gemini-3-flash"},
+            {"extract_edges.extract_attributes", "gemini-3-flash"},
+            {"extract_edges.extract_timestamps", "gpt-5.4-nano"},
+            {"dedupe_nodes.node_list", "gpt-5.4"},
+            {"summarize_nodes.summarize_pair", "gemini-3-pro"},
+            {"dedupe_edges.resolve_edge", "gpt-5.4-mini"}
+          ] do
+        assert python(%{"runtime" => shared.llm_runtime}, "runtime.resolve_model('#{prompt}').id") ==
+                 model
+      end
+    end
+
+    test "and routes sharing a provider and tuning share one client", %{shared: shared} do
+      runtime = %{"runtime" => shared.llm_runtime}
+
+      assert python(
+               runtime,
+               "runtime.resolve_model('extract_edges.extract_timestamps').transport.client is runtime.client"
+             )
+
+      assert python(
+               runtime,
+               "runtime.resolve_model('extract_edges.edge').transport.client is runtime.resolve_model('summarize_nodes.summarize_pair').transport.client"
+             )
+
+      refute python(
+               runtime,
+               "runtime.resolve_model('dedupe_nodes.node').transport.client is runtime.client"
+             )
+
+      assert python(runtime, "len({id(t.client) for t in runtime.transports})") == 3
+    end
+
+    test "and a route's tuning applies only to the prompts it routes", %{shared: shared} do
+      runtime = %{"runtime" => shared.llm_runtime}
+
+      assert python(
+               runtime,
+               "runtime.resolve_model('dedupe_nodes.node').transport.client.max_tokens"
+             ) ==
+               2048
+
+      assert python(runtime, "runtime.client.max_tokens") ==
+               python(
+                 %{},
+                 "from graphiti_core.llm_client.config import DEFAULT_MAX_TOKENS\nDEFAULT_MAX_TOKENS"
+               )
+
+      assert python(runtime, "runtime.client.reasoning") == "low"
+
+      assert python(
+               runtime,
+               "runtime.resolve_model('dedupe_nodes.node').transport.client.reasoning"
+             ) ==
+               python(
+                 %{},
+                 "from graphiti_core.llm_client.openai_base_client import DEFAULT_REASONING\nDEFAULT_REASONING"
+               )
+    end
+  end
+
+  describe "when the pool starts > while every configured model spec names a supported inference provider > while no LLM routes are configured" do
+    test "then graph instances receive the LLM client without an LLM runtime" do
+      %{shared: shared, instance: instance} =
+        constructed_clients(llm_model: %{provider: :openai, id: "gpt-5.4-mini"}, llm_routes: %{})
+
+      assert shared.llm_runtime == nil
+      assert python(%{"g" => instance}, "g.llm_runtime") == nil
+      assert python(%{"g" => instance, "llm" => shared.llm_client}, "g.llm_client is llm")
+      assert python(%{"g" => instance}, "g.llm_client.model") == "gpt-5.4-mini"
+    end
+  end
+
+  describe "when the pool starts > while every configured model spec names a supported inference provider > while a reranker model is configured" do
+    test "then the cross-encoder is built for the provider and model it names" do
+      for {reranker, client} <- [
+            {%{provider: :google, id: "gemini-2.5-flash-lite"}, "GeminiRerankerClient"},
+            {%{provider: :openai, id: "gpt-4.1-nano"}, "OpenAIRerankerClient"}
+          ] do
+        %{shared: shared} =
+          constructed_clients(
+            llm_model: %{provider: :google, id: "gemini-3.1-flash-lite"},
+            reranker_model: reranker
+          )
+
+        reranker_object = %{"reranker" => shared.cross_encoder}
+        assert python(reranker_object, "type(reranker).__name__") == client
+        assert python(reranker_object, "reranker.config.model") == reranker.id
+      end
+    end
+  end
+
+  describe "when the pool starts > while every configured model spec names a supported inference provider > while no reranker model is configured" do
+    test "then the cross-encoder is built for the LLM's provider with the graph library's default reranker model" do
+      for {llm, client} <- [
+            {%{provider: :google, id: "gemini-3.1-flash-lite"}, "GeminiRerankerClient"},
+            {%{provider: :openai, id: "gpt-5.4-mini"}, "OpenAIRerankerClient"}
+          ] do
+        %{shared: shared} = constructed_clients(llm_model: llm, reranker_model: nil)
+
+        reranker_object = %{"reranker" => shared.cross_encoder}
+        assert python(reranker_object, "type(reranker).__name__") == client
+        assert python(reranker_object, "reranker.config.model") == nil
+      end
+    end
+  end
+
+  describe "when the pool starts > while every configured model spec names a supported inference provider > while an LLM tuning setting is configured" do
+    test "then the LLM spec's client receives it" do
+      %{shared: openai} =
+        constructed_clients(
+          llm_model: %{provider: :openai, id: "gpt-5.4-mini"},
+          llm_tuning: %{
+            temperature: 0.3,
+            max_tokens: 1024,
+            reasoning: "medium",
+            verbosity: "high"
+          }
+        )
+
+      assert python(
+               %{"llm" => openai.llm_client},
+               "[llm.temperature, llm.max_tokens, llm.reasoning, llm.verbosity]"
+             ) == [0.3, 1024, "medium", "high"]
+
+      %{shared: google} =
+        constructed_clients(
+          llm_model: %{provider: :google, id: "gemini-3.1-flash-lite"},
+          llm_tuning: %{temperature: 0.7, max_tokens: 2048, thinking_budget: 256}
+        )
+
+      assert python(
+               %{"llm" => google.llm_client},
+               "[llm.temperature, llm.max_tokens, llm.thinking_config.thinking_budget]"
+             ) == [0.7, 2048, 256]
+
+      for budget <- [0, -1] do
+        %{shared: google} =
+          constructed_clients(
+            llm_model: %{provider: :google, id: "gemini-3.1-flash-lite"},
+            llm_tuning: %{thinking_budget: budget}
+          )
+
+        assert python(%{"llm" => google.llm_client}, "llm.thinking_config.thinking_budget") ==
+                 budget
+      end
+    end
+  end
+
+  describe "when the pool starts > while every configured model spec names a supported inference provider > while no LLM tuning setting is configured" do
+    test "then the LLM spec's client receives the graph library's default for it" do
+      %{shared: openai} =
+        constructed_clients(llm_model: %{provider: :openai, id: "gpt-5.5"}, llm_tuning: %{})
+
+      assert python(%{"llm" => openai.llm_client}, """
+             from graphiti_core.llm_client.config import DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
+             from graphiti_core.llm_client.openai_base_client import DEFAULT_REASONING, DEFAULT_VERBOSITY
+             [llm.temperature == DEFAULT_TEMPERATURE, llm.max_tokens == DEFAULT_MAX_TOKENS,
+              llm.reasoning == DEFAULT_REASONING, llm.verbosity == DEFAULT_VERBOSITY]
+             """) == [true, true, true, true]
+
+      %{shared: google} =
+        constructed_clients(
+          llm_model: %{provider: :google, id: "gemini-3.1-flash-lite"},
+          llm_tuning: %{}
+        )
+
+      assert python(%{"llm" => google.llm_client}, """
+             from graphiti_core.llm_client.config import DEFAULT_TEMPERATURE
+             [llm.temperature == DEFAULT_TEMPERATURE, llm.max_tokens is None, llm.thinking_config is None]
+             """) == [true, true, true]
+    end
+  end
+
+  describe "when the pool starts > while every configured model spec names a supported inference provider > while an embedder dimension is configured" do
+    test "then the embedder is configured with that dimension" do
+      for embedder <- [
+            %{provider: :openai, id: "text-embedding-3-small"},
+            %{provider: :google, id: "gemini-embedding-2-preview"}
+          ] do
+        %{shared: shared} = constructed_clients(embedder_model: embedder, embedder_dimension: 768)
+
+        assert python(%{"embedder" => shared.embedder}, "embedder.config.embedding_dim") == 768
+      end
+    end
+  end
+
+  describe "when the pool starts > while every configured model spec names a supported inference provider > while the embedder spec names Google > while no embedder batch size is configured" do
+    test "then the embedder sends one input per request" do
+      %{shared: shared} =
+        constructed_clients(
+          embedder_model: %{provider: :google, id: "gemini-embedding-2-preview"},
+          embedder_batch_size: nil
+        )
+
+      assert python(%{"embedder" => shared.embedder}, "embedder.batch_size") == 1
+    end
+  end
+
+  describe "when the pool starts > while every configured model spec names a supported inference provider > while the embedder spec names Google > while an embedder batch size is configured" do
+    test "then the embedder sends at most that many inputs per request" do
+      %{shared: shared} =
+        constructed_clients(
+          embedder_model: %{provider: :google, id: "gemini-embedding-2-preview"},
+          embedder_batch_size: 25
+        )
+
+      assert python(%{"embedder" => shared.embedder}, "embedder.batch_size") == 25
     end
   end
 
@@ -3210,19 +3451,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when the pool starts > while both configured model specs name a supported inference provider > while the embedder spec names Google" do
-    test "then the embedder sends one input per request" do
-      spec =
-        GraphitiPool.shared_client_spec(
-          %{provider: :google, id: "gemini-3.1-flash-lite"},
-          %{provider: :google, id: "gemini-embedding-2-preview"}
-        )
-
-      assert spec.embedder.batch_size == 1
-    end
-  end
-
-  describe "if either configured model spec names a provider that is neither OpenAI nor Google" do
+  describe "if any configured model spec names a provider that is neither OpenAI nor Google" do
     setup do
       previous_trap_exit = Process.flag(:trap_exit, true)
       on_exit(fn -> Process.flag(:trap_exit, previous_trap_exit) end)
@@ -3247,7 +3476,7 @@ defmodule Gralkor.GraphitiPoolTest do
                    falkordb_spec: {:embedded, "/tmp/never_used"},
                    llm_model: llm_model,
                    embedder_model: embedder_model,
-                   construct_shared_clients: fn _, _ ->
+                   construct_shared_clients: fn _spec ->
                      send(test_pid, :inference_client_construction_started)
                      %{llm_client: nil, embedder: nil, cross_encoder: nil}
                    end,
@@ -3262,16 +3491,108 @@ defmodule Gralkor.GraphitiPoolTest do
       end)
     end
 
-    test "and the failure names both configured model specs" do
-      error = unsupported_provider_error()
-      assert Exception.message(error) =~ "anthropic"
-      assert Exception.message(error) =~ "google"
+    test "and the failure names every configured model spec" do
+      message = unsupported_provider_error() |> Exception.message()
+      assert message =~ "claude-opus-5"
+      assert message =~ "gemini-embedding-2-preview"
+      assert message =~ "gpt-4.1-nano"
+      assert message =~ "command-r"
+      assert message =~ "extract_edges"
     end
 
     test "and the failure names the providers that are supported" do
       message = unsupported_provider_error() |> Exception.message()
       assert message =~ "openai"
       assert message =~ "google"
+    end
+  end
+
+  describe "if a tuning setting is configured for a model whose provider does not accept it" do
+    setup do
+      previous_trap_exit = Process.flag(:trap_exit, true)
+      on_exit(fn -> Process.flag(:trap_exit, previous_trap_exit) end)
+      :ok
+    end
+
+    @rejected_tuning [
+      {[
+         llm_model: %{provider: :google, id: "gemini-3.1-flash-lite"},
+         llm_tuning: %{reasoning: "low"}
+       ], "GRALKOR_LLM_REASONING", ":google"},
+      {[
+         llm_model: %{provider: :google, id: "gemini-3.1-flash-lite"},
+         llm_tuning: %{verbosity: "low"}
+       ], "GRALKOR_LLM_VERBOSITY", ":google"},
+      {[llm_model: %{provider: :openai, id: "gpt-5.4-mini"}, llm_tuning: %{thinking_budget: 64}],
+       "GRALKOR_LLM_THINKING_BUDGET", ":openai"},
+      {[
+         llm_routes: %{
+           "eval" => %{
+             model: %{provider: :google, id: "gemini-3-flash"},
+             tuning: %{reasoning: "high"}
+           }
+         }
+       ], "reasoning", ":google"},
+      {[
+         embedder_model: %{provider: :openai, id: "text-embedding-3-small"},
+         embedder_batch_size: 10
+       ], "GRALKOR_EMBEDDER_BATCH_SIZE", ":openai"}
+    ]
+
+    defp start_pool_with_tuning(opts, test_pid) do
+      defaults = [
+        name: nil,
+        table: :"pool_table_#{System.unique_integer([:positive])}",
+        falkordb_spec: {:embedded, "/tmp/never_used"},
+        llm_model: %{provider: :openai, id: "gpt-5.4-mini"},
+        embedder_model: %{provider: :google, id: "gemini-embedding-2-preview"},
+        reranker_model: nil,
+        llm_routes: %{},
+        llm_tuning: %{},
+        embedder_dimension: nil,
+        embedder_batch_size: nil,
+        construct_shared_clients: fn _spec ->
+          send(test_pid, :inference_client_construction_started)
+          %{llm_client: nil, embedder: nil, cross_encoder: nil}
+        end,
+        construct_falkor_db: fn _ -> :stub_falkor_db end,
+        construct_instance: fn _, _, group -> {:stub_graphiti, group} end,
+        initialise_instance: fn _ -> :ok end,
+        install_loop_fn: fn -> :ok end,
+        warmup: false
+      ]
+
+      GraphitiPool.start_link(Keyword.merge(defaults, opts))
+    end
+
+    test "then startup raises before any inference client is constructed" do
+      for {opts, _setting, _provider} <- @rejected_tuning do
+        assert {:error, {%ArgumentError{}, _}} = start_pool_with_tuning(opts, self())
+        refute_received :inference_client_construction_started
+      end
+    end
+
+    test "and the failure names the setting and the model's provider" do
+      for {opts, setting, provider} <- @rejected_tuning do
+        assert {:error, {%ArgumentError{} = error, _}} = start_pool_with_tuning(opts, self())
+        assert Exception.message(error) =~ setting
+        assert Exception.message(error) =~ provider
+      end
+
+      assert {:error, {%ArgumentError{} = error, _}} =
+               start_pool_with_tuning(
+                 [
+                   llm_routes: %{
+                     "eval" => %{
+                       model: %{provider: :google, id: "gemini-3-flash"},
+                       tuning: %{reasoning: "high"}
+                     }
+                   }
+                 ],
+                 self()
+               )
+
+      assert Exception.message(error) =~ ~s("eval")
     end
   end
 
@@ -3302,7 +3623,7 @@ defmodule Gralkor.GraphitiPoolTest do
         falkordb_spec: {:embedded, "/tmp/never_used"},
         llm_model: llm_model,
         embedder_model: embedder_model,
-        construct_shared_clients: fn _, _ ->
+        construct_shared_clients: fn _spec ->
           send(test_pid, :inference_client_construction_started)
           %{llm_client: nil, embedder: nil, cross_encoder: nil}
         end,
@@ -3373,10 +3694,43 @@ defmodule Gralkor.GraphitiPoolTest do
                )
 
       assert Exception.message(error) =~ "llm"
+
+      google = %{provider: :google, id: "gemini-3.1-flash-lite"}
+      google_embedder = %{provider: :google, id: "gemini-embedding-2-preview"}
+      openai = %{provider: :openai, id: "gpt-4.1-nano"}
+
+      for {extra, role} <- [
+            {[reranker_model: openai], "reranker"},
+            {[llm_routes: %{"eval" => %{model: openai, tuning: %{}}}], ~s(llm route "eval")}
+          ] do
+        assert {:error, {%ArgumentError{} = error, _}} =
+                 GraphitiPool.start_link(
+                   [
+                     name: nil,
+                     table: :"pool_table_#{System.unique_integer([:positive])}",
+                     falkordb_spec: {:embedded, "/tmp/never_used"},
+                     llm_model: google,
+                     embedder_model: google_embedder,
+                     construct_shared_clients: fn _ ->
+                       send(test_pid, :inference_client_construction_started)
+                       %{llm_client: nil, embedder: nil, cross_encoder: nil}
+                     end,
+                     construct_falkor_db: fn _ -> :stub_falkor_db end,
+                     construct_instance: fn _, _, group -> {:stub_graphiti, group} end,
+                     initialise_instance: fn _ -> :ok end,
+                     install_loop_fn: fn -> :ok end,
+                     warmup: false
+                   ] ++ extra
+                 )
+
+        assert Exception.message(error) =~ "OPENAI_API_KEY"
+        assert Exception.message(error) =~ role
+        refute_received :inference_client_construction_started
+      end
     end
   end
 
-  describe "where a provider is named by neither configured model spec" do
+  describe "where a provider is named by no configured model spec" do
     setup do
       previous = System.get_env("OPENAI_API_KEY")
 
@@ -3403,7 +3757,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when the pool starts > while both configured model specs name a supported inference provider > where the credential exists only in the BEAM environment" do
+  describe "when the pool starts > while every configured model spec names a supported inference provider > where the credential exists only in the BEAM environment" do
     test "then the BEAM-side credential lookup returns the configured value" do
       previous_openai = System.get_env("OPENAI_API_KEY")
 
@@ -3497,7 +3851,7 @@ defmodule Gralkor.GraphitiPoolTest do
           name: nil,
           table: table,
           falkordb_spec: {:remote, host: "memory.example", port: 6379},
-          construct_shared_clients: fn _llm, _embedder ->
+          construct_shared_clients: fn _spec ->
             %{llm_client: nil, embedder: nil, cross_encoder: nil}
           end,
           warmup: false,
@@ -3527,7 +3881,7 @@ defmodule Gralkor.GraphitiPoolTest do
           name: nil,
           table: table,
           falkordb_spec: {:embedded, data_dir},
-          construct_shared_clients: fn _llm, _embedder ->
+          construct_shared_clients: fn _spec ->
             %{llm_client: nil, embedder: nil, cross_encoder: nil}
           end,
           warmup: false,
@@ -3867,7 +4221,11 @@ defmodule Gralkor.GraphitiPoolTest do
                  falkordb_spec: {:embedded, "/tmp/never_used"},
                  llm_model: %{provider: :anthropic, id: "claude-opus-5"},
                  embedder_model: %{provider: :google, id: "gemini-embedding-2-preview"},
-                 construct_shared_clients: fn _, _ ->
+                 reranker_model: %{provider: :openai, id: "gpt-4.1-nano"},
+                 llm_routes: %{
+                   "extract_edges" => %{model: %{provider: :cohere, id: "command-r"}, tuning: %{}}
+                 },
+                 construct_shared_clients: fn _ ->
                    %{llm_client: nil, embedder: nil, cross_encoder: nil}
                  end,
                  construct_falkor_db: fn _ -> :stub_falkor_db end,
@@ -3904,6 +4262,51 @@ defmodule Gralkor.GraphitiPoolTest do
       ],
       extra_opts
     )
+  end
+
+  # Builds the pool's real provider clients and one real graph instance;
+  # constructing them calls no provider and the database is a stand-in.
+  defp constructed_clients(opts) do
+    {telemetry, _} = Pythonx.eval("import os\nos.environ.get('GRAPHITI_TELEMETRY_ENABLED')", %{})
+    previous = Pythonx.decode(telemetry)
+
+    on_exit(fn ->
+      Pythonx.eval(
+        "import os\nos.environ.pop('GRAPHITI_TELEMETRY_ENABLED', None) if previous is None else os.environ.__setitem__('GRAPHITI_TELEMETRY_ENABLED', previous.decode('utf-8'))",
+        %{"previous" => previous}
+      )
+    end)
+
+    {falkor_db, _} =
+      Pythonx.eval("import os\nos.environ['GRAPHITI_TELEMETRY_ENABLED'] = 'false'\nobject()", %{})
+
+    defaults = [
+      name: nil,
+      table: :"pool_table_#{System.unique_integer([:positive])}",
+      falkordb_spec: {:embedded, "/tmp/never_used"},
+      llm_model: %{provider: :openai, id: "gpt-5.4-mini"},
+      embedder_model: %{provider: :openai, id: "text-embedding-3-small"},
+      reranker_model: nil,
+      llm_routes: %{},
+      llm_tuning: %{},
+      embedder_dimension: nil,
+      embedder_batch_size: nil,
+      construct_falkor_db: fn _spec -> falkor_db end,
+      initialise_instance: fn _instance -> :ok end,
+      install_loop_fn: fn -> :ok end,
+      warmup: false
+    ]
+
+    {:ok, pid} = GraphitiPool.start_link(Keyword.merge(defaults, opts))
+    instance = GraphitiPool.for(pid, "routes")
+    shared = :sys.get_state(pid).shared
+    GenServer.stop(pid)
+    %{shared: shared, instance: instance}
+  end
+
+  defp python(globals, script) do
+    {value, _} = Pythonx.eval(script, globals)
+    Pythonx.decode(value)
   end
 
   defp restore_env(name, nil), do: System.delete_env(name)

@@ -46,7 +46,12 @@ defmodule Gralkor.Application do
       [
         falkordb_spec: spec,
         llm_model: Config.llm_model(),
-        embedder_model: Config.embedder_model()
+        embedder_model: Config.embedder_model(),
+        reranker_model: Config.reranker_model(),
+        llm_routes: Config.llm_routes(),
+        llm_tuning: Config.llm_tuning(),
+        embedder_dimension: Config.embedder_dimension(),
+        embedder_batch_size: Config.embedder_batch_size()
       ] ++ embedded_falkordb_options(spec)
 
     [

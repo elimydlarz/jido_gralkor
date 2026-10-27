@@ -1143,7 +1143,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
 
-    shared_clients = fn _, _ ->
+    shared_clients = fn _spec ->
       {_, clients} =
         Pythonx.eval(
           """
@@ -1282,7 +1282,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
        table: :gralkor_graphiti_instances,
        falkordb_spec: {:embedded, "/tmp/never_used"},
        construct_falkor_db: fn _ -> :fixture end,
-       construct_shared_clients: fn _, _ ->
+       construct_shared_clients: fn _spec ->
          %{llm_client: nil, embedder: nil, cross_encoder: nil}
        end,
        construct_instance: fn _, _, _ -> graphiti end,

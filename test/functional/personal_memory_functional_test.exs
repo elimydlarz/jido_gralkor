@@ -57,7 +57,7 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
       {Gralkor.GraphitiPool,
        construct_falkor_db: fn _ -> :fixture end,
        falkordb_spec: {:embedded, "/tmp/never_used"},
-       construct_shared_clients: fn _, _ ->
+       construct_shared_clients: fn _spec ->
          %{llm_client: nil, embedder: nil, cross_encoder: nil}
        end,
        construct_instance: fn _, _, _ -> graphiti end,

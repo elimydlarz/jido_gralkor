@@ -220,7 +220,7 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
 
     test_pid = self()
 
-    shared_clients = fn _, _ ->
+    shared_clients = fn _spec ->
       {_, globals} =
         Pythonx.eval(
           """

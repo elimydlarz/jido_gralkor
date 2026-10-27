@@ -1,5 +1,18 @@
 # Changelog
 
+## [11.2.0] - 2026-10-27
+
+### Changed
+- Graphiti runtime bumped to `graphiti-core[falkordb,google-genai] == 0.31.2`. Graphiti's OpenAI defaults are now `gpt-6-luna` (main and small) and `gpt-4.1-mini` (reranker), and its `auto` reasoning effort sends `none` for GPT-5.1 and later majors.
+- jido_gralkor no longer derives an OpenAI reasoning tier (`none` for GPT-5.5 and GPT-5.6): an unset `GRALKOR_LLM_REASONING` keeps Graphiti's own `auto`. A model that rejects `none` (such as `gpt-6-astra`) needs `GRALKOR_LLM_REASONING=low` or higher.
+- An unconfigured reranker is built for the LLM's provider with Graphiti's default reranker model and its own client; the OpenAI reranker no longer reuses the LLM client.
+- The embedded empty-edge-candidate guard is removed: graphiti-core 0.31.2 no longer searches edges with an empty `edge_uuids` candidate filter (it filters duplicate candidates by endpoints).
+- `GraphitiPool`'s `:construct_shared_clients` substitute receives the single decided client spec (`shared_client_spec/1`) instead of the LLM and embedder specs; `validate_native_models!/1` takes the complete inference settings.
+
+### Added
+- Optional inference settings, each unset meaning Graphiti's own default: `GRALKOR_RERANKER_MODEL` (the reranker's own provider and model); `GRALKOR_LLM_ROUTES` (JSON routing Graphiti prompt groups or group-qualified prompts to their own model and tuning through Graphiti's `LLMRuntime`); `GRALKOR_LLM_TEMPERATURE`, `GRALKOR_LLM_MAX_TOKENS`, `GRALKOR_LLM_REASONING` and `GRALKOR_LLM_VERBOSITY` (OpenAI), and `GRALKOR_LLM_THINKING_BUDGET` (Google; any integer of at least -1, `0` turning thinking off and `-1` asking for a dynamic budget, also as a route's `thinking_budget`) for the `GRALKOR_LLM_MODEL` client; `GRALKOR_EMBEDDER_DIMENSION`; and `GRALKOR_EMBEDDER_BATCH_SIZE` (Google; unset keeps one input per request).
+- Startup raises before any inference client is constructed for a malformed route or tuning value (naming the variable or key, field, and value), a tuning setting the model's provider does not accept (naming the setting and provider), or a missing credential for any provider a reranker or route selects (naming the role).
+
 ## [11.1.0] - 2026-10-03
 
 ### Changed
