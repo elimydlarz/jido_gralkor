@@ -57,6 +57,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     on_exit(fn -> Enum.each(previous, fn {key, value} -> restore_env(key, value) end) end)
 
     start_supervised!(Gralkor.Destination.Storage.InMemory)
+    start_supervised!(Gralkor.Lens.Storage.InMemory)
     Application.put_env(:jido_gralkor, :destinations, [[name: "observations"]])
 
     Application.put_env(
@@ -121,7 +122,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       {output, artefact} = in_memory_artefact(reflection)
       assert :ok = put_in_memory(output, reflection, artefact)
       assert :ok = put_in_memory(output, reflection, artefact)
-      assert [%{artefact: ^artefact}] = in_memory_search(output, reflection)
+      assert [Map.from_struct(artefact)] == in_memory_search(output, reflection)
     end
   end
 
@@ -159,7 +160,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   describe "when Graphiti artefact extraction fails before its claim-fenced transaction commits" do
-    test "then canonical lookup and public artefact search report no episode", %{
+    test "then canonical lookup and public search report no episode", %{
       reflection: reflection
     } do
       assert_verified(:failed_extraction, &assert_failed_extraction_contract/1, [reflection])
@@ -181,7 +182,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/0)
     end
 
-    test "and public artefact search excludes that incomplete artefact" do
+    test "and public search excludes that incomplete artefact's episode" do
       assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/0)
     end
 
@@ -196,24 +197,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     end
   end
 
-  describe "where Graphiti stores a Destination artefact output > when artefact search encounters historical complete episodes carrying the same artefact identifier > while their immutable payloads are equal" do
-    test "then search returns one artefact" do
-      assert_verified(:uncertain, &assert_uncertain_response_contract/0)
-    end
-  end
-
-  describe "where Graphiti stores a Destination artefact output > when artefact search encounters historical complete episodes carrying the same artefact identifier > while their immutable payloads conflict" do
-    test "then search reports an artefact conflict" do
-      assert_verified(:uncertain, &assert_uncertain_response_contract/0)
-    end
-  end
-
-  describe "where Graphiti stores a Destination artefact output > when incomplete or duplicate episodes outnumber the requested result window" do
-    test "then they cannot crowd completed unique artefacts out of the requested results" do
-      assert_verified(:uncertain, &assert_uncertain_response_contract/0)
-    end
-
-    test "and conflicts for selected artefact identifiers are detected beyond the ranked window" do
+  describe "where Graphiti stores a Destination artefact output > when incomplete episodes rank ahead of a completed artefact within the searched window" do
+    test "then they cannot crowd the completed artefact's episode out of the returned episodes" do
       assert_verified(:uncertain, &assert_uncertain_response_contract/0)
     end
   end
@@ -298,7 +283,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert :ok = put_in_memory(output, reflection, artefact)
       assert :ok = put_in_memory(output, reflection, other)
       assert :ok = put_in_memory(output, reflection, artefact)
-      assert [%{artefact: ^artefact}, %{artefact: ^other}] = in_memory_search(output, reflection)
+
+      assert [Map.from_struct(artefact), Map.from_struct(other)] ==
+               in_memory_search(output, reflection)
     end
   end
 
@@ -687,70 +674,20 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           f'legacy-unmarked-{index}': original.model_copy(
               update={'uuid': f'legacy-unmarked-{index}'}
           )
-          for index in range(25)
+          for index in range(10)
       }
       graphiti.driver.episodes = {**partials, **graphiti.driver.episodes}
       """,
       %{"graphiti" => graphiti, "artefact_id" => artefact_id}
     )
 
-    assert {:ok, [%{destination: "observations", artefact: ^first}]} =
+    expected = Map.from_struct(first)
+
+    assert {:ok, [%{destination: "observations", episodes: [%{artefact: ^expected}]}]} =
              Client.search(%Search{
                operator_id: "operator-one",
                query: "",
-               destinations: ["observations"],
-               result_type: :artefacts
-             })
-
-    Pythonx.eval(
-      """
-      uid = artefact_id.decode('utf-8') if isinstance(artefact_id, (bytes, bytearray)) else artefact_id
-      original = graphiti.driver.episodes[uid]
-      duplicate = original.model_copy(update={'uuid': 'legacy-equal-duplicate'})
-      graphiti.driver.episodes[duplicate.uuid] = duplicate
-      graphiti.driver._gralkor_completed_episode_uuids.add(duplicate.uuid)
-      """,
-      %{"graphiti" => graphiti, "artefact_id" => artefact_id}
-    )
-
-    assert {:ok, [%{destination: "observations", artefact: ^first}]} =
-             Client.search(%Search{
-               operator_id: "operator-one",
-               query: "",
-               destinations: ["observations"],
-               result_type: :artefacts
-             })
-
-    conflicting_content =
-      first
-      |> Map.put(:payload, %{"summary" => "conflicting"})
-      |> Map.from_struct()
-      |> Jason.encode!()
-
-    Pythonx.eval(
-      """
-      body = conflicting_content.decode('utf-8') if isinstance(conflicting_content, (bytes, bytearray)) else conflicting_content
-      uid = artefact_id.decode('utf-8') if isinstance(artefact_id, (bytes, bytearray)) else artefact_id
-      original = graphiti.driver.episodes[uid]
-      conflict = original.model_copy(
-          update={'uuid': 'legacy-conflicting-duplicate', 'content': body}
-      )
-      graphiti.driver.episodes[conflict.uuid] = conflict
-      graphiti.driver._gralkor_completed_episode_uuids.add(conflict.uuid)
-      """,
-      %{
-        "graphiti" => graphiti,
-        "artefact_id" => artefact_id,
-        "conflicting_content" => conflicting_content
-      }
-    )
-
-    assert {:error, {:artefact_conflict, ^artefact_id}} =
-             Client.search(%Search{
-               operator_id: "operator-one",
-               query: "stored",
-               destinations: ["observations"],
-               result_type: :artefacts
+               destinations: ["observations"]
              })
 
     {proof, _} =
@@ -759,7 +696,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         %{"graphiti" => graphiti}
       )
 
-    assert Pythonx.decode(proof) == [29, 1]
+    assert Pythonx.decode(proof) == [12, 1]
 
     :ok
   end
@@ -872,13 +809,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Gralkor.Destination.Storage.Graphiti
     )
 
-    assert {:ok, []} =
+    assert {:ok, [%{destination: "observations", episodes: []}]} =
              Client.search(%Search{
                operator_id: "operator-one",
                query: "stored",
-               destinations: ["observations"],
-               result_type: :artefacts,
-               artefact_id: artefact_id
+               destinations: ["observations"]
              })
 
     assert :ok =
@@ -889,13 +824,13 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                partial_artefact
              )
 
-    assert {:ok, [%{destination: "observations", artefact: ^partial_artefact}]} =
+    expected = Map.from_struct(partial_artefact)
+
+    assert {:ok, [%{destination: "observations", episodes: [%{artefact: ^expected}]}]} =
              Client.search(%Search{
                operator_id: "operator-one",
                query: "stored",
-               destinations: ["observations"],
-               result_type: :artefacts,
-               artefact_id: artefact_id
+               destinations: ["observations"]
              })
 
     assert :ok =
@@ -984,24 +919,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Gralkor.Destination.Storage.Graphiti
     )
 
-    assert {:ok, []} =
-             Client.search(%Search{
-               operator_id: "operator-one",
-               query: "stored",
-               destinations: ["observations"],
-               result_type: :artefacts,
-               artefact_id: artefact_id
-             })
-
-    assert {:ok, []} =
-             Client.search(%Search{
-               operator_id: "operator-one",
-               query: "stored",
-               destinations: ["observations"],
-               result_type: :artefacts
-             })
-
-    assert {:ok, []} =
+    assert {:ok, [%{destination: "observations", episodes: []}]} =
              Client.search(%Search{
                operator_id: "operator-one",
                query: "stored",
@@ -1109,13 +1027,11 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       Gralkor.Destination.Storage.Graphiti
     )
 
-    assert {:ok, []} =
+    assert {:ok, [%{destination: "observations", episodes: []}]} =
              Client.search(%Search{
                operator_id: "operator-one",
                query: "stored",
-               destinations: ["observations"],
-               result_type: :artefacts,
-               artefact_id: artefact_id
+               destinations: ["observations"]
              })
 
     {released_claim, _} =
@@ -1151,13 +1067,13 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                artefact
              )
 
-    assert {:ok, [%{destination: "observations", artefact: ^artefact}]} =
+    expected = Map.from_struct(artefact)
+
+    assert {:ok, [%{destination: "observations", episodes: [%{artefact: ^expected}]}]} =
              Client.search(%Search{
                operator_id: "operator-one",
                query: "stored",
-               destinations: ["observations"],
-               result_type: :artefacts,
-               artefact_id: artefact_id
+               destinations: ["observations"]
              })
 
     {proof, _} =
@@ -2026,17 +1942,16 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
   end
 
   defp in_memory_search(output, reflection) do
-    {:ok, artefacts} =
+    {:ok, %{episodes: episodes}} =
       Gralkor.Destination.Storage.InMemory.search(
         output.destination,
         "operator-one",
         "",
-        :artefacts,
-        10,
-        []
+        limits: Gralkor.Search.limits()
       )
 
-    Enum.map(artefacts, &%{artefact: &1, reflection: reflection.name})
+    reflection_name = reflection.name
+    for %{artefact: artefact, reflection: ^reflection_name} <- episodes, do: artefact
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)

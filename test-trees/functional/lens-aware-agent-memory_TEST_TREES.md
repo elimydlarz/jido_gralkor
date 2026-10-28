@@ -6,7 +6,7 @@ when a mounted memory plugin has an ingestion Lens declared by its consuming age
 
 when an agent with a mounted memory plugin invokes memory search
   then the tool context identifies that consuming agent's Gralkor runtime
-  and optional Destination and Lens selectors belong only to that search invocation
+  and the optional Destination selector belongs only to that search invocation
   and search selectors neither default from nor change the configured ingestion Lens
   and a turn-selected ingestion Lens neither defaults nor restricts memory search
   and returned facts are grouped under their named originating Lens or Reflection
@@ -14,8 +14,7 @@ when an agent with a mounted memory plugin invokes memory search
   where no conversation thread has been committed
     then memory search still runs for the current operator
   where the Destination selector is omitted or empty
-    while the Lens selector is omitted or empty
-      then memory search uses every accessible registered Destination
+    then memory search uses every accessible registered Destination
 
 where an agent turn selects another registered Lens
   then memory addition uses the turn-selected Lens

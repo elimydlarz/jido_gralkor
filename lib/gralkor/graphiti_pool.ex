@@ -50,6 +50,105 @@ defmodule Gralkor.GraphitiPool do
               episode.__dict__.pop('_gralkor_writer', None)
   """
 
+  # graphiti-core 0.31.2 renders several node labels as the label expression
+  # `n:A|B`, which FalkorDB rejects. Rewrite that one clause as `(n:A OR n:B)`
+  # for the FalkorDB provider so a multi-label filter keeps graphiti's meaning.
+  @falkordb_label_disjunction """
+  def install_falkordb_label_disjunction():
+      import graphiti_core.search.search_utils as search_utils
+      import graphiti_core.driver.falkordb.operations.search_ops as falkor_search_ops
+      from graphiti_core.driver.driver import GraphProvider
+      if getattr(search_utils, '_gralkor_label_disjunction', False):
+          return
+
+      def disjoin(constructor):
+          def constructed(filters, provider):
+              queries, params = constructor(filters, provider)
+              labels = list(filters.node_labels or [])
+              if provider == GraphProvider.FALKORDB and len(labels) > 1:
+                  joined = '|'.join(labels)
+                  def rewrite(query):
+                      for variable in ('n', 'm'):
+                          query = query.replace(
+                              f'{variable}:{joined}',
+                              '(' + ' OR '.join(f'{variable}:{label}' for label in labels) + ')',
+                          )
+                      return query
+                  queries = [rewrite(query) for query in queries]
+              return queries, params
+          return constructed
+
+      for module in (search_utils, falkor_search_ops):
+          module.node_search_filter_query_constructor = disjoin(module.node_search_filter_query_constructor)
+          module.edge_search_filter_query_constructor = disjoin(module.edge_search_filter_query_constructor)
+      search_utils._gralkor_label_disjunction = True
+  """
+
+  @fact_rendering """
+  async def render_facts(g, edges, lens_names=(), lens_suffixes=()):
+      from graphiti_core.nodes import EpisodicNode
+      episode_ids = list(dict.fromkeys(
+          episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
+      ))
+      episodes = await EpisodicNode.get_by_uuids(g.driver, episode_ids) if episode_ids else []
+      if episodes:
+          await hydrate_episode_writers(g.driver, episodes)
+      episodes_by_id = {episode.uuid: episode for episode in episodes}
+      source_kinds = {
+          "message": "conversation",
+          "text": "document",
+          "json": "structured_record",
+      }
+
+      endpoint_ids = list(dict.fromkeys(
+          endpoint_id
+          for edge in edges
+          for endpoint_id in (getattr(edge, "source_node_uuid", None), getattr(edge, "target_node_uuid", None))
+          if endpoint_id
+      ))
+      endpoint_names = {}
+      if endpoint_ids:
+          records, _, _ = await g.driver.execute_query(
+              'MATCH (n:Entity) WHERE n.uuid IN $uuids RETURN n.uuid AS uuid, n.name AS name',
+              uuids=endpoint_ids,
+          )
+          endpoint_names = {record['uuid']: record['name'] for record in records}
+
+      def endpoint(endpoint_id):
+          if not endpoint_id:
+              return None
+          return {"uuid": endpoint_id, "name": endpoint_names.get(endpoint_id)}
+
+      rendered = []
+      for edge in edges:
+          fact = {
+              "fact": edge.fact,
+              "relationship": getattr(edge, "name", None),
+              "source_node": endpoint(getattr(edge, "source_node_uuid", None)),
+              "target_node": endpoint(getattr(edge, "target_node_uuid", None)),
+              "created_at": str(edge.created_at) if edge.created_at else None,
+              "valid_at": str(edge.valid_at) if edge.valid_at else None,
+              "invalid_at": str(edge.invalid_at) if edge.invalid_at else None,
+              "expired_at": str(edge.expired_at) if edge.expired_at else None,
+          }
+          sources = [
+              {
+                  "id": episode_id,
+                  "source_kind": source_kinds.get(episodes_by_id[episode_id].source.value),
+                  "source_description": episodes_by_id[episode_id].source_description,
+                  "_gralkor_writer": getattr(episodes_by_id[episode_id], '_gralkor_writer', None),
+              }
+              for episode_id in (getattr(edge, "episodes", None) or [])
+              if episode_id in episodes_by_id
+              and (not lens_names or (episodes_by_id[episode_id].source_description or "").endswith(lens_suffixes))
+          ]
+          if sources:
+              fact["sources"] = sources
+          rendered.append(fact)
+
+      return rendered
+  """
+
   @upstream_failure_classification """
   def upstream_failure(error):
       import openai
@@ -203,7 +302,7 @@ defmodule Gralkor.GraphitiPool do
   `{:ok, [%{fact:, created_at:, valid_at:, invalid_at:, expired_at:}]}`
   whose individual entries can be rendered by `Gralkor.Format.format_fact/1`.
 
-  For retrieving custom-entity *nodes*, use `search_nodes/5` — edge search's
+  For retrieving custom-entity *nodes* as well, use `search_memory/5` — edge search's
   node-label filtering matches edges by endpoint and misses standalone nodes.
   """
   @spec search(GenServer.server(), String.t(), String.t(), pos_integer(), keyword()) ::
@@ -225,6 +324,7 @@ defmodule Gralkor.GraphitiPool do
         from graphiti_core.search.search_filters import SearchFilters
 
         #{@episode_writer_hydration}
+        #{@fact_rendering}
         q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
         types = (
           [t.decode('utf-8') if isinstance(t, (bytes, bytearray)) else t for t in edge_types]
@@ -253,44 +353,7 @@ defmodule Gralkor.GraphitiPool do
               return []
           edges = await g.search(q, num_results=max_results, search_filter=filters)
 
-          episode_ids = list(dict.fromkeys(
-            episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
-          ))
-          episodes = await EpisodicNode.get_by_uuids(g.driver, episode_ids) if episode_ids else []
-          if episodes:
-            await hydrate_episode_writers(g.driver, episodes)
-          episodes_by_id = {episode.uuid: episode for episode in episodes}
-          source_kinds = {
-            "message": "conversation",
-            "text": "document",
-            "json": "structured_record",
-          }
-
-          rendered = []
-          for edge in edges:
-            fact = {
-              "fact": edge.fact,
-              "created_at": str(edge.created_at) if edge.created_at else None,
-              "valid_at": str(edge.valid_at) if edge.valid_at else None,
-              "invalid_at": str(edge.invalid_at) if edge.invalid_at else None,
-              "expired_at": str(edge.expired_at) if edge.expired_at else None,
-            }
-            sources = [
-              {
-                "id": episode_id,
-                "source_kind": source_kinds.get(episodes_by_id[episode_id].source.value),
-                "source_description": episodes_by_id[episode_id].source_description,
-                "_gralkor_writer": getattr(episodes_by_id[episode_id], '_gralkor_writer', None),
-              }
-              for episode_id in (getattr(edge, "episodes", None) or [])
-              if episode_id in episodes_by_id
-              and (not lens_names or (episodes_by_id[episode_id].source_description or "").endswith(lens_suffixes))
-            ]
-            if sources:
-              fact["sources"] = sources
-            rendered.append(fact)
-
-          return rendered
+          return await render_facts(g, edges, lens_names, lens_suffixes)
 
         asyncio._gralkor_run(search_with_sources())
         """,
@@ -310,108 +373,89 @@ defmodule Gralkor.GraphitiPool do
   end
 
   @doc """
-  Episode search against `group_id` via graphiti's `search_` with an
-  episode-only config. Returns `{:ok, [%{content:, source_description:}]}` —
-  the episode bodies as they were written.
+  One memory search against `group_id` through ONE graphiti `search_` call.
 
-  This is the primitive for content Gralkor must read back verbatim. Edge and
-  node search both return what an extractor *derived* from an episode, which is
-  a different text and may be nothing at all: an episode naming one subject
-  yields a node and no edge. Graphiti searches episodes by BM25 over their
-  content, so retrieval here depends on the stored words rather than extraction.
-  Internal completion-only callers may request identity convergence. Ranked
-  results choose artefact identifiers; every completed episode carrying a
-  selected identifier is then enumerated independently of BM25 so conflicts
-  outside the ranked window remain visible to the caller. Mixed public episode
-  searches may require completion only for Reflection-authored episodes while
-  leaving ordinary historical episodes visible.
+  The config is graphiti's `COMBINED_HYBRID_SEARCH_RRF` recipe without its
+  community layer: edges and nodes are each retrieved by BM25 plus cosine
+  similarity and reranked by reciprocal rank fusion, and episodes by BM25.
+  Graphiti applies one limit to every layer, so the search asks for the largest
+  of `limits`, then cuts each kind to its own limit in relevance order. The
+  query is embedded once for every kind.
+
+  One `SearchFilters(node_labels: …, edge_types: …)` applies to the whole
+  search. Graphiti applies `node_labels` to nodes directly and to edges through
+  both endpoints; `edge_types` restricts edges only; neither restricts episodes.
+  A query longer than FalkorDB's full-text limit is cut to its earliest
+  supported terms. A Reflection episode without its durable
+  extraction-completion marker is excluded before the episode limit applies.
+
+  Returns `{:ok, %{facts: [fact], nodes: [node], episodes: [episode]}}`: facts
+  rendered as `search/5` renders them, nodes as `%{name:, summary:,
+  attributes:}`, and episodes as `%{content:, source_description:,
+  source_kind:}` plus `writer: :direct` for durable direct writes.
+
+  ## Options
+
+    * `:node_labels` — optional `[String.t()]` entity-type labels.
+    * `:edge_types` — optional `[String.t()]` relationship names.
   """
-  @spec search_episodes(String.t(), String.t(), pos_integer()) ::
-          {:ok, [map()]} | {:error, term()}
-  def search_episodes(group_id, query, max_results),
-    do: search_episodes(__MODULE__, group_id, query, max_results, [])
-
-  @spec search_episodes(GenServer.server(), String.t(), String.t(), pos_integer()) ::
-          {:ok, [map()]} | {:error, term()}
-  def search_episodes(server, group_id, query, max_results),
-    do: search_episodes(server, group_id, query, max_results, [])
-
-  @spec search_episodes(
+  @spec search_memory(
           GenServer.server(),
           String.t(),
           String.t(),
-          pos_integer(),
+          %{facts: pos_integer(), nodes: pos_integer(), episodes: pos_integer()},
           keyword()
-        ) :: {:ok, [map()]} | {:error, term()}
-  def search_episodes(server, group_id, query, max_results, opts)
-      when is_binary(group_id) and is_binary(query) and is_integer(max_results) and
-             max_results > 0 and is_list(opts) do
+        ) :: {:ok, %{facts: [map()], nodes: [map()], episodes: [map()]}} | {:error, term()}
+  def search_memory(server \\ __MODULE__, group_id, query, limits, opts \\ [])
+
+  def search_memory(
+        server,
+        group_id,
+        query,
+        %{facts: facts, nodes: nodes, episodes: episodes} = limits,
+        opts
+      )
+      when is_binary(group_id) and is_binary(query) and is_integer(facts) and facts > 0 and
+             is_integer(nodes) and nodes > 0 and is_integer(episodes) and episodes > 0 and
+             is_list(opts) do
     instance = __MODULE__.for(server, group_id)
-    require_extraction_complete = Keyword.get(opts, :require_extraction_complete, false)
-    require_reflection_complete = Keyword.get(opts, :require_reflection_complete, false)
-    converge_by_identity = Keyword.get(opts, :converge_by_identity, false)
-    lenses = Keyword.get(opts, :lenses, [])
 
     {raw, _} =
       Pythonx.eval(
         """
         import asyncio
-        import json
         from graphiti_core.driver.falkordb import STOPWORDS
         from graphiti_core.driver.falkordb.fulltext import (
           MAX_QUERY_LENGTH,
           sanitize_falkor_fulltext_query,
         )
-        from graphiti_core.search.search_config import (
-          EpisodeSearchConfig,
-          EpisodeSearchMethod,
-          SearchConfig,
-        )
+        from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_RRF
         from graphiti_core.search.search_filters import SearchFilters
 
-        q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
-        gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
-        lens_names = [
-          name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name
-          for name in lenses
-        ]
+        #{@episode_writer_hydration}
+        #{@fact_rendering}
+        #{@falkordb_label_disjunction}
+        install_falkordb_label_disjunction()
+
+        def text(value):
+          return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
+
+        q = text(query)
+        gid = text(group_id)
+        labels = [text(label) for label in node_labels] if node_labels else None
+        types = [text(edge_type) for edge_type in edge_types] if edge_types else None
         supported_query_terms = [
           word
           for word in sanitize_falkor_fulltext_query(q).split()
           if word.lower() not in STOPWORDS
         ]
-        fulltext_token_count = max(0, len(supported_query_terms) * 2 - 1)
-        if fulltext_token_count + 1 >= MAX_QUERY_LENGTH:
-          max_supported_terms = (MAX_QUERY_LENGTH - 1) // 2
-          q = ' '.join(supported_query_terms[:max_supported_terms])
-        search_limit = max_results
-        if converge_by_identity or lens_names or require_reflection_complete:
-          if hasattr(g.driver, 'execute_query'):
-            records, _, _ = asyncio._gralkor_run(
-              g.driver.execute_query(
-                "MATCH (e:Episodic {group_id: $group_id}) RETURN count(e) AS count",
-                group_id=gid,
-              )
-            )
-            if records:
-              search_limit = max(search_limit, int(records[0]['count']))
-          else:
-            search_limit = max(
-              search_limit,
-              int(getattr(g.driver, '_gralkor_episode_count', search_limit)),
-            )
-        config = SearchConfig(
-          episode_config=EpisodeSearchConfig(search_methods=[EpisodeSearchMethod.bm25]),
-          limit=search_limit,
-        )
-        res = asyncio._gralkor_run(
-          g.search_(q, config=config, group_ids=[gid], search_filter=SearchFilters())
-        )
+        if max(0, len(supported_query_terms) * 2 - 1) + 1 >= MAX_QUERY_LENGTH:
+          q = ' '.join(supported_query_terms[:(MAX_QUERY_LENGTH - 1) // 2])
 
-        #{@episode_writer_hydration}
-        episodes = res.episodes
-        if episodes:
-          asyncio._gralkor_run(hydrate_episode_writers(getattr(g, 'driver', None), episodes))
+        config = COMBINED_HYBRID_SEARCH_RRF.model_copy(deep=True)
+        config.community_config = None
+        config.limit = max(fact_limit, node_limit, episode_limit)
+
         def lens_episode(episode):
           source_description = episode.source_description or ''
           lens_marker = ' [lens: '
@@ -435,49 +479,19 @@ defmodule Gralkor.GraphitiPool do
             and bool(source_description[len('reflection:'):])
           )
 
-        if require_extraction_complete or require_reflection_complete:
-          episode_ids = [
-            e.uuid
-            for e in episodes
-            if require_extraction_complete or reflection_episode(e)
-          ]
-          if hasattr(g.driver, 'execute_query') and episode_ids:
-            records, _, _ = asyncio._gralkor_run(
-              g.driver.execute_query(
-                "MATCH (e:Episodic) WHERE e.uuid IN $uuids AND coalesce(e._gralkor_extraction_complete, false) = true RETURN e.uuid AS uuid",
-                uuids=episode_ids,
-              )
+        async def completed_reflection_episodes(episodes):
+          episode_ids = [e.uuid for e in episodes if reflection_episode(e)]
+          if not episode_ids:
+            return episodes
+          if hasattr(g.driver, 'execute_query'):
+            records, _, _ = await g.driver.execute_query(
+              "MATCH (e:Episodic) WHERE e.uuid IN $uuids AND coalesce(e._gralkor_extraction_complete, false) = true RETURN e.uuid AS uuid",
+              uuids=episode_ids,
             )
             completed_ids = {record['uuid'] for record in records}
           else:
-            completed_ids = set(
-              getattr(g.driver, '_gralkor_completed_episode_uuids', set())
-            )
-          episodes = [
-            e
-            for e in episodes
-            if not (
-              require_extraction_complete
-              or (require_reflection_complete and reflection_episode(e))
-            )
-            or e.uuid in completed_ids
-          ]
-
-        if lens_names:
-          lens_suffixes = tuple(f" [lens: {name}]" for name in lens_names)
-          episodes = [
-            episode
-            for episode in episodes
-            if (episode.source_description or '').endswith(lens_suffixes)
-          ]
-
-        def artefact_id_for(content):
-          try:
-            decoded = json.loads(content)
-          except (TypeError, ValueError):
-            return None
-          identifier = decoded.get('id') if isinstance(decoded, dict) else None
-          return identifier if isinstance(identifier, str) and identifier else None
+            completed_ids = set(getattr(g.driver, '_gralkor_completed_episode_uuids', set()))
+          return [e for e in episodes if not reflection_episode(e) or e.uuid in completed_ids]
 
         def episode_result(episode):
           result = {
@@ -491,89 +505,54 @@ defmodule Gralkor.GraphitiPool do
             result['source_kind'] = {'message': 'conversation', 'text': 'document', 'json': 'structured_record'}.get(source.value)
           return result
 
-        if converge_by_identity:
-          selected_ids = []
-          for episode in episodes:
-            identifier = artefact_id_for(episode.content)
-            if identifier is not None and identifier not in selected_ids:
-              selected_ids.append(identifier)
-              if len(selected_ids) == max_results:
-                break
-
-          if hasattr(g.driver, 'execute_query') and selected_ids:
-            records, _, _ = asyncio._gralkor_run(
-              g.driver.execute_query(
-                '''
-                MATCH (e:Episodic {group_id: $group_id})
-                WHERE $include_incomplete OR
-                      coalesce(e._gralkor_extraction_complete, false) = true
-                RETURN e.uuid AS uuid,
-                       e.content AS content,
-                       e.source_description AS source_description,
-                       e._gralkor_writer AS _gralkor_writer
-                /* gralkor_exhaustive_identity_convergence */
-                ''',
-                group_id=gid,
-                include_incomplete=not require_extraction_complete,
-              )
-            )
-            candidates = [
-              {
-                "content": record['content'],
-                "source_description": record['source_description'],
-                "_gralkor_writer": record.get('_gralkor_writer'),
-              }
-              for record in records
-            ]
-          elif selected_ids and hasattr(g.driver, 'episodes'):
-            completed_ids = set(
-              getattr(g.driver, '_gralkor_completed_episode_uuids', set())
-            )
-            candidates = [
-              episode_result(episode)
-              for episode in g.driver.episodes.values()
-              if getattr(episode, 'group_id', gid) == gid
-              and (
-                not require_extraction_complete
-                or episode.uuid in completed_ids
-              )
-            ]
-          elif selected_ids:
-            raise RuntimeError(
-              'identity convergence requires exhaustive episode enumeration'
-            )
-          else:
-            candidates = []
-
-          candidates_by_id = {}
-          for candidate in candidates:
-            identifier = artefact_id_for(candidate['content'])
-            if identifier in selected_ids:
-              candidates_by_id.setdefault(identifier, []).append(candidate)
-
-          episode_results = [
-            candidate
-            for identifier in selected_ids
-            for candidate in candidates_by_id.get(identifier, [])
+        async def search_memory():
+          results = await g.search_(
+            q,
+            config=config,
+            group_ids=[gid],
+            search_filter=SearchFilters(node_labels=labels, edge_types=types),
+          )
+          facts = await render_facts(g, list(results.edges)[:fact_limit])
+          nodes = [
+            {
+              "name": n.name,
+              "summary": n.summary,
+              "attributes": {k: str(v) for k, v in (n.attributes or {}).items()},
+            }
+            for n in list(results.nodes)[:node_limit]
           ]
-        else:
-          episode_results = [episode_result(episode) for episode in episodes[:max_results]]
+          episodes = list(results.episodes)
+          if episodes:
+            await hydrate_episode_writers(getattr(g, 'driver', None), episodes)
+          episodes = (await completed_reflection_episodes(episodes))[:episode_limit]
+          return {
+            "facts": facts,
+            "nodes": nodes,
+            "episodes": [episode_result(e) for e in episodes],
+          }
 
-        episode_results
+        asyncio._gralkor_run(search_memory())
         """,
         %{
           "g" => instance,
           "query" => query,
           "group_id" => Client.sanitize_group_id(group_id),
-          "max_results" => max_results,
-          "require_extraction_complete" => require_extraction_complete,
-          "require_reflection_complete" => require_reflection_complete,
-          "converge_by_identity" => converge_by_identity,
-          "lenses" => lenses
+          "fact_limit" => limits.facts,
+          "node_limit" => limits.nodes,
+          "episode_limit" => limits.episodes,
+          "node_labels" => Keyword.get(opts, :node_labels),
+          "edge_types" => Keyword.get(opts, :edge_types)
         }
       )
 
-    {:ok, raw |> Pythonx.decode() |> Enum.map(&episode_map/1)}
+    %{"facts" => facts, "nodes" => nodes, "episodes" => episodes} = Pythonx.decode(raw)
+
+    {:ok,
+     %{
+       facts: Enum.map(facts, &atomize_keys/1),
+       nodes: Enum.map(nodes, &node_map/1),
+       episodes: Enum.map(episodes, &episode_map/1)
+     }}
   rescue
     e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
   end
@@ -592,70 +571,6 @@ defmodule Gralkor.GraphitiPool do
     if Map.get(m, "_gralkor_writer") == "direct",
       do: Map.put(episode, :writer, :direct),
       else: episode
-  end
-
-  @doc """
-  Node search against `group_id` via graphiti's `search_` with the
-  `NODE_HYBRID_SEARCH_RRF` recipe. Unlike `search/4` (which returns *edges* and
-  whose `node_labels` filter matches edges by endpoint), this returns *nodes*
-  that are not reliably reachable through edge search.
-
-  Returns `{:ok, [%{name:, summary:, attributes:}]}` ordered by relevance.
-
-  ## Options
-
-    * `:node_labels` — optional `[String.t()]`. When present, a
-      `SearchFilters(node_labels: …)` restricts results to nodes carrying one of
-      those labels. When absent, all nodes are eligible.
-  """
-  @spec search_nodes(GenServer.server(), String.t(), String.t(), pos_integer(), keyword()) ::
-          {:ok, [map()]} | {:error, term()}
-  def search_nodes(server \\ __MODULE__, group_id, query, max_results, opts \\ [])
-
-  def search_nodes(server, group_id, query, max_results, opts)
-      when is_binary(group_id) and is_binary(query) and is_integer(max_results) and
-             max_results > 0 and
-             is_list(opts) do
-    instance = __MODULE__.for(server, group_id)
-    node_labels = Keyword.get(opts, :node_labels)
-
-    {raw, _} =
-      Pythonx.eval(
-        """
-        import asyncio
-        from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
-        from graphiti_core.search.search_filters import SearchFilters
-
-        q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
-        gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
-        labels = (
-          [l.decode('utf-8') if isinstance(l, (bytes, bytearray)) else l for l in node_labels]
-          if node_labels else None
-        )
-        sf = SearchFilters(node_labels=labels) if labels else SearchFilters()
-        config = NODE_HYBRID_SEARCH_RRF.model_copy(deep=True)
-        config.limit = max_results
-        res = asyncio._gralkor_run(g.search_(q, config=config, group_ids=[gid], search_filter=sf))
-        [
-          {
-            "name": n.name,
-            "summary": n.summary,
-            "attributes": {k: str(v) for k, v in (n.attributes or {}).items()},
-          } for n in res.nodes
-        ]
-        """,
-        %{
-          "g" => instance,
-          "query" => query,
-          "group_id" => Client.sanitize_group_id(group_id),
-          "max_results" => max_results,
-          "node_labels" => node_labels
-        }
-      )
-
-    {:ok, raw |> Pythonx.decode() |> Enum.map(&node_map/1)}
-  rescue
-    e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
   end
 
   defp node_map(%{} = m) do
@@ -1761,7 +1676,7 @@ defmodule Gralkor.GraphitiPool do
             "set it, or configure a different provider for the #{role} role"
   end
 
-  @fact_keys ~w(fact created_at valid_at invalid_at expired_at sources)a
+  @fact_keys ~w(fact relationship source_node target_node created_at valid_at invalid_at expired_at sources)a
   @fact_keys_strings Enum.map(@fact_keys, &Atom.to_string/1)
   @source_keys ~w(id source_kind source_description _gralkor_writer)a
   @source_keys_strings Enum.map(@source_keys, &Atom.to_string/1)
@@ -1769,10 +1684,22 @@ defmodule Gralkor.GraphitiPool do
   defp atomize_keys(map) when is_map(map) do
     Map.new(map, fn {k, v} ->
       key = if k in @fact_keys_strings, do: String.to_atom(k), else: k
-      v = if key == :sources, do: Enum.map(v, &atomize_source_keys/1), else: v
+
+      v =
+        case key do
+          :sources -> Enum.map(v, &atomize_source_keys/1)
+          endpoint when endpoint in [:source_node, :target_node] -> endpoint_map(v)
+          _ -> v
+        end
+
       {key, v}
     end)
   end
+
+  defp endpoint_map(%{} = endpoint),
+    do: %{uuid: Map.get(endpoint, "uuid"), name: Map.get(endpoint, "name")}
+
+  defp endpoint_map(nil), do: nil
 
   defp atomize_source_keys(map) do
     source =

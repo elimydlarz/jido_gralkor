@@ -121,12 +121,11 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
       publish_added_episodes(graphiti, "Atlas might launch Friday.")
 
-      assert {:ok, [%{fact: %{sources: sources}}]} =
+      assert {:ok, [%{destination: "observations", facts: [%{sources: sources}]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "Atlas launch",
-                 destinations: ["observations"],
-                 result_type: :facts
+                 destinations: ["observations"]
                })
 
       assert Enum.map(sources, & &1.source_kind) == ["conversation", "document"]
@@ -142,7 +141,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
       publish_added_episodes(graphiti, "The launch plan is a draft.")
 
-      assert {:ok, [%{destination: "observations", episode: episode}]} =
+      assert {:ok, [%{destination: "observations", episodes: [episode]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "launch",
@@ -170,18 +169,19 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
               [
                 %{
                   destination: "observations",
-                  episode: %{
-                    content: "Draft launch plan",
-                    source_description: "Q3 Roadmap — Draft",
-                    lens: "observations"
-                  }
+                  episodes: [
+                    %{
+                      content: "Draft launch plan",
+                      source_description: "Q3 Roadmap — Draft",
+                      lens: "observations"
+                    }
+                  ]
                 }
               ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "launch",
-                 destinations: ["observations"],
-                 result_type: :episodes
+                 destinations: ["observations"]
                })
     end
 
@@ -201,12 +201,11 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         }
       ])
 
-      assert {:ok, [%{fact: recalled_fact}]} =
+      assert {:ok, [%{destination: "observations", facts: [recalled_fact]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "Atlas launch",
-                 destinations: ["observations"],
-                 result_type: :facts
+                 destinations: ["observations"]
                })
 
       assert %{fact: "Mina speculated that Atlas might launch Friday.", sources: [source]} =
@@ -277,12 +276,11 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
       publish_added_episodes(graphiti, "Mina speculated that Atlas might launch Friday.")
 
-      assert {:ok, [%{fact: %{fact: "Mina speculated that Atlas might launch Friday."}}]} =
+      assert {:ok, [%{facts: [%{fact: "Mina speculated that Atlas might launch Friday."}]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "Atlas launch",
-                 destinations: ["observations"],
-                 result_type: :facts
+                 destinations: ["observations"]
                })
 
       assert {:ok, memory} =
@@ -394,7 +392,8 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
       publish_added_episodes(graphiti, "The launch plan should be remembered.")
 
-      assert {:ok, [%{destination: "personal", episode: episode}]} =
+      assert {:ok,
+              [%{destination: "personal", episodes: [episode], facts: [%{sources: [source]}]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "launch plan",
@@ -407,14 +406,6 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
       refute Map.has_key?(episode, :lens)
       refute Map.has_key?(episode, :reflection)
 
-      assert {:ok, [%{fact: %{sources: [source]}}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "launch plan",
-                 destinations: ["personal"],
-                 result_type: :facts
-               })
-
       assert source == %{
                id: "added-0",
                source_kind: "document",
@@ -423,7 +414,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
              }
     end
 
-    test "and public episode and fact search include it without a Lens selector" do
+    test "and public search includes it among both facts and episodes" do
       graphiti = use_native_boundary()
 
       set_episode_search_fixture(graphiti, [
@@ -433,19 +424,6 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
           writer: "direct"
         }
       ])
-
-      assert {:ok, [%{episode: episode}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "Direct",
-                 destinations: ["personal"]
-               })
-
-      assert episode.content == "Direct memory"
-      assert episode.source_description == "captured"
-      assert episode.writer == :direct
-      refute Map.has_key?(episode, :lens)
-      refute Map.has_key?(episode, :reflection)
 
       set_search_fixture(graphiti, [
         %{
@@ -461,13 +439,19 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         }
       ])
 
-      assert {:ok, [%{fact: %{sources: [source]}}]} =
+      assert {:ok,
+              [%{destination: "personal", episodes: [episode], facts: [%{sources: [source]}]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "Direct",
-                 destinations: ["personal"],
-                 result_type: :facts
+                 destinations: ["personal"]
                })
+
+      assert episode.content == "Direct memory"
+      assert episode.source_description == "captured"
+      assert episode.writer == :direct
+      refute Map.has_key?(episode, :lens)
+      refute Map.has_key?(episode, :reflection)
 
       assert source == %{
                id: "direct-one",
@@ -513,26 +497,19 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         )
       )
 
-      assert {:ok, []} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "caller",
-                 destinations: ["personal"],
-                 lenses: ["observations"]
-               })
-
-      assert {:ok, episodes} =
+      assert {:ok, [%{destination: "personal", episodes: episodes}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "caller",
                  destinations: ["personal"]
                })
 
-      assert Enum.map(episodes, & &1.episode.source_description) == descriptions
+      assert Enum.map(episodes, & &1.source_description) == descriptions
+      assert Enum.all?(episodes, &(&1.writer == :direct))
 
       assert Enum.all?(
                episodes,
-               &(not Map.has_key?(&1.episode, :lens) and not Map.has_key?(&1.episode, :reflection))
+               &(not Map.has_key?(&1, :lens) and not Map.has_key?(&1, :reflection))
              )
     end
 
@@ -548,7 +525,13 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         }
       ])
 
-      assert {:ok, [%{episode: %{content: "Direct memory", writer: :direct}}]} =
+      assert {:ok,
+              [
+                %{
+                  destination: "personal",
+                  episodes: [%{content: "Direct memory", writer: :direct}]
+                }
+              ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "Direct",
@@ -573,12 +556,11 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
       publish_added_episodes(graphiti, "The launch plan should be remembered.")
 
-      assert {:ok, [%{fact: %{sources: [%{source_kind: "document"}]}}]} =
+      assert {:ok, [%{facts: [%{sources: [%{source_kind: "document"}]}]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "launch plan",
-                 destinations: ["personal"],
-                 result_type: :facts
+                 destinations: ["personal"]
                })
     end
   end
@@ -653,27 +635,11 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         %{content: "Historical memory", source_description: "captured [lens: operator]"}
       ])
 
-      assert {:ok, [%{episode: %{content: "Historical memory", lens: "operator"}}]} =
+      assert {:ok, [%{episodes: [%{content: "Historical memory", lens: "operator"}]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "Historical",
                  destinations: ["personal"]
-               })
-    end
-
-    test "and a personal-chat Lens selector does not match those historical episodes" do
-      graphiti = use_native_boundary()
-
-      set_episode_search_fixture(graphiti, [
-        %{content: "Historical memory", source_description: "captured [lens: operator]"}
-      ])
-
-      assert {:ok, []} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "Historical",
-                 destinations: ["personal"],
-                 lenses: ["personal-chat"]
                })
     end
   end
@@ -701,23 +667,36 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
               [
                 %{
                   destination: "observations",
-                  episode: %{
-                    content: "A complete Lens observation.",
-                    source_description: "field notes",
-                    lens: "observations"
-                  }
+                  episodes: [
+                    %{
+                      content: "A complete Lens observation.",
+                      source_description: "field notes",
+                      lens: "observations"
+                    }
+                  ]
                 }
               ]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "complete",
-                 destinations: ["observations"],
-                 max_results: 1
+                 destinations: ["observations"]
                })
     end
 
     test "and completion filtering occurs before the per-Destination result limit" do
       graphiti = use_native_boundary()
+
+      %{episodes: limit} = Search.limits()
+
+      complete =
+        for index <- 1..limit do
+          %{
+            id: "complete-observation-#{index}",
+            content: "A complete Lens observation #{index}.",
+            source_description: "field notes [lens: observations]",
+            extraction_complete: true
+          }
+        end
 
       set_episode_search_fixture(graphiti, [
         %{
@@ -725,22 +704,18 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
           content: ~s({"id":"incomplete-generalisation"}),
           source_description: "reflection:generalisations",
           extraction_complete: false
-        },
-        %{
-          id: "complete-observation",
-          content: "A complete Lens observation.",
-          source_description: "field notes [lens: observations]",
-          extraction_complete: true
         }
+        | complete
       ])
 
-      assert {:ok, [%{episode: %{content: "A complete Lens observation."}}]} =
+      assert {:ok, [%{destination: "observations", episodes: episodes}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "complete",
-                 destinations: ["observations"],
-                 max_results: 1
+                 destinations: ["observations"]
                })
+
+      assert Enum.map(episodes, & &1.content) == Enum.map(complete, & &1.content)
     end
   end
 
@@ -752,7 +727,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         %{content: "An older episode.", source_description: "legacy source"}
       ])
 
-      assert {:ok, [%{episode: episode}]} =
+      assert {:ok, [%{destination: "observations", episodes: [episode]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "episode",
@@ -776,12 +751,11 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
           }
         ])
 
-        assert {:ok, [%{fact: %{sources: [source]}}]} =
+        assert {:ok, [%{destination: "personal", facts: [%{sources: [source]}]}]} =
                  Client.search(%Search{
                    operator_id: "operator-one",
                    query: "Historical",
-                   destinations: ["personal"],
-                   result_type: :facts
+                   destinations: ["personal"]
                  })
 
         assert source == %{
@@ -881,7 +855,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
         %{content: Jason.encode!(artefact), source_description: "reflection:generalisations"}
       ])
 
-      assert {:ok, [%{destination: "observations", episode: episode}]} =
+      assert {:ok, [%{destination: "observations", episodes: [episode]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "rollout",
@@ -913,37 +887,37 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
-  describe "when public artefact search reads stored Reflection output" do
+  describe "when public search reads stored Reflection output" do
     test "then only records with a non-blank identifier and structured payload become canonical artefacts" do
       graphiti = use_native_boundary()
       valid = %{id: "valid", payload: %{"summary" => "retained"}}
 
-      set_episode_search_fixture(
-        graphiti,
-        Enum.map(
-          [
+      for artefact <- [
             valid,
             %{id: "scalar", payload: "not structured"},
             %{id: "null-payload", payload: nil},
             %{id: "", payload: %{}},
             %{id: "  ", payload: %{}},
             %{id: 42, payload: %{}}
-          ],
-          fn artefact ->
-            %{content: Jason.encode!(artefact), source_description: "reflection:generalisations"}
-          end
-        )
-      )
+          ] do
+        set_episode_search_fixture(graphiti, [
+          %{content: Jason.encode!(artefact), source_description: "reflection:generalisations"}
+        ])
 
-      assert {:ok, [%{destination: "observations", artefact: artefact}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "rollout",
-                 destinations: ["observations"],
-                 result_type: :artefacts
-               })
+        result =
+          Client.search(%Search{
+            operator_id: "operator-one",
+            query: "rollout",
+            destinations: ["observations"]
+          })
 
-      assert artefact == struct!(Gralkor.Artefact, valid)
+        if artefact == valid do
+          assert {:ok, [%{destination: "observations", episodes: [%{artefact: ^valid}]}]} =
+                   result
+        else
+          assert {:error, {:invalid_reflection_artefact, "generalisations"}} = result
+        end
+      end
     end
   end
 
@@ -998,10 +972,12 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
             async def search_(self, query, config=None, group_ids=None, search_filter=None):
                 limit = config.limit if config is not None else len(self.episode_results)
-                return _SearchResult(self.episode_results[:limit])
+                return _SearchResult(self.facts[:limit], self.episode_results[:limit])
 
         class _SearchResult:
-            def __init__(self, episodes):
+            def __init__(self, edges, episodes):
+                self.edges = edges
+                self.nodes = []
                 self.episodes = episodes
 
         class _StoredEpisode:

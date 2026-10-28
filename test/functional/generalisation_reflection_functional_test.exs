@@ -55,19 +55,11 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       do: {:error, :not_found}
 
     @impl true
-    def search(destination, operator_id, query, result_type, max_results, opts) do
-      send(test_pid(), {
-        :related_memory_search,
-        destination.name,
-        operator_id,
-        query,
-        result_type,
-        max_results,
-        opts
-      })
+    def search(destination, operator_id, query, opts) do
+      send(test_pid(), {:related_memory_search, destination.name, operator_id, query, opts})
 
       responses = Application.fetch_env!(:jido_gralkor, :generalisation_search_responses)
-      Map.get(responses, destination.name, {:ok, []})
+      Map.get(responses, destination.name, {:ok, %{facts: [], nodes: [], episodes: []}})
     end
 
     defp test_pid, do: Application.fetch_env!(:jido_gralkor, :generalisation_test_pid)
@@ -87,11 +79,11 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       do: InMemory.get_artefact(output, reflection_name, operator_id, artefact_id)
 
     @impl true
-    def search(%{name: "global"}, _operator_id, _query, _result_type, _max_results, _opts),
+    def search(%{name: "global"}, _operator_id, _query, _opts),
       do: {:error, :memory_unavailable}
 
-    def search(destination, operator_id, query, result_type, max_results, opts),
-      do: InMemory.search(destination, operator_id, query, result_type, max_results, opts)
+    def search(destination, operator_id, query, opts),
+      do: InMemory.search(destination, operator_id, query, opts)
   end
 
   setup do
@@ -112,7 +104,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
   end
 
   describe "when the packaged generalisation Reflection inspects a completed ingestion" do
-    test "then one default related-memory episode search completes before generalisation inference begins" do
+    test "then one default related-memory search completes before generalisation inference begins" do
       parent = self()
 
       assert %{outcome: :delivered} =
@@ -127,14 +119,18 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       events =
         for _ <- 1..6 do
           receive do
-            {:related_memory_search, _, _, _, :episodes, _, _} = search -> search
-            {:generalisation_inference, _} = inference -> inference
+            {:related_memory_search, _, _, _, opts} = search ->
+              assert opts == [limits: Gralkor.Search.limits()]
+              search
+
+            {:generalisation_inference, _} = inference ->
+              inference
           end
         end
 
       assert Enum.all?(
                Enum.take(events, 5),
-               &match?({:related_memory_search, _, _, _, _, _, _}, &1)
+               &match?({:related_memory_search, _, _, _, _}, &1)
              )
 
       assert List.last(events) == {:generalisation_inference, "inspect-world"}
@@ -143,7 +139,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     test "and the search query contains the content of every completed representation" do
       assert %{outcome: :delivered} = reflect!(start_agent(), &output_for/1)
 
-      assert_receive {:related_memory_search, _, "operator-one", query, :episodes, _, _}
+      assert_receive {:related_memory_search, _, "operator-one", query, _opts}
       assert query =~ "Prefer explicit APIs"
       assert query =~ "Choose direct designs"
     end
@@ -153,7 +149,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       searches =
         for _ <- 1..5 do
-          assert_receive {:related_memory_search, destination, _, _, :episodes, _, _}
+          assert_receive {:related_memory_search, destination, _, _, _opts}
           destination
         end
 
@@ -166,23 +162,30 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  "unrepresented-memory"
                ])
 
-      refute_receive {:related_memory_search, _, _, _, _, _, _}
+      refute_receive {:related_memory_search, _, _, _, _}
     end
 
     test "and every related observation identifies its originating Lens" do
       {_stored_generalisation, stored_information} = stored_information_from_real_memory()
 
       observations =
-        Enum.filter(stored_information, &(Map.get(&1.episode, :reflection) == nil))
+        for %{destination: destination, episodes: episodes} <- stored_information,
+            episode <- episodes,
+            Map.get(episode, :reflection) == nil,
+            do: {destination, episode}
 
-      assert Enum.sort(Enum.map(observations, &{&1.destination, &1.episode.content})) == [
+      assert Enum.sort(
+               Enum.map(observations, fn {destination, episode} ->
+                 {destination, episode.content}
+               end)
+             ) == [
                {"decisions-memory", "A related decision"},
                {"observations-memory", "A related observation"}
              ]
 
       assert Enum.all?(observations, fn
-               %{destination: "observations-memory", episode: %{lens: "observations"}} -> true
-               %{destination: "decisions-memory", episode: %{lens: "decisions"}} -> true
+               {"observations-memory", %{lens: "observations"}} -> true
+               {"decisions-memory", %{lens: "decisions"}} -> true
                _ -> false
              end)
     end
@@ -190,11 +193,11 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     test "and related-memory results distinguish prior generalisations from Lens-authored observations" do
       {stored_generalisation, stored_information} = stored_information_from_real_memory()
 
-      assert Enum.any?(stored_information, fn
-               %{
-                 destination: "global",
-                 episode: %{reflection: "generalisations"} = episode
-               } ->
+      assert [%{episodes: global_episodes}] =
+               Enum.filter(stored_information, &(&1.destination == "global"))
+
+      assert Enum.any?(global_episodes, fn
+               %{reflection: "generalisations"} = episode ->
                  decode_episode(episode) == %{
                    "id" => "generalisation-artefact",
                    "payload" => stored_generalisation.payload
@@ -207,7 +210,9 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
     test "and inference receives every current representation separately from related observations and generalisations" do
       Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
-        "global" => {:ok, [%{content: "stored", source_description: "global"}]}
+        "global" =>
+          {:ok,
+           %{facts: [], nodes: [], episodes: [%{content: "stored", source_description: "global"}]}}
       })
 
       parent = self()
@@ -224,10 +229,24 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       assert_receive {:inference_inputs, representations, stored_information}
       assert Enum.map(representations, & &1.id) == ["representation-one", "representation-two"]
-      assert [%{destination: "global", episode: %{content: "stored"}}] = stored_information
+
+      assert [%{episodes: [%{content: "stored"}]}] =
+               Enum.filter(stored_information, &(&1.destination == "global"))
+
+      assert stored_information
+             |> Enum.reject(&(&1.destination == "global"))
+             |> Enum.all?(
+               &(&1 ==
+                   Map.put(%{facts: [], nodes: [], episodes: []}, :destination, &1.destination))
+             )
 
       prompt_stored_information = [
-        %{destination: "global", episode: %{content: "A prior generalisation"}}
+        %{
+          destination: "global",
+          facts: [],
+          nodes: [],
+          episodes: [%{content: "A prior generalisation"}]
+        }
       ]
 
       request = %{
@@ -322,8 +341,14 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                  output_for(request)
                end)
 
-      assert_receive {:empty_search_inference, representations, []}
+      assert_receive {:empty_search_inference, representations, stored_information}
       assert Enum.map(representations, & &1.id) == ["representation-one", "representation-two"]
+      assert length(stored_information) == 5
+
+      assert Enum.all?(
+               stored_information,
+               &(&1.facts == [] and &1.nodes == [] and &1.episodes == [])
+             )
     end
   end
 
@@ -354,7 +379,7 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       ingest_representations!(agent)
       before = representation_memory(agent)
 
-      assert Enum.sort(Enum.map(before, & &1.episode.content)) == [
+      assert Enum.sort(Enum.map(before, & &1.content)) == [
                "Choose direct designs",
                "Prefer explicit APIs"
              ]
@@ -414,18 +439,19 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                }
              ] = replacement.payload["generalisations"]
 
-      assert {:ok, results} =
+      assert {:ok, [%{destination: "global", episodes: episodes}]} =
                Client.search(agent, %Gralkor.Search{
                  operator_id: "operator-one",
                  query: "generalisation",
-                 destinations: ["global"],
-                 result_type: :artefacts
+                 destinations: ["global"]
                })
 
-      assert Enum.sort(Enum.map(results, & &1.artefact.id)) ==
+      artefacts = for %{artefact: artefact} <- episodes, do: artefact
+
+      assert Enum.sort(Enum.map(artefacts, & &1.id)) ==
                Enum.sort(["prior-generalisation", replacement.id])
 
-      assert Enum.find(results, &(&1.artefact.id == "prior-generalisation")).artefact == prior
+      assert Enum.find(artefacts, &(&1.id == "prior-generalisation")) == Map.from_struct(prior)
     end
   end
 
@@ -505,17 +531,16 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
       refute later.id == earlier.id
 
-      assert {:ok, results} =
+      assert {:ok, [%{destination: "global", episodes: episodes}]} =
                Client.search(agent, %Gralkor.Search{
                  operator_id: "operator-one",
                  query: "generalisation",
-                 destinations: ["global"],
-                 result_type: :artefacts,
-                 artefact_id: earlier.id
+                 destinations: ["global"]
                })
 
-      assert [%{artefact: stored_earlier}] = results
-      assert stored_earlier == earlier
+      earlier_id = earlier.id
+      assert [stored_earlier] = for(%{artefact: %{id: ^earlier_id} = a} <- episodes, do: a)
+      assert stored_earlier == Map.from_struct(earlier)
       assert [%{"evolves_from" => stored_snapshots}] = stored_earlier.payload["generalisations"]
       assert stored_snapshots == influencing_generalisations()
     end
@@ -590,11 +615,10 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
              Client.search(agent, %Gralkor.Search{
                operator_id: "operator-one",
                query: "",
-               destinations: ["observations-memory", "decisions-memory"],
-               result_type: :episodes
+               destinations: ["observations-memory", "decisions-memory"]
              })
 
-    results
+    Enum.flat_map(results, & &1.episodes)
   end
 
   defp output_for(request),
@@ -675,15 +699,19 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
     Application.put_env(:jido_gralkor, :generalisation_search_responses, %{
       "global" =>
         {:ok,
-         [
-           %{
-             artefact: %{
-               id: "stored-generalisation-artefact",
-               payload: %{"generalisations" => stored}
-             },
-             reflection: "generalisations"
-           }
-         ]}
+         %{
+           facts: [],
+           nodes: [],
+           episodes: [
+             %{
+               artefact: %{
+                 id: "stored-generalisation-artefact",
+                 payload: %{"generalisations" => stored}
+               },
+               reflection: "generalisations"
+             }
+           ]
+         }}
     })
   end
 
@@ -698,15 +726,11 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
 
   defp prior_generalisation_snapshots(stored_information) do
     stored_information
+    |> Enum.filter(&(&1.destination == "global"))
+    |> Enum.flat_map(& &1.episodes)
     |> Enum.flat_map(fn
-      %{
-        destination: "global",
-        episode: %{artefact: %{payload: %{"generalisations" => generalisations}}}
-      } ->
-        generalisations
-
-      _ ->
-        []
+      %{artefact: %{payload: %{"generalisations" => generalisations}}} -> generalisations
+      _ -> []
     end)
     |> Enum.map(&Map.take(&1, ["content", "level"]))
   end

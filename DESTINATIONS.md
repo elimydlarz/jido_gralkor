@@ -89,7 +89,7 @@ Information saved through other Lenses, information saved through Reflection out
 
 ## Search
 
-Search reads registered Destinations. With no selectors it searches every accessible registered Destination and returns relevant episodes:
+Search reads registered Destinations and returns everything relevant in one call. With only a query it searches every accessible registered Destination:
 
 ```elixir
 Gralkor.Client.search(agent_server, %Gralkor.Search{
@@ -100,101 +100,112 @@ Gralkor.Client.search(agent_server, %Gralkor.Search{
 
 That includes the packaged `personal` and `global` Destinations and every application Destination. Only the current operator's logical `personal/<operator id>` graph is searched; other registered Destinations retain their shared logical graph identity.
 
-Callers may narrow the graphs with `destinations` and may narrow episode writers with `lenses`:
+`%Gralkor.Search{}` has exactly three optional fields besides `operator_id` and `query`:
 
 ```elixir
 Gralkor.Client.search(agent_server, %Gralkor.Search{
   operator_id: operator_id,
-  query: "What should I remember?",
-  destinations: ["personal", "global"],
-  lenses: ["support-cases", "decisions"]
+  query: "what changed the parser",
+  destinations: ["code"],                  # default: every accessible registered Destination
+  entity_types: ["Commit", "Function"],    # default: no filter
+  edge_types: ["CHANGES"]                  # default: no filter
 })
 ```
 
-Names within each selector are alternatives: either Destination and either Lens may contribute. When both selectors are present, a result must satisfy both dimensions. A Lens selector filters writers within the selected Destination graphs; it is not a Destination alias. Lens filtering applies to episode and fact results. Fact searches restrict eligible edges before the result limit and retain only the selected Lens sources.
-
-Each distinct Destination is searched once. Multiple Destinations are searched concurrently, their results retain requested Destination order, and every result identifies its Destination. Episode results identify their writer where provenance is recorded; historical unmarked episodes remain unattributed. Appending Lens episodes suffix their source description with ` [lens: <Lens name>]`; Reflection episodes use the exact source description `reflection:<Reflection name>`. Lens and Reflection names containing the Lens delimiter are rejected so attribution stays unambiguous. A Lens-written result has this shape:
+Each distinct Destination is searched once, concurrently, through one Graphiti `search_` call that ranks edges, nodes, and episodes together (Graphiti's `COMBINED_HYBRID_SEARCH_RRF` recipe without its community layer: edges and nodes by BM25 plus cosine similarity with reciprocal rank fusion, episodes by BM25; the query is embedded once). The result is one map per Destination, in selected order:
 
 ```elixir
-%{
-  destination: "global",
-  episode: %{
-    content: "...",
-    source_description: "support transcript",
-    lens: "support-cases"
-  }
-}
+{:ok,
+ [
+   %{
+     destination: "code",
+     facts: [
+       %{
+         fact: "Commit 1a2b changes parse/1",
+         relationship: "CHANGES",
+         source_node: %{uuid: "...", name: "Commit 1a2b"},
+         target_node: %{uuid: "...", name: "parse/1"},
+         created_at: "...", valid_at: "...", invalid_at: nil, expired_at: nil,
+         sources: [%{id: "...", source_kind: "document", source_description: "git log [lens: commits]", lens: "commits"}]
+       }
+     ],
+     nodes: [%{name: "parse/1", summary: "...", attributes: %{"arity" => "1"}}],
+     episodes: [%{content: "...", source_description: "git log", lens: "commits"}]
+   }
+ ]}
 ```
 
-A Reflection-written result has structured artefact fields instead of `episode.content`:
+Facts, nodes, and episodes each keep Graphiti's relevance order. Every Destination contributes at most twenty facts, twenty nodes, and five episodes (`Gralkor.Search.limits/0`); episodes are whole source documents, so fewer are returned. `entity_types` restricts nodes to those labels and restricts facts to edges whose source *and* target entities both carry one of them (Graphiti applies its label filter to both edge endpoints). `edge_types` restricts facts to those relationship names. Neither filter restricts episodes.
+
+### Facts
+
+A fact record contains its `fact` text, `created_at`, `valid_at`, `invalid_at`, `expired_at`, the edge's `relationship` name, its `source_node` and `target_node` as `%{uuid:, name:}` (so a consumer can render "Commit X CHANGES Function Y"), and `sources`. Each source retains `id`, `source_kind`, and `source_description`, plus `lens`, `reflection`, or `writer: :direct` when its writer is identifiable. Lens and Reflection source descriptions retain their stored provenance markers. Direct source descriptions return the original caller text with the storage-owned terminal marker removed. Missing timestamps remain `nil`. In-memory storage is a deterministic test backend: it wraps stored episode text as a fact record with Lens and source-description attribution rather than performing extraction, so its `relationship`, `source_node`, and `target_node` are `nil`.
+
+### Episodes
+
+Episodes identify their writer where provenance is recorded; historical unmarked episodes remain unattributed. Appending Lens episodes suffix their source description with ` [lens: <Lens name>]`; Reflection episodes use the exact source description `reflection:<Reflection name>`. Lens and Reflection names containing the Lens delimiter are rejected so attribution stays unambiguous. A Lens-written episode:
+
+```elixir
+%{content: "...", source_description: "support transcript", lens: "support-cases"}
+```
+
+A Reflection-written episode carries its whole artefact as structured fields instead of `content`:
 
 ```elixir
 %{
-  destination: "global",
-  episode: %{
-    reflection: "generalisations",
-    source_description: "reflection:generalisations",
-    artefact: %{
-      id: "<stable artefact UUID>",
-      payload: %{
-        "generalisations" => [
-          %{"content" => "Use reversible rollouts", "level" => 1, "evolves_from" => []}
-        ]
-      }
+  reflection: "generalisations",
+  source_description: "reflection:generalisations",
+  artefact: %{
+    id: "<stable artefact UUID>",
+    payload: %{
+      "generalisations" => [
+        %{"content" => "Use reversible rollouts", "level" => 1, "evolves_from" => []}
+      ]
     }
   }
 }
 ```
 
-`Gralkor.Client.search/1,2` returns `{:ok, [result]}`; an empty search returns `{:ok, []}`. The API does not apply model presentation or budgeting. `memory_search` explicitly requests facts and returns `{:ok, %{result: text}}`. The existing blank-query short circuit remains an explicit textual NON-RESULT in `result`, and errors remain `{:error, reason}`.
+A Reflection episode appears only once its extraction has durably completed. Reflection payload keys and values retain their stored shape; Graphiti JSON object keys are strings. Only Reflection-provenanced episode bodies are decoded. Lens-authored documents, Jira records, and even text that happens to look like an artefact remain text in `content`. A malformed completed Reflection body returns `{:error, {:invalid_reflection_artefact, reflection_name}}`; search does not return a manufactured partial response. Private graph identities still require the explicit namespace migration described above.
 
-Reflection payload keys and values retain their stored shape; Graphiti JSON object keys are strings. Only Reflection-provenanced episode bodies are decoded. Lens-authored documents, Jira records, and even text that happens to look like an artefact remain text in `episode.content`. A malformed completed Reflection body returns `{:error, {:invalid_reflection_artefact, reflection_name}}`; search does not return a manufactured partial response. Existing valid completed artefact bodies remain compatible. Private graph identities still require the explicit namespace migration described above.
-
-Fact results have `%{destination: name, fact: record}`. The Graphiti record contains `fact` text, `created_at`, `valid_at`, `invalid_at`, `expired_at`, and `sources`; each source retains `id`, `source_kind`, and `source_description`, plus `lens`, `reflection`, or `writer: :direct` when its writer is identifiable. Lens and Reflection source descriptions retain their stored provenance markers. Direct source descriptions return the original caller text with the storage-owned terminal marker removed. Missing timestamps remain `nil`. In-memory storage is a deterministic test backend: it wraps stored episode text as a fact record with Lens and source-description attribution rather than performing extraction. Node results remain `%{destination: name, node: node_map}`; explicit artefact results remain `%{destination: name, artefact: %Gralkor.Artefact{id: id, payload: payload}}`.
-
-Readable presentation is separate: call `Gralkor.Format.format_fact(record)` explicitly. Legacy `recall` still uses that operation to construct its readable memory block. `Gralkor.Client.search/1,2` never invokes readable fact formatting.
+`Gralkor.Client.search/1,2` never applies model presentation or budgeting. Readable fact presentation is separate: call `Gralkor.Format.format_fact(record)` explicitly. Legacy `recall` still uses that operation to construct its readable memory block.
 
 ### Readable memory search
 
-`memory_search` returns one readable string in `{:ok, %{result: text}}`:
+`memory_search` takes a query and an optional `destinations` list, runs the one search, and returns one readable string in `{:ok, %{result: text}}`:
 
 ```text
+Facts
+
 Lens: jira
 - Payment retries must use an idempotency key.
-- The settlement worker retries failed requests three times.
 
 Reflection: generalisations
 - Prefer small, reversible deployments with monitoring.
+
+Entities
+- settlement worker: Retries failed requests three times. (team: payments)
+
+Episodes
+- [Lens: jira] PAY-142: settlement retries double-charged a customer when the… (truncated)
+- [Reflection: generalisations] artefact 7f3c…: {"generalisations":[{"content":"Prefer small, reversible… (truncated)
 ```
 
-The bullets are Graphiti's returned fact text. Formatting adds no Destination labels, artefact identifiers, levels, or evolution-history metadata. Groups retain first-appearance order and facts retain retrieval order within each group. A fact with several named sources appears once under each distinct source; a Lens and Reflection with the same name have separate headings. Known direct sources appear under `Source: direct conversation`, `Source: direct document`, or `Source: direct structured record`; a direct source without a recorded kind uses `Source: direct`. Facts without attributable provenance appear under `Source: unknown`. An empty search produces `No matching facts.`
+Facts from every Destination come first, grouped under source headings in first-appearance order with retrieval order within each group; a fact with several named sources appears once under each distinct source. Known direct sources appear under `Source: direct conversation`, `Source: direct document`, or `Source: direct structured record`, a direct source without a recorded kind under `Source: direct`, and unattributable facts under `Source: unknown`. Entities follow in full (name, summary, attributes). Episodes are compact so whole source documents never flood the agent's context: a writer label and an excerpt of at most 280 characters, a Reflection episode summarised by its artefact identifier and a payload excerpt. A section with nothing to show is left out; an empty search produces `No matching memory.`
 
-`JidoGralkor.MemorySearchPresentation.for_model(results, max_bytes)` is the explicit reusable formatter for structured fact results. It leaves the input unchanged and returns `{:ok, %{result: text}}`. Consumers can call the structured search API and choose their own formatter instead.
+`JidoGralkor.MemorySearchPresentation.for_model(results, max_bytes)` is the explicit reusable formatter. It leaves the input unchanged and returns `{:ok, %{result: text}}`. Consumers can call the structured search API and choose their own formatter instead.
 
-The action uses `tool_context[:memory_search_max_bytes]`, defaulting to 65,536 UTF-8 bytes for the complete serialized Jido success envelope. Independently, the entire text—including headings and notices—fits within 16,384 characters. These limits retain or omit complete facts; later fitting facts remain eligible. When facts are omitted, the text ends with `Omitted facts: N (response limit).` The count refers to input facts, regardless of how many source groups each would occupy. An individually oversized fact is omitted whole. This is a response budget, not pagination or a count of all matching memories.
+The action uses `tool_context[:memory_search_max_bytes]`, defaulting to 65,536 UTF-8 bytes for the complete serialized Jido success envelope. Independently, the entire text, including headings and notices, fits within 16,384 characters. These limits retain or omit complete bullets; later fitting bullets remain eligible. When bullets are omitted, the text ends with `Omitted (response limit): facts N, entities M, episodes K.` Each fact counts once regardless of how many source groups it would occupy. This is a response budget, not pagination.
 
-If the byte budget cannot hold the required response notice, the formatter returns `{:error, {:memory_search_budget_too_small, %{max_bytes: limit, minimum_bytes: required}}}`. A non-positive or non-integer budget raises before search starts. The existing blank-query short circuit remains an explicit textual NON-RESULT.
+If the byte budget cannot hold the required response notice, the formatter returns `{:error, {:memory_search_budget_too_small, %{max_bytes: limit, minimum_bytes: required}}}`. A non-positive or non-integer budget raises before search starts. The blank-query short circuit remains an explicit textual NON-RESULT, and errors remain `{:error, reason}`.
 
-### Consumer migration and model delivery
+### Migrating from 11.x search
 
-- Treat `action_result.result` as readable text. It is not a JSON-encoded list and must not be passed to `Jason.decode!/1`.
-- For programmatic fact access, call `Gralkor.Client.search/1,2` with `result_type: :facts`. Read `result.fact.fact` and `result.fact.sources` directly. Lens selectors are supported for facts as well as episodes.
-- For complete stored Reflection output, use episode or artefact search. Episode results expose `result.episode.artefact.id` and `.payload`; consumers no longer decode Reflection JSON from `episode.content`.
-- Naturally textual episode content stays text. Do not recursively decode source strings.
+- `result_type` is gone: every search returns facts, nodes, and episodes per Destination. Replace `result.fact` / `result.node` / `result.episode` (one flat attributed list) with `result.facts` / `result.nodes` / `result.episodes` inside each Destination map.
+- `lenses` is gone as a search selector: read each episode's `lens` or each fact source's `lens` to tell writers apart.
+- `result_type: :artefacts` and `artefact_id` are gone: Reflection artefacts arrive whole in `episodes` as `artefact: %{id:, payload:}`; match the id there.
+- `max_results` is gone: limits are fixed per Destination (`Gralkor.Search.limits/0`).
+- Setting any removed field raises `ArgumentError` naming the field with this guidance.
+- `memory_search` lost its `lenses` parameter; keep `destinations`. Treat `action_result.result` as readable text; never `Jason.decode!/1` it.
 
-Jido AI 2.3.0 serializes the small action envelope containing the readable string. One decode of a model tool message yields `%{"ok" => true, "result" => %{"result" => text}}`. The formatter keeps that text below the released sanitizer's string limit, so nested payload depth, collection sizes, and domain-key redaction do not affect the fact presentation. No framework patch or fork is required. The repository retains its Hex dependency.
-
-Provider-boundary acceptance compares the actual outgoing tool text with the expected complete presentation, including Unicode, domain-key wording, more than 100 facts, and explicit oversized-fact omissions. Native-boundary tests cover provenance and Lens filtering before the per-Destination limit. These checks establish retrieval and transport behavior; they do not guarantee a model's interpretation. Phil must install this jido_gralkor change; its existing wrapper can continue delegating to the action.
-
-Facts, nodes, and artefacts remain available as explicit advanced result types:
-
-```elixir
-Gralkor.Client.search(agent_server, %Gralkor.Search{
-  operator_id: operator_id,
-  query: "What should I remember?",
-  destinations: ["global"],
-  result_type: :facts
-})
-```
-
-Set `result_type` to `:facts`, `:nodes`, or `:artefacts` for those forms. Node results may be filtered by ontology entity type, and fact results by ontology relationship type. A non-empty `lenses` selector is supported for episodes and facts; it cannot be combined with node or artefact results.
+Jido AI 2.3.0 serializes the small action envelope containing the readable string. One decode of a model tool message yields `%{"ok" => true, "result" => %{"result" => text}}`. The formatter keeps that text below the released sanitizer's string limit, so nested payload depth, collection sizes, and domain-key redaction do not affect the presentation. No framework patch or fork is required.

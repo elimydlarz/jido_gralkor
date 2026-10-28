@@ -4,22 +4,17 @@ when the memory search tool runs with a usable query
   then the existing public Search capability is invoked once
   and the Search request carries the current operator
   and the Search request carries the usable query unchanged
-  and the Search request asks for extracted facts
+  and the Search request carries no entity or relationship type filter
   where the tool call supplies no Destination selector
-    while the tool call supplies no Lens selector
-      then the Search request leaves both selector dimensions unrestricted
+    then the Search request leaves the Destination selector unrestricted
   where the tool call supplies Destinations
     then the Search request carries the same Destination list
-  where the tool call supplies Lenses
-    then the Search request carries the same Lens list
-  where the tool call supplies Destinations and Lenses
-    then the Search request carries both lists unchanged
   while the tool context identifies an owning AgentServer as the Gralkor runtime target
     then Search receives that owning AgentServer as its runtime target
   while the tool context has no Gralkor runtime target
     then Search uses the untargeted application compatibility boundary
   while Search returns results
-    then the action result is readable source-grouped fact text
+    then the action result is readable text with facts, entities, and episodes in their own sections
     and each named originating Lens or Reflection is identified by its source heading
     while the tool context supplies no byte budget
       then the response fits within 65,536 bytes
@@ -28,7 +23,8 @@ when the memory search tool runs with a usable query
 
 when a consumer reads the memory search tool description
   then it directs the agent to search related observations and generalisations
-  and it directs the agent to use the returned source-grouped facts
+  and it directs the agent to use the returned facts, entities, and episode excerpts
+  and it offers a Destination selector but no Lens selector
 
 if the memory search tool runs without a usable query
   then no Search is issued

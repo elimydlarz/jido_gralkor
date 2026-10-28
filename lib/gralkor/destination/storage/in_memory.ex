@@ -44,45 +44,46 @@ defmodule Gralkor.Destination.Storage.InMemory do
   end
 
   @impl true
-  def search(destination, operator_id, _query, :facts, max_results, opts) do
-    lenses = Keyword.get(opts, :lenses, [])
+  def search(destination, operator_id, _query, opts) do
+    limits = Keyword.fetch!(opts, :limits)
+    graph_id = Destination.graph_id(destination, operator_id)
+    episodes = LensStorage.episodes(graph_id)
 
-    results =
-      destination
-      |> Destination.graph_id(operator_id)
-      |> LensStorage.episodes()
-      |> Enum.filter(&(lenses == [] or Map.get(&1, :lens) in lenses))
-      |> Enum.take(max_results)
-      |> Enum.map(
-        &%{
-          fact: &1.content,
-          sources: [
-            Map.take(&1, [:id, :source_kind, :lens, :reflection, :writer, :source_description])
-          ]
-        }
-      )
-
-    {:ok, results}
+    {:ok,
+     %{
+       facts: episodes |> Enum.take(limits.facts) |> Enum.map(&fact/1),
+       nodes: nodes(graph_id, Keyword.get(opts, :entity_types, []), limits.nodes),
+       episodes: episodes(destination, operator_id, episodes, limits.episodes)
+     }}
   end
 
-  def search(destination, operator_id, _query, :episodes, max_results, opts) do
-    lenses = Keyword.get(opts, :lenses, [])
+  defp fact(episode) do
+    %{
+      fact: episode.content,
+      relationship: nil,
+      source_node: nil,
+      target_node: nil,
+      sources: [
+        Map.take(episode, [:id, :source_kind, :lens, :reflection, :writer, :source_description])
+      ]
+    }
+  end
 
-    lens_episodes =
-      destination
-      |> Destination.graph_id(operator_id)
-      |> LensStorage.episodes()
-      |> Enum.filter(&(lenses == [] or Map.get(&1, :lens) in lenses))
-      |> Enum.take(max_results)
-      |> Enum.map(
-        &Map.take(&1, [:content, :source_kind, :lens, :reflection, :writer, :source_description])
-      )
+  defp nodes(graph_id, selected_labels, limit) do
+    graph_id
+    |> LensStorage.graph()
+    |> Map.fetch!(:nodes)
+    |> Enum.filter(fn node ->
+      selected_labels == [] or Enum.any?(node.labels, &(&1 in selected_labels))
+    end)
+    |> Enum.take(limit)
+  end
 
+  defp episodes(destination, operator_id, lens_episodes, limit) do
     reflection_episodes =
-      if lenses == [] and Process.whereis(__MODULE__) do
+      if Process.whereis(__MODULE__) do
         destination
         |> artefact_entries(operator_id)
-        |> Enum.take(max_results)
         |> Enum.map(fn %{artefact: artefact, reflection: reflection} ->
           %{
             artefact: Map.from_struct(artefact),
@@ -94,43 +95,13 @@ defmodule Gralkor.Destination.Storage.InMemory do
         []
       end
 
-    {:ok, Enum.take(reflection_episodes ++ lens_episodes, max_results)}
-  end
+    lens_episodes =
+      Enum.map(
+        lens_episodes,
+        &Map.take(&1, [:content, :source_kind, :lens, :reflection, :writer, :source_description])
+      )
 
-  def search(destination, operator_id, _query, :nodes, max_results, opts) do
-    selected_labels = Keyword.get(opts, :entity_types, [])
-
-    nodes =
-      destination
-      |> Destination.graph_id(operator_id)
-      |> LensStorage.graph()
-      |> Map.fetch!(:nodes)
-      |> Enum.filter(fn node ->
-        selected_labels == [] or Enum.any?(node.labels, &(&1 in selected_labels))
-      end)
-      |> Enum.take(max_results)
-
-    {:ok, nodes}
-  end
-
-  def search(destination, operator_id, query, :artefacts, max_results, opts) do
-    artefact_id = Keyword.get(opts, :artefact_id)
-
-    results =
-      destination
-      |> artefact_entries(operator_id)
-      |> Enum.map(& &1.artefact)
-      |> Enum.filter(fn artefact ->
-        (is_nil(artefact_id) or artefact.id == artefact_id) and
-          (query in [nil, ""] or
-             String.contains?(
-               String.downcase(Jason.encode!(artefact.payload)),
-               String.downcase(query)
-             ))
-      end)
-      |> Enum.take(max_results)
-
-    {:ok, results}
+    Enum.take(reflection_episodes ++ lens_episodes, limit)
   end
 
   defp artefact_entries(destination, operator_id) do

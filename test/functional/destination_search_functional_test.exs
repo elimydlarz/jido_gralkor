@@ -11,18 +11,9 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(destination, operator_id, query, result_type, max_results, opts) do
+    def search(destination, operator_id, query, opts) do
       test_pid = Application.fetch_env!(:jido_gralkor, :destination_search_test_pid)
-
-      send(test_pid, {
-        :destination_search,
-        destination.name,
-        operator_id,
-        query,
-        result_type,
-        max_results,
-        opts
-      })
+      send(test_pid, {:destination_search, destination.name, operator_id, query, opts})
 
       if Application.get_env(:jido_gralkor, :destination_search_barrier, false) do
         send(test_pid, {:destination_search_started, destination.name, self()})
@@ -33,7 +24,12 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       end
 
       responses = Application.get_env(:jido_gralkor, :destination_search_responses, %{})
-      Map.get(responses, destination.name, {:ok, ["#{destination.name}:#{query}"]})
+
+      Map.get(
+        responses,
+        destination.name,
+        {:ok, %{facts: ["#{destination.name}:#{query}"], nodes: [], episodes: []}}
+      )
     end
   end
 
@@ -100,8 +96,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
           Client.search(%Search{
             operator_id: "operator-one",
             query: "question",
-            destinations: ["first", "second"],
-            result_type: :facts
+            destinations: ["first", "second"]
           })
         end)
 
@@ -113,73 +108,72 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert {:ok, _results} = Task.await(search)
     end
 
-    test "and results retain the selected Destination order" do
+    test "and the search returns one result per selected Destination in the selected Destination order" do
       assert {:ok, [%{destination: "second"}, %{destination: "first"}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["second", "first"],
-                 result_type: :facts
-               })
+               search(destinations: ["second", "first"])
     end
 
-    test "and every result identifies its Destination" do
+    test "and every Destination result names its Destination" do
+      assert {:ok,
+              [
+                %{destination: "first", facts: ["first:question"]},
+                %{destination: "second", facts: ["second:question"]}
+              ]} = search(destinations: ["first", "second"])
+    end
+
+    test "and every Destination result carries its relevant facts, its relevant nodes, and its relevant episodes together" do
+      start_native_graph() |> seed_typed_graph()
+
+      assert {:ok, [%{destination: "first", facts: facts, nodes: nodes, episodes: episodes}]} =
+               search(query: "amber", destinations: ["first"])
+
+      assert facts |> Enum.map(& &1.fact) |> Enum.sort() == [
+               "amber lesson learns from amber project",
+               "amber project owns amber lesson"
+             ]
+
+      assert nodes |> Enum.map(& &1.name) |> Enum.sort() == ["amber lesson", "amber project"]
+      assert [%{content: "amber seed", writer: :direct}] = episodes
+    end
+
+    test "and each Destination contributes at most twenty facts, twenty nodes, and five episodes" do
+      use_in_memory_storage()
+
+      for index <- 1..25 do
+        assert :ok = add_episode("first", "operator-one", "memory #{index}", "first-alpha")
+      end
+
+      replace_first_graph(for index <- 1..25, do: node("node-#{index}", ["Project"]))
+
+      assert {:ok, [%{facts: facts, nodes: nodes, episodes: episodes}]} =
+               search(query: "memory", destinations: ["first"])
+
+      assert {length(facts), length(nodes), length(episodes)} == {20, 20, 5}
+      assert Search.limits() == %{facts: 20, nodes: 20, episodes: 5}
+    end
+
+    test "and facts, nodes, and episodes each keep relevance order within their Destination" do
       Application.put_env(:jido_gralkor, :destination_search_responses, %{
-        "first" => {:ok, ["one", "two"]},
-        "second" => {:ok, ["three"]}
+        "first" =>
+          {:ok,
+           %{facts: ["fact-1", "fact-2"], nodes: ["node-1", "node-2"], episodes: ["ep-1", "ep-2"]}}
       })
 
       assert {:ok,
               [
-                %{destination: "first", fact: "one"},
-                %{destination: "first", fact: "two"},
-                %{destination: "second", fact: "three"}
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first", "second"],
-                 result_type: :facts
-               })
-    end
+                %{
+                  facts: ["fact-1", "fact-2"],
+                  nodes: ["node-1", "node-2"],
+                  episodes: ["ep-1", "ep-2"]
+                }
+              ]} = search(destinations: ["first"])
 
-    test "and the same maximum result count applies independently to every Destination" do
-      assert {:ok, _} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first", "second"],
-                 result_type: :facts,
-                 max_results: 7
-               })
-
-      assert_receive {:destination_search, "first", _, _, _, 7, _}
-      assert_receive {:destination_search, "second", _, _, _, 7, _}
-    end
-
-    test "and unselected writers cannot consume the result allowance for selected-Lens results" do
-      use_in_memory_storage()
-      assert :ok = add_episode("first", "operator-one", "unselected one", "first-beta")
-      assert :ok = add_episode("first", "operator-one", "unselected two", "first-beta")
-      assert :ok = add_episode("first", "operator-one", "selected one", "first-alpha")
-      assert :ok = add_episode("first", "operator-one", "selected two", "first-alpha")
-
-      assert {:ok,
-              [
-                %{episode: %{content: "selected one", lens: "first-alpha"}},
-                %{episode: %{content: "selected two", lens: "first-alpha"}}
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 destinations: ["first"],
-                 lenses: ["first-alpha"],
-                 max_results: 2
-               })
+      assert_receive {:destination_search, "first", _, _, opts}
+      assert Keyword.fetch!(opts, :limits) == %{facts: 20, nodes: 20, episodes: 5}
     end
   end
 
-  describe "when a caller searches memory > where the Destination selector is omitted or empty > and the Lens selector is omitted or empty" do
+  describe "when a caller searches memory > where the Destination selector is omitted or empty" do
     test "then every accessible registered Destination is selected" do
       assert {:ok, results} =
                Client.search(%Search{operator_id: "operator-one", query: "question"})
@@ -187,8 +181,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert Enum.map(results, & &1.destination) == ["personal", "global", "first", "second"]
 
       for destination <- ["personal", "global", "first", "second"] do
-        assert_receive {:destination_search, ^destination, "operator-one", "question", :episodes,
-                        20, []}
+        assert_receive {:destination_search, ^destination, "operator-one", "question", _opts}
       end
     end
 
@@ -229,190 +222,32 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                )
 
       assert {:ok, results} = Client.search(%Search{operator_id: "operator-one", query: "amber"})
+      episodes = Map.new(results, &{&1.destination, &1.episodes})
 
-      assert Enum.any?(
-               results,
-               &match?(
-                 %{
-                   destination: "personal",
-                   episode: %{content: "amber direct memory", writer: :direct}
-                 },
-                 &1
-               )
-             )
+      assert [%{content: "amber direct memory", writer: :direct}] = episodes["personal"]
+      assert [%{content: "amber lens memory", lens: "first-alpha"}] = episodes["first"]
 
-      assert Enum.any?(
-               results,
-               &match?(
-                 %{
-                   destination: "first",
-                   episode: %{content: "amber lens memory", lens: "first-alpha"}
-                 },
-                 &1
-               )
-             )
-
-      assert Enum.any?(
-               results,
-               &match?(
-                 %{
-                   destination: "second",
-                   episode: %{
-                     artefact: %{
-                       id: "amber-review",
-                       payload: %{"lesson" => "amber artefact memory"}
-                     },
-                     reflection: "review"
-                   }
-                 },
-                 &1
-               )
-             )
+      assert [
+               %{
+                 artefact: %{id: "amber-review", payload: %{"lesson" => "amber artefact memory"}},
+                 reflection: "review"
+               }
+             ] = episodes["second"]
     end
   end
 
-  describe "when a caller searches memory > where one or more Destinations are supplied > while the Lens selector is omitted or empty" do
+  describe "when a caller searches memory > where one or more Destinations are supplied" do
     test "then results from any supplied Destination can contribute" do
-      Application.put_env(:jido_gralkor, :destination_search_responses, %{
-        "first" => {:ok, ["selected"]},
-        "second" => {:ok, ["also selected"]}
-      })
-
       assert {:ok,
               [
-                %{destination: "first", fact: "selected"},
-                %{destination: "second", fact: "also selected"}
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first", "second"],
-                 result_type: :facts
-               })
+                %{destination: "first", facts: ["first:question"]},
+                %{destination: "second", facts: ["second:question"]}
+              ]} = search(destinations: ["first", "second"])
     end
 
     test "but no result from another Destination can contribute" do
-      Application.put_env(:jido_gralkor, :destination_search_responses, %{
-        "first" => {:ok, ["selected"]},
-        "second" => {:ok, ["unselected"]}
-      })
-
-      assert {:ok, [%{destination: "first", fact: "selected"}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first"],
-                 result_type: :facts
-               })
-
-      refute_receive {:destination_search, "second", _, _, _, _, _}
-    end
-  end
-
-  describe "when a caller searches memory > where one or more Lenses are supplied > while the Destination selector is omitted or empty" do
-    test "then every accessible registered Destination is selected" do
-      assert {:ok, _results} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 lenses: ["first-alpha"]
-               })
-
-      for destination <- ["personal", "global", "first", "second"] do
-        assert_receive {:destination_search, ^destination, _, _, _, _, _}
-      end
-    end
-
-    test "and results originating in any supplied Lens can contribute" do
-      use_in_memory_storage()
-      assert :ok = add_episode("first", "operator-one", "alpha memory", "first-alpha")
-      assert :ok = add_episode("first", "operator-one", "unselected memory", "first-beta")
-      assert :ok = add_episode("second", "operator-one", "beta memory", "second-beta")
-
-      assert {:ok,
-              [
-                %{
-                  destination: "first",
-                  episode: %{content: "alpha memory", lens: "first-alpha"}
-                },
-                %{
-                  destination: "second",
-                  episode: %{content: "beta memory", lens: "second-beta"}
-                }
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 lenses: ["first-alpha", "second-beta"]
-               })
-    end
-
-    test "but no result from another Lens or from a Destination artefact output can contribute" do
-      use_in_memory_storage()
-      assert :ok = add_episode("first", "operator-one", "selected memory", "first-alpha")
-
-      output = %{
-        kind: :destination,
-        destination: Gralkor.Destination.Registry.fetch!("first"),
-        ontology: Gralkor.DefaultOntology
-      }
-
-      assert :ok =
-               Gralkor.Destination.Storage.put_artefact(
-                 output,
-                 "review",
-                 "operator-one",
-                 Gralkor.Artefact.new("review-one", %{"content" => "artefact memory"})
-               )
-
-      assert {:ok,
-              [
-                %{
-                  destination: "first",
-                  episode: %{content: "selected memory", lens: "first-alpha"}
-                }
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 lenses: ["first-alpha"]
-               })
-    end
-  end
-
-  describe "when a caller searches memory > where one or more Destinations are supplied > and one or more Lenses are supplied" do
-    test "then only results whose Destination matches any supplied Destination and whose originating Lens matches any supplied Lens can contribute" do
-      use_in_memory_storage()
-      assert :ok = add_episode("first", "operator-one", "selected", "first-alpha")
-      assert :ok = add_episode("first", "operator-one", "wrong Lens", "first-beta")
-      assert :ok = add_episode("second", "operator-one", "wrong Destination", "second-beta")
-
-      assert {:ok,
-              [
-                %{
-                  destination: "first",
-                  episode: %{content: "selected", lens: "first-alpha"}
-                }
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 destinations: ["first"],
-                 lenses: ["first-alpha", "second-beta"]
-               })
-    end
-
-    test "and selecting a Lens does not add that Lens's Destination to the supplied Destinations" do
-      assert {:ok, _} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 destinations: ["first"],
-                 lenses: ["second-beta"]
-               })
-
-      assert_receive {:destination_search, "first", _, _, _, _, _}
-      refute_receive {:destination_search, "second", _, _, _, _, _}
+      assert {:ok, [%{destination: "first"}]} = search(destinations: ["first"])
+      refute_receive {:destination_search, "second", _, _, _}
     end
   end
 
@@ -421,24 +256,16 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       use_in_memory_storage()
       assert :ok = add_episode("personal", "operator-one", "private memory")
 
-      assert {:ok, [%{destination: "personal", episode: %{content: "private memory"}}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "private",
-                 destinations: ["personal"]
-               })
+      assert {:ok, [%{destination: "personal", episodes: [%{content: "private memory"}]}]} =
+               search(query: "private", destinations: ["personal"])
     end
 
     test "and another operator's graph cannot contribute a result" do
       use_in_memory_storage()
       assert :ok = add_episode("personal", "operator-one", "private memory")
 
-      assert {:ok, []} =
-               Client.search(%Search{
-                 operator_id: "operator-two",
-                 query: "private",
-                 destinations: ["personal"]
-               })
+      assert {:ok, [%{destination: "personal", facts: [], nodes: [], episodes: []}]} =
+               search(operator_id: "operator-two", query: "private", destinations: ["personal"])
     end
   end
 
@@ -447,107 +274,28 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       use_in_memory_storage()
       assert :ok = add_episode("first", "operator-one", "shared memory")
 
-      assert {:ok, [%{destination: "first", fact: %{fact: "shared memory"}}]} =
-               Client.search(%Search{
-                 operator_id: "operator-two",
-                 query: "shared",
-                 destinations: ["first"],
-                 result_type: :facts
-               })
+      assert {:ok, [%{destination: "first", facts: [%{fact: "shared memory"}]}]} =
+               search(operator_id: "operator-two", query: "shared", destinations: ["first"])
     end
   end
 
   describe "where the same Destination is selected more than once" do
     test "then that Destination is searched only once" do
-      assert {:ok, [%{destination: "first"}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first", "first"],
-                 result_type: :facts
-               })
+      assert {:ok, [%{destination: "first"}]} = search(destinations: ["first", "first"])
 
-      assert_receive {:destination_search, "first", _, _, _, _, _}
-      refute_receive {:destination_search, "first", _, _, _, _, _}
+      assert_receive {:destination_search, "first", _, _, _}
+      refute_receive {:destination_search, "first", _, _, _}
     end
   end
 
-  describe "where the same Lens is selected more than once" do
-    test "then that Lens contributes no duplicate result" do
-      assert {:ok, _} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 destinations: ["first"],
-                 lenses: ["first-alpha", "first-alpha"]
-               })
-
-      assert_receive {:destination_search, "first", _, _, :episodes, _, [lenses: ["first-alpha"]]}
-    end
-  end
-
-  describe "where a caller supplies no maximum result count" do
-    test "then every resolved Destination receives the default maximum result count of twenty" do
-      assert {:ok, _} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first", "second"],
-                 result_type: :facts
-               })
-
-      assert_receive {:destination_search, "first", _, _, _, 20, _}
-      assert_receive {:destination_search, "second", _, _, _, 20, _}
-    end
-  end
-
-  describe "when a caller omits the result type or explicitly selects episodes" do
+  describe "when a Destination result carries episodes" do
     test "then relevant stored episode content is returned" do
-      assert {:ok, [%{destination: "first", episode: "first:question"}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first"],
-                 result_type: :episodes
-               })
-
-      start_supervised!(Gralkor.Lens.Storage.InMemory)
-
-      Application.put_env(
-        :jido_gralkor,
-        :destination_storage,
-        Gralkor.Destination.Storage.InMemory
-      )
-
-      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-
-      destination = Gralkor.Destination.Registry.fetch!("first")
-
-      store = %Gralkor.Lens.Store{
-        operator_id: "operator-one",
-        lens: %Gralkor.Lens{
-          name: "first",
-          destination: destination,
-          ontology: Gralkor.DefaultOntology,
-          ingestion: String
-        }
-      }
-
-      assert :ok = Gralkor.Lens.Store.add(store, "stored episode", "functional")
+      use_in_memory_storage()
+      assert :ok = add_episode("first", "operator-one", "stored episode", "first")
 
       assert {:ok,
-              [
-                %{
-                  destination: "first",
-                  episode: %{content: "stored episode", lens: "first"}
-                }
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "stored",
-                 destinations: ["first"],
-                 result_type: :episodes
-               })
+              [%{destination: "first", episodes: [%{content: "stored episode", lens: "first"}]}]} =
+               search(query: "stored", destinations: ["first"])
     end
 
     test "and every episode written through a Lens identifies that originating Lens" do
@@ -557,14 +305,14 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
       assert {:ok,
               [
-                %{destination: "first", episode: %{content: "alpha", lens: "first-alpha"}},
-                %{destination: "first", episode: %{content: "beta", lens: "first-beta"}}
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 destinations: ["first"]
-               })
+                %{
+                  destination: "first",
+                  episodes: [
+                    %{content: "alpha", lens: "first-alpha"},
+                    %{content: "beta", lens: "first-beta"}
+                  ]
+                }
+              ]} = search(query: "memory", destinations: ["first"])
     end
 
     test "and every directly written episode retains content and source kind without Lens or Reflection authorship" do
@@ -577,12 +325,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                  "captured"
                )
 
-      assert {:ok, [%{destination: "personal", episode: episode}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "amber",
-                 destinations: ["personal"]
-               })
+      assert {:ok, [%{destination: "personal", episodes: [episode]}]} =
+               search(query: "amber", destinations: ["personal"])
 
       assert episode == %{
                content: "amber direct memory",
@@ -596,8 +340,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       use_in_memory_storage()
       seed_episode(%{content: "old", source_description: "captured"})
 
-      assert {:ok, [%{episode: %{content: "old", source_description: "captured"} = episode}]} =
-               Client.search(%Search{operator_id: "operator-one", query: "old"})
+      assert {:ok, [%{episodes: [%{content: "old", source_description: "captured"} = episode]}]} =
+               search(query: "old", destinations: ["personal"])
 
       refute Map.has_key?(episode, :lens)
       refute Map.has_key?(episode, :reflection)
@@ -607,38 +351,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       use_in_memory_storage()
       seed_episode(%{content: "old", source_description: "captured", lens: "operator"})
 
-      assert {:ok, [%{episode: %{lens: "operator"}}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "old",
-                 destinations: ["personal"]
-               })
-    end
-
-    test "and a personal-chat Lens selector excludes historical operator-labelled and direct episodes" do
-      use_in_memory_storage()
-
-      for episode <- [
-            %{content: "old", source_description: "captured", lens: "operator"},
-            %{content: "direct", source_description: "captured", writer: :direct},
-            %{content: "chat", source_description: "captured", lens: "personal-chat"}
-          ] do
-        seed_episode(episode)
-      end
-
-      assert {:ok,
-              [
-                %{
-                  destination: "personal",
-                  episode: %{content: "chat", lens: "personal-chat"}
-                }
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "memory",
-                 destinations: ["personal"],
-                 lenses: ["personal-chat"]
-               })
+      assert {:ok, [%{episodes: [%{lens: "operator"}]}]} =
+               search(query: "old", destinations: ["personal"])
     end
 
     test "and Lens source descriptions and naturally textual content remain unchanged" do
@@ -649,46 +363,28 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert {:ok,
               [
                 %{
-                  episode: %{
-                    content: ^content,
-                    source_description: "functional",
-                    lens: "first-alpha"
-                  }
+                  episodes: [
+                    %{content: ^content, source_description: "functional", lens: "first-alpha"}
+                  ]
                 }
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "jira",
-                 destinations: ["first"]
-               })
+              ]} = search(query: "jira", destinations: ["first"])
     end
 
     test "and every episode written through a Destination artefact output exposes its stable artefact identifier and payload as structured fields" do
       use_in_memory_storage()
 
-      destination = Gralkor.Destination.Registry.fetch!("first")
-
-      reflection = %Gralkor.Reflection{
-        name: "review",
-        outputs: [
-          %{
-            kind: :destination,
-            destination: destination,
-            ontology: Gralkor.DefaultOntology
-          }
-        ],
-        chain_of_thought: %Gralkor.Reflection.ChainOfThought{steps: []}
+      output = %{
+        kind: :destination,
+        destination: Gralkor.Destination.Registry.fetch!("first"),
+        ontology: Gralkor.DefaultOntology
       }
 
-      artefact = %Gralkor.Artefact{
-        id: "review-one",
-        payload: %{"lesson" => "keep it simple"}
-      }
+      artefact = %Gralkor.Artefact{id: "review-one", payload: %{"lesson" => "keep it simple"}}
 
       assert :ok =
                Gralkor.Destination.Storage.put_artefact(
-                 Enum.find(reflection.outputs, &(&1.kind == :destination)),
-                 reflection.name,
+                 output,
+                 "review",
                  "operator-one",
                  artefact
                )
@@ -699,34 +395,24 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
               [
                 %{
                   destination: "first",
-                  episode: %{artefact: ^returned_artefact, reflection: "review"}
+                  episodes: [%{artefact: ^returned_artefact, reflection: "review"}]
                 }
-              ]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "simple",
-                 destinations: ["first"]
-               })
+              ]} = search(query: "simple", destinations: ["first"])
     end
   end
 
-  describe "where a caller explicitly selects facts" do
-    test "then relevant relationships extracted in the selected Destinations are returned as structured fact records" do
+  describe "when a Destination result carries facts" do
+    test "then relevant relationships extracted in that Destination are returned as structured fact records" do
       use_in_memory_storage()
       assert :ok = add_episode("first", "operator-one", "first:question")
 
-      assert {:ok, [%{destination: "first", fact: %{fact: "first:question"}}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first"],
-                 result_type: :facts
-               })
+      assert {:ok, [%{destination: "first", facts: [%{fact: "first:question"}]}]} =
+               search(destinations: ["first"])
     end
 
     test "and each fact retains originating episode identifiers, source kinds, and source descriptions" do
       use_native_fact_storage()
-      assert {:ok, [%{fact: %{sources: sources}} | _]} = fact_search([])
+      assert {:ok, [%{facts: [%{sources: sources} | _]}]} = fact_search()
 
       assert Enum.map(sources, &Map.take(&1, [:id, :source_kind, :source_description])) == [
                %{
@@ -739,174 +425,100 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
     test "and named Lens or Reflection provenance is exposed on each attributable fact source" do
       use_native_fact_storage()
-      assert {:ok, results} = fact_search([])
-      assert Enum.at(results, 0).fact.sources |> hd() |> Map.fetch!(:lens) == "first-beta"
-      assert Enum.at(results, 2).fact.sources |> hd() |> Map.fetch!(:reflection) == "lessons"
+      assert {:ok, [%{facts: facts}]} = fact_search()
+      assert Enum.at(facts, 0).sources |> hd() |> Map.fetch!(:lens) == "first-beta"
+      assert Enum.at(facts, 2).sources |> hd() |> Map.fetch!(:reflection) == "lessons"
+    end
+
+    test "and every fact names its relationship" do
+      start_native_graph() |> seed_typed_graph()
+
+      assert typed_facts() |> Enum.map(&{&1.fact, &1.relationship}) == [
+               {"amber lesson learns from amber project", "LEARNS_FROM"},
+               {"amber project owns amber lesson", "OWNS"}
+             ]
+    end
+
+    test "and every fact identifies its source entity by name and identifier" do
+      start_native_graph() |> seed_typed_graph()
+
+      assert typed_facts() |> Enum.map(& &1.source_node) == [
+               %{uuid: "lesson", name: "amber lesson"},
+               %{uuid: "project", name: "amber project"}
+             ]
+    end
+
+    test "and every fact identifies its target entity by name and identifier" do
+      start_native_graph() |> seed_typed_graph()
+
+      assert typed_facts() |> Enum.map(& &1.target_node) == [
+               %{uuid: "project", name: "amber project"},
+               %{uuid: "lesson", name: "amber lesson"}
+             ]
     end
   end
 
-  describe "where a caller explicitly selects facts > while one or more Lenses are supplied" do
-    test "then only facts attributed to any selected Lens can contribute" do
-      use_native_fact_storage()
-      assert {:ok, [%{fact: %{fact: "selected fact"}}]} = fact_search(["first-alpha"])
-    end
+  describe "when a Destination result carries nodes" do
+    test "then relevant entities extracted in that Destination are returned" do
+      start_native_graph() |> seed_typed_graph()
 
-    test "and Lens filtering occurs before the per-Destination result limit" do
-      use_native_fact_storage()
-      assert {:ok, [%{fact: %{fact: "selected fact"}}]} = fact_search(["first-alpha"], 1)
-    end
+      assert {:ok, [%{nodes: nodes}]} = search(query: "amber", destinations: ["first"])
 
-    test "and only selected Lens sources contribute to the returned fact attribution" do
-      use_native_fact_storage()
-      assert {:ok, [%{fact: %{sources: sources}}]} = fact_search(["first-alpha"])
-      assert Enum.map(sources, & &1.id) == ["alpha"]
-      assert Enum.map(sources, & &1.lens) == ["first-alpha"]
+      assert Enum.all?(nodes, &match?(%{name: _, summary: _, attributes: _}, &1))
+      assert nodes |> Enum.map(& &1.name) |> Enum.sort() == ["amber lesson", "amber project"]
     end
   end
 
-  describe "where a caller explicitly selects nodes" do
-    test "then relevant entities extracted in the selected Destinations are returned" do
-      assert {:ok, [%{destination: "first", node: "first:question"}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first"],
-                 result_type: :nodes
-               })
-
-      start_supervised!(Gralkor.Lens.Storage.InMemory)
-
-      Application.put_env(
-        :jido_gralkor,
-        :destination_storage,
-        Gralkor.Destination.Storage.InMemory
-      )
-
-      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-
-      destination = Gralkor.Destination.Registry.fetch!("first")
-
-      store = %Gralkor.Lens.Store{
-        operator_id: "operator-one",
-        lens: %Gralkor.Lens.Replaceable{
-          name: "first-graph",
-          destination: destination
-        }
-      }
-
-      graph = %Gralkor.Graph{
-        nodes: [%{id: "atlas", labels: ["Project"], properties: %{title: "Atlas"}}],
-        relationships: []
-      }
-
-      assert :ok = Gralkor.Lens.Store.replace_graph(store, graph)
-
-      assert {:ok, [%{destination: "first", node: %{id: "atlas"}}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "Atlas",
-                 destinations: ["first"],
-                 result_type: :nodes
-               })
-    end
-  end
-
-  describe "where a caller explicitly selects artefacts" do
-    test "then relevant artefacts from the selected Destinations are returned" do
-      artefact = %Gralkor.Artefact{
-        id: "a-1",
-        payload: %{"lesson" => "keep it simple"}
-      }
-
-      Application.put_env(:jido_gralkor, :destination_search_responses, %{
-        "first" => {:ok, [artefact]}
-      })
-
-      assert {:ok, [%{destination: "first", artefact: ^artefact}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first"],
-                 result_type: :artefacts
-               })
-    end
-
-    test "and every artefact contains exactly its stable identifier and structured payload" do
-      artefact = %Gralkor.Artefact{
-        id: "a-1",
-        payload: %{}
-      }
-
-      Application.put_env(:jido_gralkor, :destination_search_responses, %{
-        "first" => {:ok, [artefact]}
-      })
-
-      assert {:ok, [%{artefact: returned}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first"],
-                 result_type: :artefacts
-               })
-
-      assert Map.from_struct(returned) == %{id: "a-1", payload: %{}}
-    end
-  end
-
-  describe "where a caller filters nodes by entity type" do
+  describe "where a caller filters by entity type" do
     test "then only nodes carrying a selected ontology label are returned" do
       start_native_graph() |> seed_typed_graph()
 
-      assert {:ok, unfiltered} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "amber",
-                 destinations: ["first"],
-                 result_type: :nodes
-               })
-
-      assert unfiltered |> Enum.map(& &1.node.name) |> Enum.sort() == [
-               "amber lesson",
-               "amber project"
-             ]
-
-      assert {:ok, [%{destination: "first", node: %{name: "amber lesson"}}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "amber",
-                 destinations: ["first"],
-                 result_type: :nodes,
-                 entity_types: ["Learning"]
-               })
+      assert {:ok, [%{nodes: [%{name: "amber lesson"}]}]} =
+               search(query: "amber", destinations: ["first"], entity_types: ["Learning"])
     end
-  end
 
-  describe "where a caller filters facts by edge type" do
-    test "then only facts carrying a selected ontology relationship type are returned" do
+    test "and only facts whose source and target entities both carry a selected ontology label are returned" do
       start_native_graph() |> seed_typed_graph()
 
-      assert {:ok, unfiltered} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
+      assert {:ok, [%{facts: []}]} =
+               search(query: "amber", destinations: ["first"], entity_types: ["Learning"])
+
+      assert {:ok, [%{facts: facts}]} =
+               search(
                  query: "amber",
                  destinations: ["first"],
-                 result_type: :facts
-               })
+                 entity_types: ["Learning", "Project"]
+               )
 
-      assert unfiltered |> Enum.map(& &1.fact.fact) |> Enum.sort() == [
+      assert facts |> Enum.map(& &1.fact) |> Enum.sort() == [
                "amber lesson learns from amber project",
                "amber project owns amber lesson"
              ]
+    end
 
-      assert {:ok,
-              [%{destination: "first", fact: %{fact: "amber lesson learns from amber project"}}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "amber",
-                 destinations: ["first"],
-                 result_type: :facts,
-                 edge_types: ["LEARNS_FROM"]
-               })
+    test "but episodes are not restricted by entity type" do
+      start_native_graph() |> seed_typed_graph()
+
+      assert {:ok, [%{episodes: [%{content: "amber seed"}]}]} =
+               search(query: "amber", destinations: ["first"], entity_types: ["Learning"])
+    end
+  end
+
+  describe "where a caller filters by edge type" do
+    test "then only facts carrying a selected ontology relationship type are returned" do
+      start_native_graph() |> seed_typed_graph()
+
+      assert {:ok, [%{facts: [%{fact: "amber lesson learns from amber project"}]}]} =
+               search(query: "amber", destinations: ["first"], edge_types: ["LEARNS_FROM"])
+    end
+
+    test "but nodes and episodes are not restricted by relationship type" do
+      start_native_graph() |> seed_typed_graph()
+
+      assert {:ok, [%{nodes: nodes, episodes: [%{content: "amber seed"}]}]} =
+               search(query: "amber", destinations: ["first"], edge_types: ["LEARNS_FROM"])
+
+      assert nodes |> Enum.map(& &1.name) |> Enum.sort() == ["amber lesson", "amber project"]
     end
   end
 
@@ -916,190 +528,116 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         "second" => {:error, :unavailable}
       })
 
-      assert {:error, :unavailable} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "question",
-                 destinations: ["first", "second"],
-                 result_type: :facts
-               })
+      assert {:error, :unavailable} = search(destinations: ["first", "second"])
     end
   end
 
-  describe "if search supplies a maximum result count that is not a positive integer" do
+  describe "if search supplies a field removed in 12.0.0" do
     test "then search fails before any Destination query is started" do
-      assert_raise ArgumentError, ~r/max_results.*positive integer/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "question",
-          destinations: ["first"],
-          max_results: 0
-        })
+      for {field, value, _guidance} <- removed_fields() do
+        assert_raise ArgumentError, fn -> search([{:destinations, ["first"]}, {field, value}]) end
+        refute_receive {:destination_search, _, _, _, _}
       end
-
-      refute_receive {:destination_search, _, _, _, _, _, _}
     end
 
-    test "and the error identifies the invalid maximum result count" do
-      assert_raise ArgumentError, ~r/0/, fn ->
-        Client.search(%Search{operator_id: "operator-one", query: "question", max_results: 0})
+    test "and the error names the removed field" do
+      for {field, value, _guidance} <- removed_fields() do
+        error = assert_raise ArgumentError, fn -> search([{field, value}]) end
+        assert error.message =~ "#{inspect(field)} was removed in 12.0.0"
+      end
+    end
+
+    test "and the error gives migration guidance for that field" do
+      for {field, value, guidance} <- removed_fields() do
+        error = assert_raise ArgumentError, fn -> search([{field, value}]) end
+        assert error.message =~ guidance
       end
     end
   end
 
-  describe "if search supplies an unsupported result type" do
+  describe "if search supplies any Destination selection that is not a list of registered non-blank names" do
     test "then search fails before any Destination query is started" do
-      assert_raise ArgumentError, ~r/unsupported.*summary/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "question",
-          destinations: ["first"],
-          result_type: :summary
-        })
-      end
-
-      refute_receive {:destination_search, _, _, _, _, _, _}
-    end
-
-    test "and the error identifies the unsupported result type" do
-      assert_raise ArgumentError, ~r/summary/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "question",
-          result_type: :summary
-        })
-      end
-    end
-  end
-
-  describe "if search combines one or more Lenses with a node or artefact result type" do
-    test "then search fails before any Destination query is started" do
-      assert_raise ArgumentError, ~r/Lens selection requires episode or fact results/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "question",
-          lenses: ["first-alpha"],
-          result_type: :nodes
-        })
-      end
-
-      refute_receive {:destination_search, _, _, _, _, _, _}
-    end
-
-    test "and the error identifies that Lens selection requires episode or fact results" do
-      assert_raise ArgumentError, ~r/Lens selection requires episode or fact results/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "question",
-          lenses: ["first-alpha"],
-          result_type: :nodes
-        })
-      end
-    end
-  end
-
-  describe "if search supplies any Destination or Lens selection that is not a list of registered non-blank names" do
-    test "then search fails before any Destination query is started" do
-      for {selection, message, _dimension, _value} <- invalid_selections() do
+      for {destinations, message} <- invalid_selections() do
         assert_raise ArgumentError, ~r/#{Regex.escape(message)}/, fn ->
-          Client.search(
-            struct!(
-              Search,
-              Map.merge(selection, %{operator_id: "operator-one", query: "question"})
-            )
-          )
+          search(destinations: destinations)
         end
 
-        refute_receive {:destination_search, _, _, _, _, _, _}
+        refute_receive {:destination_search, _, _, _, _}
       end
     end
 
     test "and no valid subset is searched" do
-      for {selection, _message, _dimension, _value} <- invalid_selections() do
-        assert_raise ArgumentError, fn ->
-          Client.search(
-            struct!(
-              Search,
-              Map.merge(selection, %{operator_id: "operator-one", query: "question"})
-            )
-          )
-        end
-
-        refute_receive {:destination_search, "first", _, _, _, _, _}
+      for {destinations, _message} <- invalid_selections() do
+        assert_raise ArgumentError, fn -> search(destinations: destinations) end
+        refute_receive {:destination_search, "first", _, _, _}
       end
     end
 
-    test "and the error identifies whether the rejected selection was for Destinations or Lenses" do
-      for {selection, _message, dimension, _value} <- invalid_selections() do
-        error =
-          assert_raise ArgumentError, fn ->
-            Client.search(
-              struct!(
-                Search,
-                Map.merge(selection, %{operator_id: "operator-one", query: "question"})
-              )
-            )
-          end
-
-        case dimension do
-          :destinations ->
-            assert error.message =~ ~r/destination/i
-            refute error.message =~ ~r/lens/i
-
-          :lenses ->
-            assert error.message =~ ~r/lens/i
-            refute error.message =~ ~r/destination/i
-        end
-      end
-
-      assert_raise ArgumentError, ~r/unknown Destination "missing"/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "question",
-          destinations: ["missing"]
-        })
-      end
-
-      assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
-        Client.search(%Search{
-          operator_id: "operator-one",
-          query: "question",
-          lenses: ["missing"]
-        })
+    test "and the error identifies the rejected Destination selection" do
+      for {destinations, _message} <- invalid_selections() do
+        error = assert_raise ArgumentError, fn -> search(destinations: destinations) end
+        assert error.message =~ ~r/destination/i
       end
     end
 
     test "and the error identifies the rejected value" do
-      for {selection, _message, _dimension, value} <- invalid_selections() do
-        error =
-          assert_raise ArgumentError, fn ->
-            Client.search(
-              struct!(
-                Search,
-                Map.merge(selection, %{operator_id: "operator-one", query: "question"})
-              )
-            )
-          end
-
-        assert error.message =~ inspect(value)
+      for {destinations, _message} <- invalid_selections() do
+        error = assert_raise ArgumentError, fn -> search(destinations: destinations) end
+        rejected = if is_list(destinations), do: List.last(destinations), else: destinations
+        assert error.message =~ inspect(rejected)
       end
     end
   end
 
+  defp search(overrides \\ []) do
+    Client.search(
+      struct!(
+        Search,
+        Keyword.merge([operator_id: "operator-one", query: "question"], overrides)
+      )
+    )
+  end
+
+  defp removed_fields do
+    [
+      {:result_type, :facts, "every search now returns facts, nodes, and episodes"},
+      {:lenses, ["first-alpha"], "no longer filters by originating Lens"},
+      {:artefact_id, "a-1", "episodes carrying artefact"},
+      {:max_results, 5, "limits are fixed per Destination"}
+    ]
+  end
+
   defp invalid_selections do
     [
-      {%{destinations: ["first", "missing"]}, ~s(unknown Destination "missing"), :destinations,
-       "missing"},
-      {%{destinations: "first"}, ~s(search destinations must be a list, got "first"),
-       :destinations, "first"},
-      {%{destinations: ["first", " "]}, ~s(invalid Destination name " "), :destinations, " "},
-      {%{destinations: ["first"], lenses: ["first-alpha", "missing"]}, ~s(unknown Lens "missing"),
-       :lenses, "missing"},
-      {%{destinations: ["first"], lenses: "first-alpha"},
-       ~s(search lenses must be a list, got "first-alpha"), :lenses, "first-alpha"},
-      {%{destinations: ["first"], lenses: ["first-alpha", ""]}, ~s(invalid Lens name ""), :lenses,
-       ""}
+      {["first", "missing"], ~s(unknown Destination "missing")},
+      {"first", ~s(search destinations must be a list, got "first")},
+      {["first", " "], ~s(invalid Destination name " ")}
     ]
+  end
+
+  defp typed_facts do
+    assert {:ok, [%{facts: facts}]} = search(query: "amber", destinations: ["first"])
+    Enum.sort_by(facts, & &1.fact)
+  end
+
+  defp fact_search, do: search(query: "fact", destinations: ["first"])
+
+  defp node(id, labels), do: %{id: id, labels: labels, properties: %{title: id}}
+
+  defp replace_first_graph(nodes) do
+    store = %Gralkor.Lens.Store{
+      operator_id: "operator-one",
+      lens: %Gralkor.Lens.Replaceable{
+        name: "first-graph",
+        destination: Gralkor.Destination.Registry.fetch!("first")
+      }
+    }
+
+    assert :ok =
+             Gralkor.Lens.Store.replace_graph(store, %Gralkor.Graph{
+               nodes: nodes,
+               relationships: []
+             })
   end
 
   defp start_native_graph do
@@ -1223,17 +761,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     :ok
   end
 
-  defp fact_search(lenses, maximum \\ 20) do
-    Client.search(%Search{
-      operator_id: "operator-one",
-      query: "fact",
-      destinations: ["first"],
-      result_type: :facts,
-      lenses: lenses,
-      max_results: maximum
-    })
-  end
-
   defp use_native_fact_storage do
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.Graphiti)
 
@@ -1258,17 +785,9 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                 self.graph_operations_interface = self
             def edge(self, uuid, fact, episodes):
                 return SimpleNamespace(uuid=uuid, fact=fact, episodes=episodes, created_at=None, valid_at=None, invalid_at=None, expired_at=None)
-            async def execute_query(self, query, **params):
-                assert 'RELATES_TO' in query
-                assert params['group_id'] == 'g_' + 'first'.encode().hex()
-                suffixes = tuple(params['lens_suffixes'])
-                ids = {key for key, episode in self.episodes.items() if episode.source_description.endswith(suffixes)}
-                return ([{'uuid': edge.uuid} for edge in self.edges if any(i in ids for i in edge.episodes)], None, None)
-            async def search(self, query, num_results=20, search_filter=None):
-                edges = self.edges
-                if search_filter and search_filter.edge_uuids is not None:
-                    edges = [edge for edge in edges if edge.uuid in search_filter.edge_uuids]
-                return edges[:num_results]
+            async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                assert group_ids == ['g_' + 'first'.encode().hex()]
+                return SimpleNamespace(edges=self.edges[:config.limit], nodes=[], episodes=[])
             async def episodic_node_get_by_uuids(self, cls, driver, uuids):
                 return [self.episodes[uuid] for uuid in uuids]
         FactFixture()

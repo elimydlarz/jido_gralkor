@@ -179,6 +179,7 @@ when a fact search is run for a group
   then the graph library's edge search is invoked with the requested result count
   and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps
   and each returned edge identifies its originating episodes by identifier, source kind, and source description
+  and each returned edge is rendered with its relationship name and the name and identifier of its source and target entities
   and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints
   where edge types are supplied
     then the graph library's edge search is restricted to those ontology relationship types
@@ -186,30 +187,29 @@ when a fact search is run for a group
 if running a fact search raises inside the graph library
   then an error carrying the raised exception is returned
 
-when an episode search is run for a group
-  then the graph library is asked for episodes only, with the requested result count
+when a memory search is run for a group
+  then the graph library is searched once for edges, nodes, and episodes together
+  and edges and nodes are each ranked by reciprocal rank fusion of full-text and similarity search, and episodes by full-text search
+  and the graph library is asked for as many results of each kind as the largest requested kind limit
   and it is restricted to the physically encoded group id the episodes were written under
-  and each returned episode is rendered with the body that was written and its source description
-  and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned
+  and each returned edge is rendered as a fact carrying its text, its created, valid, invalid, and expired timestamps, and its originating episodes by identifier, source kind, and source description
+  and each returned edge is rendered with its relationship name and the name and identifier of its source and target entities
+  and each returned node is rendered with its name, summary, and attributes
+  and each returned episode is rendered with the body that was written, its source description, and its source kind
+  and facts, nodes, and episodes are each returned in the graph library's relevance order and cut to their own requested limit
+  and nothing an extractor derived from an episode is needed to return it, so an episode no entity was extracted from is still returned
+  while node labels are supplied
+    then the single search's filter carries those labels
+  while edge types are supplied
+    then the single search's filter carries those relationship types
+  while neither node labels nor edge types are supplied
+    then the single search's filter leaves every node and edge eligible
   when the query exceeds the graph library's full-text limit
     then the graph library receives a bounded non-empty query containing the earliest supported terms
-  when Lens names are supplied
-    then writer filtering occurs before the requested result count
-  when only durably extraction-complete episodes are requested
-    then every unmarked episode is excluded
+  when a returned Reflection episode lacks its durable extraction-completion marker
+    then that episode is excluded before the episode limit is applied
 
-if running an episode search raises inside the graph library
-  then an error carrying the raised exception is returned
-
-when a node search is run for a group
-  then it is restricted to the physically encoded group id the episodes were written under, so a group id carrying hyphens still matches
-  while node labels are supplied
-    then the graph library's node search is invoked with the requested result count and a filter carrying those labels
-    and each returned node is rendered with its name, summary, and attributes, ordered by relevance
-  while no node labels are supplied
-    then the graph library's node search is invoked with every node eligible
-
-if running a node search raises inside the graph library
+if running a memory search raises inside the graph library
   then an error carrying the raised exception is returned
 
 when an index and constraint rebuild is requested for the whole graph

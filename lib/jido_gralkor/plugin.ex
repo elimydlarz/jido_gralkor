@@ -17,8 +17,8 @@ defmodule JidoGralkor.Plugin do
 
   The plugin does **not** search memory on its own. Search is the LLM's job,
   invoked through `MemorySearch`, which calls runtime-targeted
-  `Gralkor.Client.search/2` with
-  selectors supplied for that search invocation.
+  `Gralkor.Client.search/2` with the optional Destination selector supplied
+  for that search invocation.
   Consumers force it on the first ReAct iteration via
   `JidoGralkor.ReAct.maybe_force_memory_search/2` from their
   `Jido.AI.Reasoning.ReAct.RequestTransformer`.

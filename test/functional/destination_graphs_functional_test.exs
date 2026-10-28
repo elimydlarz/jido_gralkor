@@ -76,13 +76,15 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
     test "and the episode is unavailable to another operator using the same Destination" do
       assert :ok = ingest("operator-one", "personal-chat", "private observation")
 
-      assert {:ok, []} = search("operator-two", ["personal"])
+      assert {:ok, [%{destination: "personal", facts: [], episodes: []}]} =
+               search("operator-two", ["personal"])
     end
 
     test "and the episode is unavailable from any unselected Destination" do
       assert :ok = ingest("operator-one", "personal-chat", "private observation")
 
-      assert {:ok, []} = search("operator-one", ["decisions"])
+      assert {:ok, [%{destination: "decisions", facts: [], episodes: []}]} =
+               search("operator-one", ["decisions"])
     end
   end
 
@@ -103,15 +105,19 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
 
       assert {:ok,
               [
-                %{destination: "global", fact: %{fact: "public observation"}},
-                %{destination: "global", fact: %{fact: "public decision"}}
+                %{
+                  destination: "global",
+                  episodes: [%{content: "public observation"}, %{content: "public decision"}]
+                }
               ]} =
                search("operator-three", ["global"])
     end
 
     test "and the episode is unavailable from any unselected Destination" do
       assert :ok = ingest("operator-one", "published-observations", "public observation")
-      assert {:ok, []} = search("operator-one", ["observations"])
+
+      assert {:ok, [%{destination: "observations", facts: [], episodes: []}]} =
+               search("operator-one", ["observations"])
     end
   end
 
@@ -126,14 +132,15 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
     test "and every operator can retrieve the episode by searching that Destination" do
       assert :ok = ingest("operator-one", "observations", "shared observation")
 
-      assert {:ok, [%{destination: "observations", fact: %{fact: "shared observation"}}]} =
+      assert {:ok, [%{destination: "observations", episodes: [%{content: "shared observation"}]}]} =
                search("operator-two", ["observations"])
     end
 
     test "and the episode is unavailable from any unselected Destination" do
       assert :ok = ingest("operator-one", "observations", "shared observation")
 
-      assert {:ok, []} = search("operator-two", ["decisions"])
+      assert {:ok, [%{destination: "decisions", facts: [], episodes: []}]} =
+               search("operator-two", ["decisions"])
     end
   end
 
@@ -142,7 +149,13 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
       assert :ok = ingest("operator-one", "published-observations", "public observation")
       assert :ok = ingest("operator-one", "published-decisions", "public decision")
 
-      assert {:ok, [%{fact: %{fact: "public observation"}}, %{fact: %{fact: "public decision"}}]} =
+      assert {:ok,
+              [
+                %{
+                  destination: "global",
+                  episodes: [%{content: "public observation"}, %{content: "public decision"}]
+                }
+              ]} =
                search("operator-one", ["global"])
     end
   end
@@ -235,8 +248,7 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
     Client.search(%Search{
       operator_id: operator,
       query: "memory",
-      destinations: destinations,
-      result_type: :facts
+      destinations: destinations
     })
   end
 

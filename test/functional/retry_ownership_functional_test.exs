@@ -41,7 +41,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(_, _, _, _, _, _), do: {:ok, []}
+    def search(_, _, _, _), do: {:ok, %{facts: [], nodes: [], episodes: []}}
 
     @impl true
     def put_artefact(output, reflection, operator, artefact) do
@@ -60,7 +60,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(_, _, _, _, _, _), do: {:ok, []}
+    def search(_, _, _, _), do: {:ok, %{facts: [], nodes: [], episodes: []}}
 
     @impl true
     def put_artefact(_, _, _, artefact) do
@@ -82,7 +82,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(_, _, _, _, _, _), do: {:ok, []}
+    def search(_, _, _, _), do: {:ok, %{facts: [], nodes: [], episodes: []}}
 
     @impl true
     def put_artefact(_, _, _, artefact) do
@@ -101,7 +101,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(_, _, _, _, _, _), do: {:ok, []}
+    def search(_, _, _, _), do: {:ok, %{facts: [], nodes: [], episodes: []}}
 
     @impl true
     def put_artefact(_, _, _, artefact) do
@@ -120,15 +120,18 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(destination, _, _, _, _, _) do
+    def search(destination, _, _, _) do
       if destination.name == "global" do
         counter = Application.fetch_env!(:jido_gralkor, :retry_ownership_counter)
         :counters.add(counter, 1, 1)
         attempt = :counters.get(counter, 1)
         send(test_pid(), {:related_memory_attempt, attempt})
-        if attempt == 1, do: {:error, %{status: 503}}, else: {:ok, []}
+
+        if attempt == 1,
+          do: {:error, %{status: 503}},
+          else: {:ok, %{facts: [], nodes: [], episodes: []}}
       else
-        {:ok, []}
+        {:ok, %{facts: [], nodes: [], episodes: []}}
       end
     end
 
@@ -149,12 +152,12 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(destination, _, _, _, _, _) do
+    def search(destination, _, _, _) do
       if destination.name == "global" do
         send(test_pid(), :related_memory_attempt)
         {:error, %{status: 503, reason: :search_unavailable}}
       else
-        {:ok, []}
+        {:ok, %{facts: [], nodes: [], episodes: []}}
       end
     end
 
@@ -215,6 +218,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
         class _Results:
             def __init__(self):
+                self.edges = []
                 self.nodes = []
                 self.episodes = []
 

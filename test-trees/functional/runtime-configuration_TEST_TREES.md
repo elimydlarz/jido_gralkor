@@ -66,7 +66,7 @@ when a named Reflection submission is admitted
   and later submission uses any subsequently installed Reflection definition
 
 when a search begins
-  then it retains the selected Lens and Destination definitions from one snapshot active when search began
+  then it retains the selected Destination definitions from one snapshot active when search began
   and later search uses any subsequently installed Destination definitions
 
 when a runtime-targeted operation is given an owning AgentServer PID whose Gralkor runtime is unavailable

@@ -23,62 +23,40 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(_destination, _operator_id, _query, _result_type, _max_results, _opts),
-      do: {:error, :unavailable}
+    def search(_destination, _operator_id, _query, _opts), do: {:error, :unavailable}
   end
 
   defmodule RecordingSearchStorage do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(destination, operator_id, query, result_type, max_results, opts) do
+    def search(destination, operator_id, query, opts) do
       test_pid = Application.fetch_env!(:jido_gralkor, :public_search_test_pid)
+      send(test_pid, {:public_search, destination.name, operator_id, query, opts})
 
-      send(
-        test_pid,
-        {:public_search, destination.name, operator_id, query, result_type, max_results, opts}
-      )
-
-      {:ok, [%{fact: "matching stored fact", sources: [%{lens: "observations"}]}]}
+      {:ok,
+       %{
+         facts: [%{fact: "matching stored fact", sources: [%{lens: "observations"}]}],
+         nodes: [],
+         episodes: []
+       }}
     end
   end
 
   defmodule FactSearchStorage do
     @behaviour Gralkor.Destination.Storage
-    def search(destination, operator, query, :facts, maximum, opts) do
-      {:ok, observations} =
-        Gralkor.Destination.Storage.InMemory.search(
-          destination,
-          operator,
-          query,
-          :facts,
-          maximum,
-          opts
-        )
-
-      lenses = Keyword.get(opts, :lenses, [])
+    def search(destination, operator, query, opts) do
+      {:ok, %{facts: observations} = result} =
+        Gralkor.Destination.Storage.InMemory.search(destination, operator, query, opts)
 
       extracted =
         Application.get_env(:jido_gralkor, :public_extracted_facts, [])
         |> Enum.filter(&(&1.destination == destination.name and &1.operator == operator))
         |> Enum.map(& &1.fact)
-        |> Enum.filter(fn fact ->
-          lenses == [] or Enum.any?(fact.sources, &(Map.get(&1, :lens) in lenses))
-        end)
 
-      {:ok, Enum.take(extracted ++ observations, maximum)}
+      maximum = Keyword.fetch!(opts, :limits).facts
+      {:ok, %{result | facts: Enum.take(extracted ++ observations, maximum)}}
     end
-
-    def search(destination, operator, query, type, maximum, opts),
-      do:
-        Gralkor.Destination.Storage.InMemory.search(
-          destination,
-          operator,
-          query,
-          type,
-          maximum,
-          opts
-        )
   end
 
   @observation "A reversible canary exposed a configuration fault before broad deployment impact."
@@ -443,32 +421,33 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert {:ok, %{result: text}} =
                memory_search(%{query: "memory", destinations: ["personal"]}, [])
 
-      assert text == "Lens: personal-chat\n- own memory"
+      assert text ==
+               "Facts\n\nLens: personal-chat\n- own memory\n\nEpisodes\n- [Lens: personal-chat] own memory"
     end
 
-    test "and the usable query is submitted to fact search for the current operator" do
+    test "and the usable query is submitted to the one memory search for the current operator" do
       Application.put_env(:jido_gralkor, :destination_storage, RecordingSearchStorage)
       Application.put_env(:jido_gralkor, :public_search_test_pid, self())
       on_exit(fn -> Application.delete_env(:jido_gralkor, :public_search_test_pid) end)
 
-      assert {:ok, %{result: "Lens: observations\n- matching stored fact"}} =
+      assert {:ok, %{result: "Facts\n\nLens: observations\n- matching stored fact"}} =
                memory_search(%{query: "precise query", destinations: ["observations"]}, [])
 
-      assert_receive {:public_search, "observations", "operator-one", "precise query", :facts, 20,
-                      _}
+      assert_receive {:public_search, "observations", "operator-one", "precise query", opts}
+      assert Keyword.fetch!(opts, :limits) == Gralkor.Search.limits()
+      refute Keyword.has_key?(opts, :entity_types)
+      refute Keyword.has_key?(opts, :edge_types)
     end
 
-    test "and returned results obey the optional `destinations` and `lenses` selectors supplied for that invocation" do
+    test "and returned results obey the optional `destinations` selector supplied for that invocation" do
       assert :ok = ingest_memory("observations", "wanted")
       assert :ok = ingest_memory("decisions", "other")
 
       assert {:ok, %{result: text}} =
-               memory_search(
-                 %{query: "memory", destinations: ["observations"], lenses: ["observations"]},
-                 []
-               )
+               memory_search(%{query: "memory", destinations: ["observations"]}, [])
 
-      assert text == "Lens: observations\n- wanted"
+      assert text ==
+               "Facts\n\nLens: observations\n- wanted\n\nEpisodes\n- [Lens: observations] wanted"
     end
 
     test "and the action returns one readable string with fact bullets grouped under named Lens or Reflection headings" do
@@ -477,29 +456,39 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert {:ok, %{result: text}} =
                memory_search(%{query: "payment", destinations: ["observations"]}, [])
 
-      assert text == "Lens: observations\n- Payment retries need an idempotency key."
+      assert text ==
+               "Facts\n\nLens: observations\n- Payment retries need an idempotency key.\n\n" <>
+                 "Episodes\n- [Lens: observations] Payment retries need an idempotency key."
     end
 
     test "and relevant stored generalisations can contribute beside related ingested information" do
       assert :ok = ingest_memory("observations", "observed rollout")
-      put_generalisation("Use canaries", 2, [])
+      artefact = put_generalisation("Use canaries", 2, [])
 
       assert {:ok, %{result: text}} =
                memory_search(%{query: "rollout", destinations: ["observations", "global"]}, [])
 
       assert text ==
-               "Lens: observations\n- observed rollout\n\nReflection: generalisations\n- Use canaries"
+               "Facts\n\nLens: observations\n- observed rollout\n\nReflection: generalisations\n- Use canaries\n\n" <>
+                 "Episodes\n- [Lens: observations] observed rollout\n" <>
+                 "- [Reflection: generalisations] artefact #{artefact.id}: #{Jason.encode!(artefact.payload)}"
     end
 
-    test "and the presentation adds no artefact identifiers, evolution-depth levels, or lineage metadata" do
-      put_generalisation("Use canaries", 2, [%{"content" => "prior", "level" => 1}])
+    test "and the fact presentation adds no artefact identifiers, evolution-depth levels, or lineage metadata" do
+      artefact = put_generalisation("Use canaries", 2, [%{"content" => "prior", "level" => 1}])
 
-      assert {:ok, %{result: "Reflection: generalisations\n- Use canaries"}} =
+      assert {:ok, %{result: text}} =
                memory_search(%{query: "canaries", destinations: ["global"]}, [])
+
+      assert [facts, _episodes] = String.split(text, "\n\nEpisodes\n")
+      assert facts == "Facts\n\nReflection: generalisations\n- Use canaries"
+      refute facts =~ artefact.id
+      refute facts =~ "level"
+      refute facts =~ "prior"
     end
   end
 
-  describe "when an agent invokes memory search with a usable query > where both selectors are omitted or empty" do
+  describe "when an agent invokes memory search with a usable query > where the Destination selector is omitted or empty" do
     test "then every accessible registered Destination can contribute" do
       for lens <- ["personal-chat", "shared-notes", "observations", "decisions"],
           do: assert(:ok = ingest_memory(lens, lens <> " fact"))
@@ -511,43 +500,18 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
-  describe "when an agent invokes memory search with a usable query > where only Destinations are supplied" do
+  describe "when an agent invokes memory search with a usable query > where Destinations are supplied" do
     test "then only results from any supplied Destination can contribute" do
       assert :ok = ingest_memory("observations", "wanted")
       assert :ok = ingest_memory("decisions", "other")
+      assert :ok = ingest_memory("shared-notes", "unselected")
 
       assert {:ok, %{result: text}} =
-               memory_search(%{query: "memory", destinations: ["observations"]}, [])
+               memory_search(%{query: "memory", destinations: ["observations", "decisions"]}, [])
 
-      assert text == "Lens: observations\n- wanted"
-    end
-  end
-
-  describe "when an agent invokes memory search with a usable query > where only Lenses are supplied" do
-    test "then only results originating in any supplied Lens can contribute" do
-      assert :ok = ingest_memory("observations", "wanted")
-      assert :ok = ingest_memory("decisions", "other")
-      assert {:ok, %{result: text}} = memory_search(%{query: "memory", lenses: ["decisions"]}, [])
-      assert text == "Lens: decisions\n- other"
-    end
-  end
-
-  describe "when an agent invokes memory search with a usable query > where Destinations and Lenses are supplied" do
-    test "then only results matching both selections can contribute" do
-      assert :ok = ingest_memory("observations", "intersection observation")
-      assert :ok = ingest_memory("decisions", "intersection decision")
-
-      assert {:ok, %{result: result}} =
-               memory_search(
-                 %{
-                   query: "intersection",
-                   destinations: ["observations"],
-                   lenses: ["decisions"]
-                 },
-                 []
-               )
-
-      assert result == "No matching facts."
+      assert text ==
+               "Facts\n\nLens: observations\n- wanted\n\nLens: decisions\n- other\n\n" <>
+                 "Episodes\n- [Lens: observations] wanted\n- [Lens: decisions] other"
     end
   end
 
@@ -590,7 +554,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                  Map.put(tool_context, :agent_id, fresh_agent.id)
                )
 
-      assert text == "Lens: personal-chat\n- current operator memory"
+      assert text ==
+               "Facts\n\nLens: personal-chat\n- current operator memory\n\n" <>
+                 "Episodes\n- [Lens: personal-chat] current operator memory"
     end
   end
 
@@ -625,11 +591,11 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert description =~ "Search related stored observations and generalisations"
     end
 
-    test "and its description directs the agent to use the returned source-grouped facts" do
+    test "and its description directs the agent to use the returned facts, entities, and episode excerpts" do
       description = MemorySearch.__action_metadata__().description
 
       assert description =~
-               "Use the returned source-grouped facts"
+               "Use the returned facts, entities, and episode excerpts"
     end
   end
 
@@ -640,7 +606,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       on_exit(fn -> Application.delete_env(:jido_gralkor, :public_search_test_pid) end)
 
       assert {:ok, _result} = memory_search(%{query: "  "}, session_id: "thread-one")
-      refute_receive {:public_search, _, _, _, _, _, _}
+      refute_receive {:public_search, _, _, _, _}
     end
 
     test "and the agent receives an explicit non-result" do
@@ -712,19 +678,20 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
   describe "when a consumer explicitly formats structured fact search results" do
     test "then named Lens sources have headings of the form `Lens: <name>`" do
-      assert rendered([fact("Use retries", [%{lens: "jira"}])]) == "Lens: jira\n- Use retries"
+      assert rendered([fact("Use retries", [%{lens: "jira"}])]) ==
+               "Facts\n\nLens: jira\n- Use retries"
     end
 
     test "and named Reflection sources have headings of the form `Reflection: <name>`" do
       assert rendered([fact("Use canaries", [%{reflection: "lessons"}])]) ==
-               "Reflection: lessons\n- Use canaries"
+               "Facts\n\nReflection: lessons\n- Use canaries"
     end
 
     test "and each source heading is followed by bullets containing its returned fact text" do
       assert rendered([
                fact("First\ncontinued", [%{lens: "notes"}]),
                fact("Second", [%{lens: "notes"}])
-             ]) == "Lens: notes\n- First\ncontinued\n- Second"
+             ]) == "Facts\n\nLens: notes\n- First\ncontinued\n- Second"
     end
 
     test "and source groups retain first-appearance order" do
@@ -732,7 +699,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                fact("one", [%{lens: "z"}]),
                fact("two", [%{lens: "a"}]),
                fact("three", [%{lens: "z"}])
-             ]) == "Lens: z\n- one\n- three\n\nLens: a\n- two"
+             ]) == "Facts\n\nLens: z\n- one\n- three\n\nLens: a\n- two"
     end
 
     test "and facts retain retrieval order within each source group" do
@@ -740,34 +707,34 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                fact("one", [%{lens: "z"}]),
                fact("two", [%{lens: "a"}]),
                fact("three", [%{lens: "z"}])
-             ]) == "Lens: z\n- one\n- three\n\nLens: a\n- two"
+             ]) == "Facts\n\nLens: z\n- one\n- three\n\nLens: a\n- two"
     end
   end
 
   describe "when a consumer explicitly formats structured fact search results > while a fact has several named sources" do
     test "then the fact appears once under each distinct named source" do
       assert rendered([fact("shared", [%{lens: "notes"}, %{reflection: "lessons"}])]) ==
-               "Lens: notes\n- shared\n\nReflection: lessons\n- shared"
+               "Facts\n\nLens: notes\n- shared\n\nReflection: lessons\n- shared"
     end
   end
 
   describe "when a consumer explicitly formats structured fact search results > while a Lens and a Reflection share a name" do
     test "then their facts remain in separate source groups" do
       assert rendered([fact("one", [%{lens: "same"}]), fact("two", [%{reflection: "same"}])]) ==
-               "Lens: same\n- one\n\nReflection: same\n- two"
+               "Facts\n\nLens: same\n- one\n\nReflection: same\n- two"
     end
   end
 
   describe "when a consumer explicitly formats structured fact search results > while a fact has no named Lens or Reflection provenance" do
     test "then the fact appears under `Source: unknown`" do
       assert rendered([fact("one", []), fact("two", [%{source_description: "legacy"}])]) ==
-               "Source: unknown\n- one\n- two"
+               "Facts\n\nSource: unknown\n- one\n- two"
     end
   end
 
-  describe "when a consumer explicitly formats structured fact search results > while search returns no facts" do
-    test "then the text explicitly states that no matching facts were found" do
-      assert rendered([]) == "No matching facts."
+  describe "when a consumer explicitly formats structured fact search results > while search returns no facts, entities, or episodes" do
+    test "then the text explicitly states that no matching memory was found" do
+      assert rendered([]) == "No matching memory."
     end
   end
 
@@ -779,7 +746,12 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert {:ok, %{result: text}} =
                memory_search(%{query: "x", destinations: ["observations"]}, [])
 
-      assert text == "Lens: observations\n- small\n\nOmitted facts: 1 (response limit)."
+      assert text ==
+               "Facts\n\nLens: observations\n- small\n\n" <>
+                 "Episodes\n- [Lens: observations] #{excerpt(String.duplicate("x", 16_385))}\n" <>
+                 "- [Lens: observations] small\n\n" <>
+                 "Omitted (response limit): facts 1, entities 0, episodes 0."
+
       assert String.length(text) <= 16_384
     end
 
@@ -800,7 +772,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert {:ok, %{result: text}} =
                memory_search(%{query: "x", destinations: ["observations"]}, [])
 
-      assert text == "Lens: observations\n- " <> content
+      assert text ==
+               "Facts\n\nLens: observations\n- " <>
+                 content <> "\n\nEpisodes\n- [Lens: observations] Exact λ text with another line."
     end
   end
 
@@ -809,16 +783,28 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert :ok = ingest_memory("observations", String.duplicate("x", 17_000))
       assert :ok = ingest_memory("observations", "later")
 
-      assert {:ok, %{result: "Lens: observations\n- later\n\nOmitted facts: 1 (response limit)."}} =
+      assert {:ok, %{result: text}} =
                memory_search(%{query: "x", destinations: ["observations"]}, [])
+
+      assert text ==
+               "Facts\n\nLens: observations\n- later\n\n" <>
+                 "Episodes\n- [Lens: observations] #{excerpt(String.duplicate("x", 17_000))}\n" <>
+                 "- [Lens: observations] later\n\n" <>
+                 "Omitted (response limit): facts 1, entities 0, episodes 0."
     end
 
     test "and the text reports the omitted fact count and response-limit reason" do
       for _ <- 1..2,
           do: assert(:ok = ingest_memory("observations", String.duplicate("x", 17_000)))
 
-      assert {:ok, %{result: "Omitted facts: 2 (response limit)."}} =
+      huge = "- [Lens: observations] #{excerpt(String.duplicate("x", 17_000))}"
+
+      assert {:ok, %{result: text}} =
                memory_search(%{query: "x", destinations: ["observations"]}, [])
+
+      assert text ==
+               "Episodes\n#{huge}\n#{huge}\n\n" <>
+                 "Omitted (response limit): facts 2, entities 0, episodes 0."
     end
   end
 
@@ -843,7 +829,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         end
       end
 
-      refute_received {:public_search, _, _, _, _, _, _}
+      refute_received {:public_search, _, _, _, _}
     end
   end
 
@@ -859,7 +845,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     test "and the tool result contains readable fact bullets rather than a JSON-encoded result list" do
       assert :ok = ingest_memory("observations", "Use retries.")
       {wire, _} = provider_memory_result(%{query: "x", destinations: ["observations"]})
-      assert wire["result"]["result"] == "Lens: observations\n- Use retries."
+
+      assert wire["result"]["result"] ==
+               "Facts\n\nLens: observations\n- Use retries.\n\n" <>
+                 "Episodes\n- [Lens: observations] Use retries."
     end
   end
 
@@ -874,9 +863,11 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       {wire, _} = provider_memory_result(%{query: "x", destinations: ["global"]})
 
       assert wire["result"]["result"] ==
-               "Reflection: generalisations\n- Use canaries for ABC-123."
+               "Facts\n\nReflection: generalisations\n- Use canaries for ABC-123.\n\n" <>
+                 "Episodes\n- [Reflection: generalisations] artefact #{artefact.id}: " <>
+                 excerpt(Jason.encode!(artefact.payload))
 
-      assert {:ok, [%{episode: %{artefact: stored}}]} =
+      assert {:ok, [%{destination: "global", episodes: [%{artefact: stored}]}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
                  query: "x",
@@ -906,11 +897,18 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       params = %{query: "x", destinations: names}
       {wire, _} = provider_memory_result(params)
 
-      expected =
+      facts =
         Enum.map_join(Enum.with_index(names), "\n\n", fn {name, n} ->
           "Lens: #{name}\n" <>
             Enum.map_join((n * 20)..min(n * 20 + 19, 100), "\n", &"- record-#{&1}")
         end)
+
+      episodes =
+        Enum.map_join(Enum.with_index(names), "\n", fn {name, n} ->
+          Enum.map_join((n * 20)..min(n * 20 + 4, 100), "\n", &"- [Lens: #{name}] record-#{&1}")
+        end)
+
+      expected = "Facts\n\n" <> facts <> "\n\nEpisodes\n" <> episodes
 
       assert wire["result"]["result"] == expected
     end
@@ -923,7 +921,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       {wire, _} = provider_memory_result(%{query: "x", destinations: ["observations"]})
 
       assert wire["result"]["result"] ==
-               "Lens: observations\n- small\n\nOmitted facts: 1 (response limit)."
+               "Facts\n\nLens: observations\n- small\n\n" <>
+                 "Episodes\n- [Lens: observations] #{excerpt(String.duplicate("λ", 16_385))}\n" <>
+                 "- [Lens: observations] small\n\n" <>
+                 "Omitted (response limit): facts 1, entities 0, episodes 0."
     end
   end
 
@@ -992,11 +993,20 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     {Jason.decode!(content), byte_size(content)}
   end
 
-  defp fact(text, sources), do: %{destination: "global", fact: %{fact: text, sources: sources}}
+  defp fact(text, sources), do: %{fact: text, sources: sources}
 
-  defp rendered(input) do
-    assert {:ok, %{result: text}} = Presentation.for_model(input, 65_536)
+  defp rendered(facts) do
+    results = [%{destination: "global", facts: facts, nodes: [], episodes: []}]
+    assert {:ok, %{result: text}} = Presentation.for_model(results, 65_536)
     text
+  end
+
+  defp excerpt(text) do
+    text = text |> String.split() |> Enum.join(" ")
+
+    if String.length(text) > 280,
+      do: String.slice(text, 0, 280) <> "… (truncated)",
+      else: text
   end
 
   defp eventually(fun, attempts \\ 100)

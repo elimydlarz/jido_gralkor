@@ -47,7 +47,7 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
                 writer = context.get('writer') if context is not None else None
                 self.episodes.append(SimpleNamespace(uuid=str(len(self.episodes)), content=kwargs['episode_body'], source_description=kwargs['source_description'], source=kwargs['source'], _gralkor_writer=writer))
             async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                return SimpleNamespace(episodes=self.episodes[:config.limit])
+                return SimpleNamespace(edges=[], nodes=[], episodes=self.episodes[:config.limit])
         PersonalGraphFixture()
         """,
         %{}
@@ -108,7 +108,7 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
 
     test "and public search returns the conversation without Lens or Reflection authorship" do
       capture({:direct, "personal"})
-      assert {:ok, [%{episode: episode}]} = search()
+      assert {:ok, [%{destination: "personal", episodes: [episode]}]} = search()
       assert episode.content == "Eli: Remember teal"
       assert episode.source_kind == "conversation"
       assert episode.writer == :direct
@@ -162,7 +162,7 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
 
     test "and its stored episode identifies personal-chat as the originating Lens" do
       capture({:lenses, ["personal-chat"]})
-      assert {:ok, [%{episode: %{lens: "personal-chat"}}]} = search()
+      assert {:ok, [%{destination: "personal", episodes: [%{lens: "personal-chat"}]}]} = search()
     end
 
     test "and no additional direct capture write occurs", context do
@@ -184,7 +184,9 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
     test "and each write retains its actual originating route" do
       capture({:direct, "personal"})
       capture({:lenses, ["notes"]})
-      assert {:ok, [%{episode: %{writer: :direct}}, %{episode: %{lens: "notes"}}]} = search()
+
+      assert {:ok, [%{destination: "personal", episodes: [%{writer: :direct}, %{lens: "notes"}]}]} =
+               search()
     end
   end
 

@@ -20,19 +20,15 @@ when an agent invokes memory addition and its background write fails
 
 when an agent invokes memory search with a usable query
   then returned results are scoped to the current operator
-  and the usable query is submitted to fact search for the current operator
-  and returned results obey the optional `destinations` and `lenses` selectors supplied for that invocation
+  and the usable query is submitted to the one memory search for the current operator
+  and returned results obey the optional `destinations` selector supplied for that invocation
   and the action returns one readable string with fact bullets grouped under named Lens or Reflection headings
   and relevant stored generalisations can contribute beside related ingested information
-  and the presentation adds no artefact identifiers, evolution-depth levels, or lineage metadata
-  where both selectors are omitted or empty
+  and the fact presentation adds no artefact identifiers, evolution-depth levels, or lineage metadata
+  where the Destination selector is omitted or empty
     then every accessible registered Destination can contribute
-  where only Destinations are supplied
+  where Destinations are supplied
     then only results from any supplied Destination can contribute
-  where only Lenses are supplied
-    then only results originating in any supplied Lens can contribute
-  where Destinations and Lenses are supplied
-    then only results matching both selections can contribute
   where no conversation thread has been committed
     then search still runs for the current operator
   if Search fails
@@ -44,7 +40,7 @@ when a fresh agent handles a request related to an evolved generalisation
 
 when an agent receives the memory search tool
   then its description directs the agent to search related observations and generalisations
-  and its description directs the agent to use the returned source-grouped facts
+  and its description directs the agent to use the returned facts, entities, and episode excerpts
 
 if an agent invokes memory search without a usable query
   then no Search is issued
@@ -75,8 +71,8 @@ when a consumer explicitly formats structured fact search results
     then their facts remain in separate source groups
   while a fact has no named Lens or Reflection provenance
     then the fact appears under `Source: unknown`
-  while search returns no facts
-    then the text explicitly states that no matching facts were found
+  while search returns no facts, entities, or episodes
+    then the text explicitly states that no matching memory was found
 
 when memory search formats facts for the consuming agent
   then the complete text including headings and omission notices stays within 16384 characters

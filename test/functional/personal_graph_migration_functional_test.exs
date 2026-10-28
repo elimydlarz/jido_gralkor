@@ -424,51 +424,35 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
             {"a/b", "amber slash"},
             {"a_b", "amber underscore"}
           ] do
-        assert {:ok, results} =
+        assert {:ok, [%{destination: "personal", episodes: episodes}]} =
                  Gralkor.Client.search(self(), %Gralkor.Search{
                    operator_id: identity,
                    query: "amber",
                    destinations: ["personal"]
                  })
 
-        assert Enum.filter(results, &Map.has_key?(&1.episode, :content)) == [
+        assert Enum.filter(episodes, &Map.has_key?(&1, :content)) == [
                  %{
-                   destination: "personal",
-                   episode: %{
-                     content: content,
-                     source_description: "captured",
-                     source_kind: "document",
-                     lens: "operator"
-                   }
+                   content: content,
+                   source_description: "captured",
+                   source_kind: "document",
+                   lens: "operator"
                  }
                ]
       end
 
-      assert {:ok,
-              [
-                %{
-                  artefact: %Gralkor.Artefact{
-                    id: "complete",
-                    payload: %{"summary" => "immutable amber"}
-                  }
-                }
-              ]} =
-               Gralkor.Client.search(self(), %Gralkor.Search{
-                 operator_id: "owner",
-                 query: "amber",
-                 destinations: ["personal"],
-                 result_type: :artefacts,
-                 artefact_id: "complete"
-               })
+      for query <- ["amber", "orchard"] do
+        assert {:ok, [%{destination: "personal", episodes: episodes}]} =
+                 Gralkor.Client.search(self(), %Gralkor.Search{
+                   operator_id: "owner",
+                   query: query,
+                   destinations: ["personal"]
+                 })
 
-      assert {:ok, []} =
-               Gralkor.Client.search(self(), %Gralkor.Search{
-                 operator_id: "owner",
-                 query: "orchard",
-                 destinations: ["personal"],
-                 result_type: :artefacts,
-                 artefact_id: "incomplete"
-               })
+        assert for(%{artefact: artefact} <- episodes, do: artefact) == [
+                 %{id: "complete", payload: %{"summary" => "immutable amber"}}
+               ]
+      end
 
       IO.puts(
         "Restored migration fixture: " <>
@@ -1074,22 +1058,19 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       start_public_runtime(context)
 
       for {identity, content} <- [{"a/b", "amber slash"}, {"a_b", "amber underscore"}] do
-        assert {:ok, results} =
+        assert {:ok, [%{destination: "personal", episodes: episodes}]} =
                  Gralkor.Client.search(self(), %Gralkor.Search{
                    operator_id: identity,
                    query: "amber",
                    destinations: ["personal"]
                  })
 
-        assert Enum.filter(results, &Map.has_key?(&1.episode, :content)) == [
+        assert Enum.filter(episodes, &Map.has_key?(&1, :content)) == [
                  %{
-                   destination: "personal",
-                   episode: %{
-                     content: content,
-                     source_description: "captured",
-                     source_kind: "document",
-                     lens: "operator"
-                   }
+                   content: content,
+                   source_description: "captured",
+                   source_kind: "document",
+                   lens: "operator"
                  }
                ]
       end
@@ -1100,7 +1081,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       migrate_history(context)
       start_public_runtime(context)
 
-      assert {:ok, results} =
+      assert {:ok, [%{destination: "personal", episodes: episodes}]} =
                Gralkor.Client.search(self(), %Gralkor.Search{
                  operator_id: "owner",
                  query: "orchard",
@@ -1108,17 +1089,12 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
                })
 
       assert Enum.any?(
-               results,
-               &(&1.episode[:content] == "remember amber orchard" and
-                   &1.episode[:lens] == "operator")
+               episodes,
+               &(&1[:content] == "remember amber orchard" and &1[:lens] == "operator")
              )
 
       assert_raise ArgumentError, ~r/Lens "operator" was retired/, fn ->
-        Gralkor.Client.search(self(), %Gralkor.Search{
-          operator_id: "owner",
-          query: "orchard",
-          lenses: ["operator"]
-        })
+        Gralkor.Client.lens!("operator")
       end
     end
   end
@@ -1580,14 +1556,17 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
 
     assert_receive {:migration_delivery, %{outcome: :delivered, artefact: ^artefact}}, 30_000
 
-    assert {:ok, [%{destination: "personal", artefact: ^artefact}]} =
+    assert {:ok, [%{destination: "personal", episodes: episodes}]} =
              Gralkor.Client.search(self(), %Gralkor.Search{
                operator_id: "owner",
                query: "amber",
-               destinations: ["personal"],
-               result_type: :artefacts,
-               artefact_id: artefact.id
+               destinations: ["personal"]
              })
+
+    artefact_id = artefact.id
+
+    assert [Map.from_struct(artefact)] ==
+             for(%{artefact: %{id: ^artefact_id} = stored} <- episodes, do: stored)
 
     assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
     target = hd(manifest["graphs"])["target_inventory"]
@@ -1963,14 +1942,14 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
   defp assert_public_history(fixture) do
     start_public_runtime(fixture)
 
-    assert {:ok, results} =
+    assert {:ok, [%{destination: "personal", episodes: episodes}]} =
              Gralkor.Client.search(self(), %Gralkor.Search{
                operator_id: "owner",
                query: "amber",
                destinations: ["personal"]
              })
 
-    assert Enum.any?(results, &(&1.episode[:content] == "remember amber orchard"))
+    assert Enum.any?(episodes, &(&1[:content] == "remember amber orchard"))
   end
 
   defp graph_names(database) do

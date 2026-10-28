@@ -3,7 +3,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
   ReAct tool the LLM can call to search long-term memory.
 
   Calls runtime-targeted `Gralkor.Client.search/2` with the current operator and
-  the optional Destination and Lens selectors supplied for this invocation. A
+  the optional Destination selector supplied for this invocation. A
   direct action invocation without a mounted runtime uses the compatibility
   `Gralkor.Client.search/1` boundary. Search does not depend on the ingestion
   Lens or on a committed conversation thread.
@@ -14,7 +14,10 @@ defmodule JidoGralkor.Actions.MemorySearch do
       (`tool_choice: memory_search`) where the LLM is required to
       invoke the tool but has nothing meaningful to search for.
 
-  Results are readable fact bullets grouped under named Lens or Reflection headings.
+  Results are readable text: fact bullets grouped under named Lens or Reflection
+  headings, then entity bullets, then compact episode bullets (a writer label and
+  a bounded excerpt; Reflection artefacts summarised by identifier and a bounded
+  payload excerpt), so whole source documents never flood the agent's context.
   The structured search API remains available for consumers that format their own data.
   The tool context's `:memory_search_max_bytes` defaults to 65,536 UTF-8 bytes for the
   complete Jido success envelope. The text also stays within Jido's 16,384-character
@@ -25,15 +28,14 @@ defmodule JidoGralkor.Actions.MemorySearch do
   use Jido.Action,
     name: "memory_search",
     description:
-      "Search related stored observations and generalisations. Use the returned source-grouped facts. Use a specific, focused query.",
+      "Search related stored observations and generalisations. Use the returned facts, entities, and episode excerpts. Use a specific, focused query.",
     schema: [
       query: [type: :string, default: "", doc: "The search query"],
       destinations: [
         type: {:list, :string},
         default: [],
         doc: "Optional Destination names to search"
-      ],
-      lenses: [type: {:list, :string}, default: [], doc: "Optional originating Lens names"]
+      ]
     ]
 
   require Logger
@@ -63,9 +65,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
       request = %Search{
         operator_id: Map.fetch!(context, :agent_id),
         query: query,
-        destinations: Map.get(params, :destinations, []),
-        lenses: Map.get(params, :lenses, []),
-        result_type: :facts
+        destinations: Map.get(params, :destinations, [])
       }
 
       result =

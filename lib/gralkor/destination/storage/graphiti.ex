@@ -68,88 +68,29 @@ defmodule Gralkor.Destination.Storage.Graphiti do
   end
 
   @impl true
-  def search(destination, operator_id, query, :facts, max_results, opts) do
-    graph_id = Destination.graph_id(destination, operator_id)
-    search_opts = Keyword.take(opts, [:edge_types, :lenses])
-
-    case GraphitiPool.search(GraphitiPool, graph_id, query, max_results, search_opts) do
-      {:ok, facts} ->
-        {:ok,
-         Enum.map(facts, fn fact ->
-           case Map.fetch(fact, :sources) do
-             {:ok, sources} -> Map.put(fact, :sources, Enum.map(sources, &fact_source/1))
-             :error -> fact
-           end
-         end)}
-
-      {:error, _} = error ->
-        error
-    end
-  end
-
-  def search(destination, operator_id, query, :nodes, max_results, opts) do
-    GraphitiPool.search_nodes(
-      GraphitiPool,
-      Destination.graph_id(destination, operator_id),
-      query,
-      max_results,
-      node_labels: Keyword.get(opts, :entity_types)
-    )
-  end
-
-  def search(destination, operator_id, query, :episodes, max_results, opts) do
-    case GraphitiPool.search_episodes(
+  def search(destination, operator_id, query, opts) do
+    case GraphitiPool.search_memory(
            GraphitiPool,
            Destination.graph_id(destination, operator_id),
            query,
-           max_results,
-           lenses: Keyword.get(opts, :lenses, []),
-           require_reflection_complete: true
+           Keyword.fetch!(opts, :limits),
+           node_labels: Keyword.get(opts, :entity_types),
+           edge_types: Keyword.get(opts, :edge_types)
          ) do
-      {:ok, episodes} -> structure_episodes(episodes)
-      {:error, _} = error -> error
-    end
-  end
-
-  def search(destination, operator_id, query, :artefacts, max_results, opts) do
-    search_query = Keyword.get(opts, :artefact_id) || query
-
-    case GraphitiPool.search_episodes(
-           GraphitiPool,
-           Destination.graph_id(destination, operator_id),
-           search_query,
-           max_results,
-           require_extraction_complete: true,
-           converge_by_identity: true
-         ) do
-      {:ok, episodes} ->
-        artefacts =
-          episodes
-          |> Enum.flat_map(&decode_artefact/1)
-          |> filter_artefact(Keyword.get(opts, :artefact_id))
-
-        converge_artefacts(artefacts, max_results)
+      {:ok, %{facts: facts, nodes: nodes, episodes: episodes}} ->
+        with {:ok, episodes} <- structure_episodes(episodes) do
+          {:ok, %{facts: Enum.map(facts, &fact_provenance/1), nodes: nodes, episodes: episodes}}
+        end
 
       {:error, _} = error ->
         error
     end
   end
 
-  defp filter_artefact(artefacts, nil), do: artefacts
-  defp filter_artefact(artefacts, id), do: Enum.filter(artefacts, &(&1.id == id))
-
-  defp converge_artefacts(artefacts, max_results) do
-    conflict =
-      artefacts
-      |> Enum.group_by(& &1.id)
-      |> Enum.find_value(fn {id, matching} ->
-        if matching |> MapSet.new() |> MapSet.size() > 1, do: id
-      end)
-
-    if conflict do
-      {:error, {:artefact_conflict, conflict}}
-    else
-      {:ok, artefacts |> Enum.uniq_by(& &1.id) |> Enum.take(max_results)}
+  defp fact_provenance(fact) do
+    case Map.fetch(fact, :sources) do
+      {:ok, sources} -> Map.put(fact, :sources, Enum.map(sources, &fact_source/1))
+      :error -> fact
     end
   end
 

@@ -1931,6 +1931,54 @@ defmodule Gralkor.GraphitiPoolTest do
       assert_fact_sources()
     end
 
+    test "and each returned edge is rendered with its relationship name and the name and identifier of its source and target entities" do
+      {g, _} =
+        Pythonx.eval(
+          """
+          from types import SimpleNamespace
+
+          class _EntityDriver:
+              async def execute_query(self, query, **params):
+                  names = {"commit-1": "Commit 1", "parse-fn": "parse/1"}
+                  return ([{"uuid": uuid, "name": names[uuid]} for uuid in params["uuids"]], None, None)
+
+          class _FakeGraphiti:
+              def __init__(self):
+                  self.driver = _EntityDriver()
+
+              async def search(self, query, num_results=10, search_filter=None):
+                  return [SimpleNamespace(
+                      fact="commit-1 changes parse",
+                      name="CHANGES",
+                      source_node_uuid="commit-1",
+                      target_node_uuid="parse-fn",
+                      created_at=None,
+                      valid_at=None,
+                      invalid_at=None,
+                      expired_at=None,
+                      episodes=[],
+                  )]
+
+          _FakeGraphiti()
+          """,
+          %{}
+        )
+
+      %{pid: pid} =
+        start_pool(
+          construct_instance: fn _db, _shared, _group_id -> g end,
+          warmup: false,
+          install_loop_fn: &Gralkor.Python.install_async_runtime/0
+        )
+
+      assert {:ok, [fact]} = GraphitiPool.search(pid, "g1", "parse", 5)
+      assert fact.relationship == "CHANGES"
+      assert fact.source_node == %{uuid: "commit-1", name: "Commit 1"}
+      assert fact.target_node == %{uuid: "parse-fn", name: "parse/1"}
+
+      GenServer.stop(pid)
+    end
+
     test "and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints" do
       assert_fact_excludes_standalone_node()
     end
@@ -2272,262 +2320,6 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when an episode search is run for a group" do
-    test "then the graph library is asked for episodes only, with the requested result count" do
-      {g, _} =
-        Pythonx.eval(
-          """
-          import asyncio
-
-          class _Episode:
-              def __init__(self, content, source_description):
-                  self.content = content
-                  self.source_description = source_description
-
-          class _Results:
-              def __init__(self, episodes):
-                  self.episodes = episodes
-                  self.nodes = []
-                  self.edges = []
-
-          class _FakeGraphiti:
-              def __init__(self):
-                  self.recorded = {}
-
-              async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                  self.recorded['query'] = query
-                  self.recorded['group_ids'] = list(group_ids) if group_ids else []
-                  self.recorded['limit'] = config.limit if config is not None else None
-                  self.recorded['episode_methods'] = (
-                      [m.value for m in config.episode_config.search_methods]
-                      if config is not None and config.episode_config is not None
-                      else None
-                  )
-                  self.recorded['edge_config'] = config.edge_config is not None
-                  self.recorded['node_config'] = config.node_config is not None
-                  return _Results([
-                      _Episode("GEN|v1|{}\\nEli consistently prefers dark mode", "generalisation"),
-                  ])
-
-          _FakeGraphiti()
-          """,
-          %{}
-        )
-
-      construct_instance = fn _db, _shared, _group_id -> g end
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: construct_instance,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert {:ok, [episode]} =
-               GraphitiPool.search_episodes(pid, "group-with-hyphens", "dark mode", 5)
-
-      assert episode.content == "GEN|v1|{}\nEli consistently prefers dark mode"
-      assert episode.source_description == "generalisation"
-
-      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      rec = Pythonx.decode(rec)
-      assert rec["query"] == "dark mode"
-      assert rec["group_ids"] == [physical("group-with-hyphens")]
-      assert rec["limit"] == 5
-      assert rec["episode_methods"] == ["bm25"]
-      refute rec["edge_config"]
-      refute rec["node_config"]
-
-      GenServer.stop(pid)
-    end
-
-    test "and it is restricted to the physically encoded group id the episodes were written under" do
-      assert_episode_group_restriction()
-    end
-
-    test "and each returned episode is rendered with the body that was written and its source description" do
-      assert_episode_rendering()
-    end
-
-    test "and nothing an extractor derived from the episode is involved, so an episode no entity was extracted from is still returned" do
-      assert_episode_without_extraction()
-    end
-  end
-
-  describe "when an episode search is run for a group > when the query exceeds the graph library's full-text limit" do
-    test "then the graph library receives a bounded non-empty query containing the earliest supported terms" do
-      {g, _} =
-        Pythonx.eval(
-          """
-          class _Results:
-              def __init__(self):
-                  self.episodes = []
-                  self.nodes = []
-                  self.edges = []
-
-          class _FakeGraphiti:
-              def __init__(self):
-                  self.recorded_query = None
-
-              async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                  self.recorded_query = query
-                  return _Results()
-
-          _FakeGraphiti()
-          """,
-          %{}
-        )
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: fn _db, _shared, _group_id -> g end,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      query = Enum.map_join(1..100, " ", &"term#{&1}")
-
-      assert {:ok, []} = GraphitiPool.search_episodes(pid, "group", query, 5)
-
-      {recorded_query, _} = Pythonx.eval("g.recorded_query", %{"g" => g})
-      recorded_query = Pythonx.decode(recorded_query)
-
-      assert recorded_query != ""
-      assert recorded_query =~ "term1 term2 term3"
-      assert length(String.split(recorded_query)) <= 63
-      refute recorded_query =~ "term100"
-
-      GenServer.stop(pid)
-    end
-  end
-
-  describe "when an episode search is run for a group > when only durably extraction-complete episodes are requested" do
-    test "then every unmarked episode is excluded" do
-      {g, _} =
-        Pythonx.eval(
-          """
-          class _Episode:
-              def __init__(self, uuid, content):
-                  self.uuid = uuid
-                  self.content = content
-                  self.source_description = "reflection:review"
-
-          class _Results:
-              def __init__(self):
-                  self.episodes = [
-                      _Episode("complete", "complete body"),
-                      _Episode("partial", "partial body"),
-                  ]
-                  self.nodes = []
-                  self.edges = []
-
-          class _Driver:
-              def __init__(self):
-                  self._gralkor_completed_episode_uuids = {"complete"}
-
-          class _FakeGraphiti:
-              def __init__(self):
-                  self.driver = _Driver()
-
-              async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                  return _Results()
-
-          _FakeGraphiti()
-          """,
-          %{}
-        )
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: fn _db, _shared, _group_id -> g end,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert {:ok, [%{content: "complete body"}]} =
-               GraphitiPool.search_episodes(pid, "g1", "body", 5,
-                 require_extraction_complete: true
-               )
-
-      GenServer.stop(pid)
-    end
-  end
-
-  describe "when an episode search is run for a group > when Lens names are supplied" do
-    test "then writer filtering occurs before the requested result count" do
-      {g, _} =
-        Pythonx.eval(
-          """
-          class _Episode:
-              def __init__(self, content, source_description):
-                  self.content = content
-                  self.source_description = source_description
-
-          class _Results:
-              def __init__(self, episodes):
-                  self.episodes = episodes
-                  self.nodes = []
-                  self.edges = []
-
-          class _Driver:
-              async def execute_query(self, query, **kwargs):
-                  return ([{'count': 3}], None, None)
-
-          class _FakeGraphiti:
-              def __init__(self):
-                  self.driver = _Driver()
-                  self.limit = None
-                  self.episodes = [
-                      _Episode("unselected", "source [lens: other]"),
-                      _Episode("selected one", "source one [lens: selected]"),
-                      _Episode("selected two", "source two [lens: selected]"),
-                  ]
-
-              async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                  self.limit = config.limit
-                  return _Results(self.episodes[:config.limit])
-
-          _FakeGraphiti()
-          """,
-          %{}
-        )
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: fn _db, _shared, _group_id -> g end,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert {:ok,
-              [
-                %{content: "selected one"},
-                %{content: "selected two"}
-              ]} =
-               GraphitiPool.search_episodes(pid, "g1", "selected", 2, lenses: ["selected"])
-
-      {limit, _} = Pythonx.eval("g.limit", %{"g" => g})
-      assert Pythonx.decode(limit) == 3
-      GenServer.stop(pid)
-    end
-  end
-
-  defp assert_episode_group_restriction do
-    {_episode, recorded} = episode_search_result()
-    assert recorded["group_ids"] == [physical("group-with-hyphens")]
-  end
-
-  defp assert_episode_rendering do
-    {episode, _recorded} = episode_search_result()
-    assert episode.content == "GEN|v1|{}\nEli consistently prefers dark mode"
-    assert episode.source_description == "generalisation"
-  end
-
-  defp assert_episode_without_extraction do
-    {episode, _recorded} = episode_search_result()
-    assert episode.content =~ "Eli consistently prefers dark mode"
-  end
-
   defp community_graph do
     {instance, _} =
       Pythonx.eval(
@@ -2548,181 +2340,144 @@ defmodule Gralkor.GraphitiPoolTest do
     instance
   end
 
-  describe "if running an episode search raises inside the graph library" do
-    test "then an error carrying the raised exception is returned" do
-      {g, _} =
-        Pythonx.eval(
-          """
-          class _FakeGraphiti:
-              async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                  raise RuntimeError("boom")
+  describe "when a memory search is run for a group" do
+    test "then the graph library is searched once for edges, nodes, and episodes together" do
+      {_results, recorded} = memory_search_result()
 
-          _FakeGraphiti()
-          """,
-          %{}
-        )
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: fn _db, _shared, _group_id -> g end,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert {:error, {:python, message}} = GraphitiPool.search_episodes(pid, "g1", "q", 5)
-      assert message =~ "boom"
-
-      GenServer.stop(pid)
+      assert recorded["calls"] == 1
+      assert recorded["edge_config"]
+      assert recorded["node_config"]
+      assert recorded["episode_config"]
+      refute recorded["community_config"]
+      assert recorded["query"] == "what changed parse"
     end
-  end
 
-  describe "when a node search is run for a group" do
-    test "then it is restricted to the physically encoded group id the episodes were written under, so a group id carrying hyphens still matches" do
-      {_nodes, recorded} = node_search_result()
+    test "and edges and nodes are each ranked by reciprocal rank fusion of full-text and similarity search, and episodes by full-text search" do
+      {_results, recorded} = memory_search_result()
+
+      assert recorded["edge_reranker"] == "reciprocal_rank_fusion"
+      assert recorded["node_reranker"] == "reciprocal_rank_fusion"
+      assert recorded["edge_methods"] == ["bm25", "cosine_similarity"]
+      assert recorded["node_methods"] == ["bm25", "cosine_similarity"]
+      assert recorded["episode_methods"] == ["bm25"]
+    end
+
+    test "and the graph library is asked for as many results of each kind as the largest requested kind limit" do
+      {_results, recorded} = memory_search_result(limits: %{facts: 2, nodes: 7, episodes: 1})
+      assert recorded["limit"] == 7
+    end
+
+    test "and it is restricted to the physically encoded group id the episodes were written under" do
+      {_results, recorded} = memory_search_result()
       assert recorded["group_ids"] == [physical("group-with-hyphens")]
     end
-  end
 
-  describe "when a node search is run for a group > while node labels are supplied" do
-    test "then the graph library's node search is invoked with the requested result count and a filter carrying those labels" do
-      {g, _} =
-        Pythonx.eval(
-          """
-          import asyncio
+    test "and each returned edge is rendered as a fact carrying its text, its created, valid, invalid, and expired timestamps, and its originating episodes by identifier, source kind, and source description" do
+      {%{facts: [fact | _]}, _recorded} = memory_search_result()
 
-          class _Node:
-              def __init__(self, name, summary, attributes):
-                  self.name = name
-                  self.summary = summary
-                  self.attributes = attributes
-
-          class _Results:
-              def __init__(self, nodes):
-                  self.nodes = nodes
-
-          class _FakeGraphiti:
-              def __init__(self):
-                  self.recorded = {}
-
-              async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                  self.recorded['query'] = query
-                  self.recorded['group_ids'] = list(group_ids) if group_ids else []
-                  self.recorded['limit'] = config.limit if config is not None else None
-                  self.recorded['node_labels'] = (
-                      list(search_filter.node_labels)
-                      if search_filter is not None and search_filter.node_labels
-                      else None
-                  )
-                  return _Results([
-                      _Node("resource contention", "rescheduled the vacuum job to 04:00",
-                            {"lesson": "reschedule overlapping jobs", "success": True}),
-                  ])
-
-          _FakeGraphiti()
-          """,
-          %{}
-        )
-
-      construct_instance = fn _db, _shared, _group_id -> g end
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: construct_instance,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert {:ok, [node]} =
-               GraphitiPool.search_nodes(
-                 pid,
-                 "group-with-hyphens",
-                 "how do I resolve a scheduling conflict",
-                 5,
-                 node_labels: ["Learning"]
-               )
-
-      assert node.name == "resource contention"
-      assert node.summary == "rescheduled the vacuum job to 04:00"
-      assert node.attributes["lesson"] == "reschedule overlapping jobs"
-
-      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      rec = Pythonx.decode(rec)
-      assert rec["query"] == "how do I resolve a scheduling conflict"
-      assert rec["limit"] == 5
-      assert rec["node_labels"] == ["Learning"]
-      assert rec["group_ids"] == [physical("group-with-hyphens")]
-
-      GenServer.stop(pid)
+      assert %{
+               fact: "commit-1 changes parse",
+               created_at: "2024-01-01 00:00:00+00:00",
+               valid_at: "2024-01-02 00:00:00+00:00",
+               invalid_at: nil,
+               expired_at: nil,
+               sources: [
+                 %{id: "episode-1", source_kind: "document", source_description: "git log"}
+               ]
+             } = fact
     end
 
-    test "and each returned node is rendered with its name, summary, and attributes, ordered by relevance" do
-      {nodes, _recorded} = node_search_result()
+    test "and each returned edge is rendered with its relationship name and the name and identifier of its source and target entities" do
+      {%{facts: [fact | _]}, _recorded} = memory_search_result()
 
-      assert Enum.map(nodes, &Map.take(&1, [:name, :summary, :attributes])) == [
-               %{
-                 name: "resource contention",
-                 summary: "rescheduled the vacuum job to 04:00",
-                 attributes: %{"lesson" => "reschedule overlapping jobs"}
-               },
-               %{
-                 name: "lock timeout",
-                 summary: "raised the lock wait limit",
-                 attributes: %{"lesson" => "bound lock waits"}
-               },
-               %{
-                 name: "disk pressure",
-                 summary: "moved archives to cold storage",
-                 attributes: %{"lesson" => "archive early"}
-               }
+      assert fact.relationship == "CHANGES"
+      assert fact.source_node == %{uuid: "commit-1", name: "Commit 1"}
+      assert fact.target_node == %{uuid: "parse-fn", name: "parse/1"}
+    end
+
+    test "and each returned node is rendered with its name, summary, and attributes" do
+      {%{nodes: [node | _]}, _recorded} = memory_search_result()
+      assert node == %{name: "parse/1", summary: "parses input", attributes: %{"arity" => "1"}}
+    end
+
+    test "and each returned episode is rendered with the body that was written, its source description, and its source kind" do
+      {%{episodes: [episode | _]}, _recorded} = memory_search_result()
+
+      assert episode == %{
+               content: "commit 1 touched parse",
+               source_description: "git log",
+               source_kind: "document"
+             }
+    end
+
+    test "and facts, nodes, and episodes are each returned in the graph library's relevance order and cut to their own requested limit" do
+      {results, _recorded} = memory_search_result(limits: %{facts: 1, nodes: 2, episodes: 2})
+
+      assert Enum.map(results.facts, & &1.fact) == ["commit-1 changes parse"]
+      assert Enum.map(results.nodes, & &1.name) == ["parse/1", "render/2"]
+
+      assert Enum.map(results.episodes, & &1.content) == [
+               "commit 1 touched parse",
+               "commit 2 touched render"
+             ]
+    end
+
+    test "and nothing an extractor derived from an episode is needed to return it, so an episode no entity was extracted from is still returned" do
+      {results, _recorded} = memory_search_result(edges: false, nodes: false)
+
+      assert results.facts == []
+      assert results.nodes == []
+      assert [%{content: "commit 1 touched parse"} | _] = results.episodes
+    end
+  end
+
+  describe "when a memory search is run for a group > while node labels are supplied" do
+    test "then the single search's filter carries those labels" do
+      {_results, recorded} = memory_search_result(opts: [node_labels: ["Function", "Commit"]])
+      assert recorded["node_labels"] == ["Function", "Commit"]
+    end
+  end
+
+  describe "when a memory search is run for a group > while edge types are supplied" do
+    test "then the single search's filter carries those relationship types" do
+      {_results, recorded} = memory_search_result(opts: [edge_types: ["CHANGES"]])
+      assert recorded["edge_types"] == ["CHANGES"]
+    end
+  end
+
+  describe "when a memory search is run for a group > while neither node labels nor edge types are supplied" do
+    test "then the single search's filter leaves every node and edge eligible" do
+      {_results, recorded} = memory_search_result()
+      assert recorded["node_labels"] == nil
+      assert recorded["edge_types"] == nil
+    end
+  end
+
+  describe "when a memory search is run for a group > when the query exceeds the graph library's full-text limit" do
+    test "then the graph library receives a bounded non-empty query containing the earliest supported terms" do
+      query = Enum.map_join(1..100, " ", &"term#{&1}")
+      {_results, recorded} = memory_search_result(query: query)
+
+      assert recorded["query"] != ""
+      assert recorded["query"] =~ "term1 term2 term3"
+      assert length(String.split(recorded["query"])) <= 63
+      refute recorded["query"] =~ "term100"
+    end
+  end
+
+  describe "when a memory search is run for a group > when a returned Reflection episode lacks its durable extraction-completion marker" do
+    test "then that episode is excluded before the episode limit is applied" do
+      {results, _recorded} =
+        memory_search_result(reflections: true, limits: %{facts: 1, nodes: 1, episodes: 2})
+
+      assert Enum.map(results.episodes, & &1.content) == [
+               ~s({"id":"complete","payload":{}}),
+               "commit 1 touched parse"
              ]
     end
   end
 
-  describe "when a node search is run for a group > while no node labels are supplied" do
-    test "then the graph library's node search is invoked with every node eligible" do
-      {g, _} =
-        Pythonx.eval(
-          """
-          class _Results:
-              def __init__(self):
-                  self.nodes = []
-
-          class _FakeGraphiti:
-              def __init__(self):
-                  self.recorded = {}
-
-              async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                  self.recorded['node_labels'] = (
-                      list(search_filter.node_labels)
-                      if search_filter is not None and search_filter.node_labels
-                      else None
-                  )
-                  return _Results()
-
-          _FakeGraphiti()
-          """,
-          %{}
-        )
-
-      construct_instance = fn _db, _shared, _group_id -> g end
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: construct_instance,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert {:ok, []} = GraphitiPool.search_nodes(pid, "g1", "q", 5)
-
-      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      assert (rec |> Pythonx.decode())["node_labels"] == nil
-
-      GenServer.stop(pid)
-    end
-  end
-
-  describe "if running a node search raises inside the graph library" do
+  describe "if running a memory search raises inside the graph library" do
     test "then an error carrying the raised exception is returned" do
       {g, _} =
         Pythonx.eval(
@@ -2743,11 +2498,144 @@ defmodule Gralkor.GraphitiPoolTest do
           install_loop_fn: &Gralkor.Python.install_async_runtime/0
         )
 
-      assert {:error, {:python, message}} = GraphitiPool.search_nodes(pid, "g1", "q", 5)
+      assert {:error, {:python, message}} =
+               GraphitiPool.search_memory(pid, "g1", "q", %{facts: 5, nodes: 5, episodes: 5})
+
       assert message =~ "boom"
 
       GenServer.stop(pid)
     end
+  end
+
+  defp memory_search_result(options \\ []) do
+    {g, _} =
+      Pythonx.eval(
+        """
+        from datetime import datetime, timezone
+        from graphiti_core.nodes import EpisodeType
+
+        class _Episode:
+            def __init__(self, uuid, source, source_description, content=""):
+                self.uuid = uuid
+                self.source = source
+                self.source_description = source_description
+                self.content = content
+
+        class _GraphOperations:
+            async def episodic_node_get_by_uuids(self, cls, driver, uuids):
+                return [driver.episodes[uuid] for uuid in uuids]
+
+        class _EntityDriver:
+            def __init__(self):
+                self.graph_operations_interface = _GraphOperations()
+                self.episodes = {"episode-1": _Episode("episode-1", EpisodeType.text, "git log")}
+                self.entities = {
+                    "commit-1": "Commit 1",
+                    "commit-2": "Commit 2",
+                    "parse-fn": "parse/1",
+                    "render-fn": "render/2",
+                }
+                self._gralkor_completed_episode_uuids = {"complete"}
+
+            async def execute_query(self, query, **params):
+                if "_gralkor_extraction_complete" in query:
+                    return ([{"uuid": uuid} for uuid in params["uuids"] if uuid in self._gralkor_completed_episode_uuids], None, None)
+                return ([{"uuid": uuid, "name": self.entities[uuid]} for uuid in params["uuids"] if uuid in self.entities], None, None)
+
+        class _Edge:
+            def __init__(self, fact, name, source, target):
+                self.fact = fact
+                self.name = name
+                self.source_node_uuid = source
+                self.target_node_uuid = target
+                self.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
+                self.valid_at = datetime(2024, 1, 2, tzinfo=timezone.utc)
+                self.invalid_at = None
+                self.expired_at = None
+                self.episodes = ["episode-1"]
+
+        class _Node:
+            def __init__(self, name, summary, attributes):
+                self.name = name
+                self.summary = summary
+                self.attributes = attributes
+
+        class _Results:
+            def __init__(self, edges, nodes, episodes):
+                self.edges = edges
+                self.nodes = nodes
+                self.episodes = episodes
+
+        class _FakeGraphiti:
+            def __init__(self):
+                self.driver = _EntityDriver()
+                self.recorded = {"calls": 0}
+
+            async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                self.recorded["calls"] += 1
+                self.recorded["query"] = query
+                self.recorded["group_ids"] = list(group_ids) if group_ids else []
+                self.recorded["limit"] = config.limit
+                self.recorded["edge_config"] = config.edge_config is not None
+                self.recorded["node_config"] = config.node_config is not None
+                self.recorded["episode_config"] = config.episode_config is not None
+                self.recorded["community_config"] = config.community_config is not None
+                self.recorded["edge_reranker"] = config.edge_config.reranker.value
+                self.recorded["node_reranker"] = config.node_config.reranker.value
+                self.recorded["edge_methods"] = [m.value for m in config.edge_config.search_methods]
+                self.recorded["node_methods"] = [m.value for m in config.node_config.search_methods]
+                self.recorded["episode_methods"] = [m.value for m in config.episode_config.search_methods]
+                self.recorded["node_labels"] = search_filter.node_labels
+                self.recorded["edge_types"] = search_filter.edge_types
+                edges = [
+                    _Edge("commit-1 changes parse", "CHANGES", "commit-1", "parse-fn"),
+                    _Edge("commit-2 changes render", "CHANGES", "commit-2", "render-fn"),
+                ] if with_edges else []
+                nodes = [
+                    _Node("parse/1", "parses input", {"arity": 1}),
+                    _Node("render/2", "renders output", {"arity": 2}),
+                ] if with_nodes else []
+                episodes = [
+                    _Episode("e1", EpisodeType.text, "git log", "commit 1 touched parse"),
+                    _Episode("e2", EpisodeType.text, "git log", "commit 2 touched render"),
+                    _Episode("e3", EpisodeType.text, "git log", "commit 3 touched lexer"),
+                ]
+                if with_reflections:
+                    episodes = [
+                        _Episode("partial", EpisodeType.json, "reflection:review", '{"id":"partial","payload":{}}'),
+                        _Episode("complete", EpisodeType.json, "reflection:review", '{"id":"complete","payload":{}}'),
+                    ] + episodes
+                return _Results(edges, nodes, episodes)
+
+        _FakeGraphiti()
+        """,
+        %{
+          "with_edges" => Keyword.get(options, :edges, true),
+          "with_nodes" => Keyword.get(options, :nodes, true),
+          "with_reflections" => Keyword.get(options, :reflections, false)
+        }
+      )
+
+    %{pid: pid} =
+      start_pool(
+        construct_instance: fn _db, _shared, _group_id -> g end,
+        warmup: false,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0
+      )
+
+    assert {:ok, results} =
+             GraphitiPool.search_memory(
+               pid,
+               "group-with-hyphens",
+               Keyword.get(options, :query, "what changed parse"),
+               Keyword.get(options, :limits, %{facts: 7, nodes: 7, episodes: 7}),
+               Keyword.get(options, :opts, [])
+             )
+
+    {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+    GenServer.stop(pid)
+
+    {results, Pythonx.decode(recorded)}
   end
 
   describe "when a graph instance is requested for a group" do
@@ -4394,98 +4282,6 @@ defmodule Gralkor.GraphitiPoolTest do
     result = GraphitiPool.search(pid, "g1", "q", 5)
     GenServer.stop(pid)
     result
-  end
-
-  defp episode_search_result do
-    {graph, _} =
-      Pythonx.eval(
-        """
-        class _Episode:
-            def __init__(self):
-                self.content = "GEN|v1|{}\\nEli consistently prefers dark mode"
-                self.source_description = "generalisation"
-
-        class _Results:
-            def __init__(self):
-                self.episodes = [_Episode()]
-                self.nodes = []
-                self.edges = []
-
-        class _FakeGraphiti:
-            def __init__(self):
-                self.group_ids = []
-
-            async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                self.group_ids = list(group_ids)
-                return _Results()
-
-        _FakeGraphiti()
-        """,
-        %{}
-      )
-
-    %{pid: pid} =
-      start_pool(
-        construct_instance: fn _db, _shared, _group -> graph end,
-        install_loop_fn: &Gralkor.Python.install_async_runtime/0
-      )
-
-    assert {:ok, [episode]} =
-             GraphitiPool.search_episodes(pid, "group-with-hyphens", "dark mode", 5)
-
-    {group_ids, _} = Pythonx.eval("g.group_ids", %{"g" => graph})
-    GenServer.stop(pid)
-    {episode, %{"group_ids" => Pythonx.decode(group_ids)}}
-  end
-
-  defp node_search_result do
-    {graph, _} =
-      Pythonx.eval(
-        """
-        class _Node:
-            def __init__(self, name, summary, attributes):
-                self.name = name
-                self.summary = summary
-                self.attributes = attributes
-
-        class _Results:
-            def __init__(self):
-                self.nodes = [
-                    _Node("resource contention", "rescheduled the vacuum job to 04:00",
-                          {"lesson": "reschedule overlapping jobs"}),
-                    _Node("lock timeout", "raised the lock wait limit",
-                          {"lesson": "bound lock waits"}),
-                    _Node("disk pressure", "moved archives to cold storage",
-                          {"lesson": "archive early"}),
-                ]
-
-        class _FakeGraphiti:
-            def __init__(self):
-                self.group_ids = []
-
-            async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                self.group_ids = list(group_ids)
-                return _Results()
-
-        _FakeGraphiti()
-        """,
-        %{}
-      )
-
-    %{pid: pid} =
-      start_pool(
-        construct_instance: fn _db, _shared, _group -> graph end,
-        install_loop_fn: &Gralkor.Python.install_async_runtime/0
-      )
-
-    assert {:ok, nodes} =
-             GraphitiPool.search_nodes(pid, "group-with-hyphens", "conflict", 5,
-               node_labels: ["Learning"]
-             )
-
-    {group_ids, _} = Pythonx.eval("g.group_ids", %{"g" => graph})
-    GenServer.stop(pid)
-    {nodes, %{"group_ids" => Pythonx.decode(group_ids)}}
   end
 
   defp start_episode_identity_pool do

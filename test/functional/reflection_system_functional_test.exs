@@ -60,13 +60,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(destination, operator_id, query, result_type, _max_results, _opts) do
+    def search(destination, operator_id, query, opts) do
       send(
         Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
-        {:related_memory_search, destination.name, operator_id, query, result_type}
+        {:related_memory_search, destination.name, operator_id, query, opts}
       )
 
-      {:ok, []}
+      {:ok, %{facts: [], nodes: [], episodes: []}}
     end
 
     @impl true
@@ -87,7 +87,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(_, _, _, _, _, _), do: {:ok, []}
+    def search(_, _, _, _), do: {:ok, %{facts: [], nodes: [], episodes: []}}
 
     @impl true
     def put_artefact(output, reflection_name, operator_id, artefact) do
@@ -543,7 +543,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
 
       assert_receive {:related_memory_search, "global", "operator-one", "fact one\nfact two",
-                      :episodes}
+                      [limits: %{facts: 20, nodes: 20, episodes: 5}]}
 
       assert_receive {:generalisation_callback,
                       %{
@@ -616,7 +616,12 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       representations = [%{id: "source-one", lens: "observations", content: content, result: :ok}]
 
       stored = [
-        %{destination: "global", episode: %{content: "related evidence", lens: "observations"}}
+        %{
+          destination: "global",
+          facts: [],
+          nodes: [],
+          episodes: [%{content: "related evidence", lens: "observations"}]
+        }
       ]
 
       schema = %{"answer" => "string"}
@@ -1478,20 +1483,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when a Destination is searched for artefacts" do
+  describe "when a Destination holding Reflection artefacts is searched" do
     test "then that Destination is searched", context do
       {reflection, artefact} = stored_artefact(context)
+      expected = Map.from_struct(artefact)
 
-      assert {:ok, [%{destination: "personal", artefact: ^artefact}]} =
+      assert {:ok, [%{destination: "personal", episodes: [%{artefact: ^expected}]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 destinations: [destination_output(reflection).destination.name],
-                 result_type: :artefacts
+                 destinations: [destination_output(reflection).destination.name]
                })
     end
 
-    test "and relevant artefacts written through any Destination output using that Destination are returned",
+    test "and relevant artefacts written through any Destination output using that Destination are returned among its episodes",
          context do
       one = reflection(context, "one")
       two = reflection(context, "two")
@@ -1500,40 +1505,39 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       :ok = put_artefact(one, "operator-one", a1, storage: Gralkor.Destination.Storage.InMemory)
       :ok = put_artefact(two, "operator-one", a2, storage: Gralkor.Destination.Storage.InMemory)
 
-      assert {:ok,
-              [
-                %{destination: "personal", artefact: ^a1},
-                %{destination: "personal", artefact: ^a2}
-              ]} =
+      assert {:ok, [%{destination: "personal", episodes: episodes}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "",
-                 destinations: [destination_output(one).destination.name],
-                 result_type: :artefacts
+                 destinations: [destination_output(one).destination.name]
                })
+
+      assert [
+               %{artefact: Map.from_struct(a1), reflection: one.name},
+               %{artefact: Map.from_struct(a2), reflection: two.name}
+             ] == Enum.map(episodes, &Map.take(&1, [:artefact, :reflection]))
     end
 
-    test "and every artefact contains exactly its stable identifier and structured payload",
+    test "and every returned artefact contains exactly its stable identifier and structured payload",
          context do
-      {reflection, _} = stored_artefact(context)
+      {reflection, stored} = stored_artefact(context)
 
-      assert {:ok, [%{artefact: artefact}]} =
+      assert {:ok, [%{episodes: [%{artefact: artefact}]}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 destinations: [destination_output(reflection).destination.name],
-                 result_type: :artefacts
+                 destinations: [destination_output(reflection).destination.name]
                })
 
-      assert Map.from_struct(artefact) == %{
-               id: artefact.id,
+      assert artefact == %{
+               id: stored.id,
                payload: %{"artefact" => "durable pattern"}
              }
     end
   end
 
-  describe "when a Destination is searched for artefacts > where the search also identifies one artefact" do
-    test "then only that artefact is returned from the selected Destination",
+  describe "when a Destination holding Reflection artefacts is searched > where the caller identifies one artefact" do
+    test "then that artefact is found among the Destination's episodes by its identifier",
          context do
       {reflection, artefact} = stored_artefact(context)
 
@@ -1547,25 +1551,53 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
           storage: Gralkor.Destination.Storage.InMemory
         )
 
-      assert {:ok, unselected} =
+      assert {:ok, [%{destination: "personal", episodes: episodes}]} =
                Client.search(%Search{
                  operator_id: "operator-one",
                  query: "durable",
-                 destinations: [destination_output(reflection).destination.name],
-                 result_type: :artefacts
+                 destinations: [destination_output(reflection).destination.name]
                })
 
-      assert Enum.sort(Enum.map(unselected, & &1.artefact.id)) ==
+      assert Enum.sort(for(%{artefact: %{id: id}} <- episodes, do: id)) ==
                Enum.sort([artefact.id, other.id])
 
-      assert {:ok, [%{destination: "personal", artefact: ^artefact}]} =
-               Client.search(%Search{
-                 operator_id: "operator-one",
-                 query: "durable",
-                 destinations: [destination_output(reflection).destination.name],
-                 result_type: :artefacts,
-                 artefact_id: artefact.id
-               })
+      artefact_id = artefact.id
+
+      assert [Map.from_struct(artefact)] ==
+               for(%{artefact: %{id: ^artefact_id} = found} <- episodes, do: found)
+    end
+
+    test "and exact lookup by that identifier returns only that artefact",
+         context do
+      {reflection, artefact} = stored_artefact(context)
+
+      {:ok, other} =
+        Runner.run(reflection, %{invocation() | id: "ingestion-2"}, inference: &output_for/1)
+
+      refute other.id == artefact.id
+
+      :ok =
+        put_artefact(reflection, "operator-one", other,
+          storage: Gralkor.Destination.Storage.InMemory
+        )
+
+      assert {:ok, ^artefact} =
+               Gralkor.Destination.Storage.get_artefact(
+                 destination_output(reflection),
+                 reflection.name,
+                 "operator-one",
+                 artefact.id,
+                 storage: Gralkor.Destination.Storage.InMemory
+               )
+
+      assert {:ok, ^other} =
+               Gralkor.Destination.Storage.get_artefact(
+                 destination_output(reflection),
+                 reflection.name,
+                 "operator-one",
+                 other.id,
+                 storage: Gralkor.Destination.Storage.InMemory
+               )
     end
   end
 
@@ -1583,20 +1615,20 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "then its artefact is searchable only by the invocation identity" do
       artefact = deliver_personal_erl()
 
-      assert {:ok, [%{destination: "personal", artefact: ^artefact}]} =
+      expected = Map.from_struct(artefact)
+
+      assert {:ok, [%{destination: "personal", episodes: [%{artefact: ^expected}]}]} =
                Client.search(self(), %Gralkor.Search{
                  operator_id: "owner",
                  query: "separate recurring jobs",
-                 destinations: ["personal"],
-                 result_type: :artefacts
+                 destinations: ["personal"]
                })
 
-      assert {:ok, []} =
+      assert {:ok, [%{destination: "personal", episodes: []}]} =
                Client.search(self(), %Gralkor.Search{
                  operator_id: "dashboard:another",
                  query: "separate recurring jobs",
-                 destinations: ["personal"],
-                 result_type: :artefacts
+                 destinations: ["personal"]
                })
     end
 

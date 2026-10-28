@@ -63,6 +63,9 @@ defmodule Gralkor.EmbeddedMemoryWritesFunctionalTest do
                 [
                   %{
                     fact: "search completed",
+                    relationship: nil,
+                    source_node: nil,
+                    target_node: nil,
                     created_at: nil,
                     valid_at: nil,
                     invalid_at: nil,

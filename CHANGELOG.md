@@ -1,5 +1,27 @@
 # Changelog
 
+## [12.0.0] - 2026-10-28
+
+One simplified search. This is a breaking release; migration guidance follows each entry.
+
+### Changed
+- `Gralkor.Client.search/1,2` takes `%Gralkor.Search{operator_id, query, destinations, entity_types, edge_types}` and always returns everything relevant: `{:ok, [%{destination: name, facts: [...], nodes: [...], episodes: [...]}]}`, one map per Destination in selected order (default every accessible registered Destination). Each Destination is searched by ONE Graphiti `search_` call (the `COMBINED_HYBRID_SEARCH_RRF` recipe without its community layer: edges and nodes by BM25 plus cosine similarity with reciprocal rank fusion, episodes by BM25; the query is embedded once) with one `SearchFilters(node_labels: entity_types, edge_types: edge_types)`. Each kind keeps relevance order and is capped per Destination at 20 facts, 20 nodes, and 5 episodes (`Gralkor.Search.limits/0`). **Migrate:** replace the flat `%{destination:, fact: | node: | episode: | artefact:}` list with each Destination map's `facts`, `nodes`, and `episodes`.
+- `entity_types` restricts nodes to those labels and restricts facts to edges whose source and target entities both carry one of them; `edge_types` restricts facts; neither restricts episodes.
+- Every fact also carries its edge's `relationship` name and its `source_node` and `target_node` as `%{uuid:, name:}` (all `nil` in the in-memory test backend), so a consumer can render "Commit X CHANGES Function Y". Existing fact fields are unchanged.
+- Episodes keep their structured shapes: direct, Lens, and Reflection episodes, the last carrying `artefact: %{id:, payload:}` and its `reflection` writer, so Reflection artefacts arrive whole. A Reflection episode appears only once its extraction has durably completed; that filter now applies to the episodes Graphiti ranks within the search's shared limit rather than to every episode in the graph.
+- `JidoGralkor.Actions.MemorySearch` runs the one search and renders a `Facts` section (fact bullets under Lens, Reflection, or direct-source headings), an `Entities` section, and a compact `Episodes` section (a writer label and an excerpt of at most 280 characters; Reflection artefacts summarised by identifier and a payload excerpt). An empty result reads `No matching memory.`; the omission notice reads `Omitted (response limit): facts N, entities M, episodes K.` **Migrate:** update anything that matched the old text.
+- The packaged `generalisations` Reflection's related-memory retrieval uses the same `Client.search/2` with the ingested content as the query and passes the per-Destination results to inference. It still searches every accessible registered Destination; where generalisations are written is unchanged.
+- `Gralkor.Destination.Storage`'s `search` callback is now `search(destination, operator_id, query, opts)` returning `{:ok, %{facts:, nodes:, episodes:}}` (opts carry `:limits` and optional `:entity_types`/`:edge_types`). **Migrate:** custom Destination storages implement search/4.
+
+### Removed
+- `Gralkor.Search` fields `result_type` (`:facts`, `:nodes`, `:episodes`, `:artefacts`), `lenses`, `artefact_id`, and `max_results`. They remain struct keys defaulting to `nil` only so that setting one raises `ArgumentError` naming the field with migration guidance. **Migrate:** drop `result_type` and read the kind you need; drop `lenses` and tell writers apart by each episode's or fact source's `lens`; drop `artefact_id` and match `episode.artefact.id` among a Destination's episodes (query with the artefact's content or id); drop `max_results`.
+- Artefact search, including its historical-duplicate convergence and conflict reporting.
+- `MemorySearch`'s `lenses` parameter. **Migrate:** keep `destinations`.
+- `GraphitiPool.search_episodes/3,4,5` and `GraphitiPool.search_nodes/5`, replaced by `GraphitiPool.search_memory/5`.
+
+### Fixed
+- A search with more than one entity type no longer fails on FalkorDB: graphiti-core 0.31.2 renders several labels as `n:A|B`, which FalkorDB rejects, and Gralkor now rewrites that clause as `(n:A OR n:B)` for the FalkorDB provider.
+
 ## [11.2.0] - 2026-10-27
 
 ### Changed

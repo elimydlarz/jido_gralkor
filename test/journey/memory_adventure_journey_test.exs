@@ -415,7 +415,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     test "then one MemorySearch call is made without selectors", %{adventure: adventure} do
       assert adventure.memory_search_completion_count == 1
       assert adventure.memory_search_arguments[:destinations] in [nil, []]
-      assert adventure.memory_search_arguments[:lenses] in [nil, []]
     end
 
     test "and every accessible registered Destination is searched", %{adventure: adventure} do
@@ -492,37 +491,19 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when the agent searches with both Destination and Lens selectors" do
-    test "then relevant memory whose Destination and originating Lens both match the selectors is returned",
+  describe "when the agent searches with a Destination selector" do
+    test "then relevant memory from the selected Destination is returned",
          %{adventure: adventure} do
-      assert adventure.selected_memory_search != [],
-             inspect(adventure.post_selector_memory_search, limit: :infinity)
-
-      assert Enum.all?(adventure.selected_memory_search, fn result ->
-               has_originating_lens?([result], "personal", "work-notes")
-             end)
+      assert has_originating_lens?(adventure.selected_memory_search, "personal", "work-notes"),
+             inspect(adventure.selected_memory_search, limit: :infinity)
     end
 
-    test "and a selected Lens does not contribute its memory from an unselected Destination",
-         %{adventure: adventure} do
-      assert adventure.cross_product_memory_search == []
-
-      assert has_originating_lens?(
-               adventure.post_selector_memory_search,
-               "global",
-               "published"
-             )
+    test "and no memory from an unselected Destination is returned", %{adventure: adventure} do
+      assert adventure.selected_memory_search != []
+      assert Enum.all?(adventure.selected_memory_search, &(&1.destination == "personal"))
     end
 
     test "and a subsequent selector-free search returns relevant memory from a Destination omitted by the earlier Destination selector",
-         %{adventure: adventure} do
-      assert Enum.any?(
-               adventure.post_selector_memory_search,
-               &(&1.destination == "global")
-             )
-    end
-
-    test "and that search returns relevant memory from a Lens omitted by the earlier Lens selector",
          %{adventure: adventure} do
       assert has_originating_lens?(
                adventure.post_selector_memory_search,
@@ -867,18 +848,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     selector_query = "reversible canary configuration faults deployments"
 
-    cross_product_memory_search =
-      memory_search(agent, @operator_one, %{
-        query: selector_query,
-        destinations: ["personal"],
-        lenses: ["published"]
-      })
-
     selected_memory_search =
       memory_search(agent, @operator_one, %{
         query: selector_query,
-        destinations: ["personal"],
-        lenses: ["work-notes"]
+        destinations: ["personal"]
       })
 
     post_selector_memory_search =
@@ -1017,7 +990,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       memory_search_completion_count: agent_request.memory_search_completion_count,
       agent_answer: agent_request.answer,
       selected_memory_search: selected_memory_search,
-      cross_product_memory_search: cross_product_memory_search,
       post_selector_memory_search: post_selector_memory_search,
       conversation_facts: conversation_facts,
       document_facts: document_facts,
@@ -1170,15 +1142,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   defp destination_artefact_until(_agent, _operator_id, _destination, _artefact_id, 0), do: nil
 
   defp destination_artefact_until(agent, operator_id, destination, artefact_id, attempts) do
-    assert {:ok, results} =
-             Client.search(agent, %Search{
-               operator_id: operator_id,
-               query: artefact_id,
-               destinations: [destination],
-               result_type: :artefacts,
-               artefact_id: artefact_id,
-               max_results: 1
-             })
+    results = search(agent, operator_id, [destination], :artefacts, artefact_id)
 
     case Enum.find(results, &match?(%{artefact: %{id: ^artefact_id}}, &1)) do
       %{artefact: artefact} ->
@@ -1239,18 +1203,40 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     }
   end
 
-  defp search(agent, operator_id, destinations, result_type, query) do
+  defp search(agent, operator_id, destinations, kind, query) do
     assert {:ok, results} =
              Client.search(agent, %Search{
                operator_id: operator_id,
                query: query,
-               destinations: destinations,
-               result_type: result_type,
-               max_results: 20
+               destinations: destinations
              })
 
-    results
+    flatten(results, kind)
   end
+
+  defp flatten(results, :facts),
+    do:
+      for(
+        result <- results,
+        fact <- result.facts,
+        do: %{destination: result.destination, fact: fact}
+      )
+
+  defp flatten(results, :artefacts),
+    do:
+      for(
+        result <- results,
+        %{artefact: artefact} <- result.episodes,
+        do: %{destination: result.destination, artefact: struct!(Artefact, artefact)}
+      )
+
+  defp flatten(results, :episodes),
+    do:
+      for(
+        result <- results,
+        episode <- result.episodes,
+        do: %{destination: result.destination, episode: episode}
+      )
 
   defp memory_search(agent, operator_id, params) do
     assert {:ok, %{result: result}} =
@@ -1293,8 +1279,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     params = %{
       query: Map.get(arguments, :query, Map.get(arguments, "query")),
-      destinations: Map.get(arguments, :destinations, Map.get(arguments, "destinations", [])),
-      lenses: Map.get(arguments, :lenses, Map.get(arguments, "lenses", []))
+      destinations: Map.get(arguments, :destinations, Map.get(arguments, "destinations", []))
     }
 
     results = facts_matching_text(agent, @operator_one, params, text)
@@ -1302,8 +1287,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     %{
       answer: answer,
       memory_search_arguments: %{
-        destinations: Map.get(arguments, :destinations, Map.get(arguments, "destinations")),
-        lenses: Map.get(arguments, :lenses, Map.get(arguments, "lenses"))
+        destinations: Map.get(arguments, :destinations, Map.get(arguments, "destinations"))
       },
       memory_search_completion_count: length(memory_search_completed),
       memory_search_results: results,
@@ -1377,17 +1361,17 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   defp facts_matching_text(agent, operator, params, text) do
-    assert {:ok, facts} =
+    assert {:ok, results} =
              Client.search(agent, %Search{
                operator_id: operator,
                query: params.query,
-               destinations: Map.get(params, :destinations, []),
-               lenses: Map.get(params, :lenses, []),
-               result_type: :facts
+               destinations: Map.get(params, :destinations, [])
              })
 
-    assert {:ok, %{result: ^text}} = JidoGralkor.MemorySearchPresentation.for_model(facts, 65_536)
-    facts
+    assert {:ok, %{result: ^text}} =
+             JidoGralkor.MemorySearchPresentation.for_model(results, 65_536)
+
+    flatten(results, :facts)
   end
 
   defp answer_field!(answer, label) do

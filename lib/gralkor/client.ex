@@ -285,165 +285,124 @@ defmodule Gralkor.Client do
           {:ok, [search_result()]} | {:error, term()}
   def search(%Search{} = request) do
     _ = registered_lenses!()
-    validate_max_results!(request.max_results)
-    validate_result_type!(request.result_type)
-
-    lenses = resolve_search_lenses!(request.lenses)
-    validate_lens_result_type!(lenses, request.result_type)
-
+    validate_search_request!(request)
     destinations = resolve_search_destinations!(request.destinations)
-    search_resolved(request, lenses, destinations)
+    search_resolved(request, destinations)
   end
 
   @spec search(runtime_owner(), Search.t()) ::
           {:ok, [search_result()]} | {:error, term()}
   def search(runtime_owner, %Search{} = request) do
-    validate_max_results!(request.max_results)
-    validate_result_type!(request.result_type)
-    validate_selector_names!(:lenses, request.lenses)
-    validate_selector_names!(:destinations, request.destinations)
-
-    {resolved_lenses, destinations} =
-      Runtime.resolve_search!(runtime_owner, request.lenses, request.destinations)
-
-    lenses = resolved_lenses |> Enum.map(& &1.name) |> Enum.uniq()
-    validate_lens_result_type!(lenses, request.result_type)
-
-    search_resolved(request, lenses, destinations)
+    validate_search_request!(request)
+    validate_destination_names!(request.destinations)
+    {_lenses, destinations} = Runtime.resolve_search!(runtime_owner, [], request.destinations)
+    search_resolved(request, destinations)
   end
 
-  defp search_resolved(request, lenses, destinations) do
+  defp search_resolved(request, destinations) do
     opts =
       []
       |> put_search_option(:entity_types, request.entity_types)
       |> put_search_option(:edge_types, request.edge_types)
-      |> put_search_option(:artefact_id, request.artefact_id)
-      |> put_search_option(:lenses, lenses)
+      |> Keyword.put(:limits, Search.limits())
 
     destinations
     |> Enum.map(fn destination ->
       Task.async(fn ->
         {destination.name,
-         DestinationStorage.search(
-           destination,
-           request.operator_id,
-           request.query,
-           request.result_type,
-           request.max_results,
-           opts
-         )}
+         DestinationStorage.search(destination, request.operator_id, request.query, opts)}
       end)
     end)
     |> Task.await_many(:infinity)
-    |> Enum.reduce_while({:ok, []}, fn search_result, {:ok, results} ->
-      case search_result do
-        {destination_name, {:ok, destination_results}} ->
-          attributed =
-            Enum.map(
-              destination_results,
-              &attribute_result(destination_name, request.result_type, &1)
-            )
+    |> Enum.reduce_while({:ok, []}, fn
+      {destination_name, {:ok, %{facts: facts, nodes: nodes, episodes: episodes}}},
+      {:ok, results} ->
+        result = %{destination: destination_name, facts: facts, nodes: nodes, episodes: episodes}
+        {:cont, {:ok, [result | results]}}
 
-          {:cont, {:ok, results ++ attributed}}
-
-        {_destination_name, {:error, _reason} = error} ->
-          {:halt, error}
-      end
+      {_destination_name, {:error, _reason} = error}, _results ->
+        {:halt, error}
     end)
+    |> case do
+      {:ok, results} -> {:ok, Enum.reverse(results)}
+      {:error, _} = error -> error
+    end
   end
-
-  defp attribute_result(destination, :facts, fact), do: %{destination: destination, fact: fact}
-  defp attribute_result(destination, :nodes, node), do: %{destination: destination, node: node}
-
-  defp attribute_result(destination, :episodes, episode),
-    do: %{destination: destination, episode: episode}
-
-  defp attribute_result(destination, :artefacts, artefact),
-    do: %{destination: destination, artefact: artefact}
 
   defp put_search_option(opts, _key, []), do: opts
   defp put_search_option(opts, _key, nil), do: opts
   defp put_search_option(opts, key, value), do: Keyword.put(opts, key, value)
 
-  defp validate_result_type!(type) when type in [:facts, :nodes, :episodes, :artefacts], do: :ok
+  @removed_search_guidance %{
+    result_type:
+      "every search now returns facts, nodes, and episodes per Destination as " <>
+        "%{destination:, facts:, nodes:, episodes:}; remove result_type and read the kind you need",
+    lenses:
+      "search no longer filters by originating Lens; remove lenses and read each " <>
+        "episode's `lens` or each fact source's `lens` to tell writers apart",
+    artefact_id:
+      "Reflection artefacts arrive whole as episodes carrying artefact: %{id:, payload:}; " <>
+        "remove artefact_id and match the artefact id in the returned episodes",
+    max_results:
+      "limits are fixed per Destination (Gralkor.Search.limits/0: 20 facts, 20 nodes, 5 episodes); " <>
+        "remove max_results"
+  }
 
-  defp validate_result_type!(type),
-    do: raise(ArgumentError, "unsupported search result type #{inspect(type)}")
+  defp validate_search_request!(%Search{} = request) do
+    Enum.each(Search.removed_fields(), fn field ->
+      unless is_nil(Map.fetch!(request, field)) do
+        raise ArgumentError,
+              "Gralkor.Search field #{inspect(field)} was removed in 12.0.0 " <>
+                "(got #{inspect(Map.fetch!(request, field))}): " <>
+                Map.fetch!(@removed_search_guidance, field)
+      end
+    end)
+
+    validate_type_filter!(:entity_types, request.entity_types)
+    validate_type_filter!(:edge_types, request.edge_types)
+  end
+
+  defp validate_type_filter!(field, values) when is_list(values) do
+    Enum.each(values, fn
+      value when is_binary(value) ->
+        if String.trim(value) == "",
+          do: raise(ArgumentError, "invalid search #{field} value #{inspect(value)}")
+
+      value ->
+        raise ArgumentError, "invalid search #{field} value #{inspect(value)}"
+    end)
+  end
+
+  defp validate_type_filter!(field, values),
+    do: raise(ArgumentError, "search #{field} must be a list, got #{inspect(values)}")
 
   defp resolve_search_destinations!([]), do: DestinationRegistry.configured!()
 
   defp resolve_search_destinations!(names) when is_list(names) do
+    validate_destination_names!(names)
+
     names
-    |> Enum.map(fn
-      name when is_binary(name) ->
-        if String.trim(name) == "" do
-          raise ArgumentError, "invalid Destination name #{inspect(name)}"
-        end
-
-        DestinationRegistry.fetch!(name)
-
-      name ->
-        raise ArgumentError, "invalid Destination name #{inspect(name)}"
-    end)
+    |> Enum.map(&DestinationRegistry.fetch!/1)
     |> Enum.uniq_by(& &1.name)
   end
 
   defp resolve_search_destinations!(names),
     do: raise(ArgumentError, "search destinations must be a list, got #{inspect(names)}")
 
-  defp resolve_search_lenses!(names) when is_list(names) do
-    names
-    |> Enum.map(fn
-      name when is_binary(name) ->
-        if String.trim(name) == "" do
-          raise ArgumentError, "invalid Lens name #{inspect(name)}"
-        end
-
-        lens!(name).name
-
-      name ->
-        raise ArgumentError, "invalid Lens name #{inspect(name)}"
-    end)
-    |> Enum.uniq()
-  end
-
-  defp resolve_search_lenses!(names),
-    do: raise(ArgumentError, "search lenses must be a list, got #{inspect(names)}")
-
-  defp validate_selector_names!(selector, names) when is_list(names) do
-    singular = selector |> Atom.to_string() |> String.trim_trailing("s") |> String.capitalize()
-
+  defp validate_destination_names!(names) when is_list(names) do
     Enum.each(names, fn
       name when is_binary(name) ->
         if String.trim(name) == "" do
-          raise ArgumentError, "invalid #{singular} name #{inspect(name)}"
+          raise ArgumentError, "invalid Destination name #{inspect(name)}"
         end
 
       name ->
-        raise ArgumentError, "invalid #{singular} name #{inspect(name)}"
+        raise ArgumentError, "invalid Destination name #{inspect(name)}"
     end)
   end
 
-  defp validate_selector_names!(selector, names) do
-    raise ArgumentError, "search #{selector} must be a list, got #{inspect(names)}"
-  end
-
-  defp validate_lens_result_type!([], _result_type), do: :ok
-  defp validate_lens_result_type!(_lenses, type) when type in [:episodes, :facts], do: :ok
-
-  defp validate_lens_result_type!(_lenses, result_type) do
-    raise ArgumentError,
-          "Lens selection requires episode or fact results, got #{inspect(result_type)}"
-  end
-
-  @spec validate_max_results!(term()) :: :ok
-  defp validate_max_results!(max_results) when is_integer(max_results) and max_results > 0,
-    do: :ok
-
-  defp validate_max_results!(max_results) do
-    raise ArgumentError,
-          "max_results must be a positive integer, got #{inspect(max_results)}"
-  end
+  defp validate_destination_names!(names),
+    do: raise(ArgumentError, "search destinations must be a list, got #{inspect(names)}")
 
   @spec lens!(String.t()) :: Lens.t() | ReplaceableLens.t()
   def lens!(name) do

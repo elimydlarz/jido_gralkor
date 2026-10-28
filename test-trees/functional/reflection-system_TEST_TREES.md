@@ -194,13 +194,14 @@ when a consumer-owned scheduled job triggers a Reflection
 if a Reflection's Chain of Thought fails
   then the Reflection failure identifies its name and reason
 
-when a Destination is searched for artefacts
+when a Destination holding Reflection artefacts is searched
   then that Destination is searched
-  and relevant artefacts written through any Destination output using that Destination are returned
-  and every artefact contains exactly its stable identifier and structured payload
+  and relevant artefacts written through any Destination output using that Destination are returned among its episodes
+  and every returned artefact contains exactly its stable identifier and structured payload
 
-  where the search also identifies one artefact
-    then only that artefact is returned from the selected Destination
+  where the caller identifies one artefact
+    then that artefact is found among the Destination's episodes by its identifier
+    and exact lookup by that identifier returns only that artefact
 
 if the retired `:reflection_storage` setting is configured
   then application startup fails identifying Destination outputs as the artefact memory boundary

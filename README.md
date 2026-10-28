@@ -499,7 +499,7 @@ defmodule MyApp.ChatAgent do
 end
 ```
 
-The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed), `:agent_name`, and the selected ingestion `:lens` on the signal's `tool_context`. Search selectors come from each `memory_search` call. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
+The plugin claims Jido's `:__memory__` slot. On `ai.react.query`, it plants `:session_id` (when a thread is committed), `:agent_name`, and the selected ingestion `:lens` on the signal's `tool_context`. The optional Destination selector comes from each `memory_search` call. Recall itself is the LLM's job — `JidoGralkor.ReAct.maybe_force_memory_search/2` is the cheapest way to force it on iteration 1. Capture runs automatically on completion and failure: the ReAct event trace is normalised into Gralkor's canonical `[%Gralkor.Message{role, content}]` shape via `JidoGralkor.Canonical` — `user` for the user query, `behaviour` for intermediate thinking / tool calls / tool results, `assistant` for the final answer on completed turns, or a terminal `"request failed: …"` `behaviour` on failed turns so the failure stays visible to downstream distillation.
 
 Set `tool_context[:lens]` on an individual query to override `ingestion_lens` for that turn. The plugin retains the selection on the request's Jido thread entry, making it authoritative for both `memory_add` and later completion or failure capture after ReAct has released its transient tool context.
 
@@ -533,21 +533,27 @@ The physical encoding replaces the former lossy `-` and `/` to `_` normalisation
 
 **Error contracts.** Invalid configuration, invalid Lens requests, automatic plugin-capture failures, non-PID runtime targets, and unavailable targeted runtimes raise. Runtime-targeted operations never redirect to application compatibility configuration. Valid runtime-targeted `Gralkor.Client.ingest/2`, `replace/2`, `search/2`, `reflect/5`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
 
-**Memory search results.** `Gralkor.Client.search/1,2` returns structured records for consumers that control their own presentation. The `memory_search` action requests Graphiti facts and returns readable text in `{:ok, %{result: text}}`: `Lens:`, `Reflection:`, or direct-source headings followed by fact bullets. It adds no artefact IDs or evolution-history metadata. The explicit `JidoGralkor.MemorySearchPresentation.for_model/2` formatter retains complete facts within the 16,384-character text limit and `tool_context[:memory_search_max_bytes]` (65,536 bytes by default for the complete serialized envelope), with an explicit omitted-fact count when necessary. It works with unmodified Jido AI 2.3.0. See [the schema, format, and consumer migration](DESTINATIONS.md#consumer-migration-and-model-delivery).
+**Memory search results.** `Gralkor.Client.search/1,2` returns structured records for consumers that control their own presentation: one `%{destination:, facts:, nodes:, episodes:}` map per Destination. The `memory_search` action runs that one search and returns readable text in `{:ok, %{result: text}}`: a `Facts` section with fact bullets under `Lens:`, `Reflection:`, or direct-source headings, an `Entities` section, and a compact `Episodes` section (a writer label and an excerpt of at most 280 characters; Reflection artefacts summarised by identifier and a payload excerpt), so whole source documents never flood the agent's context. The explicit `JidoGralkor.MemorySearchPresentation.for_model/2` formatter retains complete bullets within the 16,384-character text limit and `tool_context[:memory_search_max_bytes]` (65,536 bytes by default for the complete serialized envelope), with an explicit omission count per kind when necessary. It works with unmodified Jido AI 2.3.0. See [the schema, format, and consumer migration](DESTINATIONS.md#readable-memory-search).
 
 For example, the consuming agent receives text like:
 
 ```text
+Facts
+
 Lens: jira
 - Payment retries must use an idempotency key.
-- The settlement worker retries failed requests three times.
 
 Reflection: generalisations
 - Begin Payments migrations with a reversible, limited-scope trial.
-- Verify the rollback checkpoint before expanding the rollout.
+
+Entities
+- settlement worker: Retries failed requests three times.
+
+Episodes
+- [Lens: jira] PAY-142: settlement retries double-charged a customer when the… (truncated)
 ```
 
-When facts are omitted to fit the response limit, the text ends with a notice such as `Omitted facts: 3 (response limit).` Treat `result` as readable text; do not JSON-decode it. For programmatic access, use `Gralkor.Client.search/1,2` with `result_type: :facts` and read each record's `fact.fact` and `fact.sources` fields directly.
+When bullets are omitted to fit the response limit, the text ends with a notice such as `Omitted (response limit): facts 3, entities 0, episodes 1.` Treat `result` as readable text; do not JSON-decode it. For programmatic access, call `Gralkor.Client.search/1,2` and read each Destination's `facts`, `nodes`, and `episodes` directly.
 
 **`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 
@@ -662,19 +668,13 @@ The plugin mount chooses how an agent uses the registered Lenses:
 
 - `ingestion_lens` receives `memory_add` calls and automatic capture unless a turn supplies `tool_context[:lens]`.
 
-Search is independent of that mount. With only a query, `memory_search` searches episodes in every accessible registered Destination. Optional selectors narrow one invocation; names are ORed within each list and the two lists intersect:
+Search is independent of that mount. With only a query, `memory_search` searches every accessible registered Destination; an optional `destinations` list narrows one invocation:
 
 ```elixir
-%{
-  query: "What did earlier rollouts teach us?",
-  destinations: ["global", "release-notes"],
-  lenses: ["observations", "decisions"]
-}
+%{query: "What did earlier rollouts teach us?", destinations: ["global", "release-notes"]}
 ```
 
-This includes episodes only when their Destination is either selected Destination and their originating Lens is either selected Lens. Selecting a Lens never adds its Destination. A Lens selector applies only to episode results; direct callers may still explicitly request facts, nodes, or Reflection artefacts without a Lens selector.
-
-Consumers pass the owning AgentServer PID whose runtime configuration should resolve each named operation. A search resolves all selected Lenses and Destinations from one atomic snapshot:
+Consumers pass the owning AgentServer PID whose runtime configuration should resolve each named operation. A search resolves all selected Destinations from one atomic snapshot:
 
 ```elixir
 :ok =
@@ -691,9 +691,7 @@ Consumers pass the owning AgentServer PID whose runtime configuration should res
   Gralkor.Client.search(agent_server, %Gralkor.Search{
     operator_id: "operator-42",
     query: "When should we release?",
-    destinations: ["global"],
-    lenses: ["decisions"],
-    max_results: 20
+    destinations: ["global"]
   })
 
 :ok =
@@ -729,7 +727,7 @@ The supported source kinds are:
 
 Appending Lens episodes record writer provenance by suffixing their source description with ` [lens: <Lens name>]`; Reflection episodes use the exact source description `reflection:<Reflection name>`. Both registries reject names containing the Lens delimiter so these forms stay unambiguous. Direct writes persist `Episodic._gralkor_writer = "direct"`; search trusts that stored field and returns the original source description with `writer: :direct`. Historical text ending in ` [gralkor: direct]` without that field remains unchanged and unclassified. This episode-writer provenance is separate from `_gralkor_lens`, which owns replacement-graph nodes and relationships.
 
-Search defaults to stored episodes across every accessible registered Destination: the current operator's private `personal/<operator id>` logical graph plus every shared Destination. Supplying `destinations` narrows the graphs; supplying `lenses` narrows writers; OR applies within either list and both dimensions must match when both are present. Destination searches run concurrently while results retain selected Destination order. `max_results` defaults to `20`, must be a positive integer, and applies independently after writer filtering in every Destination. Each episode identifies its Destination and actual source. Direct and historical unmarked episodes remain available without invented Lens or Reflection authorship. Historical `operator` Lens markers remain unchanged and searchable without a Lens selector; selecting `personal-chat` includes only writes genuinely made through that Lens. Direct callers may explicitly request `:facts`, `:nodes`, or `:artefacts`; Lens selectors apply to episodes and facts; node searches accept `entity_types`, fact searches accept `edge_types`, and artefact searches may narrow by `artefact_id`. The `memory_search` action requests facts and returns readable bullets grouped by named Lens, Reflection, or direct source kind.
+Search takes `%Gralkor.Search{operator_id, query, destinations, entity_types, edge_types}` and returns everything relevant: by default every accessible registered Destination (the current operator's private `personal/<operator id>` logical graph plus every shared Destination), or the supplied `destinations`. Each Destination is searched once, concurrently, by one Graphiti `search_` call that ranks edges, nodes, and episodes together, and the result is one `%{destination:, facts:, nodes:, episodes:}` map per Destination in selected order. Each kind keeps relevance order and is capped per Destination at twenty facts, twenty nodes, and five episodes (`Gralkor.Search.limits/0`). Every fact carries its edge's `relationship` name and its `source_node` and `target_node` as `%{uuid:, name:}` (`nil` in the in-memory test backend, whose facts are stored episode text) along with its sources. Episodes identify their actual source: direct and historical unmarked episodes remain available without invented Lens or Reflection authorship, historical `operator` Lens markers remain unchanged, and Reflection episodes carry their whole artefact as `artefact: %{id:, payload:}` once extraction has durably completed. Supplied `entity_types` restrict nodes and also require both endpoint entities of each fact to carry a selected type; supplied `edge_types` restrict facts only; neither restricts episodes. `result_type`, `lenses`, `artefact_id`, and `max_results` were removed in 12.0.0; setting one raises `ArgumentError` with migration guidance. See [DESTINATIONS.md](DESTINATIONS.md#search).
 
 `%Gralkor.Graph{nodes:, relationships:}` is the sole replacement representation. Every node requires a unique, non-blank string `:id`, a list of non-blank string `:labels`, and a `:properties` map. Every relationship requires `:from` and `:to` identifiers naming supplied nodes, a non-blank string `:type`, and a `:properties` map. This payload is the whole current graph for the Lens; partial node and relationship operations are not supported.
 
@@ -831,33 +829,24 @@ Each admitted invocation progresses independently. A 5xx failure from inference,
 
 Each inline Chain of Thought contains an ordered, non-empty `steps` list. A step declares a non-blank `label`, natural-language `directions`, and an exact non-empty structured `output` schema. Output types are `string`, `boolean`, `integer`, recursively typed arrays such as `Array<string>`, and exact objects such as `{ content: string; level: integer }`. Later directions may interpolate only prior outputs with `{{output_name}}`. Each step receives the invocation identity and context, completed lensed representations, host tools, and tool context. The final step becomes one `%Gralkor.Artefact{}` whose fields are exactly `id` and `payload`.
 
-Before packaged generalisation inference begins, Gralkor performs one default episode search through the targeted agent runtime across every accessible registered Destination. The same search supplies related Lens-authored observations and prior Reflection-authored generalisations. The packaged prompt directs a new generalisation with no lineage to use level 1 and an evolved generalisation to use one level above its highest lineage snapshot. Generalisation lineage is validated only by the structured output contract; Gralkor preserves the model-produced values without comparing them with the related-memory input.
+Before packaged generalisation inference begins, Gralkor performs one ordinary `Gralkor.Client.search/2` through the targeted agent runtime across every accessible registered Destination, using the completed representations' content as the query, and passes the per-Destination results (facts, nodes, and episodes) to inference. Its episodes supply related Lens-authored observations and prior Reflection-authored generalisations. The packaged prompt directs a new generalisation with no lineage to use level 1 and an evolved generalisation to use one level above its highest lineage snapshot. Generalisation lineage is validated only by the structured output contract; Gralkor preserves the model-produced values without comparing them with the related-memory input.
 
 Programmatic requests and consumer-owned scheduled jobs use the same `Client.reflect/5` path. Gralkor does not own cron, calendar scheduling, or durable job state.
 
-Multiple Reflections and Lenses may save to the same Destination. Search selects Destinations directly:
+Multiple Reflections and Lenses may save to the same Destination. Search selects Destinations directly, and Reflection artefacts arrive whole among each Destination's episodes:
 
 ```elixir
-{:ok, artefacts} =
+{:ok, [%{destination: "personal", episodes: episodes}]} =
   Gralkor.Client.search(agent_server, %Gralkor.Search{
     operator_id: "operator-42",
     query: "What release approaches have worked?",
-    destinations: ["personal"],
-    result_type: :artefacts,
-    max_results: 20
+    destinations: ["personal"]
   })
 
-{:ok, [artefact]} =
-  Gralkor.Client.search(agent_server, %Gralkor.Search{
-    operator_id: "operator-42",
-    query: "",
-    destinations: ["personal"],
-    result_type: :artefacts,
-    artefact_id: "reflection-123"
-  })
+artefacts = for %{artefact: artefact} <- episodes, do: artefact
 ```
 
-`result_type: :artefacts` returns artefacts from the selected Destinations, and `artefact_id` optionally narrows the lookup to one exact artefact. The deterministic UUID derives from the operator ID, invocation ID, and Reflection name, but the artefact itself contains no producer identity. Before extraction, Graphiti waits for a graph uniqueness constraint and acquires a graph-backed UUID claim with a renewable lease, so independent application runtimes serialize equal work and reject conflicting immutable content before Graphiti's upsert can overwrite it. Lease expiry and renewal use the graph server's clock; every ownership transfer advances a generation. For a claimed deterministic UUID, the episode, every extracted entity and edge, and its extraction-completion marker persist in one generation-fenced FalkorDB query, so loss of ownership aborts the complete graph-effect set before it commits. Until that marker exists, canonical lookup retains the episode only as resumable storage state and artefact search excludes it. Repeating an equal marked write is a successful confirmation without extraction; an equal unmarked deterministic episode re-enters normal extraction without rerunning the Runner. Artefact search uses ranked completed episodes to select up to the requested number of artefact identifiers, then enumerates every completed episode carrying those identifiers independently of BM25. It collapses equal historical duplicates by artefact ID, preserves the selected ranking, and reports an artefact conflict if any completed duplicate under a selected ID disagrees.
+The deterministic UUID derives from the operator ID, invocation ID, and Reflection name, but the artefact itself contains no producer identity. Before extraction, Graphiti waits for a graph uniqueness constraint and acquires a graph-backed UUID claim with a renewable lease, so independent application runtimes serialize equal work and reject conflicting immutable content before Graphiti's upsert can overwrite it. Lease expiry and renewal use the graph server's clock; every ownership transfer advances a generation. For a claimed deterministic UUID, the episode, every extracted entity and edge, and its extraction-completion marker persist in one generation-fenced FalkorDB query, so loss of ownership aborts the complete graph-effect set before it commits. Until that marker exists, canonical lookup retains the episode only as resumable storage state and search excludes it. Repeating an equal marked write is a successful confirmation without extraction; an equal unmarked deterministic episode re-enters normal extraction without rerunning the Runner.
 
 Reflection artefact episodes written before the extraction-completion marker existed remain hidden because an absent marker cannot distinguish a fully extracted legacy write from a partial write. Invoke the original Reflection again with the same stable invocation ID and deliver its artefact to the same Destination to establish the marker; unmarked legacy episodes remain non-searchable. An operator-authored migration may mark a legacy episode only after independently verifying that its extraction completed and its immutable artefact content is the intended canonical value. This does not migrate an episode left under the former physical graph-ID encoding.
 
@@ -908,7 +897,7 @@ The Jido glue:
 - `JidoGralkor.Canonical` — normalises a Jido/ReAct turn into the canonical `[%Gralkor.Message{role, content}]` shape.
 - `JidoGralkor.Lifecycle` — `Jido.AgentServer.Lifecycle` impl whose sole job is the death-triggered flush.
 - `JidoGralkor.ContextRotator` — synchronous `rotate_now/2` for in-life context consolidation.
-- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls runtime-targeted `Gralkor.Client.search/2` for the current operator (or untargeted `search/1` when the tool context carries no runtime) for the current operator, using optional Destination and Lens selectors from that invocation. It works before a thread is committed and short-circuits only a blank query.
+- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls runtime-targeted `Gralkor.Client.search/2` for the current operator (or untargeted `search/1` when the tool context carries no runtime) for the current operator, using the optional Destination selector from that invocation, and renders facts, entities, and compact episode excerpts. It works before a thread is committed and short-circuits only a blank query.
 - `JidoGralkor.Actions.MemoryAdd` — fire-and-forget ReAct tool.
 - `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
 - `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's `personal/<operator id>` graph.

@@ -158,24 +158,19 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       assert_receive {:review_delivered, %{outcome: :delivered}}
 
-      assert {:ok, episodes} =
+      assert {:ok, [%{destination: "shared", episodes: episodes}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-two",
                  query: "",
                  destinations: ["shared"]
                })
 
-      assert Enum.all?(episodes, &(&1.destination == "shared"))
-
       assert Enum.any?(
                episodes,
-               &match?(
-                 %{episode: %{lens: "observations", content: "Release in small batches."}},
-                 &1
-               )
+               &match?(%{lens: "observations", content: "Release in small batches."}, &1)
              )
 
-      assert Enum.any?(episodes, &match?(%{episode: %{reflection: "review"}}, &1))
+      assert Enum.any?(episodes, &match?(%{reflection: "review"}, &1))
     end
   end
 
@@ -239,13 +234,19 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
                node.id == "catalogue"
              end)
 
-      assert {:ok, [%{destination: "shared", artefact: ^artefact}]} =
+      expected_artefact = Map.from_struct(artefact)
+
+      assert {:ok, [%{destination: "shared", episodes: episodes}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-two",
                  query: "preserve",
-                 destinations: ["shared"],
-                 result_type: :artefacts
+                 destinations: ["shared"]
                })
+
+      assert Enum.any?(
+               episodes,
+               &match?(%{artefact: ^expected_artefact, reflection: "review"}, &1)
+             )
     end
   end
 

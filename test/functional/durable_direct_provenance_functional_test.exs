@@ -81,7 +81,7 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
         )
 
       assert Pythonx.decode(result) == [[nil]]
-      assert {:ok, [%{episode: episode}]} = public_search(:episodes)
+      assert {:ok, [%{destination: "personal", episodes: [episode]}]} = public_search()
       assert episode.source_description == description
       refute Map.has_key?(episode, :writer)
       refute Map.has_key?(episode, :lens)
@@ -172,12 +172,14 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
       %{"database" => context.database, "uuid" => uuid}
     )
 
-    assert {:ok, [%{episode: episode}]} = public_search(:episodes)
+    assert {:ok, [%{destination: "personal", episodes: [episode], facts: [fact]}]} =
+             public_search()
+
     assert episode.writer == :direct
     assert episode.source_description == description
     refute Map.has_key?(episode, :lens)
     refute Map.has_key?(episode, :reflection)
-    assert {:ok, [%{fact: %{sources: [source]}}]} = public_search(:facts)
+    assert %{fact: "amber grows in orchard", sources: [source]} = fact
     assert source.writer == :direct
     assert source.source_description == description
     assert source.id == uuid
@@ -185,12 +187,11 @@ defmodule Gralkor.DurableDirectProvenanceFunctionalTest do
     refute Map.has_key?(source, :reflection)
   end
 
-  defp public_search(type) do
+  defp public_search do
     Gralkor.Client.search(self(), %Gralkor.Search{
       operator_id: "owner",
       query: "amber",
-      destinations: ["personal"],
-      result_type: type
+      destinations: ["personal"]
     })
   end
 

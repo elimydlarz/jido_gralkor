@@ -64,13 +64,10 @@ defmodule Gralkor.Reflection.RunnerTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(destination, operator_id, query, result_type, max_results, opts) do
-      send(
-        :reflection_runner_test,
-        {:destination_search, destination, operator_id, query, result_type, max_results, opts}
-      )
+    def search(destination, operator_id, query, opts) do
+      send(:reflection_runner_test, {:destination_search, destination, operator_id, query, opts})
 
-      {:ok, []}
+      {:ok, %{facts: [], nodes: [], episodes: []}}
     end
 
     @impl true
@@ -332,7 +329,7 @@ defmodule Gralkor.Reflection.RunnerTest do
   end
 
   describe "when the packaged generalisation Reflection runs" do
-    test "then one runtime-targeted related-memory episode search completes before inference" do
+    test "then one runtime-targeted related-memory search completes before inference" do
       prove_runtime_targeted_related_memory_search()
     end
 
@@ -607,7 +604,7 @@ defmodule Gralkor.Reflection.RunnerTest do
              )
 
     assert_receive {:runner_event, :related_memory_search, ^owner,
-                    %Search{result_type: :episodes}}
+                    %Search{destinations: [], entity_types: [], edge_types: []}}
 
     assert_receive {:runner_event, :inference, "collect"}
     assert_receive {:runner_event, :inference, "decide"}
@@ -637,7 +634,6 @@ defmodule Gralkor.Reflection.RunnerTest do
     assert_receive {:related_memory_query, :runtime_owner,
                     %Search{
                       operator_id: "operator-one",
-                      result_type: :episodes,
                       query: query
                     }}
 
@@ -701,7 +697,7 @@ defmodule Gralkor.Reflection.RunnerTest do
              )
 
     refute_receive :related_memory_searched
-    refute_receive {:destination_search, _, _, _, _, _, _}
+    refute_receive {:destination_search, _, _, _, _}
   end
 
   defp prove_built_in_inference_request do

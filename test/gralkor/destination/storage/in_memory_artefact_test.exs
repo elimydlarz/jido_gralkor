@@ -7,6 +7,7 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
 
   setup do
     start_supervised!(InMemory)
+    start_supervised!(Gralkor.Lens.Storage.InMemory)
     :ok
   end
 
@@ -18,17 +19,10 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
       assert :ok = InMemory.put_artefact(output, "review", "operator-one", artefact)
 
       assert {:ok, [^artefact]} =
-               InMemory.search(output.destination, "operator-one", "", :artefacts, 20, [])
+               searched_artefacts(output.destination)
 
       assert {:ok, []} =
-               InMemory.search(
-                 %Destination{name: "global"},
-                 "operator-one",
-                 "",
-                 :artefacts,
-                 20,
-                 []
-               )
+               searched_artefacts(%Destination{name: "global"})
     end
 
     test "and exact lookup returns that artefact" do
@@ -48,7 +42,7 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
       assert :ok = InMemory.put_artefact(output, "review", "operator-one", artefact)
 
       assert {:ok, [^earlier, ^artefact]} =
-               InMemory.search(output.destination, "operator-one", "", :artefacts, 20, [])
+               searched_artefacts(output.destination)
     end
   end
 
@@ -74,7 +68,7 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
                InMemory.get_artefact(output, "review", "operator-one", "stable-id")
 
       assert {:ok, [^first, ^second]} =
-               InMemory.search(output.destination, "operator-one", "", :artefacts, 20, [])
+               searched_artefacts(output.destination)
     end
   end
 
@@ -104,7 +98,7 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
                InMemory.get_artefact(output, "review", "operator-one", "stable-id")
 
       assert {:ok, [^original]} =
-               InMemory.search(output.destination, "operator-one", "", :artefacts, 20, [])
+               searched_artefacts(output.destination)
     end
   end
 
@@ -124,4 +118,11 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
 
   defp artefact(id, payload),
     do: %Artefact{id: id, payload: payload}
+
+  defp searched_artefacts(destination) do
+    with {:ok, %{episodes: episodes}} <-
+           InMemory.search(destination, "operator-one", "", limits: Gralkor.Search.limits()) do
+      {:ok, Enum.map(episodes, &struct!(Artefact, &1.artefact))}
+    end
+  end
 end

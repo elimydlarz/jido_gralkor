@@ -2,31 +2,19 @@ Functional: destination-search (src: lib/gralkor/graphiti_pool.ex, lib/gralkor/s
 
 when a caller searches memory
   then every distinct selected Destination is searched concurrently
-  and results retain the selected Destination order
-  and every result identifies its Destination
-  and the same maximum result count applies independently to every Destination
-  and unselected writers cannot consume the result allowance for selected-Lens results
+  and the search returns one result per selected Destination in the selected Destination order
+  and every Destination result names its Destination
+  and every Destination result carries its relevant facts, its relevant nodes, and its relevant episodes together
+  and each Destination contributes at most twenty facts, twenty nodes, and five episodes
+  and facts, nodes, and episodes each keep relevance order within their Destination
 
   where the Destination selector is omitted or empty
-    and the Lens selector is omitted or empty
-      then every accessible registered Destination is selected
-      and results written directly or by every Lens or Destination artefact output can contribute
+    then every accessible registered Destination is selected
+    and results written directly or by every Lens or Destination artefact output can contribute
 
   where one or more Destinations are supplied
-    while the Lens selector is omitted or empty
-      then results from any supplied Destination can contribute
-      but no result from another Destination can contribute
-
-  where one or more Lenses are supplied
-    while the Destination selector is omitted or empty
-      then every accessible registered Destination is selected
-      and results originating in any supplied Lens can contribute
-      but no result from another Lens or from a Destination artefact output can contribute
-
-  where one or more Destinations are supplied
-    and one or more Lenses are supplied
-      then only results whose Destination matches any supplied Destination and whose originating Lens matches any supplied Lens can contribute
-      and selecting a Lens does not add that Lens's Destination to the supplied Destinations
+    then results from any supplied Destination can contribute
+    but no result from another Destination can contribute
 
 where the selected Destinations include `personal`
   then only the current operator's `personal/<operator id>` graph is searched
@@ -38,61 +26,45 @@ where the selected Destinations include any shared Destination
 where the same Destination is selected more than once
   then that Destination is searched only once
 
-where the same Lens is selected more than once
-  then that Lens contributes no duplicate result
-
-where a caller supplies no maximum result count
-  then every resolved Destination receives the default maximum result count of twenty
-
-when a caller omits the result type or explicitly selects episodes
+when a Destination result carries episodes
   then relevant stored episode content is returned
   and every episode written through a Lens identifies that originating Lens
   and every directly written episode retains content and source kind without Lens or Reflection authorship
   and historical unmarked episodes remain available without invented authorship
   and historical operator-labelled episodes retain their recorded Lens provenance
-  and a personal-chat Lens selector excludes historical operator-labelled and direct episodes
   and Lens source descriptions and naturally textual content remain unchanged
   and every episode written through a Destination artefact output exposes its stable artefact identifier and payload as structured fields
 
-where a caller explicitly selects facts
-  then relevant relationships extracted in the selected Destinations are returned as structured fact records
+when a Destination result carries facts
+  then relevant relationships extracted in that Destination are returned as structured fact records
   and each fact retains originating episode identifiers, source kinds, and source descriptions
   and named Lens or Reflection provenance is exposed on each attributable fact source
-  while one or more Lenses are supplied
-    then only facts attributed to any selected Lens can contribute
-    and Lens filtering occurs before the per-Destination result limit
-    and only selected Lens sources contribute to the returned fact attribution
+  and every fact names its relationship
+  and every fact identifies its source entity by name and identifier
+  and every fact identifies its target entity by name and identifier
 
-where a caller explicitly selects nodes
-  then relevant entities extracted in the selected Destinations are returned
+when a Destination result carries nodes
+  then relevant entities extracted in that Destination are returned
 
-where a caller explicitly selects artefacts
-  then relevant artefacts from the selected Destinations are returned
-  and every artefact contains exactly its stable identifier and structured payload
-
-where a caller filters nodes by entity type
+where a caller filters by entity type
   then only nodes carrying a selected ontology label are returned
+  and only facts whose source and target entities both carry a selected ontology label are returned
+  but episodes are not restricted by entity type
 
-where a caller filters facts by edge type
+where a caller filters by edge type
   then only facts carrying a selected ontology relationship type are returned
+  but nodes and episodes are not restricted by relationship type
 
 if a selected Destination search fails
   then the error is returned without manufacturing a partial memory response
 
-if search supplies a maximum result count that is not a positive integer
+if search supplies a field removed in 12.0.0
   then search fails before any Destination query is started
-  and the error identifies the invalid maximum result count
+  and the error names the removed field
+  and the error gives migration guidance for that field
 
-if search supplies an unsupported result type
-  then search fails before any Destination query is started
-  and the error identifies the unsupported result type
-
-if search combines one or more Lenses with a node or artefact result type
-  then search fails before any Destination query is started
-  and the error identifies that Lens selection requires episode or fact results
-
-if search supplies any Destination or Lens selection that is not a list of registered non-blank names
+if search supplies any Destination selection that is not a list of registered non-blank names
   then search fails before any Destination query is started
   and no valid subset is searched
-  and the error identifies whether the rejected selection was for Destinations or Lenses
+  and the error identifies the rejected Destination selection
   and the error identifies the rejected value

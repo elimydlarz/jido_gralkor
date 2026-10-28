@@ -29,7 +29,7 @@ when captured conversation turns are ingested automatically
 
 when information is added or captured directly without a selected Lens
   then its source kind and description remain unchanged without Lens or Reflection authorship
-  and public episode and fact search include it without a Lens selector
+  and public search includes it among both facts and episodes
   and storage-owned direct provenance prevents writer-like source descriptions from claiming Lens or Reflection authorship
   and writer-like source descriptions do not impose Reflection completion requirements
   where a direct addition omits its source kind
@@ -41,7 +41,6 @@ if a direct addition supplies an unsupported source kind or content that does no
 
 when public search reads historical operator-labelled episodes
   then their recorded operator Lens provenance remains visible without registering that Lens
-  and a personal-chat Lens selector does not match those historical episodes
 
 when public episode search encounters an incomplete Reflection episode
   then the incomplete Reflection episode does not contribute
@@ -64,5 +63,5 @@ when public episode search reads completed Reflection output
   if the stored Reflection body is not a valid artefact
     then search returns an explicit invalid artefact error
 
-when public artefact search reads stored Reflection output
+when public search reads stored Reflection output
   then only records with a non-blank identifier and structured payload become canonical artefacts

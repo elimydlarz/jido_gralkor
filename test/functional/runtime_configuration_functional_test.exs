@@ -171,13 +171,13 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(destination, _operator_id, _query, _result_type, _max_results, _opts) do
+    def search(destination, _operator_id, _query, _opts) do
       send(
         Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid),
         {:runtime_search, destination.name}
       )
 
-      {:ok, []}
+      {:ok, %{facts: [], nodes: [], episodes: []}}
     end
 
     @impl true
@@ -191,7 +191,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(_, _, _, _, _, _), do: {:ok, []}
+    def search(_, _, _, _), do: {:ok, %{facts: [], nodes: [], episodes: []}}
 
     @impl true
     def put_artefact(output, reflection_name, operator_id, artefact) do
@@ -211,7 +211,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(_, _, _, _, _, _), do: {:ok, []}
+    def search(_, _, _, _), do: {:ok, %{facts: [], nodes: [], episodes: []}}
 
     @impl true
     def put_artefact(_output, _reflection_name, _operator_id, _artefact) do
@@ -233,14 +233,14 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(destination, _operator_id, _query, _result_type, _max_results, opts) do
+    def search(destination, _operator_id, _query, _opts) do
       send(
         Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid),
-        {:blocked_runtime_search, self(), destination, Keyword.get(opts, :lenses)}
+        {:blocked_runtime_search, self(), destination}
       )
 
       receive do
-        :continue_runtime_search -> {:ok, []}
+        :continue_runtime_search -> {:ok, %{facts: [], nodes: [], episodes: []}}
       end
     end
 
@@ -736,7 +736,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       Application.put_env(:jido_gralkor, :destination_storage, RecordingDestinationStorage)
       replacement_agent = restart_consuming_agent("runtime-configuration-restart-install")
 
-      assert {:ok, []} =
+      assert {:ok, [%{destination: "durable-memory", facts: [], nodes: [], episodes: []}]} =
                Gralkor.Client.search(replacement_agent, %Gralkor.Search{
                  operator_id: "operator-one",
                  query: "memory",
@@ -887,7 +887,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
   end
 
   describe "when a search begins" do
-    test "then it retains the selected Lens and Destination definitions from one snapshot active when search began" do
+    test "then it retains the selected Destination definitions from one snapshot active when search began" do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
@@ -908,24 +908,27 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
           Gralkor.Client.search(agent_server, %Gralkor.Search{
             operator_id: "operator-one",
             query: "memory",
-            lenses: ["observations"],
             destinations: ["project", "archive"]
           })
         end)
 
-      assert_receive {:blocked_runtime_search, first_search, first_destination, first_lenses}
-      assert_receive {:blocked_runtime_search, second_search, second_destination, second_lenses}
+      assert_receive {:blocked_runtime_search, first_search, first_destination}
+      assert_receive {:blocked_runtime_search, second_search, second_destination}
 
       assert :ok =
                JidoGralkor.Runtime.replace(agent_server, ingestion_configuration("replacement"))
 
-      assert {[%Gralkor.Lens{destination: %{name: "replacement"}}], _destinations} =
-               JidoGralkor.Runtime.resolve_search!(agent_server, ["observations"], [])
+      assert {_lenses, [%Gralkor.Destination{name: "replacement"}]} =
+               JidoGralkor.Runtime.resolve_search!(agent_server, [], ["replacement"])
+
+      assert_raise ArgumentError, fn ->
+        JidoGralkor.Runtime.resolve_search!(agent_server, [], ["project"])
+      end
 
       send(first_search, :continue_runtime_search)
       send(second_search, :continue_runtime_search)
 
-      assert {:ok, []} = Task.await(search)
+      assert {:ok, [%{destination: "project"}, %{destination: "archive"}]} = Task.await(search)
 
       assert Enum.sort([first_destination, second_destination]) ==
                Enum.sort([
@@ -933,9 +936,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  %Gralkor.Destination{name: "archive"}
                ])
 
-      assert first_lenses == ["observations"]
-      assert second_lenses == ["observations"]
-      refute_receive {:blocked_runtime_search, _, _, _}
+      refute_receive {:blocked_runtime_search, _, _}
     end
 
     test "and later search uses any subsequently installed Destination definitions" do
@@ -959,7 +960,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  destination_configuration("first-memory")
                )
 
-      assert {:ok, []} =
+      assert {:ok, [%{destination: "first-memory"}]} =
                Gralkor.Client.search(
                  agent_server,
                  %Gralkor.Search{
@@ -977,7 +978,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  destination_configuration("second-memory")
                )
 
-      assert {:ok, []} =
+      assert {:ok, [%{destination: "second-memory"}]} =
                Gralkor.Client.search(
                  agent_server,
                  %Gralkor.Search{
@@ -1406,14 +1407,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
           operator_id: "operator-one",
           query: "memory",
           destinations: ["operator"]
-        })
-      end
-
-      assert_raise ArgumentError, ~r/retired.*personal-chat/, fn ->
-        Gralkor.Client.search(self(), %Gralkor.Search{
-          operator_id: "operator-one",
-          query: "memory",
-          lenses: ["operator"]
         })
       end
 

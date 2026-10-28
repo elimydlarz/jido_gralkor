@@ -1,33 +1,63 @@
 defmodule Gralkor.Search do
   @moduledoc """
-  A search across registered memory Destinations.
+  One search across registered memory Destinations.
 
-  With empty `destinations` and `lenses`, search reads episodes from every
-  accessible registered Destination and from direct capture and every Lens and Reflection writer.
-  The packaged `personal` Destination resolves only to the current
-  `operator_id`'s graph.
+  A search names the operator, the query, and optionally the Destinations to
+  read (`destinations`, default every accessible registered Destination) and
+  ontology filters (`entity_types`, `edge_types`, default no filter). The
+  packaged `personal` Destination resolves only to the current `operator_id`'s
+  graph.
 
-  `destinations` selects graphs and `lenses` filters episode writers. Names are
-  ORed within either list and the two dimensions are ANDed together. Lens
-  filtering is valid for episode and fact results. Direct episodes expose
-  `content`, `source_description`, `source_kind`, and `writer: :direct` without
-  Lens or Reflection authorship. Historical unmarked episodes remain available
-  without invented authorship; historical `operator` Lens provenance is preserved
-  but never matched by a `personal-chat` Lens selector. A Lens-written episode exposes
-  `content`, `source_description`, and `lens`; a Reflection-written episode
-  exposes `artefact: %{id: id, payload: payload}`, `source_description`, and
-  its writer as `reflection`. Reflection episodes have no encoded `content`.
-  Naturally textual Lens content remains text, including JSON-looking source
-  records. Facts retain their text, timestamps, and structured `sources` with named Lens or
-  Reflection provenance where available. Lens selection filters matching edges before
-  the result limit and retains only selected Lens sources. Use
-  `Gralkor.Format.format_fact/1` explicitly for readable fact presentation.
+  Every search returns everything relevant: one Graphiti search per selected
+  Destination ranks that Destination's facts, nodes, and episodes together.
+  `Gralkor.Client.search/1,2` returns one result per Destination in selected
+  order:
 
-  Episodes are the default result type. Facts, nodes, and Reflection artefacts
-  remain available by explicitly setting `result_type` to `:facts`, `:nodes`,
-  or `:artefacts`.
+      %{destination: name, facts: [fact], nodes: [node], episodes: [episode]}
+
+  Each kind keeps Graphiti's relevance order and is capped per Destination by
+  `limits/0`: twenty facts, twenty nodes, and five episodes (episodes are whole
+  source documents, so fewer are returned).
+
+  * A fact carries `fact`, its `created_at`, `valid_at`, `invalid_at`, and
+    `expired_at` timestamps, its `relationship` name, its `source_node` and
+    `target_node` as `%{uuid:, name:}`, and `sources`: originating episodes with
+    `id`, `source_kind`, `source_description`, and named `lens` or `reflection`
+    provenance (or `writer: :direct`) where known.
+  * A node carries `name`, `summary`, and `attributes`.
+  * A direct episode carries `content`, `source_description`, `source_kind`, and
+    `writer: :direct`; a Lens episode carries `content`, `source_description`,
+    and `lens`; a Reflection episode carries `artefact: %{id:, payload:}`,
+    `source_description`, and its writer as `reflection`. Historical unmarked
+    episodes remain available without invented authorship, and naturally
+    textual Lens content remains text. A Reflection episode appears only once
+    its extraction has durably completed.
+
+  `entity_types` restricts nodes to those labels and restricts facts to edges
+  whose source and target entities both carry one of them. `edge_types`
+  restricts facts to those relationship names. Neither filter restricts
+  episodes. Use `Gralkor.Format.format_fact/1` explicitly for readable fact
+  presentation.
+
+  ## Removed in 12.0.0
+
+  `result_type`, `lenses`, `artefact_id`, and `max_results` remain struct keys
+  only so that supplying one fails loudly: `Gralkor.Client.search/1,2` raises
+  `ArgumentError` with migration guidance when any of them is set.
   """
 
+  @limits %{facts: 20, nodes: 20, episodes: 5}
+
+  @removed_fields [:result_type, :lenses, :artefact_id, :max_results]
+
+  @type fact :: %{
+          required(:fact) => String.t(),
+          required(:relationship) => String.t() | nil,
+          required(:source_node) => %{uuid: String.t(), name: String.t() | nil} | nil,
+          required(:target_node) => %{uuid: String.t(), name: String.t() | nil} | nil,
+          optional(:sources) => [map()],
+          optional(atom()) => term()
+        }
   @type direct_episode :: %{
           required(:content) => String.t(),
           required(:source_description) => String.t(),
@@ -40,48 +70,48 @@ defmodule Gralkor.Search do
           source_description: String.t(),
           reflection: String.t()
         }
-  @type result ::
-          %{
-            destination: String.t(),
-            episode: direct_episode() | lens_episode() | reflection_episode()
-          }
-          | %{destination: String.t(), fact: map()}
-          | %{destination: String.t(), node: map()}
-          | %{destination: String.t(), artefact: Gralkor.Artefact.t()}
+  @type episode :: direct_episode() | lens_episode() | reflection_episode()
+  @type result :: %{
+          destination: String.t(),
+          facts: [fact()],
+          nodes: [map()],
+          episodes: [episode()]
+        }
 
   @enforce_keys [:operator_id, :query]
   defstruct [
     :operator_id,
     :query,
     destinations: [],
-    lenses: [],
-    result_type: :episodes,
     entity_types: [],
     edge_types: [],
+    result_type: nil,
+    lenses: nil,
     artefact_id: nil,
-    max_results: 20
+    max_results: nil
   ]
 
-  @typedoc "The requested representation; episodes are the public default."
-  @type result_type :: :facts | :nodes | :episodes | :artefacts
-
   @typedoc """
-  One search request.
-
-  Empty selector lists mean all accessible Destinations and all episode
-  writers. `entity_types`, `edge_types`, and `artefact_id` apply only to their
-  corresponding explicit advanced result types. `max_results` applies
-  independently to each selected Destination.
+  One search request. Empty `destinations` means every accessible registered
+  Destination; empty `entity_types` and `edge_types` mean no filter. The
+  removed keys must stay `nil`.
   """
   @type t :: %__MODULE__{
           operator_id: String.t(),
           query: String.t(),
           destinations: [String.t()],
-          lenses: [String.t()],
-          result_type: result_type(),
           entity_types: [String.t()],
           edge_types: [String.t()],
-          artefact_id: String.t() | nil,
-          max_results: pos_integer()
+          result_type: nil,
+          lenses: nil,
+          artefact_id: nil,
+          max_results: nil
         }
+
+  @doc "The fixed per-Destination result limits: twenty facts, twenty nodes, five episodes."
+  @spec limits() :: %{facts: pos_integer(), nodes: pos_integer(), episodes: pos_integer()}
+  def limits, do: @limits
+
+  @doc false
+  def removed_fields, do: @removed_fields
 end

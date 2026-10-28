@@ -19,16 +19,10 @@ where Graphiti stores a Destination artefact output
       then Graphiti confirms the existing episode without repeating extraction
     while the episode exists but extraction completion was not recorded
       then canonical lookup retains the exact episode artefact as incomplete rather than reporting success
-      and public artefact search excludes that incomplete artefact
+      and public search excludes that incomplete artefact's episode
       and Graphiti resumes the normal extraction path before reporting success
-  when artefact search encounters historical complete episodes carrying the same artefact identifier
-    while their immutable payloads are equal
-      then search returns one artefact
-    while their immutable payloads conflict
-      then search reports an artefact conflict
-  when incomplete or duplicate episodes outnumber the requested result window
-    then they cannot crowd completed unique artefacts out of the requested results
-    and conflicts for selected artefact identifiers are detected beyond the ranked window
+  when incomplete episodes rank ahead of a completed artefact within the searched window
+    then they cannot crowd the completed artefact's episode out of the returned episodes
   when independent application runtimes write the same artefact UUID concurrently
     then a graph uniqueness constraint exists before UUID claim admission
     and graph-backed admission serializes extraction across runtimes
@@ -48,7 +42,7 @@ where Graphiti stores a Destination artefact output
     and upgrade behavior does not expose a possibly partial episode as completed
 
 when Graphiti artefact extraction fails before its claim-fenced transaction commits
-  then canonical lookup and public artefact search report no episode
+  then canonical lookup and public search report no episode
   and a later equal write retries extraction from scratch
 
 where in-memory Destination storage receives an artefact output

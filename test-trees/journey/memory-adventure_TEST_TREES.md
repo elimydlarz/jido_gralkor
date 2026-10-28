@@ -2,7 +2,7 @@ Journey: memory-adventure (journey: test/journey/memory_adventure_journey_test.e
 
 # Adventure: one operator adds default-ontology direct personal memory, captures direct and personal-chat turns without duplicate writes, flushes completed turns through an appending Lens, asynchronously triggers an ERL Learning, evolves a shared generalisation, and publishes global memory.
 # The same operator's appending and replaceable Lenses save to one Destination before the replaceable Lens replaces its earlier graph.
-# Fresh sessions then use default and selected memory search across packaged and application Destinations; both operators check shared and personal visibility.
+# Fresh sessions then use default and Destination-selected memory search across packaged and application Destinations; both operators check shared and personal visibility.
 
 when two operators use direct personal memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement
   then default-ontology direct personal memory remains recallable
@@ -45,11 +45,10 @@ when a fresh agent handles a request related to an evolved generalisation
   and the answer uses retrieved facts relevant to the requested migration
   and the recommendation applies the retrieved reversible limited-scope lesson to the requested migration
 
-when the agent searches with both Destination and Lens selectors
-  then relevant memory whose Destination and originating Lens both match the selectors is returned
-  and a selected Lens does not contribute its memory from an unselected Destination
+when the agent searches with a Destination selector
+  then relevant memory from the selected Destination is returned
+  and no memory from an unselected Destination is returned
   and a subsequent selector-free search returns relevant memory from a Destination omitted by the earlier Destination selector
-  and that search returns relevant memory from a Lens omitted by the earlier Lens selector
 
 when the Journey ingests conversation, document, and structured-record episodes
   then every retrieved conversation fact identifies every originating episode

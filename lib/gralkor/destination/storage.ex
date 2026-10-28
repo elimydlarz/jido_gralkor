@@ -4,14 +4,21 @@ defmodule Gralkor.Destination.Storage do
   alias Gralkor.Destination
   alias Gralkor.Artefact
 
+  @typedoc "What one Destination contributes to a search, each kind in relevance order."
+  @type search_result :: %{facts: [map()], nodes: [map()], episodes: [map()]}
+
+  @doc """
+  Searches one Destination for facts, nodes, and episodes together.
+
+  Options: `:limits` (`%{facts:, nodes:, episodes:}`, required), `:entity_types`
+  and `:edge_types` (optional lists).
+  """
   @callback search(
               Destination.t(),
               operator_id :: String.t(),
               query :: String.t(),
-              Gralkor.Search.result_type(),
-              max_results :: pos_integer(),
               keyword()
-            ) :: {:ok, [term()]} | {:error, term()}
+            ) :: {:ok, search_result()} | {:error, term()}
 
   @callback put_artefact(map(), String.t(), String.t(), Artefact.t()) ::
               :ok | {:error, term()}
@@ -21,8 +28,8 @@ defmodule Gralkor.Destination.Storage do
 
   @optional_callbacks put_artefact: 4, get_artefact: 4
 
-  def search(destination, operator_id, query, result_type, max_results, opts) do
-    configured_storage().search(destination, operator_id, query, result_type, max_results, opts)
+  def search(destination, operator_id, query, opts) do
+    configured_storage().search(destination, operator_id, query, opts)
   end
 
   def put_artefact(output, reflection_name, operator_id, artefact, opts \\ []) do

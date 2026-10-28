@@ -64,16 +64,16 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(destination, operator_id, query, :facts, max_results, _opts) do
+    def search(destination, operator_id, query, opts) do
       send(Process.whereis(:lens_graph_replacement_functional), {
         :searched_destination,
         destination,
         operator_id,
         query,
-        max_results
+        opts
       })
 
-      {:ok, ["replacement-owned fact"]}
+      {:ok, %{facts: ["replacement-owned fact"], nodes: [], episodes: []}}
     end
   end
 
@@ -266,12 +266,13 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
 
       assert :ok = Client.replace(request(graph("systems")))
 
-      assert {:ok, [%{destination: "global", artefact: ^artefact}]} =
+      expected_artefact = Map.from_struct(artefact)
+
+      assert {:ok, [%{destination: "global", episodes: [%{artefact: ^expected_artefact}]}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-two",
                  query: "keep",
-                 destinations: ["global"],
-                 result_type: :artefacts
+                 destinations: ["global"]
                })
     end
 
@@ -479,16 +480,17 @@ defmodule Gralkor.LensGraphReplacementFunctionalTest do
 
   describe "when a caller searches the Destination used by a replaceable Lens" do
     test "then Destination search resolves and searches that Destination's graph" do
-      assert {:ok, [%{destination: "personal", fact: "replacement-owned fact"}]} =
+      assert {:ok, [%{destination: "personal", facts: ["replacement-owned fact"]}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
                  destinations: ["personal"],
-                 query: "How does settlement work?",
-                 result_type: :facts
+                 query: "How does settlement work?"
                })
 
       assert_receive {:searched_destination, %Gralkor.Destination{name: "personal"},
-                      "operator-one", "How does settlement work?", 20}
+                      "operator-one", "How does settlement work?", opts}
+
+      assert Keyword.fetch!(opts, :limits) == Gralkor.Search.limits()
     end
   end
 
