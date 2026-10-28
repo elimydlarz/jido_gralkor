@@ -34,6 +34,7 @@ when a Destination result carries episodes
   and historical operator-labelled episodes retain their recorded Lens provenance
   and Lens source descriptions and naturally textual content remain unchanged
   and every episode written through a Destination artefact output exposes its stable artefact identifier and payload as structured fields
+  and a search for one word of an artefact's payload returns that artefact from a Graphiti Destination
 
 when a Destination result carries facts
   then relevant relationships extracted in that Destination are returned as structured fact records
@@ -42,6 +43,7 @@ when a Destination result carries facts
   and every fact names its relationship
   and every fact identifies its source entity by name and identifier
   and every fact identifies its target entity by name and identifier
+  and a fact written by a graph replacement is returned by a search for one of its words
 
 when a Destination result carries nodes
   then relevant entities extracted in that Destination are returned

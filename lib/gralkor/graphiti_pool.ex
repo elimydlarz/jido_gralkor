@@ -382,6 +382,11 @@ defmodule Gralkor.GraphitiPool do
   of `limits`, then cuts each kind to its own limit in relevance order. The
   query is embedded once for every kind.
 
+  The search runs on the physically encoded group's own graph instance, whose
+  driver is bound to that group's database, and passes no `group_ids`: content
+  a Lens graph replacement inserted with any stored `group_id` is still found,
+  as 11.2.0's edge search found it.
+
   One `SearchFilters(node_labels: …, edge_types: …)` applies to the whole
   search. Graphiti applies `node_labels` to nodes directly and to edges through
   both endpoints; `edge_types` restricts edges only; neither restricts episodes.
@@ -441,7 +446,6 @@ defmodule Gralkor.GraphitiPool do
           return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
 
         q = text(query)
-        gid = text(group_id)
         labels = [text(label) for label in node_labels] if node_labels else None
         types = [text(edge_type) for edge_type in edge_types] if edge_types else None
         supported_query_terms = [
@@ -509,7 +513,6 @@ defmodule Gralkor.GraphitiPool do
           results = await g.search_(
             q,
             config=config,
-            group_ids=[gid],
             search_filter=SearchFilters(node_labels=labels, edge_types=types),
           )
           facts = await render_facts(g, list(results.edges)[:fact_limit])
@@ -536,7 +539,6 @@ defmodule Gralkor.GraphitiPool do
         %{
           "g" => instance,
           "query" => query,
-          "group_id" => Client.sanitize_group_id(group_id),
           "fact_limit" => limits.facts,
           "node_limit" => limits.nodes,
           "episode_limit" => limits.episodes,

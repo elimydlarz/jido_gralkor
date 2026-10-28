@@ -191,7 +191,7 @@ when a memory search is run for a group
   then the graph library is searched once for edges, nodes, and episodes together
   and edges and nodes are each ranked by reciprocal rank fusion of full-text and similarity search, and episodes by full-text search
   and the graph library is asked for as many results of each kind as the largest requested kind limit
-  and it is restricted to the physically encoded group id the episodes were written under
+  and it searches only the database of that group, whatever group id each record stores
   and each returned edge is rendered as a fact carrying its text, its created, valid, invalid, and expired timestamps, and its originating episodes by identifier, source kind, and source description
   and each returned edge is rendered with its relationship name and the name and identifier of its source and target entities
   and each returned node is rendered with its name, summary, and attributes

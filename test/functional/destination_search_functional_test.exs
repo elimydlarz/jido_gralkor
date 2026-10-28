@@ -399,6 +399,37 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                 }
               ]} = search(query: "simple", destinations: ["first"])
     end
+
+    test "and a search for one word of an artefact's payload returns that artefact from a Graphiti Destination" do
+      start_native_graph()
+
+      output = %{
+        kind: :destination,
+        destination: Gralkor.Destination.Registry.fetch!("first"),
+        ontology: Gralkor.DefaultOntology
+      }
+
+      artefact =
+        Gralkor.Artefact.new(
+          Gralkor.Artefact.id_for("operator-one", "invocation-one", "review"),
+          %{"lesson" => "prefer reversible saffron rollouts"}
+        )
+
+      assert :ok =
+               Gralkor.Destination.Storage.put_artefact(
+                 output,
+                 "review",
+                 "operator-one",
+                 artefact
+               )
+
+      returned_artefact = Map.from_struct(artefact)
+
+      assert {:ok, [%{destination: "first", episodes: episodes}]} =
+               search(query: "saffron", destinations: ["first"])
+
+      assert [%{artefact: ^returned_artefact, reflection: "review"}] = episodes
+    end
   end
 
   describe "when a Destination result carries facts" do
@@ -455,6 +486,41 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                %{uuid: "project", name: "amber project"},
                %{uuid: "lesson", name: "amber lesson"}
              ]
+    end
+
+    test "and a fact written by a graph replacement is returned by a search for one of its words" do
+      start_native_graph()
+
+      replace_first_graph(
+        [replacement_entity("payments", "Payments"), replacement_entity("clearing", "Clearing")],
+        [
+          %{
+            from: "payments",
+            to: "clearing",
+            type: "RELATES_TO",
+            properties: %{
+              uuid: "settlement",
+              group_id: "first",
+              name: "SETTLES_THROUGH",
+              fact: "Payments settles through Clearing.",
+              episodes: [],
+              created_at: "2026-08-11T00:00:00Z"
+            }
+          }
+        ]
+      )
+
+      assert {:ok, [%{destination: "first", facts: facts}]} =
+               search(query: "clearing", destinations: ["first"])
+
+      assert [
+               %{
+                 fact: "Payments settles through Clearing.",
+                 relationship: "SETTLES_THROUGH",
+                 source_node: %{uuid: "payments", name: "Payments"},
+                 target_node: %{uuid: "clearing", name: "Clearing"}
+               }
+             ] = facts
     end
   end
 
@@ -624,7 +690,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
   defp node(id, labels), do: %{id: id, labels: labels, properties: %{title: id}}
 
-  defp replace_first_graph(nodes) do
+  defp replace_first_graph(nodes, relationships \\ []) do
     store = %Gralkor.Lens.Store{
       operator_id: "operator-one",
       lens: %Gralkor.Lens.Replaceable{
@@ -636,8 +702,22 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     assert :ok =
              Gralkor.Lens.Store.replace_graph(store, %Gralkor.Graph{
                nodes: nodes,
-               relationships: []
+               relationships: relationships
              })
+  end
+
+  defp replacement_entity(id, name) do
+    %{
+      id: id,
+      labels: ["Entity"],
+      properties: %{
+        uuid: id,
+        group_id: "first",
+        name: name,
+        summary: name,
+        created_at: "2026-08-11T00:00:00Z"
+      }
+    }
   end
 
   defp start_native_graph do
@@ -786,7 +866,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
             def edge(self, uuid, fact, episodes):
                 return SimpleNamespace(uuid=uuid, fact=fact, episodes=episodes, created_at=None, valid_at=None, invalid_at=None, expired_at=None)
             async def search_(self, query, config=None, group_ids=None, search_filter=None):
-                assert group_ids == ['g_' + 'first'.encode().hex()]
+                assert group_ids is None
                 return SimpleNamespace(edges=self.edges[:config.limit], nodes=[], episodes=[])
             async def episodic_node_get_by_uuids(self, cls, driver, uuids):
                 return [self.episodes[uuid] for uuid in uuids]

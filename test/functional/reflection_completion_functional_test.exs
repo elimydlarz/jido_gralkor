@@ -363,7 +363,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
               from graphiti_core.search.search_config import SearchResults
               episodes = await EpisodicNode.get_by_group_ids(
                   self.driver,
-                  list(group_ids or []),
+                  [gid] if group_ids is None else list(group_ids),
                   limit=config.limit if config is not None else None,
               )
               return SearchResults(episodes=episodes)
@@ -747,7 +747,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                   from graphiti_core.search.search_config import SearchResults
                   episodes = await EpisodicNode.get_by_group_ids(
                       self.driver,
-                      list(group_ids or []),
+                      [gid] if group_ids is None else list(group_ids),
                       limit=config.limit if config is not None else None,
                   )
                   return SearchResults(episodes=episodes)
@@ -1126,7 +1126,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             from graphiti_core.search.search_config import SearchResults
             episodes = await EpisodicNode.get_by_group_ids(
                 self.driver,
-                list(group_ids or []),
+                [gid] if group_ids is None else list(group_ids),
                 limit=config.limit if config is not None else None,
             )
             return SearchResults(episodes=episodes)

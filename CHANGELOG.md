@@ -20,6 +20,7 @@ One simplified search. This is a breaking release; migration guidance follows ea
 - `GraphitiPool.search_episodes/3,4,5` and `GraphitiPool.search_nodes/5`, replaced by `GraphitiPool.search_memory/5`.
 
 ### Fixed
+- Facts a Lens graph replacement inserts are found by search whatever `group_id` the caller stored on them, as 11.2.0's fact search found them. The one search runs on the Destination's own graph and no longer also filters by the stored `group_id`.
 - A search with more than one entity type no longer fails on FalkorDB: graphiti-core 0.31.2 renders several labels as `n:A|B`, which FalkorDB rejects, and Gralkor now rewrites that clause as `(n:A OR n:B)` for the FalkorDB provider.
 
 ## [11.2.0] - 2026-10-27

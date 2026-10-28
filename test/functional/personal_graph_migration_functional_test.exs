@@ -441,7 +441,10 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
                ]
       end
 
-      for query <- ["amber", "orchard"] do
+      for {query, artefacts} <- [
+            {"amber", [%{id: "complete", payload: %{"summary" => "immutable amber"}}]},
+            {"orchard", []}
+          ] do
         assert {:ok, [%{destination: "personal", episodes: episodes}]} =
                  Gralkor.Client.search(self(), %Gralkor.Search{
                    operator_id: "owner",
@@ -449,9 +452,8 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
                    destinations: ["personal"]
                  })
 
-        assert for(%{artefact: artefact} <- episodes, do: artefact) == [
-                 %{id: "complete", payload: %{"summary" => "immutable amber"}}
-               ]
+        assert Enum.any?(episodes, &(&1[:content] == "remember amber orchard"))
+        assert for(%{artefact: artefact} <- episodes, do: artefact) == artefacts
       end
 
       IO.puts(

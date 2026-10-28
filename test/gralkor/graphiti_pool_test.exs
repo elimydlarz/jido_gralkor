@@ -2367,9 +2367,11 @@ defmodule Gralkor.GraphitiPoolTest do
       assert recorded["limit"] == 7
     end
 
-    test "and it is restricted to the physically encoded group id the episodes were written under" do
+    test "and it searches only the database of that group, whatever group id each record stores" do
       {_results, recorded} = memory_search_result()
-      assert recorded["group_ids"] == [physical("group-with-hyphens")]
+      assert_received {:memory_search_instance, group_id}
+      assert group_id == physical("group-with-hyphens")
+      assert recorded["group_ids"] == nil
     end
 
     test "and each returned edge is rendered as a fact carrying its text, its created, valid, invalid, and expired timestamps, and its originating episodes by identifier, source kind, and source description" do
@@ -2574,7 +2576,7 @@ defmodule Gralkor.GraphitiPoolTest do
             async def search_(self, query, config=None, group_ids=None, search_filter=None):
                 self.recorded["calls"] += 1
                 self.recorded["query"] = query
-                self.recorded["group_ids"] = list(group_ids) if group_ids else []
+                self.recorded["group_ids"] = None if group_ids is None else list(group_ids)
                 self.recorded["limit"] = config.limit
                 self.recorded["edge_config"] = config.edge_config is not None
                 self.recorded["node_config"] = config.node_config is not None
@@ -2616,9 +2618,14 @@ defmodule Gralkor.GraphitiPoolTest do
         }
       )
 
+    test_pid = self()
+
     %{pid: pid} =
       start_pool(
-        construct_instance: fn _db, _shared, _group_id -> g end,
+        construct_instance: fn _db, _shared, group_id ->
+          send(test_pid, {:memory_search_instance, group_id})
+          g
+        end,
         warmup: false,
         install_loop_fn: &Gralkor.Python.install_async_runtime/0
       )
