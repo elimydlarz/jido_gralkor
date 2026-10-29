@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import test from "node:test";
 
 const skillUrl = new URL("../.agents/skills/publish/SKILL.md", import.meta.url);
@@ -12,6 +12,22 @@ async function readmeDocuments() {
   const links = [...readme.matchAll(/\[[^\]]*\]\((?!https?:\/\/)([^)\s]+\.md)(?:#[^)\s]*)?\)/g)];
   return [...new Set(["README.md", ...links.map((match) => match[1])])];
 }
+
+test("then Codex agents find the publish skill at `.agents/skills/publish` and Claude Code agents find the same skill at `.claude/skills/publish`", async () => {
+  const claudeSkillUrl = new URL("../.claude/skills/publish/SKILL.md", import.meta.url);
+
+  assert.equal(await realpath(claudeSkillUrl), await realpath(skillUrl));
+});
+
+test("and the skill description says that every jido_gralkor Hex publication and release tag goes through this skill, which needs no interactive Hex login or one-time password", async () => {
+  const skill = await readFile(skillUrl, "utf8");
+  const description = skill.match(/^---\n[\s\S]*?^description: (.+)$[\s\S]*?^---$/m)[1];
+
+  assert.match(description, /every jido_gralkor Hex publication and release tag/);
+  assert.match(description, /`mix hex\.publish`/);
+  assert.match(description, /`HEX_TOKEN` and `GH_TOKEN`/);
+  assert.match(description, /no interactive Hex login or one-time password/);
+});
 
 test("when an operator asks to publish jido_gralkor with a semantic-version change kind or the current version", async (context) => {
   await context.test("then the version selection is the only required operator input", async () => {

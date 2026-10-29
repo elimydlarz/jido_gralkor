@@ -1,4 +1,7 @@
-Unit: publish-jido-gralkor (src: .agents/skills/publish/SKILL.md, .agents/skills/publish/agents/openai.yaml, .env.example, mix.exs, README.md, DESTINATIONS.md, PERSONAL_MEMORY_MIGRATION.md; unit: test/publish_skill_test.mjs)
+Unit: publish-jido-gralkor (src: .agents/skills/publish/SKILL.md, .agents/skills/publish/agents/openai.yaml, .claude/skills/publish, .env.example, mix.exs, README.md, DESTINATIONS.md, PERSONAL_MEMORY_MIGRATION.md; unit: test/publish_skill_test.mjs)
+
+then Codex agents find the publish skill at `.agents/skills/publish` and Claude Code agents find the same skill at `.claude/skills/publish`
+and the skill description says that every jido_gralkor Hex publication and release tag goes through this skill, which needs no interactive Hex login or one-time password
 
 when an operator asks to publish jido_gralkor with a semantic-version change kind or the current version
   then the version selection is the only required operator input

@@ -126,6 +126,13 @@ mix muzak --seed N             # reproducible mutation sample
 
 A mutation that no test fails on is a **survivor** — a gap in the suite. Each mutation restarts the app stack, so full runs take tens of minutes; scope with `--only` for fast feedback. The runner relies on `test_helper.exs` keeping `InMemory.start_link` idempotent (it re-requires the helper per mutation).
 
+## Releasing
+
+Publish jido_gralkor to Hex, and create its release tag, only through the publish skill: `.agents/skills/publish/SKILL.md`, which Claude Code also finds at `.claude/skills/publish`. Read it in full before the first release step, including when a subagent prepared the release.
+- It loads `HEX_TOKEN` and `GH_TOKEN` from `.env` and publishes with `HEX_API_KEY` in a temporary `HEX_HOME`, so it needs no interactive Hex login or one-time password.
+- Never run a bare `mix hex.publish`. It uses the cached CLI session, which expires and then asks for a one-time password.
+- Never create a tag with `git tag` or `git push`. The skill creates it through GitHub's API.
+
 ## Test Trees
 
 See [`test-trees/`](test-trees/) — the canonical contract between intent and tests for this project.

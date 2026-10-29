@@ -1,6 +1,6 @@
 ---
 name: publish
-description: Publish the current jido_gralkor version or a major, minor, or patch semantic-version change to Hex while trunk-sync exclusively owns commits and branch synchronization and GitHub's API creates the release tag. Use when an operator asks to publish or release jido_gralkor from this repository.
+description: Publish jido_gralkor to Hex and create its GitHub release tag. Use this skill for every jido_gralkor Hex publication and release tag, including any request to publish, release, or tag jido_gralkor, before any `mix hex.publish`, and whenever Hex reports no authenticated user or asks for a one-time password. It loads `HEX_TOKEN` and `GH_TOKEN` from the repository .env, so it needs no interactive Hex login or one-time password. It publishes the current version or a major, minor, or patch change while trunk-sync owns commits and GitHub's API creates the tag.
 ---
 
 # Publish jido_gralkor
