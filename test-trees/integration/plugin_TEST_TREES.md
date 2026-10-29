@@ -27,7 +27,7 @@ if mount is given no agent name
 if mount is given a blank agent name
   then it raises ArgumentError
 
-if mount's capture Destination is missing, unregistered, or retired
+if mount's capture Destination is missing, unregistered, retired, or the packaged `generalisations` Destination
   then it raises an ArgumentError identifying the rejected capture Destination
 
 if mount's runtime configuration is invalid

@@ -8,6 +8,21 @@ defmodule Gralkor.Destination do
           name: String.t()
         }
 
+  @packaged_names ["personal", "global", "generalisations"]
+
+  @doc "Names of the package-owned Destinations installed in every runtime, in installation order."
+  @spec packaged_names() :: [String.t()]
+  def packaged_names, do: @packaged_names
+
+  @exclusive_names ["generalisations"]
+
+  @doc """
+  Names of packaged Destinations only their packaged Reflection writes to:
+  consumer Lenses, consumer Reflections, and capture cannot target them.
+  """
+  @spec exclusive_names() :: [String.t()]
+  def exclusive_names, do: @exclusive_names
+
   @spec graph_id(t(), String.t()) :: String.t()
   def graph_id(%__MODULE__{name: "personal"}, operator_id) do
     validate_operator_id!(operator_id)

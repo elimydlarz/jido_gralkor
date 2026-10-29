@@ -93,10 +93,6 @@ when a session holding no turns is flushed without awaiting
 when a scheduled flush's callback succeeds, on its first attempt or after retries
   then a flush-completed line naming the turn count and the elapsed milliseconds is logged at info
 
-if the flush callback reports a client contract error
-  then the flush is dropped without any retry
-  and a dropped-on-contract-error line is logged at warning
-
 if the flush callback reports an upstream-LLM error
   then the flush is dropped without any retry, retrying only amplifying load on a struggling upstream
   and a dropped-on-upstream-error line is logged at warning
@@ -108,15 +104,13 @@ if the flush callback raises or fails for any other reason
   when that schedule is exhausted
     then the turns are dropped
     and an exhausted line is logged at error
+    and the exhausted line names the last failure
 
 when a session holding turns is flushed and awaited
   while the flush callback succeeds within the caller's timeout
     then success is returned
     and the entry is consumed, so reading the session's turns back returns nothing
     and a flush-completed event naming the session and its outcome is logged at info
-  while the flush callback reports a client contract error
-    then that error is returned without any retry
-    and the entry is still consumed
   while the flush callback reports an upstream-LLM error
     then that error is returned without any retry
     and the entry is still consumed

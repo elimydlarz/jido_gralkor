@@ -196,6 +196,54 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
       ontology: Gralkor.DefaultOntology
     }
 
+  describe "when Graphiti Destination storage searches a Destination" do
+    test "then the pool is asked for the Destination's group with the limits, entity types as node labels, edge types, and selected Lenses" do
+      test_pid = self()
+
+      assert {:ok, %{facts: [], nodes: [], episodes: []}} =
+               Graphiti.search(
+                 %Destination{name: "personal"},
+                 "operator-one",
+                 "amber",
+                 [
+                   limits: %{facts: 20, nodes: 20, episodes: 5},
+                   entity_types: ["Project"],
+                   edge_types: ["OWNS"],
+                   lenses: ["alpha"]
+                 ],
+                 recording_search_memory(test_pid)
+               )
+
+      assert_receive {:search_memory, "personal/operator-one", "amber",
+                      %{facts: 20, nodes: 20, episodes: 5}, opts}
+
+      assert opts == [node_labels: ["Project"], edge_types: ["OWNS"], lenses: ["alpha"]]
+    end
+
+    test "and an absent selector is forwarded as nil" do
+      test_pid = self()
+
+      assert {:ok, _} =
+               Graphiti.search(
+                 %Destination{name: "observations"},
+                 "operator-one",
+                 "amber",
+                 [limits: Gralkor.Search.limits()],
+                 recording_search_memory(test_pid)
+               )
+
+      assert_receive {:search_memory, "observations", "amber", _limits, opts}
+      assert opts == [node_labels: nil, edge_types: nil, lenses: nil]
+    end
+  end
+
+  defp recording_search_memory(test_pid) do
+    fn group, query, limits, opts ->
+      send(test_pid, {:search_memory, group, query, limits, opts})
+      {:ok, %{facts: [], nodes: [], episodes: []}}
+    end
+  end
+
   defp artefact do
     %Artefact{
       id: "stable-id",

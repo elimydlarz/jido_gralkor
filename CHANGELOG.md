@@ -1,5 +1,43 @@
 # Changelog
 
+## [13.0.0] - 2026-10-29
+
+The packaged `generalisations` Reflection gets its own packaged Destination, and search can read only what chosen Lenses wrote again. This is a breaking release; migration guidance follows each entry.
+
+### Added
+- A packaged `generalisations` Destination, installed in every runtime beside `personal` and `global` (`JidoGralkor.Runtime.destinations/1` now lists `personal`, `global`, `generalisations`, then consumer Destinations). Its logical graph ID is exactly `generalisations`, shared by every operator. It is an ordinary accessible registered Destination, so a selector-free `Gralkor.Client.search/1,2` or `MemorySearch` call also searches it and still finds stored generalisations.
+- `%Gralkor.Search{}` accepts `lenses` again: a list of registered Lens names (ORed), default `[]` meaning every writer; a Lens named more than once is applied once. Every selected Destination is still searched (selecting a Lens neither adds nor narrows Destinations), and each Destination result holds only what the selected Lenses wrote there:
+  - episodes whose source description carries a selected Lens's ` [lens: NAME]` marker;
+  - facts drawn from such an episode, or written by a selected replaceable Lens's graph replacement; each fact's `sources` keep only selected-Lens episodes;
+  - nodes mentioned (`MENTIONS`) by such an episode, or owned by a selected Lens's graph replacement.
+  Direct writes, other Lenses, and Reflection artefacts never contribute. `entity_types` and `edge_types` restrict the Lens's results further.
+- On FalkorDB all three restrictions are applied inside the graph queries, before ranking and the per-Destination caps (20 facts, 20 nodes, 5 episodes), so other writers cannot crowd a Lens's results out. Facts use graphiti-core's `SearchFilters.edge_uuids`. graphiti-core 0.31.2 has no node or episode uuid filter and its episode full-text search ignores filters, so Gralkor wraps graphiti's node and edge filter constructors and episode full-text search: node searches gain `n.uuid IN …` and the FalkorDB episode full-text query gains `e.uuid IN …` before its limit. A Lens that has written nothing to a Destination yields an empty result there without a Graphiti search.
+- `GraphitiPool.search_memory/5` accepts `:lenses`; the `Gralkor.Destination.Storage` search options may carry `:lenses`. The in-memory backend filters episodes and facts by Lens (including facts a selected Lens's graph replacement wrote) and nodes by replacement owner.
+- An unknown, blank, or non-list Lens selection raises `ArgumentError` before any Destination is searched; runtime-targeted `search/2` resolves Lens names from the agent's runtime snapshot taken when the search begins.
+- `GraphitiPool` wraps graphiti-core's filter constructors and episode full-text search once, when the pool starts and before any search. It first checks that every wrapped or reused graphiti function exists with its pinned signature; otherwise startup raises naming the function and the pinned graphiti-core version from `priv/python/pyproject.toml`, and nothing is wrapped. The several-label rewrite raises if graphiti no longer renders `n:A|B`, instead of passing the query on unchanged.
+
+### Changed
+- **Breaking:** `generalisations` is a reserved Destination name. Runtime configuration that declares a Destination named `generalisations` is rejected with `{:reserved_definition_name, :destinations, "generalisations"}`, and an application Destination registry entry with that name raises `ArgumentError`. **Migrate:** rename any consumer Destination called `generalisations`, and point its Lenses and Reflection outputs at the new name.
+- **Breaking:** only the packaged generalisation Reflection writes to `generalisations`. A consumer Lens or Reflection Destination output that references it is rejected with `{:exclusive_destination, :lenses | :reflections, name, "generalisations"}` (an application Lens registry entry raises `ArgumentError`), and a plugin mount whose `capture_destination` is `generalisations` raises `ArgumentError`. **Migrate:** point those Lenses, Reflection outputs, and capture Destinations at `global` or an application Destination.
+- The packaged `generalisations` Reflection's Destination output now references `generalisations` instead of `global`.
+- The packaged `generalisations` Reflection's related-memory search reads only the `generalisations` Destination instead of every accessible registered Destination. Inference receives the current representations plus prior generalisations and no longer receives Lens-authored observations from other Destinations. Its `inspect-world` directions no longer mention related Lens-authored observations.
+- Existing generalisation artefacts stay in `global`. There is no backfill or migration: new generalisations start fresh in `generalisations`, and the first ones after upgrading do not see the artefacts already in `global` as prior generalisations. A selector-free search still finds the old ones in `global`.
+- Setting `lenses` no longer raises the 12.0.0 removal error. `result_type`, `artefact_id`, and `max_results` still raise with migration guidance. `JidoGralkor.Actions.MemorySearch` still offers no Lens selector.
+- The capture buffer's exhausted line names the last failure.
+
+### Removed
+- `GraphitiPool.search/5`'s `:lenses` option. **Migrate:** use `GraphitiPool.search_memory/5` or `Gralkor.Client.search/1,2` with `lenses`.
+- The post-filter fallback for non-FalkorDB drivers in Lens episode filtering: a Lens-filtered episode search on another backend now raises.
+- The capture buffer's `{:error, :capture_client_4xx}` contract-error handling, which nothing in Gralkor produced. A flush callback returning it is now retried with the configured backoff like any other failure. **Migrate:** a custom flush callback that needs a capture dropped without retry returns `{:error, {:upstream_llm, reason}}`.
+
+### Fixed
+- `GraphitiPool.search_memory/5`, `search/5`, `build_indices/1`, `build_communities/2`, the warmup search, and `Gralkor.PersonalGraphMigration` return a one-line Python error summary instead of the whole traceback (which could include embedding vectors).
+- `Gralkor.PersonalGraphMigration` returns `{:error, reason}` when the Python runtime cannot initialise, instead of raising a `MatchError`.
+- Lens scope queries ignore records with a null uuid, so a Lens whose only writes lack identifiers yields an empty result without a Graphiti search.
+
+### Known limits
+- Lens scope queries collect every episode, edge, and node uuid a selected Lens wrote before the search, so their cost grows with that Lens's volume in the Destination.
+
 ## [12.0.0] - 2026-10-28
 
 One simplified search. This is a breaking release; migration guidance follows each entry.

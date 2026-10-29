@@ -50,38 +50,169 @@ defmodule Gralkor.GraphitiPool do
               episode.__dict__.pop('_gralkor_writer', None)
   """
 
-  # graphiti-core 0.31.2 renders several node labels as the label expression
-  # `n:A|B`, which FalkorDB rejects. Rewrite that one clause as `(n:A OR n:B)`
-  # for the FalkorDB provider so a multi-label filter keeps graphiti's meaning.
-  @falkordb_label_disjunction """
-  def install_falkordb_label_disjunction():
+  @pyproject_path Path.join([__DIR__, "..", "..", "priv", "python", "pyproject.toml"])
+  @external_resource @pyproject_path
+  @graphiti_core_version (case Regex.run(
+                                 ~r/"graphiti-core(?:\[[^\]]*\])?==([^"]+)"/,
+                                 File.read!(@pyproject_path)
+                               ) do
+                            [_, version] -> version
+                          end)
+
+  # graphiti-core 0.31.2's SearchFilters restricts edges by uuid but has no
+  # node or episode uuid filter, its episode full-text search ignores the
+  # filter entirely, and it renders several node labels as the label
+  # expression `n:A|B`, which FalkorDB rejects. Pool start wraps graphiti's
+  # filter constructors and episode full-text search once, before any search:
+  #
+  # * several node labels become `(n:A OR n:B)` for FalkorDB;
+  # * a `LensSearchFilters` carrying `node_uuids` adds `n.uuid IN …` to every
+  #   node search;
+  # * one carrying `episode_uuids` runs the FalkorDB episode full-text query
+  #   with `e.uuid IN …` before its limit.
+  #
+  # Without those fields every query is graphiti's own. These are graphiti
+  # internals, so each wrapped or reused function is checked for its pinned
+  # signature first and nothing is wrapped unless every check passes.
+  @search_filters """
+  def install_search_filters(pinned_version):
+      import inspect
+      import graphiti_core.search.search as search_module
       import graphiti_core.search.search_utils as search_utils
       import graphiti_core.driver.falkordb.operations.search_ops as falkor_search_ops
       from graphiti_core.driver.driver import GraphProvider
-      if getattr(search_utils, '_gralkor_label_disjunction', False):
-          return
+      from graphiti_core.search.search_filters import SearchFilters
+      installed = getattr(search_utils, '_gralkor_search_filters', None)
+      if installed is not None:
+          return installed
 
-      def disjoin(constructor):
+      def unsupported(qualified, expected, found):
+          raise RuntimeError(
+              f'Gralkor search filters require {qualified}({", ".join(expected)}) '
+              f'from graphiti-core {pinned_version}; found {found}'
+          )
+
+      def required(module, name, expected):
+          qualified = f'{module.__name__}.{name}'
+          function = getattr(module, name, None)
+          if not callable(function):
+              unsupported(qualified, expected, 'no such function')
+          parameters = list(inspect.signature(function).parameters)
+          if parameters != expected:
+              unsupported(qualified, expected, f'{qualified}({", ".join(parameters)})')
+          return function
+
+      filter_parameters = ['filters', 'provider']
+      episode_parameters = ['driver', 'query', '_search_filter', 'group_ids', 'limit']
+      targets = [
+          (search_utils, 'node_search_filter_query_constructor', filter_parameters, 'node'),
+          (search_utils, 'edge_search_filter_query_constructor', filter_parameters, 'edge'),
+          (falkor_search_ops, 'node_search_filter_query_constructor', filter_parameters, 'node'),
+          (falkor_search_ops, 'edge_search_filter_query_constructor', filter_parameters, 'edge'),
+          (search_module, 'episode_fulltext_search', episode_parameters, 'episode'),
+      ]
+      originals = [
+          (module, name, required(module, name, expected), kind)
+          for module, name, expected, kind in targets
+      ]
+      fulltext_query = required(search_utils, 'fulltext_query', ['query', 'group_ids', 'driver'])
+      get_nodes_query = required(search_utils, 'get_nodes_query', ['name', 'query', 'limit', 'provider'])
+      get_episodic_node_from_record = required(search_utils, 'get_episodic_node_from_record', ['record'])
+      episode_return = getattr(search_utils, 'EPISODIC_NODE_RETURN', None)
+      if not isinstance(episode_return, str):
+          unsupported('graphiti_core.search.search_utils.EPISODIC_NODE_RETURN', [], 'no such query')
+
+      class LensSearchFilters(SearchFilters):
+          node_uuids: list[str] | None = None
+          episode_uuids: list[str] | None = None
+
+      def label_disjunction(queries, filters, provider):
+          labels = list(filters.node_labels or [])
+          if provider != GraphProvider.FALKORDB or len(labels) < 2:
+              return queries
+          joined = '|'.join(labels)
+          rewritten = []
+          for query in queries:
+              for variable in ('n', 'm'):
+                  query = query.replace(
+                      f'{variable}:{joined}',
+                      '(' + ' OR '.join(f'{variable}:{label}' for label in labels) + ')',
+                  )
+              rewritten.append(query)
+          if rewritten == list(queries):
+              raise RuntimeError(
+                  f'graphiti-core {pinned_version} no longer renders several node labels as '
+                  f'n:{joined}; Gralkor cannot rewrite them for FalkorDB'
+              )
+          return rewritten
+
+      def node_constructor(original):
           def constructed(filters, provider):
-              queries, params = constructor(filters, provider)
-              labels = list(filters.node_labels or [])
-              if provider == GraphProvider.FALKORDB and len(labels) > 1:
-                  joined = '|'.join(labels)
-                  def rewrite(query):
-                      for variable in ('n', 'm'):
-                          query = query.replace(
-                              f'{variable}:{joined}',
-                              '(' + ' OR '.join(f'{variable}:{label}' for label in labels) + ')',
-                          )
-                      return query
-                  queries = [rewrite(query) for query in queries]
+              queries, params = original(filters, provider)
+              queries = label_disjunction(list(queries), filters, provider)
+              node_uuids = getattr(filters, 'node_uuids', None)
+              if node_uuids is not None:
+                  queries = queries + ['n.uuid IN $gralkor_node_uuids']
+                  params = {**params, 'gralkor_node_uuids': list(node_uuids)}
               return queries, params
+          constructed._gralkor_original = original
           return constructed
 
-      for module in (search_utils, falkor_search_ops):
-          module.node_search_filter_query_constructor = disjoin(module.node_search_filter_query_constructor)
-          module.edge_search_filter_query_constructor = disjoin(module.edge_search_filter_query_constructor)
-      search_utils._gralkor_label_disjunction = True
+      def edge_constructor(original):
+          def constructed(filters, provider):
+              queries, params = original(filters, provider)
+              return label_disjunction(list(queries), filters, provider), params
+          constructed._gralkor_original = original
+          return constructed
+
+      def episode_search(original):
+          async def episode_fulltext_search(driver, query, _search_filter, group_ids=None, limit=search_utils.RELEVANT_SCHEMA_LIMIT):
+              episode_uuids = getattr(_search_filter, 'episode_uuids', None)
+              if episode_uuids is None:
+                  return await original(driver, query, _search_filter, group_ids, limit)
+              if driver.search_interface or driver.provider != GraphProvider.FALKORDB:
+                  raise RuntimeError(
+                      f'Gralkor Lens search filters support only FalkorDB, not {driver.provider}'
+                  )
+              fuzzy_query = fulltext_query(query, group_ids, driver)
+              if fuzzy_query == '':
+                  return []
+              params = {}
+              group_filter = ''
+              if group_ids is not None:
+                  group_filter = '\\nAND e.group_id IN $group_ids'
+                  params['group_ids'] = group_ids
+              cypher = (
+                  get_nodes_query('episode_content', '$query', limit=limit, provider=driver.provider)
+                  + '\\nYIELD node AS episode, score'
+                  + '\\nMATCH (e:Episodic)'
+                  + '\\nWHERE e.uuid = episode.uuid AND e.uuid IN $gralkor_episode_uuids'
+                  + group_filter
+                  + '\\nRETURN\\n'
+                  + episode_return
+                  + '\\nORDER BY score DESC\\nLIMIT $limit'
+              )
+              records, _, _ = await driver.execute_query(
+                  cypher,
+                  query=fuzzy_query,
+                  limit=limit,
+                  routing_='r',
+                  gralkor_episode_uuids=list(episode_uuids),
+                  **params,
+              )
+              return [get_episodic_node_from_record(record) for record in records]
+          episode_fulltext_search._gralkor_original = original
+          return episode_fulltext_search
+
+      wrap = {'node': node_constructor, 'edge': edge_constructor, 'episode': episode_search}
+      wrapped = [(module, name, wrap[kind](function)) for module, name, function, kind in originals]
+      for module, name, function in wrapped:
+          setattr(module, name, function)
+      search_utils._gralkor_search_filter_originals = [
+          (module, name, function) for module, name, function, _kind in originals
+      ]
+      search_utils._gralkor_search_filters = LensSearchFilters
+      return LensSearchFilters
   """
 
   @fact_rendering """
@@ -314,7 +445,6 @@ defmodule Gralkor.GraphitiPool do
              max_results > 0 and is_list(opts) do
     instance = __MODULE__.for(server, group_id)
     edge_types = Keyword.get(opts, :edge_types)
-    lenses = Keyword.get(opts, :lenses, [])
 
     {raw, _} =
       Pythonx.eval(
@@ -330,30 +460,11 @@ defmodule Gralkor.GraphitiPool do
           [t.decode('utf-8') if isinstance(t, (bytes, bytearray)) else t for t in edge_types]
           if edge_types else None
         )
-        lens_names = [name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name for name in lenses]
-        gid = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
-        lens_suffixes = tuple(f" [lens: {name}]" for name in lens_names)
         async def search_with_sources():
           filters = SearchFilters(edge_types=types)
-          if lens_names:
-            records, _, _ = await g.driver.execute_query(
-              '''
-              MATCH (episode:Episodic {group_id: $group_id})
-              WHERE any(suffix IN $lens_suffixes WHERE episode.source_description ENDS WITH suffix)
-              WITH collect(episode.uuid) AS episode_ids
-              MATCH ()-[edge:RELATES_TO]->()
-              WHERE edge.group_id = $group_id AND any(id IN edge.episodes WHERE id IN episode_ids)
-              RETURN edge.uuid AS uuid
-              ''',
-              group_id=gid,
-              lens_suffixes=list(lens_suffixes),
-            )
-            filters.edge_uuids = [record['uuid'] for record in records]
-            if not filters.edge_uuids:
-              return []
           edges = await g.search(q, num_results=max_results, search_filter=filters)
 
-          return await render_facts(g, edges, lens_names, lens_suffixes)
+          return await render_facts(g, edges)
 
         asyncio._gralkor_run(search_with_sources())
         """,
@@ -361,15 +472,13 @@ defmodule Gralkor.GraphitiPool do
           "g" => instance,
           "query" => query,
           "max_results" => max_results,
-          "edge_types" => edge_types,
-          "lenses" => lenses,
-          "group_id" => Client.sanitize_group_id(group_id)
+          "edge_types" => edge_types
         }
       )
 
     {:ok, raw |> Pythonx.decode() |> Enum.map(&atomize_keys/1)}
   rescue
-    e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
+    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
   end
 
   @doc """
@@ -403,6 +512,17 @@ defmodule Gralkor.GraphitiPool do
 
     * `:node_labels` — optional `[String.t()]` entity-type labels.
     * `:edge_types` — optional `[String.t()]` relationship names.
+    * `:lenses` — optional `[String.t()]` Lens names. Episodes are restricted
+      to those whose source description ends with a selected ` [lens: NAME]`
+      marker (never a durable direct write); edges to those drawn from such an
+      episode or carrying a selected `_gralkor_lens`; nodes to those such an
+      episode `MENTIONS` or carrying a selected `_gralkor_lens`. Edges use
+      `SearchFilters.edge_uuids`; nodes and episodes use the `node_uuids` and
+      `episode_uuids` that `install_lens_search_filters` adds to graphiti's
+      node and FalkorDB episode full-text queries, so every restriction applies
+      before ranking and limits. Fact sources keep only selected-Lens episodes.
+      When nothing in the group matches, no graph search runs and every kind
+      is empty.
   """
   @spec search_memory(
           GenServer.server(),
@@ -437,10 +557,13 @@ defmodule Gralkor.GraphitiPool do
         from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_RRF
         from graphiti_core.search.search_filters import SearchFilters
 
+        import graphiti_core.search.search_utils as search_utils
+
         #{@episode_writer_hydration}
         #{@fact_rendering}
-        #{@falkordb_label_disjunction}
-        install_falkordb_label_disjunction()
+        LensSearchFilters = search_utils._gralkor_search_filters
+        if LensSearchFilters is None:
+          raise RuntimeError('Gralkor search filters are not installed; start Gralkor.GraphitiPool first')
 
         def text(value):
           return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
@@ -448,6 +571,8 @@ defmodule Gralkor.GraphitiPool do
         q = text(query)
         labels = [text(label) for label in node_labels] if node_labels else None
         types = [text(edge_type) for edge_type in edge_types] if edge_types else None
+        lens_names = [text(name) for name in lenses] if lenses else []
+        lens_suffixes = tuple(f' [lens: {name}]' for name in lens_names)
         supported_query_terms = [
           word
           for word in sanitize_falkor_fulltext_query(q).split()
@@ -509,13 +634,68 @@ defmodule Gralkor.GraphitiPool do
             result['source_kind'] = {'message': 'conversation', 'text': 'document', 'json': 'structured_record'}.get(source.value)
           return result
 
-        async def search_memory():
-          results = await g.search_(
-            q,
-            config=config,
-            search_filter=SearchFilters(node_labels=labels, edge_types=types),
+        async def lens_scope():
+          def uuids(records):
+            return list(dict.fromkeys(
+              record['uuid'] for record in records if record['uuid'] is not None
+            ))
+
+          episode_records, _, _ = await g.driver.execute_query(
+            '''
+            MATCH (episode:Episodic)
+            WHERE any(suffix IN $lens_suffixes WHERE episode.source_description ENDS WITH suffix)
+              AND episode.uuid IS NOT NULL
+            RETURN episode.uuid AS uuid
+            ''',
+            lens_suffixes=list(lens_suffixes),
           )
-          facts = await render_facts(g, list(results.edges)[:fact_limit])
+          episode_uuids = uuids(episode_records)
+          edge_records, _, _ = await g.driver.execute_query(
+            '''
+            MATCH (:Entity)-[edge:RELATES_TO]->(:Entity)
+            WHERE (edge._gralkor_lens IN $lens_names
+              OR any(id IN coalesce(edge.episodes, []) WHERE id IN $episode_uuids))
+              AND edge.uuid IS NOT NULL
+            RETURN edge.uuid AS uuid
+            ''',
+            lens_names=lens_names,
+            episode_uuids=episode_uuids,
+          )
+          mentioned_records, _, _ = await g.driver.execute_query(
+            '''
+            MATCH (episode:Episodic)-[:MENTIONS]->(node:Entity)
+            WHERE episode.uuid IN $episode_uuids AND node.uuid IS NOT NULL
+            RETURN node.uuid AS uuid
+            ''',
+            episode_uuids=episode_uuids,
+          )
+          owned_records, _, _ = await g.driver.execute_query(
+            'MATCH (node:Entity) WHERE node._gralkor_lens IN $lens_names AND node.uuid IS NOT NULL '
+            'RETURN node.uuid AS uuid',
+            lens_names=lens_names,
+          )
+          return (
+            episode_uuids,
+            uuids(edge_records),
+            uuids(mentioned_records + owned_records),
+          )
+
+        async def search_memory():
+          if lens_names:
+            episode_uuids, edge_uuids, node_uuids = await lens_scope()
+            if not (episode_uuids or edge_uuids or node_uuids):
+              return {"facts": [], "nodes": [], "episodes": []}
+            search_filter = LensSearchFilters(
+              node_labels=labels,
+              edge_types=types,
+              edge_uuids=edge_uuids,
+              node_uuids=node_uuids,
+              episode_uuids=episode_uuids,
+            )
+          else:
+            search_filter = SearchFilters(node_labels=labels, edge_types=types)
+          results = await g.search_(q, config=config, search_filter=search_filter)
+          facts = await render_facts(g, list(results.edges)[:fact_limit], lens_names, lens_suffixes)
           nodes = [
             {
               "name": n.name,
@@ -543,7 +723,8 @@ defmodule Gralkor.GraphitiPool do
           "node_limit" => limits.nodes,
           "episode_limit" => limits.episodes,
           "node_labels" => Keyword.get(opts, :node_labels),
-          "edge_types" => Keyword.get(opts, :edge_types)
+          "edge_types" => Keyword.get(opts, :edge_types),
+          "lenses" => Keyword.get(opts, :lenses)
         }
       )
 
@@ -556,7 +737,7 @@ defmodule Gralkor.GraphitiPool do
        episodes: Enum.map(episodes, &episode_map/1)
      }}
   rescue
-    e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
+    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
   end
 
   defp episode_map(%{} = m) do
@@ -1379,7 +1560,7 @@ defmodule Gralkor.GraphitiPool do
 
     {:ok, %{status: "built"}}
   rescue
-    e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
+    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
   end
 
   @doc "Build communities for `group_id`."
@@ -1401,7 +1582,22 @@ defmodule Gralkor.GraphitiPool do
     decoded = Pythonx.decode(raw)
     {:ok, %{communities: decoded["communities"], edges: decoded["edges"]}}
   rescue
-    e in Pythonx.Error -> {:error, {:python, Exception.message(e)}}
+    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
+  end
+
+  defp install_search_filters! do
+    Pythonx.eval(
+      """
+      #{@search_filters}
+      install_search_filters(pinned_version.decode('utf-8'))
+      None
+      """,
+      %{"pinned_version" => @graphiti_core_version}
+    )
+
+    :ok
+  rescue
+    e in Pythonx.Error -> raise RuntimeError, summarise_python_error(e)
   end
 
   @doc """
@@ -1797,6 +1993,7 @@ defmodule Gralkor.GraphitiPool do
     falkordb_spec = Keyword.fetch!(opts, :falkordb_spec)
     inference = inference_settings(opts)
     validate_native_models!(inference)
+    install_search_filters!()
 
     socket_timeout = embedded_falkordb_socket_timeout(falkordb_spec, opts)
     construct_falkor_db = Keyword.get(opts, :construct_falkor_db, &default_construct_falkor_db/2)
@@ -2613,7 +2810,7 @@ defmodule Gralkor.GraphitiPool do
 
     :ok
   rescue
-    e in Pythonx.Error -> {:error, Exception.message(e)}
+    e in Pythonx.Error -> {:error, summarise_python_error(e)}
   end
 
   defp time(fun) do

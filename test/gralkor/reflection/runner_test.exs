@@ -329,7 +329,7 @@ defmodule Gralkor.Reflection.RunnerTest do
   end
 
   describe "when the packaged generalisation Reflection runs" do
-    test "then one runtime-targeted related-memory search completes before inference" do
+    test "then one runtime-targeted related-memory search of the packaged `generalisations` Destination completes before inference" do
       prove_runtime_targeted_related_memory_search()
     end
 
@@ -604,7 +604,7 @@ defmodule Gralkor.Reflection.RunnerTest do
              )
 
     assert_receive {:runner_event, :related_memory_search, ^owner,
-                    %Search{destinations: [], entity_types: [], edge_types: []}}
+                    %Search{destinations: ["generalisations"], entity_types: [], edge_types: []}}
 
     assert_receive {:runner_event, :inference, "collect"}
     assert_receive {:runner_event, :inference, "decide"}

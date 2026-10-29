@@ -107,7 +107,11 @@ defmodule Gralkor.Reflection.Runner do
       |> Enum.map(&render_value/1)
       |> Enum.join("\n")
 
-    request = %Search{operator_id: field(ingestion, :operator_id), query: query}
+    request = %Search{
+      operator_id: field(ingestion, :operator_id),
+      query: query,
+      destinations: ["generalisations"]
+    }
 
     search = Keyword.get(opts, :related_memory_search, &Client.search/2)
     search.(Keyword.fetch!(opts, :runtime_owner), request)

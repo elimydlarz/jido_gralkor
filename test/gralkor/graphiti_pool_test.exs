@@ -13,11 +13,15 @@ defmodule Gralkor.GraphitiPoolTest do
   defp physical(logical_group_id), do: Client.sanitize_group_id(logical_group_id)
 
   def start_pool(opts) do
-    table = :"pool_table_#{System.unique_integer([:positive])}"
+    opts = pool_opts(opts)
+    {:ok, pid} = GraphitiPool.start_link(opts)
+    %{pid: pid, table: Keyword.fetch!(opts, :table)}
+  end
 
+  defp pool_opts(opts) do
     defaults = [
       name: nil,
-      table: table,
+      table: :"pool_table_#{System.unique_integer([:positive])}",
       falkordb_spec: {:embedded, "/tmp/never_used"},
       construct_falkor_db: fn _spec -> :stub_falkor_db end,
       construct_shared_clients: fn _spec ->
@@ -29,8 +33,180 @@ defmodule Gralkor.GraphitiPoolTest do
       install_loop_fn: fn -> :ok end
     ]
 
-    {:ok, pid} = GraphitiPool.start_link(Keyword.merge(defaults, opts))
-    %{pid: pid, table: table}
+    Keyword.merge(defaults, opts)
+  end
+
+  @search_filter_targets """
+  import graphiti_core.search.search as search_module
+  import graphiti_core.search.search_utils as search_utils
+  import graphiti_core.driver.falkordb.operations.search_ops as falkor_search_ops
+  targets = [
+      (search_utils, 'node_search_filter_query_constructor'),
+      (search_utils, 'edge_search_filter_query_constructor'),
+      (falkor_search_ops, 'node_search_filter_query_constructor'),
+      (falkor_search_ops, 'edge_search_filter_query_constructor'),
+      (search_module, 'episode_fulltext_search'),
+  ]
+  """
+
+  defp wrapped_search_functions do
+    {functions, _} =
+      Pythonx.eval(
+        @search_filter_targets <>
+          """
+          [
+              [
+                  module.__name__ + '.' + name,
+                  id(getattr(module, name, None)),
+                  hasattr(getattr(module, name, None), '_gralkor_original'),
+              ]
+              for module, name in targets
+          ]
+          """,
+        %{}
+      )
+
+    Pythonx.decode(functions)
+  end
+
+  # Puts graphiti's own functions back, as before any pool started, and
+  # restores whatever was installed when the test exits.
+  defp unwrap_search_filters do
+    {saved, _} =
+      Pythonx.eval(
+        @search_filter_targets <>
+          """
+          saved = (
+              [(module, name, getattr(module, name, None)) for module, name in targets],
+              getattr(search_utils, '_gralkor_search_filters', None),
+              getattr(search_utils, '_gralkor_search_filter_originals', None),
+          )
+          for module, name, function in (saved[2] or []):
+              setattr(module, name, function)
+          search_utils._gralkor_search_filters = None
+          saved
+          """,
+        %{}
+      )
+
+    on_exit(fn ->
+      Pythonx.eval(
+        @search_filter_targets <>
+          """
+          functions, installed, originals = saved
+          for module, name, function in functions:
+              setattr(module, name, function)
+          search_utils._gralkor_search_filters = installed
+          search_utils._gralkor_search_filter_originals = originals
+          None
+          """,
+        %{"saved" => saved}
+      )
+    end)
+
+    saved
+  end
+
+  defp pinned_graphiti_core_version do
+    [_, version] =
+      Regex.run(
+        ~r/"graphiti-core(?:\[[^\]]*\])?==([^"]+)"/,
+        File.read!("priv/python/pyproject.toml")
+      )
+
+    version
+  end
+
+  # Runs graphiti's filter constructors, as wrapped by a started pool, for the
+  # supplied filter keyword arguments; also runs graphiti's own unwrapped
+  # constructors from `search_filters` for comparison.
+  defp filter_queries(filter_kwargs, filter_class \\ "SearchFilters") do
+    %{pid: pid} = start_pool([])
+
+    {queries, _} =
+      Pythonx.eval(
+        @search_filter_targets <>
+          """
+          import graphiti_core.search.search_filters as search_filters
+          from graphiti_core.driver.driver import GraphProvider
+          def text(value):
+              return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
+          kwargs = {
+              text(key): [text(item) for item in value]
+              for key, value in filter_kwargs.items()
+          }
+          cls = (
+              search_utils._gralkor_search_filters
+              if text(filter_class) == 'LensSearchFilters'
+              else search_filters.SearchFilters
+          )
+          filters = cls(**kwargs)
+          def run(constructor):
+              queries, params = constructor(filters, GraphProvider.FALKORDB)
+              return {'queries': list(queries), 'params': {key: value for key, value in params.items()}}
+          {
+              'node': run(search_utils.node_search_filter_query_constructor),
+              'edge': run(search_utils.edge_search_filter_query_constructor),
+              'falkor_node': run(falkor_search_ops.node_search_filter_query_constructor),
+              'falkor_edge': run(falkor_search_ops.edge_search_filter_query_constructor),
+              'own_node': run(search_filters.node_search_filter_query_constructor),
+              'own_edge': run(search_filters.edge_search_filter_query_constructor),
+          }
+          """,
+        %{"filter_kwargs" => filter_kwargs, "filter_class" => filter_class}
+      )
+
+    GenServer.stop(pid)
+    Pythonx.decode(queries)
+  end
+
+  # Drives the episode full-text search a started pool installed, and
+  # graphiti's own, against a driver that records the Cypher it is sent.
+  defp episode_fulltext_queries(episode_uuids) do
+    %{pid: pid} = start_pool(install_loop_fn: &Gralkor.Python.install_async_runtime/0)
+
+    {recorded, _} =
+      Pythonx.eval(
+        @search_filter_targets <>
+          """
+          import asyncio
+          from graphiti_core.driver.driver import GraphProvider
+          from graphiti_core.search.search_filters import SearchFilters
+
+          class _RecordingDriver:
+              provider = GraphProvider.FALKORDB
+              search_interface = None
+
+              def __init__(self):
+                  self.recorded = []
+
+              def build_fulltext_query(self, query, group_ids=None, max_query_length=128):
+                  return query
+
+              async def execute_query(self, cypher, **params):
+                  self.recorded.append({'cypher': cypher, **params})
+                  return ([], None, None)
+
+          uuids = None if episode_uuids is None else [
+              uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
+              for uuid in episode_uuids
+          ]
+          filters = (
+              SearchFilters()
+              if uuids is None
+              else search_utils._gralkor_search_filters(episode_uuids=uuids)
+          )
+          wrapped = _RecordingDriver()
+          own = _RecordingDriver()
+          asyncio._gralkor_run(search_module.episode_fulltext_search(wrapped, 'amber notes', filters, None, 5))
+          asyncio._gralkor_run(search_utils.episode_fulltext_search(own, 'amber notes', SearchFilters(), None, 5))
+          {'wrapped': wrapped.recorded, 'own': own.recorded}
+          """,
+        %{"episode_uuids" => episode_uuids}
+      )
+
+    GenServer.stop(pid)
+    Pythonx.decode(recorded)
   end
 
   defp start_raising_graph_pool(add_message \\ "graph library exploded") do
@@ -2440,6 +2616,25 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when a memory search is run for a group > while node labels are supplied > while several node labels are supplied" do
+    test "then the graph library's node filter admits a node carrying any one of them" do
+      queries = filter_queries(%{"node_labels" => ["Function", "Commit"]})
+
+      assert queries["node"]["queries"] == ["(n:Function OR n:Commit)"]
+      assert queries["falkor_node"]["queries"] == ["(n:Function OR n:Commit)"]
+      assert queries["own_node"]["queries"] == ["n:Function|Commit"]
+    end
+
+    test "and its edge filter admits an edge whose source and target each carry any one of them" do
+      queries = filter_queries(%{"node_labels" => ["Function", "Commit"]})
+      expected = "(n:Function OR n:Commit) AND (m:Function OR m:Commit)"
+
+      assert expected in queries["edge"]["queries"]
+      assert expected in queries["falkor_edge"]["queries"]
+      assert "n:Function|Commit AND m:Function|Commit" in queries["own_edge"]["queries"]
+    end
+  end
+
   describe "when a memory search is run for a group > while edge types are supplied" do
     test "then the single search's filter carries those relationship types" do
       {_results, recorded} = memory_search_result(opts: [edge_types: ["CHANGES"]])
@@ -2447,12 +2642,118 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a memory search is run for a group > while neither node labels nor edge types are supplied" do
+  describe "when a memory search is run for a group > while neither node labels, edge types, nor Lenses are supplied" do
     test "then the single search's filter leaves every node and edge eligible" do
       {_results, recorded} = memory_search_result()
       assert recorded["node_labels"] == nil
       assert recorded["edge_types"] == nil
+      assert recorded["edge_uuids"] == nil
+      assert recorded["node_uuids"] == nil
+      assert recorded["episode_uuids"] == nil
+      assert recorded["lens_queries"] == []
     end
+
+    test "and the graph library's own node and episode queries are issued unchanged" do
+      for filters <- [%{}, %{"node_labels" => ["Function"]}, %{"edge_types" => ["CHANGES"]}] do
+        queries = filter_queries(filters)
+
+        assert queries["node"] == queries["own_node"]
+        assert queries["falkor_node"] == queries["own_node"]
+        assert queries["edge"] == queries["own_edge"]
+        assert queries["falkor_edge"] == queries["own_edge"]
+      end
+
+      %{"wrapped" => wrapped, "own" => own} = episode_fulltext_queries(nil)
+      assert [_query] = own
+      assert wrapped == own
+    end
+  end
+
+  describe "when a memory search is run for a group > while Lenses are supplied" do
+    test "then the single search's filter admits only edges drawn from an episode whose source description names a supplied Lens or owned by a supplied Lens's graph replacement" do
+      {_results, recorded} =
+        memory_search_result(lens_scope: lens_scope(), opts: [lenses: ["alpha"]])
+
+      assert recorded["edge_uuids"] == ["alpha-edge", "replaced-edge"]
+
+      assert %{"lens_names" => ["alpha"], "episode_uuids" => ["lens-episode"]} =
+               lens_query(recorded, "RELATES_TO")
+
+      assert %{"lens_suffixes" => [" [lens: alpha]"]} = lens_query(recorded, "ENDS WITH")
+    end
+
+    test "and the single search's filter admits only nodes mentioned by such an episode or owned by such a replacement" do
+      {_results, recorded} =
+        memory_search_result(lens_scope: lens_scope(), opts: [lenses: ["alpha"]])
+
+      assert recorded["node_uuids"] == ["mentioned-node", "replaced-node"]
+      assert %{"episode_uuids" => ["lens-episode"]} = lens_query(recorded, "MENTIONS")
+      assert %{"lens_names" => ["alpha"]} = lens_query(recorded, "node._gralkor_lens")
+    end
+
+    test "and the single search's filter admits only episodes whose source description names a supplied Lens" do
+      {_results, recorded} =
+        memory_search_result(lens_scope: lens_scope(), opts: [lenses: ["alpha"]])
+
+      assert recorded["episode_uuids"] == ["lens-episode"]
+      assert %{"lens_suffixes" => [" [lens: alpha]"]} = lens_query(recorded, "ENDS WITH")
+    end
+
+    test "and the episode restriction is applied inside the full-text query, before its limit" do
+      %{"wrapped" => [query]} = episode_fulltext_queries(["lens-episode"])
+
+      restriction = :binary.match(query["cypher"], "e.uuid IN $gralkor_episode_uuids")
+      limit = :binary.match(query["cypher"], "LIMIT $limit")
+
+      assert {restriction_at, _} = restriction
+      assert {limit_at, _} = limit
+      assert restriction_at < limit_at
+      assert query["cypher"] =~ "db.idx.fulltext.queryNodes"
+      assert query["query"] == "amber notes"
+      assert query["gralkor_episode_uuids"] == ["lens-episode"]
+      assert query["limit"] == 5
+    end
+
+    test "and each rendered fact's sources include only episodes whose source description names a supplied Lens" do
+      {%{facts: [fact | _]}, _recorded} =
+        memory_search_result(lens_scope: lens_scope(), opts: [lenses: ["alpha"]])
+
+      assert [%{id: "lens-episode", source_description: "notes [lens: alpha]"}] = fact.sources
+    end
+  end
+
+  describe "when a memory search is run for a group > while Lenses are supplied > while nothing in the group was written by a supplied Lens" do
+    test "then the graph library is not searched" do
+      {_results, recorded} =
+        memory_search_result(lens_scope: %{}, opts: [lenses: ["silent"]])
+
+      assert recorded["calls"] == 0
+
+      {_results, recorded} =
+        memory_search_result(lens_scope: %{"owned" => [nil]}, opts: [lenses: ["silent"]])
+
+      assert recorded["calls"] == 0
+    end
+
+    test "and no facts, nodes, or episodes are returned" do
+      {results, _recorded} =
+        memory_search_result(lens_scope: %{}, opts: [lenses: ["silent"]])
+
+      assert results == %{facts: [], nodes: [], episodes: []}
+    end
+  end
+
+  defp lens_scope do
+    %{
+      "episodes" => ["lens-episode"],
+      "edges" => ["alpha-edge", "replaced-edge"],
+      "mentioned" => ["mentioned-node"],
+      "owned" => ["replaced-node"]
+    }
+  end
+
+  defp lens_query(recorded, marker) do
+    Enum.find(recorded["lens_queries"], &String.contains?(&1["query"], marker))
   end
 
   describe "when a memory search is run for a group > when the query exceeds the graph library's full-text limit" do
@@ -2516,6 +2817,15 @@ defmodule Gralkor.GraphitiPoolTest do
         from datetime import datetime, timezone
         from graphiti_core.nodes import EpisodeType
 
+        def _text(value):
+            return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
+
+        scope = (
+            None
+            if lens_scope is None
+            else {_text(key): [_text(uuid) for uuid in uuids] for key, uuids in lens_scope.items()}
+        )
+
         class _Episode:
             def __init__(self, uuid, source, source_description, content=""):
                 self.uuid = uuid
@@ -2528,9 +2838,13 @@ defmodule Gralkor.GraphitiPoolTest do
                 return [driver.episodes[uuid] for uuid in uuids]
 
         class _EntityDriver:
-            def __init__(self):
+            def __init__(self, recorded):
                 self.graph_operations_interface = _GraphOperations()
-                self.episodes = {"episode-1": _Episode("episode-1", EpisodeType.text, "git log")}
+                self.recorded = recorded
+                self.episodes = {
+                    "episode-1": _Episode("episode-1", EpisodeType.text, "git log"),
+                    "lens-episode": _Episode("lens-episode", EpisodeType.text, "notes [lens: alpha]"),
+                }
                 self.entities = {
                     "commit-1": "Commit 1",
                     "commit-2": "Commit 2",
@@ -2539,7 +2853,19 @@ defmodule Gralkor.GraphitiPoolTest do
                 }
                 self._gralkor_completed_episode_uuids = {"complete"}
 
+            def lens_records(self, key, query, params):
+                self.recorded["lens_queries"].append({"query": query, **params})
+                return ([{"uuid": uuid} for uuid in scope.get(key, [])], None, None)
+
             async def execute_query(self, query, **params):
+                if "RELATES_TO" in query:
+                    return self.lens_records("edges", query, params)
+                if "MENTIONS" in query:
+                    return self.lens_records("mentioned", query, params)
+                if "ENDS WITH" in query:
+                    return self.lens_records("episodes", query, params)
+                if "node._gralkor_lens" in query:
+                    return self.lens_records("owned", query, params)
                 if "_gralkor_extraction_complete" in query:
                     return ([{"uuid": uuid} for uuid in params["uuids"] if uuid in self._gralkor_completed_episode_uuids], None, None)
                 return ([{"uuid": uuid, "name": self.entities[uuid]} for uuid in params["uuids"] if uuid in self.entities], None, None)
@@ -2554,7 +2880,7 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.valid_at = datetime(2024, 1, 2, tzinfo=timezone.utc)
                 self.invalid_at = None
                 self.expired_at = None
-                self.episodes = ["episode-1"]
+                self.episodes = ["episode-1", "lens-episode"] if scope is not None else ["episode-1"]
 
         class _Node:
             def __init__(self, name, summary, attributes):
@@ -2570,8 +2896,8 @@ defmodule Gralkor.GraphitiPoolTest do
 
         class _FakeGraphiti:
             def __init__(self):
-                self.driver = _EntityDriver()
-                self.recorded = {"calls": 0}
+                self.recorded = {"calls": 0, "lens_queries": []}
+                self.driver = _EntityDriver(self.recorded)
 
             async def search_(self, query, config=None, group_ids=None, search_filter=None):
                 self.recorded["calls"] += 1
@@ -2589,6 +2915,9 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.recorded["episode_methods"] = [m.value for m in config.episode_config.search_methods]
                 self.recorded["node_labels"] = search_filter.node_labels
                 self.recorded["edge_types"] = search_filter.edge_types
+                self.recorded["edge_uuids"] = search_filter.edge_uuids
+                self.recorded["node_uuids"] = getattr(search_filter, "node_uuids", None)
+                self.recorded["episode_uuids"] = getattr(search_filter, "episode_uuids", None)
                 edges = [
                     _Edge("commit-1 changes parse", "CHANGES", "commit-1", "parse-fn"),
                     _Edge("commit-2 changes render", "CHANGES", "commit-2", "render-fn"),
@@ -2614,7 +2943,8 @@ defmodule Gralkor.GraphitiPoolTest do
         %{
           "with_edges" => Keyword.get(options, :edges, true),
           "with_nodes" => Keyword.get(options, :nodes, true),
-          "with_reflections" => Keyword.get(options, :reflections, false)
+          "with_reflections" => Keyword.get(options, :reflections, false),
+          "lens_scope" => Keyword.get(options, :lens_scope)
         }
       )
 
@@ -2938,6 +3268,61 @@ defmodule Gralkor.GraphitiPoolTest do
       shareds = instance_shareds |> :ets.tab2list() |> Enum.map(fn {_, s} -> s end)
       assert length(shareds) == 3
       assert Enum.uniq(shareds) == [shared]
+    end
+
+    test "and the graph library's node and edge filter constructors and episode full-text search are wrapped once, before any search" do
+      unwrap_search_filters()
+      refute Enum.any?(wrapped_search_functions(), fn [_name, _id, wrapped?] -> wrapped? end)
+
+      %{pid: first} = start_pool([])
+      wrapped = wrapped_search_functions()
+
+      assert Enum.map(wrapped, &hd/1) == [
+               "graphiti_core.search.search_utils.node_search_filter_query_constructor",
+               "graphiti_core.search.search_utils.edge_search_filter_query_constructor",
+               "graphiti_core.driver.falkordb.operations.search_ops.node_search_filter_query_constructor",
+               "graphiti_core.driver.falkordb.operations.search_ops.edge_search_filter_query_constructor",
+               "graphiti_core.search.search.episode_fulltext_search"
+             ]
+
+      assert Enum.all?(wrapped, fn [_name, _id, wrapped?] -> wrapped? end)
+
+      %{pid: second} = start_pool([])
+      assert wrapped_search_functions() == wrapped
+
+      GenServer.stop(first)
+      GenServer.stop(second)
+    end
+  end
+
+  describe "if a graph library function the pool wraps is missing or has another signature" do
+    setup do
+      previous_trap_exit = Process.flag(:trap_exit, true)
+      on_exit(fn -> Process.flag(:trap_exit, previous_trap_exit) end)
+      :ok
+    end
+
+    test "then startup raises naming that function and the pinned graph library version" do
+      version = pinned_graphiti_core_version()
+      %{pid: pid} = start_pool([])
+      GenServer.stop(pid)
+
+      for {mutation, function} <- [
+            {"del falkor_search_ops.node_search_filter_query_constructor",
+             "graphiti_core.driver.falkordb.operations.search_ops.node_search_filter_query_constructor"},
+            {"async def changed(driver, query):\n    return []\nsearch_module.episode_fulltext_search = changed",
+             "graphiti_core.search.search.episode_fulltext_search"}
+          ] do
+        unwrap_search_filters()
+        Pythonx.eval(@search_filter_targets <> mutation <> "\nNone", %{})
+
+        assert {:error, {%RuntimeError{message: message}, _stacktrace}} =
+                 GraphitiPool.start_link(pool_opts([]))
+
+        assert message =~ function
+        assert message =~ "graphiti-core #{version}"
+        refute Enum.any?(wrapped_search_functions(), fn [_name, _id, wrapped?] -> wrapped? end)
+      end
     end
   end
 

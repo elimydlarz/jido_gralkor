@@ -121,6 +121,33 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
     end
   end
 
+  describe "when the packaged generalisation Reflection stores an artefact" do
+    test "then every operator resolves the one graph named `generalisations`" do
+      output = store_generalisations()
+
+      for operator <- ["operator-one", "operator-two"] do
+        assert Gralkor.Destination.graph_id(output.destination, operator) == "generalisations"
+      end
+
+      assert {:ok, [%{destination: "generalisations", episodes: episodes}]} =
+               search("operator-three", ["generalisations"])
+
+      assert episodes |> Enum.map(& &1.artefact.id) |> Enum.sort() == [
+               "generalisation-operator-one",
+               "generalisation-operator-two"
+             ]
+    end
+
+    test "and the artefact is unavailable from the `global` Destination" do
+      store_generalisations()
+
+      for operator <- ["operator-one", "operator-two"] do
+        assert {:ok, [%{destination: "global", facts: [], nodes: [], episodes: []}]} =
+                 search(operator, ["global"])
+      end
+    end
+  end
+
   describe "when a Lens saves an episode to an application Destination" do
     test "then its one graph is named for that Destination" do
       assert :ok = ingest("operator-one", "observations", "shared observation")
@@ -250,6 +277,29 @@ defmodule Gralkor.DestinationGraphsFunctionalTest do
       query: "memory",
       destinations: destinations
     })
+  end
+
+  defp store_generalisations do
+    start_supervised!(Gralkor.Destination.Storage.InMemory)
+
+    start_supervised!(
+      {JidoGralkor.Runtime,
+       owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}}
+    )
+
+    [output] = JidoGralkor.Runtime.reflection!(self(), "generalisations").outputs
+
+    for operator <- ["operator-one", "operator-two"] do
+      assert :ok =
+               Gralkor.Destination.Storage.put_artefact(
+                 output,
+                 "generalisations",
+                 operator,
+                 Gralkor.Artefact.new("generalisation-#{operator}", %{"generalisations" => []})
+               )
+    end
+
+    output
   end
 
   defp destination(name), do: [name: name]

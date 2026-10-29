@@ -70,7 +70,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         name: "second-beta",
         destination: "second",
         ingestion: Gralkor.Lens.Ingestion.Store
-      ]
+      ],
+      [name: "first-graph", destination: "first", write: :replace_graph]
     ])
 
     Application.put_env(:jido_gralkor, :destination_storage, SearchStorage)
@@ -178,14 +179,85 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert {:ok, results} =
                Client.search(%Search{operator_id: "operator-one", query: "question"})
 
-      assert Enum.map(results, & &1.destination) == ["personal", "global", "first", "second"]
+      assert Enum.map(results, & &1.destination) == [
+               "personal",
+               "global",
+               "generalisations",
+               "first",
+               "second"
+             ]
 
-      for destination <- ["personal", "global", "first", "second"] do
+      for destination <- ["personal", "global", "generalisations", "first", "second"] do
         assert_receive {:destination_search, ^destination, "operator-one", "question", _opts}
       end
     end
 
-    test "and results written directly or by every Lens or Destination artefact output can contribute" do
+    test "and results follow the order `personal`, `global`, `generalisations`, then application Destinations" do
+      Application.put_env(:jido_gralkor, :destinations, [
+        [name: "first"],
+        [name: "second"],
+        [name: "alpha"]
+      ])
+
+      for destinations <- [[], nil] do
+        request =
+          if destinations,
+            do: %Search{
+              operator_id: "operator-one",
+              query: "question",
+              destinations: destinations
+            },
+            else: %Search{operator_id: "operator-one", query: "question"}
+
+        assert {:ok, results} = Client.search(request)
+
+        assert Enum.map(results, & &1.destination) ==
+                 ["personal", "global", "generalisations", "first", "second", "alpha"]
+      end
+    end
+
+    test "and a Lens selector does not narrow the search to that Lens's Destination" do
+      every_destination =
+        Enum.map(Gralkor.Destination.Registry.configured!(), & &1.name)
+
+      assert "second" in every_destination
+      assert {:ok, results} = search(lenses: ["second-beta"])
+
+      assert Enum.map(results, & &1.destination) == every_destination
+
+      for destination <- every_destination do
+        assert_receive {:destination_search, ^destination, "operator-one", "question", opts}
+        assert Keyword.fetch!(opts, :lenses) == ["second-beta"]
+      end
+    end
+  end
+
+  describe "when a caller searches memory > where one or more Destinations are supplied" do
+    test "then results from any supplied Destination can contribute" do
+      assert {:ok,
+              [
+                %{destination: "first", facts: ["first:question"]},
+                %{destination: "second", facts: ["second:question"]}
+              ]} = search(destinations: ["first", "second"])
+    end
+
+    test "but no result from another Destination can contribute" do
+      assert {:ok, [%{destination: "first"}]} = search(destinations: ["first"])
+      refute_receive {:destination_search, "second", _, _, _}
+    end
+
+    test "and a Lens selector does not add that Lens's Destination to the supplied Destinations" do
+      assert {:ok, [%{destination: "second"}]} =
+               search(destinations: ["second"], lenses: ["first-alpha"])
+
+      assert_receive {:destination_search, "second", _, _, opts}
+      assert Keyword.fetch!(opts, :lenses) == ["first-alpha"]
+      refute_receive {:destination_search, "first", _, _, _}
+    end
+  end
+
+  describe "when a caller searches memory > where the Lens selector is omitted or empty" do
+    test "then results written directly or by every Lens or Destination artefact output can contribute" do
       start_native_graph()
 
       assert :ok =
@@ -236,18 +308,185 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "when a caller searches memory > where one or more Destinations are supplied" do
-    test "then results from any supplied Destination can contribute" do
-      assert {:ok,
-              [
-                %{destination: "first", facts: ["first:question"]},
-                %{destination: "second", facts: ["second:question"]}
-              ]} = search(destinations: ["first", "second"])
+  describe "when a caller searches memory > where one or more Lenses are supplied" do
+    test "then only episodes written through any supplied Lens are returned" do
+      start_native_graph() |> seed_lens_graph()
+
+      assert {:ok, [%{episodes: episodes}]} = lens_search(["first-alpha"])
+      assert [%{content: "amber alpha memory", lens: "first-alpha"}] = episodes
+
+      assert {:ok, [%{episodes: episodes}]} = lens_search(["first-alpha", "first-beta"])
+
+      assert episodes |> Enum.map(& &1.content) |> Enum.sort() == [
+               "amber alpha memory",
+               "amber beta memory"
+             ]
     end
 
-    test "but no result from another Destination can contribute" do
-      assert {:ok, [%{destination: "first"}]} = search(destinations: ["first"])
-      refute_receive {:destination_search, "second", _, _, _}
+    test "and only facts drawn from an episode written through any supplied Lens or written by any supplied Lens's graph replacement are returned" do
+      start_native_graph() |> seed_lens_graph()
+
+      assert {:ok, [%{facts: facts}]} = lens_search(["first-alpha"])
+
+      assert facts |> Enum.map(& &1.fact) |> Enum.sort() == [
+               "amber alpha lesson learns from amber alpha project",
+               "amber alpha project owns amber alpha lesson",
+               "amber shared lesson fact"
+             ]
+
+      assert {:ok, [%{facts: facts}]} = lens_search(["first-graph"])
+      assert Enum.map(facts, & &1.fact) == ["amber replacement settles through amber clearing"]
+    end
+
+    test "and only entities mentioned by an episode written through any supplied Lens or written by any supplied Lens's graph replacement are returned" do
+      start_native_graph() |> seed_lens_graph()
+
+      assert {:ok, [%{nodes: nodes}]} = lens_search(["first-alpha"])
+
+      assert nodes |> Enum.map(& &1.name) |> Enum.sort() == [
+               "amber alpha lesson",
+               "amber alpha project"
+             ]
+
+      assert {:ok, [%{nodes: nodes}]} = lens_search(["first-graph"])
+
+      assert nodes |> Enum.map(& &1.name) |> Enum.sort() == [
+               "amber clearing",
+               "amber replacement"
+             ]
+    end
+
+    test "but no result written directly, through another Lens, or through a Destination artefact output can contribute" do
+      use_in_memory_storage()
+      assert :ok = add_episode("first", "operator-one", "amber alpha", "first-alpha")
+      assert :ok = add_episode("first", "operator-one", "amber beta", "first-beta")
+
+      seed_first_episode(%{
+        content: "amber direct",
+        source_description: "manual",
+        writer: :direct
+      })
+
+      replace_first_graph([node("amber-node", ["Project"])])
+
+      output = %{
+        kind: :destination,
+        destination: Gralkor.Destination.Registry.fetch!("first"),
+        ontology: Gralkor.DefaultOntology
+      }
+
+      assert :ok =
+               Gralkor.Destination.Storage.put_artefact(
+                 output,
+                 "review",
+                 "operator-one",
+                 Gralkor.Artefact.new("amber-review", %{"lesson" => "amber artefact"})
+               )
+
+      assert {:ok, [%{facts: facts, nodes: nodes, episodes: episodes}]} =
+               lens_search(["first-alpha"])
+
+      assert Enum.map(episodes, & &1.content) == ["amber alpha"]
+      assert Enum.map(facts, & &1.fact) == ["amber alpha"]
+      assert nodes == []
+    end
+
+    test "and results from other writers cannot consume any per-Destination limit" do
+      start_native_graph() |> seed_lens_graph() |> seed_competing_direct_memory()
+
+      assert {:ok, [%{facts: facts, nodes: nodes, episodes: episodes}]} =
+               lens_search(["first-alpha"])
+
+      assert length(facts) == 3
+      assert length(nodes) == 2
+      assert [%{content: "amber alpha memory"}] = episodes
+
+      assert {:ok, [%{facts: unfiltered, episodes: unfiltered_episodes}]} =
+               search(query: "amber", destinations: ["first"])
+
+      assert length(unfiltered) == 20
+      assert length(unfiltered_episodes) == 5
+    end
+
+    test "and each returned fact's sources name only supplied Lenses" do
+      start_native_graph() |> seed_lens_graph()
+
+      assert {:ok, [%{facts: facts}]} = lens_search(["first-alpha"])
+      shared = Enum.find(facts, &(&1.fact == "amber shared lesson fact"))
+
+      assert Enum.map(shared.sources, & &1.lens) == ["first-alpha"]
+
+      assert {:ok, [%{facts: facts}]} = lens_search(["first-alpha", "first-beta"])
+      shared = Enum.find(facts, &(&1.fact == "amber shared lesson fact"))
+
+      assert shared.sources |> Enum.map(& &1.lens) |> Enum.sort() == [
+               "first-alpha",
+               "first-beta"
+             ]
+    end
+
+    test "and entity and edge type filters further restrict the supplied Lenses' results" do
+      start_native_graph() |> seed_lens_graph()
+
+      assert {:ok, [%{facts: facts}]} = lens_search(["first-alpha"], edge_types: ["OWNS"])
+      assert Enum.map(facts, & &1.fact) == ["amber alpha project owns amber alpha lesson"]
+
+      assert {:ok, [%{nodes: nodes, facts: facts}]} =
+               lens_search(["first-alpha"], entity_types: ["Learning"])
+
+      assert Enum.map(nodes, & &1.name) == ["amber alpha lesson"]
+      assert Enum.map(facts, & &1.fact) == ["amber shared lesson fact"]
+    end
+
+    test "and a Lens supplied more than once is applied once" do
+      assert {:ok, [%{destination: "first"}]} =
+               search(
+                 destinations: ["first"],
+                 lenses: ["first-alpha", "first-beta", "first-alpha"]
+               )
+
+      assert_receive {:destination_search, "first", _, _, opts}
+      assert Keyword.fetch!(opts, :lenses) == ["first-alpha", "first-beta"]
+    end
+  end
+
+  describe "when a caller searches memory > where one or more Lenses are supplied > while the search is made through an agent's runtime" do
+    test "then Lens names resolve from that runtime's configuration" do
+      start_supervised!(
+        {JidoGralkor.Runtime,
+         owner: self(),
+         configuration: %{
+           destinations: [%{name: "runtime-memory"}],
+           lenses: [
+             %{
+               name: "runtime-lens",
+               destination: "runtime-memory",
+               write: :append,
+               ingestion: Gralkor.Lens.Ingestion.Store
+             }
+           ],
+           reflections: []
+         }}
+      )
+
+      request = %Search{
+        operator_id: "operator-one",
+        query: "question",
+        destinations: ["runtime-memory"],
+        lenses: ["runtime-lens", "runtime-lens"]
+      }
+
+      assert {:ok, [%{destination: "runtime-memory"}]} = Client.search(self(), request)
+      assert_receive {:destination_search, "runtime-memory", _, _, opts}
+      assert Keyword.fetch!(opts, :lenses) == ["runtime-lens"]
+
+      assert_raise ArgumentError, ~r/runtime-lens/, fn ->
+        Client.search(%Search{request | destinations: ["first"]})
+      end
+
+      assert_raise ArgumentError, ~r/first-alpha/, fn ->
+        Client.search(self(), %Search{request | lenses: ["first-alpha"]})
+      end
     end
   end
 
@@ -621,11 +860,11 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "if search supplies any Destination selection that is not a list of registered non-blank names" do
+  describe "if search supplies any Destination or Lens selection that is not a list of registered non-blank names" do
     test "then search fails before any Destination query is started" do
-      for {destinations, message} <- invalid_selections() do
+      for {selector, selection, message} <- invalid_selections() do
         assert_raise ArgumentError, ~r/#{Regex.escape(message)}/, fn ->
-          search(destinations: destinations)
+          search([{selector, selection}])
         end
 
         refute_receive {:destination_search, _, _, _, _}
@@ -633,23 +872,35 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
 
     test "and no valid subset is searched" do
-      for {destinations, _message} <- invalid_selections() do
-        assert_raise ArgumentError, fn -> search(destinations: destinations) end
+      for {selector, selection, _message} <- invalid_selections() do
+        assert_raise ArgumentError, fn ->
+          search([{:destinations, ["first"]}, {selector, selection}])
+        end
+
         refute_receive {:destination_search, "first", _, _, _}
       end
     end
 
-    test "and the error identifies the rejected Destination selection" do
-      for {destinations, _message} <- invalid_selections() do
-        error = assert_raise ArgumentError, fn -> search(destinations: destinations) end
-        assert error.message =~ ~r/destination/i
+    test "and the error identifies whether the rejected selection was for Destinations or Lenses" do
+      for {selector, selection, _message} <- invalid_selections() do
+        error = assert_raise ArgumentError, fn -> search([{selector, selection}]) end
+
+        case selector do
+          :destinations ->
+            assert error.message =~ ~r/destination/i
+            refute error.message =~ ~r/lens/i
+
+          :lenses ->
+            assert error.message =~ ~r/lens/i
+            refute error.message =~ ~r/destination/i
+        end
       end
     end
 
     test "and the error identifies the rejected value" do
-      for {destinations, _message} <- invalid_selections() do
-        error = assert_raise ArgumentError, fn -> search(destinations: destinations) end
-        rejected = if is_list(destinations), do: List.last(destinations), else: destinations
+      for {selector, selection, _message} <- invalid_selections() do
+        error = assert_raise ArgumentError, fn -> search([{selector, selection}]) end
+        rejected = if is_list(selection), do: List.last(selection), else: selection
         assert error.message =~ inspect(rejected)
       end
     end
@@ -667,7 +918,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
   defp removed_fields do
     [
       {:result_type, :facts, "every search now returns facts, nodes, and episodes"},
-      {:lenses, ["first-alpha"], "no longer filters by originating Lens"},
       {:artefact_id, "a-1", "episodes carrying artefact"},
       {:max_results, 5, "limits are fixed per Destination"}
     ]
@@ -675,10 +925,145 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
   defp invalid_selections do
     [
-      {["first", "missing"], ~s(unknown Destination "missing")},
-      {"first", ~s(search destinations must be a list, got "first")},
-      {["first", " "], ~s(invalid Destination name " ")}
+      {:destinations, ["first", "missing"], ~s(unknown Destination "missing")},
+      {:destinations, "first", ~s(search destinations must be a list, got "first")},
+      {:destinations, ["first", " "], ~s(invalid Destination name " ")},
+      {:lenses, ["first-alpha", "missing"], ~s(unknown Lens "missing")},
+      {:lenses, "first-alpha", ~s(search lenses must be a list, got "first-alpha")},
+      {:lenses, ["first-alpha", " "], ~s(invalid Lens name " ")}
     ]
+  end
+
+  defp lens_search(lenses, overrides \\ []) do
+    search([query: "amber", destinations: ["first"], lenses: lenses] ++ overrides)
+  end
+
+  defp seed_first_episode(episode),
+    do: GenServer.call(Gralkor.Lens.Storage.InMemory, {:add, "first", episode})
+
+  # One Destination holding memory from every writer: two appending Lenses
+  # (each episode mentioning its own entities), a direct write, a Reflection
+  # artefact, and a replaceable Lens's graph. `shared` is drawn from both
+  # Lenses' episodes.
+  defp seed_lens_graph(%{database: database} = graph) do
+    for {id, lens, content} <- [
+          {"amber-alpha", "first-alpha", "amber alpha memory"},
+          {"amber-beta", "first-beta", "amber beta memory"}
+        ] do
+      assert :ok =
+               Client.ingest(%Gralkor.Ingest{
+                 id: id,
+                 operator_id: "operator-one",
+                 lens: lens,
+                 source_kind: :document,
+                 content: content,
+                 source_description: "notes"
+               })
+    end
+
+    assert :ok = Gralkor.Client.Native.memory_add("first", "amber direct memory", "manual")
+
+    output = %{
+      kind: :destination,
+      destination: Gralkor.Destination.Registry.fetch!("first"),
+      ontology: Gralkor.DefaultOntology
+    }
+
+    assert :ok =
+             Gralkor.Destination.Storage.put_artefact(
+               output,
+               "review",
+               "operator-one",
+               Gralkor.Artefact.new("amber-review", %{"lesson" => "amber artefact memory"})
+             )
+
+    replace_first_graph(
+      [
+        replacement_entity("replacement", "amber replacement"),
+        replacement_entity("clearing", "amber clearing")
+      ],
+      [
+        %{
+          from: "replacement",
+          to: "clearing",
+          type: "RELATES_TO",
+          properties: %{
+            uuid: "settlement",
+            group_id: "first",
+            name: "SETTLES_THROUGH",
+            fact: "amber replacement settles through amber clearing",
+            episodes: [],
+            created_at: "2026-08-11T00:00:00Z"
+          }
+        }
+      ]
+    )
+
+    Pythonx.eval(
+      """
+      graph = database.select_graph('g_' + b'first'.hex())
+      graph.query('''
+        MATCH (alpha:Episodic) WHERE alpha.source_description ENDS WITH ' [lens: first-alpha]'
+        MATCH (beta:Episodic) WHERE beta.source_description ENDS WITH ' [lens: first-beta]'
+        MATCH (direct:Episodic) WHERE direct.content = 'amber direct memory'
+        CREATE (al:Entity:Learning {uuid: 'alpha-lesson', name: 'amber alpha lesson', group_id: alpha.group_id, summary: 'amber alpha lesson', created_at: alpha.created_at}),
+               (ap:Entity:Project {uuid: 'alpha-project', name: 'amber alpha project', group_id: alpha.group_id, summary: 'amber alpha project', created_at: alpha.created_at}),
+               (bl:Entity:Learning {uuid: 'beta-lesson', name: 'amber beta lesson', group_id: alpha.group_id, summary: 'amber beta lesson', created_at: alpha.created_at}),
+               (dp:Entity:Project {uuid: 'direct-project', name: 'amber direct project', group_id: alpha.group_id, summary: 'amber direct project', created_at: alpha.created_at}),
+               (alpha)-[:MENTIONS {uuid: 'mentions-al', group_id: alpha.group_id, created_at: alpha.created_at}]->(al),
+               (alpha)-[:MENTIONS {uuid: 'mentions-ap', group_id: alpha.group_id, created_at: alpha.created_at}]->(ap),
+               (beta)-[:MENTIONS {uuid: 'mentions-bl', group_id: alpha.group_id, created_at: alpha.created_at}]->(bl),
+               (direct)-[:MENTIONS {uuid: 'mentions-dp', group_id: alpha.group_id, created_at: alpha.created_at}]->(dp),
+               (al)-[learns:RELATES_TO {uuid: 'alpha-learns', name: 'LEARNS_FROM', fact: 'amber alpha lesson learns from amber alpha project', episodes: [alpha.uuid], group_id: alpha.group_id, created_at: alpha.created_at, valid_at: alpha.valid_at}]->(ap),
+               (ap)-[owns:RELATES_TO {uuid: 'alpha-owns', name: 'OWNS', fact: 'amber alpha project owns amber alpha lesson', episodes: [alpha.uuid], group_id: alpha.group_id, created_at: alpha.created_at, valid_at: alpha.valid_at}]->(al),
+               (bl)-[beta_owns:RELATES_TO {uuid: 'beta-owns', name: 'OWNS', fact: 'amber beta lesson owns amber alpha lesson', episodes: [beta.uuid], group_id: alpha.group_id, created_at: alpha.created_at, valid_at: alpha.valid_at}]->(al),
+               (al)-[shared:RELATES_TO {uuid: 'shared', name: 'SHARES', fact: 'amber shared lesson fact', episodes: [beta.uuid, alpha.uuid], group_id: alpha.group_id, created_at: alpha.created_at, valid_at: alpha.valid_at}]->(bl),
+               (dp)-[direct_owns:RELATES_TO {uuid: 'direct-owns', name: 'OWNS', fact: 'amber direct project owns amber direct project', episodes: [direct.uuid], group_id: alpha.group_id, created_at: alpha.created_at, valid_at: alpha.valid_at}]->(dp)
+        SET al.name_embedding = vecf32([0.1, 0.2, 0.3]),
+            ap.name_embedding = vecf32([0.1, 0.2, 0.3]),
+            bl.name_embedding = vecf32([0.1, 0.2, 0.3]),
+            dp.name_embedding = vecf32([0.1, 0.2, 0.3]),
+            learns.fact_embedding = vecf32([0.1, 0.2, 0.3]),
+            owns.fact_embedding = vecf32([0.1, 0.2, 0.3]),
+            beta_owns.fact_embedding = vecf32([0.1, 0.2, 0.3]),
+            shared.fact_embedding = vecf32([0.1, 0.2, 0.3]),
+            direct_owns.fact_embedding = vecf32([0.1, 0.2, 0.3])
+      ''')
+      """,
+      %{"database" => database}
+    )
+
+    graph
+  end
+
+  # Thirty direct facts and entities and ten direct episodes, each matching
+  # the query more strongly than any Lens result.
+  defp seed_competing_direct_memory(%{database: database} = graph) do
+    Pythonx.eval(
+      """
+      graph = database.select_graph('g_' + b'first'.hex())
+      graph.query('''
+        MATCH (direct:Episodic) WHERE direct.content = 'amber direct memory'
+        UNWIND range(1, 30) AS i
+        CREATE (n:Entity:Project {uuid: 'competing-' + toString(i), name: 'amber amber amber ' + toString(i), group_id: direct.group_id, summary: 'amber amber amber', created_at: direct.created_at}),
+               (direct)-[:MENTIONS {uuid: 'competing-mention-' + toString(i), group_id: direct.group_id, created_at: direct.created_at}]->(n),
+               (n)-[e:RELATES_TO {uuid: 'competing-fact-' + toString(i), name: 'OWNS', fact: 'amber amber amber ' + toString(i), episodes: [direct.uuid], group_id: direct.group_id, created_at: direct.created_at, valid_at: direct.valid_at}]->(n)
+        SET n.name_embedding = vecf32([0.1, 0.2, 0.3]),
+            e.fact_embedding = vecf32([0.1, 0.2, 0.3])
+      ''')
+      graph.query('''
+        MATCH (direct:Episodic) WHERE direct.content = 'amber direct memory'
+        UNWIND range(1, 10) AS i
+        CREATE (e:Episodic)
+        SET e = properties(direct),
+            e.uuid = 'competing-episode-' + toString(i),
+            e.content = 'amber amber amber ' + toString(i)
+      ''')
+      """,
+      %{"database" => database}
+    )
+
+    graph
   end
 
   defp typed_facts do

@@ -7,8 +7,8 @@ defmodule Gralkor.CaptureBuffer do
   accepted turns. Session lifetime is owned by the consumer; there is no idle-flush policy. On `flush/1` (or shutdown via
   `flush_all/0` from `terminate/2`), the buffered turns are handed to the
   configured `flush_callback` with retry: server-internal failures get the
-  configured backoff (default 1s/2s/4s); contract errors (4xx) and
-  upstream-LLM errors drop without retry.
+  configured backoff (default 1s/2s/4s), and the exhausted line names the last
+  failure; upstream-LLM errors drop without retry.
 
   See `test-trees/unit/capture-buffer_TEST_TREES.md`.
   """
@@ -833,16 +833,12 @@ defmodule Gralkor.CaptureBuffer do
         Logger.info("[gralkor] capture flushed — turns:#{length(turns)} elapsed:#{elapsed}ms")
         {:ok, result}
 
-      {:error, :capture_client_4xx} = err ->
-        Logger.warning("[gralkor] capture dropped (4xx)")
-        err
-
       {:error, {:upstream_llm, _}} = err ->
         Logger.warning("[gralkor] capture dropped (upstream error)")
         err
 
-      {:error, _reason} ->
-        retry(group, agent, user, ontology, turns, cb, retries, t0)
+      {:error, reason} ->
+        retry(group, agent, user, ontology, turns, cb, retries, t0, reason)
 
       {:exception, exception, stacktrace} ->
         Logger.warning(
@@ -850,7 +846,7 @@ defmodule Gralkor.CaptureBuffer do
             Exception.format(:error, exception, stacktrace)
         )
 
-        retry(group, agent, user, ontology, turns, cb, retries, t0)
+        retry(group, agent, user, ontology, turns, cb, retries, t0, Exception.message(exception))
     end
   end
 
@@ -869,12 +865,12 @@ defmodule Gralkor.CaptureBuffer do
     end
   end
 
-  defp retry(_group, _agent, _user, _ontology, _turns, _cb, [], _t0) do
-    Logger.error("[gralkor] capture exhausted")
+  defp retry(_group, _agent, _user, _ontology, _turns, _cb, [], _t0, last_reason) do
+    Logger.error("[gralkor] capture exhausted — last failure: #{inspect(last_reason)}")
     {:error, :exhausted}
   end
 
-  defp retry(group, agent, user, ontology, turns, cb, [delay | rest], t0) do
+  defp retry(group, agent, user, ontology, turns, cb, [delay | rest], t0, _last_reason) do
     Process.sleep(delay)
     do_flush(group, agent, user, ontology, turns, cb, rest, t0)
   end

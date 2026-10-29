@@ -1,4 +1,4 @@
-Functional: destination-registration (src: lib/gralkor/destination.ex, lib/gralkor/destination/registry.ex, lib/jido_gralkor/runtime.ex; functional: test/functional/destination_registration_functional_test.exs)
+Functional: destination-registration (src: lib/gralkor/destination.ex, lib/gralkor/destination/registry.ex, lib/gralkor/reflection/packaged.ex, lib/jido_gralkor/runtime.ex; functional: test/functional/destination_registration_functional_test.exs)
 
 when an application registers a valid Destination
   then Lenses and Reflections can reference that Destination by name
@@ -7,6 +7,7 @@ when an application registers a valid Destination
 where the packaged Destinations are used
   then personal memory references the Destination named `personal`
   and globally shared memory references the Destination named `global`
+  and generalisations reference the Destination named `generalisations`
 
 when multiple Lenses or Reflections reference the same Destination
   then their results are saved to the same Destination
@@ -30,8 +31,11 @@ if an application registers an invalid Destination
 if a Lens or Reflection references an unknown Destination
   then configuration resolution raises `ArgumentError` identifying the Lens or Reflection and Destination
 
+if an application Lens or Reflection references the packaged `generalisations` Destination
+  then configuration resolution raises `ArgumentError` identifying the Lens or Reflection
+
 if the application registers the retired operator Destination
   then configuration resolution identifies personal as its replacement before any memory operation
 
-if the application registers a Destination named personal
-  then configuration resolution refuses to replace the packaged private Destination
+if the application registers a Destination with a packaged name
+  then configuration resolution refuses to replace the packaged Destination

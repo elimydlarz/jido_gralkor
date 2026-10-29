@@ -10,8 +10,9 @@ defmodule Gralkor.Destination.Storage do
   @doc """
   Searches one Destination for facts, nodes, and episodes together.
 
-  Options: `:limits` (`%{facts:, nodes:, episodes:}`, required), `:entity_types`
-  and `:edge_types` (optional lists).
+  Options: `:limits` (`%{facts:, nodes:, episodes:}`, required), `:entity_types`,
+  `:edge_types`, and `:lenses` (optional lists). Selected `:lenses` restrict
+  every kind to what those Lenses wrote before ranking and limits.
   """
   @callback search(
               Destination.t(),

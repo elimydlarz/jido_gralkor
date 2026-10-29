@@ -10,11 +10,28 @@ when a caller searches memory
 
   where the Destination selector is omitted or empty
     then every accessible registered Destination is selected
-    and results written directly or by every Lens or Destination artefact output can contribute
+    and results follow the order `personal`, `global`, `generalisations`, then application Destinations
+    and a Lens selector does not narrow the search to that Lens's Destination
 
   where one or more Destinations are supplied
     then results from any supplied Destination can contribute
     but no result from another Destination can contribute
+    and a Lens selector does not add that Lens's Destination to the supplied Destinations
+
+  where the Lens selector is omitted or empty
+    then results written directly or by every Lens or Destination artefact output can contribute
+
+  where one or more Lenses are supplied
+    then only episodes written through any supplied Lens are returned
+    and only facts drawn from an episode written through any supplied Lens or written by any supplied Lens's graph replacement are returned
+    and only entities mentioned by an episode written through any supplied Lens or written by any supplied Lens's graph replacement are returned
+    but no result written directly, through another Lens, or through a Destination artefact output can contribute
+    and results from other writers cannot consume any per-Destination limit
+    and each returned fact's sources name only supplied Lenses
+    and entity and edge type filters further restrict the supplied Lenses' results
+    and a Lens supplied more than once is applied once
+    while the search is made through an agent's runtime
+      then Lens names resolve from that runtime's configuration
 
 where the selected Destinations include `personal`
   then only the current operator's `personal/<operator id>` graph is searched
@@ -65,8 +82,8 @@ if search supplies a field removed in 12.0.0
   and the error names the removed field
   and the error gives migration guidance for that field
 
-if search supplies any Destination selection that is not a list of registered non-blank names
+if search supplies any Destination or Lens selection that is not a list of registered non-blank names
   then search fails before any Destination query is started
   and no valid subset is searched
-  and the error identifies the rejected Destination selection
+  and the error identifies whether the rejected selection was for Destinations or Lenses
   and the error identifies the rejected value

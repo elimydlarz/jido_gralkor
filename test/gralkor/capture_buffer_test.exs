@@ -965,36 +965,6 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "when a session holding turns is flushed and awaited > while the flush callback reports a client contract error" do
-    setup do
-      test_pid = self()
-
-      err_callback = fn _g, _a, _u, _o, _t ->
-        send(test_pid, :callback_invoked)
-        {:error, :capture_client_4xx}
-      end
-
-      :ok = stop_supervised(CaptureBuffer)
-      {:ok, _} = start_supervised({CaptureBuffer, flush_callback: err_callback, retries: []})
-      :ok
-    end
-
-    test "then that error is returned without any retry" do
-      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
-
-      assert {:error, :capture_client_4xx} = CaptureBuffer.flush_and_await("s1", 1_000)
-      assert_receive :callback_invoked, 500
-      refute_receive :callback_invoked, 50
-    end
-
-    test "and the entry is still consumed" do
-      :ok = CaptureBuffer.append("s1", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
-
-      assert {:error, :capture_client_4xx} = CaptureBuffer.flush_and_await("s1", 1_000)
-      assert [] = CaptureBuffer.turns_for("s1")
-    end
-  end
-
   describe "when a session holding turns is flushed and awaited > while the flush callback reports an upstream-LLM error" do
     setup do
       test_pid = self()
@@ -1346,50 +1316,6 @@ defmodule Gralkor.CaptureBufferTest do
     end
   end
 
-  describe "if the flush callback reports a client contract error" do
-    setup do
-      test_pid = self()
-      attempts = :counters.new(1, [])
-
-      flush_callback = fn _g, _a, _u, _o, _t ->
-        :counters.add(attempts, 1, 1)
-        send(test_pid, {:attempt, :counters.get(attempts, 1)})
-        {:error, :capture_client_4xx}
-      end
-
-      :ok = stop_supervised(CaptureBuffer)
-
-      {:ok, _} =
-        start_supervised({CaptureBuffer, flush_callback: flush_callback, retries: [10, 20, 30]})
-
-      :ok
-    end
-
-    test "then the flush is dropped without any retry" do
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
-
-      capture_log(fn ->
-        :ok = CaptureBuffer.flush("s")
-
-        assert_receive {:attempt, 1}, 200
-        refute_receive {:attempt, 2}, 100
-      end)
-    end
-
-    test "and a dropped-on-contract-error line is logged at warning" do
-      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
-
-      log =
-        capture_log(fn ->
-          :ok = CaptureBuffer.flush("s")
-          assert_receive {:attempt, 1}, 200
-        end)
-
-      assert log =~ "[warning]"
-      assert log =~ "[gralkor] capture dropped (4xx)"
-    end
-  end
-
   describe "if the flush callback reports an upstream-LLM error" do
     setup do
       test_pid = self()
@@ -1465,6 +1391,36 @@ defmodule Gralkor.CaptureBufferTest do
 
       assert log =~ "[error]"
       assert log =~ "[gralkor] capture exhausted"
+    end
+
+    test "and the exhausted line names the last failure" do
+      attempts = :counters.new(1, [])
+
+      flush_callback = fn _g, _a, _u, _o, _t ->
+        :counters.add(attempts, 1, 1)
+
+        case :counters.get(attempts, 1) do
+          1 -> {:error, :first_failure}
+          2 -> raise "second failure"
+          _ -> {:error, {:graph, "last failure"}}
+        end
+      end
+
+      :ok = stop_supervised(CaptureBuffer)
+
+      {:ok, _} =
+        start_supervised({CaptureBuffer, flush_callback: flush_callback, retries: [5, 5]})
+
+      :ok = CaptureBuffer.append("s", "g", "Susu", "Eli", nil, [Message.new("user", "x")])
+
+      log =
+        capture_log(fn ->
+          assert {:error, :exhausted} = CaptureBuffer.flush_and_await("s", 1_000)
+        end)
+
+      [exhausted] = log |> String.split("\n") |> Enum.filter(&(&1 =~ "capture exhausted"))
+      assert exhausted =~ ~s({:graph, "last failure"})
+      refute exhausted =~ "first_failure"
     end
   end
 

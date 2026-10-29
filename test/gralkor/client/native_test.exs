@@ -585,7 +585,8 @@ defmodule Gralkor.Client.NativeTest do
     setup do
       start_supervised!(
         {CaptureBuffer,
-         flush_callback: fn _g, _a, _u, _o, _t -> {:error, :capture_client_4xx} end, retries: []}
+         flush_callback: fn _g, _a, _u, _o, _t -> {:error, {:upstream_llm, :rate_limited}} end,
+         retries: []}
       )
 
       :ok
@@ -597,7 +598,7 @@ defmodule Gralkor.Client.NativeTest do
           Message.new("user", "x")
         ])
 
-      assert {:error, :capture_client_4xx} = Native.flush_and_await("s1", 1_000)
+      assert {:error, {:upstream_llm, :rate_limited}} = Native.flush_and_await("s1", 1_000)
     end
   end
 

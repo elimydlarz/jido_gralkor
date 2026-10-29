@@ -43,7 +43,7 @@ if inference fails or returns an invalid response
   then the Runner failure identifies the Reflection, current step, and reason
 
 when the packaged generalisation Reflection runs
-  then one runtime-targeted related-memory search completes before inference
+  then one runtime-targeted related-memory search of the packaged `generalisations` Destination completes before inference
   and the search query contains every completed representation's content
   and the resulting stored information is available to every inference step
   if related-memory search fails

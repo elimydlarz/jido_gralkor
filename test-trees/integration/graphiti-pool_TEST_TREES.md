@@ -6,6 +6,7 @@ when the graph library needs inference
 when the pool starts
   then the shared asyncio runtime is installed, so the pool can be started on its own
   and the LLM client, the embedder, and the cross-encoder are each constructed once and shared by every graph instance for the pool's lifetime
+  and the graph library's node and edge filter constructors and episode full-text search are wrapped once, before any search
   while every configured model spec names a supported inference provider
     then client construction proceeds using the configured model ids
     and the LLM client is built for the provider the LLM spec names
@@ -45,6 +46,9 @@ when the pool starts
     and the embedded database is constructed once and held for the pool's lifetime
   while a remote connection is configured
     then the remote database is constructed once and held for the pool's lifetime
+
+if a graph library function the pool wraps is missing or has another signature
+  then startup raises naming that function and the pinned graph library version
 
 if any configured model spec names a provider that is neither OpenAI nor Google
   then startup raises before any inference client is constructed
@@ -200,10 +204,23 @@ when a memory search is run for a group
   and nothing an extractor derived from an episode is needed to return it, so an episode no entity was extracted from is still returned
   while node labels are supplied
     then the single search's filter carries those labels
+    while several node labels are supplied
+      then the graph library's node filter admits a node carrying any one of them
+      and its edge filter admits an edge whose source and target each carry any one of them
   while edge types are supplied
     then the single search's filter carries those relationship types
-  while neither node labels nor edge types are supplied
+  while neither node labels, edge types, nor Lenses are supplied
     then the single search's filter leaves every node and edge eligible
+    and the graph library's own node and episode queries are issued unchanged
+  while Lenses are supplied
+    then the single search's filter admits only edges drawn from an episode whose source description names a supplied Lens or owned by a supplied Lens's graph replacement
+    and the single search's filter admits only nodes mentioned by such an episode or owned by such a replacement
+    and the single search's filter admits only episodes whose source description names a supplied Lens
+    and the episode restriction is applied inside the full-text query, before its limit
+    and each rendered fact's sources include only episodes whose source description names a supplied Lens
+    while nothing in the group was written by a supplied Lens
+      then the graph library is not searched
+      and no facts, nodes, or episodes are returned
   when the query exceeds the graph library's full-text limit
     then the graph library receives a bounded non-empty query containing the earliest supported terms
   when a returned Reflection episode lacks its durable extraction-completion marker

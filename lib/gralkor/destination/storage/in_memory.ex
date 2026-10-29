@@ -47,15 +47,54 @@ defmodule Gralkor.Destination.Storage.InMemory do
   def search(destination, operator_id, _query, opts) do
     limits = Keyword.fetch!(opts, :limits)
     graph_id = Destination.graph_id(destination, operator_id)
-    episodes = LensStorage.episodes(graph_id)
+
+    case Keyword.get(opts, :lenses, []) do
+      [] ->
+        episodes = LensStorage.episodes(graph_id)
+
+        {:ok,
+         %{
+           facts: episodes |> Enum.take(limits.facts) |> Enum.map(&fact/1),
+           nodes: nodes(graph_id, Keyword.get(opts, :entity_types, []), limits.nodes),
+           episodes: episodes(destination, operator_id, episodes, limits.episodes)
+         }}
+
+      lenses ->
+        lens_search(graph_id, lenses, Keyword.get(opts, :entity_types, []), limits)
+    end
+  end
+
+  # Only what the selected Lenses wrote: their episodes (and the facts this
+  # backend derives from them), the relationships and nodes their graph
+  # replacements own. Direct writes and Destination artefacts never match a Lens.
+  defp lens_search(graph_id, lenses, selected_labels, limits) do
+    episodes = graph_id |> LensStorage.episodes() |> Enum.filter(&(Map.get(&1, :lens) in lenses))
+
+    replacement_facts =
+      graph_id
+      |> LensStorage.graph()
+      |> Map.fetch!(:relationships)
+      |> Enum.filter(&(Map.get(&1.properties, :_gralkor_lens) in lenses))
+      |> Enum.map(&replacement_fact/1)
+
+    nodes =
+      graph_id
+      |> nodes(selected_labels, :infinity)
+      |> Enum.filter(&(Map.get(&1.properties, :_gralkor_lens) in lenses))
+      |> Enum.take(limits.nodes)
 
     {:ok,
      %{
-       facts: episodes |> Enum.take(limits.facts) |> Enum.map(&fact/1),
-       nodes: nodes(graph_id, Keyword.get(opts, :entity_types, []), limits.nodes),
-       episodes: episodes(destination, operator_id, episodes, limits.episodes)
+       facts:
+         episodes |> Enum.map(&fact/1) |> Kernel.++(replacement_facts) |> Enum.take(limits.facts),
+       nodes: nodes,
+       episodes: episodes |> Enum.take(limits.episodes) |> Enum.map(&episode_result/1)
      }}
   end
+
+  defp episode_result(episode),
+    do:
+      Map.take(episode, [:content, :source_kind, :lens, :reflection, :writer, :source_description])
 
   defp fact(episode) do
     %{
@@ -69,6 +108,15 @@ defmodule Gralkor.Destination.Storage.InMemory do
     }
   end
 
+  defp replacement_fact(relationship) do
+    %{
+      fact: Map.get(relationship.properties, :fact),
+      relationship: Map.get(relationship.properties, :name, relationship.type),
+      source_node: %{uuid: relationship.from, name: nil},
+      target_node: %{uuid: relationship.to, name: nil}
+    }
+  end
+
   defp nodes(graph_id, selected_labels, limit) do
     graph_id
     |> LensStorage.graph()
@@ -76,8 +124,11 @@ defmodule Gralkor.Destination.Storage.InMemory do
     |> Enum.filter(fn node ->
       selected_labels == [] or Enum.any?(node.labels, &(&1 in selected_labels))
     end)
-    |> Enum.take(limit)
+    |> take(limit)
   end
+
+  defp take(nodes, :infinity), do: nodes
+  defp take(nodes, limit), do: Enum.take(nodes, limit)
 
   defp episodes(destination, operator_id, lens_episodes, limit) do
     reflection_episodes =

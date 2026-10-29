@@ -73,7 +73,7 @@ when an agent runtime validates Reflection declarations
 when an agent's Gralkor runtime installs its package-owned Reflection definitions
   then ERL declares one Destination output referencing the packaged `personal` Destination
   and ERL's Destination output carries jido_gralkor's built-in experiential-learning ontology
-  and generalisation declares one Destination output referencing the packaged `global` Destination
+  and generalisation declares one Destination output referencing the packaged `generalisations` Destination
 
 where an application-defined Destination output omits its ontology
   then the output selects generic extraction for a runtime-delivered artefact

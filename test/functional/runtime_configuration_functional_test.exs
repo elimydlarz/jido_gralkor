@@ -171,11 +171,10 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(destination, _operator_id, _query, _opts) do
-      send(
-        Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid),
-        {:runtime_search, destination.name}
-      )
+    def search(destination, _operator_id, _query, opts) do
+      test_pid = Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid)
+      send(test_pid, {:runtime_search, destination.name})
+      send(test_pid, {:runtime_search_lenses, destination.name, Keyword.get(opts, :lenses, [])})
 
       {:ok, %{facts: [], nodes: [], episodes: []}}
     end
@@ -233,11 +232,15 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     @behaviour Gralkor.Destination.Storage
 
     @impl true
-    def search(destination, _operator_id, _query, _opts) do
+    def search(destination, _operator_id, _query, opts) do
+      test_pid = Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid)
+
       send(
-        Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid),
-        {:blocked_runtime_search, self(), destination}
+        test_pid,
+        {:blocked_runtime_search_lenses, destination.name, Keyword.get(opts, :lenses)}
       )
+
+      send(test_pid, {:blocked_runtime_search, self(), destination})
 
       receive do
         :continue_runtime_search -> {:ok, %{facts: [], nodes: [], episodes: []}}
@@ -365,7 +368,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       refute_receive {:supervised_reflection_callback, _}
     end
 
-    test "and it installs package-owned structured definitions for the `personal` and `global` Destinations" do
+    test "and it installs package-owned structured definitions for the `personal`, `global`, and `generalisations` Destinations" do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
@@ -376,7 +379,8 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       assert Enum.map(JidoGralkor.Runtime.destinations(agent_server), & &1.name) == [
                "personal",
-               "global"
+               "global",
+               "generalisations"
              ]
     end
 
@@ -527,6 +531,9 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       assert %Gralkor.Destination{name: "global"} =
                JidoGralkor.Runtime.destination!(agent_server, "global")
+
+      assert %Gralkor.Destination{name: "generalisations"} =
+               JidoGralkor.Runtime.destination!(agent_server, "generalisations")
 
       assert %Gralkor.Lens{name: "personal-chat"} =
                JidoGralkor.Runtime.lens!(agent_server, "personal-chat")
@@ -936,6 +943,50 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                  %Gralkor.Destination{name: "archive"}
                ])
 
+      refute_receive {:blocked_runtime_search, _, _}
+    end
+
+    test "and it resolves selected Lens names from that same snapshot" do
+      Application.put_env(:jido_gralkor, :destination_storage, RecordingDestinationStorage)
+
+      agent_server =
+        start_supervised!(
+          {Jido.AgentServer,
+           agent: ConsumerAgent, id: "runtime-configuration-lens-search", register_global: false}
+        )
+
+      configuration = ingestion_configuration("project")
+      assert :ok = JidoGralkor.Runtime.replace(agent_server, configuration)
+
+      request = %Gralkor.Search{
+        operator_id: "operator-one",
+        query: "memory",
+        destinations: ["project"],
+        lenses: ["observations"]
+      }
+
+      assert {:ok, [%{destination: "project"}]} = Gralkor.Client.search(agent_server, request)
+      assert_receive {:runtime_search_lenses, "project", ["observations"]}
+
+      assert :ok = JidoGralkor.Runtime.replace(agent_server, %{configuration | lenses: []})
+
+      error =
+        assert_raise ArgumentError, fn -> Gralkor.Client.search(agent_server, request) end
+
+      assert error.message =~ "observations"
+      refute_receive {:runtime_search_lenses, _, _}
+
+      Application.put_env(:jido_gralkor, :destination_storage, BlockingSearchStorage)
+      assert :ok = JidoGralkor.Runtime.replace(agent_server, configuration)
+      search = Task.async(fn -> Gralkor.Client.search(agent_server, request) end)
+
+      assert_receive {:blocked_runtime_search, blocked, %Gralkor.Destination{name: "project"}}
+      assert_receive {:blocked_runtime_search_lenses, "project", ["observations"]}
+
+      assert :ok = JidoGralkor.Runtime.replace(agent_server, %{configuration | lenses: []})
+      send(blocked, :continue_runtime_search)
+
+      assert {:ok, [%{destination: "project"}]} = Task.await(search)
       refute_receive {:blocked_runtime_search, _, _}
     end
 
@@ -1354,12 +1405,18 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
-  describe "if consumer configuration claims the packaged personal Destination or personal-chat Lens" do
+  describe "if consumer configuration claims a packaged Destination or Lens name" do
     test "then validation rejects the conflicting consumer definition before activating it" do
       active = %{destinations: [%{name: "consumer-memory"}], lenses: [], reflections: []}
       start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: active})
 
-      for {collection, name} <- [{:destinations, "personal"}, {:lenses, "personal-chat"}] do
+      for {collection, name} <- [
+            {:destinations, "personal"},
+            {:destinations, "global"},
+            {:destinations, "generalisations"},
+            {:lenses, "personal-chat"},
+            {:lenses, "global"}
+          ] do
         config =
           %{destinations: [], lenses: [], reflections: []} |> Map.put(collection, [%{name: name}])
 
@@ -1372,11 +1429,57 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         assert JidoGralkor.Runtime.snapshot(self()) == active
       end
 
-      assert %Gralkor.Destination{name: "personal"} =
-               JidoGralkor.Runtime.destination!(self(), "personal")
+      for name <- ["personal", "global", "generalisations"] do
+        assert %Gralkor.Destination{name: ^name} = JidoGralkor.Runtime.destination!(self(), name)
+      end
 
       assert %Gralkor.Lens{ingestion: Gralkor.Lens.Ingestion.Store} =
                JidoGralkor.Runtime.lens!(self(), "personal-chat")
+    end
+  end
+
+  describe "if a consumer Lens or Reflection writes to the packaged `generalisations` Destination" do
+    test "then validation rejects it before activating it" do
+      active = %{destinations: [%{name: "consumer-memory"}], lenses: [], reflections: []}
+      start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: active})
+
+      lens = %{
+        name: "generalising",
+        destination: "generalisations",
+        write: :append,
+        ingestion: Gralkor.Lens.Ingestion.Store
+      }
+
+      reflection = %{
+        name: "generalising",
+        outputs: [%{kind: :destination, destination: "generalisations"}],
+        chain_of_thought: %{
+          steps: [
+            %{label: "review", directions: "Review.", output: %{"summary" => "string"}}
+          ]
+        }
+      }
+
+      for {collection, definition} <- [
+            {:lenses, lens},
+            {:lenses,
+             %{name: "generalising", destination: "generalisations", write: :replace_graph}},
+            {:reflections, reflection}
+          ] do
+        config =
+          %{destinations: [], lenses: [], reflections: []} |> Map.put(collection, [definition])
+
+        assert {:error, {:exclusive_destination, ^collection, "generalising", "generalisations"}} =
+                 JidoGralkor.Runtime.validate(config)
+
+        assert {:error, {:exclusive_destination, ^collection, "generalising", "generalisations"}} =
+                 JidoGralkor.Runtime.replace(self(), config)
+
+        assert JidoGralkor.Runtime.snapshot(self()) == active
+      end
+
+      assert [%{destination: %Gralkor.Destination{name: "generalisations"}}] =
+               JidoGralkor.Runtime.reflection!(self(), "generalisations").outputs
     end
   end
 

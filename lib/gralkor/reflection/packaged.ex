@@ -8,7 +8,7 @@ defmodule Gralkor.Reflection.Packaged do
         outputs: [
           %{
             kind: :destination,
-            destination: "global",
+            destination: "generalisations",
             ontology: Gralkor.DefaultOntology
           }
         ],
@@ -19,12 +19,11 @@ defmodule Gralkor.Reflection.Packaged do
               directions: """
               Inspect every current lensed representation and all related stored
               information supplied to this Reflection. Treat current representations
-              and Lens-authored stored episodes as observations. Treat stored artefacts
-              declaring the generalisations Reflection as prior generalisations.
-              Revisit current and related observations together with prior
-              generalisations. Describe how the observations reinforce, qualify,
-              conflict with, or connect the prior generalisations, and where they call
-              for a new generalisation.
+              as observations. Treat stored artefacts declaring the generalisations
+              Reflection as prior generalisations. Revisit current representations
+              together with prior generalisations. Describe how the observations
+              reinforce, qualify, conflict with, or connect the prior generalisations,
+              and where they call for a new generalisation.
               """,
               output: %{"inspection" => "string"}
             },

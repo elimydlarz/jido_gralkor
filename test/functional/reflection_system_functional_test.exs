@@ -398,10 +398,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert destination_output(erl).ontology == Gralkor.Reflection.ERLOntology
     end
 
-    test "and generalisation declares one Destination output referencing the packaged `global` Destination" do
+    test "and generalisation declares one Destination output referencing the packaged `generalisations` Destination" do
       generalisation = packaged_reflection("generalisations")
 
-      assert [%{kind: :destination, destination: %Gralkor.Destination{name: "global"}}] =
+      assert [%{kind: :destination, destination: %Gralkor.Destination{name: "generalisations"}}] =
                generalisation.outputs
     end
   end
@@ -542,8 +542,8 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  inference: inference
                )
 
-      assert_receive {:related_memory_search, "global", "operator-one", "fact one\nfact two",
-                      [limits: %{facts: 20, nodes: 20, episodes: 5}]}
+      assert_receive {:related_memory_search, "generalisations", "operator-one",
+                      "fact one\nfact two", [limits: %{facts: 20, nodes: 20, episodes: 5}]}
 
       assert_receive {:generalisation_callback,
                       %{
@@ -552,7 +552,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                       }}
 
       assert payload == %{"generalisations" => generalisations}
-      assert_receive {:generalisation_delivered, "global", %Gralkor.Artefact{payload: ^payload}}
+
+      assert_receive {:generalisation_delivered, "generalisations",
+                      %Gralkor.Artefact{payload: ^payload}}
+
+      refute_received {:related_memory_search, _destination, _operator, _query, _opts}
     end
   end
 

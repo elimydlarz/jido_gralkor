@@ -211,7 +211,7 @@ defmodule JidoGralkor.Runtime do
          :ok <- validate_destination_references(configuration),
          :ok <- validate_reserved_entity_kinds(configuration) do
       destinations =
-        [%Destination{name: "personal"}, %Destination{name: "global"}] ++
+        Enum.map(Destination.packaged_names(), &%Destination{name: &1}) ++
           Enum.map(configuration.destinations, fn definition ->
             %Destination{name: field(definition, :name)}
           end)
@@ -331,7 +331,7 @@ defmodule JidoGralkor.Runtime do
          packaged_reflections
        ) do
     packaged = %{
-      destinations: ["personal", "global"],
+      destinations: Destination.packaged_names(),
       lenses: ["personal-chat", "global"],
       reflections: Enum.map(packaged_reflections.(), &field(&1, :name))
     }
@@ -602,7 +602,7 @@ defmodule JidoGralkor.Runtime do
   defp validate_destination_references(configuration) do
     destination_names =
       MapSet.new(
-        ["personal", "global"] ++ Enum.map(configuration.destinations, &field(&1, :name))
+        Destination.packaged_names() ++ Enum.map(configuration.destinations, &field(&1, :name))
       )
 
     with :ok <- validate_lens_destinations(configuration.lenses, destination_names) do
@@ -612,16 +612,23 @@ defmodule JidoGralkor.Runtime do
 
   defp validate_lens_destinations(lenses, destination_names) do
     case Enum.find(lenses, fn definition ->
-           not MapSet.member?(destination_names, field(definition, :destination))
+           not MapSet.member?(destination_names, field(definition, :destination)) or
+             field(definition, :destination) in Destination.exclusive_names()
          end) do
       nil ->
         :ok
 
       definition ->
         {:error,
-         {:unknown_destination, :lenses, field(definition, :name),
+         {destination_error(field(definition, :destination)), :lenses, field(definition, :name),
           field(definition, :destination)}}
     end
+  end
+
+  defp destination_error(name) do
+    if name in Destination.exclusive_names(),
+      do: :exclusive_destination,
+      else: :unknown_destination
   end
 
   defp validate_reflection_destinations(reflections, destination_names) do
@@ -632,15 +639,16 @@ defmodule JidoGralkor.Runtime do
         if is_list(outputs) do
           Enum.find(outputs, fn output ->
             field(output, :kind) == :destination and
-              not MapSet.member?(destination_names, field(output, :destination))
+              (not MapSet.member?(destination_names, field(output, :destination)) or
+                 field(output, :destination) in Destination.exclusive_names())
           end)
         end
 
       if missing do
         {:halt,
          {:error,
-          {:unknown_destination, :reflections, field(reflection, :name),
-           field(missing, :destination)}}}
+          {destination_error(field(missing, :destination)), :reflections,
+           field(reflection, :name), field(missing, :destination)}}}
       else
         {:cont, :ok}
       end

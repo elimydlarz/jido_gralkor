@@ -3,10 +3,10 @@ defmodule Gralkor.Search do
   One search across registered memory Destinations.
 
   A search names the operator, the query, and optionally the Destinations to
-  read (`destinations`, default every accessible registered Destination) and
-  ontology filters (`entity_types`, `edge_types`, default no filter). The
-  packaged `personal` Destination resolves only to the current `operator_id`'s
-  graph.
+  read (`destinations`, default every accessible registered Destination), the
+  Lenses whose writes to read (`lenses`, default every writer), and ontology
+  filters (`entity_types`, `edge_types`, default no filter). The packaged
+  `personal` Destination resolves only to the current `operator_id`'s graph.
 
   Every search returns everything relevant: one Graphiti search per selected
   Destination ranks that Destination's facts, nodes, and episodes together.
@@ -39,16 +39,37 @@ defmodule Gralkor.Search do
   episodes. Use `Gralkor.Format.format_fact/1` explicitly for readable fact
   presentation.
 
+  ## Lens selection
+
+  `lenses` names registered Lenses (ORed). It neither adds nor narrows
+  Destinations: every selected Destination is still searched, and each returns
+  only what the selected Lenses wrote there:
+
+  * episodes whose writer is a selected Lens;
+  * facts drawn from such an episode, or written by a selected replaceable
+    Lens's graph replacement; each fact's `sources` keep only selected-Lens
+    episodes;
+  * nodes mentioned by such an episode, or owned by a selected Lens's graph
+    replacement.
+
+  Direct writes, other Lenses, and Reflection artefacts never contribute. On
+  Graphiti every restriction is applied inside the graph queries, before
+  ranking and the per-Destination limits, so other writers cannot crowd a
+  Lens's results out. `entity_types` and `edge_types` restrict the Lens's
+  results further. An unknown, blank, or non-list Lens selection raises
+  `ArgumentError` before any Destination is searched.
+
   ## Removed in 12.0.0
 
-  `result_type`, `lenses`, `artefact_id`, and `max_results` remain struct keys
-  only so that supplying one fails loudly: `Gralkor.Client.search/1,2` raises
-  `ArgumentError` with migration guidance when any of them is set.
+  `result_type`, `artefact_id`, and `max_results` remain struct keys only so
+  that supplying one fails loudly: `Gralkor.Client.search/1,2` raises
+  `ArgumentError` with migration guidance when any of them is set. (`lenses`,
+  removed in 12.0.0, returned in 13.0.0.)
   """
 
   @limits %{facts: 20, nodes: 20, episodes: 5}
 
-  @removed_fields [:result_type, :lenses, :artefact_id, :max_results]
+  @removed_fields [:result_type, :artefact_id, :max_results]
 
   @type fact :: %{
           required(:fact) => String.t(),
@@ -83,27 +104,27 @@ defmodule Gralkor.Search do
     :operator_id,
     :query,
     destinations: [],
+    lenses: [],
     entity_types: [],
     edge_types: [],
     result_type: nil,
-    lenses: nil,
     artefact_id: nil,
     max_results: nil
   ]
 
   @typedoc """
   One search request. Empty `destinations` means every accessible registered
-  Destination; empty `entity_types` and `edge_types` mean no filter. The
-  removed keys must stay `nil`.
+  Destination; empty `lenses` means every writer; empty `entity_types` and
+  `edge_types` mean no filter. The removed keys must stay `nil`.
   """
   @type t :: %__MODULE__{
           operator_id: String.t(),
           query: String.t(),
           destinations: [String.t()],
+          lenses: [String.t()],
           entity_types: [String.t()],
           edge_types: [String.t()],
           result_type: nil,
-          lenses: nil,
           artefact_id: nil,
           max_results: nil
         }

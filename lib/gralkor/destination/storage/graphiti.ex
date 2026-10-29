@@ -69,13 +69,20 @@ defmodule Gralkor.Destination.Storage.Graphiti do
 
   @impl true
   def search(destination, operator_id, query, opts) do
-    case GraphitiPool.search_memory(
-           GraphitiPool,
+    search(destination, operator_id, query, opts, fn group_id, query, limits, pool_opts ->
+      GraphitiPool.search_memory(GraphitiPool, group_id, query, limits, pool_opts)
+    end)
+  end
+
+  @doc false
+  def search(destination, operator_id, query, opts, search_memory) do
+    case search_memory.(
            Destination.graph_id(destination, operator_id),
            query,
            Keyword.fetch!(opts, :limits),
            node_labels: Keyword.get(opts, :entity_types),
-           edge_types: Keyword.get(opts, :edge_types)
+           edge_types: Keyword.get(opts, :edge_types),
+           lenses: Keyword.get(opts, :lenses)
          ) do
       {:ok, %{facts: facts, nodes: nodes, episodes: episodes}} ->
         with {:ok, episodes} <- structure_episodes(episodes) do

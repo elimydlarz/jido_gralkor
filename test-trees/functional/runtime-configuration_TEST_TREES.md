@@ -4,7 +4,7 @@ when a consumer starts a Jido agent with the Gralkor plugin
   then the plugin starts one Gralkor runtime under that agent
   and that runtime owns the agent's runtime configuration
   and that runtime supervises the agent's Reflection processing and output delivery
-  and it installs package-owned structured definitions for the `personal` and `global` Destinations
+  and it installs package-owned structured definitions for the `personal`, `global`, and `generalisations` Destinations
   and it installs the package-owned `personal-chat` Lens
   and it installs package-owned structured definitions for the generalisations and ERL Reflections
   and it installs the complete consumer configuration supplied when the agent started
@@ -67,6 +67,7 @@ when a named Reflection submission is admitted
 
 when a search begins
   then it retains the selected Destination definitions from one snapshot active when search began
+  and it resolves selected Lens names from that same snapshot
   and later search uses any subsequently installed Destination definitions
 
 when a runtime-targeted operation is given an owning AgentServer PID whose Gralkor runtime is unavailable
@@ -80,8 +81,11 @@ if current configuration uses a retired operator Destination or Lens name
   then validation identifies the retired name and its personal or personal-chat replacement
   and the previous runtime snapshot remains active
 
-if consumer configuration claims the packaged personal Destination or personal-chat Lens
+if consumer configuration claims a packaged Destination or Lens name
   then validation rejects the conflicting consumer definition before activating it
+
+if a consumer Lens or Reflection writes to the packaged `generalisations` Destination
+  then validation rejects it before activating it
 
 if a consumer Destination begins with personal/ or operator/
   then validation rejects the private or retired graph namespace

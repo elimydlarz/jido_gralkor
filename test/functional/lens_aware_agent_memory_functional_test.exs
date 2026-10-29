@@ -40,7 +40,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
           %{fact: "direct fact", sources: [%{writer: :direct, source_kind: "conversation"}]}
         ])
 
-    def search(%{name: "global"}, _, _, _opts),
+    def search(%{name: "generalisations"}, _, _, _opts),
       do: facts([%{fact: "reflected fact", sources: [%{reflection: "generalisations"}]}])
 
     defp facts(facts), do: {:ok, %{facts: facts, nodes: [], episodes: []}}
@@ -223,7 +223,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert {:ok, %{result: text}} =
                MemorySearch.run(
-                 %{query: "provenance", destinations: ["observations", "global"]},
+                 %{query: "provenance", destinations: ["observations", "generalisations"]},
                  mounted_search_context()
                )
 

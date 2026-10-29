@@ -204,12 +204,13 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  describe "if mount's capture Destination is missing, unregistered, or retired" do
+  describe "if mount's capture Destination is missing, unregistered, retired, or the packaged `generalisations` Destination" do
     test "then it raises an ArgumentError identifying the rejected capture Destination" do
       for {capture_destination, rejected} <- [
             {nil, ~r/capture_destination nil/},
             {"nowhere", ~r/"nowhere"/},
-            {"operator", ~r/"operator" was retired/}
+            {"operator", ~r/"operator" was retired/},
+            {"generalisations", ~r/"generalisations"/}
           ] do
         assert_raise ArgumentError, rejected, fn ->
           Plugin.mount(%{id: "operator-one", state: %{}},

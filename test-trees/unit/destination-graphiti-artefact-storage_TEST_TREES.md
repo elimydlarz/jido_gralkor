@@ -21,3 +21,7 @@ when Graphiti reports an episode conflict for an artefact output
 
 if the episode boundary fails during an artefact write or lookup
   then Destination storage returns that failure unchanged
+
+when Graphiti Destination storage searches a Destination
+  then the pool is asked for the Destination's group with the limits, entity types as node labels, edge types, and selected Lenses
+  and an absent selector is forwarded as nil

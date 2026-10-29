@@ -131,7 +131,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       observability: %{redact_tool_args?: false},
       system_prompt: """
       Search long-term memory exactly once before answering, using a focused
-      query without Destination or Lens selectors. Apply the relevant retrieved
+      query without a Destination selector. Apply the relevant retrieved
       facts grouped under their Lens or Reflection source.
       Follow the requested answer format exactly.
       """,
@@ -371,7 +371,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.published_input_at_global
     end
 
-    test "and each consumer-supplied invocation identifier resolves a completed `generalisations` artefact",
+    test "and each consumer-supplied invocation identifier resolves a completed artefact of the `generalisations` Reflection",
          %{
            adventure: adventure
          } do
@@ -387,6 +387,37 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
       assert published_artefact_id ==
                Artefact.id_for(@operator_one, "journey-published-policy", "generalisations")
+    end
+
+    test "and each completed generalisation artefact is searchable through the `generalisations` Destination by both operators",
+         %{adventure: adventure} do
+      expected = [
+        adventure.work_notes_generalisation_artefact,
+        adventure.published_generalisation_artefact
+      ]
+
+      for operator <- [@operator_one, @operator_two] do
+        assert Map.fetch!(adventure.generalisations_destination_artefacts, operator) == expected
+      end
+    end
+
+    test "and no generalisation artefact is searchable through the `global` Destination",
+         %{adventure: adventure} do
+      assert adventure.global_artefact_searches != []
+
+      for %{episode: episode} <- adventure.global_artefact_searches do
+        refute Map.get(episode, :reflection) == "generalisations"
+      end
+
+      generalisation_ids = [
+        adventure.work_notes_generalisation_artefact.id,
+        adventure.published_generalisation_artefact.id
+      ]
+
+      refute Enum.any?(adventure.global_artefact_searches, fn
+               %{episode: %{artefact: %{id: id}}} -> id in generalisation_ids
+               _ -> false
+             end)
     end
   end
 
@@ -420,7 +451,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     test "and every accessible registered Destination is searched", %{adventure: adventure} do
       searched = Enum.map(adventure.default_memory_search, & &1.destination)
 
-      assert MapSet.new(searched) == MapSet.new(["personal", "global", "operations"])
+      assert MapSet.new(searched) ==
+               MapSet.new(["personal", "global", "generalisations", "operations"])
     end
 
     test "and its results include relevant memory from the `personal`, `global`, and an application Destination",
@@ -431,11 +463,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                "work-notes"
              )
 
-      assert has_declaring_reflection?(
-               adventure.default_memory_search,
-               "global",
-               "generalisations"
-             )
+      assert has_originating_lens?(adventure.default_memory_search, "global", "published")
 
       assert has_originating_lens?(
                adventure.default_memory_search,
@@ -454,7 +482,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
       assert has_declaring_reflection?(
                adventure.default_memory_search,
-               "global",
+               "generalisations",
                "generalisations"
              )
     end
@@ -510,6 +538,54 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                "global",
                "published"
              )
+    end
+  end
+
+  describe "when the Journey consumer searches with a Lens selector" do
+    test "then only episodes written through the selected Lens are returned",
+         %{adventure: adventure} do
+      episodes = lens_episodes(adventure.work_notes_lens_search)
+
+      assert episodes != []
+      assert Enum.all?(episodes, &(Map.get(&1, :lens) == "work-notes"))
+      assert Enum.any?(episodes, &(&1 |> episode_content() |> String.contains?("Vacuum")))
+    end
+
+    test "and no episode written directly, through another Lens, or by a Reflection is returned",
+         %{adventure: adventure} do
+      episodes = lens_episodes(adventure.work_notes_lens_search)
+
+      refute Enum.any?(episodes, &(Map.get(&1, :writer) == :direct))
+      refute Enum.any?(episodes, &Map.has_key?(&1, :artefact))
+      refute Enum.any?(episodes, &(Map.get(&1, :lens) in ["personal-chat", "systems"]))
+
+      for text <- ["Juniper", "Cedar", "Harbor"] do
+        refute Enum.any?(episodes, &(&1 |> episode_content() |> String.contains?(text)))
+      end
+    end
+
+    test "and memory written by a replaceable Lens's graph replacement is returned for that Lens",
+         %{adventure: adventure} do
+      facts = for result <- adventure.systems_lens_search, fact <- result.facts, do: fact
+
+      assert Enum.any?(facts, &(&1.fact == "Payments settles through Clearing."))
+      refute Enum.any?(facts, &(&1.fact == "Payments settles through Ledger."))
+      assert lens_episodes(adventure.systems_lens_search) == []
+    end
+
+    test "and a subsequent Lens-free search returns the memory written directly or through the other Lenses",
+         %{adventure: adventure} do
+      episodes = lens_episodes(adventure.lens_free_search)
+
+      assert Enum.any?(episodes, fn episode ->
+               Map.get(episode, :writer) == :direct and
+                 episode |> episode_content() |> String.contains?("Juniper")
+             end)
+
+      assert Enum.any?(episodes, fn episode ->
+               Map.get(episode, :lens) == "personal-chat" and
+                 episode |> episode_content() |> String.contains?("Harbor")
+             end)
     end
   end
 
@@ -627,13 +703,13 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              )
 
     {first_generalisation, later_generalisation, work_notes_generalisation_artefact} =
-      evolve_global_generalisation(agent)
+      evolve_shared_generalisation(agent)
 
     assert %Artefact{} =
              destination_artefact_until(
                agent,
                @operator_one,
-               "global",
+               "generalisations",
                Artefact.id_for(
                  @operator_one,
                  "journey-generalisation-level-two",
@@ -955,7 +1031,56 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         "system dependency registry"
       )
 
+    generalisation_artefact_ids = [
+      work_notes_generalisation_artefact.id,
+      published_generalisation_artefact.id
+    ]
+
+    generalisations_destination_artefacts =
+      Map.new([@operator_one, @operator_two], fn operator ->
+        {operator,
+         Enum.map(
+           generalisation_artefact_ids,
+           &destination_artefact_until(agent, operator, "generalisations", &1)
+         )}
+      end)
+
+    global_artefact_searches =
+      Enum.flat_map(
+        generalisation_artefact_ids ++ ["Atlas Deployment requires Rollback Checkpoint"],
+        &search(agent, @operator_one, ["global"], :episodes, &1)
+      )
+
+    lens_query = "Backup Vacuum 02:00 Juniper Muscat Cedar Amman Harbor Thursday"
+
+    work_notes_lens_search =
+      lens_search_until(agent, ["work-notes"], lens_query, fn results ->
+        results
+        |> lens_episodes()
+        |> Enum.any?(&(&1 |> episode_content() |> String.contains?("Vacuum")))
+      end)
+
+    systems_lens_search =
+      lens_search_until(agent, ["systems"], "Payments settlement Clearing", fn results ->
+        Enum.any?(results, fn result ->
+          Enum.any?(result.facts, &(&1.fact == "Payments settles through Clearing."))
+        end)
+      end)
+
+    lens_free_search =
+      lens_search_until(agent, [], "Juniper Muscat Harbor Thursday", fn results ->
+        episodes = lens_episodes(results)
+
+        Enum.any?(episodes, &(&1 |> episode_content() |> String.contains?("Juniper"))) and
+          Enum.any?(episodes, &(&1 |> episode_content() |> String.contains?("Harbor")))
+      end)
+
     %{
+      generalisations_destination_artefacts: generalisations_destination_artefacts,
+      global_artefact_searches: global_artefact_searches,
+      work_notes_lens_search: work_notes_lens_search,
+      systems_lens_search: systems_lens_search,
+      lens_free_search: lens_free_search,
       implicit_memory: contains_all?(implicit_memory, ["juniper", "muscat"]),
       direct_capture_episodes: direct_capture_episodes,
       personal_chat_episodes: personal_chat_episodes,
@@ -997,7 +1122,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     }
   end
 
-  defp evolve_global_generalisation(agent) do
+  defp evolve_shared_generalisation(agent) do
     first_ingestion_id = "journey-generalisation-level-one"
 
     first_report = """
@@ -1056,7 +1181,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              destination_artefact_until(
                agent,
                @operator_one,
-               "global",
+               "generalisations",
                first_generalisation_artefact.id
              )
 
@@ -1213,6 +1338,28 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     flatten(results, kind)
   end
+
+  # Searches operator one's `personal` Destination through `Gralkor.Client.search/2`
+  # with a Lens selector (MemorySearch has none), retrying until `predicate`
+  # holds or attempts run out.
+  defp lens_search_until(agent, lenses, query, predicate, attempts \\ 60) do
+    assert {:ok, results} =
+             Client.search(agent, %Search{
+               operator_id: @operator_one,
+               query: query,
+               destinations: ["personal"],
+               lenses: lenses
+             })
+
+    if predicate.(results) or attempts <= 1 do
+      results
+    else
+      Process.sleep(1_000)
+      lens_search_until(agent, lenses, query, predicate, attempts - 1)
+    end
+  end
+
+  defp lens_episodes(results), do: Enum.flat_map(results, & &1.episodes)
 
   defp flatten(results, :facts),
     do:

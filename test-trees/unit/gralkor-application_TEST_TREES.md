@@ -1,4 +1,4 @@
-Unit: gralkor-application (src: lib/gralkor/application.ex; integration: test/gralkor/application_test.exs; unit: test/gralkor/application_test.exs)
+Unit: gralkor-application (src: lib/gralkor/application.ex; unit: test/gralkor/application_test.exs)
 
 when the application starts
   while a remote FalkorDB connection is configured
@@ -13,7 +13,6 @@ when the application starts
       and the graph pool is constructed with the embedded connection
       and the graph pool receives the configured embedded socket timeout
       and the Python runtime is told to sweep for orphaned embedded servers, this deployment spawning one of its own
-      and startup returns only once all three have initialised, so a consumer needs no separate readiness gate
   while neither a remote connection nor a data directory is configured
     then no children are supervised, because the consumer has not opted into the native runtime
   while the in-memory client is configured
@@ -29,9 +28,6 @@ when a capture flush runs
   then the transcript episode is rendered from the user and assistant text of every captured turn only, with no agent reasoning and no inference call
   and the rendered transcript is written as a captured episode
   and storage-owned direct writer provenance is recorded without a Lens
-  while no episode-writing dependency is supplied
-    then default writes name the graph pool server explicitly and reach it without shifted arguments
-    and the logical group is encoded exactly once by that graph pool boundary
 
 when a capture flush writes its captured episode successfully
   then a single line reporting the group, the transcript size, and the duration is logged

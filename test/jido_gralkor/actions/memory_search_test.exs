@@ -108,7 +108,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       assert {:ok, _result} = run_search(%{query: "launch"})
 
       assert Enum.sort(received_destination_searches()) ==
-               Enum.sort(["personal", "global", "observations", "decisions"])
+               Enum.sort(["personal", "global", "generalisations", "observations", "decisions"])
     end
 
     test "and the Search request carries the current operator" do
@@ -136,7 +136,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
     test "then the Search request leaves the Destination selector unrestricted" do
       assert {:ok, _result} = run_search(%{query: "launch"})
 
-      for destination <- ["personal", "global", "observations", "decisions"] do
+      for destination <- ["personal", "global", "generalisations", "observations", "decisions"] do
         assert_receive {:destination_search, ^destination, "operator-one", "launch", []}
       end
 

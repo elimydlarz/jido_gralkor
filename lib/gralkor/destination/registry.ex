@@ -3,15 +3,11 @@ defmodule Gralkor.Destination.Registry do
 
   alias Gralkor.Destination
 
-  @packaged [
-    %Destination{name: "personal"},
-    %Destination{name: "global"}
-  ]
-
   def configured! do
     case Application.get_env(:jido_gralkor, :destinations, []) do
       definitions when is_list(definitions) ->
-        destinations = @packaged ++ Enum.map(definitions, &resolve!/1)
+        packaged = Enum.map(Destination.packaged_names(), &%Destination{name: &1})
+        destinations = packaged ++ Enum.map(definitions, &resolve!/1)
         validate_unique_names!(destinations)
         destinations
 

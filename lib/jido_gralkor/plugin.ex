@@ -121,11 +121,18 @@ defmodule JidoGralkor.Plugin do
   end
 
   defp validate_mount_destination!(runtime_config, name) do
-    names = ["personal", "global"] ++ Enum.map(runtime_config.destinations, &fetch_opt(&1, :name))
+    names =
+      Gralkor.Destination.packaged_names() ++
+        Enum.map(runtime_config.destinations, &fetch_opt(&1, :name))
 
     if name == "operator" do
       raise ArgumentError,
             "capture Destination \"operator\" was retired; migrate and select \"personal\""
+    end
+
+    if name in Gralkor.Destination.exclusive_names() do
+      raise ArgumentError,
+            "invalid :capture_destination #{inspect(name)}; only its packaged Reflection writes there"
     end
 
     unless name in names do

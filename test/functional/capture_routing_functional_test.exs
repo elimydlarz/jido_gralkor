@@ -217,10 +217,10 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
     end
 
     test "and terminal failure consumes the buffered entry", %{behavior: behavior} do
-      Agent.update(behavior, fn _ -> {:error, :capture_client_4xx} end)
+      Agent.update(behavior, fn _ -> {:error, {:upstream_llm, :rate_limited}} end)
       capture({:direct, "personal"}, "one")
 
-      assert {:error, :capture_client_4xx} =
+      assert {:error, {:upstream_llm, :rate_limited}} =
                Client.impl().flush_and_await("capture-session", 1_000)
 
       assert Gralkor.CaptureBuffer.turns_for("capture-session") == []
@@ -240,22 +240,22 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
 
   describe "when one selected capture route fails" do
     test "then remaining selected routes are still attempted", %{behavior: behavior} do
-      Agent.update(behavior, fn _ -> {:error, :capture_client_4xx} end)
+      Agent.update(behavior, fn _ -> {:error, {:upstream_llm, :rate_limited}} end)
       capture({:direct, "personal"}, "failed")
       capture({:lenses, ["first"]}, "survives")
 
-      assert {:error, :capture_client_4xx} =
+      assert {:error, {:upstream_llm, :rate_limited}} =
                Client.impl().flush_and_await("capture-session", 1_000)
 
       assert [%{content: "Eli: survives"}] = episodes()
     end
 
     test "and the overall flush returns failure", %{behavior: behavior} do
-      Agent.update(behavior, fn _ -> {:error, :capture_client_4xx} end)
+      Agent.update(behavior, fn _ -> {:error, {:upstream_llm, :rate_limited}} end)
       capture({:lenses, ["first"]}, "survives")
       capture({:direct, "personal"}, "failed")
 
-      assert {:error, :capture_client_4xx} =
+      assert {:error, {:upstream_llm, :rate_limited}} =
                Client.impl().flush_and_await("capture-session", 1_000)
     end
   end

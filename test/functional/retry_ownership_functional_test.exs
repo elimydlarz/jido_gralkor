@@ -121,7 +121,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
     @impl true
     def search(destination, _, _, _) do
-      if destination.name == "global" do
+      if destination.name == "generalisations" do
         counter = Application.fetch_env!(:jido_gralkor, :retry_ownership_counter)
         :counters.add(counter, 1, 1)
         attempt = :counters.get(counter, 1)
@@ -153,7 +153,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
     @impl true
     def search(destination, _, _, _) do
-      if destination.name == "global" do
+      if destination.name == "generalisations" do
         send(test_pid(), :related_memory_attempt)
         {:error, %{status: 503, reason: :search_unavailable}}
       else

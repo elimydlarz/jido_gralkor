@@ -65,8 +65,13 @@ defmodule Gralkor.PersonalGraphMigration do
   end
 
   defp execute(connection, request) do
-    :ok = Gralkor.Python.ensure_initialised()
+    case Gralkor.Python.ensure_initialised() do
+      :ok -> run(connection, request)
+      {:error, reason} -> {:error, "Python runtime unavailable: #{inspect(reason)}"}
+    end
+  end
 
+  defp run(connection, request) do
     {result, _globals} =
       Pythonx.eval(
         """
@@ -86,6 +91,6 @@ defmodule Gralkor.PersonalGraphMigration do
 
     {:ok, result |> Pythonx.decode() |> Jason.decode!()}
   rescue
-    error in Pythonx.Error -> {:error, Exception.message(error)}
+    error in Pythonx.Error -> {:error, Gralkor.GraphitiPool.summarise_python_error(error)}
   end
 end

@@ -30,7 +30,9 @@ when the Journey consumer triggers generalisation after successive ingestions co
 when distinct ingestions use Lenses backed by different Destinations
   then the `work-notes` input is searchable through the `personal` Destination
   and the `published` input is searchable through the `global` Destination
-  and each consumer-supplied invocation identifier resolves a completed `generalisations` artefact
+  and each consumer-supplied invocation identifier resolves a completed artefact of the `generalisations` Reflection
+  and each completed generalisation artefact is searchable through the `generalisations` Destination by both operators
+  and no generalisation artefact is searchable through the `global` Destination
 
 when the Journey consumer triggers a consumer-defined Reflection with a Destination output
   then its artefact is searchable through its Destination
@@ -49,6 +51,12 @@ when the agent searches with a Destination selector
   then relevant memory from the selected Destination is returned
   and no memory from an unselected Destination is returned
   and a subsequent selector-free search returns relevant memory from a Destination omitted by the earlier Destination selector
+
+when the Journey consumer searches with a Lens selector
+  then only episodes written through the selected Lens are returned
+  and no episode written directly, through another Lens, or by a Reflection is returned
+  and memory written by a replaceable Lens's graph replacement is returned for that Lens
+  and a subsequent Lens-free search returns the memory written directly or through the other Lenses
 
 when the Journey ingests conversation, document, and structured-record episodes
   then every retrieved conversation fact identifies every originating episode

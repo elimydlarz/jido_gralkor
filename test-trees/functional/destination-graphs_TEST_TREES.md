@@ -1,4 +1,4 @@
-Functional: destination-graphs (src: lib/gralkor/destination.ex, lib/gralkor/destination/registry.ex, lib/gralkor/destination/storage/in_memory.ex; functional: test/functional/destination_graphs_functional_test.exs)
+Functional: destination-graphs (src: lib/gralkor/destination.ex, lib/gralkor/destination/registry.ex, lib/gralkor/reflection/packaged.ex, lib/gralkor/destination/storage/in_memory.ex; functional: test/functional/destination_graphs_functional_test.exs)
 
 when a Lens saves an episode to the `personal` Destination
   then the resolved graph is named `personal/<operator id>`
@@ -9,6 +9,10 @@ when a Lens saves an episode to the `global` Destination
   then every operator resolves the one graph named `global`
   and every operator can retrieve the episode by searching the `global` Destination
   and the episode is unavailable from any unselected Destination
+
+when the packaged generalisation Reflection stores an artefact
+  then every operator resolves the one graph named `generalisations`
+  and the artefact is unavailable from the `global` Destination
 
 when a Lens saves an episode to an application Destination
   then its one graph is named for that Destination

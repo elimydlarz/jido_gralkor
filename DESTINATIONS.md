@@ -10,10 +10,13 @@ Lenses and Reflection Destination outputs reference registered Destinations by n
 
 ## Graph identity
 
-The package registers two Destinations:
+The package registers three Destinations:
 
 - `global` is the single shared global graph. Its logical graph ID is exactly `global` for every operator.
 - `personal` is private to one operator. Its logical graph ID is `personal/<same operator id>`.
+- `generalisations` is the shared graph the packaged generalisation Reflection writes to and reads its prior generalisations from. Its logical graph ID is exactly `generalisations` for every operator.
+
+An application cannot register a Destination named `personal`, `global`, or `generalisations`; configuration naming one is rejected rather than replacing the packaged Destination. Only the packaged generalisation Reflection writes to `generalisations`: a consumer Lens, a consumer Reflection Destination output, or a plugin `capture_destination` naming it is rejected (`{:exclusive_destination, collection, name, "generalisations"}` in runtime configuration). Every operator reads it through any search that includes it, including selector-free search.
 
 An agent may register another Destination with only a name in its complete runtime configuration:
 
@@ -71,7 +74,7 @@ runtime_config = %{
 }
 ```
 
-The packaged `personal-chat` Lens writes with `Gralkor.DefaultOntology`. The packaged generalisation Reflection has a `global` Destination output with `Gralkor.DefaultOntology`; packaged ERL has a `personal` Destination output with `Gralkor.Reflection.ERLOntology`.
+The packaged `personal-chat` Lens writes with `Gralkor.DefaultOntology`. The packaged generalisation Reflection has a `generalisations` Destination output with `Gralkor.DefaultOntology`; packaged ERL has a `personal` Destination output with `Gralkor.Reflection.ERLOntology`.
 
 Direct capture uses the built-in ontology without Lens authorship. `personal-chat` runs only when explicitly selected and uses the existing Store ingestion process for every supported source kind. Storage marks new direct writes with a terminal ` [gralkor: direct]` marker, then removes that marker from the public source description. User descriptions cannot override the actual writer. Lens and Reflection names reserve both writer delimiters.
 
@@ -98,15 +101,16 @@ Gralkor.Client.search(agent_server, %Gralkor.Search{
 })
 ```
 
-That includes the packaged `personal` and `global` Destinations and every application Destination. Only the current operator's logical `personal/<operator id>` graph is searched; other registered Destinations retain their shared logical graph identity.
+That includes the packaged `personal`, `global`, and `generalisations` Destinations and every application Destination. Only the current operator's logical `personal/<operator id>` graph is searched; other registered Destinations retain their shared logical graph identity.
 
-`%Gralkor.Search{}` has exactly three optional fields besides `operator_id` and `query`:
+`%Gralkor.Search{}` has exactly four optional fields besides `operator_id` and `query`:
 
 ```elixir
 Gralkor.Client.search(agent_server, %Gralkor.Search{
   operator_id: operator_id,
   query: "what changed the parser",
   destinations: ["code"],                  # default: every accessible registered Destination
+  lenses: ["commits"],                     # default: every writer
   entity_types: ["Commit", "Function"],    # default: no filter
   edge_types: ["CHANGES"]                  # default: no filter
 })
@@ -136,6 +140,16 @@ Each distinct Destination is searched once, concurrently, through one Graphiti `
 ```
 
 Facts, nodes, and episodes each keep Graphiti's relevance order. Every Destination contributes at most twenty facts, twenty nodes, and five episodes (`Gralkor.Search.limits/0`); episodes are whole source documents, so fewer are returned. `entity_types` restricts nodes to those labels and restricts facts to edges whose source *and* target entities both carry one of them (Graphiti applies its label filter to both edge endpoints). `edge_types` restricts facts to those relationship names. Neither filter restricts episodes.
+
+### Lens selection
+
+`lenses` names registered Lenses (ORed) and narrows what each selected Destination returns to what those Lenses wrote there; it never adds or removes Destinations, so a Lens selector without `destinations` still searches every accessible registered Destination. Within each Destination:
+
+- episodes: only those whose source description ends with a selected Lens's ` [lens: <name>]` marker (a durable direct write never matches);
+- facts: only edges drawn from such an episode, or written by a selected replaceable Lens's graph replacement (`_gralkor_lens`); each fact's `sources` keep only selected-Lens episodes;
+- nodes: only entities mentioned (`MENTIONS`) by such an episode, or owned by a selected replaceable Lens's replacement.
+
+Direct writes, other Lenses, Reflection artefacts, and historical `operator`-labelled episodes never contribute (the retired `operator` Lens cannot be selected). `entity_types` and `edge_types` restrict the Lens's results further. On FalkorDB every restriction is part of the graph queries, applied before ranking and the per-Destination caps, so other writers cannot consume a Lens's twenty facts, twenty nodes, or five episodes: facts through graphiti-core's `SearchFilters.edge_uuids`; nodes and episodes through filters Gralkor adds to graphiti-core 0.31.2's node searches and FalkorDB episode full-text query, which have none of their own. A Lens that has written nothing to a Destination returns empty facts, nodes, and episodes there without a Graphiti search. An unknown, blank, or non-list Lens selection raises `ArgumentError` before any Destination is searched; runtime-targeted search resolves Lens names from the agent's runtime snapshot.
 
 ### Facts
 
@@ -202,7 +216,7 @@ If the byte budget cannot hold the required response notice, the formatter retur
 ### Migrating from 11.x search
 
 - `result_type` is gone: every search returns facts, nodes, and episodes per Destination. Replace `result.fact` / `result.node` / `result.episode` (one flat attributed list) with `result.facts` / `result.nodes` / `result.episodes` inside each Destination map.
-- `lenses` is gone as a search selector: read each episode's `lens` or each fact source's `lens` to tell writers apart.
+- `lenses` was removed in 12.0.0 and returned in 13.0.0 with the same meaning: only what the selected Lenses wrote, filtered before ranking. It now restricts facts, nodes, and episodes together.
 - `result_type: :artefacts` and `artefact_id` are gone: Reflection artefacts arrive whole in `episodes` as `artefact: %{id:, payload:}`; match the id there.
 - `max_results` is gone: limits are fixed per Destination (`Gralkor.Search.limits/0`).
 - Setting any removed field raises `ArgumentError` naming the field with this guidance.

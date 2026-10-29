@@ -466,7 +466,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       artefact = put_generalisation("Use canaries", 2, [])
 
       assert {:ok, %{result: text}} =
-               memory_search(%{query: "rollout", destinations: ["observations", "global"]}, [])
+               memory_search(
+                 %{query: "rollout", destinations: ["observations", "generalisations"]},
+                 []
+               )
 
       assert text ==
                "Facts\n\nLens: observations\n- observed rollout\n\nReflection: generalisations\n- Use canaries\n\n" <>
@@ -478,7 +481,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       artefact = put_generalisation("Use canaries", 2, [%{"content" => "prior", "level" => 1}])
 
       assert {:ok, %{result: text}} =
-               memory_search(%{query: "canaries", destinations: ["global"]}, [])
+               memory_search(%{query: "canaries", destinations: ["generalisations"]}, [])
 
       assert [facts, _episodes] = String.split(text, "\n\nEpisodes\n")
       assert facts == "Facts\n\nReflection: generalisations\n- Use canaries"
@@ -860,18 +863,18 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         end)
 
       artefact = put_generalisation("Use canaries for ABC-123.", 2, [history])
-      {wire, _} = provider_memory_result(%{query: "x", destinations: ["global"]})
+      {wire, _} = provider_memory_result(%{query: "x", destinations: ["generalisations"]})
 
       assert wire["result"]["result"] ==
                "Facts\n\nReflection: generalisations\n- Use canaries for ABC-123.\n\n" <>
                  "Episodes\n- [Reflection: generalisations] artefact #{artefact.id}: " <>
                  excerpt(Jason.encode!(artefact.payload))
 
-      assert {:ok, [%{destination: "global", episodes: [%{artefact: stored}]}]} =
+      assert {:ok, [%{destination: "generalisations", episodes: [%{artefact: stored}]}]} =
                Client.search(%Gralkor.Search{
                  operator_id: "operator-one",
                  query: "x",
-                 destinations: ["global"]
+                 destinations: ["generalisations"]
                })
 
       assert stored.payload == artefact.payload
@@ -1087,7 +1090,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       outputs: [
         %{
           kind: :destination,
-          destination: Gralkor.Destination.Registry.fetch!("global"),
+          destination: Gralkor.Destination.Registry.fetch!("generalisations"),
           ontology: Gralkor.DefaultOntology
         }
       ],
@@ -1119,7 +1122,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       fixtures ++
         [
           %{
-            destination: "global",
+            destination: "generalisations",
             operator: "operator-one",
             fact: %{
               fact: content,
@@ -1258,7 +1261,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       outputs: [
         %{
           kind: :destination,
-          destination: Gralkor.Destination.Registry.fetch!("global"),
+          destination: Gralkor.Destination.Registry.fetch!("generalisations"),
           ontology: Gralkor.DefaultOntology
         }
       ],
@@ -1290,7 +1293,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       fixtures ++
         [
           %{
-            destination: "global",
+            destination: "generalisations",
             operator: operator_id,
             fact: %{
               fact: content,

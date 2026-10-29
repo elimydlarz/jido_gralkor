@@ -15,13 +15,13 @@ defmodule Gralkor.Client do
   supplied callback. With empty selectors, search runs every
   accessible registered Destination concurrently and returns episodes from
   direct, Lens, and Reflection writers. Destination and Lens names are ORed within
-  their respective selectors and ANDed across them; Lens filters are
-  applied to episodes and facts. Each result identifies its Destination.
+  their respective selectors and ANDed across them; Lens filters restrict
+  episodes, facts, and nodes before ranking (see `Gralkor.Search`). Each
+  result identifies its Destination and carries its facts, nodes, and episodes.
   Direct episodes retain their source without Lens or Reflection authorship;
   real Lens and Reflection records retain their named writer. Historical
   unmarked and operator-labelled records remain readable without an active
-  operator Lens. Facts, nodes, and Reflection artefacts are explicit
-  advanced result types.
+  operator Lens.
 
   Capture uses `capture/2` with an owning AgentServer PID and an explicit
   `Gralkor.Capture` route. Direct capture selects a registered Destination;
@@ -286,24 +286,31 @@ defmodule Gralkor.Client do
   def search(%Search{} = request) do
     _ = registered_lenses!()
     validate_search_request!(request)
+    lenses = resolve_search_lenses!(request.lenses)
     destinations = resolve_search_destinations!(request.destinations)
-    search_resolved(request, destinations)
+    search_resolved(request, lenses, destinations)
   end
 
   @spec search(runtime_owner(), Search.t()) ::
           {:ok, [search_result()]} | {:error, term()}
   def search(runtime_owner, %Search{} = request) do
     validate_search_request!(request)
+    validate_lens_names!(request.lenses)
     validate_destination_names!(request.destinations)
-    {_lenses, destinations} = Runtime.resolve_search!(runtime_owner, [], request.destinations)
-    search_resolved(request, destinations)
+
+    {resolved_lenses, destinations} =
+      Runtime.resolve_search!(runtime_owner, request.lenses, request.destinations)
+
+    lenses = resolved_lenses |> Enum.map(& &1.name) |> Enum.uniq()
+    search_resolved(request, lenses, destinations)
   end
 
-  defp search_resolved(request, destinations) do
+  defp search_resolved(request, lenses, destinations) do
     opts =
       []
       |> put_search_option(:entity_types, request.entity_types)
       |> put_search_option(:edge_types, request.edge_types)
+      |> put_search_option(:lenses, lenses)
       |> Keyword.put(:limits, Search.limits())
 
     destinations
@@ -337,9 +344,6 @@ defmodule Gralkor.Client do
     result_type:
       "every search now returns facts, nodes, and episodes per Destination as " <>
         "%{destination:, facts:, nodes:, episodes:}; remove result_type and read the kind you need",
-    lenses:
-      "search no longer filters by originating Lens; remove lenses and read each " <>
-        "episode's `lens` or each fact source's `lens` to tell writers apart",
     artefact_id:
       "Reflection artefacts arrive whole as episodes carrying artefact: %{id:, payload:}; " <>
         "remove artefact_id and match the artefact id in the returned episodes",
@@ -403,6 +407,29 @@ defmodule Gralkor.Client do
 
   defp validate_destination_names!(names),
     do: raise(ArgumentError, "search destinations must be a list, got #{inspect(names)}")
+
+  defp resolve_search_lenses!(names) do
+    validate_lens_names!(names)
+
+    names
+    |> Enum.map(&lens!(&1).name)
+    |> Enum.uniq()
+  end
+
+  defp validate_lens_names!(names) when is_list(names) do
+    Enum.each(names, fn
+      name when is_binary(name) ->
+        if String.trim(name) == "" do
+          raise ArgumentError, "invalid Lens name #{inspect(name)}"
+        end
+
+      name ->
+        raise ArgumentError, "invalid Lens name #{inspect(name)}"
+    end)
+  end
+
+  defp validate_lens_names!(names),
+    do: raise(ArgumentError, "search lenses must be a list, got #{inspect(names)}")
 
   @spec lens!(String.t()) :: Lens.t() | ReplaceableLens.t()
   def lens!(name) do
@@ -554,6 +581,10 @@ defmodule Gralkor.Client do
     unless is_binary(destination_name) and String.trim(destination_name) != "" do
       raise ArgumentError,
             "invalid Lens #{inspect(lens_name)} Destination #{inspect(destination_name)}"
+    end
+
+    if destination_name in Gralkor.Destination.exclusive_names() do
+      raise ArgumentError, "only its packaged Reflection writes to this Destination"
     end
 
     DestinationRegistry.fetch!(destination_name)

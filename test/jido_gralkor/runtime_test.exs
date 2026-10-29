@@ -18,6 +18,7 @@ defmodule JidoGralkor.RuntimeTest do
       assert Enum.map(Runtime.destinations(self()), & &1.name) == [
                "personal",
                "global",
+               "generalisations",
                "reviews"
              ]
 
@@ -248,7 +249,13 @@ defmodule JidoGralkor.RuntimeTest do
 
       assert {lenses, destinations} = Runtime.resolve_search!(self(), ["custom"], [])
       assert Enum.map(lenses, & &1.name) == ["custom"]
-      assert Enum.map(destinations, & &1.name) == ["personal", "global", "reviews"]
+
+      assert Enum.map(destinations, & &1.name) == [
+               "personal",
+               "global",
+               "generalisations",
+               "reviews"
+             ]
     end
   end
 
@@ -283,12 +290,23 @@ defmodule JidoGralkor.RuntimeTest do
       assert :ok = Runtime.replace(self(), replacement)
 
       assert [%Gralkor.Lens{name: "custom", destination: %{name: "reviews"}}] = lenses
-      assert Enum.map(destinations, & &1.name) == ["personal", "global", "reviews"]
+
+      assert Enum.map(destinations, & &1.name) == [
+               "personal",
+               "global",
+               "generalisations",
+               "reviews"
+             ]
 
       assert {[%Gralkor.Lens{destination: %{name: "new"}}], current_destinations} =
                Runtime.resolve_search!(self(), ["custom"], [])
 
-      assert Enum.map(current_destinations, & &1.name) == ["personal", "global", "new"]
+      assert Enum.map(current_destinations, & &1.name) == [
+               "personal",
+               "global",
+               "generalisations",
+               "new"
+             ]
     end
   end
 
@@ -1154,7 +1172,7 @@ defmodule JidoGralkor.RuntimeTest do
   defp packaged_reflection do
     %{
       name: "generalisations",
-      outputs: [%{kind: :destination, destination: "global"}],
+      outputs: [%{kind: :destination, destination: "generalisations"}],
       chain_of_thought: %{steps: []}
     }
   end
