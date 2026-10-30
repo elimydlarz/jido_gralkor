@@ -51,8 +51,9 @@ defmodule Gralkor.Application do
         llm_routes: Config.llm_routes(),
         llm_tuning: Config.llm_tuning(),
         embedder_dimension: Config.embedder_dimension(),
-        embedder_batch_size: Config.embedder_batch_size()
-      ] ++ embedded_falkordb_options(spec)
+        embedder_batch_size: Config.embedder_batch_size(),
+        graph_operation_deadline_ms: Config.graph_operation_deadline_ms()
+      ] ++ falkordb_socket_options(spec)
 
     [
       {Gralkor.Python, [reap_orphans: not remote?]},
@@ -68,11 +69,13 @@ defmodule Gralkor.Application do
     ]
   end
 
-  defp embedded_falkordb_options({:embedded, _data_dir}) do
+  defp falkordb_socket_options({:embedded, _data_dir}) do
     [embedded_falkordb_socket_timeout_ms: Config.embedded_falkordb_socket_timeout_ms()]
   end
 
-  defp embedded_falkordb_options({:remote, _options}), do: []
+  defp falkordb_socket_options({:remote, _options}) do
+    [remote_falkordb_socket_timeout_ms: Config.remote_falkordb_socket_timeout_ms()]
+  end
 
   @doc false
   def build_flush_callback(_config, deps \\ []) do

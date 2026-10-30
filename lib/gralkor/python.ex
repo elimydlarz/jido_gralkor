@@ -127,9 +127,12 @@ defmodule Gralkor.Python do
   Spin up a daemon-thread asyncio event loop and stash it on `asyncio` as
   `_gralkor_loop` plus a `_gralkor_run(coro)` helper that submits onto it.
 
-  Must run once per Pythonx interpreter, before any code that calls into
-  graphiti via `asyncio._gralkor_run`. Idempotent — the second call is a
-  no-op.
+  `_gralkor_run` waits at most `deadline_ms`; on expiry it cancels the coroutine
+  and raises `TimeoutError`. Every call applies its own deadline, so a later
+  call can change it.
+
+  Must run before any code that calls into graphiti via `asyncio._gralkor_run`.
+  The loop itself starts once per Pythonx interpreter.
 
   Why: Pythonx.eval creates a fresh event loop per `asyncio.run` call.
   AsyncFalkorDB (and any redis-async connection) binds its connections to
@@ -139,11 +142,12 @@ defmodule Gralkor.Python do
   for `asyncio.run` — and, crucially, it shares one loop across all calls
   so connection reuse works.
   """
-  @spec install_async_runtime() :: :ok | {:error, term()}
-  def install_async_runtime do
+  @spec install_async_runtime(pos_integer()) :: :ok | {:error, term()}
+  def install_async_runtime(deadline_ms \\ Gralkor.Config.graph_operation_deadline_ms()) do
     Pythonx.eval(
       """
-      import asyncio, threading
+      import asyncio, concurrent.futures, threading
+      asyncio._gralkor_deadline_seconds = deadline_ms / 1000
       if not hasattr(asyncio, '_gralkor_loop'):
           loop = asyncio.new_event_loop()
           started = threading.Event()
@@ -154,9 +158,16 @@ defmodule Gralkor.Python do
           threading.Thread(target=_run, daemon=True).start()
           started.wait()
           asyncio._gralkor_loop = loop
-          asyncio._gralkor_run = lambda coro: asyncio.run_coroutine_threadsafe(coro, loop).result()
+          def _gralkor_run(coro):
+              future = asyncio.run_coroutine_threadsafe(coro, loop)
+              try:
+                  return future.result(asyncio._gralkor_deadline_seconds)
+              except concurrent.futures.TimeoutError:
+                  future.cancel()
+                  raise
+          asyncio._gralkor_run = _gralkor_run
       """,
-      %{}
+      %{"deadline_ms" => deadline_ms}
     )
 
     :ok

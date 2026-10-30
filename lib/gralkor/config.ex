@@ -12,6 +12,13 @@ defmodule Gralkor.Config do
     * The embedded FalkorDB socket read timeout — configured in milliseconds as
       `:embedded_falkordb_socket_timeout_ms`, defaulting to 60 seconds. It is
       validated only when the embedded backend starts.
+    * The remote FalkorDB socket timeout — configured in milliseconds as
+      `:remote_falkordb_socket_timeout_ms`, defaulting to 60 seconds. It is
+      validated only when the remote backend starts.
+    * The graph operation deadline — configured in milliseconds as
+      `:graph_operation_deadline_ms`, defaulting to 30 minutes. It bounds every
+      call across the Python bridge, inference included, so it must outlast a
+      healthy episode write.
     * The LLM and embedder models — set via the `GRALKOR_LLM_MODEL` and
       `GRALKOR_EMBEDDER_MODEL` env vars in `"provider:model"` form (operator
       contract). `llm_model/0` and `embedder_model/0` return them as
@@ -38,6 +45,8 @@ defmodule Gralkor.Config do
   @default_llm_model %{provider: :google, id: "gemini-3.1-flash-lite"}
   @default_embedder_model %{provider: :google, id: "gemini-embedding-2-preview"}
   @default_embedded_falkordb_socket_timeout_ms 60_000
+  @default_remote_falkordb_socket_timeout_ms 60_000
+  @default_graph_operation_deadline_ms 1_800_000
 
   # Graphiti 0.31.2's prompt groups and their prompts
   # (graphiti_core/prompts/names.py). A route key names a whole group or one
@@ -159,6 +168,51 @@ defmodule Gralkor.Config do
   def validate_embedded_falkordb_socket_timeout_ms!(value) do
     raise ArgumentError,
           ":embedded_falkordb_socket_timeout_ms must be a positive integer, got #{inspect(value)}"
+  end
+
+  @doc """
+  Resolve the remote FalkorDB socket timeout in milliseconds.
+  """
+  @spec remote_falkordb_socket_timeout_ms() :: pos_integer()
+  def remote_falkordb_socket_timeout_ms do
+    :jido_gralkor
+    |> Application.get_env(
+      :remote_falkordb_socket_timeout_ms,
+      @default_remote_falkordb_socket_timeout_ms
+    )
+    |> validate_remote_falkordb_socket_timeout_ms!()
+  end
+
+  @doc false
+  @spec validate_remote_falkordb_socket_timeout_ms!(term()) :: pos_integer()
+  def validate_remote_falkordb_socket_timeout_ms!(value)
+      when is_integer(value) and value > 0,
+      do: value
+
+  def validate_remote_falkordb_socket_timeout_ms!(value) do
+    raise ArgumentError,
+          ":remote_falkordb_socket_timeout_ms must be a positive integer, got #{inspect(value)}"
+  end
+
+  @doc """
+  Resolve the deadline, in milliseconds, for one call across the Python bridge.
+  """
+  @spec graph_operation_deadline_ms() :: pos_integer()
+  def graph_operation_deadline_ms do
+    :jido_gralkor
+    |> Application.get_env(:graph_operation_deadline_ms, @default_graph_operation_deadline_ms)
+    |> validate_graph_operation_deadline_ms!()
+  end
+
+  @doc false
+  @spec validate_graph_operation_deadline_ms!(term()) :: pos_integer()
+  def validate_graph_operation_deadline_ms!(value)
+      when is_integer(value) and value > 0,
+      do: value
+
+  def validate_graph_operation_deadline_ms!(value) do
+    raise ArgumentError,
+          ":graph_operation_deadline_ms must be a positive integer, got #{inspect(value)}"
   end
 
   @spec llm_model() :: model_spec()

@@ -383,7 +383,7 @@ defmodule Gralkor.GraphitiPool do
 
     {:ok, raw |> Pythonx.decode() |> Enum.map(&atomize_keys/1)}
   rescue
-    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
+    e in Pythonx.Error -> python_failure(e, :search)
   end
 
   @doc """
@@ -632,7 +632,7 @@ defmodule Gralkor.GraphitiPool do
        episodes: Enum.map(episodes, &episode_map/1)
      }}
   rescue
-    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
+    e in Pythonx.Error -> python_failure(e, :search_memory)
   end
 
   defp episode_map(%{} = m) do
@@ -1368,7 +1368,7 @@ defmodule Gralkor.GraphitiPool do
       _ -> :ok
     end
   rescue
-    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
+    e in Pythonx.Error -> python_failure(e, :add_episode)
   end
 
   defp with_episode_write_admission(server, uuid, operation) do
@@ -1434,7 +1434,7 @@ defmodule Gralkor.GraphitiPool do
 
     :ok
   rescue
-    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
+    e in Pythonx.Error -> python_failure(e, :remove_episode)
   end
 
   @doc """
@@ -1455,7 +1455,7 @@ defmodule Gralkor.GraphitiPool do
 
     {:ok, %{status: "built"}}
   rescue
-    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
+    e in Pythonx.Error -> python_failure(e, :build_indices)
   end
 
   @doc "Build communities for `group_id`."
@@ -1477,7 +1477,7 @@ defmodule Gralkor.GraphitiPool do
     decoded = Pythonx.decode(raw)
     {:ok, %{communities: decoded["communities"], edges: decoded["edges"]}}
   rescue
-    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
+    e in Pythonx.Error -> python_failure(e, :build_communities)
   end
 
   defp install_search_filters! do
@@ -1493,6 +1493,21 @@ defmodule Gralkor.GraphitiPool do
     :ok
   rescue
     e in Pythonx.Error -> raise RuntimeError, summarise_python_error(e)
+  end
+
+  # A socket read timeout and an expired bridge deadline both surface here. A
+  # deadlocked FalkorDB stays locked until it restarts, so retries also time out;
+  # the log line is what makes that visible.
+  @spec python_failure(Pythonx.Error.t(), atom()) :: {:error, :timeout | {:python, String.t()}}
+  defp python_failure(error, stage) do
+    summary = summarise_python_error(error)
+
+    if Regex.match?(~r/^(\w+\.)*TimeoutError\b/, summary) do
+      Logger.error("[gralkor] graph operation timed out — stage:#{stage} reason:#{summary}")
+      {:error, :timeout}
+    else
+      {:error, {:python, summary}}
+    end
   end
 
   @doc """
@@ -1876,7 +1891,7 @@ defmodule Gralkor.GraphitiPool do
       episode -> {:ok, episode}
     end
   rescue
-    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
+    e in Pythonx.Error -> python_failure(e, :get_episode)
   end
 
   # ── GenServer ──────────────────────────────────────────────
@@ -1890,7 +1905,8 @@ defmodule Gralkor.GraphitiPool do
     validate_native_models!(inference)
     install_search_filters!()
 
-    socket_timeout = embedded_falkordb_socket_timeout(falkordb_spec, opts)
+    socket_timeout = falkordb_socket_timeout(falkordb_spec, opts)
+    deadline_ms = graph_operation_deadline(opts)
     construct_falkor_db = Keyword.get(opts, :construct_falkor_db, &default_construct_falkor_db/2)
 
     close_falkor_db =
@@ -1908,7 +1924,11 @@ defmodule Gralkor.GraphitiPool do
     construct_instance = Keyword.get(opts, :construct_instance, &default_construct_instance/3)
     initialise_instance = Keyword.get(opts, :initialise_instance, &initialise_instance/1)
     warmup? = Keyword.get(opts, :warmup, true)
-    install_loop_fn = Keyword.get(opts, :install_loop_fn, &Gralkor.Python.install_async_runtime/0)
+
+    install_loop_fn =
+      Keyword.get(opts, :install_loop_fn, fn ->
+        Gralkor.Python.install_async_runtime(deadline_ms)
+      end)
 
     :ets.new(table, [:set, :public, :named_table, read_concurrency: true])
     register_table(self(), table)
