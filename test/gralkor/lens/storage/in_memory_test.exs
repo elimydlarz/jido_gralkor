@@ -112,4 +112,3 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
   defp key(%Store{operator_id: operator_id, lens: %{destination: destination}}),
     do: Destination.graph_id(destination, operator_id)
 end
-end

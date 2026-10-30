@@ -1059,11 +1059,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   defp setup_runtime_configuration do
     %{
       destinations: Application.fetch_env!(:jido_gralkor, :destinations),
-      lenses:
-        Enum.map(
-          Application.fetch_env!(:jido_gralkor, :lenses),
-          &Keyword.put(&1, :write, :append)
-        ),
+      lenses: Application.fetch_env!(:jido_gralkor, :lenses),
       reflections: []
     }
   end
