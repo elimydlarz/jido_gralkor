@@ -77,13 +77,7 @@ defmodule Gralkor.Capture do
       {:lenses, names} ->
         owner
         |> Runtime.lenses!(Enum.uniq(names))
-        |> Enum.map(fn
-          %Lens{} = lens ->
-            {:lens, lens}
-
-          lens ->
-            raise ArgumentError, "Lens #{inspect(lens.name)} accepts only whole-graph replacement"
-        end)
+        |> Enum.map(&{:lens, &1})
     end
   end
 

@@ -6,7 +6,6 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   alias Gralkor.GraphitiPool
   alias Gralkor.Destination
   alias Gralkor.Lens
-  alias Gralkor.Lens.Replaceable
   alias Gralkor.Lens.Store
 
   @type add_episode_fn ::
@@ -15,33 +14,10 @@ defmodule Gralkor.Lens.Storage.Graphiti do
   @type search_fn ::
           (String.t(), String.t(), pos_integer() ->
              {:ok, [String.t()]} | {:error, term()})
-  @type replace_graph_fn ::
-          (String.t(), String.t(), map() -> :ok | {:error, term()})
 
   @impl true
   def add_episode(%Store{} = store, content, source_description) do
     add_episode(store, content, source_description, [])
-  end
-
-  @impl Gralkor.Lens.Storage
-  def replace_graph(%Store{} = store, graph) do
-    replace_graph(store, graph, [])
-  end
-
-  @spec replace_graph(Store.t(), Gralkor.Graph.t(), replace_graph_fn: replace_graph_fn()) ::
-          :ok | {:error, term()}
-  def replace_graph(
-        %Store{operator_id: operator_id, lens: %Replaceable{} = lens},
-        %Gralkor.Graph{} = graph,
-        opts
-      ) do
-    replace_graph_fn = replace_graph_option(opts)
-
-    replace_graph_fn.(
-      Destination.graph_id(lens.destination, operator_id),
-      lens.name,
-      Map.from_struct(graph)
-    )
   end
 
   @spec add_episode(Store.t(), String.t(), String.t(), keyword()) ::
@@ -96,20 +72,6 @@ defmodule Gralkor.Lens.Storage.Graphiti do
       ontology,
       graph_opts
     )
-  end
-
-  defp graph_replace(group_id, lens_name, data) do
-    GraphitiPool.replace_graph(group_id, lens_name, :property_graph, data)
-  end
-
-  defp replace_graph_option(opts) do
-    case Keyword.pop(opts, :replace_graph_fn, &graph_replace/3) do
-      {replace_graph_fn, []} ->
-        replace_graph_fn
-
-      {_replace_graph_fn, unsupported} ->
-        raise ArgumentError, "unsupported replace options #{inspect(unsupported)}"
-    end
   end
 
   defp search_option(opts) do

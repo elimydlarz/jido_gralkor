@@ -46,11 +46,9 @@ defmodule Gralkor.Search do
   only what the selected Lenses wrote there:
 
   * episodes whose writer is a selected Lens;
-  * facts drawn from such an episode, or written by a selected replaceable
-    Lens's graph replacement; each fact's `sources` keep only selected-Lens
-    episodes;
-  * nodes mentioned by such an episode, or owned by a selected Lens's graph
-    replacement.
+  * facts drawn from such an episode; each fact's `sources` keep only
+    selected-Lens episodes;
+  * nodes mentioned by such an episode.
 
   Direct writes, other Lenses, and Reflection artefacts never contribute. On
   Graphiti every restriction is applied inside the graph queries, before

@@ -3,17 +3,15 @@ defmodule Gralkor.Lens.Store do
   Storage capability passed to a `Gralkor.Lens.Ingestion` process.
 
   The Store is already bound to an operator and resolved Lens. Additions use
-  an appending Lens's ontology and Destination; complete replacements use a
-  replaceable Lens's fixed graph representation and ownership; searches use its Destination.
-  Ingestion processes should use this capability rather than choose Graphiti
-  group IDs themselves.
+  its ontology and Destination; searches use its Destination. Ingestion
+  processes should use this capability rather than choose Graphiti group IDs
+  themselves.
 
   Global provenance is attached by the storage adapter and does not need to be
   supplied by the process.
   """
 
   alias Gralkor.Lens
-  alias Gralkor.Lens.Replaceable
   alias Gralkor.IngestedRepresentation
 
   @enforce_keys [:operator_id, :lens]
@@ -21,7 +19,7 @@ defmodule Gralkor.Lens.Store do
 
   @type t :: %__MODULE__{
           operator_id: String.t(),
-          lens: Lens.t() | Replaceable.t(),
+          lens: Lens.t(),
           source_kind: Gralkor.Ingest.source_kind() | nil,
           representation_collector: (IngestedRepresentation.t() -> any()) | nil
         }
@@ -39,12 +37,6 @@ defmodule Gralkor.Lens.Store do
       {:error, _} = error ->
         error
     end
-  end
-
-  @spec replace_graph(t(), Gralkor.Graph.t()) :: :ok | {:error, term()}
-  @doc "Replaces the complete graph owned by the bound replaceable Lens."
-  def replace_graph(%__MODULE__{} = store, graph) do
-    storage().replace_graph(store, graph)
   end
 
   @spec search(t(), String.t(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}

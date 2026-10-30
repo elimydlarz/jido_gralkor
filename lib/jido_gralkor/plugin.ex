@@ -153,14 +153,6 @@ defmodule JidoGralkor.Plugin do
     unless lens_name in names do
       raise ArgumentError, "unknown Lens #{inspect(lens_name)}"
     end
-
-    if Enum.any?(
-         declared,
-         &(fetch_opt(&1, :name) == lens_name and fetch_opt(&1, :write) == :replace_graph)
-       ) do
-      raise ArgumentError,
-            "ingestion Lens #{inspect(lens_name)} accepts only whole-graph replacement and cannot ingest conversation capture"
-    end
   end
 
   defp fetch_opt(opts, key) when is_list(opts), do: Keyword.get(opts, key)
@@ -406,16 +398,7 @@ defmodule JidoGralkor.Plugin do
 
   defp runtime_lens!(_owner, nil), do: :ok
 
-  defp runtime_lens!(owner, lens) when is_binary(lens) do
-    case Runtime.lens!(owner, lens) do
-      %Gralkor.Lens.Replaceable{} ->
-        raise ArgumentError,
-              "invalid Lens #{inspect(lens)}: it accepts only whole-graph replacement and cannot ingest conversation capture"
-
-      definition ->
-        definition
-    end
-  end
+  defp runtime_lens!(owner, lens) when is_binary(lens), do: Runtime.lens!(owner, lens)
 
   defp runtime_lens!(_owner, lens), do: raise(ArgumentError, "invalid Lens #{inspect(lens)}")
 

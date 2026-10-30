@@ -228,21 +228,12 @@ defmodule JidoGralkor.Runtime do
           }
         ] ++
           Enum.map(configuration.lenses, fn definition ->
-            case field(definition, :write) do
-              :replace_graph ->
-                %Gralkor.Lens.Replaceable{
-                  name: field(definition, :name),
-                  destination: Map.fetch!(destination_index, field(definition, :destination))
-                }
-
-              _ ->
-                %Lens{
-                  name: field(definition, :name),
-                  destination: Map.fetch!(destination_index, field(definition, :destination)),
-                  ontology: ontology(definition),
-                  ingestion: field(definition, :ingestion)
-                }
-            end
+            %Lens{
+              name: field(definition, :name),
+              destination: Map.fetch!(destination_index, field(definition, :destination)),
+              ontology: ontology(definition),
+              ingestion: field(definition, :ingestion)
+            }
           end)
 
       reflections =
@@ -285,7 +276,7 @@ defmodule JidoGralkor.Runtime do
   defp validate_definition_fields(configuration) do
     allowed = %{
       destinations: [:name],
-      lenses: [:name, :destination, :write, :ingestion, :ontology],
+      lenses: [:name, :destination, :ingestion, :ontology],
       reflections: [:name, :outputs, :chain_of_thought]
     }
 
@@ -298,7 +289,7 @@ defmodule JidoGralkor.Runtime do
                      nil
 
                    unknown ->
-                     {:unknown_definition_fields, collection, field(definition, :name), unknown}
+                     unknown_definition_fields(collection, field(definition, :name), unknown)
                  end
 
                :error ->
@@ -310,6 +301,15 @@ defmodule JidoGralkor.Runtime do
       end
     end)
   end
+
+  defp unknown_definition_fields(:lenses, name, unknown) do
+    if Enum.any?(unknown, &known_field?(&1, [:write])),
+      do: {:removed_lens_write, name, Lens.removed_write_guidance()},
+      else: {:unknown_definition_fields, :lenses, name, unknown}
+  end
+
+  defp unknown_definition_fields(collection, name, unknown),
+    do: {:unknown_definition_fields, collection, name, unknown}
 
   defp definition_keys(definition) when is_map(definition), do: {:ok, Map.keys(definition)}
 
@@ -408,35 +408,18 @@ defmodule JidoGralkor.Runtime do
     Enum.reduce_while(lenses, :ok, fn definition, :ok ->
       name = field(definition, :name)
 
-      result =
-        case field(definition, :write) do
-          :append ->
-            ingestion = field(definition, :ingestion)
-            ontology = ontology(definition)
+      ingestion = field(definition, :ingestion)
+      ontology = ontology(definition)
 
-            cond do
-              not valid_ingestion?(ingestion) ->
-                {:error, {:invalid_lens_ingestion, name, ingestion}}
+      cond do
+        not valid_ingestion?(ingestion) ->
+          {:halt, {:error, {:invalid_lens_ingestion, name, ingestion}}}
 
-              not valid_ontology?(ontology) ->
-                {:error, {:invalid_lens_ontology, name, ontology}}
+        not valid_ontology?(ontology) ->
+          {:halt, {:error, {:invalid_lens_ontology, name, ontology}}}
 
-              true ->
-                :ok
-            end
-
-          :replace_graph ->
-            if has_field?(definition, :ingestion) or has_field?(definition, :ontology),
-              do: {:error, {:incompatible_lens_definition, name}},
-              else: :ok
-
-          write ->
-            {:error, {:invalid_lens_write, name, write}}
-        end
-
-      case result do
-        :ok -> {:cont, :ok}
-        {:error, _reason} = error -> {:halt, error}
+        true ->
+          {:cont, :ok}
       end
     end)
   end
@@ -920,11 +903,6 @@ defmodule JidoGralkor.Runtime do
 
   defp field(keyword, key) when is_list(keyword), do: Keyword.get(keyword, key)
   defp field(_, _), do: nil
-
-  defp has_field?(map, key) when is_map(map),
-    do: Map.has_key?(map, key) or Map.has_key?(map, Atom.to_string(key))
-
-  defp has_field?(keyword, key) when is_list(keyword), do: Keyword.has_key?(keyword, key)
 
   defp ontology(definition) do
     case field(definition, :ontology) do

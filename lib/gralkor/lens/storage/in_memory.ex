@@ -7,7 +7,6 @@ defmodule Gralkor.Lens.Storage.InMemory do
 
   alias Gralkor.Lens
   alias Gralkor.Destination
-  alias Gralkor.Lens.Replaceable
   alias Gralkor.Lens.Store
 
   @type episode :: %{
@@ -29,28 +28,12 @@ defmodule Gralkor.Lens.Storage.InMemory do
   @spec episodes(key()) :: [episode()]
   def episodes(key), do: GenServer.call(__MODULE__, {:episodes, key})
 
-  @spec graph(key()) :: map()
-  def graph(key), do: GenServer.call(__MODULE__, {:graph, key})
-
   @impl Gralkor.Lens.Storage
   def add_episode(%Store{} = store, content, source_description) do
     GenServer.call(
       __MODULE__,
       {:add, key(store), episode(content, store.lens, source_description)}
     )
-  end
-
-  @impl Gralkor.Lens.Storage
-  def replace_graph(
-        %Store{lens: %Replaceable{name: lens_name}} = store,
-        %Gralkor.Graph{} = graph
-      ) do
-    owned_graph = %{
-      nodes: Enum.map(graph.nodes, &put_owner(&1, lens_name)),
-      relationships: Enum.map(graph.relationships, &put_owner(&1, lens_name))
-    }
-
-    GenServer.call(__MODULE__, {:replace_graph, key(store), lens_name, owned_graph})
   end
 
   @impl Gralkor.Lens.Storage
@@ -68,26 +51,8 @@ defmodule Gralkor.Lens.Storage.InMemory do
     {:reply, {:ok, contents}, state}
   end
 
-  def handle_call({:replace_graph, key, lens_name, graph}, _from, state) do
-    retained =
-      state
-      |> Map.get({:graph, key}, %{nodes: [], relationships: []})
-      |> retain_other_owners(lens_name)
-
-    replacement = %{
-      nodes: retained.nodes ++ graph.nodes,
-      relationships: retained.relationships ++ graph.relationships
-    }
-
-    {:reply, :ok, Map.put(state, {:graph, key}, replacement)}
-  end
-
   def handle_call({:episodes, key}, _from, state) do
     {:reply, Map.get(state, key, []), state}
-  end
-
-  def handle_call({:graph, key}, _from, state) do
-    {:reply, Map.get(state, {:graph, key}, %{nodes: [], relationships: []}), state}
   end
 
   @spec episode(String.t(), Lens.t(), String.t()) :: episode()
@@ -97,9 +62,7 @@ defmodule Gralkor.Lens.Storage.InMemory do
   defp key(%Store{operator_id: operator_id, lens: %{destination: destination}}),
     do: Destination.graph_id(destination, operator_id)
 
-  defp put_owner(entity, lens_name) do
-    Map.update!(entity, :properties, &Map.put(&1, :_gralkor_lens, lens_name))
-  end
+end
 
   defp retain_other_owners(graph, lens_name) do
     %{

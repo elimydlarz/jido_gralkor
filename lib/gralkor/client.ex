@@ -2,13 +2,12 @@ defmodule Gralkor.Client do
   @moduledoc """
   Public entry point and adapter port for Gralkor memory.
 
-  Named Lens operations use `ingest/1` and `replace/1`; `search/1` reads
-  registered Destinations and may filter episode writers by Lens.
-  Ingestion resolves an appending Lens and invokes its ingestion process with a
-  Lens-bound store. Replacement validates and stores the complete graph for a
-  replaceable Lens. Lenses and Reflections reference first-class Destinations,
-  each of which names one graph. Appending Lenses select the ontology for their
-  writes; Reflection Destination outputs select it for runtime-delivered
+  Named Lens operations use `ingest/1`; `search/1` reads registered Destinations
+  and may filter episode writers by Lens. Ingestion resolves a Lens and invokes
+  its ingestion process with a Lens-bound store. Lenses and Reflections reference
+  first-class Destinations, each of which names one graph. Lenses select the
+  ontology for their writes; Reflection Destination outputs select it for
+  runtime-delivered
   artefacts. The runtime-targeted arities resolve names from one consuming
   AgentServer's atomic configuration snapshot. `reflect/5` admits an invocation
   without waiting for production and reports its terminal result through the
@@ -62,9 +61,7 @@ defmodule Gralkor.Client do
   alias Gralkor.Destination.Registry, as: DestinationRegistry
   alias Gralkor.Lens
   alias Gralkor.Lens.Ingestion.Store, as: StoreIngestion
-  alias Gralkor.Lens.Replaceable, as: ReplaceableLens
   alias Gralkor.Lens.Store
-  alias Gralkor.Replace
   alias Gralkor.Destination.Storage, as: DestinationStorage
   alias Gralkor.Search
   alias JidoGralkor.Runtime
@@ -159,30 +156,23 @@ defmodule Gralkor.Client do
     Ingest.validate_id!(request.id)
     Ingest.validate_source!(request.source_kind, request.content)
 
-    case lens do
-      %Lens{} = lens ->
-        collection_ref = make_ref()
-        caller = self()
+    collection_ref = make_ref()
+    caller = self()
 
-        store = %Store{
-          operator_id: request.operator_id,
-          lens: lens,
-          source_kind: request.source_kind,
-          representation_collector: &send(caller, {collection_ref, &1})
-        }
+    store = %Store{
+      operator_id: request.operator_id,
+      lens: lens,
+      source_kind: request.source_kind,
+      representation_collector: &send(caller, {collection_ref, &1})
+    }
 
-        case lens.ingestion.ingest(request, store) do
-          :ok ->
-            {:ok, collect_representations(collection_ref, [])}
+    case lens.ingestion.ingest(request, store) do
+      :ok ->
+        {:ok, collect_representations(collection_ref, [])}
 
-          {:error, _} = error ->
-            _discarded = collect_representations(collection_ref, [])
-            error
-        end
-
-      %ReplaceableLens{} ->
-        raise ArgumentError,
-              "Lens #{inspect(request.lens)} accepts only whole-graph replacement"
+      {:error, _} = error ->
+        _discarded = collect_representations(collection_ref, [])
+        error
     end
   end
 
@@ -193,92 +183,6 @@ defmodule Gralkor.Client do
     after
       0 -> Enum.reverse(representations)
     end
-  end
-
-  @spec replace(Replace.t()) :: :ok | {:error, term()}
-  def replace(%Replace{lens: lens_name, graph: graph} = request) do
-    replace_with_resolved_lens(request, graph, lens!(lens_name))
-  end
-
-  @spec replace(runtime_owner(), Replace.t()) :: :ok | {:error, term()}
-  def replace(runtime_owner, %Replace{lens: lens_name, graph: graph} = request) do
-    replace_with_resolved_lens(request, graph, Runtime.lens!(runtime_owner, lens_name))
-  end
-
-  defp replace_with_resolved_lens(request, graph, lens) do
-    case lens do
-      %ReplaceableLens{} = lens ->
-        validate_graph!(lens, graph)
-        store = %Store{operator_id: request.operator_id, lens: lens}
-        Store.replace_graph(store, graph)
-
-      %Lens{} ->
-        raise ArgumentError, "Lens #{inspect(request.lens)} accepts only episode ingestion"
-    end
-  end
-
-  defp validate_graph!(%ReplaceableLens{}, %Gralkor.Graph{} = graph) do
-    validate_graph_data!(graph)
-  end
-
-  defp validate_graph!(%ReplaceableLens{}, graph),
-    do: invalid_graph!("expected a Gralkor.Graph", graph)
-
-  defp validate_graph_data!(%Gralkor.Graph{nodes: nodes, relationships: relationships} = graph)
-       when is_list(nodes) and is_list(relationships) do
-    node_ids = validate_graph_nodes!(nodes, graph)
-    validate_graph_relationships!(relationships, node_ids, graph)
-  end
-
-  defp validate_graph_data!(graph),
-    do: invalid_graph!("expected node and relationship lists", graph)
-
-  defp validate_graph_nodes!(nodes, graph) do
-    Enum.reduce(nodes, MapSet.new(), fn node, node_ids ->
-      case node do
-        %{id: id, labels: labels, properties: properties}
-        when is_binary(id) and is_list(labels) and is_map(properties) ->
-          unless String.trim(id) != "" and
-                   Enum.all?(labels, &(is_binary(&1) and String.trim(&1) != "")) do
-            invalid_graph!("invalid node", graph)
-          end
-
-          if MapSet.member?(node_ids, id) do
-            invalid_graph!("duplicate node identifier #{inspect(id)}", graph)
-          end
-
-          MapSet.put(node_ids, id)
-
-        _ ->
-          invalid_graph!("invalid node", graph)
-      end
-    end)
-  end
-
-  defp validate_graph_relationships!(relationships, node_ids, graph) do
-    Enum.each(relationships, fn relationship ->
-      case relationship do
-        %{from: source, to: destination, type: type, properties: properties}
-        when is_binary(source) and is_binary(destination) and is_binary(type) and
-               is_map(properties) ->
-          unless String.trim(type) != "" do
-            invalid_graph!("invalid relationship", graph)
-          end
-
-          Enum.each([source, destination], fn endpoint ->
-            unless MapSet.member?(node_ids, endpoint) do
-              invalid_graph!("missing relationship endpoint #{inspect(endpoint)}", graph)
-            end
-          end)
-
-        _ ->
-          invalid_graph!("invalid relationship", graph)
-      end
-    end)
-  end
-
-  defp invalid_graph!(reason, graph) do
-    raise ArgumentError, "invalid graph data: #{reason}; got #{inspect(graph)}"
   end
 
   @spec search(Search.t()) ::
@@ -431,7 +335,7 @@ defmodule Gralkor.Client do
   defp validate_lens_names!(names),
     do: raise(ArgumentError, "search lenses must be a list, got #{inspect(names)}")
 
-  @spec lens!(String.t()) :: Lens.t() | ReplaceableLens.t()
+  @spec lens!(String.t()) :: Lens.t()
   def lens!(name) do
     lenses = registered_lenses!()
 
@@ -449,29 +353,16 @@ defmodule Gralkor.Client do
   end
 
   defp resolve_lens(definition) do
-    case Keyword.get(definition, :write, :append) do
-      :append ->
-        %Lens{
-          name: Keyword.fetch!(definition, :name),
-          destination:
-            fetch_lens_destination!(
-              Keyword.fetch!(definition, :name),
-              Keyword.get(definition, :destination)
-            ),
-          ontology: Keyword.get(definition, :ontology, Gralkor.DefaultOntology),
-          ingestion: Keyword.fetch!(definition, :ingestion)
-        }
-
-      :replace_graph ->
-        %ReplaceableLens{
-          name: Keyword.fetch!(definition, :name),
-          destination:
-            fetch_lens_destination!(
-              Keyword.fetch!(definition, :name),
-              Keyword.get(definition, :destination)
-            )
-        }
-    end
+    %Lens{
+      name: Keyword.fetch!(definition, :name),
+      destination:
+        fetch_lens_destination!(
+          Keyword.fetch!(definition, :name),
+          Keyword.get(definition, :destination)
+        ),
+      ontology: Keyword.get(definition, :ontology, Gralkor.DefaultOntology),
+      ingestion: Keyword.fetch!(definition, :ingestion)
+    }
   end
 
   defp registered_lenses! do
@@ -527,43 +418,29 @@ defmodule Gralkor.Client do
       raise ArgumentError, "invalid Lens #{inspect(name)}: scope and address are unsupported"
     end
 
-    if Keyword.has_key?(definition, :graph_format) do
+    if Keyword.has_key?(definition, :write) do
       raise ArgumentError,
-            "invalid Lens #{inspect(name)}: graph_format is unsupported; Gralkor has one fixed graph representation"
+            "invalid Lens #{inspect(name)}: #{Gralkor.Lens.removed_write_guidance()}"
     end
 
-    validate_lens_write!(name, definition)
+    validate_lens_settings!(name, definition)
   end
 
   defp validate_lens!(definition) do
     raise ArgumentError, "invalid Lens definition #{inspect(definition)}"
   end
 
-  defp validate_lens_write!(name, definition) do
-    case Keyword.get(definition, :write, :append) do
-      :append ->
-        destination = Keyword.get(definition, :destination)
-        ontology = Keyword.get(definition, :ontology, Gralkor.DefaultOntology)
-        ingestion = Keyword.get(definition, :ingestion)
+  defp validate_lens_settings!(name, definition) do
+    destination = Keyword.get(definition, :destination)
+    ontology = Keyword.get(definition, :ontology, Gralkor.DefaultOntology)
+    ingestion = Keyword.get(definition, :ingestion)
 
-        fetch_lens_destination!(name, destination)
-        validate_lens_ontology!(name, ontology)
+    fetch_lens_destination!(name, destination)
+    validate_lens_ontology!(name, ontology)
 
-        unless is_atom(ingestion) and Code.ensure_loaded?(ingestion) and
-                 function_exported?(ingestion, :ingest, 2) do
-          raise ArgumentError, "invalid Lens #{inspect(name)} ingestion #{inspect(ingestion)}"
-        end
-
-      :replace_graph ->
-        fetch_lens_destination!(name, Keyword.get(definition, :destination))
-
-        if Keyword.has_key?(definition, :ontology) or Keyword.has_key?(definition, :ingestion) do
-          raise ArgumentError,
-                "invalid Lens #{inspect(name)} combines appending and replaceable write settings"
-        end
-
-      write ->
-        raise ArgumentError, "invalid Lens #{inspect(name)} write mode #{inspect(write)}"
+    unless is_atom(ingestion) and Code.ensure_loaded?(ingestion) and
+             function_exported?(ingestion, :ingest, 2) do
+      raise ArgumentError, "invalid Lens #{inspect(name)} ingestion #{inspect(ingestion)}"
     end
   end
 

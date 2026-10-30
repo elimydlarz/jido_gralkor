@@ -310,101 +310,6 @@ defmodule Gralkor.GraphitiPool do
 
   # ── Public API ──────────────────────────────────────────────
 
-  @spec replace_graph(
-          GenServer.server(),
-          String.t(),
-          String.t(),
-          :property_graph,
-          Gralkor.Graph.property_graph()
-        ) ::
-          :ok | {:error, term()}
-  def replace_graph(
-        server \\ __MODULE__,
-        group_id,
-        lens_name,
-        :property_graph,
-        %{nodes: nodes, relationships: relationships}
-      ) do
-    instance = __MODULE__.for(server, group_id)
-
-    Pythonx.eval(
-      """
-      import asyncio
-      def text(value):
-          return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else str(value)
-
-      def native(value):
-          if isinstance(value, (bytes, bytearray)):
-              return value.decode('utf-8')
-          if isinstance(value, dict):
-              return {text(key): native(item) for key, item in value.items()}
-          if isinstance(value, (list, tuple)):
-              return [native(item) for item in value]
-          return value
-
-      def get(mapping, key):
-          return mapping.get(key, mapping.get(key.encode('utf-8')))
-
-      def identifier(value):
-          return '`' + text(value).replace('`', '``') + '`'
-
-      owner = lens.decode('utf-8') if isinstance(lens, (bytes, bytearray)) else lens
-      asyncio._gralkor_run(g.driver.execute_query(
-          'MATCH ()-[relationship]->() '
-          'WHERE relationship._gralkor_lens = $lens '
-          'DELETE relationship',
-          lens=owner,
-      ))
-      asyncio._gralkor_run(g.driver.execute_query(
-          'MATCH (node) '
-          'WHERE node._gralkor_lens = $lens '
-          'DELETE node',
-          lens=owner,
-      ))
-      for supplied_node in nodes:
-          node_id = text(get(supplied_node, 'id'))
-          labels = ''.join(':' + identifier(label) for label in get(supplied_node, 'labels'))
-          supplied_properties = get(supplied_node, 'properties')
-          properties = native(supplied_properties)
-          properties['id'] = node_id
-          properties['_gralkor_lens'] = owner
-          asyncio._gralkor_run(g.driver.execute_query(
-              f'CREATE (node{labels}) SET node = $properties',
-              properties=properties,
-          ))
-      for supplied_relationship in relationships:
-          source_id = text(get(supplied_relationship, 'from'))
-          destination_id = text(get(supplied_relationship, 'to'))
-          relationship_type = identifier(get(supplied_relationship, 'type'))
-          supplied_properties = get(supplied_relationship, 'properties')
-          properties = native(supplied_properties)
-          properties['_gralkor_lens'] = owner
-          asyncio._gralkor_run(g.driver.execute_query(
-              'MATCH (source), (destination) '
-              'WHERE source._gralkor_lens = $lens AND source.id = $source_id '
-              'AND destination._gralkor_lens = $lens AND destination.id = $destination_id '
-              f'CREATE (source)-[relationship:{relationship_type}]->(destination) '
-              'SET relationship = $properties',
-              lens=owner,
-              source_id=source_id,
-              destination_id=destination_id,
-              properties=properties,
-          ))
-      None
-      """,
-      %{
-        "g" => instance,
-        "lens" => lens_name,
-        "nodes" => nodes,
-        "relationships" => relationships
-      }
-    )
-
-    :ok
-  rescue
-    e in Pythonx.Error -> {:error, {:python, summarise_python_error(e)}}
-  end
-
   def start_link(opts \\ []) do
     name = Keyword.get(opts, :name, __MODULE__)
     GenServer.start_link(__MODULE__, opts, if(name, do: [name: name], else: []))
@@ -492,9 +397,7 @@ defmodule Gralkor.GraphitiPool do
   query is embedded once for every kind.
 
   The search runs on the physically encoded group's own graph instance, whose
-  driver is bound to that group's database, and passes no `group_ids`: content
-  a Lens graph replacement inserted with any stored `group_id` is still found,
-  as 11.2.0's edge search found it.
+  driver is bound to that group's database, and passes no `group_ids`.
 
   One `SearchFilters(node_labels: …, edge_types: …)` applies to the whole
   search. Graphiti applies `node_labels` to nodes directly and to edges through
@@ -515,8 +418,7 @@ defmodule Gralkor.GraphitiPool do
     * `:lenses` — optional `[String.t()]` Lens names. Episodes are restricted
       to those whose source description ends with a selected ` [lens: NAME]`
       marker (never a durable direct write); edges to those drawn from such an
-      episode or carrying a selected `_gralkor_lens`; nodes to those such an
-      episode `MENTIONS` or carrying a selected `_gralkor_lens`. Edges use
+      episode; nodes to those such an episode `MENTIONS`. Edges use
       `SearchFilters.edge_uuids`; nodes and episodes use the `node_uuids` and
       `episode_uuids` that `install_lens_search_filters` adds to graphiti's
       node and FalkorDB episode full-text queries, so every restriction applies
@@ -653,12 +555,10 @@ defmodule Gralkor.GraphitiPool do
           edge_records, _, _ = await g.driver.execute_query(
             '''
             MATCH (:Entity)-[edge:RELATES_TO]->(:Entity)
-            WHERE (edge._gralkor_lens IN $lens_names
-              OR any(id IN coalesce(edge.episodes, []) WHERE id IN $episode_uuids))
+            WHERE any(id IN coalesce(edge.episodes, []) WHERE id IN $episode_uuids)
               AND edge.uuid IS NOT NULL
             RETURN edge.uuid AS uuid
             ''',
-            lens_names=lens_names,
             episode_uuids=episode_uuids,
           )
           mentioned_records, _, _ = await g.driver.execute_query(
@@ -669,15 +569,10 @@ defmodule Gralkor.GraphitiPool do
             ''',
             episode_uuids=episode_uuids,
           )
-          owned_records, _, _ = await g.driver.execute_query(
-            'MATCH (node:Entity) WHERE node._gralkor_lens IN $lens_names AND node.uuid IS NOT NULL '
-            'RETURN node.uuid AS uuid',
-            lens_names=lens_names,
-          )
           return (
             episode_uuids,
             uuids(edge_records),
-            uuids(mentioned_records + owned_records),
+            uuids(mentioned_records),
           )
 
         async def search_memory():
