@@ -62,6 +62,8 @@ config :jido_gralkor,
   ]
 ```
 
+`:remote_falkordb_socket_timeout_ms` (default `60_000`) reaches the remote `FalkorDB` client as `socket_timeout` and `socket_connect_timeout`, in seconds, and is validated when the remote backend starts. `:graph_operation_deadline_ms` (default `1_800_000`) bounds every `asyncio._gralkor_run` call on either backend; it covers inference, so it must outlast a healthy episode write, and it is separate from the socket timeout for that reason. An expired deadline cancels the coroutine. Either timeout reaches callers as `{:error, :timeout}` and logs its stage; `GraphitiPool` maps any `TimeoutError` escaping the bridge, whether builtin or from redis-py. `FalkorDB(...)` probes the server during construction, so a server that never answers fails pool startup at the socket timeout.
+
 Remote wins when both are configured. Misconfiguration (non-keyword value, missing host/port, blank host, non-positive port) raises `ArgumentError` at app start before any child is supervised — operator typos surface immediately, not under the first user request.
 
 `GraphitiPool` traps supervisor exit signals so its termination callback closes owned graph resources during graceful supervisor shutdown. The application lifecycle Functional test stops a real supervisor and verifies its embedded server has exited; the Journey also verifies owned-resource cleanup.

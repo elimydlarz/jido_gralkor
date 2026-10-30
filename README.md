@@ -119,6 +119,16 @@ config :jido_gralkor,
 
 The setting is passed to the embedded Redis client as `socket_timeout`; it is ignored by remote FalkorDB. A zero, negative, or non-integer value raises `ArgumentError` when the embedded runtime starts.
 
+Two settings bound how long a graph operation can wait:
+
+```elixir
+config :jido_gralkor,
+  remote_falkordb_socket_timeout_ms: 60_000,
+  graph_operation_deadline_ms: 1_800_000
+```
+
+`:remote_falkordb_socket_timeout_ms` limits how long the remote client waits on its socket. `:graph_operation_deadline_ms` limits one whole call into the graph library, inference included, so set it above your longest healthy episode write. Expiring either one makes `GraphitiPool.add_episode/6` and `Client.ingest/2` return `{:error, :timeout}`, cancels the outstanding work, and logs the stage that timed out. A zero, negative, or non-integer value raises `ArgumentError` at startup; the socket timeout is validated only when the remote runtime starts. A FalkorDB deadlocked by a write stays locked until it restarts, so retries also time out until then.
+
 **2. In-memory client in tests.** Swap the adapter for the in-memory twin:
 
 ```elixir
@@ -172,11 +182,13 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
 | `:embedded_falkordb_socket_timeout_ms` | positive integer | `60_000` | Socket read timeout for the embedded FalkorDB connection, converted to seconds for `AsyncFalkorDB`. Ignored by remote FalkorDB. Invalid values raise `ArgumentError` when the embedded runtime starts. |
+| `:remote_falkordb_socket_timeout_ms` | positive integer | `60_000` | Socket timeout for the remote FalkorDB connection, converted to seconds for `FalkorDB`. Ignored by embedded FalkorDB. |
+| `:graph_operation_deadline_ms` | positive integer | `1_800_000` | Deadline for one call into the graph library, inference included. On expiry the call is cancelled and returns `{:error, :timeout}`. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool → CaptureBuffer). |
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
 | `:destination_storage` | module implementing `Gralkor.Destination.Storage` | `Gralkor.Destination.Storage.Graphiti` | The single memory boundary behind `Client.search/1` and Reflection Destination outputs. Artefact writes create-or-confirm by stable `artefact.id`. Set to `Gralkor.Destination.Storage.InMemory` in tests. |
 | `:destinations` | list of Destination definitions | `[]` | Application compatibility registry for direct client calls without an AgentServer target. Mounted agents use their own `:runtime_config`. |
-| `:lenses` | list of Lens definitions | `[]` | Application compatibility registry for direct client calls without an AgentServer target. An omitted write mode defaults to `:append`; mounted-agent Lens definitions declare their write mode explicitly. |
+| `:lenses` | list of Lens definitions | `[]` | Application compatibility registry for direct client calls without an AgentServer target. A retained `:write` field raises with migration guidance; mounted-agent Lens definitions declare their write mode explicitly. |
 | `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall search and presentation. On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. |
 | `:test` | boolean | `false` | Verbose diagnostic logging: recall queries, returned facts, and flushed capture bodies are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
 
@@ -184,6 +196,8 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 # config/runtime.exs — everything optional, shown with its default
 config :jido_gralkor,
   embedded_falkordb_socket_timeout_ms: 60_000,
+  remote_falkordb_socket_timeout_ms: 60_000,
+  graph_operation_deadline_ms: 1_800_000,
   recall_deadline_ms: 12_000
 ```
 

@@ -163,7 +163,10 @@ defmodule Gralkor.Python do
               try:
                   return future.result(asyncio._gralkor_deadline_seconds)
               except concurrent.futures.TimeoutError:
-                  future.cancel()
+                  if future.cancel():
+                      raise TimeoutError(
+                          f'graph operation exceeded its {asyncio._gralkor_deadline_seconds}s deadline'
+                      ) from None
                   raise
           asyncio._gralkor_run = _gralkor_run
       """,

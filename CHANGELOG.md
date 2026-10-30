@@ -4,6 +4,10 @@
 
 Replacement Lenses are gone, because reliable ingestion of large structured graphs into Graphiti has been abandoned and nothing Graphiti searches could see their output. This is a breaking change; migration guidance follows each entry.
 
+### Added
+- `:remote_falkordb_socket_timeout_ms` (default `60_000`): the remote FalkorDB client now has a socket timeout. Invalid values raise `ArgumentError` when the remote runtime starts.
+- `:graph_operation_deadline_ms` (default `1_800_000`): a deadline on every call across the Python bridge. Expiry cancels the outstanding work. It covers inference, so raise it if a healthy episode write can take longer.
+
 ### Removed
 - **Breaking:** `Gralkor.Client.replace/1,2`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Lens.Replaceable`, `Gralkor.Lens.Store.replace_graph/2`, the `replace_graph/2` storage callback, and `GraphitiPool.replace_graph`. **Migrate:** write structured graphs to FalkorDB directly, outside Gralkor.
 - **Breaking:** the Lens `:write` field. Every Lens appends, so a definition that still supplies `:write` is rejected: runtime configuration returns `{:removed_lens_write, name, guidance}`, and the application registry raises `ArgumentError`. **Migrate:** delete `:write` from each Lens, and delete any `write: :replace_graph` Lens.
@@ -11,6 +15,7 @@ Replacement Lenses are gone, because reliable ingestion of large structured grap
 
 ### Changed
 - **Breaking:** a Lens search selector matches only episodes, the facts drawn from them, and the entities they mention. Content already marked `_gralkor_lens` in a deployed graph stays in the graph and in Lens-free search, but no Lens selector returns it. **Migrate:** delete it with a one-off Cypher cleanup if unwanted.
+- **Breaking:** a graph operation that times out returns `{:error, :timeout}` instead of `{:error, {:python, reason}}` or never returning, and logs the stage it hit. This covers every `GraphitiPool` operation. A FalkorDB that never answers now fails pool startup instead of hanging it. **Migrate:** handle `{:error, :timeout}` where you match on graph errors.
 - In-memory Destination search returns no nodes, because replacement was the only thing that wrote in-memory graph content.
 
 ## [13.0.0] - 2026-10-29
