@@ -61,7 +61,7 @@ From issue #1, this CR closes items 3, 4 and 6 (`max_tokens`, chunking, extracti
 **Consumer migration (Phil)**
 - Phil pins `~> 13.0`, so this removal reaches it only when it upgrades.
 - Before upgrading, remove `Phil.CodeGraph`'s `Client.replace` path, the seed's `code` Lenses, and the `replace_graph` option from `Phil.RuntimeConfiguration` and `RuntimeConfigurationLive`.
-- Drop `"write"` from the seed and from stored Lens definitions before upgrading.
+- Drop `"write"` from the seed and from stored Lens definitions in the same change as the upgrade, not before it: 13.0.0 refuses a runtime Lens without `write: :append` (`:invalid_lens_write`), and this removal raises on any `:write`.
 - Check whether any deployed graph holds `_gralkor_lens`-marked nodes. If it does, deleting them is a one-off Cypher cleanup, outside this CR.
 
 ---
