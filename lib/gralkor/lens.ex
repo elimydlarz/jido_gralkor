@@ -25,6 +25,6 @@ defmodule Gralkor.Lens do
   @doc "Migration guidance for a definition that retains the removed `:write` field."
   @spec removed_write_guidance() :: String.t()
   def removed_write_guidance do
-    ":write was removed with replacement Lenses; delete it from appending Lenses and delete any `write: :replace_graph` Lens"
+    ":write was removed with replacement Lenses; delete it from each Lens, and delete any Lens that replaced graphs"
   end
 end

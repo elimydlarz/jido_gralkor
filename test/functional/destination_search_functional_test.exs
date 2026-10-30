@@ -706,7 +706,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                %{uuid: "lesson", name: "amber lesson"}
              ]
     end
-
   end
 
   describe "when a Destination result carries nodes" do

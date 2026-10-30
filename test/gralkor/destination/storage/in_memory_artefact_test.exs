@@ -161,7 +161,6 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
       refute Enum.any?(episodes, &(Map.get(&1, :writer) == :direct))
       refute Enum.any?(facts, &(&1.fact == "direct one"))
     end
-
   end
 
   # One Destination holding an artefact, two appending Lenses' episodes, and a

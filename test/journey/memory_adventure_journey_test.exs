@@ -287,7 +287,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     test "and appending Lenses use that same graph", %{adventure: adventure} do
       assert adventure.appending_operator_graph
     end
-
   end
 
   describe "when the Journey consumer triggers generalisation after successive ingestions containing related observations" do

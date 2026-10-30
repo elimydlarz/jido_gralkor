@@ -300,7 +300,6 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-
     test "and a Lens retaining the removed `write` field is identified with migration guidance" do
       for write <- [:append, :replace_graph] do
         Application.put_env(:jido_gralkor, :lenses, [

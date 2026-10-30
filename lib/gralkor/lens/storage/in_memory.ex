@@ -61,17 +61,4 @@ defmodule Gralkor.Lens.Storage.InMemory do
 
   defp key(%Store{operator_id: operator_id, lens: %{destination: destination}}),
     do: Destination.graph_id(destination, operator_id)
-
-end
-
-  defp retain_other_owners(graph, lens_name) do
-    %{
-      nodes: Enum.reject(graph.nodes, &owned_by?(&1, lens_name)),
-      relationships: Enum.reject(graph.relationships, &owned_by?(&1, lens_name))
-    }
-  end
-
-  defp owned_by?(entity, lens_name) do
-    Map.get(entity.properties, :_gralkor_lens) == lens_name
-  end
 end
