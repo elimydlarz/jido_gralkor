@@ -41,7 +41,8 @@ From issue #1, this CR closes items 3, 4 and 6 (`max_tokens`, chunking, extracti
   - `GraphitiPool.replace_graph`
 - **Runtime:** remove `write: :replace_graph` support from `JidoGralkor.Runtime` (definition building, around lines 220 and 409).
 - **The `:write` key:** with only one write mode left, drop it from Lens definitions entirely. A definition that still supplies `:write`, or `write: :replace_graph`, raises at runtime-configuration validation with migration guidance, as the existing `:search_destinations` removal does.
-- **The `_gralkor_lens` marker:** it exists only for replacement ownership, so remove it from code and docs.
+- **The `_gralkor_lens` marker:** only replacement writes it, so remove it from code and docs, including the Lens search filters in `GraphitiPool.search_memory`.
+- **In-memory nodes:** replacement was the only writer of in-memory graph content, so in-memory Destination search returns no nodes.
 - **Docs:**
   - the Lenses bullet in CLAUDE.md's Mental Model, and the line "`_gralkor_lens` continues to mean replacement ownership"
   - the replacement sections in the README and `DESTINATIONS.md`
