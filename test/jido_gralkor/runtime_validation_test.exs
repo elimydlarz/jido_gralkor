@@ -186,8 +186,8 @@ defmodule JidoGralkor.RuntimeValidationTest do
     end
   end
 
-  describe "when an appending Lens declares `write: :append`, a Destination, and a valid ingestion module" do
-    test "then it resolves as an appending Lens" do
+  describe "when a Lens declares a Destination and a valid ingestion module" do
+    test "then it resolves as a Lens" do
       {:ok, _pid} = start_runtime(config())
       assert %Gralkor.Lens{name: "notes"} = Runtime.lens!(self(), "notes")
     end
@@ -199,7 +199,7 @@ defmodule JidoGralkor.RuntimeValidationTest do
     end
   end
 
-  describe "if an appending Lens has a missing or invalid ingestion module or an invalid ontology" do
+  describe "if a Lens has a missing or invalid ingestion module or an invalid ontology" do
     test "then validation identifies the Lens and invalid field" do
       c = update_in(config(), [:lenses, Access.at(0)], &Keyword.delete(&1, :ingestion))
       assert {:error, {:invalid_lens_ingestion, "notes", nil}} = validate(c)

@@ -1442,10 +1442,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   defp episode_content(%{"content" => content}), do: content
   defp episode_content(content) when is_binary(content), do: content
 
-  defp contains_fact?(results, text) do
-    Enum.any?(results, fn %{fact: fact} -> String.contains?(fact.fact, text) end)
-  end
-
   defp attributed_facts(
          agent,
          operator_id,
