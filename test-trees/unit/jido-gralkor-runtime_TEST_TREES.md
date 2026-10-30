@@ -56,24 +56,18 @@ if a Lens or Reflection name contains a reserved provenance delimiter
 if a Lens or Reflection references an unknown Destination
   then validation identifies the definition and Destination
 
-when an appending Lens declares `write: :append`, a Destination, and a valid ingestion module
-  then it resolves as an appending Lens
+when a Lens declares a Destination and a valid ingestion module
+  then it resolves as a Lens
   and an omitted ontology resolves to `Gralkor.DefaultOntology`
 
-if an appending Lens has a missing or invalid ingestion module or an invalid ontology
+if a Lens has a missing or invalid ingestion module or an invalid ontology
   then validation identifies the Lens and invalid field
 
 if a map supplies an atom-keyed ontology value and a string-keyed ontology value
   then the atom-keyed value remains authoritative even when it is false
 
-when a replaceable Lens declares `write: :replace_graph` and a Destination
-  then it resolves as a replaceable Lens
-
-if a replaceable Lens also declares ingestion or ontology fields
-  then validation identifies the incompatible Lens definition
-
-if a Lens declares any other write mode
-  then validation identifies the Lens and write value
+if a Lens definition retains the removed `write` field under an atom or string key
+  then validation identifies the Lens and gives migration guidance
 
 if a Reflection's outputs value is not a list or contains a malformed output
   then validation identifies the Reflection and invalid output

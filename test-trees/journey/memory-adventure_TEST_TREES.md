@@ -1,10 +1,9 @@
 Journey: memory-adventure (journey: test/journey/memory_adventure_journey_test.exs)
 
 # Adventure: one operator adds default-ontology direct personal memory, captures direct and personal-chat turns without duplicate writes, flushes completed turns through an appending Lens, asynchronously triggers an ERL Learning, evolves a shared generalisation, and publishes global memory.
-# The same operator's appending and replaceable Lenses save to one Destination before the replaceable Lens replaces its earlier graph.
 # Fresh sessions then use default and Destination-selected memory search across packaged and application Destinations; both operators check shared and personal visibility.
 
-when two operators use direct personal memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement
+when two operators use direct personal memory, Lenses, and asynchronously triggered Reflections
   then default-ontology direct personal memory remains recallable
   and direct conversation capture remains searchable without Lens or Reflection authorship
   and personal-chat processing records its actual Lens provenance
@@ -17,10 +16,6 @@ when two operators use direct personal memory, Lenses, asynchronously triggered 
   and each operator's selector-free search excludes the other operator's personal memory
   and direct memory uses the graph named `personal/<operator id>`
   and appending Lenses use that same graph
-  and replaceable Lenses use that same graph
-  and replacing one Lens's graph preserves information written by another Lens
-  and fresh retrieval returns the current replacement graph
-  and fresh retrieval omits the superseded replacement graph
 
 when the Journey consumer triggers generalisation after successive ingestions containing related observations
   then the first resulting generalisation exposes non-blank content, an integer level, and a lineage list
@@ -55,7 +50,6 @@ when the agent searches with a Destination selector
 when the Journey consumer searches with a Lens selector
   then only episodes written through the selected Lens are returned
   and no episode written directly, through another Lens, or by a Reflection is returned
-  and memory written by a replaceable Lens's graph replacement is returned for that Lens
   and a subsequent Lens-free search returns the memory written directly or through the other Lenses
 
 when the Journey ingests conversation, document, and structured-record episodes

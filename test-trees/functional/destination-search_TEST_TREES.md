@@ -23,8 +23,8 @@ when a caller searches memory
 
   where one or more Lenses are supplied
     then only episodes written through any supplied Lens are returned
-    and only facts drawn from an episode written through any supplied Lens or written by any supplied Lens's graph replacement are returned
-    and only entities mentioned by an episode written through any supplied Lens or written by any supplied Lens's graph replacement are returned
+    and only facts drawn from an episode written through any supplied Lens are returned
+    and only entities mentioned by an episode written through any supplied Lens are returned
     but no result written directly, through another Lens, or through a Destination artefact output can contribute
     and results from other writers cannot consume any per-Destination limit
     and each returned fact's sources name only supplied Lenses
@@ -60,7 +60,6 @@ when a Destination result carries facts
   and every fact names its relationship
   and every fact identifies its source entity by name and identifier
   and every fact identifies its target entity by name and identifier
-  and a fact written by a graph replacement is returned by a search for one of its words
 
 when a Destination result carries nodes
   then relevant entities extracted in that Destination are returned

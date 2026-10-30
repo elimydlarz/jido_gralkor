@@ -37,15 +37,12 @@ if the Gralkor plugin runtime terminates unexpectedly
     and the consumer supervisor starts a replacement AgentServer
     and the replacement agent receives the consumer's current durable configuration
 
-when complete runtime configuration contains an appending Lens declaring `write: :append`, a Destination, an ingestion module, and an optional ontology
+when complete runtime configuration contains a Lens declaring a Destination, an ingestion module, and an optional ontology
   then replacement accepts the Lens for ingestion
   and an omitted ontology selects `Gralkor.DefaultOntology`
 
-when complete runtime configuration contains a replaceable Lens declaring `write: :replace_graph` and a Destination
-  then replacement accepts the Lens for complete-graph replacement
-
-if a Lens definition combines appending and replacement fields
-  then replacement fails identifying the incompatible Lens definition
+if a Lens definition retains the removed `write` field
+  then replacement fails identifying the Lens and giving migration guidance
 
 if an ontology declares a custom entity kind named `Entity`, `Episodic`, or `Community`
   then replacement fails identifying the entity kind reserved by Graphiti

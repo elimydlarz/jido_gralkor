@@ -12,10 +12,6 @@ where the packaged Destinations are used
 when multiple Lenses or Reflections reference the same Destination
   then their results are saved to the same Destination
 
-where a replaceable Lens references a shared Destination
-  then replacement changes only graph content previously written by that Lens
-  and information saved through every other Lens or Reflection remains unchanged
-
 if the Destination registry is not a list
   then configuration resolution raises `ArgumentError` naming what it found instead
 

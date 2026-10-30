@@ -43,8 +43,6 @@ when mount selects an ingestion Lens
     then mounting raises an ArgumentError identifying the unknown Lens
   if the ingestion Lens is retired
     then mounting raises an ArgumentError naming `personal-chat` as its replacement
-  if the ingestion Lens accepts only whole-graph replacement
-    then mounting raises an ArgumentError identifying that Lens
   if the Lens exists only in the application compatibility registry
     then mounting raises an ArgumentError identifying the unknown Lens
   if the removed `:default_lens` option is supplied

@@ -1,17 +1,14 @@
-Functional: lens-registration (src: lib/gralkor/lens.ex, lib/gralkor/lens/replaceable.ex, lib/gralkor/client.ex; functional: test/functional/lens_registration_functional_test.exs)
+Functional: lens-registration (src: lib/gralkor/lens.ex, lib/gralkor/client.ex; functional: test/functional/lens_registration_functional_test.exs)
 
-when the application compatibility registry contains a valid appending or replaceable Lens
+when the application compatibility registry contains a valid Lens
   then direct compatibility operations can select the Lens by name
   and each selected name resolves to the same application-owned Lens definition
   and the Lens uses its referenced registered Destination
 
-where an appending Lens definition provides `write: :append`, a Destination name, and an ingestion process
+where a Lens definition provides a Destination name and an ingestion process
   then the Lens uses its declared ingestion behaviour
 
-where an application compatibility Lens omits its write mode
-  then the Lens defaults to `write: :append`
-
-where an appending Lens omits its ontology
+where a Lens omits its ontology
   then the Lens uses jido_gralkor's built-in default ontology
 
 if an application compatibility Lens's ontology declares a custom entity kind named `Entity`, `Episodic`, or `Community`
@@ -38,6 +35,4 @@ if the application compatibility registry contains an invalid Lens
   and a missing or unknown Lens Destination is identified with its Lens
   and an invalid Lens ontology is identified with its Lens
   and an invalid Lens ingestion process is identified with its Lens
-  and an invalid Lens write mode is identified with its Lens
-  and a Lens definition that combines appending and replaceable write settings is identified with its Lens
-  and a removed graph-format field is identified with its Lens
+  and a Lens retaining the removed `write` field is identified with migration guidance

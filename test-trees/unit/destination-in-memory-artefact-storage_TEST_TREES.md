@@ -17,11 +17,11 @@ when in-memory Destination storage looks up an absent artefact identifier
   then lookup reports not found
 
 when in-memory Destination storage is searched with no Lenses
-  then facts, nodes, and episodes of the Destination are returned within their limits
+  then facts and episodes of the Destination are returned within their limits
+  and no nodes are returned because this backend extracts no entities
 
 when in-memory Destination storage is searched with Lenses
   then only episodes written through a selected Lens are returned
-  and only facts drawn from those episodes or written by a selected Lens's graph replacement are returned
-  and only nodes owned by a selected Lens's graph replacement are returned
+  and only facts drawn from those episodes are returned
+  and no nodes are returned
   but no direct write or Destination artefact contributes
-  and nodes are limited after Lens filtering
