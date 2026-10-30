@@ -45,7 +45,6 @@ runtime_config = %{
     %{
       name: "support-cases",
       destination: "global",
-      write: :append,
       ontology: MyApp.SupportOntology,
       ingestion: MyApp.SupportIngestion
     }
@@ -81,14 +80,6 @@ Direct capture uses the built-in ontology without Lens authorship. `personal-cha
 Historical ` [lens: operator]` provenance stays intact, and older unmarked episodes remain readable without invented authorship. Destination-only or selector-free search includes these records; a `personal-chat` Lens filter does not relabel or include them. Incomplete Reflection artefacts still require their durable completion marker.
 
 The retired `operator` Destination never falls through to shared-name resolution. Moving `operator/<identifier>` to `personal/<same identifier>` requires the [explicit graph migration](PERSONAL_MEMORY_MIGRATION.md), which preserves stored history and changes physical and stored group identities together. Current public configuration rejects retired names; archival consumer routing must translate separately from immutable snapshots and hashes.
-
-## Replaceable Lenses
-
-A replaceable Lens replaces only graph content previously written by that Lens. It does not clear or replace its Destination.
-
-The private `_gralkor_lens` ownership field identifies graph content written by a replaceable Lens. Replacing Lens `A` removes content carrying `_gralkor_lens: "A"`, then inserts the new graph carrying the same marker. It is separate from the source-description provenance used for episode writers.
-
-Information saved through other Lenses, information saved through Reflection outputs, and information without Lens `A`'s ownership marker remain unchanged.
 
 ## Search
 
@@ -146,8 +137,8 @@ Facts, nodes, and episodes each keep Graphiti's relevance order. Every Destinati
 `lenses` names registered Lenses (ORed) and narrows what each selected Destination returns to what those Lenses wrote there; it never adds or removes Destinations, so a Lens selector without `destinations` still searches every accessible registered Destination. Within each Destination:
 
 - episodes: only those whose source description ends with a selected Lens's ` [lens: <name>]` marker (a durable direct write never matches);
-- facts: only edges drawn from such an episode, or written by a selected replaceable Lens's graph replacement (`_gralkor_lens`); each fact's `sources` keep only selected-Lens episodes;
-- nodes: only entities mentioned (`MENTIONS`) by such an episode, or owned by a selected replaceable Lens's replacement.
+- facts: only edges drawn from such an episode; each fact's `sources` keep only selected-Lens episodes;
+- nodes: only entities mentioned (`MENTIONS`) by such an episode.
 
 Direct writes, other Lenses, Reflection artefacts, and historical `operator`-labelled episodes never contribute (the retired `operator` Lens cannot be selected). `entity_types` and `edge_types` restrict the Lens's results further. On FalkorDB every restriction is part of the graph queries, applied before ranking and the per-Destination caps, so other writers cannot consume a Lens's twenty facts, twenty nodes, or five episodes: facts through graphiti-core's `SearchFilters.edge_uuids`; nodes and episodes through filters Gralkor adds to graphiti-core 0.31.2's node searches and FalkorDB episode full-text query, which have none of their own. A Lens that has written nothing to a Destination returns empty facts, nodes, and episodes there without a Graphiti search. An unknown, blank, or non-list Lens selection raises `ArgumentError` before any Destination is searched; runtime-targeted search resolves Lens names from the agent's runtime snapshot.
 
@@ -157,7 +148,7 @@ A fact record contains its `fact` text, `created_at`, `valid_at`, `invalid_at`, 
 
 ### Episodes
 
-Episodes identify their writer where provenance is recorded; historical unmarked episodes remain unattributed. Appending Lens episodes suffix their source description with ` [lens: <Lens name>]`; Reflection episodes use the exact source description `reflection:<Reflection name>`. Lens and Reflection names containing the Lens delimiter are rejected so attribution stays unambiguous. A Lens-written episode:
+Episodes identify their writer where provenance is recorded; historical unmarked episodes remain unattributed. Lens episodes suffix their source description with ` [lens: <Lens name>]`; Reflection episodes use the exact source description `reflection:<Reflection name>`. Lens and Reflection names containing the Lens delimiter are rejected so attribution stays unambiguous. A Lens-written episode:
 
 ```elixir
 %{content: "...", source_description: "support transcript", lens: "support-cases"}

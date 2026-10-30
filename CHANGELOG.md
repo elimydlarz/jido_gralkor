@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+Replacement Lenses are gone, because reliable ingestion of large structured graphs into Graphiti has been abandoned and nothing Graphiti searches could see their output. This is a breaking change; migration guidance follows each entry.
+
+### Removed
+- **Breaking:** `Gralkor.Client.replace/1,2`, `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Lens.Replaceable`, `Gralkor.Lens.Store.replace_graph/2`, the `replace_graph/2` storage callback, and `GraphitiPool.replace_graph`. **Migrate:** write structured graphs to FalkorDB directly, outside Gralkor.
+- **Breaking:** the Lens `:write` field. Every Lens appends, so a definition that still supplies `:write` is rejected: runtime configuration returns `{:removed_lens_write, name, guidance}`, and the application registry raises `ArgumentError`. **Migrate:** delete `:write` from each Lens, and delete any `write: :replace_graph` Lens.
+- The `graph_format` rejection on application-registry Lenses, which guarded only replacement Lenses.
+
+### Changed
+- **Breaking:** a Lens search selector matches only episodes, the facts drawn from them, and the entities they mention. Content already marked `_gralkor_lens` in a deployed graph stays in the graph and in Lens-free search, but no Lens selector returns it. **Migrate:** delete it with a one-off Cypher cleanup if unwanted.
+- In-memory Destination search returns no nodes, because replacement was the only thing that wrote in-memory graph content.
+
 ## [13.0.0] - 2026-10-29
 
 The packaged `generalisations` Reflection gets its own packaged Destination, and search can read only what chosen Lenses wrote again. This is a breaking release; migration guidance follows each entry.
