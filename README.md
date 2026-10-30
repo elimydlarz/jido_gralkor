@@ -11,7 +11,7 @@ This is the canonical home for new Gralkor development: Gralkor is Jido-first. A
 ```elixir
 def deps do
   [
-    {:jido_gralkor, "~> 13.0"}
+    {:jido_gralkor, "~> 14.0"}
   ]
 end
 ```
