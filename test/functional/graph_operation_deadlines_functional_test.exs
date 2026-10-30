@@ -287,10 +287,11 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
   end
 
   defp graph_value(graph, attribute) do
-    {value, _} = Pythonx.eval("getattr(graph, attribute.decode('utf-8'))", %{
-      "graph" => graph,
-      "attribute" => attribute
-    })
+    {value, _} =
+      Pythonx.eval("getattr(graph, attribute.decode('utf-8'))", %{
+        "graph" => graph,
+        "attribute" => attribute
+      })
 
     Pythonx.decode(value)
   end
