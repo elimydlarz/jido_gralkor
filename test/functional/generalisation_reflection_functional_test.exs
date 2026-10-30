@@ -25,13 +25,11 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                %{
                  name: "observations",
                  destination: "observations-memory",
-                 write: :append,
                  ingestion: Gralkor.Lens.Ingestion.Store
                },
                %{
                  name: "decisions",
                  destination: "decisions-memory",
-                 write: :append,
                  ingestion: Gralkor.Lens.Ingestion.Store
                }
              ],

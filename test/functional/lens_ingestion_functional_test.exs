@@ -87,12 +87,6 @@ defmodule Gralkor.LensIngestionFunctionalTest do
 
     @impl true
     def search(_store, _query, _max_results), do: {:ok, []}
-
-    @impl true
-    def replace_graph(_store, _graph) do
-      send(Process.whereis(:lens_ingestion_functional), :graph_replaced)
-      :ok
-    end
   end
 
   defmodule RecordingGraphitiStorage do
@@ -112,9 +106,6 @@ defmodule Gralkor.LensIngestionFunctionalTest do
 
     @impl true
     def search(_store, _query, _max_results), do: {:ok, []}
-
-    @impl true
-    def replace_graph(_store, _graph), do: :ok
   end
 
   setup do
@@ -328,36 +319,6 @@ defmodule Gralkor.LensIngestionFunctionalTest do
     end
   end
 
-  describe "if episode ingestion selects a replaceable Lens" do
-    test "then ingestion fails with an error identifying that the Lens accepts only whole-graph replacement" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        [
-          name: "observations",
-          destination: "observations",
-          write: :replace_graph
-        ]
-      ])
-
-      assert_raise ArgumentError, ~r/observations.*only whole-graph replacement/, fn ->
-        Client.ingest(request("information"))
-      end
-    end
-
-    test "and no existing graph content is removed or inserted" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        [
-          name: "observations",
-          destination: "observations",
-          write: :replace_graph
-        ]
-      ])
-
-      assert_raise ArgumentError, fn -> Client.ingest(request("information")) end
-      refute_receive :graph_replaced
-      refute_receive {:episode_added, _, _, _}
-    end
-  end
-
   describe "if the selected Lens's ingestion process fails" do
     test "then ingestion returns that failure to the caller" do
       Application.put_env(:jido_gralkor, :lenses, [lens(FailingIngestion)])
@@ -464,7 +425,6 @@ defmodule Gralkor.LensIngestionFunctionalTest do
         %{
           name: "observations",
           destination: "observations",
-          write: :append,
           ontology: MemoryOntology,
           ingestion: VariableIngestion
         }

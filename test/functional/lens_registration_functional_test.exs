@@ -87,13 +87,9 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     :ok
   end
 
-  describe "when the application compatibility registry contains a valid appending or replaceable Lens" do
+  describe "when the application compatibility registry contains a valid Lens" do
     test "then direct compatibility operations can select the Lens by name" do
       assert %Gralkor.Lens{name: "observations"} = Client.lens!("observations")
-
-      Application.put_env(:jido_gralkor, :lenses, [valid_replaceable_lens("systems")])
-
-      assert %Gralkor.Lens.Replaceable{name: "systems"} = Client.lens!("systems")
     end
 
     test "and each selected name resolves to the same application-owned Lens definition" do
@@ -103,10 +99,6 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
                ontology: MemoryOntology,
                ingestion: StoreIngestion
              } = Client.lens!("observations")
-
-      Application.put_env(:jido_gralkor, :lenses, [valid_replaceable_lens("systems")])
-
-      assert %Gralkor.Lens.Replaceable{name: "systems"} = Client.lens!("systems")
     end
 
     test "and the Lens uses its referenced registered Destination" do
@@ -114,7 +106,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     end
   end
 
-  describe "where an appending Lens definition provides `write: :append`, a Destination name, and an ingestion process" do
+  describe "where a Lens definition provides a Destination name and an ingestion process" do
     test "then the Lens uses its declared ingestion behaviour" do
       assert %Gralkor.Lens{
                name: "observations",
@@ -125,17 +117,7 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     end
   end
 
-  describe "where an application compatibility Lens omits its write mode" do
-    test "then the Lens defaults to `write: :append`" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        valid_lens("observations") |> Keyword.delete(:write)
-      ])
-
-      assert %Gralkor.Lens{ingestion: StoreIngestion} = Client.lens!("observations")
-    end
-  end
-
-  describe "where an appending Lens omits its ontology" do
+  describe "where a Lens omits its ontology" do
     test "then the Lens uses jido_gralkor's built-in default ontology" do
       Application.put_env(:jido_gralkor, :lenses, [
         valid_lens("observations") |> Keyword.delete(:ontology)
@@ -276,16 +258,6 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-    test "and a removed graph-format field is identified with its Lens" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        valid_replaceable_lens("systems") ++ [graph_format: :property_graph]
-      ])
-
-      assert_raise ArgumentError, ~r/systems.*graph_format.*unsupported/, fn ->
-        Client.lens!("systems")
-      end
-    end
-
     test "and an invalid Lens definition shape is identified" do
       for definition <- [%{name: "observations"}, [:not_a_keyword_entry]] do
         Application.put_env(:jido_gralkor, :lenses, [definition])
@@ -328,22 +300,16 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
       end
     end
 
-    test "and an invalid Lens write mode is identified with its Lens" do
-      Application.put_env(:jido_gralkor, :lenses, [
-        valid_lens("observations") |> Keyword.put(:write, :overwrite)
-      ])
 
-      assert_raise ArgumentError, ~r/observations.*write.*overwrite/, fn ->
-        Client.lens!("observations")
-      end
-    end
+    test "and a Lens retaining the removed `write` field is identified with migration guidance" do
+      for write <- [:append, :replace_graph] do
+        Application.put_env(:jido_gralkor, :lenses, [
+          valid_lens("observations") |> Keyword.put(:write, write)
+        ])
 
-    test "and a Lens definition that combines appending and replaceable write settings is identified with its Lens" do
-      definition = valid_replaceable_lens("systems") |> Keyword.put(:ingestion, StoreIngestion)
-      Application.put_env(:jido_gralkor, :lenses, [definition])
-
-      assert_raise ArgumentError, ~r/systems.*combines.*write settings/, fn ->
-        Client.lens!("systems")
+        assert_raise ArgumentError, ~r/observations.*:write was removed.*delete/, fn ->
+          Client.lens!("observations")
+        end
       end
     end
   end
@@ -352,14 +318,9 @@ defmodule Gralkor.LensRegistrationFunctionalTest do
     [
       name: name,
       destination: "memory",
-      write: :append,
       ontology: MemoryOntology,
       ingestion: StoreIngestion
     ]
-  end
-
-  defp valid_replaceable_lens(name) do
-    [name: name, destination: "memory", write: :replace_graph]
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)

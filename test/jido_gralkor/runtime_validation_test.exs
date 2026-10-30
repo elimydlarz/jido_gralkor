@@ -218,7 +218,6 @@ defmodule JidoGralkor.RuntimeValidationTest do
             "ontology" => Gralkor.DefaultOntology,
             name: "notes",
             destination: "memory",
-            write: :append,
             ingestion: Gralkor.Lens.Ingestion.Store,
             ontology: false
           }
@@ -228,36 +227,16 @@ defmodule JidoGralkor.RuntimeValidationTest do
     end
   end
 
-  describe "when a replaceable Lens declares `write: :replace_graph` and a Destination" do
-    test "then it resolves as a replaceable Lens" do
-      lens = [[name: "notes", destination: "memory", write: :replace_graph]]
+  describe "if a Lens definition retains the removed `write` field under an atom or string key" do
+    test "then validation identifies the Lens and gives migration guidance" do
+      for {key, value} <- [{:write, :append}, {:write, :replace_graph}, {"write", "append"}] do
+        lens = config().lenses |> hd() |> Map.new() |> Map.put(key, value)
 
-      {:ok, _pid} = start_runtime(Map.put(config(), :lenses, lens))
+        assert {:error, {:removed_lens_write, "notes", guidance}} =
+                 validate(Map.put(config(), :lenses, [lens]))
 
-      assert %Gralkor.Lens.Replaceable{name: "notes"} = Runtime.lens!(self(), "notes")
-    end
-  end
-
-  describe "if a replaceable Lens also declares ingestion or ontology fields" do
-    test "then validation identifies the incompatible Lens definition" do
-      lens = [
-        [
-          name: "notes",
-          destination: "memory",
-          write: :replace_graph,
-          ontology: Gralkor.DefaultOntology
-        ]
-      ]
-
-      assert {:error, {:incompatible_lens_definition, "notes"}} =
-               validate(Map.put(config(), :lenses, lens))
-    end
-  end
-
-  describe "if a Lens declares any other write mode" do
-    test "then validation identifies the Lens and write value" do
-      c = update_in(config(), [:lenses, Access.at(0)], &Keyword.put(&1, :write, :other))
-      assert {:error, {:invalid_lens_write, "notes", :other}} = validate(c)
+        assert guidance =~ "delete"
+      end
     end
   end
 
@@ -435,7 +414,6 @@ defmodule JidoGralkor.RuntimeValidationTest do
         [
           name: "notes",
           destination: "memory",
-          write: :append,
           ingestion: Gralkor.Lens.Ingestion.Store,
           ontology: Gralkor.DefaultOntology
         ]
@@ -487,7 +465,6 @@ defmodule JidoGralkor.RuntimeValidationTest do
           [
             name: "notes",
             destination: "memory",
-            write: :append,
             ingestion: Gralkor.Lens.Ingestion.Store,
             ontology: ontology
           ]

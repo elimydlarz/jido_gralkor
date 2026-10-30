@@ -1215,7 +1215,6 @@ defmodule JidoGralkor.RuntimeTest do
   defp lens_configuration do
     %{
       name: "custom",
-      write: :append,
       destination: "reviews",
       ingestion: Gralkor.Lens.Ingestion.Store
     }

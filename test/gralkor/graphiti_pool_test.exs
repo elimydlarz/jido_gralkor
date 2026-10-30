@@ -1698,354 +1698,6 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a complete property graph replaces content owned by a Lens in a group" do
-    test "then every relationship carrying that Lens's reserved ownership field is removed before owned nodes are removed" do
-      {g, _} = replacement_graphiti()
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: fn _db, _shared, _group_id -> g end,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert :ok =
-               GraphitiPool.replace_graph(
-                 pid,
-                 "g1",
-                 "systems",
-                 :property_graph,
-                 %{nodes: [], relationships: []}
-               )
-
-      {recorded, _} = Pythonx.eval("g.driver.recorded", %{"g" => g})
-
-      assert [
-               %{"query" => relationship_delete, "params" => %{"lens" => "systems"}},
-               %{"query" => node_delete, "params" => %{"lens" => "systems"}}
-             ] = Pythonx.decode(recorded)
-
-      assert relationship_delete =~ "MATCH ()-[relationship]->()"
-      assert relationship_delete =~ "relationship._gralkor_lens = $lens"
-      assert node_delete =~ "MATCH (node)"
-      assert node_delete =~ "node._gralkor_lens = $lens"
-
-      GenServer.stop(pid)
-    end
-
-    test "and every node carrying that Lens's reserved ownership field is removed" do
-      {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
-
-      assert :ok = result
-      [_, node_delete] = recorded
-      assert node_delete["query"] =~ "DELETE node"
-      refute node_delete["query"] =~ "DETACH DELETE"
-      assert node_delete["params"] == %{"lens" => "systems"}
-
-      GenServer.stop(pid)
-    end
-
-    test "and each supplied node is inserted with its identifier, labels, properties, and reserved Lens ownership field" do
-      {g, _} = replacement_graphiti()
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: fn _db, _shared, _group_id -> g end,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert :ok =
-               GraphitiPool.replace_graph(
-                 pid,
-                 "g1",
-                 "systems",
-                 :property_graph,
-                 %{
-                   nodes: [
-                     %{
-                       id: "payments",
-                       labels: ["System", "Critical"],
-                       properties: %{name: "Payments", priority: 1}
-                     }
-                   ],
-                   relationships: []
-                 }
-               )
-
-      {recorded, _} = Pythonx.eval("g.driver.recorded", %{"g" => g})
-      [_, _, node_insert] = Pythonx.decode(recorded)
-
-      assert node_insert["query"] =~ "CREATE (node:`System`:`Critical`)"
-
-      assert node_insert["params"] == %{
-               "properties" => %{
-                 "id" => "payments",
-                 "name" => "Payments",
-                 "priority" => 1,
-                 "_gralkor_lens" => "systems"
-               }
-             }
-
-      GenServer.stop(pid)
-    end
-
-    test "and each supplied relationship is inserted between its identified endpoints with its type, properties, and reserved Lens ownership field" do
-      {g, _} = replacement_graphiti()
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: fn _db, _shared, _group_id -> g end,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert :ok =
-               GraphitiPool.replace_graph(
-                 pid,
-                 "g1",
-                 "systems",
-                 :property_graph,
-                 %{
-                   nodes: [
-                     %{id: "payments", labels: ["System"], properties: %{}},
-                     %{id: "ledger", labels: ["System"], properties: %{}}
-                   ],
-                   relationships: [
-                     %{
-                       from: "payments",
-                       to: "ledger",
-                       type: "DEPENDS_ON",
-                       properties: %{protocol: "events"}
-                     }
-                   ]
-                 }
-               )
-
-      {recorded, _} = Pythonx.eval("g.driver.recorded", %{"g" => g})
-      [_, _, _, _, relationship_insert] = Pythonx.decode(recorded)
-
-      assert relationship_insert["query"] =~
-               "CREATE (source)-[relationship:`DEPENDS_ON`]->(destination)"
-
-      assert relationship_insert["params"] == %{
-               "lens" => "systems",
-               "source_id" => "payments",
-               "destination_id" => "ledger",
-               "properties" => %{
-                 "protocol" => "events",
-                 "_gralkor_lens" => "systems"
-               }
-             }
-
-      GenServer.stop(pid)
-    end
-
-    test "and every supplied string property crosses the native graph boundary as text without changing its value" do
-      {g, _} = replacement_graphiti(nil, reject_bytes: true)
-
-      %{pid: pid} =
-        start_pool(
-          construct_instance: fn _db, _shared, _group_id -> g end,
-          warmup: false,
-          install_loop_fn: &Gralkor.Python.install_async_runtime/0
-        )
-
-      assert :ok =
-               GraphitiPool.replace_graph(
-                 pid,
-                 "g1",
-                 "systems",
-                 :property_graph,
-                 %{
-                   nodes: [
-                     %{
-                       id: "payments",
-                       labels: ["System"],
-                       properties: %{name: "Payments", details: %{protocol: "events"}}
-                     }
-                   ],
-                   relationships: []
-                 }
-               )
-
-      {recorded, _} = Pythonx.eval("g.driver.recorded", %{"g" => g})
-      [_, _, node_insert] = Pythonx.decode(recorded)
-
-      assert node_insert["params"]["properties"]["name"] == "Payments"
-      assert node_insert["params"]["properties"]["details"] == %{"protocol" => "events"}
-
-      GenServer.stop(pid)
-    end
-
-    test "and nodes and relationships owned by another Lens remain unchanged" do
-      {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
-
-      assert :ok = result
-
-      assert Enum.all?(recorded, fn operation ->
-               operation["params"] == %{"lens" => "systems"}
-             end)
-
-      GenServer.stop(pid)
-    end
-
-    test "and nodes and relationships without the reserved Lens ownership field remain unchanged" do
-      {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
-
-      assert :ok = result
-
-      assert Enum.all?(recorded, fn operation ->
-               operation["query"] =~ "._gralkor_lens = $lens"
-             end)
-
-      GenServer.stop(pid)
-    end
-
-    test "and success is returned after every supplied node and relationship is inserted" do
-      graph = %{
-        nodes: [
-          %{id: "payments", labels: ["System"], properties: %{}},
-          %{id: "ledger", labels: ["System"], properties: %{}}
-        ],
-        relationships: [
-          %{from: "payments", to: "ledger", type: "DEPENDS_ON", properties: %{}}
-        ]
-      }
-
-      {result, recorded, pid} = run_graph_replacement(graph)
-
-      assert :ok = result
-      assert length(recorded) == 5
-
-      GenServer.stop(pid)
-    end
-  end
-
-  describe "where the supplied complete property graph is empty" do
-    test "then every node and relationship owned by the Lens is removed" do
-      {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
-
-      assert :ok = result
-      assert length(recorded) == 2
-
-      GenServer.stop(pid)
-    end
-
-    test "and no node or relationship insertion is attempted" do
-      {result, recorded, pid} = run_graph_replacement(%{nodes: [], relationships: []})
-
-      assert :ok = result
-      refute Enum.any?(recorded, &(&1["query"] =~ "CREATE"))
-
-      GenServer.stop(pid)
-    end
-  end
-
-  describe "if removing Lens-owned graph content fails" do
-    test "then the graph failure is returned" do
-      {result, _recorded, pid} =
-        run_graph_replacement(%{nodes: [], relationships: []}, fail_at: 1)
-
-      assert {:error, {:python, reason}} = result
-      assert reason =~ "replacement query 1 failed"
-
-      GenServer.stop(pid)
-    end
-
-    test "and no supplied node or relationship is inserted" do
-      graph = %{
-        nodes: [%{id: "payments", labels: ["System"], properties: %{}}],
-        relationships: []
-      }
-
-      {_result, recorded, pid} = run_graph_replacement(graph, fail_at: 1)
-      assert length(recorded) == 1
-
-      GenServer.stop(pid)
-    end
-  end
-
-  describe "if inserting a supplied node fails" do
-    test "then the graph failure is returned" do
-      graph = %{
-        nodes: [%{id: "payments", labels: ["System"], properties: %{}}],
-        relationships: []
-      }
-
-      {result, _recorded, pid} = run_graph_replacement(graph, fail_at: 3)
-      assert {:error, {:python, reason}} = result
-      assert reason =~ "replacement query 3 failed"
-
-      GenServer.stop(pid)
-    end
-
-    test "and no supplied relationship is inserted" do
-      graph = %{
-        nodes: [%{id: "payments", labels: ["System"], properties: %{}}],
-        relationships: [
-          %{from: "payments", to: "payments", type: "DEPENDS_ON", properties: %{}}
-        ]
-      }
-
-      {_result, recorded, pid} = run_graph_replacement(graph, fail_at: 3)
-      assert length(recorded) == 3
-
-      GenServer.stop(pid)
-    end
-
-    test "and removed Lens-owned content is not restored" do
-      graph = %{
-        nodes: [%{id: "payments", labels: ["System"], properties: %{}}],
-        relationships: []
-      }
-
-      {_result, recorded, pid} = run_graph_replacement(graph, fail_at: 3)
-      assert length(recorded) == 3
-      assert List.last(recorded)["query"] =~ "CREATE (node"
-
-      GenServer.stop(pid)
-    end
-  end
-
-  describe "if inserting a supplied relationship fails" do
-    test "then the graph failure is returned" do
-      graph = %{
-        nodes: [
-          %{id: "payments", labels: ["System"], properties: %{}},
-          %{id: "ledger", labels: ["System"], properties: %{}}
-        ],
-        relationships: [
-          %{from: "payments", to: "ledger", type: "DEPENDS_ON", properties: %{}}
-        ]
-      }
-
-      {result, _recorded, pid} = run_graph_replacement(graph, fail_at: 5)
-      assert {:error, {:python, reason}} = result
-      assert reason =~ "replacement query 5 failed"
-
-      GenServer.stop(pid)
-    end
-
-    test "and removed Lens-owned content and inserted nodes are not restored" do
-      graph = %{
-        nodes: [
-          %{id: "payments", labels: ["System"], properties: %{}},
-          %{id: "ledger", labels: ["System"], properties: %{}}
-        ],
-        relationships: [
-          %{from: "payments", to: "ledger", type: "DEPENDS_ON", properties: %{}}
-        ]
-      }
-
-      {_result, recorded, pid} = run_graph_replacement(graph, fail_at: 5)
-      assert length(recorded) == 5
-      assert List.last(recorded)["query"] =~ "CREATE (source)-[relationship"
-
-      GenServer.stop(pid)
-    end
-  end
-
   describe "when a fact search is run for a group" do
     test "then the graph library's edge search is invoked with the requested result count" do
       # A Pythonx-built fake graphiti whose search coroutine records its kwargs on the
@@ -2670,25 +2322,23 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a memory search is run for a group > while Lenses are supplied" do
-    test "then the single search's filter admits only edges drawn from an episode whose source description names a supplied Lens or owned by a supplied Lens's graph replacement" do
+    test "then the single search's filter admits only edges drawn from an episode whose source description names a supplied Lens" do
       {_results, recorded} =
         memory_search_result(lens_scope: lens_scope(), opts: [lenses: ["alpha"]])
 
-      assert recorded["edge_uuids"] == ["alpha-edge", "replaced-edge"]
+      assert recorded["edge_uuids"] == ["alpha-edge"]
 
-      assert %{"lens_names" => ["alpha"], "episode_uuids" => ["lens-episode"]} =
-               lens_query(recorded, "RELATES_TO")
+      assert %{"episode_uuids" => ["lens-episode"]} = lens_query(recorded, "RELATES_TO")
 
       assert %{"lens_suffixes" => [" [lens: alpha]"]} = lens_query(recorded, "ENDS WITH")
     end
 
-    test "and the single search's filter admits only nodes mentioned by such an episode or owned by such a replacement" do
+    test "and the single search's filter admits only nodes mentioned by such an episode" do
       {_results, recorded} =
         memory_search_result(lens_scope: lens_scope(), opts: [lenses: ["alpha"]])
 
-      assert recorded["node_uuids"] == ["mentioned-node", "replaced-node"]
+      assert recorded["node_uuids"] == ["mentioned-node"]
       assert %{"episode_uuids" => ["lens-episode"]} = lens_query(recorded, "MENTIONS")
-      assert %{"lens_names" => ["alpha"]} = lens_query(recorded, "node._gralkor_lens")
     end
 
     test "and the single search's filter admits only episodes whose source description names a supplied Lens" do
@@ -2730,7 +2380,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert recorded["calls"] == 0
 
       {_results, recorded} =
-        memory_search_result(lens_scope: %{"owned" => [nil]}, opts: [lenses: ["silent"]])
+        memory_search_result(lens_scope: %{"mentioned" => [nil]}, opts: [lenses: ["silent"]])
 
       assert recorded["calls"] == 0
     end
@@ -2746,9 +2396,8 @@ defmodule Gralkor.GraphitiPoolTest do
   defp lens_scope do
     %{
       "episodes" => ["lens-episode"],
-      "edges" => ["alpha-edge", "replaced-edge"],
-      "mentioned" => ["mentioned-node"],
-      "owned" => ["replaced-node"]
+      "edges" => ["alpha-edge"],
+      "mentioned" => ["mentioned-node"]
     }
   end
 
@@ -2864,8 +2513,6 @@ defmodule Gralkor.GraphitiPoolTest do
                     return self.lens_records("mentioned", query, params)
                 if "ENDS WITH" in query:
                     return self.lens_records("episodes", query, params)
-                if "node._gralkor_lens" in query:
-                    return self.lens_records("owned", query, params)
                 if "_gralkor_extraction_complete" in query:
                     return ([{"uuid": uuid} for uuid in params["uuids"] if uuid in self._gralkor_completed_episode_uuids], None, None)
                 return ([{"uuid": uuid, "name": self.entities[uuid]} for uuid in params["uuids"] if uuid in self.entities], None, None)
@@ -4591,57 +4238,6 @@ defmodule Gralkor.GraphitiPoolTest do
 
   defp restore_env(name, nil), do: System.delete_env(name)
   defp restore_env(name, value), do: System.put_env(name, value)
-
-  defp replacement_graphiti(fail_at \\ nil, opts \\ []) do
-    Pythonx.eval(
-      """
-      def _contains_bytes(value):
-          if isinstance(value, (bytes, bytearray)):
-              return True
-          if isinstance(value, dict):
-              return any(_contains_bytes(key) or _contains_bytes(item) for key, item in value.items())
-          if isinstance(value, (list, tuple)):
-              return any(_contains_bytes(item) for item in value)
-          return False
-
-      class _ReplacementDriver:
-          def __init__(self, fail_at, reject_bytes):
-              self.recorded = []
-              self.fail_at = fail_at
-              self.reject_bytes = reject_bytes
-
-          async def execute_query(self, query, **params):
-              self.recorded.append({"query": query, "params": params})
-              if self.reject_bytes and _contains_bytes(params):
-                  raise RuntimeError("native graph parameters contain bytes")
-              if self.fail_at == len(self.recorded):
-                  raise RuntimeError(f"replacement query {self.fail_at} failed")
-              return []
-
-      class _ReplacementGraphiti:
-          def __init__(self, fail_at, reject_bytes):
-              self.driver = _ReplacementDriver(fail_at, reject_bytes)
-
-      _ReplacementGraphiti(fail_at, reject_bytes)
-      """,
-      %{"fail_at" => fail_at, "reject_bytes" => Keyword.get(opts, :reject_bytes, false)}
-    )
-  end
-
-  defp run_graph_replacement(graph, opts \\ []) do
-    {g, _} = replacement_graphiti(Keyword.get(opts, :fail_at))
-
-    %{pid: pid} =
-      start_pool(
-        construct_instance: fn _db, _shared, _group_id -> g end,
-        warmup: false,
-        install_loop_fn: &Gralkor.Python.install_async_runtime/0
-      )
-
-    result = GraphitiPool.replace_graph(pid, "g1", "systems", :property_graph, graph)
-    {recorded, _} = Pythonx.eval("g.driver.recorded", %{"g" => g})
-    {result, Pythonx.decode(recorded), pid}
-  end
 
   defp fact_search_result do
     {graph, _} =

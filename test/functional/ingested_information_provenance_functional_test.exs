@@ -23,9 +23,6 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
     @impl true
     def search(_store, _query, _max_results), do: {:ok, []}
-
-    @impl true
-    def replace_graph(_store, _graph), do: :ok
   end
 
   defmodule RecordingIngestion do
@@ -63,9 +60,6 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
 
     @impl true
     def search(_store, _query, _max_results), do: {:ok, []}
-
-    @impl true
-    def replace_graph(_store, _graph), do: :ok
   end
 
   setup do
@@ -1079,7 +1073,6 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
            %{
              name: "observations",
              destination: "observations",
-             write: :append,
              ingestion: Gralkor.Lens.Ingestion.Store
            }
          ],

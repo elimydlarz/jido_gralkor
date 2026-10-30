@@ -146,7 +146,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                %{
                  name: "observations",
                  destination: "personal",
-                 write: :append,
                  ingestion: Gralkor.Lens.Ingestion.Store
                }
              ],
@@ -272,11 +271,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
        owner: self(),
        configuration: %{
          destinations: Application.fetch_env!(:jido_gralkor, :destinations),
-         lenses:
-           Enum.map(
-             Application.fetch_env!(:jido_gralkor, :lenses),
-             &Keyword.put(&1, :write, :append)
-           ),
+         lenses: Application.fetch_env!(:jido_gralkor, :lenses),
          reflections: []
        }}
     )

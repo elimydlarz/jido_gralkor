@@ -70,8 +70,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         name: "second-beta",
         destination: "second",
         ingestion: Gralkor.Lens.Ingestion.Store
-      ],
-      [name: "first-graph", destination: "first", write: :replace_graph]
+      ]
     ])
 
     Application.put_env(:jido_gralkor, :destination_storage, SearchStorage)
@@ -138,16 +137,10 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
 
     test "and each Destination contributes at most twenty facts, twenty nodes, and five episodes" do
-      use_in_memory_storage()
-
-      for index <- 1..25 do
-        assert :ok = add_episode("first", "operator-one", "memory #{index}", "first-alpha")
-      end
-
-      replace_first_graph(for index <- 1..25, do: node("node-#{index}", ["Project"]))
+      start_native_graph() |> seed_lens_graph() |> seed_competing_direct_memory()
 
       assert {:ok, [%{facts: facts, nodes: nodes, episodes: episodes}]} =
-               search(query: "memory", destinations: ["first"])
+               search(query: "amber", destinations: ["first"])
 
       assert {length(facts), length(nodes), length(episodes)} == {20, 20, 5}
       assert Search.limits() == %{facts: 20, nodes: 20, episodes: 5}
@@ -323,7 +316,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
              ]
     end
 
-    test "and only facts drawn from an episode written through any supplied Lens or written by any supplied Lens's graph replacement are returned" do
+    test "and only facts drawn from an episode written through any supplied Lens are returned" do
       start_native_graph() |> seed_lens_graph()
 
       assert {:ok, [%{facts: facts}]} = lens_search(["first-alpha"])
@@ -333,12 +326,9 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                "amber alpha project owns amber alpha lesson",
                "amber shared lesson fact"
              ]
-
-      assert {:ok, [%{facts: facts}]} = lens_search(["first-graph"])
-      assert Enum.map(facts, & &1.fact) == ["amber replacement settles through amber clearing"]
     end
 
-    test "and only entities mentioned by an episode written through any supplied Lens or written by any supplied Lens's graph replacement are returned" do
+    test "and only entities mentioned by an episode written through any supplied Lens are returned" do
       start_native_graph() |> seed_lens_graph()
 
       assert {:ok, [%{nodes: nodes}]} = lens_search(["first-alpha"])
@@ -346,13 +336,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert nodes |> Enum.map(& &1.name) |> Enum.sort() == [
                "amber alpha lesson",
                "amber alpha project"
-             ]
-
-      assert {:ok, [%{nodes: nodes}]} = lens_search(["first-graph"])
-
-      assert nodes |> Enum.map(& &1.name) |> Enum.sort() == [
-               "amber clearing",
-               "amber replacement"
              ]
     end
 
@@ -366,8 +349,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         source_description: "manual",
         writer: :direct
       })
-
-      replace_first_graph([node("amber-node", ["Project"])])
 
       output = %{
         kind: :destination,
@@ -461,7 +442,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
              %{
                name: "runtime-lens",
                destination: "runtime-memory",
-               write: :append,
                ingestion: Gralkor.Lens.Ingestion.Store
              }
            ],
@@ -727,40 +707,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
              ]
     end
 
-    test "and a fact written by a graph replacement is returned by a search for one of its words" do
-      start_native_graph()
-
-      replace_first_graph(
-        [replacement_entity("payments", "Payments"), replacement_entity("clearing", "Clearing")],
-        [
-          %{
-            from: "payments",
-            to: "clearing",
-            type: "RELATES_TO",
-            properties: %{
-              uuid: "settlement",
-              group_id: "first",
-              name: "SETTLES_THROUGH",
-              fact: "Payments settles through Clearing.",
-              episodes: [],
-              created_at: "2026-08-11T00:00:00Z"
-            }
-          }
-        ]
-      )
-
-      assert {:ok, [%{destination: "first", facts: facts}]} =
-               search(query: "clearing", destinations: ["first"])
-
-      assert [
-               %{
-                 fact: "Payments settles through Clearing.",
-                 relationship: "SETTLES_THROUGH",
-                 source_node: %{uuid: "payments", name: "Payments"},
-                 target_node: %{uuid: "clearing", name: "Clearing"}
-               }
-             ] = facts
-    end
   end
 
   describe "when a Destination result carries nodes" do
@@ -942,9 +888,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     do: GenServer.call(Gralkor.Lens.Storage.InMemory, {:add, "first", episode})
 
   # One Destination holding memory from every writer: two appending Lenses
-  # (each episode mentioning its own entities), a direct write, a Reflection
-  # artefact, and a replaceable Lens's graph. `shared` is drawn from both
-  # Lenses' episodes.
+  # (each episode mentioning its own entities), a direct write, and a Reflection
+  # artefact. `shared` is drawn from both Lenses' episodes.
   defp seed_lens_graph(%{database: database} = graph) do
     for {id, lens, content} <- [
           {"amber-alpha", "first-alpha", "amber alpha memory"},
@@ -976,28 +921,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                "operator-one",
                Gralkor.Artefact.new("amber-review", %{"lesson" => "amber artefact memory"})
              )
-
-    replace_first_graph(
-      [
-        replacement_entity("replacement", "amber replacement"),
-        replacement_entity("clearing", "amber clearing")
-      ],
-      [
-        %{
-          from: "replacement",
-          to: "clearing",
-          type: "RELATES_TO",
-          properties: %{
-            uuid: "settlement",
-            group_id: "first",
-            name: "SETTLES_THROUGH",
-            fact: "amber replacement settles through amber clearing",
-            episodes: [],
-            created_at: "2026-08-11T00:00:00Z"
-          }
-        }
-      ]
-    )
 
     Pythonx.eval(
       """
@@ -1072,38 +995,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
   end
 
   defp fact_search, do: search(query: "fact", destinations: ["first"])
-
-  defp node(id, labels), do: %{id: id, labels: labels, properties: %{title: id}}
-
-  defp replace_first_graph(nodes, relationships \\ []) do
-    store = %Gralkor.Lens.Store{
-      operator_id: "operator-one",
-      lens: %Gralkor.Lens.Replaceable{
-        name: "first-graph",
-        destination: Gralkor.Destination.Registry.fetch!("first")
-      }
-    }
-
-    assert :ok =
-             Gralkor.Lens.Store.replace_graph(store, %Gralkor.Graph{
-               nodes: nodes,
-               relationships: relationships
-             })
-  end
-
-  defp replacement_entity(id, name) do
-    %{
-      id: id,
-      labels: ["Entity"],
-      properties: %{
-        uuid: id,
-        group_id: "first",
-        name: name,
-        summary: name,
-        created_at: "2026-08-11T00:00:00Z"
-      }
-    }
-  end
 
   defp start_native_graph do
     directory =

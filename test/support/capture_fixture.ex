@@ -56,7 +56,6 @@ defmodule Gralkor.CaptureFixture do
                  &%{
                    name: &1,
                    destination: "personal",
-                   write: :append,
                    ingestion: Gralkor.Lens.Ingestion.Store
                  }
                ),

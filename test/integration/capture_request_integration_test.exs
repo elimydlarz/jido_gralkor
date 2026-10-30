@@ -17,16 +17,13 @@ defmodule Gralkor.CaptureRequestIntegrationTest do
            %{
              name: "first",
              destination: "personal",
-             write: :append,
              ingestion: Gralkor.Lens.Ingestion.Store
            },
            %{
              name: "second",
              destination: "personal",
-             write: :append,
              ingestion: Gralkor.Lens.Ingestion.Store
-           },
-           %{name: "replacement", destination: "shared", write: :replace_graph}
+           }
          ],
          reflections: []
        }}
@@ -140,14 +137,6 @@ defmodule Gralkor.CaptureRequestIntegrationTest do
       assert first.destination == second.destination
       assert first.name == "first"
       assert second.name == "second"
-    end
-  end
-
-  describe "when a capture request resolves through its owning runtime > if a selected Lens only accepts whole-graph replacement" do
-    test "then resolution rejects conversation capture through that Lens" do
-      assert_raise ArgumentError, ~r/whole-graph replacement/, fn ->
-        Capture.resolve!(self(), %{request() | route: {:lenses, ["replacement"]}})
-      end
     end
   end
 

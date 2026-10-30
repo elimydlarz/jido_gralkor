@@ -3,7 +3,6 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
   alias Gralkor.Lens
   alias Gralkor.Destination
-  alias Gralkor.Lens.Replaceable
   alias Gralkor.Lens.Storage.Graphiti
   alias Gralkor.Lens.Store
   alias Gralkor.TestOntologies.Strict
@@ -157,7 +156,7 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  describe "if a Lens store receives an unsupported addition, replacement, or search option" do
+  describe "if a Lens store receives an unsupported addition or search option" do
     test "then an `ArgumentError` is raised" do
       Enum.each(unsupported_operations(self()), fn operation ->
         assert_raise ArgumentError, operation
@@ -310,231 +309,6 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
     end
   end
 
-  describe "when a replaceable Lens store using the `personal` Destination replaces a complete graph" do
-    test "then graph replacement receives the same resolved group used by existing Lens operations" do
-      store = replaceable_store(:personal)
-      graph = property_graph()
-      test_pid = self()
-
-      replace_graph_fn = fn group_id, _lens_name, _data ->
-        send(test_pid, {:graph_replaced, group_id})
-        :ok
-      end
-
-      assert :ok = Graphiti.replace_graph(store, graph, replace_graph_fn: replace_graph_fn)
-
-      assert_receive {:graph_replaced, "personal/operator-one"}
-    end
-
-    test "and graph replacement receives the selected Lens name" do
-      test_pid = self()
-
-      replace_graph_fn = fn _group_id, lens_name, _data ->
-        send(test_pid, {:graph_replaced, lens_name})
-        :ok
-      end
-
-      assert :ok =
-               Graphiti.replace_graph(replaceable_store(:personal), property_graph(),
-                 replace_graph_fn: replace_graph_fn
-               )
-
-      assert_receive {:graph_replaced, "systems"}
-    end
-
-    test "and graph replacement receives the supplied nodes and relationships" do
-      graph = property_graph()
-      data = Map.from_struct(graph)
-      test_pid = self()
-
-      replace_graph_fn = fn _group_id, _lens_name, replacement_data ->
-        send(test_pid, {:graph_replaced, replacement_data})
-        :ok
-      end
-
-      assert :ok =
-               Graphiti.replace_graph(replaceable_store(:personal), graph,
-                 replace_graph_fn: replace_graph_fn
-               )
-
-      assert_receive {:graph_replaced, ^data}
-    end
-
-    test "and the graph replacement result is returned to the caller" do
-      replace_graph_fn = fn _group_id, _lens_name, _data ->
-        {:error, :graph_unavailable}
-      end
-
-      assert {:error, :graph_unavailable} =
-               Graphiti.replace_graph(replaceable_store(:personal), property_graph(),
-                 replace_graph_fn: replace_graph_fn
-               )
-    end
-  end
-
-  describe "when a replaceable Lens store using the `global` Destination replaces a complete graph" do
-    test "then graph replacement receives the group named `global` for every operator" do
-      test_pid = self()
-
-      replace_graph_fn = fn group_id, _lens_name, _data ->
-        send(test_pid, {:graph_replaced, group_id})
-        :ok
-      end
-
-      for operator_id <- ["operator-one", "operator-two"] do
-        assert :ok =
-                 Graphiti.replace_graph(replaceable_store(:global, operator_id), property_graph(),
-                   replace_graph_fn: replace_graph_fn
-                 )
-
-        assert_receive {:graph_replaced, "global"}
-      end
-    end
-
-    test "and graph replacement receives the selected Lens name" do
-      test_pid = self()
-
-      replace_graph_fn = fn _group_id, lens_name, _data ->
-        send(test_pid, {:graph_replaced, lens_name})
-        :ok
-      end
-
-      assert :ok =
-               Graphiti.replace_graph(replaceable_store(:global), property_graph(),
-                 replace_graph_fn: replace_graph_fn
-               )
-
-      assert_receive {:graph_replaced, "systems"}
-    end
-
-    test "and graph replacement receives the supplied nodes and relationships" do
-      graph = property_graph()
-      data = Map.from_struct(graph)
-      test_pid = self()
-
-      replace_graph_fn = fn _group_id, _lens_name, replacement_data ->
-        send(test_pid, {:graph_replaced, replacement_data})
-        :ok
-      end
-
-      assert :ok =
-               Graphiti.replace_graph(replaceable_store(:global), graph,
-                 replace_graph_fn: replace_graph_fn
-               )
-
-      assert_receive {:graph_replaced, ^data}
-    end
-
-    test "and the graph replacement result is returned to the caller" do
-      replace_graph_fn = fn _group_id, _lens_name, _data ->
-        {:error, :graph_unavailable}
-      end
-
-      assert {:error, :graph_unavailable} =
-               Graphiti.replace_graph(replaceable_store(:global), property_graph(),
-                 replace_graph_fn: replace_graph_fn
-               )
-    end
-  end
-
-  describe "when a replaceable Lens store using an application Destination replaces a complete graph" do
-    test "then graph replacement receives the group named for that Destination for every operator" do
-      test_pid = self()
-
-      replace_graph_fn = fn group_id, _, _ ->
-        send(test_pid, {:graph_replaced, group_id})
-        :ok
-      end
-
-      for operator_id <- ["operator-one", "operator-two"] do
-        assert :ok =
-                 Graphiti.replace_graph(
-                   replaceable_store(:application, operator_id),
-                   property_graph(),
-                   replace_graph_fn: replace_graph_fn
-                 )
-
-        assert_receive {:graph_replaced, "systems"}
-      end
-    end
-
-    test "and graph replacement receives the selected Lens name" do
-      test_pid = self()
-
-      replace_graph_fn = fn _group_id, lens_name, _replacement_data ->
-        send(test_pid, {:graph_replaced, lens_name})
-        :ok
-      end
-
-      assert :ok =
-               Graphiti.replace_graph(replaceable_store(:application), property_graph(),
-                 replace_graph_fn: replace_graph_fn
-               )
-
-      assert_receive {:graph_replaced, "systems"}
-    end
-
-    test "and graph replacement receives the supplied nodes and relationships" do
-      graph = property_graph()
-      data = Map.from_struct(graph)
-      test_pid = self()
-
-      replace_graph_fn = fn _group_id, _lens_name, replacement_data ->
-        send(test_pid, {:graph_replaced, replacement_data})
-        :ok
-      end
-
-      assert :ok =
-               Graphiti.replace_graph(replaceable_store(:application), graph,
-                 replace_graph_fn: replace_graph_fn
-               )
-
-      assert_receive {:graph_replaced, ^data}
-    end
-
-    test "and the graph replacement result is returned to the caller" do
-      replace_graph_fn = fn _, _, _ -> {:error, :graph_unavailable} end
-
-      assert {:error, :graph_unavailable} =
-               Graphiti.replace_graph(replaceable_store(:application), property_graph(),
-                 replace_graph_fn: replace_graph_fn
-               )
-    end
-  end
-
-  describe "when a replaceable Lens store is searched" do
-    test "then graph search receives its resolved Destination group" do
-      test_pid = self()
-
-      search_fn = fn group_id, query, max_results ->
-        send(test_pid, {:graph_search, group_id, query, max_results})
-        {:ok, []}
-      end
-
-      assert {:ok, []} =
-               Graphiti.search(replaceable_store(:personal), "settlement", 5,
-                 search_fn: search_fn
-               )
-
-      assert {:ok, []} =
-               Graphiti.search(replaceable_store(:global), "settlement", 5, search_fn: search_fn)
-
-      assert_receive {:graph_search, "personal/operator-one", "settlement", 5}
-
-      assert_receive {:graph_search, "global", "settlement", 5}
-    end
-  end
-
-  defp replaceable_store(scope, operator_id \\ "operator-one") do
-    %Store{
-      operator_id: operator_id,
-      lens: %Replaceable{
-        name: "systems",
-        destination: destination(destination_name(scope))
-      }
-    }
-  end
-
   defp lens(name, destination_name),
     do: %Lens{
       name: name,
@@ -545,23 +319,8 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
 
   defp destination(name), do: %Destination{name: name}
 
-  defp destination_name(:application), do: "systems"
-  defp destination_name(scope), do: Atom.to_string(scope)
-
-  defp property_graph do
-    %Gralkor.Graph{
-      nodes: [%{id: "system", labels: ["System"], properties: %{name: "payments"}}],
-      relationships: []
-    }
-  end
-
   defp unsupported_operations(test_pid) do
     add_episode_fn = fn _, _, _, _, _ ->
-      send(test_pid, :graphiti_operation_began)
-      :ok
-    end
-
-    replace_graph_fn = fn _, _, _ ->
       send(test_pid, :graphiti_operation_began)
       :ok
     end
@@ -578,12 +337,6 @@ defmodule Gralkor.Lens.Storage.GraphitiTest do
           "content",
           "source",
           add_episode_fn: add_episode_fn,
-          unsupported_option: true
-        )
-      end,
-      fn ->
-        Graphiti.replace_graph(replaceable_store(:personal), property_graph(),
-          replace_graph_fn: replace_graph_fn,
           unsupported_option: true
         )
       end,

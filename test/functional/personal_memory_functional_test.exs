@@ -75,7 +75,6 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
            %{
              name: "notes",
              destination: "personal",
-             write: :append,
              ingestion: Gralkor.Lens.Ingestion.Store
            }
          ],

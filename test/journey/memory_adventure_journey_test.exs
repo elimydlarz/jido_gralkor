@@ -12,12 +12,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Client.Native
-  alias Gralkor.Graph
   alias Gralkor.GraphitiPool
   alias Gralkor.Ingest
   alias Gralkor.Message
   alias Gralkor.Artefact
-  alias Gralkor.Replace
   alias Gralkor.Search
   alias JidoGralkor.Actions.MemoryAdd
   alias JidoGralkor.Actions.MemorySearch
@@ -86,21 +84,17 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                %{
                  name: "work-notes",
                  destination: "personal",
-                 write: :append,
                  ontology: Gralkor.MemoryAdventureJourneyTest.JourneyOntology,
                  ingestion: Gralkor.Lens.Ingestion.Store
                },
-               %{name: "systems", destination: "personal", write: :replace_graph},
                %{
                  name: "runbooks",
                  destination: "operations",
-                 write: :append,
                  ingestion: Gralkor.Lens.Ingestion.Store
                },
                %{
                  name: "published",
                  destination: "global",
-                 write: :append,
                  ontology: Gralkor.MemoryAdventureJourneyTest.JourneyOntology,
                  ingestion: Gralkor.Lens.Ingestion.Store
                }
@@ -217,7 +211,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     {:ok, adventure: run_adventure(agent)}
   end
 
-  describe "when two operators use direct personal memory, Lenses, asynchronously triggered Reflections, and shared-Destination replacement" do
+  describe "when two operators use direct personal memory, Lenses, and asynchronously triggered Reflections" do
     test "then default-ontology direct personal memory remains recallable", %{
       adventure: adventure
     } do
@@ -294,23 +288,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.appending_operator_graph
     end
 
-    test "and replaceable Lenses use that same graph", %{adventure: adventure} do
-      assert adventure.replaceable_operator_graph
-    end
-
-    test "and replacing one Lens's graph preserves information written by another Lens", %{
-      adventure: adventure
-    } do
-      assert adventure.preserved_shared_information
-    end
-
-    test "and fresh retrieval returns the current replacement graph", %{adventure: adventure} do
-      assert adventure.current_replacement
-    end
-
-    test "and fresh retrieval omits the superseded replacement graph", %{adventure: adventure} do
-      refute adventure.superseded_replacement
-    end
   end
 
   describe "when the Journey consumer triggers generalisation after successive ingestions containing related observations" do
@@ -557,20 +534,11 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
       refute Enum.any?(episodes, &(Map.get(&1, :writer) == :direct))
       refute Enum.any?(episodes, &Map.has_key?(&1, :artefact))
-      refute Enum.any?(episodes, &(Map.get(&1, :lens) in ["personal-chat", "systems"]))
+      refute Enum.any?(episodes, &(Map.get(&1, :lens) == "personal-chat"))
 
       for text <- ["Juniper", "Cedar", "Harbor"] do
         refute Enum.any?(episodes, &(&1 |> episode_content() |> String.contains?(text)))
       end
-    end
-
-    test "and memory written by a replaceable Lens's graph replacement is returned for that Lens",
-         %{adventure: adventure} do
-      facts = for result <- adventure.systems_lens_search, fact <- result.facts, do: fact
-
-      assert Enum.any?(facts, &(&1.fact == "Payments settles through Clearing."))
-      refute Enum.any?(facts, &(&1.fact == "Payments settles through Ledger."))
-      assert lens_episodes(adventure.systems_lens_search) == []
     end
 
     test "and a subsequent Lens-free search returns the memory written directly or through the other Lenses",
@@ -878,9 +846,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         source_description: "migration runbook"
       })
 
-    :ok = Client.replace(agent, replacement("Ledger", "old"))
-    :ok = Client.replace(agent, replacement("Clearing", "current"))
-
     agent_request = agent_request(agent)
     default_memory_search = agent_request.memory_search_results
 
@@ -979,18 +944,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     other_operator_erl =
       search(agent, @operator_two, ["personal"], :artefacts, "backup vacuum scheduling conflict")
 
-    current_graph =
-      search_until(
-        agent,
-        @operator_one,
-        ["personal"],
-        :facts,
-        "settlement clearing",
-        &contains_fact?(&1, "Clearing")
-      )
-
-    superseded_graph = search(agent, @operator_one, ["personal"], :facts, "settlement ledger")
-
     conversation_facts =
       attributed_facts(
         agent,
@@ -1060,13 +1013,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         |> Enum.any?(&(&1 |> episode_content() |> String.contains?("Vacuum")))
       end)
 
-    systems_lens_search =
-      lens_search_until(agent, ["systems"], "Payments settlement Clearing", fn results ->
-        Enum.any?(results, fn result ->
-          Enum.any?(result.facts, &(&1.fact == "Payments settles through Clearing."))
-        end)
-      end)
-
     lens_free_search =
       lens_search_until(agent, [], "Juniper Muscat Harbor Thursday", fn results ->
         episodes = lens_episodes(results)
@@ -1079,7 +1025,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       generalisations_destination_artefacts: generalisations_destination_artefacts,
       global_artefact_searches: global_artefact_searches,
       work_notes_lens_search: work_notes_lens_search,
-      systems_lens_search: systems_lens_search,
       lens_free_search: lens_free_search,
       implicit_memory: contains_all?(implicit_memory, ["juniper", "muscat"]),
       direct_capture_episodes: direct_capture_episodes,
@@ -1095,11 +1040,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       second_operator_other_local_information: contains_episode?(private_for_second, "juniper"),
       implicit_default_operator_graph: contains_episode?(implicit_episodes, "juniper"),
       appending_operator_graph: contains_episode?(shared_episodes, "backup"),
-      replaceable_operator_graph: contains_fact?(current_graph, "Clearing"),
-      preserved_shared_information: contains_episode?(shared_episodes, "vacuum"),
-      current_replacement: contains_fact?(current_graph, "Payments settles through Clearing."),
-      superseded_replacement:
-        contains_fact?(superseded_graph, "Payments settles through Ledger."),
       first_generalisation: first_generalisation,
       later_generalisation: later_generalisation,
       work_notes_input_at_operator: contains_episode?(work_notes_input, "aurora"),
@@ -1285,48 +1225,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   defp find_generalisation(_artefact, _predicate), do: nil
-
-  defp replacement(target, suffix) do
-    %Replace{
-      operator_id: @operator_one,
-      lens: "systems",
-      graph: %Graph{
-        nodes: [
-          replacement_entity("payments-#{suffix}", "Payments"),
-          replacement_entity("target-#{suffix}", target)
-        ],
-        relationships: [
-          %{
-            from: "payments-#{suffix}",
-            to: "target-#{suffix}",
-            type: "RELATES_TO",
-            properties: %{
-              uuid: "memory-adventure-settlement-#{suffix}",
-              group_id: "personal/#{@operator_one}",
-              name: "SETTLES_THROUGH",
-              fact: "Payments settles through #{target}.",
-              episodes: [],
-              created_at: "2026-08-11T00:00:00Z"
-            }
-          }
-        ]
-      }
-    }
-  end
-
-  defp replacement_entity(id, name) do
-    %{
-      id: id,
-      labels: ["Entity"],
-      properties: %{
-        uuid: "memory-adventure-#{id}",
-        group_id: "personal/#{@operator_one}",
-        name: name,
-        summary: name,
-        created_at: "2026-08-11T00:00:00Z"
-      }
-    }
-  end
 
   defp search(agent, operator_id, destinations, kind, query) do
     assert {:ok, results} =

@@ -379,7 +379,6 @@ defmodule Gralkor.CaptureRoutingFunctionalTest do
           &%{
             name: &1,
             destination: if(&1 == "shared", do: "shared", else: "personal"),
-            write: :append,
             ontology: if(&1 == "second", do: Gralkor.DefaultOntology, else: RoutingOntology),
             ingestion:
               if(&1 == "second", do: Gralkor.Lens.Ingestion.Store, else: RecordingIngestion)

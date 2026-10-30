@@ -312,7 +312,6 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
            [
              name: "failing",
              destination: "failing-decisions",
-             write: :append,
              ontology: LensOntology,
              ingestion: FailingIngestion
            ]
@@ -368,7 +367,6 @@ defmodule JidoGralkor.Actions.MemoryAddTest do
     [
       name: "decisions",
       destination: destination,
-      write: :append,
       ontology: LensOntology,
       ingestion: RecordingIngestion
     ]

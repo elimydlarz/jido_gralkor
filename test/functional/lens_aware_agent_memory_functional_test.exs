@@ -943,21 +943,18 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
         %{
           name: "observations",
           destination: "observations",
-          write: :append,
           ontology: MemoryOntology,
           ingestion: StoreIngestion
         },
         %{
           name: "decisions",
           destination: "decisions",
-          write: :append,
           ontology: MemoryOntology,
           ingestion: StoreIngestion
         },
         %{
           name: "shared-generalisations",
           destination: "global",
-          write: :append,
           ontology: Gralkor.DefaultOntology,
           ingestion: StoreIngestion
         }

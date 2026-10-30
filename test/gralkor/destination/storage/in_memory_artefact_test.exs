@@ -110,19 +110,27 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
   end
 
   describe "when in-memory Destination storage is searched with no Lenses" do
-    test "then facts, nodes, and episodes of the Destination are returned within their limits" do
+    test "then facts and episodes of the Destination are returned within their limits" do
       seed_writers()
 
-      assert {:ok, %{facts: facts, nodes: nodes, episodes: episodes}} =
+      assert {:ok, %{facts: facts, episodes: episodes}} =
                InMemory.search(%Destination{name: "observations"}, "operator-one", "q",
                  limits: %{facts: 2, nodes: 1, episodes: 3}
                )
 
       assert Enum.map(facts, & &1.fact) == ["alpha one", "beta one"]
-      assert Enum.map(nodes, & &1.id) == ["owned"]
 
       assert [%{artefact: %{id: "review-id"}}, %{content: "alpha one"}, %{content: "beta one"}] =
                episodes
+    end
+
+    test "and no nodes are returned because this backend extracts no entities" do
+      seed_writers()
+
+      assert {:ok, %{nodes: []}} =
+               InMemory.search(%Destination{name: "observations"}, "operator-one", "q",
+                 limits: Gralkor.Search.limits()
+               )
     end
   end
 
@@ -134,65 +142,30 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
       assert Enum.all?(episodes, &(&1.lens == "alpha"))
     end
 
-    test "and only facts drawn from those episodes or written by a selected Lens's graph replacement are returned" do
+    test "and only facts drawn from those episodes are returned" do
       seed_writers()
       assert {:ok, %{facts: facts}} = lens_search(["alpha"])
       assert Enum.map(facts, & &1.fact) == ["alpha one", "alpha two"]
-
-      assert {:ok, %{facts: [replacement]}} = lens_search(["graph"])
-
-      assert %{fact: "owned settles through other", relationship: "SETTLES_THROUGH"} =
-               replacement
     end
 
-    test "and only nodes owned by a selected Lens's graph replacement are returned" do
+    test "and no nodes are returned" do
       seed_writers()
       assert {:ok, %{nodes: []}} = lens_search(["alpha"])
-      assert {:ok, %{nodes: nodes}} = lens_search(["graph"])
-      assert Enum.map(nodes, & &1.id) == ["owned", "other"]
     end
 
     test "but no direct write or Destination artefact contributes" do
       seed_writers()
-      assert {:ok, %{facts: facts, episodes: episodes}} = lens_search(["alpha", "graph"])
+      assert {:ok, %{facts: facts, episodes: episodes}} = lens_search(["alpha"])
 
       refute Enum.any?(episodes, &Map.has_key?(&1, :artefact))
       refute Enum.any?(episodes, &(Map.get(&1, :writer) == :direct))
       refute Enum.any?(facts, &(&1.fact == "direct one"))
     end
 
-    test "and nodes are limited after Lens filtering" do
-      seed_writers()
-
-      GenServer.call(
-        Gralkor.Lens.Storage.InMemory,
-        {:replace_graph, "observations", "unselected",
-         %{
-           nodes:
-             for(
-               id <- 1..3,
-               do: %{
-                 id: "unselected-#{id}",
-                 labels: ["Thing"],
-                 properties: %{_gralkor_lens: "unselected"}
-               }
-             ),
-           relationships: []
-         }}
-      )
-
-      assert {:ok, %{nodes: nodes}} =
-               InMemory.search(%Destination{name: "observations"}, "operator-one", "q",
-                 limits: %{facts: 20, nodes: 1, episodes: 5},
-                 lenses: ["graph"]
-               )
-
-      assert Enum.map(nodes, & &1.id) == ["owned"]
-    end
   end
 
-  # One Destination holding an artefact, two appending Lenses' episodes, a
-  # direct write, and a replaceable Lens's graph.
+  # One Destination holding an artefact, two appending Lenses' episodes, and a
+  # direct write.
   defp seed_writers do
     assert :ok =
              InMemory.put_artefact(
@@ -211,33 +184,6 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
     end
 
     add_episode(%{content: "direct one", source_description: "manual", writer: :direct})
-
-    store = %Gralkor.Lens.Store{
-      operator_id: "operator-one",
-      lens: %Gralkor.Lens.Replaceable{
-        name: "graph",
-        destination: %Destination{name: "observations"}
-      }
-    }
-
-    assert :ok =
-             Gralkor.Lens.Storage.InMemory.replace_graph(store, %Gralkor.Graph{
-               nodes: [
-                 %{id: "owned", labels: ["Thing"], properties: %{}},
-                 %{id: "other", labels: ["Thing"], properties: %{}}
-               ],
-               relationships: [
-                 %{
-                   from: "owned",
-                   to: "other",
-                   type: "RELATES_TO",
-                   properties: %{
-                     name: "SETTLES_THROUGH",
-                     fact: "owned settles through other"
-                   }
-                 }
-               ]
-             })
   end
 
   defp add_episode(episode),

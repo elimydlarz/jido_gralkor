@@ -79,13 +79,11 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
            [
              name: "observations",
              destination: "observations",
-             write: :append,
              ingestion: Gralkor.Lens.Ingestion.Store
            ],
            [
              name: "decisions",
              destination: "decisions",
-             write: :append,
              ingestion: Gralkor.Lens.Ingestion.Store
            ]
          ],

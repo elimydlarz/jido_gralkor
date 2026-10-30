@@ -55,7 +55,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                %{
                  name: "runtime-observations",
                  destination: "runtime-memory",
-                 write: :append,
                  ingestion: Gralkor.RuntimeConfigurationFunctionalTest.RecordingIngestion
                }
              ],
@@ -449,7 +448,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
           %{
             name: "observations",
             destination: "project",
-            write: :append,
             ingestion: Gralkor.Lens.Ingestion.Store,
             ontology: ConsumerOntology
           }
@@ -1201,7 +1199,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
-  describe "when complete runtime configuration contains an appending Lens declaring `write: :append`, a Destination, an ingestion module, and an optional ontology" do
+  describe "when complete runtime configuration contains a Lens declaring a Destination, an ingestion module, and an optional ontology" do
     test "then replacement accepts the Lens for ingestion" do
       agent_server =
         start_supervised!(
@@ -1244,59 +1242,33 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
   end
 
-  describe "when complete runtime configuration contains a replaceable Lens declaring `write: :replace_graph` and a Destination" do
-    test "then replacement accepts the Lens for complete-graph replacement" do
+  describe "if a Lens definition retains the removed `write` field" do
+    test "then replacement fails identifying the Lens and giving migration guidance" do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
            agent: ConsumerAgent,
-           id: "runtime-configuration-replaceable-lens",
+           id: "runtime-configuration-removed-lens-write",
            register_global: false}
         )
 
-      assert :ok =
-               JidoGralkor.Runtime.replace(agent_server, %{
-                 destinations: [%{name: "project"}],
-                 lenses: [
-                   %{
-                     name: "project-topology",
-                     destination: "project",
-                     write: :replace_graph
-                   }
-                 ],
-                 reflections: []
-               })
+      for write <- [:append, :replace_graph] do
+        assert {:error, {:removed_lens_write, "project-topology", guidance}} =
+                 JidoGralkor.Runtime.replace(agent_server, %{
+                   destinations: [%{name: "project"}],
+                   lenses: [
+                     %{
+                       name: "project-topology",
+                       destination: "project",
+                       write: write,
+                       ingestion: RecordingIngestion
+                     }
+                   ],
+                   reflections: []
+                 })
 
-      assert %Gralkor.Lens.Replaceable{
-               name: "project-topology",
-               destination: %Gralkor.Destination{name: "project"}
-             } = JidoGralkor.Runtime.lens!(agent_server, "project-topology")
-    end
-  end
-
-  describe "if a Lens definition combines appending and replacement fields" do
-    test "then replacement fails identifying the incompatible Lens definition" do
-      agent_server =
-        start_supervised!(
-          {Jido.AgentServer,
-           agent: ConsumerAgent,
-           id: "runtime-configuration-incompatible-lens",
-           register_global: false}
-        )
-
-      assert {:error, {:incompatible_lens_definition, "project-topology"}} =
-               JidoGralkor.Runtime.replace(agent_server, %{
-                 destinations: [%{name: "project"}],
-                 lenses: [
-                   %{
-                     name: "project-topology",
-                     destination: "project",
-                     write: :replace_graph,
-                     ingestion: RecordingIngestion
-                   }
-                 ],
-                 reflections: []
-               })
+        assert guidance =~ "delete"
+      end
     end
   end
 
@@ -1325,7 +1297,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                      %{
                        name: "observations",
                        destination: "project",
-                       write: :append,
                        ingestion: RecordingIngestion,
                        ontology: ontology
                      }
@@ -1353,7 +1324,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                    %{
                      name: "people",
                      destination: "project",
-                     write: :append,
                      ingestion: RecordingIngestion,
                      ontology: PersonOntology
                    }
@@ -1374,14 +1344,12 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
              %{
                name: "operator",
                destination: "personal",
-               write: :append,
                ingestion: Gralkor.Lens.Ingestion.Store
              }, "personal-chat"},
             {:lenses,
              %{
                name: "notes",
                destination: "operator",
-               write: :append,
                ingestion: Gralkor.Lens.Ingestion.Store
              }, "personal"}
           ] do
@@ -1446,7 +1414,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       lens = %{
         name: "generalising",
         destination: "generalisations",
-        write: :append,
         ingestion: Gralkor.Lens.Ingestion.Store
       }
 
@@ -1462,8 +1429,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       for {collection, definition} <- [
             {:lenses, lens},
-            {:lenses,
-             %{name: "generalising", destination: "generalisations", write: :replace_graph}},
             {:reflections, reflection}
           ] do
         config =
@@ -1550,7 +1515,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         %{
           name: "observations",
           destination: destination,
-          write: :append,
           ingestion: RecordingIngestion
         }
       ],
@@ -1571,7 +1535,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         %{
           name: "observations",
           destination: "global",
-          write: :append,
           ingestion: RecordingIngestion,
           ontology: false
         }

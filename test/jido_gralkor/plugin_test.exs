@@ -231,7 +231,6 @@ defmodule JidoGralkor.PluginTest do
           %{
             name: "stray",
             destination: "absent",
-            write: :append,
             ingestion: Gralkor.Lens.Ingestion.Store
           }
         ],
@@ -326,24 +325,6 @@ defmodule JidoGralkor.PluginTest do
             ingestion_lens: retired
           )
         end
-      end
-    end
-  end
-
-  describe "when mount selects an ingestion Lens > if the ingestion Lens accepts only whole-graph replacement" do
-    test "then mounting raises an ArgumentError identifying that Lens" do
-      configuration =
-        Map.update!(runtime_configuration(), :lenses, fn lenses ->
-          lenses ++ [%{name: "snapshot", destination: "memory", write: :replace_graph}]
-        end)
-
-      assert_raise ArgumentError, ~r/"snapshot".*whole-graph replacement/, fn ->
-        Plugin.mount(%{id: "operator-one", state: %{}},
-          capture_destination: "personal",
-          agent_name: "Susu",
-          ingestion_lens: "snapshot",
-          runtime_config: configuration
-        )
       end
     end
   end
@@ -537,18 +518,9 @@ defmodule JidoGralkor.PluginTest do
         agent("operator-one", thread_id: "thread-one")
         |> put_in([:state, :__memory__], plugin_state)
 
-      :ok =
-        JidoGralkor.Runtime.replace(
-          self(),
-          Map.update!(runtime_configuration(), :lenses, fn lenses ->
-            lenses ++ [%{name: "snapshot", destination: "memory", write: :replace_graph}]
-          end)
-        )
-
       for {invalid, message} <- [
             {"missing", ~r/unknown_definition, :lenses, "missing"/},
-            {42, ~r/invalid Lens 42/},
-            {"snapshot", ~r/invalid Lens "snapshot": it accepts only whole-graph replacement/}
+            {42, ~r/invalid Lens 42/}
           ] do
         signal =
           Signal.new!("ai.react.query", %{query: "hi", tool_context: %{lens: invalid}},
@@ -1182,14 +1154,12 @@ defmodule JidoGralkor.PluginTest do
         %{
           name: "observations",
           destination: "memory",
-          write: :append,
           ontology: LensOntology,
           ingestion: Gralkor.Lens.Ingestion.Store
         },
         %{
           name: "notes",
           destination: "memory",
-          write: :append,
           ingestion: Gralkor.Lens.Ingestion.Store
         }
       ],

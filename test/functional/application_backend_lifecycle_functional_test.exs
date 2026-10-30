@@ -106,7 +106,6 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
              %{
                name: "observations",
                destination: "observations",
-               write: :append,
                ingestion: Gralkor.Lens.Ingestion.Store
              }
            ],

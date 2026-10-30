@@ -178,82 +178,6 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
     end
   end
 
-  describe "where a replaceable Lens references a shared Destination" do
-    test "then replacement changes only graph content previously written by that Lens" do
-      start_supervised!(Gralkor.Lens.Storage.InMemory)
-      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-
-      Application.put_env(:jido_gralkor, :lenses, [
-        replaceable_lens("systems"),
-        replaceable_lens("catalogue")
-      ])
-
-      assert :ok = Client.replace(replacement("catalogue", "catalogue"))
-      assert :ok = Client.replace(replacement("systems-old", "systems"))
-      assert :ok = Client.replace(replacement("systems-new", "systems"))
-
-      assert Enum.map(Gralkor.Lens.Storage.InMemory.graph("shared").nodes, & &1.id) == [
-               "catalogue",
-               "systems-new"
-             ]
-    end
-
-    test "and information saved through every other Lens or Reflection remains unchanged" do
-      start_supervised!(Gralkor.Lens.Storage.InMemory)
-      start_supervised!(Gralkor.Destination.Storage.InMemory)
-      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-
-      Application.put_env(
-        :jido_gralkor,
-        :destination_storage,
-        Gralkor.Destination.Storage.InMemory
-      )
-
-      Application.put_env(:jido_gralkor, :lenses, [
-        replaceable_lens("systems"),
-        replaceable_lens("catalogue")
-      ])
-
-      assert :ok = Client.replace(replacement("catalogue", "catalogue"))
-
-      reflection = configured_reflections!([reflection_definition()]) |> List.first()
-
-      artefact = %Gralkor.Artefact{
-        id: "review-one",
-        payload: %{"lesson" => "preserve"}
-      }
-
-      assert :ok =
-               Gralkor.Destination.Storage.put_artefact(
-                 Enum.find(reflection.outputs, &(&1.kind == :destination)),
-                 reflection.name,
-                 "operator-one",
-                 artefact,
-                 storage: Gralkor.Destination.Storage.InMemory
-               )
-
-      assert :ok = Client.replace(replacement("systems", "systems"))
-
-      assert Enum.any?(Gralkor.Lens.Storage.InMemory.graph("shared").nodes, fn node ->
-               node.id == "catalogue"
-             end)
-
-      expected_artefact = Map.from_struct(artefact)
-
-      assert {:ok, [%{destination: "shared", episodes: episodes}]} =
-               Client.search(%Gralkor.Search{
-                 operator_id: "operator-two",
-                 query: "preserve",
-                 destinations: ["shared"]
-               })
-
-      assert Enum.any?(
-               episodes,
-               &match?(%{artefact: ^expected_artefact, reflection: "review"}, &1)
-             )
-    end
-  end
-
   describe "if the Destination registry is not a list" do
     test "then configuration resolution raises `ArgumentError` naming what it found instead" do
       Application.put_env(:jido_gralkor, :destinations, %{not: "a list"})
@@ -421,7 +345,6 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       missing_lens = [
         name: "observations",
         destination: "missing",
-        write: :append,
         ontology: MemoryOntology,
         ingestion: StoreIngestion
       ]
@@ -453,7 +376,6 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
       generalising_lens = [
         name: "observations",
         destination: "generalisations",
-        write: :append,
         ontology: MemoryOntology,
         ingestion: StoreIngestion
       ]
@@ -516,21 +438,6 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
                      fn -> mount!(runtime_configuration([[name: name]])) end
       end
     end
-  end
-
-  defp replaceable_lens(name) do
-    [name: name, destination: "shared", write: :replace_graph]
-  end
-
-  defp replacement(node_id, lens) do
-    %Gralkor.Replace{
-      operator_id: "operator-one",
-      lens: lens,
-      graph: %Gralkor.Graph{
-        nodes: [%{id: node_id, labels: ["Thing"], properties: %{}}],
-        relationships: []
-      }
-    }
   end
 
   defp runtime_configuration(destinations, lenses \\ [], reflections \\ []) do
