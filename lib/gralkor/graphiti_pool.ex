@@ -2096,7 +2096,7 @@ defmodule Gralkor.GraphitiPool do
 
   defp episode_write_admission({:remote, _options}), do: :unbounded
 
-  defp embedded_falkordb_socket_timeout({:embedded, _data_dir}, opts) do
+  defp falkordb_socket_timeout({:embedded, _data_dir}, opts) do
     opts
     |> Keyword.get_lazy(
       :embedded_falkordb_socket_timeout_ms,
@@ -2106,7 +2106,21 @@ defmodule Gralkor.GraphitiPool do
     |> Kernel./(1_000)
   end
 
-  defp embedded_falkordb_socket_timeout({:remote, _options}, _opts), do: nil
+  defp falkordb_socket_timeout({:remote, _options}, opts) do
+    opts
+    |> Keyword.get_lazy(
+      :remote_falkordb_socket_timeout_ms,
+      &Config.remote_falkordb_socket_timeout_ms/0
+    )
+    |> Config.validate_remote_falkordb_socket_timeout_ms!()
+    |> Kernel./(1_000)
+  end
+
+  defp graph_operation_deadline(opts) do
+    opts
+    |> Keyword.get_lazy(:graph_operation_deadline_ms, &Config.graph_operation_deadline_ms/0)
+    |> Config.validate_graph_operation_deadline_ms!()
+  end
 
   defp construct_falkor_db(constructor, spec, socket_timeout) do
     case :erlang.fun_info(constructor, :arity) do
@@ -2331,7 +2345,7 @@ defmodule Gralkor.GraphitiPool do
     db
   end
 
-  defp default_construct_falkor_db({:remote, kw}, _socket_timeout) do
+  defp default_construct_falkor_db({:remote, kw}, socket_timeout) do
     host = Keyword.fetch!(kw, :host)
     port = Keyword.fetch!(kw, :port)
     username = Keyword.get(kw, :username)
@@ -2345,14 +2359,23 @@ defmodule Gralkor.GraphitiPool do
         h = host.decode('utf-8') if isinstance(host, (bytes, bytearray)) else host
         u = username.decode('utf-8') if isinstance(username, (bytes, bytearray)) else username
         p = password.decode('utf-8') if isinstance(password, (bytes, bytearray)) else password
-        FalkorDB(host=h, port=port, username=u, password=p, ssl=ssl)
+        FalkorDB(
+            host=h,
+            port=port,
+            username=u,
+            password=p,
+            ssl=ssl,
+            socket_timeout=socket_timeout,
+            socket_connect_timeout=socket_timeout,
+        )
         """,
         %{
           "host" => host,
           "port" => port,
           "username" => username,
           "password" => password,
-          "ssl" => ssl
+          "ssl" => ssl,
+          "socket_timeout" => socket_timeout
         }
       )
 
