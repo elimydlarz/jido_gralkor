@@ -30,7 +30,7 @@ From issue #1, this CR closes items 3, 4 and 6 (`max_tokens`, chunking, extracti
 - Replacement Lenses write a separate graph shape through `%Gralkor.Graph{}`. Its nodes and relationships have no embeddings and no episode attribution, and their ownership is tracked by `_gralkor_lens`.
 - Graphiti resolution and `memory_search` never see them.
 - With structured ingestion abandoned, they are surface area with no consumer value.
-- Phil's main branch exposes `write: "replace_graph"` in its runtime-configuration UI but never calls `Client.replace`. Its code-graph branch removed the only call site.
+- Phil's main branch still contains a call to `Client.replace` (`Phil.CodeGraph`, one replace Lens per repository), but nothing runs it: `GITHUB_SNAPSHOT_REPOS` is set in no environment. Phil's approved `WIP_CODE.md` replaces that path with direct FalkorDB writes.
 
 **Change.** Delete the replacement path end to end.
 - **Modules:** `Gralkor.Replace`, `Gralkor.Graph`, `Gralkor.Lens.Replaceable`.
