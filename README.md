@@ -188,7 +188,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | `:lens_storage` | module | `Gralkor.Lens.Storage.Graphiti` | Physical storage behind `Gralkor.Lens.Store`. Set to `Gralkor.Lens.Storage.InMemory` in tests — pinning `:client` alone does **not** intercept `Client.ingest/1`, `replace/1`, or `search/1`. |
 | `:destination_storage` | module implementing `Gralkor.Destination.Storage` | `Gralkor.Destination.Storage.Graphiti` | The single memory boundary behind `Client.search/1` and Reflection Destination outputs. Artefact writes create-or-confirm by stable `artefact.id`. Set to `Gralkor.Destination.Storage.InMemory` in tests. |
 | `:destinations` | list of Destination definitions | `[]` | Application compatibility registry for direct client calls without an AgentServer target. Mounted agents use their own `:runtime_config`. |
-| `:lenses` | list of Lens definitions | `[]` | Application compatibility registry for direct client calls without an AgentServer target. A retained `:write` field raises with migration guidance; mounted-agent Lens definitions declare their write mode explicitly. |
+| `:lenses` | list of Lens definitions | `[]` | Application compatibility registry for direct client calls without an AgentServer target. A retained `:write` field raises with migration guidance. |
 | `:recall_deadline_ms` | positive integer | `12_000` | Wall-clock budget for a whole recall search and presentation. On expiry the recall task is killed and `recall/4` returns `{:error, :recall_deadline_expired}`. |
 | `:test` | boolean | `false` | Verbose diagnostic logging: recall queries, returned facts, and flushed capture bodies are written to the log. Debugging aid — leave it off in production, where it would log memory contents. |
 
