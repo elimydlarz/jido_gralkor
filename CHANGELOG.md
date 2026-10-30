@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [14.0.0] - 2026-10-30
 
 Replacement Lenses are gone, because reliable ingestion of large structured graphs into Graphiti has been abandoned and nothing Graphiti searches could see their output. This is a breaking change; migration guidance follows each entry.
 
