@@ -59,8 +59,9 @@ From issue #1, this CR closes items 3, 4 and 6 (`max_tokens`, chunking, extracti
 - Appending Lenses work unchanged without `:write`.
 
 **Consumer migration (Phil)**
-- Remove the `replace_graph` option from `Phil.RuntimeConfiguration` and `RuntimeConfigurationLive`.
-- Drop `"write"` from stored Lens definitions before upgrading.
+- Phil pins `~> 13.0`, so this removal reaches it only when it upgrades.
+- Before upgrading, remove `Phil.CodeGraph`'s `Client.replace` path, the seed's `code` Lenses, and the `replace_graph` option from `Phil.RuntimeConfiguration` and `RuntimeConfigurationLive`.
+- Drop `"write"` from the seed and from stored Lens definitions before upgrading.
 - Check whether any deployed graph holds `_gralkor_lens`-marked nodes. If it does, deleting them is a one-off Cypher cleanup, outside this CR.
 
 ---
