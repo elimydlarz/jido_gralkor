@@ -49,7 +49,9 @@ From issue #1, this CR closes items 3, 4 and 6 (`max_tokens`, chunking, extracti
 - **Test trees:** remove the replacement leaves in `test-trees/functional/runtime-configuration_TEST_TREES.md` and `test-trees/unit/jido-gralkor-runtime_TEST_TREES.md`.
 - **Tests:**
   - delete `test/functional/lens_graph_replacement_functional_test.exs`
-  - strip replacement cases from about 15 other test files: storage, pool, runtime validation, plugin, the functional suites, and the `memory_adventure` journey
+  - strip replacement cases from the other test files: storage, pool, runtime validation, plugin, the functional suites, and the `memory_adventure` journey
+  - drop `write: :append` from every Lens fixture
+  - keep `_gralkor_lens` in the personal graph migration fixtures, which model historical data
 
 **Acceptance**
 - None of `replace_graph`, `Gralkor.Graph`, `Gralkor.Replace`, `Replaceable` or `_gralkor_lens` remains in `lib/`, the test trees, the README, CLAUDE.md or `DESTINATIONS.md`.
