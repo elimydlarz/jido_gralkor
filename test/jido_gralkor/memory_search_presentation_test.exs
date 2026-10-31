@@ -2,238 +2,334 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   use ExUnit.Case, async: true
   alias JidoGralkor.MemorySearchPresentation, as: Presentation
 
-  @omitted_one_fact "Omitted (response limit): facts 1, entities 0, episodes 0."
+  @omitted_one "1 more memory omitted (response limit)."
 
   describe "when the memory search formatter is called" do
-    test "then facts from every Destination appear first under a `Facts` heading, then entities under an `Entities` heading, then episodes under an `Episodes` heading" do
+    test "then every memory is one line of plain text under the heading of its writer" do
       input = [
-        result("first", [fact("first fact", [%{lens: "notes"}])], [entity("Atlas")], [
-          episode("first episode", %{lens: "notes"})
+        result("first", [fact("first\nfact", [%{lens: "notes"}])], [], [
+          episode("first   episode", %{lens: "notes"})
+        ])
+      ]
+
+      assert rendered(input) == "Lens: notes\n- first fact\n- first episode"
+    end
+
+    test "and whole Reflection artefacts come first, then facts, then episodes" do
+      input = [
+        result("first", [fact("a fact", [%{lens: "notes"}])], [], [
+          episode("an episode", %{lens: "notes"})
         ]),
-        result("second", [fact("second fact", [%{lens: "notes"}])], [entity("Borealis")], [])
+        result("second", [], [], [artefact("lessons", %{"lesson" => "an artefact"})])
       ]
 
       assert rendered(input) ==
-               "Facts\n\nLens: notes\n- first fact\n- second fact\n\n" <>
-                 "Entities\n- Atlas\n- Borealis\n\n" <>
-                 "Episodes\n- [Lens: notes] first episode"
+               "Reflection: lessons\n- an artefact\n\nLens: notes\n- a fact\n- an episode"
     end
 
-    test "and a section with nothing to show is left out" do
-      assert rendered([result("global", [], [entity("Atlas")], [])]) == "Entities\n- Atlas"
-    end
-
-    test "and the formatter adds no Destination, artefact level, or lineage metadata" do
-      input =
-        fact("Use canaries", [%{reflection: "lessons", id: "episode-id"}])
-        |> Map.put(:artefact, %{id: "artefact-id", payload: %{level: 2, evolves_from: ["old"]}})
-
-      assert rendered(facts([input])) == "Facts\n\nReflection: lessons\n- Use canaries"
-    end
-
-    test "and the structured input remains unchanged" do
-      input = facts([fact("one", [%{lens: "notes", id: "source-id"}])])
-      assert rendered(input) == "Facts\n\nLens: notes\n- one"
-      assert input == facts([fact("one", [%{lens: "notes", id: "source-id"}])])
-    end
-  end
-
-  describe "when the memory search formatter is called > while no facts, entities, or episodes are supplied" do
-    test "then the text explicitly states that no matching memory was found" do
-      assert rendered([]) == "No matching memory."
-      assert rendered([result("global", [], [], [])]) == "No matching memory."
-    end
-  end
-
-  describe "when the formatter presents facts" do
-    test "then Lens groups use `Lens: <name>` headings" do
-      assert rendered(facts([fact("Use retries", [%{lens: "jira"}])])) ==
-               "Facts\n\nLens: jira\n- Use retries"
-    end
-
-    test "and Reflection groups use `Reflection: <name>` headings" do
-      assert rendered(facts([fact("Use canaries", [%{reflection: "lessons"}])])) ==
-               "Facts\n\nReflection: lessons\n- Use canaries"
-    end
-
-    test "and each fact is presented as one bullet with its complete text" do
-      assert rendered(
-               facts([
-                 fact("First\ncontinued", [%{lens: "notes"}]),
-                 fact("Second", [%{lens: "notes"}])
-               ])
-             ) == "Facts\n\nLens: notes\n- First\ncontinued\n- Second"
-    end
-
-    test "and groups retain first-appearance order with retrieval order inside each group" do
+    test "and headings keep first-appearance order with retrieval order inside each heading" do
       assert rendered(
                facts([
                  fact("one", [%{lens: "z"}]),
                  fact("two", [%{lens: "a"}]),
                  fact("three", [%{lens: "z"}])
                ])
-             ) == "Facts\n\nLens: z\n- one\n- three\n\nLens: a\n- two"
+             ) == "Lens: z\n- one\n- three\n\nLens: a\n- two"
+    end
+
+    test "and entities come last under an `Entities` heading" do
+      input = [
+        result("global", [], [entity("Atlas")], [episode("an episode", %{lens: "notes"})]),
+        result("second", [], [entity("Borealis")], [])
+      ]
+
+      assert rendered(input) == "Lens: notes\n- an episode\n\nEntities\n- Atlas\n- Borealis"
+    end
+
+    test "and nothing is labelled as a fact, an episode, or an artefact" do
+      text =
+        rendered([
+          result("global", [fact("one", [%{lens: "notes"}])], [], [
+            episode("two", %{lens: "notes"}),
+            artefact("lessons", %{"lesson" => "three"})
+          ])
+        ])
+
+      refute text =~ "Facts"
+      refute text =~ "Episodes"
+      refute text =~ "artefact"
+      refute text =~ "Excerpt"
+    end
+
+    test "and the formatter adds no Destination, artefact identifier, level, or lineage metadata" do
+      payload = %{
+        "generalisations" => [%{"content" => "Use canaries", "level" => 2, "evolves_from" => []}]
+      }
+
+      assert rendered([result("global", [], [], [artefact("lessons", payload)])]) ==
+               "Reflection: lessons\n- Use canaries"
+    end
+
+    test "and the structured input remains unchanged" do
+      input = facts([fact("one", [%{lens: "notes", id: "source-id"}])])
+      assert rendered(input) == "Lens: notes\n- one"
+      assert input == facts([fact("one", [%{lens: "notes", id: "source-id"}])])
+    end
+  end
+
+  describe "when the memory search formatter is called > while no memories are supplied" do
+    test "then the text explicitly states that no matching memory was found" do
+      assert rendered([]) == "No matching memory."
+      assert rendered([result("global", [], [], [])]) == "No matching memory."
+    end
+  end
+
+  describe "when the formatter names a writer" do
+    test "then a Lens uses a `Lens: <name>` heading" do
+      assert rendered(facts([fact("one", [%{lens: "notes"}])])) == "Lens: notes\n- one"
+    end
+
+    test "and a Reflection uses a `Reflection: <name>` heading" do
+      assert rendered(facts([fact("one", [%{reflection: "lessons"}])])) ==
+               "Reflection: lessons\n- one"
+    end
+
+    test "and known direct provenance identifies its source kind" do
+      for {kind, heading} <- [
+            {:conversation, "Source: direct conversation"},
+            {"conversation", "Source: direct conversation"},
+            {:document, "Source: direct document"},
+            {:structured_record, "Source: direct structured record"}
+          ] do
+        assert rendered([
+                 result("global", [], [], [
+                   episode("one", %{writer: :direct, source_kind: kind})
+                 ])
+               ]) == heading <> "\n- one"
+      end
+
+      assert rendered(facts([fact("one", [%{writer: :direct}])])) == "Source: direct\n- one"
+    end
+
+    test "and unnamed provenance uses `Source: unknown`" do
+      assert rendered(facts([fact("one", [%{id: "x"}]), fact("two", [])])) ==
+               "Source: unknown\n- one\n- two"
+
+      assert rendered([result("global", [], [], [%{content: "three"}])]) ==
+               "Source: unknown\n- three"
+    end
+  end
+
+  describe "when the formatter presents facts" do
+    test "then each fact is one bullet with its complete text" do
+      text = String.duplicate("a long fact ", 200) |> String.trim()
+      assert rendered(facts([fact(text, [%{lens: "notes"}])])) == "Lens: notes\n- " <> text
     end
 
     test "and repeated provenance for one source adds no duplicate bullet for that fact" do
-      assert rendered(facts([fact("one", [%{lens: "x", id: "a"}, %{lens: "x", id: "b"}])])) ==
-               "Facts\n\nLens: x\n- one"
+      assert rendered(facts([fact("one", [%{lens: "notes", id: "a"}, %{lens: "notes", id: "b"}])])) ==
+               "Lens: notes\n- one"
     end
 
-    test "and facts with several named sources appear under each distinct source" do
-      assert rendered(facts([fact("shared", [%{lens: "notes"}, %{reflection: "lessons"}])])) ==
-               "Facts\n\nLens: notes\n- shared\n\nReflection: lessons\n- shared"
+    test "and a fact with several named sources appears under each distinct source" do
+      assert rendered(facts([fact("one", [%{lens: "notes"}, %{reflection: "lessons"}])])) ==
+               "Lens: notes\n- one\n\nReflection: lessons\n- one"
     end
+  end
 
-    test "and known direct provenance identifies its source kind without a Lens or Reflection heading" do
-      for {kind, name} <- [
-            {:conversation, "conversation"},
-            {"document", "document"},
-            {:structured_record, "structured record"}
-          ] do
-        assert rendered(facts([fact("one", [%{writer: :direct, source_kind: kind}])])) ==
-                 "Facts\n\nSource: direct #{name}\n- one"
-      end
+  describe "when the formatter presents facts > while a fact has an invalidation date" do
+    test "then its bullet ends with `(invalidated at <date>)`" do
+      invalidated =
+        fact("The Vacuum job runs at 02:00.", [%{lens: "notes"}])
+        |> Map.put(:invalid_at, "2026-10-12 09:16:40.173249+00:00")
+        |> Map.put(:expired_at, "2026-10-20 00:00:00+00:00")
 
-      assert rendered(facts([fact("one", [%{writer: :direct}])])) ==
-               "Facts\n\nSource: direct\n- one"
+      assert rendered(facts([invalidated])) ==
+               "Lens: notes\n- The Vacuum job runs at 02:00. (invalidated at 2026-10-12)"
     end
+  end
 
-    test "and unnamed provenance is grouped under `Source: unknown`" do
-      assert rendered(facts([fact("one", []), fact("two", [%{source_description: "legacy"}])])) ==
-               "Facts\n\nSource: unknown\n- one\n- two"
+  describe "when the formatter presents facts > while a fact has only an expiry date" do
+    test "then its bullet ends with `(invalidated at <date>)`" do
+      expired =
+        fact("The Vacuum job runs at 02:00.", [%{lens: "notes"}])
+        |> Map.put(:invalid_at, nil)
+        |> Map.put(:expired_at, "2026-10-20 00:00:00+00:00")
+
+      assert rendered(facts([expired])) ==
+               "Lens: notes\n- The Vacuum job runs at 02:00. (invalidated at 2026-10-20)"
     end
   end
 
   describe "when the formatter presents entities" do
-    test "then each entity is presented as one bullet with its complete name, summary, and attributes" do
-      node = %{
-        name: "parse/1",
-        summary: "Parses the whole input " <> String.duplicate("carefully ", 60),
-        attributes: %{"module" => "Lexer", "arity" => "1"}
-      }
+    test "then each entity is one bullet with its complete name, summary, and attributes" do
+      node = %{name: "Atlas", summary: "A rollout", attributes: %{"owner" => "Platform"}}
 
       assert rendered([result("global", [], [node], [])]) ==
-               "Entities\n- parse/1: #{node.summary} (arity: 1, module: Lexer)"
+               "Entities\n- Atlas: A rollout (owner: Platform)"
+    end
+  end
+
+  describe "when the formatter presents a Reflection artefact" do
+    test "then its payload is presented whole as readable text" do
+      text = String.duplicate("a long lesson ", 100) |> String.trim()
+
+      assert rendered([result("global", [], [], [artefact("lessons", %{"lesson" => text})])]) ==
+               "Reflection: lessons\n- " <> text
+    end
+
+    test "and each item of a top-level list is its own bullet" do
+      payload = %{
+        "generalisations" => [
+          %{"content" => "First lesson", "level" => 1},
+          %{"content" => "Second lesson", "level" => 1}
+        ]
+      }
+
+      assert rendered([result("global", [], [], [artefact("lessons", payload)])]) ==
+               "Reflection: lessons\n- First lesson\n- Second lesson"
+    end
+
+    test "and an object with a `content` string presents only that text" do
+      payload = %{"content" => "Use canaries", "level" => 3, "owner" => "Platform"}
+
+      assert rendered([result("global", [], [], [artefact("lessons", payload)])]) ==
+               "Reflection: lessons\n- Use canaries"
+    end
+
+    test "and an object with one field presents only that field's value" do
+      assert rendered([result("global", [], [], [artefact("lessons", %{"summary" => "Reviewed"})])]) ==
+               "Reflection: lessons\n- Reviewed"
+    end
+
+    test "and any other object presents `key: value` pairs separated by semicolons" do
+      payload = %{
+        "approach" => "moved Vacuum",
+        "lesson" => "Keep them apart",
+        "success" => true,
+        "unset" => nil,
+        "tags" => ["ops", "jobs"]
+      }
+
+      assert rendered([result("global", [], [], [artefact("erl", payload)])]) ==
+               "Reflection: erl\n- approach: moved Vacuum; lesson: Keep them apart; " <>
+                 "success: true; tags: ops, jobs"
+    end
+
+    test "and an empty payload presents nothing" do
+      assert rendered([result("global", [], [], [artefact("lessons", %{})])]) ==
+               "No matching memory."
     end
   end
 
   describe "when the formatter presents episodes" do
-    test "then each episode is presented as one bullet labelled with its originating Lens, Reflection, or source kind" do
-      episodes = [
-        episode("from a lens", %{lens: "notes"}),
-        episode("from a conversation", %{writer: :direct, source_kind: "conversation"})
-      ]
+    test "then an episode's text is presented whole on one line" do
+      text = String.duplicate("a long source document ", 100) |> String.trim()
 
-      assert rendered([result("global", [], [], episodes)]) ==
-               "Episodes\n- [Lens: notes] from a lens\n- [Source: direct conversation] from a conversation"
+      assert rendered([
+               result("global", [], [], [
+                 episode(text <> "\n\nuser: and more", %{lens: "notes"})
+               ])
+             ]) == "Lens: notes\n- " <> text <> " user: and more"
     end
 
-    test "and an episode's text is cut to a bounded excerpt marked as truncated" do
-      content = String.duplicate("word ", 200)
+    test "and a structured-record episode is presented as readable text the same way as a Reflection artefact" do
+      content = Jason.encode!(%{"approach" => "canary", "owner" => "Platform"})
 
-      assert "Episodes\n- [Lens: notes] " <> excerpt =
-               rendered([result("global", [], [], [episode(content, %{lens: "notes"})])])
-
-      assert String.ends_with?(excerpt, "… (truncated)")
-      assert String.length(excerpt) < 300
+      assert rendered([
+               result("global", [], [], [
+                 episode(content, %{lens: "notes", source_kind: "structured_record"})
+               ])
+             ]) == "Lens: notes\n- approach: canary; owner: Platform"
     end
 
-    test "and a Reflection episode is summarised by its artefact identifier and a bounded excerpt of its payload" do
-      reflection = %{
-        artefact: %{id: "gen-1", payload: %{"generalisations" => String.duplicate("x", 1_000)}},
-        reflection: "generalisations",
-        source_description: "reflection:generalisations"
-      }
+    test "and a structured-record episode whose content is not JSON keeps its text" do
+      assert rendered([
+               result("global", [], [], [
+                 episode("not { json", %{lens: "notes", source_kind: :structured_record})
+               ])
+             ]) == "Lens: notes\n- not { json"
+    end
+  end
 
-      assert "Episodes\n- [Reflection: generalisations] artefact gen-1: " <> excerpt =
-               rendered([result("global", [], [], [reflection])])
+  describe "when one memory is longer than 4,000 characters" do
+    test "then it is cut to 4,000 characters and marked as truncated" do
+      text = String.duplicate("x", 4_001)
 
-      assert excerpt =~ ~s({"generalisations":"xxx)
-      assert String.ends_with?(excerpt, "… (truncated)")
-      assert String.length(excerpt) < 300
+      assert rendered(facts([fact(text, [%{lens: "notes"}])])) ==
+               "Lens: notes\n- " <> String.duplicate("x", 4_000) <> "… (truncated)"
     end
 
-    test "and an episode with no named writer is labelled `Source: unknown`" do
-      assert rendered([result("global", [], [], [%{content: "old", source_description: "x"}])]) ==
-               "Episodes\n- [Source: unknown] old"
+    test "and a memory of exactly 4,000 characters is not cut" do
+      text = String.duplicate("x", 4_000)
+      assert rendered(facts([fact(text, [%{lens: "notes"}])])) == "Lens: notes\n- " <> text
+    end
+
+    test "and an invalidated fact keeps its invalidation date" do
+      invalidated =
+        fact(String.duplicate("x", 4_001), [%{lens: "notes"}])
+        |> Map.put(:invalid_at, "2026-10-12 00:00:00+00:00")
+
+      assert rendered(facts([invalidated])) ==
+               "Lens: notes\n- " <>
+                 String.duplicate("x", 4_000) <> "… (truncated) (invalidated at 2026-10-12)"
     end
   end
 
   describe "when formatted results must fit response limits" do
-    test "then an exact-fit response retains every complete fact, entity, and episode bullet" do
+    test "then an exact-fit response retains every memory" do
       input = [
         result("global", [fact("one", [%{lens: "notes"}])], [entity("Atlas")], [
           episode("story", %{lens: "notes"})
         ])
       ]
 
-      expected = %{
-        result:
-          "Facts\n\nLens: notes\n- one\n\nEntities\n- Atlas\n\nEpisodes\n- [Lens: notes] story"
-      }
+      expected = %{result: "Lens: notes\n- one\n- story\n\nEntities\n- Atlas"}
 
       assert Presentation.for_model(input, envelope_bytes(expected)) == {:ok, expected}
     end
 
     test "and headings and omission notices count towards the 16384-character ceiling" do
-      heading = "Facts\n\nLens: notes\n- "
-      notice = "\n\n" <> @omitted_one_fact
-      oversized = fact(String.duplicate("y", 17_000), [%{lens: "notes"}])
-      content = String.duplicate("x", 16_384 - String.length(heading) - String.length(notice))
+      memories = for _ <- 1..5, do: fact(String.duplicate("x", 4_000), [%{lens: "notes"}])
 
-      assert rendered(facts([fact(content, [%{lens: "notes"}]), oversized])) ==
-               heading <> content <> notice
-
-      assert rendered(facts([fact(content <> "x", [%{lens: "notes"}]), oversized])) ==
-               "Omitted (response limit): facts 2, entities 0, episodes 0."
+      assert rendered(facts(memories)) ==
+               "Lens: notes\n" <>
+                 Enum.map_join(1..4, "\n", fn _ -> "- " <> String.duplicate("x", 4_000) end) <>
+                 "\n\n" <> @omitted_one
     end
 
     test "and UTF-8 bytes and JSON escaping count towards the complete-envelope byte budget" do
-      input = facts([fact(String.duplicate("λ\n\"", 40), [%{lens: "notes"}])])
+      input = facts([fact(String.duplicate("λ\"", 40), [%{lens: "notes"}])])
       text = rendered(input)
       bytes = envelope_bytes(%{result: text})
       assert Presentation.for_model(input, bytes) == {:ok, %{result: text}}
-      assert Presentation.for_model(input, bytes - 1) == {:ok, %{result: @omitted_one_fact}}
+      assert Presentation.for_model(input, bytes - 1) == {:ok, %{result: @omitted_one}}
     end
 
     test "and a bullet that exceeds either limit is omitted whole while later fitting bullets remain eligible" do
-      input = [
-        result(
-          "global",
-          [
-            fact(String.duplicate("x", 17_000), [%{lens: "notes"}]),
-            fact("small", [%{lens: "notes"}])
-          ],
-          [entity("Atlas")],
-          []
-        )
-      ]
+      input =
+        facts([
+          fact(String.duplicate("x", 300), [%{lens: "notes"}]),
+          fact("small", [%{lens: "notes"}])
+        ])
 
-      assert rendered(input) ==
-               "Facts\n\nLens: notes\n- small\n\nEntities\n- Atlas\n\n" <> @omitted_one_fact
+      expected = %{result: "Lens: notes\n- small\n\n" <> @omitted_one}
+
+      assert Presentation.for_model(input, envelope_bytes(expected)) == {:ok, expected}
     end
 
-    test "and the omission notice counts excluded facts, entities, and episodes separately, each fact once regardless of its source count" do
-      huge = String.duplicate("x", 17_000)
+    test "and the omission notice gives the total omitted, each fact once regardless of its source count" do
+      memories = for _ <- 1..6, do: fact(String.duplicate("x", 4_000), [%{lens: "a"}, %{lens: "b"}])
+      text = rendered(facts(memories))
 
-      input = [
-        result(
-          "global",
-          [fact(huge, [%{lens: "a"}, %{lens: "b"}])],
-          [%{name: huge, summary: nil, attributes: %{}}],
-          []
-        )
-      ]
-
-      assert rendered(input) == "Omitted (response limit): facts 1, entities 1, episodes 0."
+      assert String.ends_with?(text, "\n\n5 more memories omitted (response limit).")
     end
   end
 
   describe "when formatted results must fit response limits > while the budget cannot contain the empty response and required notice" do
     test "then an explicit error reports the required minimum bytes" do
       input = facts([fact("one", [%{lens: "notes"}])])
-      minimum = envelope_bytes(%{result: @omitted_one_fact})
+      minimum = envelope_bytes(%{result: @omitted_one})
 
       assert Presentation.for_model(input, 1) ==
                {:error,
@@ -277,6 +373,9 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   defp fact(text, sources), do: %{fact: text, sources: sources}
   defp entity(name), do: %{name: name, summary: nil, attributes: %{}}
   defp episode(content, provenance), do: Map.put(provenance, :content, content)
+
+  defp artefact(reflection, payload),
+    do: %{reflection: reflection, artefact: %{id: "artefact-id", payload: payload}}
 
   defp rendered(input) do
     assert {:ok, %{result: text}} = Presentation.for_model(input, 65_536)
