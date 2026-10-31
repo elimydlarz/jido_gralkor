@@ -3,7 +3,16 @@ defmodule Gralkor.RecallTest do
 
   alias Gralkor.Recall
 
-  defp ok_search(facts), do: fn _g, _q, _max -> {:ok, facts} end
+  @no_memories %{facts: [], nodes: [], episodes: []}
+
+  defp ok_search(facts) do
+    memories = %{
+      @no_memories
+      | facts: Enum.map(facts, &%{fact: &1, sources: [%{lens: "notes"}]})
+    }
+
+    fn _g, _q, _max -> {:ok, memories} end
+  end
 
   defp default_opts(extras \\ []) do
     Keyword.merge([search_fn: ok_search([])], extras)
@@ -20,12 +29,18 @@ defmodule Gralkor.RecallTest do
     end
   end
 
-  describe "when memory search returns facts" do
-    test "then the memory block lists every returned fact verbatim and in order" do
-      returned_facts = [
-        "X is a thing (created 2020)",
-        "Y was deprecated (invalid since 2022)"
-      ]
+  describe "when memory search returns memories" do
+    test "then the memory block presents them in the same format as `memory_search`" do
+      memories = %{
+        facts: [%{fact: "X is a thing", sources: [%{lens: "notes"}]}],
+        nodes: [%{name: "Atlas", summary: nil, attributes: %{}}],
+        episodes: [
+          %{reflection: "lessons", artefact: %{id: "a", payload: %{"lesson" => "Use canaries"}}}
+        ]
+      }
+
+      assert {:ok, %{result: presented}} =
+               JidoGralkor.MemorySearchPresentation.for_model([memories], 65_536)
 
       assert {:ok, block} =
                Recall.recall(
@@ -33,30 +48,10 @@ defmodule Gralkor.RecallTest do
                  "TestAgent",
                  nil,
                  "q",
-                 default_opts(search_fn: ok_search(returned_facts))
+                 default_opts(search_fn: fn _g, _q, _max -> {:ok, memories} end)
                )
 
-      assert block =~ Enum.at(returned_facts, 0)
-      assert block =~ Enum.at(returned_facts, 1)
-
-      assert :binary.match(block, Enum.at(returned_facts, 0)) <
-               :binary.match(block, Enum.at(returned_facts, 1))
-    end
-
-    test "and every returned fact retains its available source wording" do
-      source_wording = "according to the migration report filed by Mina"
-      fact = "Y was deprecated, #{source_wording}."
-
-      assert {:ok, block} =
-               Recall.recall(
-                 "g",
-                 "TestAgent",
-                 nil,
-                 "q",
-                 default_opts(search_fn: ok_search([fact]))
-               )
-
-      assert block =~ fact
+      assert block =~ presented
     end
   end
 
@@ -67,7 +62,7 @@ defmodule Gralkor.RecallTest do
 
       search_fn = fn _g, _q, max ->
         send(test_pid, {ref, max})
-        {:ok, []}
+        {:ok, @no_memories}
       end
 
       _ =
@@ -90,7 +85,7 @@ defmodule Gralkor.RecallTest do
 
       search_fn = fn _g, _q, max ->
         send(test_pid, {ref, max})
-        {:ok, []}
+        {:ok, @no_memories}
       end
 
       _ = Recall.recall("g", "TestAgent", nil, "q", default_opts(search_fn: search_fn))
@@ -106,7 +101,7 @@ defmodule Gralkor.RecallTest do
 
       search_fn = fn group, _q, _max ->
         send(test_pid, {ref, group})
-        {:ok, []}
+        {:ok, @no_memories}
       end
 
       _ =
@@ -168,7 +163,7 @@ defmodule Gralkor.RecallTest do
     test "then a deadline-expired error is returned" do
       slow_search = fn _g, _q, _max ->
         Process.sleep(500)
-        {:ok, []}
+        {:ok, @no_memories}
       end
 
       assert {:error, :recall_deadline_expired} =
@@ -201,7 +196,7 @@ defmodule Gralkor.RecallTest do
       search_fn = fn _, _, _ ->
         Process.sleep(200)
         send(test_pid, :search_finished)
-        {:ok, []}
+        {:ok, @no_memories}
       end
 
       assert {:error, :recall_deadline_expired} =
@@ -353,7 +348,7 @@ defmodule Gralkor.RecallTest do
   defp deadline_logs(session_id, deadline_ms) do
     slow_search = fn _g, _q, _max ->
       Process.sleep(500)
-      {:ok, []}
+      {:ok, @no_memories}
     end
 
     ExUnit.CaptureLog.capture_log(fn ->

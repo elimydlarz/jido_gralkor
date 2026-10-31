@@ -729,7 +729,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
-  describe "when memory search formats facts for the consuming agent" do
+  describe "when memory search formats memories for the consuming agent" do
     test "then the complete text including headings and omission notices stays within 16384 characters" do
       ingest_large_memories(5)
 
@@ -795,7 +795,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
-  describe "when memory search formats facts for the consuming agent > while the byte budget cannot hold an empty response with the required notice" do
+  describe "when memory search formats memories for the consuming agent > while the byte budget cannot hold an empty response with the required notice" do
     test "then an explicit budget error is returned" do
       assert {:error, {:memory_search_budget_too_small, %{max_bytes: 1, minimum_bytes: minimum}}} =
                memory_search(%{query: "x"}, memory_search_max_bytes: 1)
@@ -804,7 +804,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
-  describe "when memory search formats facts for the consuming agent > if the byte budget is not a positive integer" do
+  describe "when memory search formats memories for the consuming agent > if the byte budget is not a positive integer" do
     test "then the action rejects the budget before searching memory" do
       Application.put_env(:jido_gralkor, :destination_storage, RecordingSearchStorage)
       Application.put_env(:jido_gralkor, :public_search_test_pid, self())

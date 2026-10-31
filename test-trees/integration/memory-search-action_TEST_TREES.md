@@ -14,7 +14,7 @@ when the memory search tool runs with a usable query
   while the tool context has no Gralkor runtime target
     then Search uses the untargeted application compatibility boundary
   while Search returns results
-    then the action result is readable text with facts, entities, and episodes in their own sections
+    then the action result is readable text with memories under their writers and entities last
     and each named originating Lens or Reflection is identified by its source heading
     while the tool context supplies no byte budget
       then the response fits within 65,536 bytes

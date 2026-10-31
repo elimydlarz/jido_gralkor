@@ -1,7 +1,7 @@
 defmodule Gralkor.Recall do
   @moduledoc """
-  Orchestrate one recall call: search the graph and wrap the returned facts in
-  a `<gralkor-memory>` block.
+  Orchestrate one recall call: search the graph and wrap the returned memories,
+  in the same format as `memory_search`, in a `<gralkor-memory>` block.
 
   Pure orchestration — the search dependency is passed as a function in
   `opts`. Production wiring lives in `Gralkor.Client.Native`.
@@ -9,20 +9,24 @@ defmodule Gralkor.Recall do
   See `test-trees/unit/recall_TEST_TREES.md`.
   """
 
+  alias JidoGralkor.MemorySearchPresentation
+
   require Logger
 
   @memory_envelope_open ~s(<gralkor-memory trust="untrusted">)
   @memory_envelope_close "</gralkor-memory>"
   @further_querying_instruction "Search memory (up to 3 times, diverse queries) if you need more detail."
-  @no_facts_body "No relevant memories found."
+  @no_memories_body "No relevant memories found."
   @default_max_results 10
   @default_deadline_ms 12_000
+  @max_bytes 65_536
 
   @type group_id :: String.t()
   @type session_id :: String.t() | nil
+  @type memories :: %{facts: [map()], nodes: [map()], episodes: [map()]}
   @type search_fn ::
           (group_id(), query :: String.t(), max :: pos_integer() ->
-             {:ok, [String.t()]} | {:error, term()})
+             {:ok, memories()} | {:error, term()})
 
   @type opts :: [
           search_fn: search_fn(),
@@ -53,7 +57,7 @@ defmodule Gralkor.Recall do
       {:ok, {:result, result}} ->
         log_result(result)
 
-        if test_mode?() and result.n_facts > 0,
+        if test_mode?() and result.n_memories > 0,
           do: Logger.info("[gralkor] [test] recall block: #{result.block}")
 
         {:ok, result.block}
@@ -79,20 +83,29 @@ defmodule Gralkor.Recall do
       {:error, reason} ->
         {:error, reason}
 
-      {:ok, facts} when is_list(facts) ->
-        {body, n_facts} = present(facts)
-
-        %{
-          block: wrap(body),
-          n_facts: n_facts,
-          search_ms: search_ms,
-          total_ms: System.monotonic_time(:millisecond) - t0
-        }
+      {:ok, memories} when is_map(memories) ->
+        with {:ok, body, n_memories} <- present(memories) do
+          %{
+            block: wrap(body),
+            n_memories: n_memories,
+            search_ms: search_ms,
+            total_ms: System.monotonic_time(:millisecond) - t0
+          }
+        end
     end
   end
 
-  defp present([]), do: {@no_facts_body, 0}
-  defp present(facts), do: {Enum.join(facts, "\n"), length(facts)}
+  defp present(%{facts: facts, nodes: nodes, episodes: episodes} = memories) do
+    case length(facts) + length(nodes) + length(episodes) do
+      0 ->
+        {:ok, @no_memories_body, 0}
+
+      n_memories ->
+        with {:ok, %{result: body}} <- MemorySearchPresentation.for_model([memories], @max_bytes) do
+          {:ok, body, n_memories}
+        end
+    end
+  end
 
   defp wrap(body) do
     @memory_envelope_open <>
@@ -118,7 +131,7 @@ defmodule Gralkor.Recall do
 
   defp log_result(result) do
     Logger.info(
-      "[gralkor] recall result — #{result.n_facts} facts blockChars:#{String.length(result.block)} #{result.total_ms}ms (search:#{result.search_ms})"
+      "[gralkor] recall result — #{result.n_memories} memories blockChars:#{String.length(result.block)} #{result.total_ms}ms (search:#{result.search_ms})"
     )
   end
 

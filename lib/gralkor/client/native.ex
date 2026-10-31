@@ -10,7 +10,8 @@ defmodule Gralkor.Client.Native do
 
   alias Gralkor.CaptureBuffer
   alias Gralkor.DefaultOntology
-  alias Gralkor.Format
+  alias Gralkor.Destination
+  alias Gralkor.Destination.Storage.Graphiti, as: GraphitiStorage
   alias Gralkor.GraphitiPool
   alias Gralkor.Ingest
   alias Gralkor.Recall
@@ -110,10 +111,9 @@ defmodule Gralkor.Client.Native do
 
   defp search_fn do
     fn group_id, query, max_results ->
-      case GraphitiPool.search(group_id, query, max_results) do
-        {:ok, raw_facts} -> {:ok, Enum.map(raw_facts, &Format.format_fact/1)}
-        {:error, _} = err -> err
-      end
+      GraphitiStorage.search(%Destination{name: group_id}, nil, query,
+        limits: %{facts: max_results, nodes: max_results, episodes: max_results}
+      )
     end
   end
 

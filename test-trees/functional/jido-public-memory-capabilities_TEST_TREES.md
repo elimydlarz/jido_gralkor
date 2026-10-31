@@ -24,7 +24,7 @@ when an agent invokes memory search with a usable query
   and returned results obey the optional `destinations` selector supplied for that invocation
   and the action returns one readable string with memories under named Lens or Reflection headings
   and relevant stored generalisations can contribute beside related ingested information
-  and the fact presentation adds no artefact identifiers, evolution-depth levels, or lineage metadata
+  and the presentation adds no artefact identifiers, evolution-depth levels, or lineage metadata
   where the Destination selector is omitted or empty
     then every accessible registered Destination can contribute
   where Destinations are supplied
@@ -74,7 +74,7 @@ when a consumer explicitly formats structured fact search results
   while search returns no facts, entities, or episodes
     then the text explicitly states that no matching memory was found
 
-when memory search formats facts for the consuming agent
+when memory search formats memories for the consuming agent
   then the complete text including headings and omission notices stays within 16384 characters
   and the serialized success envelope fits the configured byte budget
   and every included memory retains its complete text
