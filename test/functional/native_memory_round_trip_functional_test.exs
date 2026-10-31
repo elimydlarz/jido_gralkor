@@ -40,6 +40,12 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
                 self.invalid_at = None
                 self.expired_at = None
 
+        class _SearchResult:
+            def __init__(self, edges):
+                self.edges = edges
+                self.nodes = []
+                self.episodes = []
+
         class _FakeGraphiti:
             def __init__(self):
                 self.recorded = {"episodes": []}
@@ -68,14 +74,14 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
             async def build_indices_and_constraints(self):
                 pass
 
-            async def search(self, query, num_results=10, search_filter=None):
+            async def search_(self, query, config=None, group_ids=None, search_filter=None):
                 self.searches += 1
                 if self.search_delay:
                     import asyncio
                     await asyncio.sleep(self.search_delay)
                 if self.search_fails:
                     raise RuntimeError("graph refused the search")
-                return [_Edge(f) for f in self.facts]
+                return _SearchResult([_Edge(f) for f in self.facts])
 
         _FakeGraphiti()
         """,

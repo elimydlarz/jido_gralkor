@@ -758,8 +758,8 @@ defmodule Gralkor.Client.NativeTest do
             async def add_episode(self, **kwargs):
                 self.bodies.append(kwargs.get("episode_body"))
 
-            async def search(self, query, num_results=10, search_filter=None):
-                return [
+            async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                edges = [
                     types.SimpleNamespace(
                         fact=body,
                         created_at=None,
@@ -768,8 +768,9 @@ defmodule Gralkor.Client.NativeTest do
                         expired_at=None,
                         episodes=None,
                     )
-                    for body in self.bodies[:num_results]
+                    for body in self.bodies
                 ]
+                return types.SimpleNamespace(edges=edges, nodes=[], episodes=[])
 
             async def build_indices_and_constraints(self):
                 return None
@@ -1227,16 +1228,17 @@ defmodule Gralkor.Client.NativeTest do
       Pythonx.eval(
         """
         import asyncio
+        import types
 
         class _FakeGraphiti:
             def __init__(self):
                 self.recorded = {}
 
-            async def search(self, query, num_results=10, search_filter=None):
+            async def search_(self, query, config=None, group_ids=None, search_filter=None):
                 self.recorded.setdefault('fact_queries', []).append(query)
                 if query.startswith('slow:'):
                     await asyncio.sleep(0.3)
-                return []
+                return types.SimpleNamespace(edges=[], nodes=[], episodes=[])
 
         _FakeGraphiti()
         """,
