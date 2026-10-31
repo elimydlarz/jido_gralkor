@@ -425,9 +425,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
 
     test "and every accessible registered Destination is searched", %{adventure: adventure} do
-      searched = Enum.map(adventure.default_memory_search, & &1.destination)
-
-      assert MapSet.new(searched) ==
+      assert MapSet.new(adventure.default_memory_search_destinations) ==
                MapSet.new(["personal", "global", "generalisations", "operations"])
     end
 
@@ -448,7 +446,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              )
     end
 
-    test "and its results include relevant Lens-authored memory and relevant stored generalisations",
+    test "and its results include relevant Lens-authored memory and relevant stored generalisations, as facts or whole episodes",
          %{adventure: adventure} do
       assert has_originating_lens?(
                adventure.default_memory_search,
@@ -460,13 +458,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                adventure.default_memory_search,
                "generalisations",
                "generalisations"
-             )
+             ) or
+               has_generalisation_artefact?(adventure.default_memory_search_artefacts)
     end
 
-    test "and its readable fact bullets are grouped under the named originating Lens or Reflection",
+    test "and its readable memory names the originating Lens or Reflection",
          %{adventure: adventure} do
       assert adventure.memory_search_text =~ "Lens: work-notes\n- "
-      assert adventure.memory_search_text =~ "Reflection: generalisations\n- "
+      assert adventure.memory_search_text =~ "Reflection: generalisations"
     end
 
     test "and the answer uses retrieved facts relevant to the requested migration",
@@ -1049,6 +1048,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       consumer_returned_artefact: consumer_returned_artefact,
       consumer_reflection_outcome: consumer_reflection_result.outcome,
       default_memory_search: default_memory_search,
+      default_memory_search_destinations: agent_request.memory_search_destinations,
+      default_memory_search_artefacts: agent_request.memory_search_artefacts,
       memory_search_text: agent_request.memory_search_text,
       memory_search_arguments: agent_request.memory_search_arguments,
       memory_search_completion_count: agent_request.memory_search_completion_count,
@@ -1326,7 +1327,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       destinations: Map.get(arguments, :destinations, Map.get(arguments, "destinations", []))
     }
 
-    results = facts_matching_text(agent, @operator_one, params, text)
+    results = results_matching_text(agent, @operator_one, params, text)
 
     %{
       answer: answer,
@@ -1334,7 +1335,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         destinations: Map.get(arguments, :destinations, Map.get(arguments, "destinations"))
       },
       memory_search_completion_count: length(memory_search_completed),
-      memory_search_results: results,
+      memory_search_results: flatten(results, :facts),
+      memory_search_destinations: Enum.map(results, & &1.destination),
+      memory_search_artefacts: flatten(results, :artefacts),
       memory_search_text: text
     }
   end
@@ -1397,6 +1400,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end)
   end
 
+  defp has_generalisation_artefact?(artefacts) do
+    Enum.any?(artefacts, fn %{destination: destination, artefact: artefact} ->
+      destination == "generalisations" and Map.has_key?(artefact.payload, "generalisations")
+    end)
+  end
+
   defp has_declaring_reflection?(results, destination, reflection) do
     Enum.any?(results, fn %{destination: selected, fact: fact} ->
       selected == destination and
@@ -1405,6 +1414,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   defp facts_matching_text(agent, operator, params, text) do
+    agent |> results_matching_text(operator, params, text) |> flatten(:facts)
+  end
+
+  defp results_matching_text(agent, operator, params, text) do
     assert {:ok, results} =
              Client.search(agent, %Search{
                operator_id: operator,
@@ -1415,7 +1428,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     assert {:ok, %{result: ^text}} =
              JidoGralkor.MemorySearchPresentation.for_model(results, 65_536)
 
-    flatten(results, :facts)
+    results
   end
 
   defp answer_field!(answer, label) do

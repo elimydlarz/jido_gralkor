@@ -37,8 +37,8 @@ when a fresh agent handles a request related to an evolved generalisation
   then one MemorySearch call is made without selectors
   and every accessible registered Destination is searched
   and its results include relevant memory from the `personal`, `global`, and an application Destination
-  and its results include relevant Lens-authored memory and relevant stored generalisations
-  and its readable fact bullets are grouped under the named originating Lens or Reflection
+  and its results include relevant Lens-authored memory and relevant stored generalisations, as facts or whole episodes
+  and its readable memory names the originating Lens or Reflection
   and the answer uses retrieved facts relevant to the requested migration
   and the recommendation applies the retrieved reversible limited-scope lesson to the requested migration
 
