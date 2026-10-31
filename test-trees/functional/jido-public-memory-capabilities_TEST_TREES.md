@@ -40,7 +40,7 @@ when a fresh agent handles a request related to an evolved generalisation
 
 when an agent receives the memory search tool
   then its description directs the agent to search related observations and generalisations
-  and its description directs the agent to use the returned facts, entities, and episode excerpts
+  and its description directs the agent to use the returned memories
 
 if an agent invokes memory search without a usable query
   then no Search is issued

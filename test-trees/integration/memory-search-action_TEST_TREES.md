@@ -23,7 +23,7 @@ when the memory search tool runs with a usable query
 
 when a consumer reads the memory search tool description
   then it directs the agent to search related observations and generalisations
-  and it directs the agent to use the returned facts, entities, and episode excerpts
+  and it directs the agent to use the returned memories
   and it offers a Destination selector but no Lens selector
 
 if the memory search tool runs without a usable query

@@ -1,11 +1,10 @@
-Unit: recall (src: lib/gralkor/recall.ex; unit: test/gralkor/recall_test.exs)
+Unit: recall (src: lib/gralkor/recall.ex, lib/jido_gralkor/memory_search_presentation.ex; unit: test/gralkor/recall_test.exs)
 
 when no relevant facts are found
   then an empty graph result produces the no-memories body
 
-when memory search returns facts
-  then the memory block lists every returned fact verbatim and in order
-  and every returned fact retains its available source wording
+when memory search returns memories
+  then the memory block presents them in the same format as `memory_search`
 
 when a maximum result count is supplied
   then that count is forwarded to the main search
