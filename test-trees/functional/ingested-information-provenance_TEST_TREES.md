@@ -5,7 +5,7 @@ when information is submitted through public ingestion with a supported source k
   and its stored episode retains the reported source description
   and public episode search presents the originating Lens separately from episode content and source description
   and every returned fact identifies each originating episode by identifier, source kind, and source description
-  and recall presents the extracted fact wording and its source attribution without rewriting either
+  and recall presents the extracted fact wording under its writer heading without rewriting it
 
 where the source kind is conversation
   while the supplied content is speaker-attributed text

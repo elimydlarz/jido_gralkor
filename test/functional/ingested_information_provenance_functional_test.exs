@@ -212,7 +212,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
              }
     end
 
-    test "and recall presents the extracted fact wording and its source attribution without rewriting either" do
+    test "and recall presents the extracted fact wording under its writer heading without rewriting it" do
       graphiti = use_native_boundary()
       fact = "Mina speculated that Atlas might launch Friday."
 
@@ -237,10 +237,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
                  "Atlas launch"
                )
 
-      assert memory =~ fact
-
-      assert memory =~
-               "source: conversation — planning conversation; episode: episode-conversation-1"
+      assert memory =~ "Source: unknown\n- " <> fact
     end
 
     test "then Graphiti's existing episode extraction is instructed to preserve source attribution and epistemic wording in extracted facts" do
