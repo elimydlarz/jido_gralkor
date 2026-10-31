@@ -624,6 +624,7 @@ defmodule Gralkor.Client.NativeTest do
 
         class _Results:
             def __init__(self):
+                self.edges = []
                 self.nodes = []
                 self.episodes = []
 
