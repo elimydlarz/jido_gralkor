@@ -875,7 +875,7 @@ The Jido glue:
 - `JidoGralkor.Canonical` — normalises a Jido/ReAct turn into the canonical `[%Gralkor.Message{role, content}]` shape.
 - `JidoGralkor.Lifecycle` — `Jido.AgentServer.Lifecycle` impl whose sole job is the death-triggered flush.
 - `JidoGralkor.ContextRotator` — synchronous `rotate_now/2` for in-life context consolidation.
-- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls runtime-targeted `Gralkor.Client.search/2` for the current operator (or untargeted `search/1` when the tool context carries no runtime) for the current operator, using the optional Destination selector from that invocation, and renders facts, entities, and compact episode excerpts. It works before a thread is committed and short-circuits only a blank query.
+- `JidoGralkor.Actions.MemorySearch` — the ReAct tool that calls runtime-targeted `Gralkor.Client.search/2` for the current operator (or untargeted `search/1` when the tool context carries no runtime) for the current operator, using the optional Destination selector from that invocation, and renders every memory as one line under its writer, with entities last. It works before a thread is committed and short-circuits only a blank query.
 - `JidoGralkor.Actions.MemoryAdd` — fire-and-forget ReAct tool.
 - `JidoGralkor.Actions.MemoryBuildIndices` — admin tool. Description tells the LLM `DO NOT CALL` unless the user asked. Whole-graph index rebuild.
 - `JidoGralkor.Actions.MemoryBuildCommunities` — admin tool. Same `DO NOT CALL` guard. Runs Graphiti community detection on this agent's `personal/<operator id>` graph.
