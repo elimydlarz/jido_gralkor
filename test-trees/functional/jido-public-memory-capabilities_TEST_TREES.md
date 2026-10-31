@@ -22,7 +22,7 @@ when an agent invokes memory search with a usable query
   then returned results are scoped to the current operator
   and the usable query is submitted to the one memory search for the current operator
   and returned results obey the optional `destinations` selector supplied for that invocation
-  and the action returns one readable string with fact bullets grouped under named Lens or Reflection headings
+  and the action returns one readable string with memories under named Lens or Reflection headings
   and relevant stored generalisations can contribute beside related ingested information
   and the fact presentation adds no artefact identifiers, evolution-depth levels, or lineage metadata
   where the Destination selector is omitted or empty
@@ -77,10 +77,12 @@ when a consumer explicitly formats structured fact search results
 when memory search formats facts for the consuming agent
   then the complete text including headings and omission notices stays within 16384 characters
   and the serialized success envelope fits the configured byte budget
-  and every included fact retains its complete text
-  while a fact cannot fit within the response limits
-    then that whole fact is omitted while later fitting facts remain eligible
-    and the text reports the omitted fact count and response-limit reason
+  and every included memory retains its complete text
+  while a memory cannot fit within the response limits
+    then that whole memory is omitted while later fitting memories remain eligible
+    and the text reports the omitted memory count and response-limit reason
+  while one memory is longer than 4,000 characters
+    then it is cut to 4,000 characters and marked as truncated
   while the byte budget cannot hold an empty response with the required notice
     then an explicit budget error is returned
   if the byte budget is not a positive integer
@@ -88,10 +90,10 @@ when memory search formats facts for the consuming agent
 
 when unmodified Jido AI 2.3.0 sends memory search output to the provider
   then one decode of the tool envelope exposes the exact readable string returned by the action
-  and the tool result contains readable fact bullets rather than a JSON-encoded result list
+  and the tool result contains readable bullets rather than a JSON-encoded result list
   while the canonical Reflection payload contains deep lineage or domain keys ending in `_key`
     then the provider receives the retained extracted fact text unchanged
   while more than 100 facts fit within the response limits
     then the provider receives every formatted fact without a synthetic omission item
-  while a source fact exceeds the response limits
-    then the provider receives an explicit omission notice instead of a sliced fact
+  while source memories exceed the response limits
+    then the provider receives an explicit omission notice instead of a sliced memory

@@ -465,7 +465,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     test "and its readable memory names the originating Lens or Reflection",
          %{adventure: adventure} do
       assert adventure.memory_search_text =~ "Lens: work-notes\n- "
-      assert adventure.memory_search_text =~ "Reflection: generalisations"
+      assert adventure.memory_search_text =~ "Reflection: generalisations\n- "
     end
 
     test "and the answer uses retrieved facts relevant to the requested migration",

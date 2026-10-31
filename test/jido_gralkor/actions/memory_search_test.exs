@@ -171,27 +171,23 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   end
 
   describe "when the memory search tool runs with a usable query > while Search returns results" do
-    test "then the action result is readable text with facts, entities, and episodes in their own sections" do
+    test "then the action result is readable text with memories under their writers and entities last" do
       assert {:ok, %{result: text}} =
                run_search(%{query: "launch", destinations: ["observations", "global"]})
 
       assert text ==
                """
-               Facts
-
                Lens: observations
                - selected observations memory
+               - observations episode
 
                Reflection: generalisations
                - selected global memory
+               - global episode
 
                Entities
                - observations entity: an entity
-               - global entity: an entity
-
-               Episodes
-               - [Lens: observations] observations episode
-               - [Reflection: generalisations] global episode\
+               - global entity: an entity\
                """
     end
 
@@ -211,7 +207,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
       assert {:ok, %{result: text} = result} =
                run_search(%{query: "launch", destinations: ["observations"]})
 
-      assert text =~ "Omitted (response limit): facts"
+      assert text =~ "omitted (response limit)."
       assert byte_size(Jason.encode!(%{ok: true, result: result})) <= 65_536
     end
   end
@@ -235,9 +231,9 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                "Search related stored observations and generalisations"
     end
 
-    test "and it directs the agent to use the returned facts, entities, and episode excerpts" do
+    test "and it directs the agent to use the returned memories" do
       assert MemorySearch.__action_metadata__().description =~
-               "Use the returned facts, entities, and episode excerpts"
+               "Use the returned memories"
     end
 
     test "and it offers a Destination selector but no Lens selector" do
