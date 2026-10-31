@@ -266,7 +266,7 @@ defmodule Gralkor.RecallTest do
       assert logs =~ "group:g"
       assert logs =~ "queryChars:10"
       assert logs =~ "max:10"
-      assert logs =~ "[gralkor] recall result — 1 facts"
+      assert logs =~ "[gralkor] recall result — 1 memories"
       assert logs =~ "blockChars:"
       assert logs =~ "search:"
     end

@@ -318,11 +318,12 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     end
 
     test "and headings and omission notices count towards the 16384-character ceiling" do
-      memories = for _ <- 1..5, do: fact(String.duplicate("x", 4_000), [%{lens: "notes"}])
+      texts = for number <- 1..5, do: "#{number} " <> String.duplicate("x", 3_998)
+      memories = Enum.map(texts, &fact(&1, [%{lens: "notes"}]))
 
       assert rendered(facts(memories)) ==
                "Lens: notes\n" <>
-                 Enum.map_join(1..4, "\n", fn _ -> "- " <> String.duplicate("x", 4_000) end) <>
+                 Enum.map_join(Enum.take(texts, 4), "\n", &("- " <> &1)) <>
                  "\n\n" <> @omitted_one
     end
 
@@ -348,7 +349,9 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
 
     test "and the omission notice gives the total omitted, each fact once regardless of its source count" do
       memories =
-        for _ <- 1..6, do: fact(String.duplicate("x", 4_000), [%{lens: "a"}, %{lens: "b"}])
+        for number <- 1..6 do
+          fact("#{number} " <> String.duplicate("x", 3_998), [%{lens: "a"}, %{lens: "b"}])
+        end
 
       text = rendered(facts(memories))
 
