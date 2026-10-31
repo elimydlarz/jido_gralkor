@@ -95,11 +95,16 @@ defmodule JidoGralkor.MemorySearchPresentation do
   defp entity_memory(node) do
     name = Map.get(node, :name) || Map.get(node, :id) || "unnamed entity"
     summary = Map.get(node, :summary)
-    attributes = Map.get(node, :attributes) || Map.get(node, :properties) || %{}
+
+    attributes =
+      (Map.get(node, :attributes) || Map.get(node, :properties) || %{})
+      |> Enum.reject(fn {key, _value} ->
+        key |> to_string() |> String.starts_with?("_gralkor")
+      end)
 
     text = if summary in [nil, ""], do: name, else: "#{name}: #{summary}"
 
-    if attributes == %{} do
+    if attributes == [] do
       {[@entities_heading], one_line(text)}
     else
       pairs =

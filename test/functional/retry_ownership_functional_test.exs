@@ -260,11 +260,11 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
                 pass
 
             async def search(self, query, num_results=10, search_filter=None):
-                self.attempts["search"] += 1
-                await asyncio.sleep(self.search_delay)
                 return []
 
             async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                self.attempts["search"] += 1
+                await asyncio.sleep(self.search_delay)
                 return _Results()
 
         _FakeGraphiti()

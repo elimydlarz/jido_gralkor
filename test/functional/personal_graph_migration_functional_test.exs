@@ -1340,8 +1340,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
       assert {:ok, memory} =
                Gralkor.Client.Native.recall("operator/owner", "TestAgent", nil, "orchard")
 
-      assert memory =~ "amber grows in orchard"
-      assert memory =~ "captured [lens: operator]"
+      assert memory =~ "Lens: operator\n- amber grows in orchard"
     end
 
     test "and only matching migration-owned target graphs are removed", context do

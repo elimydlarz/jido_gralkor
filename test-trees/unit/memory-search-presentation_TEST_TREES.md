@@ -29,6 +29,7 @@ when the formatter presents facts
 
 when the formatter presents entities
   then each entity is one bullet with its complete name, summary, and attributes
+  and internal `_gralkor` attributes are not shown
 
 when the formatter presents a Reflection artefact
   then its payload is presented whole as readable text

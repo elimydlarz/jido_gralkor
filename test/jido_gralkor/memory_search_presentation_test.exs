@@ -178,6 +178,22 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       assert rendered([result("global", [], [node], [])]) ==
                "Entities\n- Atlas: A rollout (owner: Platform)"
     end
+
+    test "and internal `_gralkor` attributes are not shown" do
+      node = %{
+        name: "Atlas",
+        summary: "A rollout",
+        attributes: %{"_gralkor_lens" => "observations", "owner" => "Platform"}
+      }
+
+      assert rendered([result("global", [], [node], [])]) ==
+               "Entities\n- Atlas: A rollout (owner: Platform)"
+
+      hidden_only = %{node | attributes: %{"_gralkor_lens" => "observations"}}
+
+      assert rendered([result("global", [], [hidden_only], [])]) ==
+               "Entities\n- Atlas: A rollout"
+    end
   end
 
   describe "when the formatter presents a Reflection artefact" do
