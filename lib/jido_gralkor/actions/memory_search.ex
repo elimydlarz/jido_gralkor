@@ -14,21 +14,19 @@ defmodule JidoGralkor.Actions.MemorySearch do
       (`tool_choice: memory_search`) where the LLM is required to
       invoke the tool but has nothing meaningful to search for.
 
-  Results are readable text: fact bullets grouped under named Lens or Reflection
-  headings, then entity bullets, then compact episode bullets (a writer label and
-  a bounded excerpt; Reflection artefacts summarised by identifier and a bounded
-  payload excerpt), so whole source documents never flood the agent's context.
+  Results are readable text: every memory is one line under the heading of the
+  Lens, Reflection, or direct source that wrote it, with entities last.
   The structured search API remains available for consumers that format their own data.
   The tool context's `:memory_search_max_bytes` defaults to 65,536 UTF-8 bytes for the
   complete Jido success envelope. The text also stays within Jido's 16,384-character
-  string limit. Whole facts that do not fit are counted in an explicit omission notice.
+  string limit. Memories that do not fit are counted in an explicit omission notice.
   Errors propagate.
   """
 
   use Jido.Action,
     name: "memory_search",
     description:
-      "Search related stored observations and generalisations. Use the returned facts, entities, and episode excerpts. Use a specific, focused query.",
+      "Search related stored observations and generalisations. Use the returned memories. Use a specific, focused query.",
     schema: [
       query: [type: :string, default: "", doc: "The search query"],
       destinations: [

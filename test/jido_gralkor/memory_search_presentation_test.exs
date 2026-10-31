@@ -127,7 +127,9 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     end
 
     test "and repeated provenance for one source adds no duplicate bullet for that fact" do
-      assert rendered(facts([fact("one", [%{lens: "notes", id: "a"}, %{lens: "notes", id: "b"}])])) ==
+      assert rendered(
+               facts([fact("one", [%{lens: "notes", id: "a"}, %{lens: "notes", id: "b"}])])
+             ) ==
                "Lens: notes\n- one"
     end
 
@@ -198,7 +200,9 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     end
 
     test "and an object with one field presents only that field's value" do
-      assert rendered([result("global", [], [], [artefact("lessons", %{"summary" => "Reviewed"})])]) ==
+      assert rendered([
+               result("global", [], [], [artefact("lessons", %{"summary" => "Reviewed"})])
+             ]) ==
                "Reflection: lessons\n- Reviewed"
     end
 
@@ -319,10 +323,12 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     end
 
     test "and the omission notice gives the total omitted, each fact once regardless of its source count" do
-      memories = for _ <- 1..6, do: fact(String.duplicate("x", 4_000), [%{lens: "a"}, %{lens: "b"}])
+      memories =
+        for _ <- 1..6, do: fact(String.duplicate("x", 4_000), [%{lens: "a"}, %{lens: "b"}])
+
       text = rendered(facts(memories))
 
-      assert String.ends_with?(text, "\n\n5 more memories omitted (response limit).")
+      assert String.ends_with?(text, "\n\n4 more memories omitted (response limit).")
     end
   end
 
