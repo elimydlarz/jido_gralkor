@@ -37,6 +37,14 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
              ) == "Lens: z\n- one\n- three\n\nLens: a\n- two"
     end
 
+    test "and the same text appears once under one heading" do
+      input = [
+        result("global", [fact("one", [%{lens: "notes"}])], [], [episode("one", %{lens: "notes"})])
+      ]
+
+      assert rendered(input) == "Lens: notes\n- one"
+    end
+
     test "and entities come last under an `Entities` heading" do
       input = [
         result("global", [], [entity("Atlas")], [episode("an episode", %{lens: "notes"})]),

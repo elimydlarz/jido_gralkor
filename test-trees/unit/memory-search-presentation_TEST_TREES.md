@@ -4,6 +4,7 @@ when the memory search formatter is called
   then every memory is one line of plain text under the heading of its writer
   and whole Reflection artefacts come first, then facts, then episodes
   and headings keep first-appearance order with retrieval order inside each heading
+  and the same text appears once under one heading
   and entities come last under an `Entities` heading
   and nothing is labelled as a fact, an episode, or an artefact
   and the formatter adds no Destination, artefact identifier, level, or lineage metadata

@@ -185,8 +185,13 @@ defmodule JidoGralkor.MemorySearchPresentation do
       Enum.reduce(memories, [], fn {headings, text}, groups ->
         Enum.reduce(headings, groups, fn heading, groups ->
           case List.keyfind(groups, heading, 0) do
-            nil -> groups ++ [{heading, [text]}]
-            {^heading, texts} -> List.keyreplace(groups, heading, 0, {heading, texts ++ [text]})
+            nil ->
+              groups ++ [{heading, [text]}]
+
+            {^heading, texts} ->
+              if text in texts,
+                do: groups,
+                else: List.keyreplace(groups, heading, 0, {heading, texts ++ [text]})
           end
         end)
       end)
