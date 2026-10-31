@@ -173,34 +173,44 @@ A Reflection-written episode carries its whole artefact as structured fields ins
 
 A Reflection episode appears only once its extraction has durably completed. Reflection payload keys and values retain their stored shape; Graphiti JSON object keys are strings. Only Reflection-provenanced episode bodies are decoded. Lens-authored documents, Jira records, and even text that happens to look like an artefact remain text in `content`. A malformed completed Reflection body returns `{:error, {:invalid_reflection_artefact, reflection_name}}`; search does not return a manufactured partial response. Private graph identities still require the explicit namespace migration described above.
 
-`Gralkor.Client.search/1,2` never applies model presentation or budgeting. Readable fact presentation is separate: call `Gralkor.Format.format_fact(record)` explicitly. Legacy `recall` still uses that operation to construct its readable memory block.
+`Gralkor.Client.search/1,2` never applies model presentation or budgeting. Readable presentation is separate: call `JidoGralkor.MemorySearchPresentation.for_model/2` explicitly. `memory_search` and legacy `recall` both use it.
 
 ### Readable memory search
 
-`memory_search` takes a query and an optional `destinations` list, runs the one search, and returns one readable string in `{:ok, %{result: text}}`:
+`memory_search` and `recall` present memory the same way. For example:
 
 ```text
-Facts
+Reflection: generalisations
+- Prefer small, reversible changes to Payments migrations.
+
+Reflection: erl
+- approach: moved Vacuum to 04:00; lesson: Keep the jobs apart; success: true
 
 Lens: jira
 - Payment retries must use an idempotency key.
+- Settlement retried failed requests twice. (invalidated at 2026-10-12)
+- PAY-142: settlement retries double-charged a customer when the worker restarted.
 
-Reflection: generalisations
-- Prefer small, reversible deployments with monitoring.
+Source: direct conversation
+- user: Can we move the cutover? assistant: Sunday works.
 
 Entities
-- settlement worker: Retries failed requests three times. (team: payments)
+- settlement worker: Retries failed requests three times.
 
-Episodes
-- [Lens: jira] PAY-142: settlement retries double-charged a customer when the… (truncated)
-- [Reflection: generalisations] artefact 7f3c…: {"generalisations":[{"content":"Prefer small, reversible… (truncated)
+3 more memories omitted (response limit).
 ```
 
-Facts from every Destination come first, grouped under source headings in first-appearance order with retrieval order within each group; a fact with several named sources appears once under each distinct source. Known direct sources appear under `Source: direct conversation`, `Source: direct document`, or `Source: direct structured record`, a direct source without a recorded kind under `Source: direct`, and unattributable facts under `Source: unknown`. Entities follow in full (name, summary, attributes). Episodes are compact so whole source documents never flood the agent's context: a writer label and an excerpt of at most 280 characters, a Reflection episode summarised by its artefact identifier and a payload excerpt. A section with nothing to show is left out; an empty search produces `No matching memory.`
+Every memory is one line of plain text under the heading of whoever wrote it: `Lens: <name>`, `Reflection: <name>`, `Source: direct conversation`, `Source: direct document`, `Source: direct structured record`, `Source: direct` for a direct source without a recorded kind, or `Source: unknown`. A fact with several named sources appears under each distinct source, and the same text appears once under one heading. Entities have no single writer, so they come last under `Entities` with their name, summary, and attributes. An empty search produces `No matching memory.`
+
+Whole Reflection artefacts come first, then facts, then episodes. That order sets both the heading order and which memories survive the response limits.
+
+Reflection artefacts and structured-record episodes become readable text without any Reflection-specific code. An object with a `content` string shows only that text, which keeps `level` and `evolves_from` out of generalisations; an object with one field shows that field's value; any other object shows `key: value` pairs separated by semicolons; and each item of a top-level list is its own bullet.
+
+A fact with an invalidation date, or failing that an expiry date, ends with `(invalidated at <date>)`. Any memory is cut only past 4,000 characters, and is then marked `… (truncated)`.
 
 `JidoGralkor.MemorySearchPresentation.for_model(results, max_bytes)` is the explicit reusable formatter. It leaves the input unchanged and returns `{:ok, %{result: text}}`. Consumers can call the structured search API and choose their own formatter instead.
 
-The action uses `tool_context[:memory_search_max_bytes]`, defaulting to 65,536 UTF-8 bytes for the complete serialized Jido success envelope. Independently, the entire text, including headings and notices, fits within 16,384 characters. These limits retain or omit complete bullets; later fitting bullets remain eligible. When bullets are omitted, the text ends with `Omitted (response limit): facts N, entities M, episodes K.` Each fact counts once regardless of how many source groups it would occupy. This is a response budget, not pagination.
+The action uses `tool_context[:memory_search_max_bytes]`, defaulting to 65,536 UTF-8 bytes for the complete serialized Jido success envelope. Independently, the entire text, including headings and notices, fits within 16,384 characters. These limits retain or omit whole memories; later fitting memories remain eligible. When memories are omitted, the text ends with `N more memories omitted (response limit).` Each fact counts once regardless of how many headings it would occupy. This is a response budget, not pagination.
 
 If the byte budget cannot hold the required response notice, the formatter returns `{:error, {:memory_search_budget_too_small, %{max_bytes: limit, minimum_bytes: required}}}`. A non-positive or non-integer budget raises before search starts. The blank-query short circuit remains an explicit textual NON-RESULT, and errors remain `{:error, reason}`.
 

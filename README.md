@@ -207,7 +207,7 @@ The retired `:reflection_storage` setting causes startup to fail. Configure `:de
 
 Direct capture and the explicitly selected packaged `personal-chat` Lens use `Gralkor.DefaultOntology`. Neither requires consumer ontology configuration. The Lens targets the private `personal` Destination. Direct capture does not select a Lens or claim Lens authorship. Application-specific extraction schemas belong on Lenses or Reflection outputs.
 
-`recall/4` presents every fact returned by memory search verbatim and in order inside an untrusted memory block, retaining any source wording carried by each fact. Recall makes no second inference call: the consuming agent decides how to interpret the returned memory with its own model.
+`recall/4` presents the memories returned by memory search in the same format as `memory_search`, inside an untrusted memory block. Recall makes no second inference call: the consuming agent decides how to interpret the returned memory with its own model.
 
 ### Explicit capture and migration
 
@@ -543,27 +543,24 @@ The physical encoding replaces the former lossy `-` and `/` to `_` normalisation
 
 **Error contracts.** Invalid configuration, invalid Lens requests, automatic plugin-capture failures, non-PID runtime targets, and unavailable targeted runtimes raise. Runtime-targeted operations never redirect to application compatibility configuration. Valid runtime-targeted `Gralkor.Client.ingest/2`, `replace/2`, `search/2`, `reflect/5`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
 
-**Memory search results.** `Gralkor.Client.search/1,2` returns structured records for consumers that control their own presentation: one `%{destination:, facts:, nodes:, episodes:}` map per Destination. The `memory_search` action runs that one search and returns readable text in `{:ok, %{result: text}}`: a `Facts` section with fact bullets under `Lens:`, `Reflection:`, or direct-source headings, an `Entities` section, and a compact `Episodes` section (a writer label and an excerpt of at most 280 characters; Reflection artefacts summarised by identifier and a payload excerpt), so whole source documents never flood the agent's context. The explicit `JidoGralkor.MemorySearchPresentation.for_model/2` formatter retains complete bullets within the 16,384-character text limit and `tool_context[:memory_search_max_bytes]` (65,536 bytes by default for the complete serialized envelope), with an explicit omission count per kind when necessary. It works with unmodified Jido AI 2.3.0. See [the schema, format, and consumer migration](DESTINATIONS.md#readable-memory-search).
+**Memory search results.** `Gralkor.Client.search/1,2` returns structured records for consumers that control their own presentation: one `%{destination:, facts:, nodes:, episodes:}` map per Destination. The `memory_search` action runs that one search and returns readable text in `{:ok, %{result: text}}`: every memory is one line of plain text under the heading of whoever wrote it (`Lens:`, `Reflection:`, or a direct source), with entities last under `Entities`. A memory is cut only past 4,000 characters, and says so. The explicit `JidoGralkor.MemorySearchPresentation.for_model/2` formatter retains or omits memories whole within the 16,384-character text limit and `tool_context[:memory_search_max_bytes]` (65,536 bytes by default for the complete serialized envelope), with one notice giving the total omitted. It works with unmodified Jido AI 2.3.0. See [the schema, format, and consumer migration](DESTINATIONS.md#readable-memory-search).
 
 For example, the consuming agent receives text like:
 
 ```text
-Facts
-
-Lens: jira
-- Payment retries must use an idempotency key.
-
 Reflection: generalisations
 - Begin Payments migrations with a reversible, limited-scope trial.
 
+Lens: jira
+- Payment retries must use an idempotency key.
+- Settlement retried failed requests twice. (invalidated at 2026-10-12)
+- PAY-142: settlement retries double-charged a customer when the worker restarted.
+
 Entities
 - settlement worker: Retries failed requests three times.
-
-Episodes
-- [Lens: jira] PAY-142: settlement retries double-charged a customer when the… (truncated)
 ```
 
-When bullets are omitted to fit the response limit, the text ends with a notice such as `Omitted (response limit): facts 3, entities 0, episodes 1.` Treat `result` as readable text; do not JSON-decode it. For programmatic access, call `Gralkor.Client.search/1,2` and read each Destination's `facts`, `nodes`, and `episodes` directly.
+When memories are omitted to fit the response limit, the text ends with a notice such as `3 more memories omitted (response limit).` Treat `result` as readable text; do not JSON-decode it. For programmatic access, call `Gralkor.Client.search/1,2` and read each Destination's `facts`, `nodes`, and `episodes` directly.
 
 **`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 
@@ -696,7 +693,7 @@ The supported source kinds are:
 - `:document` accepts text and becomes a Graphiti text episode.
 - `:structured_record` accepts a JSON-compatible map or list, which Gralkor JSON-encodes for a Graphiti JSON episode.
 
-`source_kind` says where the information came from; it is not a credibility, truth, opinion, or speculation rating. Gralkor validates the kind and its content shape before invoking a Lens or Graphiti. Automatic turn capture declares `:conversation`; callers using `Gralkor.Ingest` or `memory_add/4` declare the kind themselves, while legacy `memory_add/3` remains a document-text compatibility call. The same Graphiti extraction call receives static guidance to retain attribution and epistemic wording such as uncertainty or speculation—Gralkor does not run a second presentation-classification inference. Fact results resolve their originating episodes and append the episode identifier, source kind, and source description on recall.
+`source_kind` says where the information came from; it is not a credibility, truth, opinion, or speculation rating. Gralkor validates the kind and its content shape before invoking a Lens or Graphiti. Automatic turn capture declares `:conversation`; callers using `Gralkor.Ingest` or `memory_add/4` declare the kind themselves, while legacy `memory_add/3` remains a document-text compatibility call. The same Graphiti extraction call receives static guidance to retain attribution and epistemic wording such as uncertainty or speculation—Gralkor does not run a second presentation-classification inference. Fact results resolve their originating episodes, which identify the writer shown on recall.
 
 Lens episodes record writer provenance by suffixing their source description with ` [lens: <Lens name>]`; Reflection episodes use the exact source description `reflection:<Reflection name>`. Both registries reject names containing the Lens delimiter so these forms stay unambiguous. Direct writes persist `Episodic._gralkor_writer = "direct"`; search trusts that stored field and returns the original source description with `writer: :direct`. Historical text ending in ` [gralkor: direct]` without that field remains unchanged and unclassified.
 

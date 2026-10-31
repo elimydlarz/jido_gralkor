@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+Everything presented to an agent now has one format: every memory is one line of plain text under the heading of whoever wrote it. This changes the text agents receive; the structured `Gralkor.Client.search/1,2` results are unchanged.
+
+### Changed
+- **Breaking:** `memory_search` no longer has `Facts` or `Episodes` sections, `[Lens: x]` bracket labels, or artefact identifiers. Whole Reflection artefacts come first, then facts, then episodes, under `Lens:`, `Reflection:`, or `Source:` headings; entities stay last under `Entities`. **Migrate:** update anything that parses or asserts this text, or read structured results from `Gralkor.Client.search/1,2`.
+- Reflection artefacts and structured-record episodes appear as readable text instead of raw JSON, so generalisations reach the agent whole.
+- Episodes are no longer cut at 280 characters. Any memory is cut only past 4,000 characters, and says so.
+- A fact with an invalidation or expiry date now ends with `(invalidated at <date>)`. These previously looked current.
+- The omission notice is now `N more memories omitted (response limit).`
+- **Breaking:** `recall/4` uses the same format and now returns entities and episodes as well as facts. It no longer includes timestamps, source descriptions, or episode identifiers. **Migrate:** use `Gralkor.Client.search/1,2` if you need those.
+
 ## [14.0.0] - 2026-10-30
 
 Replacement Lenses are gone, because reliable ingestion of large structured graphs into Graphiti has been abandoned and nothing Graphiti searches could see their output. This is a breaking change; migration guidance follows each entry.

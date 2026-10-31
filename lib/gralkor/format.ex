@@ -3,7 +3,7 @@ defmodule Gralkor.Format do
   Explicit readable presentation of structured graphiti fact records.
 
   Public search returns the records themselves. This operation is opt-in;
-  legacy recall calls it before constructing its readable memory block.
+  Lens store search uses it for its readable results.
 
   Pure Elixir — graphiti runs in Python, but we extract its edges into
   Elixir maps and format them here, never reaching back into Python for
