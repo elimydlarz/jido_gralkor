@@ -22,10 +22,17 @@ when the formatter presents facts
   then each fact is one bullet with its complete text
   and repeated provenance for one source adds no duplicate bullet for that fact
   and a fact with several named sources appears under each distinct source
-  while a fact has an invalidation date
-    then its bullet ends with `(invalidated at <date>)`
-  while a fact has only an expiry date
-    then its bullet ends with `(invalidated at <date>)`
+
+when the formatter shows when a memory was true and where it came from
+  then a fact or episode with a start date ends with `(valid from <date>)`
+  and the start date is when it became true, or when it was recorded if that is missing
+  and an invalidated or expired fact ends with `(valid from <date> to <date>)`
+  and an invalidated fact with no start date ends with `(valid until <date>)`
+  and a memory's source descriptions follow its dates, as in `(valid from <date>; source: <description>)`
+  and a fact drawn from several episodes lists each distinct source description once
+  and a source description never repeats its Lens marker
+  and a source description that only names a Reflection is left out
+  and a memory with no dates or source description ends with no parentheses
 
 when the formatter presents entities
   then each entity is one bullet with its complete name, summary, and attributes
@@ -47,7 +54,7 @@ when the formatter presents episodes
 when one memory is longer than 4,000 characters
   then it is cut to 4,000 characters and marked as truncated
   and a memory of exactly 4,000 characters is not cut
-  and an invalidated fact keeps its invalidation date
+  and its dates and source still follow the cut
 
 when formatted results must fit response limits
   then an exact-fit response retains every memory
