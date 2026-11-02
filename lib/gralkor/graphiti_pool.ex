@@ -531,6 +531,9 @@ defmodule Gralkor.GraphitiPool do
           }
           if direct_episode(episode):
             result["_gralkor_writer"] = "direct"
+          for moment in ('valid_at', 'created_at'):
+            if getattr(episode, moment, None) is not None:
+              result[moment] = str(getattr(episode, moment))
           source = getattr(episode, 'source', None)
           if source is not None:
             result['source_kind'] = {'message': 'conversation', 'text': 'document', 'json': 'structured_record'}.get(source.value)
@@ -645,6 +648,13 @@ defmodule Gralkor.GraphitiPool do
       if Map.has_key?(m, "source_kind"),
         do: Map.put(episode, :source_kind, m["source_kind"]),
         else: episode
+
+    episode =
+      Enum.reduce(["valid_at", "created_at"], episode, fn moment, episode ->
+        if Map.has_key?(m, moment),
+          do: Map.put(episode, String.to_existing_atom(moment), m[moment]),
+          else: episode
+      end)
 
     if Map.get(m, "_gralkor_writer") == "direct",
       do: Map.put(episode, :writer, :direct),

@@ -163,23 +163,25 @@ defmodule Gralkor.Destination.Storage.Graphiti do
 
       _ ->
         if String.starts_with?(source_description, "reflection:") do
-          reflection_episode(content, source_description)
+          reflection_episode(episode, content, source_description)
         else
           {:ok, episode}
         end
     end
   end
 
-  defp reflection_episode(content, "reflection:" <> reflection = source_description) do
+  defp reflection_episode(episode, content, "reflection:" <> reflection = source_description) do
     case decode_artefact(content) do
       [%Artefact{id: id, payload: payload}]
       when is_binary(id) and byte_size(id) > 0 and is_map(payload) ->
         {:ok,
-         %{
+         episode
+         |> Map.take([:valid_at, :created_at])
+         |> Map.merge(%{
            artefact: %{id: id, payload: payload},
            reflection: reflection,
            source_description: source_description
-         }}
+         })}
 
       _ ->
         {:error, {:invalid_reflection_artefact, reflection}}
