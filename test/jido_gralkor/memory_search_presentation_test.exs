@@ -147,27 +147,100 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     end
   end
 
-  describe "when the formatter presents facts > while a fact has an invalidation date" do
-    test "then its bullet ends with `(invalidated at <date>)`" do
-      invalidated =
-        fact("The Vacuum job runs at 02:00.", [%{lens: "notes"}])
-        |> Map.put(:invalid_at, "2026-10-12 09:16:40.173249+00:00")
-        |> Map.put(:expired_at, "2026-10-20 00:00:00+00:00")
+  describe "when the formatter shows when a memory was true and where it came from" do
+    test "then a fact or episode with a start date ends with `(valid from <date>)`" do
+      dated_fact =
+        Map.put(fact("one", [%{lens: "notes"}]), :valid_at, "2026-10-30 09:16:32+00:00")
 
-      assert rendered(facts([invalidated])) ==
-               "Lens: notes\n- The Vacuum job runs at 02:00. (invalidated at 2026-10-12)"
+      dated_episode = Map.put(episode("two", %{lens: "notes"}), :valid_at, "2026-10-29T08:00:00Z")
+
+      assert rendered([result("global", [dated_fact], [], [dated_episode])]) ==
+               "Lens: notes\n- one (valid from 2026-10-30)\n- two (valid from 2026-10-29)"
     end
-  end
 
-  describe "when the formatter presents facts > while a fact has only an expiry date" do
-    test "then its bullet ends with `(invalidated at <date>)`" do
-      expired =
-        fact("The Vacuum job runs at 02:00.", [%{lens: "notes"}])
-        |> Map.put(:invalid_at, nil)
+    test "and the start date is when it became true, or when it was recorded if that is missing" do
+      became_true =
+        fact("one", [%{lens: "notes"}])
+        |> Map.put(:valid_at, "2026-10-30 00:00:00+00:00")
+        |> Map.put(:created_at, "2026-10-31 00:00:00+00:00")
+
+      recorded =
+        Map.put(fact("two", [%{lens: "notes"}]), :created_at, "2026-10-31 00:00:00+00:00")
+
+      assert rendered(facts([became_true, recorded])) ==
+               "Lens: notes\n- one (valid from 2026-10-30)\n- two (valid from 2026-10-31)"
+    end
+
+    test "and an invalidated or expired fact ends with `(valid from <date> to <date>)`" do
+      invalidated =
+        fact("one", [%{lens: "notes"}])
+        |> Map.put(:valid_at, "2026-10-02 00:00:00+00:00")
+        |> Map.put(:invalid_at, "2026-10-12 00:00:00+00:00")
         |> Map.put(:expired_at, "2026-10-20 00:00:00+00:00")
 
-      assert rendered(facts([expired])) ==
-               "Lens: notes\n- The Vacuum job runs at 02:00. (invalidated at 2026-10-20)"
+      expired =
+        fact("two", [%{lens: "notes"}])
+        |> Map.put(:valid_at, "2026-10-02 00:00:00+00:00")
+        |> Map.put(:expired_at, "2026-10-20 00:00:00+00:00")
+
+      assert rendered(facts([invalidated, expired])) ==
+               "Lens: notes\n- one (valid from 2026-10-02 to 2026-10-12)\n" <>
+                 "- two (valid from 2026-10-02 to 2026-10-20)"
+    end
+
+    test "and an invalidated fact with no start date ends with `(valid until <date>)`" do
+      invalidated =
+        Map.put(fact("one", [%{lens: "notes"}]), :invalid_at, "2026-10-12 00:00:00+00:00")
+
+      assert rendered(facts([invalidated])) == "Lens: notes\n- one (valid until 2026-10-12)"
+    end
+
+    test "and a memory's source descriptions follow its dates, as in `(valid from <date>; source: <description>)`" do
+      dated =
+        Map.put(
+          fact("one", [%{lens: "notes", source_description: "team notes"}]),
+          :valid_at,
+          "2026-10-30 00:00:00+00:00"
+        )
+
+      undated = episode("two", %{lens: "notes", source_description: "planning call"})
+
+      assert rendered([result("global", [dated], [], [undated])]) ==
+               "Lens: notes\n- one (valid from 2026-10-30; source: team notes)\n" <>
+                 "- two (source: planning call)"
+    end
+
+    test "and a fact drawn from several episodes lists each distinct source description once" do
+      shared =
+        fact("one", [
+          %{lens: "notes", source_description: "team notes"},
+          %{lens: "notes", source_description: "incident review"},
+          %{lens: "notes", source_description: "team notes"}
+        ])
+
+      assert rendered(facts([shared])) ==
+               "Lens: notes\n- one (source: team notes, incident review)"
+    end
+
+    test "and a source description never repeats its Lens marker" do
+      marked = fact("one", [%{lens: "notes", source_description: "team notes [lens: notes]"}])
+      assert rendered(facts([marked])) == "Lens: notes\n- one (source: team notes)"
+    end
+
+    test "and a source description that only names a Reflection is left out" do
+      reflected =
+        fact("one", [%{reflection: "lessons", source_description: "reflection:lessons"}])
+
+      artefact =
+        artefact("lessons", %{"lesson" => "two"})
+        |> Map.put(:source_description, "reflection:lessons")
+
+      assert rendered([result("global", [reflected], [], [artefact])]) ==
+               "Reflection: lessons\n- two\n- one"
+    end
+
+    test "and a memory with no dates or source description ends with no parentheses" do
+      assert rendered(facts([fact("one", [%{lens: "notes"}])])) == "Lens: notes\n- one"
     end
   end
 
@@ -293,14 +366,16 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       assert rendered(facts([fact(text, [%{lens: "notes"}])])) == "Lens: notes\n- " <> text
     end
 
-    test "and an invalidated fact keeps its invalidation date" do
-      invalidated =
-        fact(String.duplicate("x", 4_001), [%{lens: "notes"}])
+    test "and its dates and source still follow the cut" do
+      long =
+        fact(String.duplicate("x", 4_001), [%{lens: "notes", source_description: "team notes"}])
+        |> Map.put(:valid_at, "2026-10-02 00:00:00+00:00")
         |> Map.put(:invalid_at, "2026-10-12 00:00:00+00:00")
 
-      assert rendered(facts([invalidated])) ==
+      assert rendered(facts([long])) ==
                "Lens: notes\n- " <>
-                 String.duplicate("x", 4_000) <> "… (truncated) (invalidated at 2026-10-12)"
+                 String.duplicate("x", 4_000) <>
+                 "… (truncated) (valid from 2026-10-02 to 2026-10-12; source: team notes)"
     end
   end
 
