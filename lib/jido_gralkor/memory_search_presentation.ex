@@ -11,8 +11,13 @@ defmodule JidoGralkor.MemorySearchPresentation do
   Structured content becomes readable text without knowing any Reflection's
   shape: an object with a `content` string shows only that text, an object with
   one field shows that field's value, any other object shows `key: value` pairs,
-  and each item of a top-level list is its own bullet. A fact with an invalidation
-  or expiry date says when with `(invalidated at <date>)`.
+  and each item of a top-level list is its own bullet.
+
+  A fact or episode ends with when it was true and where it came from:
+  `(valid from <date>)`, or `(valid from <date> to <date>)` once it was invalidated
+  or expired, then `; source: <description>`. The start is when it became true,
+  or when it was recorded if that is missing. A source description never repeats
+  its Lens marker, and one that only names a Reflection is left out.
 
   A memory is cut only past 4,000 characters, and says so. The complete text fits
   Jido AI's 16,384-character string limit and the supplied UTF-8 byte budget for
@@ -81,15 +86,62 @@ defmodule JidoGralkor.MemorySearchPresentation do
     |> bullets()
     |> Enum.map(&{[heading(episode)], one_line(&1)})
     |> reject_blank()
+    |> with_details(episode, [episode])
   end
 
-  defp fact_memory(fact), do: {fact_headings(fact), one_line(fact.fact) <> invalidation(fact)}
+  defp fact_memory(fact),
+    do: {fact_headings(fact), one_line(fact.fact) <> details(fact, Map.get(fact, :sources, []))}
 
-  defp invalidation(fact) do
-    case Map.get(fact, :invalid_at) || Map.get(fact, :expired_at) do
-      nil -> ""
-      moment -> " (invalidated at #{moment |> to_string() |> String.slice(0, 10)})"
+  defp with_details(memories, record, sources) do
+    Enum.map(memories, fn {headings, text} -> {headings, text <> details(record, sources)} end)
+  end
+
+  defp details(record, sources) do
+    case Enum.reject([validity(record), source(sources)], &is_nil/1) do
+      [] -> ""
+      parts -> " (" <> Enum.join(parts, "; ") <> ")"
     end
+  end
+
+  defp validity(record) do
+    from = date(Map.get(record, :valid_at) || Map.get(record, :created_at))
+    to = date(Map.get(record, :invalid_at) || Map.get(record, :expired_at))
+
+    case {from, to} do
+      {nil, nil} -> nil
+      {from, nil} -> "valid from #{from}"
+      {nil, to} -> "valid until #{to}"
+      {from, to} -> "valid from #{from} to #{to}"
+    end
+  end
+
+  defp date(nil), do: nil
+  defp date(""), do: nil
+  defp date(moment), do: moment |> to_string() |> String.slice(0, 10)
+
+  defp source(sources) do
+    sources
+    |> Enum.map(&source_description/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> case do
+      [] -> nil
+      descriptions -> "source: " <> Enum.join(descriptions, ", ")
+    end
+  end
+
+  defp source_description(source) do
+    description =
+      source
+      |> Map.get(:source_description)
+      |> to_string()
+      |> String.replace(~r/ \[lens: .+\]$/s, "")
+      |> String.replace_suffix(" [gralkor: direct]", "")
+      |> one_line()
+
+    if description == "" or String.starts_with?(description, "reflection:"),
+      do: nil,
+      else: description
   end
 
   defp entity_memory(node) do
@@ -124,6 +176,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
     |> episode_bullets(content)
     |> Enum.map(&{[heading(episode)], one_line(&1)})
     |> reject_blank()
+    |> with_details(episode, [episode])
   end
 
   defp episode_bullets(kind, content) when kind in [:structured_record, "structured_record"] do
