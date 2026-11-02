@@ -543,18 +543,18 @@ The physical encoding replaces the former lossy `-` and `/` to `_` normalisation
 
 **Error contracts.** Invalid configuration, invalid Lens requests, automatic plugin-capture failures, non-PID runtime targets, and unavailable targeted runtimes raise. Runtime-targeted operations never redirect to application compatibility configuration. Valid runtime-targeted `Gralkor.Client.ingest/2`, `replace/2`, `search/2`, `reflect/5`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
 
-**Memory search results.** `Gralkor.Client.search/1,2` returns structured records for consumers that control their own presentation: one `%{destination:, facts:, nodes:, episodes:}` map per Destination. The `memory_search` action runs that one search and returns readable text in `{:ok, %{result: text}}`: every memory is one line of plain text under the heading of whoever wrote it (`Lens:`, `Reflection:`, or a direct source), with entities last under `Entities`. A memory is cut only past 4,000 characters, and says so. The explicit `JidoGralkor.MemorySearchPresentation.for_model/2` formatter retains or omits memories whole within the 16,384-character text limit and `tool_context[:memory_search_max_bytes]` (65,536 bytes by default for the complete serialized envelope), with one notice giving the total omitted. It works with unmodified Jido AI 2.3.0. See [the schema, format, and consumer migration](DESTINATIONS.md#readable-memory-search).
+**Memory search results.** `Gralkor.Client.search/1,2` returns structured records for consumers that control their own presentation: one `%{destination:, facts:, nodes:, episodes:}` map per Destination. The `memory_search` action runs that one search and returns readable text in `{:ok, %{result: text}}`: every memory is one line of plain text under the heading of whoever wrote it (`Lens:`, `Reflection:`, or a direct source), with entities last under `Entities`. Each fact and episode ends with when it was true and its source, as in `(valid from 2026-10-02 to 2026-10-12; source: incident review)`. A memory is cut only past 4,000 characters, and says so. The explicit `JidoGralkor.MemorySearchPresentation.for_model/2` formatter retains or omits memories whole within the 16,384-character text limit and `tool_context[:memory_search_max_bytes]` (65,536 bytes by default for the complete serialized envelope), with one notice giving the total omitted. It works with unmodified Jido AI 2.3.0. See [the schema, format, and consumer migration](DESTINATIONS.md#readable-memory-search).
 
 For example, the consuming agent receives text like:
 
 ```text
 Reflection: generalisations
-- Begin Payments migrations with a reversible, limited-scope trial.
+- Begin Payments migrations with a reversible, limited-scope trial. (valid from 2026-10-29)
 
 Lens: jira
-- Payment retries must use an idempotency key.
-- Settlement retried failed requests twice. (invalidated at 2026-10-12)
-- PAY-142: settlement retries double-charged a customer when the worker restarted.
+- Payment retries must use an idempotency key. (valid from 2026-10-30; source: PAY-142)
+- Settlement retried failed requests twice. (valid from 2026-10-02 to 2026-10-12; source: incident review)
+- PAY-142: settlement retries double-charged a customer when the worker restarted. (valid from 2026-10-30; source: PAY-142)
 
 Entities
 - settlement worker: Retries failed requests three times.

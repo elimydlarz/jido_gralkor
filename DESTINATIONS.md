@@ -181,18 +181,18 @@ A Reflection episode appears only once its extraction has durably completed. Ref
 
 ```text
 Reflection: generalisations
-- Prefer small, reversible changes to Payments migrations.
+- Prefer small, reversible changes to Payments migrations. (valid from 2026-10-29)
 
 Reflection: erl
-- approach: moved Vacuum to 04:00; lesson: Keep the jobs apart; success: true
+- approach: moved Vacuum to 04:00; lesson: Keep the jobs apart; success: true (valid from 2026-10-27)
 
 Lens: jira
-- Payment retries must use an idempotency key.
-- Settlement retried failed requests twice. (invalidated at 2026-10-12)
-- PAY-142: settlement retries double-charged a customer when the worker restarted.
+- Payment retries must use an idempotency key. (valid from 2026-10-30; source: PAY-142)
+- Settlement retried failed requests twice. (valid from 2026-10-02 to 2026-10-12; source: incident review)
+- PAY-142: settlement retries double-charged a customer when the worker restarted. (valid from 2026-10-30; source: PAY-142)
 
 Source: direct conversation
-- user: Can we move the cutover? assistant: Sunday works.
+- user: Can we move the cutover? assistant: Sunday works. (valid from 2026-10-31; source: planning call)
 
 Entities
 - settlement worker: Retries failed requests three times.
@@ -206,7 +206,7 @@ Whole Reflection artefacts come first, then facts, then episodes. That order set
 
 Reflection artefacts and structured-record episodes become readable text without any Reflection-specific code. An object with a `content` string shows only that text, which keeps `level` and `evolves_from` out of generalisations; an object with one field shows that field's value; any other object shows `key: value` pairs separated by semicolons; and each item of a top-level list is its own bullet.
 
-A fact with an invalidation date, or failing that an expiry date, ends with `(invalidated at <date>)`. Any memory is cut only past 4,000 characters, and is then marked `… (truncated)`.
+A fact or episode ends with when it was true and where it came from: `(valid from <date>)`, or `(valid from <date> to <date>)` once it was invalidated or expired, then `; source: <description>`. The start is when it became true, or when it was recorded if that is missing, and an invalidated fact with no start shows `(valid until <date>)`. A fact drawn from several episodes lists each distinct source description once. A source description never repeats its Lens marker, and one that only names a Reflection is left out because the heading already says so. Any memory is cut only past 4,000 characters, and is then marked `… (truncated)` ahead of its dates and source.
 
 `JidoGralkor.MemorySearchPresentation.for_model(results, max_bytes)` is the explicit reusable formatter. It leaves the input unchanged and returns `{:ok, %{result: text}}`. Consumers can call the structured search API and choose their own formatter instead.
 
