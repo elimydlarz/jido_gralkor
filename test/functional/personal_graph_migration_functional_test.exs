@@ -436,7 +436,9 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
                    content: content,
                    source_description: "captured",
                    source_kind: "document",
-                   lens: "operator"
+                   lens: "operator",
+                   created_at: "2026-01-01 00:00:00+00:00",
+                   valid_at: "2026-01-01 00:00:00+00:00"
                  }
                ]
       end
@@ -1072,7 +1074,9 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
                    content: content,
                    source_description: "captured",
                    source_kind: "document",
-                   lens: "operator"
+                   lens: "operator",
+                   created_at: "2026-01-01 00:00:00+00:00",
+                   valid_at: "2026-01-01 00:00:00+00:00"
                  }
                ]
       end

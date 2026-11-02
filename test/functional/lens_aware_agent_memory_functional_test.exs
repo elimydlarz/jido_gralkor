@@ -144,7 +144,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert result ==
-               "Lens: decisions\n- selected decision memory"
+               "Lens: decisions\n- selected decision memory (source: functional)"
 
       assert {:ok, %{result: unselected}} =
                MemorySearch.run(%{query: "selected"}, search_context)
@@ -215,7 +215,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert result ==
-               "Lens: observations\n- observation visible from a decision turn"
+               "Lens: observations\n- observation visible from a decision turn (source: functional)"
     end
 
     test "and returned facts are grouped under their named originating Lens or Reflection" do
@@ -262,7 +262,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                )
 
       assert result ==
-               "Lens: observations\n- first-turn searchable memory"
+               "Lens: observations\n- first-turn searchable memory (source: functional)"
     end
   end
 
@@ -289,7 +289,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                MemorySearch.run(%{query: "memory"}, mounted_search_context())
 
       assert result ==
-               "Lens: personal-chat\n- operator memory\n\nLens: shared-generalisations\n- global memory\n\nLens: observations\n- observation memory\n\nLens: decisions\n- decision memory"
+               "Lens: personal-chat\n- operator memory (source: functional)\n\nLens: shared-generalisations\n- global memory (source: functional)\n\nLens: observations\n- observation memory (source: functional)\n\nLens: decisions\n- decision memory (source: functional)"
     end
   end
 

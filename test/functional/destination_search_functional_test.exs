@@ -547,7 +547,10 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert {:ok, [%{destination: "personal", episodes: [episode]}]} =
                search(query: "amber", destinations: ["personal"])
 
-      assert episode == %{
+      assert %{valid_at: valid_at, created_at: created_at} = episode
+      assert is_binary(valid_at) and is_binary(created_at)
+
+      assert Map.drop(episode, [:valid_at, :created_at]) == %{
                content: "amber direct memory",
                source_kind: "document",
                source_description: "captured",
