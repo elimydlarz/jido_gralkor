@@ -409,7 +409,8 @@ defmodule Gralkor.GraphitiPool do
   Returns `{:ok, %{facts: [fact], nodes: [node], episodes: [episode]}}`: facts
   rendered as `search/5` renders them, nodes as `%{name:, summary:,
   attributes:}`, and episodes as `%{content:, source_description:,
-  source_kind:}` plus `writer: :direct` for durable direct writes.
+  source_kind:}` plus `valid_at:` and `created_at:` when Graphiti records them and
+  `writer: :direct` for durable direct writes.
 
   ## Options
 
