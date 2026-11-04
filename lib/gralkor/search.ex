@@ -4,7 +4,8 @@ defmodule Gralkor.Search do
 
   A search names the operator, the query, and optionally the Destinations to
   read (`destinations`, default every accessible registered Destination), the
-  Lenses whose writes to read (`lenses`, default every writer), and ontology
+  Lenses whose writes to read (`lenses`, default every writer) or to leave out
+  (`excluded_lenses`, default none), and ontology
   filters (`entity_types`, `edge_types`, default no filter). The packaged
   `personal` Destination resolves only to the current `operator_id`'s graph.
 
@@ -56,6 +57,28 @@ defmodule Gralkor.Search do
   Lens's results out. `entity_types` and `edge_types` restrict the Lens's
   results further. An unknown, blank, or non-list Lens selection raises
   `ArgumentError` before any Destination is searched.
+
+  ## Lens exclusion
+
+  `excluded_lenses` names registered Lenses whose writes to leave out while
+  keeping every other writer. Like `lenses`, it neither adds nor narrows
+  Destinations; each excluded Lens's own Destination is still searched. Within
+  each Destination:
+
+  * episodes whose writer is an excluded Lens are left out;
+  * a fact is left out only when every episode it was drawn from is such an
+    episode; a fact another writer also produced stays, and its `sources` omit
+    the excluded episodes;
+  * a node is left out only when every episode mentioning it is such an
+    episode, so entities other writers also mention stay.
+
+  Direct writes, other Lenses, Reflection artefacts, and historical unmarked
+  episodes remain. On Graphiti the exclusions are applied inside the graph
+  queries, before ranking and the per-Destination limits, so an excluded Lens
+  cannot take a result place. `entity_types` and `edge_types` restrict what
+  remains. Supplying both `lenses` and `excluded_lenses` raises
+  `ArgumentError`, as does an unknown, blank, or non-list exclusion, before any
+  Destination is searched.
 
   ## Removed in 12.0.0
 
@@ -113,7 +136,9 @@ defmodule Gralkor.Search do
 
   @typedoc """
   One search request. Empty `destinations` means every accessible registered
-  Destination; empty `lenses` means every writer; empty `entity_types` and
+  Destination; empty `lenses` means every writer; empty `excluded_lenses`
+  means nothing is excluded, and `lenses` and `excluded_lenses` cannot both be
+  non-empty; empty `entity_types` and
   `edge_types` mean no filter. The removed keys must stay `nil`.
   """
   @type t :: %__MODULE__{
