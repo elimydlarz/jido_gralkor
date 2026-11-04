@@ -355,9 +355,28 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                  false
              end)
     end
-  end
 
-  describe "when the Journey consumer triggers generalisation after successive ingestions containing related observations > prior generalisations" do
+    test "and later generalisation inference receives each prior generalisation in the memory search format with its level",
+         %{adventure: adventure} do
+      %{"content" => content, "level" => level} = adventure.first_generalisation
+      assert [_ | _] = adventure.later_generalisation_prompts
+
+      for prompt <- adventure.later_generalisation_prompts do
+        stored = stored_information_section(prompt)
+
+        assert stored =~
+                 ~r/Reflection: generalisations\n(?:.*\n)*?- #{Regex.escape(squish(content))}[^\n]*\n  level: #{level}\n/
+
+        refute stored =~ ~s("level")
+        assert {:error, _} = Jason.decode(stored)
+      end
+    end
+
+    test "and the later generalisation's level is one above the highest level in its lineage",
+         %{adventure: adventure} do
+      %{"level" => level, "evolves_from" => lineage} = adventure.later_generalisation
+      assert level == Enum.max(Enum.map(lineage, & &1["level"])) + 1
+    end
   end
 
   describe "when distinct ingestions use Lenses backed by different Destinations" do
@@ -492,6 +511,21 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          %{adventure: adventure} do
       assert adventure.memory_search_text =~ "Lens: work-notes\n- "
       assert adventure.memory_search_text =~ "Reflection: generalisations\n- "
+    end
+
+    test "and its readable memory shows each retrieved generalisation's level and lineage snapshots as indented fields",
+         %{adventure: adventure} do
+      generalisations =
+        for %{destination: "generalisations", artefact: %{payload: payload}} <-
+              adventure.default_memory_search_artefacts,
+            generalisation <- Map.get(payload, "generalisations", []),
+            do: generalisation
+
+      assert Enum.any?(generalisations, &match?(%{"evolves_from" => [_ | _]}, &1))
+
+      for generalisation <- generalisations do
+        assert adventure.memory_search_text =~ rendered_generalisation(generalisation)
+      end
     end
 
     test "and the answer uses retrieved facts relevant to the requested migration",
@@ -1498,6 +1532,35 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     results
   end
+
+  defp stored_information_section(prompt) do
+    [_, rest] =
+      String.split(prompt, "Related stored information available to this Reflection step:\n",
+        parts: 2
+      )
+
+    rest |> String.split("\n\nReturn only one JSON object", parts: 2) |> hd()
+  end
+
+  # How the formatter lays out one generalisation: its content, then its level,
+  # then each lineage snapshot as a nested bullet with its own level.
+  defp rendered_generalisation(%{"content" => content, "level" => level} = generalisation) do
+    lineage =
+      case Map.get(generalisation, "evolves_from", []) do
+        [] ->
+          ""
+
+        snapshots ->
+          "\n  evolves_from:" <>
+            Enum.map_join(snapshots, fn %{"content" => content, "level" => level} ->
+              "\n  - #{squish(content)}\n    level: #{level}"
+            end)
+      end
+
+    ~r/- #{Regex.escape(squish(content))}[^\n]*\n  level: #{level}#{Regex.escape(lineage)}(?:\n|\z)/
+  end
+
+  defp squish(text), do: text |> String.split() |> Enum.join(" ")
 
   defp answer_field!(answer, label) do
     labels = "RECOMMENDATION|RATIONALE"
