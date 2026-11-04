@@ -224,6 +224,8 @@ defmodule JidoGralkor.MemorySearchPresentation do
 
   # Pruning drops null, blank, and empty values, and anything containing only those.
   defp prune(nil), do: :empty
+  # A struct such as a DateTime is one plain value.
+  defp prune(%_{} = value), do: prune(to_string(value))
 
   defp prune(value) when is_binary(value) do
     case one_line(value) do
