@@ -220,6 +220,71 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
       refute related_section =~ "Prefer explicit APIs"
     end
 
+    test "and built-in inference presents prior generalisations in the memory search format, with each level and lineage snapshot" do
+      stored_information = [
+        %{
+          destination: "generalisations",
+          facts: [],
+          nodes: [],
+          episodes: [
+            %{
+              uuid: "prior-episode",
+              reflection: "generalisations",
+              source_description: "reflection:generalisations",
+              artefact: %{
+                id: "prior-artefact",
+                payload: %{
+                  "generalisations" => [
+                    %{
+                      "content" => "Prefer explicit APIs everywhere",
+                      "level" => 2,
+                      "evolves_from" => [
+                        %{"content" => "Prefer explicit APIs in Payments", "level" => 1}
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+
+      request = %{
+        directions: "Synthesize a generalisation.",
+        operator_id: "operator-one",
+        output_schema: %{"generalisations" => "Array<{ content: string; level: integer }>"},
+        representations: ingestion().representations,
+        stored_information: stored_information,
+        tool_context: %{},
+        tools: []
+      }
+
+      call = fn prompt, _config, _opts ->
+        send(self(), {:default_inference_prompt, prompt})
+        %{termination_reason: :final_answer, result: Jason.encode!(%{"generalisations" => []})}
+      end
+
+      assert {:ok, _} = Runner.default_inference(request, call)
+      assert_receive {:default_inference_prompt, prompt}
+
+      [_, related_section] =
+        String.split(prompt, "Related stored information available to this Reflection step:\n")
+
+      [related_section, _contract] =
+        String.split(related_section, "\n\nReturn only one JSON object")
+
+      assert related_section ==
+               "Reflection: generalisations\n" <>
+                 "- Prefer explicit APIs everywhere\n" <>
+                 "  level: 2\n" <>
+                 "  evolves_from:\n" <>
+                 "  - Prefer explicit APIs in Payments\n" <>
+                 "    level: 1"
+
+      refute related_section =~ "prior-artefact"
+    end
+
     test "and inference is directed to revisit current representations together with prior generalisations" do
       directions = step_directions("inspect-world")
 
