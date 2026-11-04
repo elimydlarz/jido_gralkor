@@ -114,7 +114,10 @@ defmodule JidoGralkor.MemorySearchPresentation do
   defp fact_memory(fact),
     do:
       {fact_headings(fact),
-       fact.fact |> one_line() |> memory_text() |> append_details(details(fact, Map.get(fact, :sources, [])))}
+       fact.fact
+       |> one_line()
+       |> memory_text()
+       |> append_details(details(fact, Map.get(fact, :sources, [])))}
 
   defp with_details(memories, record, sources) do
     Enum.map(memories, fn {headings, text} ->
@@ -265,7 +268,8 @@ defmodule JidoGralkor.MemorySearchPresentation do
   defp lines(value), do: [to_string(value)]
 
   defp field_lines(fields) do
-    {one_line, nested} = fields |> Enum.sort_by(&elem(&1, 0)) |> Enum.split_with(&one_line_field?/1)
+    {one_line, nested} =
+      fields |> Enum.sort_by(&elem(&1, 0)) |> Enum.split_with(&one_line_field?/1)
 
     Enum.flat_map(one_line, fn {key, value} -> ["#{key}: #{plain_list(List.wrap(value))}"] end) ++
       Enum.flat_map(nested, fn

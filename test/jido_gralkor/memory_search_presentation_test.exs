@@ -102,7 +102,9 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
 
       text = rendered([result("global", [], [node], [episode])])
 
-      assert text == "Reflection: lessons\n- lesson: Use canaries\n  level: 1\n\nEntities\n- Atlas: A rollout"
+      assert text ==
+               "Reflection: lessons\n- lesson: Use canaries\n  level: 1\n\nEntities\n- Atlas: A rollout"
+
       refute text =~ "artefact-id"
       refute text =~ "uuid"
       refute text =~ "global"
@@ -291,12 +293,21 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   describe "when the formatter presents entities" do
     test "then each entity's first line is `name: summary`, or only its name when it has no summary" do
       assert rendered([
-               result("global", [], [%{entity("Atlas") | summary: "A rollout"}, entity("Borealis")], [])
+               result(
+                 "global",
+                 [],
+                 [%{entity("Atlas") | summary: "A rollout"}, entity("Borealis")],
+                 []
+               )
              ]) == "Entities\n- Atlas: A rollout\n- Borealis"
     end
 
     test "and each attribute is its own indented `key: value` line, not an inline bracket" do
-      node = %{name: "Atlas", summary: "A rollout", attributes: %{owner: "Platform", region: "eu-west"}}
+      node = %{
+        name: "Atlas",
+        summary: "A rollout",
+        attributes: %{owner: "Platform", region: "eu-west"}
+      }
 
       assert rendered([result("global", [], [node], [])]) ==
                "Entities\n- Atlas: A rollout\n  owner: Platform\n  region: eu-west"
@@ -304,7 +315,12 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
 
     test "and entities with different attributes each show all of their own" do
       atlas = %{name: "Atlas", summary: "A rollout", attributes: %{"owner" => "Platform"}}
-      borealis = %{name: "Borealis", summary: nil, attributes: %{"tier" => 1, "tags" => ["a", "b"]}}
+
+      borealis = %{
+        name: "Borealis",
+        summary: nil,
+        attributes: %{"tier" => 1, "tags" => ["a", "b"]}
+      }
 
       assert rendered([result("global", [], [atlas, borealis], [])]) ==
                "Entities\n- Atlas: A rollout\n  owner: Platform\n- Borealis\n  tags: a, b\n  tier: 1"
@@ -414,7 +430,10 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     end
 
     test "and a nested object is a `key:` line followed by its own fields two spaces further in" do
-      payload = %{"content" => "Use canaries", "scope" => %{"team" => "Platform", "region" => "eu"}}
+      payload = %{
+        "content" => "Use canaries",
+        "scope" => %{"team" => "Platform", "region" => "eu"}
+      }
 
       assert rendered([result("global", [], [], [artefact("lessons", payload)])]) ==
                "Reflection: lessons\n- Use canaries\n  scope:\n    region: eu\n    team: Platform"
@@ -552,13 +571,16 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
                "Reflection: erl\n- c\n  lesson: " <> lesson
 
       assert rendered([result("global", [], [], [artefact("erl", over)])]) ==
-               "Reflection: erl\n- cc\n  lesson: " <> String.slice(lesson, 0, 3_987) <> "… (truncated)"
+               "Reflection: erl\n- cc\n  lesson: " <>
+                 String.slice(lesson, 0, 3_987) <> "… (truncated)"
     end
 
     test "and the truncation marker ends the last line that is kept" do
       lines = for n <- 1..9, into: %{}, do: {"field_#{n}", String.duplicate("y", 490)}
 
-      text = rendered([result("global", [], [], [artefact("erl", Map.put(lines, "content", "c"))])])
+      text =
+        rendered([result("global", [], [], [artefact("erl", Map.put(lines, "content", "c"))])])
+
       body = String.replace_prefix(text, "Reflection: erl\n- ", "")
 
       assert String.length(body) == 4_000 + String.length("… (truncated)")
