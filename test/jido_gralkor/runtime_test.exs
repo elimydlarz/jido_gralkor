@@ -310,7 +310,27 @@ defmodule JidoGralkor.RuntimeTest do
     end
   end
 
-  describe "when search definitions are resolved from an active runtime > if any selected name is unknown" do
+  describe "when search definitions are resolved from an active runtime > while excluded Lens names are supplied" do
+    test "then the excluded Lens definitions resolve from the same snapshot without duplicates" do
+      configuration = %{reflection_configuration() | lenses: [lens_configuration()]}
+      start_runtime(configuration)
+
+      assert {[], destinations, excluded} =
+               Runtime.resolve_search!(self(), [], ["reviews"], [
+                 "custom",
+                 "personal-chat",
+                 "custom"
+               ])
+
+      assert [%Gralkor.Lens{name: "custom", destination: %{name: "reviews"}}, personal_chat] =
+               excluded
+
+      assert personal_chat.name == "personal-chat"
+      assert Enum.map(destinations, & &1.name) == ["reviews"]
+    end
+  end
+
+  describe "when search definitions are resolved from an active runtime > if any selected or excluded name is unknown" do
     test "then resolution fails without returning a partial result" do
       start_runtime(%{reflection_configuration() | lenses: [lens_configuration()]})
 
@@ -320,6 +340,10 @@ defmodule JidoGralkor.RuntimeTest do
 
       assert_raise ArgumentError, ~r/unknown_definition, :lenses, "missing"/, fn ->
         Runtime.resolve_search!(self(), ["custom", "missing"], ["reviews"])
+      end
+
+      assert_raise ArgumentError, ~r/unknown_definition, :excluded_lenses, "missing"/, fn ->
+        Runtime.resolve_search!(self(), [], ["reviews"], ["custom", "missing"])
       end
     end
   end
