@@ -299,7 +299,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
     text = Enum.join([first | Enum.map(rest, &("  " <> &1))], "\n")
 
     if String.length(text) > @max_memory_chars,
-      do: String.slice(text, 0, @max_memory_chars) <> "… (truncated)",
+      do: String.trim_trailing(String.slice(text, 0, @max_memory_chars)) <> "… (truncated)",
       else: text
   end
 
