@@ -117,8 +117,9 @@ The lineage repeats the text of each earlier generalisation. That is intended. T
   - CLAUDE.md (the `MemorySearch` entry, including "Reflection inference alone keeps raw JSON")
   - a CHANGELOG `[Unreleased]` entry
 - **Verification:** `mix test.functional`, then the Journey on embedded and remote FalkorDB.
-
-**Coordination.** The formatter files belong to the "gralkor search result consistency" session. Send it a message before you edit them, and before any Functional or Journey run.
+  - The Journey uses embedded FalkorDB by default.
+  - With `GRALKOR_JOURNEY_FALKORDB=host:port`, it uses a remote FalkorDB instead. Point it at an empty, disposable server, such as a local `falkordb/falkordb` container, because the adventure's graphs stay on the server after the run.
+  - Run only one test VM on the embedded backend at a time.
 
 **Out of scope**
 - The new observations section of the Reflection prompt
