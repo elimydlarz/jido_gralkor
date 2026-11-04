@@ -2,10 +2,10 @@
 
 ## [Unreleased]
 
+Everything presented to a model now has one format: every memory is one bullet under the heading of whoever wrote it, with its main text first and every other field it carries on indented lines. This changes the text agents and the generalisation Reflection receive; the structured `Gralkor.Client.search/1,2` results are unchanged.
+
 ### Added
 - `%Gralkor.Search{excluded_lenses: [...]}` leaves out what the named Lenses wrote and keeps every other writer, including memory written without any Lens (direct writes, capture, Reflection artefacts, historical unmarked episodes). An episode written through an excluded Lens is left out; a fact only when every episode it was drawn from was, and an entity only when nothing but such episodes mentions it, so cross-source facts and entities survive and kept facts' `sources` never name an excluded Lens. On FalkorDB the exclusions run inside the graph queries before ranking and the per-Destination caps, so a high-volume Lens cannot take any of the twenty facts, twenty nodes, or five episodes. Destinations are chosen exactly as before. Supplying both `lenses` and `excluded_lenses` raises `ArgumentError`, as do unknown, blank, or non-list exclusions. Runtime-targeted search resolves excluded names from the agent's runtime snapshot (`JidoGralkor.Runtime.resolve_search!/4`).
-
-Everything presented to a model now has one format: every memory is one bullet under the heading of whoever wrote it, with its main text first and every other field it carries on indented lines. This changes the text agents and the generalisation Reflection receive; the structured `Gralkor.Client.search/1,2` results are unchanged.
 
 ### Changed
 - **Breaking:** `memory_search` no longer has `Facts` or `Episodes` sections, `[Lens: x]` bracket labels, or artefact identifiers. Whole Reflection artefacts come first, then facts, then episodes, under `Lens:`, `Reflection:`, or `Source:` headings; entities stay last under `Entities`. **Migrate:** update anything that parses or asserts this text, or read structured results from `Gralkor.Client.search/1,2`.
