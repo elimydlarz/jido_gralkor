@@ -469,16 +469,24 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                "Reflection: generalisations\n- Use canaries\n\nLens: observations\n- observed rollout (source: functional)"
     end
 
-    test "and the presentation adds no artefact identifiers, evolution-depth levels, or lineage metadata" do
+    test "and the presentation adds no artefact identifiers" do
       artefact = put_generalisation("Use canaries", 2, [%{"content" => "prior", "level" => 1}])
 
       assert {:ok, %{result: text}} =
                memory_search(%{query: "canaries", destinations: ["generalisations"]}, [])
 
-      assert text == "Reflection: generalisations\n- Use canaries"
       refute text =~ artefact.id
-      refute text =~ "level"
-      refute text =~ "prior"
+    end
+
+    test "and a generalisation shows its level and each lineage snapshot as its own fields" do
+      put_generalisation("Use canaries", 2, [%{"content" => "prior", "level" => 1}])
+
+      assert {:ok, %{result: text}} =
+               memory_search(%{query: "canaries", destinations: ["generalisations"]}, [])
+
+      assert text ==
+               "Reflection: generalisations\n- Use canaries\n  level: 2\n  evolves_from:\n" <>
+                 "  - prior\n    level: 1"
     end
   end
 

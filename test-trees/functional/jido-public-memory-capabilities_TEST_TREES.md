@@ -24,7 +24,8 @@ when an agent invokes memory search with a usable query
   and returned results obey the optional `destinations` selector supplied for that invocation
   and the action returns one readable string with memories under named Lens or Reflection headings
   and relevant stored generalisations can contribute beside related ingested information
-  and the presentation adds no artefact identifiers, evolution-depth levels, or lineage metadata
+  and the presentation adds no artefact identifiers
+  and a generalisation shows its level and each lineage snapshot as its own fields
   where the Destination selector is omitted or empty
     then every accessible registered Destination can contribute
   where Destinations are supplied
