@@ -388,7 +388,7 @@ defmodule Gralkor.Client do
   end
 
   defp validate_excluded_lens_names!(names),
-    do: raise(ArgumentError, "search excluded_lenses must be a list, got #{inspect(names)}")
+    do: raise(ArgumentError, "search excluded Lenses must be a list, got #{inspect(names)}")
 
   @spec lens!(String.t()) :: Lens.t()
   def lens!(name) do

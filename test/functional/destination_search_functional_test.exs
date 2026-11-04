@@ -1114,7 +1114,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       {:lenses, ["first-alpha", " "], ~s(invalid Lens name " ")},
       {:excluded_lenses, ["first-alpha", "missing"], ~s(unknown excluded Lens "missing")},
       {:excluded_lenses, "first-alpha",
-       ~s(search excluded_lenses must be a list, got "first-alpha")},
+       ~s(search excluded Lenses must be a list, got "first-alpha")},
       {:excluded_lenses, ["first-alpha", " "], ~s(invalid excluded Lens name " ")}
     ]
   end
