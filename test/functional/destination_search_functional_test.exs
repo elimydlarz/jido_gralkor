@@ -1068,6 +1068,28 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
+  describe "if search both selects and excludes Lenses" do
+    test "then search fails before any Destination query is started" do
+      for {lenses, excluded_lenses} <- [{["first-alpha"], ["first-beta"]}, {["first-alpha"], ["first-alpha"]}] do
+        assert_raise ArgumentError, fn ->
+          search(destinations: ["first"], lenses: lenses, excluded_lenses: excluded_lenses)
+        end
+
+        refute_receive {:destination_search, _, _, _, _}
+      end
+    end
+
+    test "and the error names both the Lens selection and the Lens exclusion" do
+      error =
+        assert_raise ArgumentError, fn ->
+          search(lenses: ["first-alpha"], excluded_lenses: ["first-beta"])
+        end
+
+      assert error.message =~ ":lenses"
+      assert error.message =~ ":excluded_lenses"
+    end
+  end
+
   defp search(overrides \\ []) do
     Client.search(
       struct!(
