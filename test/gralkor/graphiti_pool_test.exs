@@ -162,7 +162,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
   # Drives the episode full-text search a started pool installed, and
   # graphiti's own, against a driver that records the Cypher it is sent.
-  defp episode_fulltext_queries(episode_uuids) do
+  defp episode_fulltext_queries(episode_uuids, filter_field \\ "episode_uuids") do
     %{pid: pid} = start_pool(install_loop_fn: &Gralkor.Python.install_async_runtime/0)
 
     {recorded, _} =
@@ -194,7 +194,7 @@ defmodule Gralkor.GraphitiPoolTest do
           filters = (
               SearchFilters()
               if uuids is None
-              else search_utils._gralkor_search_filters(episode_uuids=uuids)
+              else search_utils._gralkor_search_filters(**{filter_field.decode('utf-8'): uuids})
           )
           wrapped = _RecordingDriver()
           own = _RecordingDriver()
@@ -202,7 +202,7 @@ defmodule Gralkor.GraphitiPoolTest do
           asyncio._gralkor_run(search_utils.episode_fulltext_search(own, 'amber notes', SearchFilters(), None, 5))
           {'wrapped': wrapped.recorded, 'own': own.recorded}
           """,
-        %{"episode_uuids" => episode_uuids}
+        %{"episode_uuids" => episode_uuids, "filter_field" => filter_field}
       )
 
     GenServer.stop(pid)
@@ -2294,7 +2294,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a memory search is run for a group > while neither node labels, edge types, nor Lenses are supplied" do
+  describe "when a memory search is run for a group > while neither node labels, edge types, selected Lenses, nor excluded Lenses are supplied" do
     test "then the single search's filter leaves every node and edge eligible" do
       {_results, recorded} = memory_search_result()
       assert recorded["node_labels"] == nil
@@ -2302,6 +2302,9 @@ defmodule Gralkor.GraphitiPoolTest do
       assert recorded["edge_uuids"] == nil
       assert recorded["node_uuids"] == nil
       assert recorded["episode_uuids"] == nil
+      assert recorded["excluded_edge_uuids"] == nil
+      assert recorded["excluded_node_uuids"] == nil
+      assert recorded["excluded_episode_uuids"] == nil
       assert recorded["lens_queries"] == []
     end
 
@@ -2390,6 +2393,97 @@ defmodule Gralkor.GraphitiPoolTest do
         memory_search_result(lens_scope: %{}, opts: [lenses: ["silent"]])
 
       assert results == %{facts: [], nodes: [], episodes: []}
+    end
+  end
+
+  describe "when a memory search is run for a group > while excluded Lenses are supplied" do
+    test "then the single search's filter rejects episodes whose source description names an excluded Lens" do
+      {_results, recorded} =
+        memory_search_result(lens_scope: lens_scope(), opts: [excluded_lenses: ["alpha"]])
+
+      assert recorded["calls"] == 1
+      assert recorded["excluded_episode_uuids"] == ["lens-episode"]
+      assert recorded["episode_uuids"] == nil
+      assert %{"excluded_suffixes" => [" [lens: alpha]"]} = lens_query(recorded, "ENDS WITH")
+    end
+
+    test "and the single search's filter rejects edges drawn only from such episodes" do
+      {_results, recorded} =
+        memory_search_result(lens_scope: lens_scope(), opts: [excluded_lenses: ["alpha"]])
+
+      assert recorded["excluded_edge_uuids"] == ["alpha-edge"]
+      assert recorded["edge_uuids"] == nil
+
+      edge_query = lens_query(recorded, "RELATES_TO")
+      assert edge_query["excluded_episode_uuids"] == ["lens-episode"]
+      assert edge_query["query"] =~ "all(id IN edge.episodes WHERE id IN $excluded_episode_uuids)"
+    end
+
+    test "and the single search's filter rejects nodes mentioned only by such episodes" do
+      {_results, recorded} =
+        memory_search_result(lens_scope: lens_scope(), opts: [excluded_lenses: ["alpha"]])
+
+      assert recorded["excluded_node_uuids"] == ["mentioned-node"]
+      assert recorded["node_uuids"] == nil
+
+      node_query = lens_query(recorded, "MENTIONS")
+      assert node_query["excluded_episode_uuids"] == ["lens-episode"]
+      assert node_query["query"] =~ "NOT kept.uuid IN $excluded_episode_uuids"
+    end
+
+    test "and the graph library's node and edge queries apply those rejections before their limits" do
+      queries =
+        filter_queries(
+          %{"excluded_node_uuids" => ["node-1"], "excluded_edge_uuids" => ["edge-1"]},
+          "LensSearchFilters"
+        )
+
+      for kind <- ["node", "falkor_node"] do
+        assert "NOT n.uuid IN $gralkor_excluded_node_uuids" in queries[kind]["queries"]
+        assert queries[kind]["params"]["gralkor_excluded_node_uuids"] == ["node-1"]
+      end
+
+      for kind <- ["edge", "falkor_edge"] do
+        assert "NOT e.uuid IN $gralkor_excluded_edge_uuids" in queries[kind]["queries"]
+        assert queries[kind]["params"]["gralkor_excluded_edge_uuids"] == ["edge-1"]
+      end
+    end
+
+    test "and the episode rejection is applied inside the full-text query, before its limit" do
+      %{"wrapped" => [query]} =
+        episode_fulltext_queries(["lens-episode"], "excluded_episode_uuids")
+
+      assert {rejection_at, _} =
+               :binary.match(query["cypher"], "NOT e.uuid IN $gralkor_excluded_episode_uuids")
+
+      assert {limit_at, _} = :binary.match(query["cypher"], "LIMIT $limit")
+      assert rejection_at < limit_at
+      refute query["cypher"] =~ "$gralkor_episode_uuids"
+      assert query["cypher"] =~ "db.idx.fulltext.queryNodes"
+      assert query["gralkor_excluded_episode_uuids"] == ["lens-episode"]
+      assert query["limit"] == 5
+    end
+
+    test "and each rendered fact's sources omit episodes whose source description names an excluded Lens" do
+      {%{facts: [fact | _]}, _recorded} =
+        memory_search_result(lens_scope: lens_scope(), opts: [excluded_lenses: ["alpha"]])
+
+      assert [%{id: "episode-1", source_description: "git log"}] = fact.sources
+    end
+  end
+
+  describe "when a memory search is run for a group > while excluded Lenses are supplied > while nothing in the group was written by an excluded Lens" do
+    test "then the single search's filter leaves every node, edge, and episode eligible" do
+      {results, recorded} =
+        memory_search_result(lens_scope: %{}, opts: [excluded_lenses: ["silent"]])
+
+      assert recorded["calls"] == 1
+
+      for field <- ~w(edge_uuids node_uuids episode_uuids excluded_edge_uuids excluded_node_uuids excluded_episode_uuids) do
+        assert recorded[field] == nil
+      end
+
+      assert length(results.episodes) == 3
     end
   end
 
@@ -2565,6 +2659,9 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.recorded["edge_uuids"] = search_filter.edge_uuids
                 self.recorded["node_uuids"] = getattr(search_filter, "node_uuids", None)
                 self.recorded["episode_uuids"] = getattr(search_filter, "episode_uuids", None)
+                self.recorded["excluded_edge_uuids"] = getattr(search_filter, "excluded_edge_uuids", None)
+                self.recorded["excluded_node_uuids"] = getattr(search_filter, "excluded_node_uuids", None)
+                self.recorded["excluded_episode_uuids"] = getattr(search_filter, "excluded_episode_uuids", None)
                 edges = [
                     _Edge("commit-1 changes parse", "CHANGES", "commit-1", "parse-fn"),
                     _Edge("commit-2 changes render", "CHANGES", "commit-2", "render-fn"),
