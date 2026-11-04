@@ -52,6 +52,8 @@ The goal is one formatter for every memory search result shown to a model. The f
 **Unchanged**
 - Headings, the order of headings and sections, and the `Entities` section last.
 - The same-text-once rule. It compares the complete text of each memory, with all of its lines.
+
+**Extended:** under one heading, a memory whose whole text is another memory's first line is left out, and the longer memory keeps its place. Without this rule, a generalisation would appear twice: once as the multi-line artefact, and once as the one-line fact that Graphiti extracted from it. Before this change, both were the same single line, so the same-text-once rule merged them.
 - The 16,384-character ceiling, the byte budget, and the omission notice. A memory is kept or omitted whole.
 
 **Examples**

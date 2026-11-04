@@ -206,7 +206,7 @@ Entities
 3 more memories omitted (response limit).
 ```
 
-Every memory is one bullet under the heading of whoever wrote it: `Lens: <name>`, `Reflection: <name>`, `Source: direct conversation`, `Source: direct document`, `Source: direct structured record`, `Source: direct` for a direct source without a recorded kind, or `Source: unknown`. A fact with several named sources appears under each distinct source, and the same text appears once under one heading. Entities have no single writer, so they come last under `Entities`: the first line is `name: summary`, or only the name, and each attribute follows on its own indented `key: value` line. An empty search produces `No matching memory.`
+Every memory is one bullet under the heading of whoever wrote it: `Lens: <name>`, `Reflection: <name>`, `Source: direct conversation`, `Source: direct document`, `Source: direct structured record`, `Source: direct` for a direct source without a recorded kind, or `Source: unknown`. A fact with several named sources appears under each distinct source, and the same text appears once under one heading; a memory that is only another memory's first line under that heading, such as the fact extracted from a generalisation, is left out beside it. Entities have no single writer, so they come last under `Entities`: the first line is `name: summary`, or only the name, and each attribute follows on its own indented `key: value` line. An empty search produces `No matching memory.`
 
 Whole Reflection artefacts come first, then facts, then episodes. That order sets both the heading order and which memories survive the response limits.
 
