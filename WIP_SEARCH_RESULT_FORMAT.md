@@ -87,7 +87,7 @@ The lineage repeats the text of each earlier generalisation. That is intended. T
 - The generalisation Reflection runs the same search as `memory_search` (`Gralkor.Client.search/2`, `runner.ex:116`), but it does not use the formatter.
 
 **Change**
-- `default_inference/3` renders `request.stored_information` with `for_model/2`, at the same 65,536-byte default as `memory_search`. The `result` text goes under "Related stored information available to this Reflection step:" in place of `Jason.encode!`.
+- `default_inference/3` renders `request.stored_information` with `for_model/2`, at the same 65,536-byte default as `memory_search`. The formatter owns that default (`for_model/1`, `default_max_bytes/0`), and `memory_search`, `recall/4`, and the Reflection prompt all use it. The `result` text goes under "Related stored information available to this Reflection step:" in place of `Jason.encode!`.
 - The prompt has the same limits as `memory_search`: the 16,384-character ceiling and the byte budget. If prior memory is longer than that, the formatter omits whole memories and adds its omission notice. Before this change the prompt had no limit. The search caps (20 facts, 20 nodes, 5 episodes) keep the usual result within the limit.
 - If `for_model/2` returns an error, `default_inference/3` returns that error as `{:error, reason}` and does not call the model.
 - `request.stored_information` stays structured, so a consumer's own `:inference` function gets the same data as before.
@@ -109,6 +109,11 @@ The lineage repeats the text of each earlier generalisation. That is intended. T
   - the formatter unit test, with multi-line memories
   - the runner unit test, checking the prompt text
   - Functional tests that assert artefact or entity text. Fixtures with `level` will gain `level:` lines.
+  - The memory-adventure Journey, with real services, checks each place a model sees memory:
+    - the agent's `memory_search` text shows each retrieved generalisation's level and lineage
+    - `recall/4` uses the same format inside its untrusted memory block
+    - the later generalisation's built-in inference receives prior generalisations in this format with their levels, and the generalisation it produces sits one level above its lineage
+    - To see the prompt, the Journey passes `reflect/5` an `:inference` function. That function reports each prompt, then runs the real built-in inference and model unchanged.
 - **Docs:** these places describe the old format, and each one must change:
   - the `MemorySearchPresentation` moduledoc
   - the `MemorySearch` moduledoc ("every memory is one line")
