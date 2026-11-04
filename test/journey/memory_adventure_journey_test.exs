@@ -689,7 +689,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                %{agent_id: @operator_two, gralkor_runtime: agent}
              )
 
-    {first_generalisation, later_generalisation, work_notes_generalisation_artefact} =
+    {first_generalisation, later_generalisation, work_notes_generalisation_artefact,
+     later_generalisation_prompts} =
       evolve_shared_generalisation(agent)
 
     assert %Artefact{} =
@@ -1046,6 +1047,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       work_notes_lens_search: work_notes_lens_search,
       lens_free_search: lens_free_search,
       implicit_memory: contains_all?(implicit_memory, ["juniper", "muscat"]),
+      recall_text: implicit_memory,
+      later_generalisation_prompts: later_generalisation_prompts,
       direct_capture_episodes: direct_capture_episodes,
       personal_chat_episodes: personal_chat_episodes,
       erl_visible_to_other_operator: learning_artefact?(other_operator_erl),
@@ -1156,14 +1159,19 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                source_description: "cross-domain reversible change review"
              })
 
+    prompt_ref = make_ref()
+
     later_generalisation_artefact =
       invoke_reflection!(
         agent,
         "generalisations",
         @operator_one,
         later_ingestion_id,
-        later_representations
+        later_representations,
+        inference: recording_built_in_inference(self(), prompt_ref)
       )
+
+    later_generalisation_prompts = received_prompts(prompt_ref)
 
     later_generalisation =
       find_generalisation(later_generalisation_artefact, fn generalisation ->
@@ -1172,7 +1180,27 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
           match?([_ | _], generalisation["evolves_from"])
       end)
 
-    {first_generalisation, later_generalisation, first_generalisation_artefact}
+    {first_generalisation, later_generalisation, first_generalisation_artefact,
+     later_generalisation_prompts}
+  end
+
+  # The real built-in inference and model, observed: each step's prompt is reported
+  # to the test before the unchanged Jido ReAct run sends it to the provider.
+  defp recording_built_in_inference(test_pid, prompt_ref) do
+    fn request ->
+      Gralkor.Reflection.Runner.default_inference(request, fn prompt, config, opts ->
+        send(test_pid, {prompt_ref, prompt})
+        Jido.AI.Reasoning.ReAct.run(prompt, config, opts)
+      end)
+    end
+  end
+
+  defp received_prompts(prompt_ref) do
+    receive do
+      {^prompt_ref, prompt} -> [prompt | received_prompts(prompt_ref)]
+    after
+      0 -> []
+    end
   end
 
   defp invoke_reflection!(
@@ -1180,14 +1208,16 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          reflection_name,
          operator_id,
          invocation_id,
-         representations
+         representations,
+         opts \\ []
        ) do
     invoke_reflection_result!(
       agent,
       reflection_name,
       operator_id,
       invocation_id,
-      representations
+      representations,
+      opts
     ).artefact
   end
 
@@ -1196,7 +1226,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
          reflection_name,
          operator_id,
          invocation_id,
-         representations
+         representations,
+         opts \\ []
        ) do
     test_pid = self()
     callback_ref = make_ref()
@@ -1211,7 +1242,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     callback = fn result -> send(test_pid, {callback_ref, result}) end
 
     assert {:ok, ^invocation_id} =
-             Client.reflect(agent, reflection_name, invocation, callback)
+             Client.reflect(agent, reflection_name, invocation, callback, opts)
 
     receive do
       {^callback_ref,
