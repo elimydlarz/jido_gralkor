@@ -359,6 +359,55 @@ defmodule Gralkor.Reflection.RunnerTest do
       prove_built_in_inference_request()
     end
 
+    test "and the stored information is presented in the memory search format, including each generalisation's level and lineage" do
+      prompt = built_in_prompt(default_inference_request())
+
+      {:ok, %{result: formatted}} =
+        JidoGralkor.MemorySearchPresentation.for_model(stored_generalisations(), 65_536)
+
+      assert stored_section(prompt) == formatted
+
+      assert formatted ==
+               "Reflection: generalisations\n" <>
+                 "- Gate every customer-impacting release behind a checkpoint\n" <>
+                 "  level: 2\n" <>
+                 "  evolves_from:\n" <>
+                 "  - Gate critical deployments behind a canary\n" <>
+                 "    level: 1"
+    end
+
+    test "and the stored information is not presented as JSON" do
+      section = stored_section(built_in_prompt(default_inference_request()))
+
+      refute section =~ Jason.encode!(stored_generalisations())
+      assert {:error, _} = Jason.decode(section)
+      refute section =~ "artefact-one"
+      refute section =~ ~s("level")
+    end
+
+    test "and the representations and output contract remain JSON" do
+      prompt = built_in_prompt(default_inference_request())
+
+      assert prompt_json(
+               prompt,
+               "Lensed representations available to this Reflection step:",
+               nil
+             ) == [
+               %{
+                 "content" => "Deployment evidence.",
+                 "id" => "representation-one",
+                 "lens" => "observations",
+                 "result" => "ok"
+               }
+             ]
+
+      assert prompt_json(
+               prompt,
+               "Return only one JSON object satisfying this exact output contract:",
+               nil
+             ) == %{"answer" => "string"}
+    end
+
     test "and it supplies the host tools and a tool context whose operator identity comes from the invocation while every other supplied field remains unchanged" do
       prove_built_in_inference_context()
     end
@@ -376,6 +425,48 @@ defmodule Gralkor.Reflection.RunnerTest do
   describe "when built-in inference is invoked for a step > if the provider fails or returns invalid JSON or a non-object JSON value" do
     test "then built-in inference returns the identified error" do
       prove_built_in_inference_errors()
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > if the stored information cannot be formatted" do
+    test "then built-in inference returns the formatting error without calling the model" do
+      test_pid = self()
+
+      caller = fn _prompt, _config, _opts ->
+        send(test_pid, :model_called)
+        %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
+      end
+
+      assert {:error, {:memory_search_budget_too_small, %{max_bytes: 1}}} =
+               Runner.default_inference(default_inference_request(), caller,
+                 model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end,
+                 stored_information_max_bytes: 1
+               )
+
+      refute_received :model_called
+    end
+  end
+
+  describe "when a consumer inference function is supplied" do
+    test "then it receives the stored information as the structured search results" do
+      test_pid = self()
+      stored = stored_generalisations()
+      search = fn _owner, _request -> {:ok, stored} end
+
+      inference = fn request ->
+        send(test_pid, {:stored_information, request.stored_information})
+        {:ok, output_for(request)}
+      end
+
+      assert {:ok, %Artefact{}} =
+               Runner.run(generalisation_reflection(), invocation(),
+                 runtime_owner: self(),
+                 related_memory_search: search,
+                 inference: inference
+               )
+
+      assert_receive {:stored_information, ^stored}
+      assert is_list(stored) and is_map(hd(stored))
     end
   end
 
@@ -741,11 +832,7 @@ defmodule Gralkor.Reflection.RunnerTest do
              }
            ]
 
-    assert prompt_json(
-             prompt,
-             "Related stored information available to this Reflection step:",
-             "Return only one JSON object"
-           ) == [%{"content" => "stored observation"}]
+    assert stored_section(prompt) =~ "Gate every customer-impacting release behind a checkpoint"
 
     assert prompt_json(
              prompt,
@@ -754,6 +841,64 @@ defmodule Gralkor.Reflection.RunnerTest do
            ) == %{"answer" => "string"}
 
     refute prompt =~ "must not leak"
+  end
+
+  defp built_in_prompt(request) do
+    test_pid = self()
+
+    caller = fn prompt, _config, _opts ->
+      send(test_pid, {:built_in_prompt, prompt})
+      %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
+    end
+
+    assert {:ok, _} =
+             Runner.default_inference(request, caller,
+               model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end
+             )
+
+    assert_receive {:built_in_prompt, prompt}
+    prompt
+  end
+
+  defp stored_section(prompt) do
+    [_, rest] =
+      String.split(prompt, "Related stored information available to this Reflection step:\n",
+        parts: 2
+      )
+
+    [section | _] = String.split(rest, "\n\nReturn only one JSON object", parts: 2)
+    String.trim(section)
+  end
+
+  defp stored_generalisations do
+    [
+      %{
+        destination: "generalisations",
+        facts: [],
+        nodes: [],
+        episodes: [
+          %{
+            uuid: "episode-one",
+            reflection: "generalisations",
+            source_description: "reflection:generalisations",
+            artefact: %{
+              id: "artefact-one",
+              payload: %{
+                "generalisations" => [
+                  %{
+                    "content" => "Gate every customer-impacting release behind a checkpoint",
+                    "level" => 2,
+                    "evolves_from" => [
+                      %{"content" => "Gate critical deployments behind a canary", "level" => 1}
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
   end
 
   defp prompt_json(prompt, heading, _next_heading) do
@@ -931,7 +1076,7 @@ defmodule Gralkor.Reflection.RunnerTest do
           internal_note: "must not leak"
         }
       ],
-      stored_information: [%{content: "stored observation"}],
+      stored_information: stored_generalisations(),
       tools: [SampleTool],
       tool_context: %{
         operator_id: "conflicting-operator",
