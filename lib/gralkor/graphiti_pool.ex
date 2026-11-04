@@ -67,9 +67,13 @@ defmodule Gralkor.GraphitiPool do
   #
   # * several node labels become `(n:A OR n:B)` for FalkorDB;
   # * a `LensSearchFilters` carrying `node_uuids` adds `n.uuid IN …` to every
-  #   node search;
-  # * one carrying `episode_uuids` runs the FalkorDB episode full-text query
-  #   with `e.uuid IN …` before its limit.
+  #   node search, and one carrying `excluded_node_uuids` adds
+  #   `NOT n.uuid IN …`;
+  # * one carrying `excluded_edge_uuids` adds `NOT e.uuid IN …` to every edge
+  #   search (graphiti's own `edge_uuids` admits edges);
+  # * one carrying `episode_uuids` or `excluded_episode_uuids` runs the FalkorDB
+  #   episode full-text query with `e.uuid IN …` or `NOT e.uuid IN …` before
+  #   its limit.
   #
   # Without those fields every query is graphiti's own. These are graphiti
   # internals, so each wrapped or reused function is checked for its pinned
@@ -125,6 +129,9 @@ defmodule Gralkor.GraphitiPool do
       class LensSearchFilters(SearchFilters):
           node_uuids: list[str] | None = None
           episode_uuids: list[str] | None = None
+          excluded_node_uuids: list[str] | None = None
+          excluded_edge_uuids: list[str] | None = None
+          excluded_episode_uuids: list[str] | None = None
 
       def label_disjunction(queries, filters, provider):
           labels = list(filters.node_labels or [])
@@ -154,6 +161,10 @@ defmodule Gralkor.GraphitiPool do
               if node_uuids is not None:
                   queries = queries + ['n.uuid IN $gralkor_node_uuids']
                   params = {**params, 'gralkor_node_uuids': list(node_uuids)}
+              excluded_node_uuids = getattr(filters, 'excluded_node_uuids', None)
+              if excluded_node_uuids is not None:
+                  queries = queries + ['NOT n.uuid IN $gralkor_excluded_node_uuids']
+                  params = {**params, 'gralkor_excluded_node_uuids': list(excluded_node_uuids)}
               return queries, params
           constructed._gralkor_original = original
           return constructed
@@ -161,14 +172,20 @@ defmodule Gralkor.GraphitiPool do
       def edge_constructor(original):
           def constructed(filters, provider):
               queries, params = original(filters, provider)
-              return label_disjunction(list(queries), filters, provider), params
+              queries = label_disjunction(list(queries), filters, provider)
+              excluded_edge_uuids = getattr(filters, 'excluded_edge_uuids', None)
+              if excluded_edge_uuids is not None:
+                  queries = queries + ['NOT e.uuid IN $gralkor_excluded_edge_uuids']
+                  params = {**params, 'gralkor_excluded_edge_uuids': list(excluded_edge_uuids)}
+              return queries, params
           constructed._gralkor_original = original
           return constructed
 
       def episode_search(original):
           async def episode_fulltext_search(driver, query, _search_filter, group_ids=None, limit=search_utils.RELEVANT_SCHEMA_LIMIT):
               episode_uuids = getattr(_search_filter, 'episode_uuids', None)
-              if episode_uuids is None:
+              excluded_episode_uuids = getattr(_search_filter, 'excluded_episode_uuids', None)
+              if episode_uuids is None and excluded_episode_uuids is None:
                   return await original(driver, query, _search_filter, group_ids, limit)
               if driver.search_interface or driver.provider != GraphProvider.FALKORDB:
                   raise RuntimeError(
@@ -178,6 +195,13 @@ defmodule Gralkor.GraphitiPool do
               if fuzzy_query == '':
                   return []
               params = {}
+              uuid_filter = ''
+              if episode_uuids is not None:
+                  uuid_filter += ' AND e.uuid IN $gralkor_episode_uuids'
+                  params['gralkor_episode_uuids'] = list(episode_uuids)
+              if excluded_episode_uuids is not None:
+                  uuid_filter += ' AND NOT e.uuid IN $gralkor_excluded_episode_uuids'
+                  params['gralkor_excluded_episode_uuids'] = list(excluded_episode_uuids)
               group_filter = ''
               if group_ids is not None:
                   group_filter = '\\nAND e.group_id IN $group_ids'
@@ -186,7 +210,8 @@ defmodule Gralkor.GraphitiPool do
                   get_nodes_query('episode_content', '$query', limit=limit, provider=driver.provider)
                   + '\\nYIELD node AS episode, score'
                   + '\\nMATCH (e:Episodic)'
-                  + '\\nWHERE e.uuid = episode.uuid AND e.uuid IN $gralkor_episode_uuids'
+                  + '\\nWHERE e.uuid = episode.uuid'
+                  + uuid_filter
                   + group_filter
                   + '\\nRETURN\\n'
                   + episode_return
@@ -197,7 +222,6 @@ defmodule Gralkor.GraphitiPool do
                   query=fuzzy_query,
                   limit=limit,
                   routing_='r',
-                  gralkor_episode_uuids=list(episode_uuids),
                   **params,
               )
               return [get_episodic_node_from_record(record) for record in records]
@@ -216,7 +240,7 @@ defmodule Gralkor.GraphitiPool do
   """
 
   @fact_rendering """
-  async def render_facts(g, edges, lens_names=(), lens_suffixes=()):
+  async def render_facts(g, edges, lens_names=(), lens_suffixes=(), excluded_suffixes=()):
       from graphiti_core.nodes import EpisodicNode
       episode_ids = list(dict.fromkeys(
           episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
@@ -272,6 +296,7 @@ defmodule Gralkor.GraphitiPool do
               for episode_id in (getattr(edge, "episodes", None) or [])
               if episode_id in episodes_by_id
               and (not lens_names or (episodes_by_id[episode_id].source_description or "").endswith(lens_suffixes))
+              and not (excluded_suffixes and (episodes_by_id[episode_id].source_description or "").endswith(excluded_suffixes))
           ]
           if sources:
               fact["sources"] = sources
