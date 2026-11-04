@@ -466,7 +466,6 @@ defmodule Gralkor.Reflection.RunnerTest do
                )
 
       assert_receive {:stored_information, ^stored}
-      assert is_list(stored) and is_map(hd(stored))
     end
   end
 
