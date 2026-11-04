@@ -466,7 +466,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                )
 
       assert text ==
-               "Reflection: generalisations\n- Use canaries\n\nLens: observations\n- observed rollout (source: functional)"
+               "Reflection: generalisations\n- Use canaries\n  level: 2\n\nLens: observations\n- observed rollout (source: functional)"
     end
 
     test "and the presentation adds no artefact identifiers" do
