@@ -1092,12 +1092,71 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       {:destinations, ["first", " "], ~s(invalid Destination name " ")},
       {:lenses, ["first-alpha", "missing"], ~s(unknown Lens "missing")},
       {:lenses, "first-alpha", ~s(search lenses must be a list, got "first-alpha")},
-      {:lenses, ["first-alpha", " "], ~s(invalid Lens name " ")}
+      {:lenses, ["first-alpha", " "], ~s(invalid Lens name " ")},
+      {:excluded_lenses, ["first-alpha", "missing"], ~s(unknown excluded Lens "missing")},
+      {:excluded_lenses, "first-alpha",
+       ~s(search excluded_lenses must be a list, got "first-alpha")},
+      {:excluded_lenses, ["first-alpha", " "], ~s(invalid excluded Lens name " ")}
     ]
   end
 
   defp lens_search(lenses, overrides \\ []) do
     search([query: "amber", destinations: ["first"], lenses: lenses] ++ overrides)
+  end
+
+  defp exclusion_search(excluded_lenses, overrides \\ []) do
+    search(
+      [query: "amber", destinations: ["first"], excluded_lenses: excluded_lenses] ++ overrides
+    )
+  end
+
+  # The excluded `first-beta` episode also mentions `amber alpha lesson`, which
+  # the kept `first-alpha` episode mentions too.
+  defp seed_excluded_mention_of_alpha_lesson(%{database: database} = graph) do
+    Pythonx.eval(
+      """
+      graph = database.select_graph('g_' + b'first'.hex())
+      graph.query('''
+        MATCH (beta:Episodic) WHERE beta.source_description ENDS WITH ' [lens: first-beta]'
+        MATCH (al:Entity {uuid: 'alpha-lesson'})
+        CREATE (beta)-[:MENTIONS {uuid: 'mentions-beta-al', group_id: beta.group_id, created_at: beta.created_at}]->(al)
+      ''')
+      """,
+      %{"database" => database}
+    )
+
+    graph
+  end
+
+  # Thirty facts and entities and ten episodes written only through the
+  # `first-beta` Lens, each matching the query more strongly than any kept result.
+  defp seed_competing_excluded_memory(%{database: database} = graph) do
+    Pythonx.eval(
+      """
+      graph = database.select_graph('g_' + b'first'.hex())
+      graph.query('''
+        MATCH (beta:Episodic) WHERE beta.source_description ENDS WITH ' [lens: first-beta]'
+        UNWIND range(1, 30) AS i
+        CREATE (n:Entity:Project {uuid: 'excluded-' + toString(i), name: 'amber amber amber ' + toString(i), group_id: beta.group_id, summary: 'amber amber amber', created_at: beta.created_at}),
+               (beta)-[:MENTIONS {uuid: 'excluded-mention-' + toString(i), group_id: beta.group_id, created_at: beta.created_at}]->(n),
+               (n)-[e:RELATES_TO {uuid: 'excluded-fact-' + toString(i), name: 'OWNS', fact: 'amber amber amber ' + toString(i), episodes: [beta.uuid], group_id: beta.group_id, created_at: beta.created_at, valid_at: beta.valid_at}]->(n)
+        SET n.name_embedding = vecf32([0.1, 0.2, 0.3]),
+            e.fact_embedding = vecf32([0.1, 0.2, 0.3])
+      ''')
+      graph.query('''
+        MATCH (beta:Episodic) WHERE beta.source_description ENDS WITH ' [lens: first-beta]'
+        WITH beta LIMIT 1
+        UNWIND range(1, 10) AS i
+        CREATE (e:Episodic)
+        SET e = properties(beta),
+            e.uuid = 'excluded-episode-' + toString(i),
+            e.content = 'amber amber amber ' + toString(i)
+      ''')
+      """,
+      %{"database" => database}
+    )
+
+    graph
   end
 
   defp seed_first_episode(episode),
