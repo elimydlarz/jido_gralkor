@@ -638,6 +638,16 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       assert Presentation.for_model(input, envelope_bytes(expected)) == {:ok, expected}
     end
 
+    test "and a caller that supplies no byte budget gets the 65,536-byte default that every model-facing presentation shares" do
+      assert Presentation.default_max_bytes() == 65_536
+
+      wide =
+        facts(for n <- 1..20, do: fact("#{n} " <> String.duplicate("λ", 1_500), [%{lens: "n"}]))
+
+      assert Presentation.for_model(wide) == Presentation.for_model(wide, 65_536)
+      refute Presentation.for_model(wide) == Presentation.for_model(wide, 16_384)
+    end
+
     test "and headings and omission notices count towards the 16384-character ceiling" do
       texts = for number <- 1..5, do: "#{number} " <> String.duplicate("x", 3_998)
       memories = Enum.map(texts, &fact(&1, [%{lens: "notes"}]))

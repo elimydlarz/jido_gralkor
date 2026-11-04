@@ -1528,7 +1528,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              })
 
     assert {:ok, %{result: ^text}} =
-             JidoGralkor.MemorySearchPresentation.for_model(results, 65_536)
+             JidoGralkor.MemorySearchPresentation.for_model(results)
 
     results
   end

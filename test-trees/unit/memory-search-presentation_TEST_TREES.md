@@ -75,6 +75,7 @@ when one memory is longer than 4,000 characters
 
 when formatted results must fit response limits
   then an exact-fit response retains every memory
+  and a caller that supplies no byte budget gets the 65,536-byte default that every model-facing presentation shares
   and headings and omission notices count towards the 16384-character ceiling
   and UTF-8 bytes and JSON escaping count towards the complete-envelope byte budget
   and a bullet that exceeds either limit is omitted whole while later fitting bullets remain eligible
