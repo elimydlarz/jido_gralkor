@@ -249,7 +249,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "when a caller searches memory > where the Lens selector is omitted or empty" do
+  describe "when a caller searches memory > where the Lens selector is omitted or empty > and no Lens is excluded" do
     test "then results written directly or by every Lens or Destination artefact output can contribute" do
       start_native_graph()
 
@@ -301,7 +301,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "when a caller searches memory > where one or more Lenses are supplied" do
+  describe "when a caller searches memory > where one or more Lenses are supplied > and no Lens is excluded" do
     test "then only episodes written through any supplied Lens are returned" do
       start_native_graph() |> seed_lens_graph()
 
@@ -431,7 +431,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "when a caller searches memory > where one or more Lenses are supplied > while the search is made through an agent's runtime" do
+  describe "when a caller searches memory > where one or more Lenses are supplied > and no Lens is excluded > while the search is made through an agent's runtime" do
     test "then Lens names resolve from that runtime's configuration" do
       start_supervised!(
         {JidoGralkor.Runtime,
@@ -808,7 +808,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  describe "if search supplies any Destination or Lens selection that is not a list of registered non-blank names" do
+  describe "if search supplies any Destination selection, Lens selection, or Lens exclusion that is not a list of registered non-blank names" do
     test "then search fails before any Destination query is started" do
       for {selector, selection, message} <- invalid_selections() do
         assert_raise ArgumentError, ~r/#{Regex.escape(message)}/, fn ->
@@ -829,7 +829,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       end
     end
 
-    test "and the error identifies whether the rejected selection was for Destinations or Lenses" do
+    test "and the error identifies whether the rejected selection was for Destinations, Lenses, or excluded Lenses" do
       for {selector, selection, _message} <- invalid_selections() do
         error = assert_raise ArgumentError, fn -> search([{selector, selection}]) end
 
