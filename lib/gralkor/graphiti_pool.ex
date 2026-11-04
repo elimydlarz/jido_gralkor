@@ -451,6 +451,16 @@ defmodule Gralkor.GraphitiPool do
       before ranking and limits. Fact sources keep only selected-Lens episodes.
       When nothing in the group matches, no graph search runs and every kind
       is empty.
+    * `:excluded_lenses` — optional `[String.t()]` Lens names whose writes are
+      left out, with every other writer kept. Episodes whose source description
+      ends with an excluded ` [lens: NAME]` marker are rejected; so are edges
+      whose every originating episode is such an episode, and nodes mentioned
+      only by such episodes. An edge or node another writer's episode also
+      supports stays, and fact sources omit the excluded episodes. The
+      rejections are `NOT … IN` filters added to graphiti's node, edge, and
+      FalkorDB episode full-text queries, so they apply before ranking and
+      limits. When the group holds nothing an excluded Lens wrote, the search
+      runs unfiltered.
   """
   @spec search_memory(
           GenServer.server(),
