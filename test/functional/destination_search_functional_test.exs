@@ -555,13 +555,10 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert {:ok, [%{facts: facts, episodes: episodes}]} = exclusion_search(["first-beta"])
 
       assert [%{reflection: "review", artefact: %{id: "amber-review"}}] =
-               Enum.filter(episodes, &Map.has_key?(&1, :artefact))
+               artefact_episodes(episodes)
 
-      assert episodes |> Enum.map(&Map.get(&1, :content)) |> Enum.reject(&is_nil/1) |> Enum.sort() ==
-               ["amber alpha", "amber direct", "amber historical"]
-
-      assert facts |> Enum.map(& &1.fact) |> Enum.sort() ==
-               ["amber alpha", "amber direct", "amber historical"]
+      assert episode_contents(episodes) == ["amber alpha", "amber direct", "amber historical"]
+      assert fact_texts(facts) == ["amber alpha", "amber direct", "amber historical"]
     end
 
     test "and excluded results cannot consume any per-Destination limit" do
