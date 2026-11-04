@@ -82,7 +82,8 @@ defmodule Gralkor.Destination.Storage.Graphiti do
            Keyword.fetch!(opts, :limits),
            node_labels: Keyword.get(opts, :entity_types),
            edge_types: Keyword.get(opts, :edge_types),
-           lenses: Keyword.get(opts, :lenses)
+           lenses: Keyword.get(opts, :lenses),
+           excluded_lenses: Keyword.get(opts, :excluded_lenses)
          ) do
       {:ok, %{facts: facts, nodes: nodes, episodes: episodes}} ->
         with {:ok, episodes} <- structure_episodes(episodes) do

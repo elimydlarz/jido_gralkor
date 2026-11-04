@@ -50,7 +50,12 @@ defmodule Gralkor.Destination.Storage.InMemory do
 
     case Keyword.get(opts, :lenses, []) do
       [] ->
-        episodes = LensStorage.episodes(graph_id)
+        excluded_lenses = Keyword.get(opts, :excluded_lenses, [])
+
+        episodes =
+          graph_id
+          |> LensStorage.episodes()
+          |> Enum.reject(&(Map.get(&1, :lens) in excluded_lenses))
 
         {:ok,
          %{
@@ -64,6 +69,9 @@ defmodule Gralkor.Destination.Storage.InMemory do
     end
   end
 
+  # Excluded Lenses (above) leave out their episodes and the facts this backend
+  # derives from them; everything else remains.
+  #
   # Only what the selected Lenses wrote: their episodes and the facts this
   # backend derives from them. Direct writes and Destination artefacts never
   # match a Lens. This backend extracts no entities, so it returns no nodes.
