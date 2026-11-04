@@ -173,7 +173,7 @@ A Reflection-written episode carries its whole artefact as structured fields ins
 
 A Reflection episode appears only once its extraction has durably completed. Reflection payload keys and values retain their stored shape; Graphiti JSON object keys are strings. Only Reflection-provenanced episode bodies are decoded. Lens-authored documents, Jira records, and even text that happens to look like an artefact remain text in `content`. A malformed completed Reflection body returns `{:error, {:invalid_reflection_artefact, reflection_name}}`; search does not return a manufactured partial response. Private graph identities still require the explicit namespace migration described above.
 
-`Gralkor.Client.search/1,2` never applies model presentation or budgeting. Readable presentation is separate: call `JidoGralkor.MemorySearchPresentation.for_model/2` explicitly. `memory_search` and legacy `recall` both use it.
+`Gralkor.Client.search/1,2` never applies model presentation or budgeting. Readable presentation is separate: call `JidoGralkor.MemorySearchPresentation.for_model/2` explicitly. `memory_search`, legacy `recall`, and the packaged generalisation Reflection's built-in inference prompt all use it; a consumer `:inference` function still receives the structured results.
 
 ### Readable memory search
 
@@ -182,9 +182,15 @@ A Reflection episode appears only once its extraction has durably completed. Ref
 ```text
 Reflection: generalisations
 - Prefer small, reversible changes to Payments migrations. (valid from 2026-10-29)
+  level: 2
+  evolves_from:
+  - Prefer reversible changes to Payments schema migrations.
+    level: 1
 
 Reflection: erl
-- approach: moved Vacuum to 04:00; lesson: Keep the jobs apart; success: true (valid from 2026-10-27)
+- approach: moved Vacuum to 04:00 (valid from 2026-10-27)
+  lesson: Keep the jobs apart
+  success: true
 
 Lens: jira
 - Payment retries must use an idempotency key. (valid from 2026-10-30; source: PAY-142)
@@ -200,13 +206,13 @@ Entities
 3 more memories omitted (response limit).
 ```
 
-Every memory is one line of plain text under the heading of whoever wrote it: `Lens: <name>`, `Reflection: <name>`, `Source: direct conversation`, `Source: direct document`, `Source: direct structured record`, `Source: direct` for a direct source without a recorded kind, or `Source: unknown`. A fact with several named sources appears under each distinct source, and the same text appears once under one heading. Entities have no single writer, so they come last under `Entities` with their name, summary, and attributes. An empty search produces `No matching memory.`
+Every memory is one bullet under the heading of whoever wrote it: `Lens: <name>`, `Reflection: <name>`, `Source: direct conversation`, `Source: direct document`, `Source: direct structured record`, `Source: direct` for a direct source without a recorded kind, or `Source: unknown`. A fact with several named sources appears under each distinct source, and the same text appears once under one heading. Entities have no single writer, so they come last under `Entities`: the first line is `name: summary`, or only the name, and each attribute follows on its own indented `key: value` line. An empty search produces `No matching memory.`
 
 Whole Reflection artefacts come first, then facts, then episodes. That order sets both the heading order and which memories survive the response limits.
 
-Reflection artefacts and structured-record episodes become readable text without any Reflection-specific code. An object with a `content` string shows only that text, which keeps `level` and `evolves_from` out of generalisations; an object with one field shows that field's value; any other object shows `key: value` pairs separated by semicolons; and each item of a top-level list is its own bullet.
+Reflection artefacts and structured-record episodes become readable text without any Reflection-specific code, and keep every field they carry. A payload object with exactly one key, such as `generalisations`, is presented as that key's value, once and only at the outer level, and each item of a top-level list is its own bullet. A bullet's first line is an object's `content` string, or else its first field in alphabetical order as `key: value`. Every other field follows on its own line, two spaces further in: fields that fit on one line (a plain value, or a comma-separated list of plain values) first, in alphabetical order, then nested fields in alphabetical order. A list containing an object becomes `key:` followed by one nested bullet per item, laid out the same way, and a nested object becomes `key:` followed by its own fields. Null, empty strings, empty lists, empty objects, and fields containing only those are left out. Record metadata such as uuids, artefact identifiers, and Destinations never appears. The lineage in `evolves_from` repeats each earlier generalisation's text; the formatter presents what the payload carries.
 
-A fact or episode ends with when it was true and where it came from: `(valid from <date>)`, or `(valid from <date> to <date>)` once it was invalidated or expired, then `; source: <description>`. The start is when it became true, or when it was recorded if that is missing, and an invalidated fact with no start shows `(valid until <date>)`. A fact drawn from several episodes lists each distinct source description once. A source description never repeats its Lens marker, and one that only names a Reflection is left out because the heading already says so. Any memory is cut only past 4,000 characters, and is then marked `… (truncated)` ahead of its dates and source.
+The first line of a fact or episode ends with when it was true and where it came from: `(valid from <date>)`, or `(valid from <date> to <date>)` once it was invalidated or expired, then `; source: <description>`. The start is when it became true, or when it was recorded if that is missing, and an invalidated fact with no start shows `(valid until <date>)`. A fact drawn from several episodes lists each distinct source description once. A source description never repeats its Lens marker, and one that only names a Reflection is left out because the heading already says so. Any memory is cut only past 4,000 characters, counting all of its lines with their indentation, and `… (truncated)` then ends the last line kept; the dates and source still follow on the first line and do not count toward the cut.
 
 `JidoGralkor.MemorySearchPresentation.for_model(results, max_bytes)` is the explicit reusable formatter. It leaves the input unchanged and returns `{:ok, %{result: text}}`. Consumers can call the structured search API and choose their own formatter instead.
 

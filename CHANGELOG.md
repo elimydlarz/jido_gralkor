@@ -2,11 +2,14 @@
 
 ## [Unreleased]
 
-Everything presented to an agent now has one format: every memory is one line of plain text under the heading of whoever wrote it. This changes the text agents receive; the structured `Gralkor.Client.search/1,2` results are unchanged.
+Everything presented to a model now has one format: every memory is one bullet under the heading of whoever wrote it, with its main text first and every other field it carries on indented lines. This changes the text agents and the generalisation Reflection receive; the structured `Gralkor.Client.search/1,2` results are unchanged.
 
 ### Changed
 - **Breaking:** `memory_search` no longer has `Facts` or `Episodes` sections, `[Lens: x]` bracket labels, or artefact identifiers. Whole Reflection artefacts come first, then facts, then episodes, under `Lens:`, `Reflection:`, or `Source:` headings; entities stay last under `Entities`. **Migrate:** update anything that parses or asserts this text, or read structured results from `Gralkor.Client.search/1,2`.
-- Reflection artefacts and structured-record episodes appear as readable text instead of raw JSON, so generalisations reach the agent whole.
+- Reflection artefacts and structured-record episodes appear as readable text instead of raw JSON, and keep every field. A bullet's first line is an object's `content`, or else its first field as `key: value`; every other field follows on its own indented `key: value` line, one-line fields then nested ones, each alphabetical; lists of objects become nested bullets; empty values are left out. A generalisation now shows its `level` and each `evolves_from` snapshot. Only a payload's single outer key, such as `generalisations`, is unwrapped.
+- Entity attributes appear on their own indented `key: value` lines instead of in brackets after the summary.
+- The date and source suffix ends a memory's first line, and the 4,000-character cut counts all of a memory's lines.
+- **Breaking:** the packaged generalisation Reflection's built-in inference prompt presents prior memory in this format, within the same 65,536-byte and 16,384-character limits as `memory_search`, instead of as unbounded JSON. A consumer `:inference` function still receives structured `stored_information`. **Migrate:** a custom prompt that needs the raw records should supply its own `:inference` function.
 - Episodes are no longer cut at 280 characters. Any memory is cut only past 4,000 characters, and says so.
 - Each fact and episode ends with when it was true and where it came from, as in `(valid from 2026-10-02 to 2026-10-12; source: incident review)`. Invalidated facts previously looked current in `memory_search`.
 - Episode search results carry `valid_at` and `created_at` when Graphiti records them.
