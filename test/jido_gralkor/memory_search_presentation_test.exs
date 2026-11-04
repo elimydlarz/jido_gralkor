@@ -81,8 +81,10 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       assert rendered([result("global", [extracted, other_heading], [], [generalisation])]) ==
                "Reflection: generalisations\n- Use canaries\n  level: 2\n\nLens: notes\n- Use canaries"
 
-      assert rendered([result("global", [extracted], [], [])] ++
-                        [result("generalisations", [], [], [generalisation])]) ==
+      assert rendered(
+               [result("global", [extracted], [], [])] ++
+                 [result("generalisations", [], [], [generalisation])]
+             ) ==
                "Reflection: generalisations\n- Use canaries\n  level: 2"
     end
 
