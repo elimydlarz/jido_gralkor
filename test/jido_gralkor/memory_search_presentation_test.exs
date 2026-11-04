@@ -4,15 +4,25 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
 
   @omitted_one "1 more memory omitted (response limit)."
 
+  @wip_examples "WIP_SEARCH_RESULT_FORMAT.md"
+                |> File.read!()
+                |> String.split("**Examples**\n\n```\n", parts: 2)
+                |> List.last()
+                |> String.split("```", parts: 2)
+                |> hd()
+
   describe "when the memory search formatter is called" do
-    test "then every memory is one line of plain text under the heading of its writer" do
+    test "then every memory is one bullet under the heading of its writer, its first line its main text and each other field on its own indented line" do
       input = [
         result("first", [fact("first\nfact", [%{lens: "notes"}])], [], [
-          episode("first   episode", %{lens: "notes"})
+          episode("first   episode", %{lens: "notes"}),
+          artefact("lessons", %{"content" => "a\nlesson", "owner" => "Platform  team"})
         ])
       ]
 
-      assert rendered(input) == "Lens: notes\n- first fact\n- first episode"
+      assert rendered(input) ==
+               "Reflection: lessons\n- a lesson\n  owner: Platform team\n\n" <>
+                 "Lens: notes\n- first fact\n- first episode"
     end
 
     test "and whole Reflection artefacts come first, then facts, then episodes" do
@@ -69,12 +79,32 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       refute text =~ "Excerpt"
     end
 
-    test "and the formatter adds no Destination, artefact identifier, level, or lineage metadata" do
-      payload = %{
+    test "and the formatter adds no record metadata such as a Destination, an artefact identifier, or a uuid" do
+      episode =
+        artefact("lessons", %{"lesson" => "Use canaries"})
+        |> Map.merge(%{uuid: "episode-uuid", group_id: "g_676c6f62616c", destination: "global"})
+
+      node = %{entity("Atlas") | summary: "A rollout"} |> Map.put(:uuid, "node-uuid")
+
+      text = rendered([result("global", [], [node], [episode])])
+
+      assert text == "Reflection: lessons\n- lesson: Use canaries\n\nEntities\n- Atlas: A rollout"
+      refute text =~ "artefact-id"
+      refute text =~ "uuid"
+      refute text =~ "global"
+    end
+
+    test "and level and lineage appear only as fields the payload itself carries" do
+      with_lineage = %{
         "generalisations" => [%{"content" => "Use canaries", "level" => 2, "evolves_from" => []}]
       }
 
-      assert rendered([result("global", [], [], [artefact("lessons", payload)])]) ==
+      assert rendered([result("global", [], [], [artefact("lessons", with_lineage)])]) ==
+               "Reflection: lessons\n- Use canaries\n  level: 2"
+
+      without = %{"generalisations" => [%{"content" => "Use canaries"}]}
+
+      assert rendered([result("global", [], [], [artefact("lessons", without)])]) ==
                "Reflection: lessons\n- Use canaries"
     end
 
@@ -245,11 +275,25 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   end
 
   describe "when the formatter presents entities" do
-    test "then each entity is one bullet with its complete name, summary, and attributes" do
-      node = %{name: "Atlas", summary: "A rollout", attributes: %{"owner" => "Platform"}}
+    test "then each entity's first line is `name: summary`, or only its name when it has no summary" do
+      assert rendered([
+               result("global", [], [%{entity("Atlas") | summary: "A rollout"}, entity("Borealis")], [])
+             ]) == "Entities\n- Atlas: A rollout\n- Borealis"
+    end
+
+    test "and each attribute is its own indented `key: value` line, not an inline bracket" do
+      node = %{name: "Atlas", summary: "A rollout", attributes: %{owner: "Platform", region: "eu-west"}}
 
       assert rendered([result("global", [], [node], [])]) ==
-               "Entities\n- Atlas: A rollout (owner: Platform)"
+               "Entities\n- Atlas: A rollout\n  owner: Platform\n  region: eu-west"
+    end
+
+    test "and entities with different attributes each show all of their own" do
+      atlas = %{name: "Atlas", summary: "A rollout", attributes: %{"owner" => "Platform"}}
+      borealis = %{name: "Borealis", summary: nil, attributes: %{"tier" => 1, "tags" => ["a", "b"]}}
+
+      assert rendered([result("global", [], [atlas, borealis], [])]) ==
+               "Entities\n- Atlas: A rollout\n  owner: Platform\n- Borealis\n  tags: a, b\n  tier: 1"
     end
 
     test "and internal `_gralkor` attributes are not shown" do
@@ -260,7 +304,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       }
 
       assert rendered([result("global", [], [node], [])]) ==
-               "Entities\n- Atlas: A rollout (owner: Platform)"
+               "Entities\n- Atlas: A rollout\n  owner: Platform"
 
       hidden_only = %{node | attributes: %{"_gralkor_lens" => "observations"}}
 
@@ -280,8 +324,8 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     test "and each item of a top-level list is its own bullet" do
       payload = %{
         "generalisations" => [
-          %{"content" => "First lesson", "level" => 1},
-          %{"content" => "Second lesson", "level" => 1}
+          %{"content" => "First lesson"},
+          %{"content" => "Second lesson"}
         ]
       }
 
@@ -289,32 +333,144 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
                "Reflection: lessons\n- First lesson\n- Second lesson"
     end
 
-    test "and an object with a `content` string presents only that text" do
+    test "and a payload object with exactly one key is presented as that key's value, once, at the outer level only" do
+      assert rendered([
+               result("global", [], [], [artefact("lessons", %{"summary" => "Reviewed"})])
+             ]) == "Reflection: lessons\n- Reviewed"
+
+      nested = %{"outer" => %{"inner" => %{"lesson" => "Keep apart"}}}
+
+      assert rendered([result("global", [], [], [artefact("lessons", nested)])]) ==
+               "Reflection: lessons\n- inner:\n    lesson: Keep apart"
+    end
+
+    test "and an object's `content` string is its first line and every other field follows" do
       payload = %{"content" => "Use canaries", "level" => 3, "owner" => "Platform"}
 
       assert rendered([result("global", [], [], [artefact("lessons", payload)])]) ==
-               "Reflection: lessons\n- Use canaries"
+               "Reflection: lessons\n- Use canaries\n  level: 3\n  owner: Platform"
     end
 
-    test "and an object with one field presents only that field's value" do
-      assert rendered([
-               result("global", [], [], [artefact("lessons", %{"summary" => "Reviewed"})])
-             ]) ==
-               "Reflection: lessons\n- Reviewed"
+    test "and an object without `content` puts its first field on the first line as `key: value`" do
+      payload = %{"lesson" => "Keep them apart", "approach" => "moved Vacuum"}
+
+      assert rendered([result("global", [], [], [artefact("erl", payload)])]) ==
+               "Reflection: erl\n- approach: moved Vacuum\n  lesson: Keep them apart"
     end
 
-    test "and any other object presents `key: value` pairs separated by semicolons" do
+    test "and one-line fields come first in alphabetical order, then multi-line fields in alphabetical order" do
       payload = %{
-        "approach" => "moved Vacuum",
-        "lesson" => "Keep them apart",
-        "success" => true,
-        "unset" => nil,
-        "tags" => ["ops", "jobs"]
+        "zeta" => "last plain",
+        "alpha" => [%{"content" => "listed"}],
+        "beta" => %{"note" => "nested"},
+        "gamma" => "plain"
       }
 
       assert rendered([result("global", [], [], [artefact("erl", payload)])]) ==
-               "Reflection: erl\n- approach: moved Vacuum; lesson: Keep them apart; " <>
-                 "success: true; tags: ops, jobs"
+               "Reflection: erl\n- gamma: plain\n  zeta: last plain\n  alpha:\n  - listed\n" <>
+                 "  beta:\n    note: nested"
+    end
+
+    test "and a number or boolean is written as it is" do
+      payload = %{"level" => 2, "score" => 0.5, "success" => true, "failed" => false}
+
+      assert rendered([result("global", [], [], [artefact("erl", payload)])]) ==
+               "Reflection: erl\n- failed: false\n  level: 2\n  score: 0.5\n  success: true"
+    end
+
+    test "and a list of plain values is one `key: a, b, c` line" do
+      payload = %{"lesson" => "Keep apart", "tags" => ["ops", "jobs", 3]}
+
+      assert rendered([result("global", [], [], [artefact("erl", payload)])]) ==
+               "Reflection: erl\n- lesson: Keep apart\n  tags: ops, jobs, 3"
+    end
+
+    test "and a list containing an object is a `key:` line followed by one nested bullet per item, laid out the same way" do
+      payload = %{
+        "content" => "Current",
+        "evolves_from" => [
+          %{"content" => "Earlier", "level" => 1, "evolves_from" => [%{"content" => "Earliest"}]},
+          "a plain snapshot"
+        ]
+      }
+
+      assert rendered([result("global", [], [], [artefact("lessons", payload)])]) ==
+               "Reflection: lessons\n- Current\n  evolves_from:\n  - Earlier\n    level: 1\n" <>
+                 "    evolves_from:\n    - Earliest\n  - a plain snapshot"
+    end
+
+    test "and a nested object is a `key:` line followed by its own fields two spaces further in" do
+      payload = %{"content" => "Use canaries", "scope" => %{"team" => "Platform", "region" => "eu"}}
+
+      assert rendered([result("global", [], [], [artefact("lessons", payload)])]) ==
+               "Reflection: lessons\n- Use canaries\n  scope:\n    region: eu\n    team: Platform"
+    end
+
+    test "and a nested object with one field keeps its field name" do
+      payload = %{"content" => "Use canaries", "scope" => %{"team" => "Platform"}}
+
+      assert rendered([result("global", [], [], [artefact("lessons", payload)])]) ==
+               "Reflection: lessons\n- Use canaries\n  scope:\n    team: Platform"
+    end
+
+    test "and null, empty strings, empty lists, empty objects, and fields containing only those are left out" do
+      payload = %{
+        "content" => "Use canaries",
+        "unset" => nil,
+        "blank" => " ",
+        "none" => [],
+        "nothing" => %{},
+        "hollow" => %{"inner" => [nil, ""], "other" => %{}},
+        "kept" => [nil, "x"]
+      }
+
+      assert rendered([result("global", [], [], [artefact("lessons", payload)])]) ==
+               "Reflection: lessons\n- Use canaries\n  kept: x"
+    end
+
+    test "and the generalisation, erl, and entity examples render exactly as specified" do
+      generalisation =
+        artefact("generalisations", %{
+          "generalisations" => [
+            %{
+              "content" =>
+                "For any potentially customer-impacting release activity, a mandatory reversible, limited-scope checkpoint must be used…",
+              "level" => 2,
+              "evolves_from" => [
+                %{
+                  "content" =>
+                    "For critical deployments, a mandatory reversible, limited-scope canary and checkpoint must be used…",
+                  "level" => 1
+                }
+              ]
+            }
+          ]
+        })
+        |> Map.put(:valid_at, "2026-10-02T00:00:00Z")
+
+      erl =
+        artefact("erl", %{
+          "approach" => "moved Vacuum to 04:00",
+          "lesson" => "Keep the jobs apart",
+          "problem_kind" => "job scheduling",
+          "success" => true
+        })
+        |> Map.put(:valid_at, "2026-10-12T00:00:00Z")
+
+      atlas = %{
+        name: "Atlas",
+        summary: "A rollout",
+        attributes: %{"owner" => "Platform", "region" => "eu-west"}
+      }
+
+      payments = %{
+        name: "Payments",
+        summary: "Customer-impacting release activity needs a checkpoint",
+        attributes: %{}
+      }
+
+      assert rendered([result("global", [], [atlas, payments], [generalisation, erl])]) ==
+               String.trim_trailing(@wip_examples)
     end
 
     test "and an empty payload presents nothing" do
@@ -324,7 +480,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   end
 
   describe "when the formatter presents episodes" do
-    test "then an episode's text is presented whole on one line" do
+    test "then an episode that is not a structured record is presented whole on one line" do
       text = String.duplicate("a long source document ", 100) |> String.trim()
 
       assert rendered([
@@ -341,7 +497,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
                result("global", [], [], [
                  episode(content, %{lens: "notes", source_kind: "structured_record"})
                ])
-             ]) == "Lens: notes\n- approach: canary; owner: Platform"
+             ]) == "Lens: notes\n- approach: canary\n  owner: Platform"
     end
 
     test "and a structured-record episode whose content is not JSON keeps its text" do
@@ -353,6 +509,18 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     end
   end
 
+  describe "when the formatter shows a memory with several lines" do
+    test "then its date and source suffix ends its first line" do
+      episode =
+        artefact("erl", %{"approach" => "canary", "lesson" => "Keep apart"})
+        |> Map.merge(%{valid_at: "2026-10-12T00:00:00Z", source_description: "incident review"})
+
+      assert rendered([result("global", [], [], [episode])]) ==
+               "Reflection: erl\n- approach: canary (valid from 2026-10-12; source: incident review)\n" <>
+                 "  lesson: Keep apart"
+    end
+  end
+
   describe "when one memory is longer than 4,000 characters" do
     test "then it is cut to 4,000 characters and marked as truncated" do
       text = String.duplicate("x", 4_001)
@@ -361,12 +529,35 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
                "Lens: notes\n- " <> String.duplicate("x", 4_000) <> "… (truncated)"
     end
 
+    test "and its length counts every line with its indentation and line breaks" do
+      lesson = String.duplicate("x", 3_986)
+      exact = %{"content" => "c", "lesson" => lesson}
+      over = %{"content" => "cc", "lesson" => lesson}
+
+      assert rendered([result("global", [], [], [artefact("erl", exact)])]) ==
+               "Reflection: erl\n- c\n  lesson: " <> lesson
+
+      assert rendered([result("global", [], [], [artefact("erl", over)])]) ==
+               "Reflection: erl\n- cc\n  lesson: " <> String.slice(lesson, 0, 3_985) <> "… (truncated)"
+    end
+
+    test "and the truncation marker ends the last line that is kept" do
+      lines = for n <- 1..9, into: %{}, do: {"field_#{n}", String.duplicate("y", 490)}
+
+      text = rendered([result("global", [], [], [artefact("erl", Map.put(lines, "content", "c"))])])
+      body = String.replace_prefix(text, "Reflection: erl\n- ", "")
+
+      assert String.length(body) == 4_000 + String.length("… (truncated)")
+      assert String.ends_with?(body, "y… (truncated)")
+      refute String.ends_with?(body, "\n… (truncated)")
+    end
+
     test "and a memory of exactly 4,000 characters is not cut" do
       text = String.duplicate("x", 4_000)
       assert rendered(facts([fact(text, [%{lens: "notes"}])])) == "Lens: notes\n- " <> text
     end
 
-    test "and its dates and source still follow the cut" do
+    test "and its dates and source still follow the cut without counting toward it" do
       long =
         fact(String.duplicate("x", 4_001), [%{lens: "notes", source_description: "team notes"}])
         |> Map.put(:valid_at, "2026-10-02 00:00:00+00:00")
