@@ -365,7 +365,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         stored = stored_information_section(prompt)
 
         assert stored =~
-                 ~r/Reflection: generalisations\n(?:.*\n)*?- #{Regex.escape(squish(content))}[^\n]*\n  level: #{level}\n/
+                 ~r/Reflection: generalisations\n(?:.*\n)*?- #{Regex.escape(squish(content))}[^\n]*\n  level: #{level}(?:\n|$)/
 
         refute stored =~ ~s("level")
         assert {:error, _} = Jason.decode(stored)
