@@ -35,7 +35,7 @@ The test kind identifies the consumer seam. Hook timing does not change a test's
 ## Journey
 
 - Consumer seam: one curated operator lifecycle through the exported Gralkor memory API.
-- Controllable conditions: public memory requests, isolated destination and lens configuration, a test-owned data directory, embedded FalkorDB, Graphiti, PythonX, and configured model-provider credentials.
+- Controllable conditions: public memory requests, isolated destination and lens configuration, a test-owned data directory, embedded FalkorDB (or, with `GRALKOR_JOURNEY_FALKORDB=host:port`, an empty disposable remote FalkorDB), Graphiti, PythonX, and configured model-provider credentials.
 - Observable outcomes: public memory results with source provenance, graph replacement and recall across operators and destinations, reflection effects, and cleanup of the production-like runtime.
 - Real boundaries: production Gralkor modules, PythonX, Graphiti, embedded FalkorDB, and configured model providers.
 - Substituted boundaries: none in the current Journey.
