@@ -470,6 +470,215 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
+  describe "when a caller searches memory > where one or more Lenses are excluded > and the Lens selector is omitted or empty" do
+    test "then no episode written through an excluded Lens is returned" do
+      start_native_graph() |> seed_lens_graph()
+
+      assert {:ok, [%{episodes: episodes}]} = exclusion_search(["first-beta"])
+
+      contents = Enum.map(episodes, &Map.get(&1, :content))
+      assert "amber alpha memory" in contents
+      refute "amber beta memory" in contents
+      refute Enum.any?(episodes, &(Map.get(&1, :lens) == "first-beta"))
+    end
+
+    test "and no fact drawn only from episodes written through excluded Lenses is returned" do
+      start_native_graph() |> seed_lens_graph()
+
+      assert {:ok, [%{facts: facts}]} = exclusion_search(["first-beta"])
+
+      refute "amber beta lesson owns amber alpha lesson" in Enum.map(facts, & &1.fact)
+    end
+
+    test "and no entity mentioned only by episodes written through excluded Lenses is returned" do
+      start_native_graph() |> seed_lens_graph()
+
+      assert {:ok, [%{nodes: nodes}]} = exclusion_search(["first-beta"])
+
+      assert nodes |> Enum.map(& &1.name) |> Enum.sort() == [
+               "amber alpha lesson",
+               "amber alpha project",
+               "amber direct project"
+             ]
+    end
+
+    test "but a fact also drawn from an episode written by another writer is returned" do
+      start_native_graph() |> seed_lens_graph()
+
+      assert {:ok, [%{facts: facts}]} = exclusion_search(["first-beta"])
+
+      assert facts |> Enum.map(& &1.fact) |> Enum.sort() == [
+               "amber alpha lesson learns from amber alpha project",
+               "amber alpha project owns amber alpha lesson",
+               "amber direct project owns amber direct project",
+               "amber shared lesson fact"
+             ]
+    end
+
+    test "and an entity also mentioned by an episode written by another writer is returned" do
+      start_native_graph() |> seed_lens_graph() |> seed_excluded_mention_of_alpha_lesson()
+
+      assert {:ok, [%{nodes: nodes}]} = exclusion_search(["first-beta"])
+
+      names = Enum.map(nodes, & &1.name)
+      assert "amber alpha lesson" in names
+      refute "amber beta lesson" in names
+    end
+
+    test "and results written directly, through another Lens, through a Destination artefact output, or without recorded authorship can contribute" do
+      use_in_memory_storage()
+      assert :ok = add_episode("first", "operator-one", "amber alpha", "first-alpha")
+      assert :ok = add_episode("first", "operator-one", "amber beta", "first-beta")
+
+      seed_first_episode(%{
+        content: "amber direct",
+        source_description: "manual",
+        writer: :direct
+      })
+
+      seed_first_episode(%{content: "amber historical", source_description: "old notes"})
+
+      output = %{
+        kind: :destination,
+        destination: Gralkor.Destination.Registry.fetch!("first"),
+        ontology: Gralkor.DefaultOntology
+      }
+
+      assert :ok =
+               Gralkor.Destination.Storage.put_artefact(
+                 output,
+                 "review",
+                 "operator-one",
+                 Gralkor.Artefact.new("amber-review", %{"lesson" => "amber artefact"})
+               )
+
+      assert {:ok, [%{facts: facts, episodes: episodes}]} = exclusion_search(["first-beta"])
+
+      assert [%{reflection: "review", artefact: %{id: "amber-review"}}] =
+               Enum.filter(episodes, &Map.has_key?(&1, :artefact))
+
+      assert episodes |> Enum.map(&Map.get(&1, :content)) |> Enum.reject(&is_nil/1) |> Enum.sort() ==
+               ["amber alpha", "amber direct", "amber historical"]
+
+      assert facts |> Enum.map(& &1.fact) |> Enum.sort() ==
+               ["amber alpha", "amber direct", "amber historical"]
+    end
+
+    test "and excluded results cannot consume any per-Destination limit" do
+      start_native_graph() |> seed_lens_graph() |> seed_competing_excluded_memory()
+
+      assert {:ok, [%{facts: unfiltered, nodes: unfiltered_nodes, episodes: unfiltered_episodes}]} =
+               search(query: "amber", destinations: ["first"])
+
+      assert length(unfiltered) == 20
+      assert length(unfiltered_nodes) == 20
+      assert length(unfiltered_episodes) == 5
+
+      assert {:ok, [%{facts: facts, nodes: nodes, episodes: episodes}]} =
+               exclusion_search(["first-beta"])
+
+      assert length(facts) == 4
+      assert length(nodes) == 3
+      contents = Enum.map(episodes, &Map.get(&1, :content))
+      assert "amber alpha memory" in contents
+      assert "amber direct memory" in contents
+      refute Enum.any?(episodes, &(Map.get(&1, :lens) == "first-beta"))
+    end
+
+    test "and each returned fact's sources name no excluded Lens" do
+      start_native_graph() |> seed_lens_graph()
+
+      assert {:ok, [%{facts: facts}]} = exclusion_search(["first-beta"])
+      shared = Enum.find(facts, &(&1.fact == "amber shared lesson fact"))
+
+      assert Enum.map(shared.sources, & &1.lens) == ["first-alpha"]
+      refute Enum.any?(facts, fn fact -> Enum.any?(fact.sources, &(&1[:lens] == "first-beta")) end)
+    end
+
+    test "and entity and edge type filters further restrict the remaining results" do
+      start_native_graph() |> seed_lens_graph()
+
+      assert {:ok, [%{facts: facts}]} = exclusion_search(["first-beta"], edge_types: ["OWNS"])
+
+      assert facts |> Enum.map(& &1.fact) |> Enum.sort() == [
+               "amber alpha project owns amber alpha lesson",
+               "amber direct project owns amber direct project"
+             ]
+
+      assert {:ok, [%{nodes: nodes, facts: facts}]} =
+               exclusion_search(["first-beta"], entity_types: ["Learning"])
+
+      assert Enum.map(nodes, & &1.name) == ["amber alpha lesson"]
+      assert Enum.map(facts, & &1.fact) == ["amber shared lesson fact"]
+    end
+
+    test "and each excluded Lens's Destination is still searched" do
+      every_destination =
+        Enum.map(Gralkor.Destination.Registry.configured!(), & &1.name)
+
+      assert "first" in every_destination
+      assert {:ok, results} = search(excluded_lenses: ["first-alpha"])
+
+      assert Enum.map(results, & &1.destination) == every_destination
+
+      for destination <- every_destination do
+        assert_receive {:destination_search, ^destination, "operator-one", "question", opts}
+        assert Keyword.fetch!(opts, :excluded_lenses) == ["first-alpha"]
+        refute Keyword.has_key?(opts, :lenses)
+      end
+    end
+
+    test "and a Lens excluded more than once is applied once" do
+      assert {:ok, [%{destination: "first"}]} =
+               search(
+                 destinations: ["first"],
+                 excluded_lenses: ["first-alpha", "first-beta", "first-alpha"]
+               )
+
+      assert_receive {:destination_search, "first", _, _, opts}
+      assert Keyword.fetch!(opts, :excluded_lenses) == ["first-alpha", "first-beta"]
+    end
+  end
+
+  describe "when a caller searches memory > where one or more Lenses are excluded > and the Lens selector is omitted or empty > while the search is made through an agent's runtime" do
+    test "then excluded Lens names resolve from that runtime's configuration" do
+      start_supervised!(
+        {JidoGralkor.Runtime,
+         owner: self(),
+         configuration: %{
+           destinations: [%{name: "runtime-memory"}],
+           lenses: [
+             %{
+               name: "runtime-lens",
+               destination: "runtime-memory",
+               ingestion: Gralkor.Lens.Ingestion.Store
+             }
+           ],
+           reflections: []
+         }}
+      )
+
+      request = %Search{
+        operator_id: "operator-one",
+        query: "question",
+        destinations: ["runtime-memory"],
+        excluded_lenses: ["runtime-lens", "runtime-lens"]
+      }
+
+      assert {:ok, [%{destination: "runtime-memory"}]} = Client.search(self(), request)
+      assert_receive {:destination_search, "runtime-memory", _, _, opts}
+      assert Keyword.fetch!(opts, :excluded_lenses) == ["runtime-lens"]
+
+      assert_raise ArgumentError, ~r/runtime-lens/, fn ->
+        Client.search(%Search{request | destinations: ["first"]})
+      end
+
+      assert_raise ArgumentError, ~r/first-alpha/, fn ->
+        Client.search(self(), %Search{request | excluded_lenses: ["first-alpha"]})
+      end
+    end
+  end
+
   describe "where the selected Destinations include `personal`" do
     test "then only the current operator's `personal/<operator id>` graph is searched" do
       use_in_memory_storage()
