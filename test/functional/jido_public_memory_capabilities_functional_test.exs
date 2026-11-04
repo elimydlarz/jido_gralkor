@@ -849,7 +849,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   end
 
   describe "when unmodified Jido AI 2.3.0 sends memory search output to the provider > while the canonical Reflection payload contains deep lineage or domain keys ending in `_key`" do
-    test "then the provider receives the retained extracted fact text unchanged" do
+    test "then the provider receives the artefact's deep lineage and `_key` fields unchanged" do
       history =
         Enum.reduce(1..12, %{"document_key" => "ABC-123"}, fn _, value ->
           %{"history" => value}
@@ -858,8 +858,16 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       artefact = put_generalisation("Use canaries for ABC-123.", 2, [history])
       {wire, _} = provider_memory_result(%{query: "x", destinations: ["generalisations"]})
 
+      nested_history =
+        Enum.map_join(0..11, "\n", fn depth ->
+          String.duplicate("  ", depth + 2) <> "history:"
+        end)
+
       assert wire["result"]["result"] ==
-               "Reflection: generalisations\n- Use canaries for ABC-123."
+               "Reflection: generalisations\n- Use canaries for ABC-123.\n  level: 2\n" <>
+                 "  evolves_from:\n  - history:\n" <>
+                 String.replace_prefix(nested_history, "    history:\n", "") <>
+                 "\n" <> String.duplicate("  ", 14) <> "document_key: ABC-123"
 
       assert {:ok, [%{destination: "generalisations", episodes: [%{artefact: stored}]}]} =
                Client.search(%Gralkor.Search{

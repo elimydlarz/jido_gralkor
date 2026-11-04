@@ -69,6 +69,23 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       assert rendered(input) == "Lens: notes\n- one"
     end
 
+    test "and a memory whose whole text is another memory's first line under the same heading is left out beside it" do
+      generalisation =
+        artefact("generalisations", %{
+          "generalisations" => [%{"content" => "Use canaries", "level" => 2}]
+        })
+
+      extracted = fact("Use canaries", [%{reflection: "generalisations"}])
+      other_heading = fact("Use canaries", [%{lens: "notes"}])
+
+      assert rendered([result("global", [extracted, other_heading], [], [generalisation])]) ==
+               "Reflection: generalisations\n- Use canaries\n  level: 2\n\nLens: notes\n- Use canaries"
+
+      assert rendered([result("global", [extracted], [], [])] ++
+                        [result("generalisations", [], [], [generalisation])]) ==
+               "Reflection: generalisations\n- Use canaries\n  level: 2"
+    end
+
     test "and entities come last under an `Entities` heading" do
       input = [
         result("global", [], [entity("Atlas")], [episode("an episode", %{lens: "notes"})]),

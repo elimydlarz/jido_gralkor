@@ -337,9 +337,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
               groups ++ [{heading, [text]}]
 
             {^heading, texts} ->
-              if text in texts,
-                do: groups,
-                else: List.keyreplace(groups, heading, 0, {heading, texts ++ [text]})
+              List.keyreplace(groups, heading, 0, {heading, add_text(texts, text)})
           end
         end)
       end)
@@ -347,6 +345,23 @@ defmodule JidoGralkor.MemorySearchPresentation do
     {entities, writers} = Enum.split_with(groups, &(elem(&1, 0) == @entities_heading))
     writers ++ entities
   end
+
+  # The same text appears once under one heading, and a memory that is only another
+  # memory's first line adds nothing beside it: the longer memory is kept in place.
+  defp add_text(texts, text) do
+    cond do
+      Enum.any?(texts, &(&1 == text or first_line(&1) == text)) ->
+        texts
+
+      first_line(text) in texts ->
+        Enum.map(texts, &if(&1 == first_line(text), do: text, else: &1))
+
+      true ->
+        texts ++ [text]
+    end
+  end
+
+  defp first_line(text), do: text |> String.split("\n", parts: 2) |> hd()
 
   defp fact_headings(fact) do
     headings = fact |> Map.get(:sources, []) |> Enum.flat_map(&named_heading/1) |> Enum.uniq()
