@@ -1123,6 +1123,14 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     search([query: "amber", destinations: ["first"], lenses: lenses] ++ overrides)
   end
 
+  defp artefact_episodes(episodes), do: Enum.filter(episodes, &Map.has_key?(&1, :artefact))
+
+  defp episode_contents(episodes) do
+    episodes |> Enum.map(&Map.get(&1, :content)) |> Enum.reject(&is_nil/1) |> Enum.sort()
+  end
+
+  defp fact_texts(facts), do: facts |> Enum.map(& &1.fact) |> Enum.sort()
+
   defp exclusion_search(excluded_lenses, overrides \\ []) do
     search(
       [query: "amber", destinations: ["first"], excluded_lenses: excluded_lenses] ++ overrides
