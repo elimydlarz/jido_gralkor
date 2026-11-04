@@ -306,11 +306,11 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       node = %{
         name: "Atlas",
         summary: "A rollout",
-        attributes: %{owner: "Platform", region: "eu-west"}
+        attributes: %{owner: "Platform", region: "eu-west", since: ~D[2026-10-02]}
       }
 
       assert rendered([result("global", [], [node], [])]) ==
-               "Entities\n- Atlas: A rollout\n  owner: Platform\n  region: eu-west"
+               "Entities\n- Atlas: A rollout\n  owner: Platform\n  region: eu-west\n  since: 2026-10-02"
     end
 
     test "and entities with different attributes each show all of their own" do
