@@ -94,7 +94,7 @@ Gralkor.Client.search(agent_server, %Gralkor.Search{
 
 That includes the packaged `personal`, `global`, and `generalisations` Destinations and every application Destination. Only the current operator's logical `personal/<operator id>` graph is searched; other registered Destinations retain their shared logical graph identity.
 
-`%Gralkor.Search{}` has exactly four optional fields besides `operator_id` and `query`:
+`%Gralkor.Search{}` has exactly five optional fields besides `operator_id` and `query`:
 
 ```elixir
 Gralkor.Client.search(agent_server, %Gralkor.Search{
@@ -102,6 +102,7 @@ Gralkor.Client.search(agent_server, %Gralkor.Search{
   query: "what changed the parser",
   destinations: ["code"],                  # default: every accessible registered Destination
   lenses: ["commits"],                     # default: every writer
+  # excluded_lenses: ["commits"],          # default: none; cannot be combined with lenses
   entity_types: ["Commit", "Function"],    # default: no filter
   edge_types: ["CHANGES"]                  # default: no filter
 })
@@ -141,6 +142,25 @@ Facts, nodes, and episodes each keep Graphiti's relevance order. Every Destinati
 - nodes: only entities mentioned (`MENTIONS`) by such an episode.
 
 Direct writes, other Lenses, Reflection artefacts, and historical `operator`-labelled episodes never contribute (the retired `operator` Lens cannot be selected). `entity_types` and `edge_types` restrict the Lens's results further. On FalkorDB every restriction is part of the graph queries, applied before ranking and the per-Destination caps, so other writers cannot consume a Lens's twenty facts, twenty nodes, or five episodes: facts through graphiti-core's `SearchFilters.edge_uuids`; nodes and episodes through filters Gralkor adds to graphiti-core 0.31.2's node searches and FalkorDB episode full-text query, which have none of their own. A Lens that has written nothing to a Destination returns empty facts, nodes, and episodes there without a Graphiti search. An unknown, blank, or non-list Lens selection raises `ArgumentError` before any Destination is searched; runtime-targeted search resolves Lens names from the agent's runtime snapshot.
+
+### Lens exclusion
+
+`excluded_lenses` names registered Lenses whose writes to leave out while keeping everything else. Like `lenses`, it never adds or removes Destinations: every selected Destination is still searched, including each excluded Lens's own. Within each Destination:
+
+- episodes: those whose source description ends with an excluded Lens's ` [lens: <name>]` marker are left out;
+- facts: an edge is left out only when every episode it was drawn from is such an episode; an edge another writer's episode also produced stays, and its `sources` omit the excluded episodes;
+- nodes: an entity is left out only when every episode mentioning it is such an episode; an entity another writer's episode also mentions stays, so cross-source relationships survive.
+
+Direct writes and capture, other Lenses, Reflection artefacts, and historical unmarked episodes all remain. On FalkorDB the exclusions are `NOT … IN` filters inside the same graph queries, applied before ranking and the per-Destination caps, so an excluded Lens's volume cannot take any of the twenty facts, twenty nodes, or five episodes. `entity_types` and `edge_types` restrict what remains. Supplying both `lenses` and `excluded_lenses` raises `ArgumentError` before any Destination is searched: a selection already leaves out every other writer. An unknown, blank, or non-list exclusion raises `ArgumentError` naming the excluded Lens; runtime-targeted search resolves excluded names from the agent's runtime snapshot.
+
+```elixir
+# General recall without the high-volume commit history the "code-changes" Lens writes to global.
+Gralkor.Client.search(agent_server, %Gralkor.Search{
+  operator_id: operator_id,
+  query: "who owns the settlement worker",
+  excluded_lenses: ["code-changes"]
+})
+```
 
 ### Facts
 
