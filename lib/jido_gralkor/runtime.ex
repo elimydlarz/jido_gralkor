@@ -39,10 +39,19 @@ defmodule JidoGralkor.Runtime do
   def lenses!(owner, names), do: fetch_definitions!(owner, :lenses, names)
 
   def resolve_search!(owner, lens_names, destination_names) do
+    {lenses, destinations, []} = resolve_search!(owner, lens_names, destination_names, [])
+    {lenses, destinations}
+  end
+
+  def resolve_search!(owner, lens_names, destination_names, excluded_lens_names) do
     Enum.each(lens_names, &reject_retired_selection!(:lenses, &1))
+    Enum.each(excluded_lens_names, &reject_retired_selection!(:lenses, &1))
     Enum.each(destination_names, &reject_retired_selection!(:destinations, &1))
 
-    case call!(owner, {:resolve_search, lens_names, destination_names}) do
+    case call!(
+           owner,
+           {:resolve_search, lens_names, destination_names, excluded_lens_names}
+         ) do
       {:ok, resolved} -> resolved
       {:error, reason} -> raise ArgumentError, inspect(reason)
     end
@@ -131,12 +140,18 @@ defmodule JidoGralkor.Runtime do
     {:reply, state.definitions.destination_list, state}
   end
 
-  def handle_call({:resolve_search, lens_names, destination_names}, _from, state) do
+  def handle_call(
+        {:resolve_search, lens_names, destination_names, excluded_lens_names},
+        _from,
+        state
+      ) do
     reply =
       with {:ok, lenses} <- fetch_definitions(state.definitions.lenses, :lenses, lens_names),
+           {:ok, excluded_lenses} <-
+             fetch_definitions(state.definitions.lenses, :excluded_lenses, excluded_lens_names),
            {:ok, destinations} <-
              resolve_search_destinations(state.definitions, destination_names) do
-        {:ok, {lenses, destinations}}
+        {:ok, {lenses, destinations, excluded_lenses}}
       end
 
     {:reply, reply, state}
