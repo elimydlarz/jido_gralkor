@@ -1050,6 +1050,11 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
           :lenses ->
             assert error.message =~ ~r/lens/i
             refute error.message =~ ~r/destination/i
+            refute error.message =~ ~r/exclu/i
+
+          :excluded_lenses ->
+            assert error.message =~ ~r/excluded lens/i
+            refute error.message =~ ~r/destination/i
         end
       end
     end
