@@ -2,24 +2,32 @@ defmodule JidoGralkor.MemorySearchPresentation do
   @moduledoc """
   Render structured search results as readable text for the consuming agent.
 
-  Every memory is one line of plain text under the heading of whoever wrote it:
+  Every memory is one bullet under the heading of whoever wrote it:
   `Lens: <name>`, `Reflection: <name>`, a direct source kind, or `Source: unknown`.
   Entities have no single writer, so they come last under `Entities`. Whole
   Reflection artefacts come first, then facts, then episodes, and that one order
   sets both the heading order and which memories survive the response limits.
 
-  Structured content becomes readable text without knowing any Reflection's
-  shape: an object with a `content` string shows only that text, an object with
-  one field shows that field's value, any other object shows `key: value` pairs,
-  and each item of a top-level list is its own bullet.
+  A bullet's first line is the memory's main text: the fact text, `name: summary`
+  for an entity, an object's `content` string, or else an object's first field
+  as `key: value`. Every other field the memory carries (the payload fields of a
+  Reflection artefact or structured-record episode, and an entity's attributes)
+  follows on its own indented `key: value` line: one-line fields first, then
+  nested ones, each group alphabetical. A list of plain values stays on one line;
+  a list containing an object becomes nested bullets laid out the same way, and a
+  nested object becomes `key:` followed by its own fields. Null and empty values
+  are left out. A payload object with exactly one key is presented as that key's
+  value, and each item of a top-level list is its own bullet. Nothing depends on
+  any Reflection's or entity type's shape, and record metadata never appears.
 
-  A fact or episode ends with when it was true and where it came from:
-  `(valid from <date>)`, or `(valid from <date> to <date>)` once it was invalidated
-  or expired, then `; source: <description>`. The start is when it became true,
-  or when it was recorded if that is missing. A source description never repeats
-  its Lens marker, and one that only names a Reflection is left out.
+  A fact or episode's first line ends with when it was true and where it came
+  from: `(valid from <date>)`, or `(valid from <date> to <date>)` once it was
+  invalidated or expired, then `; source: <description>`. The start is when it
+  became true, or when it was recorded if that is missing. A source description
+  never repeats its Lens marker, and one that only names a Reflection is left out.
 
-  A memory is cut only past 4,000 characters, and says so. The complete text fits
+  A memory is cut only past 4,000 characters, counting all of its lines, and says
+  so; the date and source follow the cut. The complete text fits
   Jido AI's 16,384-character string limit and the supplied UTF-8 byte budget for
   its serialized success envelope. Memories are retained or omitted whole, with
   one notice giving the total omitted. Canonical search data is unchanged.
@@ -29,6 +37,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
   @max_chars 16_384
   @max_memory_chars 4_000
   @entities_heading "Entities"
+  @main_text_field "content"
 
   @spec validate_max_bytes!(term()) :: pos_integer()
   def validate_max_bytes!(max_bytes) when is_integer(max_bytes) and max_bytes > 0, do: max_bytes
@@ -83,17 +92,42 @@ defmodule JidoGralkor.MemorySearchPresentation do
     payload
     |> Jason.encode!()
     |> Jason.decode!()
-    |> bullets()
-    |> Enum.map(&{[heading(episode)], one_line(&1)})
-    |> reject_blank()
+    |> structured_memories(episode)
+  end
+
+  defp structured_memories(value, episode) do
+    value
+    |> unwrap()
+    |> List.wrap()
+    |> Enum.map(&prune/1)
+    |> Enum.reject(&(&1 == :empty))
+    |> Enum.map(&{[heading(episode)], memory_text(lines(&1))})
     |> with_details(episode, [episode])
   end
 
+  # A payload's single outer key only names the Reflection's output field.
+  defp unwrap(value) when is_map(value) and map_size(value) == 1,
+    do: value |> Map.values() |> hd()
+
+  defp unwrap(value), do: value
+
   defp fact_memory(fact),
-    do: {fact_headings(fact), one_line(fact.fact) <> details(fact, Map.get(fact, :sources, []))}
+    do:
+      {fact_headings(fact),
+       fact.fact |> one_line() |> memory_text() |> append_details(details(fact, Map.get(fact, :sources, [])))}
 
   defp with_details(memories, record, sources) do
-    Enum.map(memories, fn {headings, text} -> {headings, text <> details(record, sources)} end)
+    Enum.map(memories, fn {headings, text} ->
+      {headings, append_details(text, details(record, sources))}
+    end)
+  end
+
+  # The date and source suffix ends the bullet's first line.
+  defp append_details(text, details) do
+    case String.split(text, "\n", parts: 2) do
+      [first] -> first <> details
+      [first, rest] -> first <> details <> "\n" <> rest
+    end
   end
 
   defp details(record, sources) do
@@ -145,74 +179,124 @@ defmodule JidoGralkor.MemorySearchPresentation do
   end
 
   defp entity_memory(node) do
-    name = Map.get(node, :name) || Map.get(node, :id) || "unnamed entity"
-    summary = Map.get(node, :summary)
+    name = one_line(Map.get(node, :name) || Map.get(node, :id) || "unnamed entity")
+    summary = one_line(Map.get(node, :summary))
+    first = if summary == "", do: name, else: "#{name}: #{summary}"
 
     attributes =
       (Map.get(node, :attributes) || Map.get(node, :properties) || %{})
       |> Enum.reject(fn {key, _value} ->
         key |> to_string() |> String.starts_with?("_gralkor")
       end)
+      |> Map.new(fn {key, value} -> {to_string(key), value} end)
 
-    text = if summary in [nil, ""], do: name, else: "#{name}: #{summary}"
+    fields =
+      case prune(attributes) do
+        :empty -> []
+        pruned -> field_lines(pruned)
+      end
 
-    if attributes == [] do
-      {[@entities_heading], one_line(text)}
-    else
-      pairs =
-        Enum.map_join(Enum.sort_by(attributes, &to_string(elem(&1, 0))), ", ", fn {key, value} ->
-          "#{key}: #{value}"
-        end)
-
-      {[@entities_heading], one_line("#{text} (#{pairs})")}
-    end
+    {[@entities_heading], memory_text([first | fields])}
   end
 
   defp episode_memories(episode) do
     content = to_string(Map.get(episode, :content, ""))
 
-    episode
-    |> Map.get(:source_kind)
-    |> episode_bullets(content)
-    |> Enum.map(&{[heading(episode)], one_line(&1)})
-    |> reject_blank()
-    |> with_details(episode, [episode])
-  end
-
-  defp episode_bullets(kind, content) when kind in [:structured_record, "structured_record"] do
-    case Jason.decode(content) do
-      {:ok, value} -> bullets(value)
-      {:error, _} -> [content]
+    if Map.get(episode, :source_kind) in [:structured_record, "structured_record"] do
+      case Jason.decode(content) do
+        {:ok, value} -> structured_memories(value, episode)
+        {:error, _} -> plain_episode_memories(content, episode)
+      end
+    else
+      plain_episode_memories(content, episode)
     end
   end
 
-  defp episode_bullets(_kind, content), do: [content]
-
-  defp reject_blank(memories), do: Enum.reject(memories, fn {_headings, text} -> text == "" end)
-
-  defp bullets(value) when is_list(value), do: Enum.flat_map(value, &bullets/1)
-  defp bullets(%{"content" => content}) when is_binary(content), do: [content]
-
-  defp bullets(value) when is_map(value) and map_size(value) == 1,
-    do: value |> Map.values() |> hd() |> bullets()
-
-  defp bullets(value), do: [readable(value)]
-
-  defp readable(value) when is_binary(value), do: value
-  defp readable(value) when is_list(value), do: Enum.map_join(value, ", ", &readable/1)
-  defp readable(%{"content" => content}) when is_binary(content), do: content
-
-  defp readable(value) when is_map(value) do
-    value
-    |> Enum.reject(fn {_key, field} -> is_nil(field) end)
-    |> Enum.sort_by(&elem(&1, 0))
-    |> Enum.map_join("; ", fn {key, field} -> "#{key}: #{readable(field)}" end)
+  defp plain_episode_memories(content, episode) do
+    case one_line(content) do
+      "" -> []
+      text -> with_details([{[heading(episode)], memory_text(text)}], episode, [episode])
+    end
   end
 
-  defp readable(value), do: to_string(value)
+  # Pruning drops null, blank, and empty values, and anything containing only those.
+  defp prune(nil), do: :empty
 
-  defp one_line(text) do
-    text = text |> String.split() |> Enum.join(" ")
+  defp prune(value) when is_binary(value) do
+    case one_line(value) do
+      "" -> :empty
+      text -> text
+    end
+  end
+
+  defp prune(value) when is_list(value) do
+    case value |> Enum.map(&prune/1) |> Enum.reject(&(&1 == :empty)) do
+      [] -> :empty
+      items -> items
+    end
+  end
+
+  defp prune(value) when is_map(value) do
+    value
+    |> Enum.map(fn {key, field} -> {one_line(to_string(key)), prune(field)} end)
+    |> Enum.reject(fn {_key, field} -> field == :empty end)
+    |> case do
+      [] -> :empty
+      fields -> Map.new(fields)
+    end
+  end
+
+  defp prune(value), do: value
+
+  # The lines of one pruned value, relative to its bullet's text column.
+  defp lines(value) when is_map(value) do
+    case Map.pop(value, @main_text_field) do
+      {main, rest} when is_binary(main) -> [main | field_lines(rest)]
+      _ -> field_lines(value)
+    end
+  end
+
+  defp lines(value) when is_list(value) do
+    if Enum.all?(value, &plain?/1),
+      do: [plain_list(value)],
+      else: nested_bullets(value)
+  end
+
+  defp lines(value), do: [to_string(value)]
+
+  defp field_lines(fields) do
+    {one_line, nested} = fields |> Enum.sort_by(&elem(&1, 0)) |> Enum.split_with(&one_line_field?/1)
+
+    Enum.flat_map(one_line, fn {key, value} -> ["#{key}: #{plain_list(List.wrap(value))}"] end) ++
+      Enum.flat_map(nested, fn
+        {key, value} when is_list(value) -> ["#{key}:" | nested_bullets(value)]
+        {key, value} -> ["#{key}:" | Enum.map(lines(value), &("  " <> &1))]
+      end)
+  end
+
+  defp nested_bullets(items) do
+    Enum.flat_map(items, fn item ->
+      [first | rest] = lines(item)
+      ["- " <> first | Enum.map(rest, &("  " <> &1))]
+    end)
+  end
+
+  defp one_line_field?({_key, value}) when is_list(value), do: Enum.all?(value, &plain?/1)
+  defp one_line_field?({_key, value}), do: plain?(value)
+
+  defp plain?(value), do: not is_map(value) and not is_list(value)
+
+  defp plain_list(values), do: Enum.map_join(values, ", ", &to_string/1)
+
+  defp one_line(nil), do: ""
+  defp one_line(text), do: text |> to_string() |> String.split() |> Enum.join(" ")
+
+  # The bullet's text: its first line, then each other line under the text column,
+  # cut past 4,000 characters counting every line.
+  defp memory_text(text) when is_binary(text), do: memory_text([text])
+
+  defp memory_text([first | rest]) do
+    text = Enum.join([first | Enum.map(rest, &("  " <> &1))], "\n")
 
     if String.length(text) > @max_memory_chars,
       do: String.slice(text, 0, @max_memory_chars) <> "… (truncated)",
