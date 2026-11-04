@@ -230,6 +230,17 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.implicit_memory
     end
 
+    test "and recall presents that memory in the memory search format inside an untrusted memory block",
+         %{adventure: adventure} do
+      assert adventure.recall_text =~
+               ~r/\A<gralkor-memory trust="untrusted">\n(?:Lens|Reflection|Source): [^\n]+\n- /
+
+      assert adventure.recall_text =~
+               ~r/\n- [^\n]*Juniper[^\n]*\(valid from \d{4}-\d{2}-\d{2}; source: [^)\n]+\)\n/
+
+      assert String.ends_with?(adventure.recall_text, "\n</gralkor-memory>")
+    end
+
     test "and direct conversation capture remains searchable without Lens or Reflection authorship",
          %{adventure: adventure} do
       assert [%{episode: episode}] = adventure.direct_capture_episodes
@@ -344,6 +355,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                  false
              end)
     end
+  end
+
+  describe "when the Journey consumer triggers generalisation after successive ingestions containing related observations > prior generalisations" do
   end
 
   describe "when distinct ingestions use Lenses backed by different Destinations" do

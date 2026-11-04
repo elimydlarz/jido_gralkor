@@ -5,6 +5,7 @@ Journey: memory-adventure (journey: test/journey/memory_adventure_journey_test.e
 
 when two operators use direct personal memory, Lenses, and asynchronously triggered Reflections
   then default-ontology direct personal memory remains recallable
+  and recall presents that memory in the memory search format inside an untrusted memory block
   and direct conversation capture remains searchable without Lens or Reflection authorship
   and personal-chat processing records its actual Lens provenance
   and alternating direct and personal-chat turns writes one episode for each selected route
@@ -21,6 +22,8 @@ when the Journey consumer triggers generalisation after successive ingestions co
   then the first resulting generalisation exposes non-blank content, an integer level, and a lineage list
   and a later resulting generalisation exposes non-blank content, an integer level, and non-empty lineage
   and every later lineage snapshot exposes non-blank content and an integer level
+  and later generalisation inference receives each prior generalisation in the memory search format with its level
+  and the later generalisation's level is one above the highest level in its lineage
 
 when distinct ingestions use Lenses backed by different Destinations
   then the `work-notes` input is searchable through the `personal` Destination
@@ -39,6 +42,7 @@ when a fresh agent handles a request related to an evolved generalisation
   and its results include relevant memory from the `personal`, `global`, and an application Destination
   and its results include relevant Lens-authored memory and relevant stored generalisations, as facts or whole episodes
   and its readable memory names the originating Lens or Reflection
+  and its readable memory shows each retrieved generalisation's level and lineage snapshots as indented fields
   and the answer uses retrieved facts relevant to the requested migration
   and the recommendation applies the retrieved reversible limited-scope lesson to the requested migration
 
