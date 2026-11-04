@@ -3,6 +3,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   One production-like memory adventure through the real PythonX, Graphiti, and
   embedded FalkorDB runtime.
 
+  Set `GRALKOR_JOURNEY_FALKORDB=host:port` to run the same adventure against a
+  remote FalkorDB instead. Use an empty, disposable server: the adventure's
+  graphs persist there after the run.
+
   Reifies the `memory-adventure` Journey tree.
   """
 
@@ -154,20 +158,26 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       )
 
     File.mkdir_p!(data_dir)
-    System.put_env("GRALKOR_DATA_DIR", data_dir)
+    falkordb_spec = journey_falkordb_spec(data_dir)
+
+    case falkordb_spec do
+      {:embedded, _} -> System.put_env("GRALKOR_DATA_DIR", data_dir)
+      {:remote, _} -> System.delete_env("GRALKOR_DATA_DIR")
+    end
 
     Application.put_env(:jido_gralkor, :client, Native)
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.Graphiti)
     Application.put_env(:jido_gralkor, :recall_deadline_ms, 90_000)
 
-    {:ok, _python} = start_supervised(Gralkor.Python)
+    {:ok, _python} =
+      start_supervised({Gralkor.Python, [reap_orphans: match?({:embedded, _}, falkordb_spec)]})
 
     {:ok, _pool} =
       start_supervised(
         {GraphitiPool,
          [
-           falkordb_spec: {:embedded, data_dir},
+           falkordb_spec: falkordb_spec,
            llm_model: Gralkor.Config.llm_model(),
            embedder_model: Gralkor.Config.embedder_model(),
            warmup: false
@@ -178,7 +188,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       start_supervised(
         {CaptureBuffer,
          [
-           flush_callback: GralkorApplication.build_flush_callback({:embedded, data_dir}),
+           flush_callback: GralkorApplication.build_flush_callback(falkordb_spec),
            lens_flush_callback: GralkorApplication.build_lens_flush_callback()
          ]}
       )
