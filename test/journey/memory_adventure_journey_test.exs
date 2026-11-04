@@ -635,6 +635,17 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
+  defp journey_falkordb_spec(data_dir) do
+    case System.get_env("GRALKOR_JOURNEY_FALKORDB") do
+      value when value in [nil, ""] ->
+        {:embedded, data_dir}
+
+      value ->
+        [host, port] = String.split(String.trim(value), ":", parts: 2)
+        {:remote, [host: host, port: String.to_integer(port)]}
+    end
+  end
+
   defp run_adventure(agent) do
     implicit_fact =
       "The private deployment codename is Juniper and the launch city is Muscat."
