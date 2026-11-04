@@ -858,16 +858,21 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       artefact = put_generalisation("Use canaries for ABC-123.", 2, [history])
       {wire, _} = provider_memory_result(%{query: "x", destinations: ["generalisations"]})
 
-      nested_history =
-        Enum.map_join(0..11, "\n", fn depth ->
-          String.duplicate("  ", depth + 2) <> "history:"
-        end)
+      lineage =
+        ["  - history:"] ++
+          for(depth <- 1..11, do: String.duplicate(" ", 4 + 2 * depth) <> "history:") ++
+          [String.duplicate(" ", 28) <> "document_key: ABC-123"]
 
       assert wire["result"]["result"] ==
-               "Reflection: generalisations\n- Use canaries for ABC-123.\n  level: 2\n" <>
-                 "  evolves_from:\n  - history:\n" <>
-                 String.replace_prefix(nested_history, "    history:\n", "") <>
-                 "\n" <> String.duplicate("  ", 14) <> "document_key: ABC-123"
+               Enum.join(
+                 [
+                   "Reflection: generalisations",
+                   "- Use canaries for ABC-123.",
+                   "  level: 2",
+                   "  evolves_from:" | lineage
+                 ],
+                 "\n"
+               )
 
       assert {:ok, [%{destination: "generalisations", episodes: [%{artefact: stored}]}]} =
                Client.search(%Gralkor.Search{
