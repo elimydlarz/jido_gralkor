@@ -4,12 +4,26 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
 
   @omitted_one "1 more memory omitted (response limit)."
 
-  @wip_examples "WIP_SEARCH_RESULT_FORMAT.md"
-                |> File.read!()
-                |> String.split("**Examples**\n\n```\n", parts: 2)
-                |> List.last()
-                |> String.split("```", parts: 2)
-                |> hd()
+  @examples """
+  Reflection: generalisations
+  - For any potentially customer-impacting release activity, a mandatory reversible, limited-scope checkpoint must be used… (valid from 2026-10-02)
+    level: 2
+    evolves_from:
+    - For critical deployments, a mandatory reversible, limited-scope canary and checkpoint must be used…
+      level: 1
+
+  Reflection: erl
+  - approach: moved Vacuum to 04:00 (valid from 2026-10-12)
+    lesson: Keep the jobs apart
+    problem_kind: job scheduling
+    success: true
+
+  Entities
+  - Atlas: A rollout
+    owner: Platform
+    region: eu-west
+  - Payments: Customer-impacting release activity needs a checkpoint
+  """
 
   describe "when the memory search formatter is called" do
     test "then every memory is one bullet under the heading of its writer, its first line its main text and each other field on its own indented line" do
@@ -81,14 +95,14 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
 
     test "and the formatter adds no record metadata such as a Destination, an artefact identifier, or a uuid" do
       episode =
-        artefact("lessons", %{"lesson" => "Use canaries"})
+        artefact("lessons", %{"lesson" => "Use canaries", "level" => 1})
         |> Map.merge(%{uuid: "episode-uuid", group_id: "g_676c6f62616c", destination: "global"})
 
       node = %{entity("Atlas") | summary: "A rollout"} |> Map.put(:uuid, "node-uuid")
 
       text = rendered([result("global", [], [node], [episode])])
 
-      assert text == "Reflection: lessons\n- lesson: Use canaries\n\nEntities\n- Atlas: A rollout"
+      assert text == "Reflection: lessons\n- lesson: Use canaries\n  level: 1\n\nEntities\n- Atlas: A rollout"
       refute text =~ "artefact-id"
       refute text =~ "uuid"
       refute text =~ "global"
@@ -470,7 +484,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       }
 
       assert rendered([result("global", [], [atlas, payments], [generalisation, erl])]) ==
-               String.trim_trailing(@wip_examples)
+               String.trim_trailing(@examples)
     end
 
     test "and an empty payload presents nothing" do
@@ -530,7 +544,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     end
 
     test "and its length counts every line with its indentation and line breaks" do
-      lesson = String.duplicate("x", 3_986)
+      lesson = String.duplicate("x", 3_988)
       exact = %{"content" => "c", "lesson" => lesson}
       over = %{"content" => "cc", "lesson" => lesson}
 
@@ -538,7 +552,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
                "Reflection: erl\n- c\n  lesson: " <> lesson
 
       assert rendered([result("global", [], [], [artefact("erl", over)])]) ==
-               "Reflection: erl\n- cc\n  lesson: " <> String.slice(lesson, 0, 3_985) <> "… (truncated)"
+               "Reflection: erl\n- cc\n  lesson: " <> String.slice(lesson, 0, 3_987) <> "… (truncated)"
     end
 
     test "and the truncation marker ends the last line that is kept" do
