@@ -191,8 +191,9 @@ defmodule Gralkor.Client do
     _ = registered_lenses!()
     validate_search_request!(request)
     lenses = resolve_search_lenses!(request.lenses)
+    excluded_lenses = resolve_excluded_search_lenses!(request.excluded_lenses)
     destinations = resolve_search_destinations!(request.destinations)
-    search_resolved(request, lenses, destinations)
+    search_resolved(request, lenses, excluded_lenses, destinations)
   end
 
   @spec search(runtime_owner(), Search.t()) ::
@@ -200,21 +201,29 @@ defmodule Gralkor.Client do
   def search(runtime_owner, %Search{} = request) do
     validate_search_request!(request)
     validate_lens_names!(request.lenses)
+    validate_excluded_lens_names!(request.excluded_lenses)
     validate_destination_names!(request.destinations)
 
-    {resolved_lenses, destinations} =
-      Runtime.resolve_search!(runtime_owner, request.lenses, request.destinations)
+    {resolved_lenses, destinations, resolved_excluded_lenses} =
+      Runtime.resolve_search!(
+        runtime_owner,
+        request.lenses,
+        request.destinations,
+        request.excluded_lenses
+      )
 
     lenses = resolved_lenses |> Enum.map(& &1.name) |> Enum.uniq()
-    search_resolved(request, lenses, destinations)
+    excluded_lenses = resolved_excluded_lenses |> Enum.map(& &1.name) |> Enum.uniq()
+    search_resolved(request, lenses, excluded_lenses, destinations)
   end
 
-  defp search_resolved(request, lenses, destinations) do
+  defp search_resolved(request, lenses, excluded_lenses, destinations) do
     opts =
       []
       |> put_search_option(:entity_types, request.entity_types)
       |> put_search_option(:edge_types, request.edge_types)
       |> put_search_option(:lenses, lenses)
+      |> put_search_option(:excluded_lenses, excluded_lenses)
       |> Keyword.put(:limits, Search.limits())
 
     destinations
@@ -268,7 +277,17 @@ defmodule Gralkor.Client do
 
     validate_type_filter!(:entity_types, request.entity_types)
     validate_type_filter!(:edge_types, request.edge_types)
+    validate_lens_selection_or_exclusion!(request.lenses, request.excluded_lenses)
   end
+
+  defp validate_lens_selection_or_exclusion!([_ | _] = lenses, [_ | _] = excluded_lenses) do
+    raise ArgumentError,
+          "Gralkor.Search cannot both select Lenses (:lenses #{inspect(lenses)}) and " <>
+            "exclude Lenses (:excluded_lenses #{inspect(excluded_lenses)}); a Lens selection " <>
+            "already leaves out every other writer, so supply only one of them"
+  end
+
+  defp validate_lens_selection_or_exclusion!(_lenses, _excluded_lenses), do: :ok
 
   defp validate_type_filter!(field, values) when is_list(values) do
     Enum.each(values, fn
@@ -334,6 +353,42 @@ defmodule Gralkor.Client do
 
   defp validate_lens_names!(names),
     do: raise(ArgumentError, "search lenses must be a list, got #{inspect(names)}")
+
+  defp resolve_excluded_search_lenses!(names) do
+    validate_excluded_lens_names!(names)
+    registered = Enum.map(registered_lenses!(), &Keyword.get(&1, :name))
+
+    Enum.each(names, fn name ->
+      cond do
+        name in registered ->
+          :ok
+
+        name in ["operator", "default"] ->
+          raise ArgumentError,
+                "excluded Lens #{inspect(name)} was retired; use \"personal-chat\" instead"
+
+        true ->
+          raise ArgumentError, "unknown excluded Lens #{inspect(name)}"
+      end
+    end)
+
+    Enum.uniq(names)
+  end
+
+  defp validate_excluded_lens_names!(names) when is_list(names) do
+    Enum.each(names, fn
+      name when is_binary(name) ->
+        if String.trim(name) == "" do
+          raise ArgumentError, "invalid excluded Lens name #{inspect(name)}"
+        end
+
+      name ->
+        raise ArgumentError, "invalid excluded Lens name #{inspect(name)}"
+    end)
+  end
+
+  defp validate_excluded_lens_names!(names),
+    do: raise(ArgumentError, "search excluded_lenses must be a list, got #{inspect(names)}")
 
   @spec lens!(String.t()) :: Lens.t()
   def lens!(name) do
