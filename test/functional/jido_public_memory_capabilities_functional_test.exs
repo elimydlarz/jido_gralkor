@@ -849,7 +849,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   end
 
   describe "when unmodified Jido AI 2.3.0 sends memory search output to the provider > while the canonical Reflection payload contains deep lineage or domain keys ending in `_key`" do
-    test "then the provider receives the artefact's deep lineage and `_key` fields unchanged" do
+    test "then the provider receives deep lineage and `_key` fields unchanged" do
       history =
         Enum.reduce(1..12, %{"document_key" => "ABC-123"}, fn _, value ->
           %{"history" => value}

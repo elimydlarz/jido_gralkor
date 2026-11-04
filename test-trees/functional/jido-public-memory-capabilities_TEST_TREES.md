@@ -93,7 +93,7 @@ when unmodified Jido AI 2.3.0 sends memory search output to the provider
   then one decode of the tool envelope exposes the exact readable string returned by the action
   and the tool result contains readable bullets rather than a JSON-encoded result list
   while the canonical Reflection payload contains deep lineage or domain keys ending in `_key`
-    then the provider receives the artefact's deep lineage and `_key` fields unchanged
+    then the provider receives deep lineage and `_key` fields unchanged
   while more than 100 facts fit within the response limits
     then the provider receives every formatted fact without a synthetic omission item
   while source memories exceed the response limits
