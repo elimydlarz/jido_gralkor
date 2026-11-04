@@ -99,7 +99,9 @@ when search definitions are resolved from an active runtime
     then every accessible Destination and every selected Lens resolve from one snapshot
   while Destination and Lens names are supplied
     then those definitions resolve from one snapshot in first-selected order without duplicates
-  if any selected name is unknown
+  while excluded Lens names are supplied
+    then the excluded Lens definitions resolve from the same snapshot without duplicates
+  if any selected or excluded name is unknown
     then resolution fails without returning a partial result
 
 when a runtime-targeted call receives a live owning AgentServer PID

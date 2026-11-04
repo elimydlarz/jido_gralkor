@@ -19,9 +19,11 @@ when a caller searches memory
     and a Lens selector does not add that Lens's Destination to the supplied Destinations
 
   where the Lens selector is omitted or empty
+  and no Lens is excluded
     then results written directly or by every Lens or Destination artefact output can contribute
 
   where one or more Lenses are supplied
+  and no Lens is excluded
     then only episodes written through any supplied Lens are returned
     and only facts drawn from an episode written through any supplied Lens are returned
     and only entities mentioned by an episode written through any supplied Lens are returned
@@ -32,6 +34,22 @@ when a caller searches memory
     and a Lens supplied more than once is applied once
     while the search is made through an agent's runtime
       then Lens names resolve from that runtime's configuration
+
+  where one or more Lenses are excluded
+  and the Lens selector is omitted or empty
+    then no episode written through an excluded Lens is returned
+    and no fact drawn only from episodes written through excluded Lenses is returned
+    and no entity mentioned only by episodes written through excluded Lenses is returned
+    but a fact also drawn from an episode written by another writer is returned
+    and an entity also mentioned by an episode written by another writer is returned
+    and results written directly, through another Lens, through a Destination artefact output, or without recorded authorship can contribute
+    and excluded results cannot consume any per-Destination limit
+    and each returned fact's sources name no excluded Lens
+    and entity and edge type filters further restrict the remaining results
+    and each excluded Lens's Destination is still searched
+    and a Lens excluded more than once is applied once
+    while the search is made through an agent's runtime
+      then excluded Lens names resolve from that runtime's configuration
 
 where the selected Destinations include `personal`
   then only the current operator's `personal/<operator id>` graph is searched
@@ -81,8 +99,12 @@ if search supplies a field removed in 12.0.0
   and the error names the removed field
   and the error gives migration guidance for that field
 
-if search supplies any Destination or Lens selection that is not a list of registered non-blank names
+if search supplies any Destination selection, Lens selection, or Lens exclusion that is not a list of registered non-blank names
   then search fails before any Destination query is started
   and no valid subset is searched
-  and the error identifies whether the rejected selection was for Destinations or Lenses
+  and the error identifies whether the rejected selection was for Destinations, Lenses, or excluded Lenses
   and the error identifies the rejected value
+
+if search both selects and excludes Lenses
+  then search fails before any Destination query is started
+  and the error names both the Lens selection and the Lens exclusion

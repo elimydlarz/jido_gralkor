@@ -182,7 +182,7 @@ when a memory search is run for a group
       and its edge filter admits an edge whose source and target each carry any one of them
   while edge types are supplied
     then the single search's filter carries those relationship types
-  while neither node labels, edge types, nor Lenses are supplied
+  while neither node labels, edge types, selected Lenses, nor excluded Lenses are supplied
     then the single search's filter leaves every node and edge eligible
     and the graph library's own node and episode queries are issued unchanged
   while Lenses are supplied
@@ -194,6 +194,15 @@ when a memory search is run for a group
     while nothing in the group was written by a supplied Lens
       then the graph library is not searched
       and no facts, nodes, or episodes are returned
+  while excluded Lenses are supplied
+    then the single search's filter rejects episodes whose source description names an excluded Lens
+    and the single search's filter rejects edges drawn only from such episodes
+    and the single search's filter rejects nodes mentioned only by such episodes
+    and the graph library's node and edge queries apply those rejections before their limits
+    and the episode rejection is applied inside the full-text query, before its limit
+    and each rendered fact's sources omit episodes whose source description names an excluded Lens
+    while nothing in the group was written by an excluded Lens
+      then the single search's filter leaves every node, edge, and episode eligible
   when the query exceeds the graph library's full-text limit
     then the graph library receives a bounded non-empty query containing the earliest supported terms
   when a returned Reflection episode lacks its durable extraction-completion marker
