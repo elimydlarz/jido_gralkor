@@ -51,7 +51,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
   def run(params, context) do
     max_bytes =
       context
-      |> Map.get(:memory_search_max_bytes, 65_536)
+      |> Map.get(:memory_search_max_bytes, MemorySearchPresentation.default_max_bytes())
       |> MemorySearchPresentation.validate_max_bytes!()
 
     query = params |> Map.get(:query, "") |> to_string()
@@ -78,10 +78,8 @@ defmodule JidoGralkor.Actions.MemorySearch do
             Client.search(request)
         end
 
-      case result do
-        {:ok, results} -> MemorySearchPresentation.for_model(results, max_bytes)
-        {:error, reason} -> {:error, reason}
-      end
+      with {:ok, results} <- result,
+           do: MemorySearchPresentation.for_model(results, max_bytes)
     end
   end
 end

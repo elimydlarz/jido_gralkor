@@ -19,7 +19,6 @@ defmodule Gralkor.Recall do
   @no_memories_body "No relevant memories found."
   @default_max_results 10
   @default_deadline_ms 12_000
-  @max_bytes 65_536
 
   @type group_id :: String.t()
   @type session_id :: String.t() | nil
@@ -101,7 +100,7 @@ defmodule Gralkor.Recall do
         {:ok, @no_memories_body, 0}
 
       n_memories ->
-        with {:ok, %{result: body}} <- MemorySearchPresentation.for_model([memories], @max_bytes) do
+        with {:ok, %{result: body}} <- MemorySearchPresentation.for_model([memories]) do
           {:ok, body, n_memories}
         end
     end

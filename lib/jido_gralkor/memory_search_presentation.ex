@@ -34,6 +34,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
   """
 
   @type output :: %{result: String.t()}
+  @default_max_bytes 65_536
   @max_chars 16_384
   @max_memory_chars 4_000
   @entities_heading "Entities"
@@ -47,8 +48,12 @@ defmodule JidoGralkor.MemorySearchPresentation do
           "memory_search_max_bytes must be a positive integer, got: #{inspect(max_bytes)}"
   end
 
+  @doc "The byte budget every model-facing presentation uses unless told otherwise."
+  @spec default_max_bytes() :: pos_integer()
+  def default_max_bytes, do: @default_max_bytes
+
   @spec for_model([Gralkor.Search.result()], pos_integer()) :: {:ok, output()} | {:error, term()}
-  def for_model(results, max_bytes) do
+  def for_model(results, max_bytes \\ @default_max_bytes) do
     validate_max_bytes!(max_bytes)
     memories = memories(results)
     total = length(memories)
@@ -101,8 +106,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
     |> List.wrap()
     |> Enum.map(&prune/1)
     |> Enum.reject(&(&1 == :empty))
-    |> Enum.map(&{[heading(episode)], memory_text(lines(&1))})
-    |> with_details(episode, [episode])
+    |> Enum.map(&memory([heading(episode)], lines(&1), details(episode, [episode])))
   end
 
   # A payload's single outer key only names the Reflection's output field.
@@ -111,26 +115,21 @@ defmodule JidoGralkor.MemorySearchPresentation do
 
   defp unwrap(value), do: value
 
-  defp fact_memory(fact),
-    do:
-      {fact_headings(fact),
-       fact.fact
-       |> one_line()
-       |> memory_text()
-       |> append_details(details(fact, Map.get(fact, :sources, [])))}
-
-  defp with_details(memories, record, sources) do
-    Enum.map(memories, fn {headings, text} ->
-      {headings, append_details(text, details(record, sources))}
-    end)
+  defp fact_memory(fact) do
+    sources = Map.get(fact, :sources, [])
+    memory(fact_headings(fact), [one_line(fact.fact)], details(fact, sources))
   end
 
-  # The date and source suffix ends the bullet's first line.
-  defp append_details(text, details) do
-    case String.split(text, "\n", parts: 2) do
-      [first] -> first <> details
-      [first, rest] -> first <> details <> "\n" <> rest
-    end
+  # Every memory is its headings and its text: the lines cut past 4,000 characters,
+  # then the date and source suffix at the end of the first line.
+  defp memory(headings, lines, details) do
+    text =
+      case lines |> memory_text() |> String.split("\n", parts: 2) do
+        [first] -> first <> details
+        [first, rest] -> first <> details <> "\n" <> rest
+      end
+
+    {headings, text}
   end
 
   defp details(record, sources) do
@@ -188,10 +187,8 @@ defmodule JidoGralkor.MemorySearchPresentation do
 
     attributes =
       (Map.get(node, :attributes) || Map.get(node, :properties) || %{})
-      |> Enum.reject(fn {key, _value} ->
-        key |> to_string() |> String.starts_with?("_gralkor")
-      end)
       |> Map.new(fn {key, value} -> {to_string(key), value} end)
+      |> Map.reject(fn {key, _value} -> String.starts_with?(key, "_gralkor") end)
 
     fields =
       case prune(attributes) do
@@ -199,7 +196,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
         pruned -> field_lines(pruned)
       end
 
-    {[@entities_heading], memory_text([first | fields])}
+    memory([@entities_heading], [first | fields], "")
   end
 
   defp episode_memories(episode) do
@@ -218,7 +215,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
   defp plain_episode_memories(content, episode) do
     case one_line(content) do
       "" -> []
-      text -> with_details([{[heading(episode)], memory_text(text)}], episode, [episode])
+      text -> [memory([heading(episode)], [text], details(episode, [episode]))]
     end
   end
 
@@ -299,8 +296,6 @@ defmodule JidoGralkor.MemorySearchPresentation do
 
   # The bullet's text: its first line, then each other line under the text column,
   # cut past 4,000 characters counting every line.
-  defp memory_text(text) when is_binary(text), do: memory_text([text])
-
   defp memory_text([first | rest]) do
     text = Enum.join([first | Enum.map(rest, &("  " <> &1))], "\n")
 

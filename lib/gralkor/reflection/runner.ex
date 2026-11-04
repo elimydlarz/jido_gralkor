@@ -8,9 +8,6 @@ defmodule Gralkor.Reflection.Runner do
   alias Gralkor.Search
   alias JidoGralkor.MemorySearchPresentation
 
-  # The same default budget as `memory_search`, so prior memory reads the same way.
-  @stored_information_max_bytes 65_536
-
   def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
     inference = Keyword.get(opts, :inference, &default_inference/1)
     tool_executor = Keyword.get(opts, :tool_executor, &default_tool_executor/2)
@@ -229,14 +226,17 @@ defmodule Gralkor.Reflection.Runner do
 
   def default_inference(request, run_step, opts)
       when is_function(run_step, 3) and is_list(opts) do
-    max_bytes = Keyword.get(opts, :stored_information_max_bytes, @stored_information_max_bytes)
+    # Prior memory reads exactly as `memory_search` presents it to an agent.
+    max_bytes =
+      Keyword.get(
+        opts,
+        :stored_information_max_bytes,
+        MemorySearchPresentation.default_max_bytes()
+      )
 
-    case MemorySearchPresentation.for_model(request.stored_information, max_bytes) do
-      {:ok, %{result: stored_information}} ->
-        run_default_inference(request, stored_information, run_step, opts)
-
-      {:error, reason} ->
-        {:error, reason}
+    with {:ok, %{result: stored_information}} <-
+           MemorySearchPresentation.for_model(request.stored_information, max_bytes) do
+      run_default_inference(request, stored_information, run_step, opts)
     end
   end
 
