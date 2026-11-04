@@ -6,6 +6,10 @@ defmodule Gralkor.Reflection.Runner do
   alias Gralkor.Reflection
   alias Gralkor.Reflection.ChainOfThought
   alias Gralkor.Search
+  alias JidoGralkor.MemorySearchPresentation
+
+  # The same default budget as `memory_search`, so prior memory reads the same way.
+  @stored_information_max_bytes 65_536
 
   def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
     inference = Keyword.get(opts, :inference, &default_inference/1)
@@ -225,6 +229,18 @@ defmodule Gralkor.Reflection.Runner do
 
   def default_inference(request, run_step, opts)
       when is_function(run_step, 3) and is_list(opts) do
+    max_bytes = Keyword.get(opts, :stored_information_max_bytes, @stored_information_max_bytes)
+
+    case MemorySearchPresentation.for_model(request.stored_information, max_bytes) do
+      {:ok, %{result: stored_information}} ->
+        run_default_inference(request, stored_information, run_step, opts)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp run_default_inference(request, stored_information, run_step, opts) do
     prompt = """
     #{request.directions}
 
@@ -232,7 +248,7 @@ defmodule Gralkor.Reflection.Runner do
     #{Jason.encode!(serializable_representations(request))}
 
     Related stored information available to this Reflection step:
-    #{Jason.encode!(request.stored_information)}
+    #{stored_information}
 
     Return only one JSON object satisfying this exact output contract:
     #{Jason.encode!(request.output_schema)}
