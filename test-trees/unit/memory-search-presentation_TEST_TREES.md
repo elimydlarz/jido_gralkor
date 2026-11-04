@@ -1,13 +1,14 @@
 Unit: memory-search-presentation (src: lib/jido_gralkor/memory_search_presentation.ex; unit: test/jido_gralkor/memory_search_presentation_test.exs)
 
 when the memory search formatter is called
-  then every memory is one line of plain text under the heading of its writer
+  then every memory is one bullet under the heading of its writer, its first line its main text and each other field on its own indented line
   and whole Reflection artefacts come first, then facts, then episodes
   and headings keep first-appearance order with retrieval order inside each heading
   and the same text appears once under one heading
   and entities come last under an `Entities` heading
   and nothing is labelled as a fact, an episode, or an artefact
-  and the formatter adds no Destination, artefact identifier, level, or lineage metadata
+  and the formatter adds no record metadata such as a Destination, an artefact identifier, or a uuid
+  and level and lineage appear only as fields the payload itself carries
   and the structured input remains unchanged
   while no memories are supplied
     then the text explicitly states that no matching memory was found
@@ -35,26 +36,41 @@ when the formatter shows when a memory was true and where it came from
   and a memory with no dates or source description ends with no parentheses
 
 when the formatter presents entities
-  then each entity is one bullet with its complete name, summary, and attributes
+  then each entity's first line is `name: summary`, or only its name when it has no summary
+  and each attribute is its own indented `key: value` line, not an inline bracket
+  and entities with different attributes each show all of their own
   and internal `_gralkor` attributes are not shown
 
 when the formatter presents a Reflection artefact
   then its payload is presented whole as readable text
   and each item of a top-level list is its own bullet
-  and an object with a `content` string presents only that text
-  and an object with one field presents only that field's value
-  and any other object presents `key: value` pairs separated by semicolons
+  and a payload object with exactly one key is presented as that key's value, once, at the outer level only
+  and an object's `content` string is its first line and every other field follows
+  and an object without `content` puts its first field on the first line as `key: value`
+  and one-line fields come first in alphabetical order, then multi-line fields in alphabetical order
+  and a number or boolean is written as it is
+  and a list of plain values is one `key: a, b, c` line
+  and a list containing an object is a `key:` line followed by one nested bullet per item, laid out the same way
+  and a nested object is a `key:` line followed by its own fields two spaces further in
+  and a nested object with one field keeps its field name
+  and null, empty strings, empty lists, empty objects, and fields containing only those are left out
+  and the generalisation, erl, and entity examples render exactly as specified
   and an empty payload presents nothing
 
 when the formatter presents episodes
-  then an episode's text is presented whole on one line
+  then an episode that is not a structured record is presented whole on one line
   and a structured-record episode is presented as readable text the same way as a Reflection artefact
   and a structured-record episode whose content is not JSON keeps its text
 
+when the formatter shows a memory with several lines
+  then its date and source suffix ends its first line
+
 when one memory is longer than 4,000 characters
   then it is cut to 4,000 characters and marked as truncated
+  and its length counts every line with its indentation and line breaks
+  and the truncation marker ends the last line that is kept
   and a memory of exactly 4,000 characters is not cut
-  and its dates and source still follow the cut
+  and its dates and source still follow the cut without counting toward it
 
 when formatted results must fit response limits
   then an exact-fit response retains every memory

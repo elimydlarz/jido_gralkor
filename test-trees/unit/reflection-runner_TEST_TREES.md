@@ -54,9 +54,17 @@ when another Reflection runs
 
 when built-in inference is invoked for a step
   then it runs the configured model through Jido's standalone ReAct runtime with the directions, exact output contract, representations, and stored information
+  and the stored information is presented in the memory search format, including each generalisation's level and lineage
+  and the stored information is not presented as JSON
+  and the representations and output contract remain JSON
   and it supplies the host tools and a tool context whose operator identity comes from the invocation while every other supplied field remains unchanged
   and a final JSON object is returned as wrapped structured output
   if the provider fails or returns invalid JSON or a non-object JSON value
     then built-in inference returns the identified error
   if the ReAct runtime ends without a final answer
     then built-in inference returns its termination reason as an error
+  if the stored information cannot be formatted
+    then built-in inference returns the formatting error without calling the model
+
+when a consumer inference function is supplied
+  then it receives the stored information as the structured search results
