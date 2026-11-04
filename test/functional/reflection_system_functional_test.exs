@@ -1991,6 +1991,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
 
   defp expected_step_prompt(directions, representations, stored_information, schema) do
+    {:ok, %{result: stored_information}} =
+      JidoGralkor.MemorySearchPresentation.for_model(stored_information, 65_536)
+
     """
     #{directions}
 
@@ -1998,7 +2001,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     #{Jason.encode!(representations)}
 
     Related stored information available to this Reflection step:
-    #{Jason.encode!(stored_information)}
+    #{stored_information}
 
     Return only one JSON object satisfying this exact output contract:
     #{Jason.encode!(schema)}
