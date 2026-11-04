@@ -218,7 +218,24 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       end
     end)
 
-    {:ok, adventure: run_adventure(agent)}
+    adventure = run_adventure(agent)
+
+    # TEMPORARY-DUMP
+    File.write!(
+      "/Users/eli/.claude/jobs/03e25a86/tmp/journey_texts.txt",
+      Enum.join(
+        [
+          "===== MEMORY_SEARCH =====",
+          adventure.memory_search_text,
+          "===== RECALL =====",
+          inspect(adventure.recall_text, printable_limit: :infinity),
+          "===== PROMPTS =====" | adventure.later_generalisation_prompts
+        ],
+        "\n"
+      )
+    )
+
+    {:ok, adventure: adventure}
   end
 
   describe "when two operators use direct personal memory, Lenses, and asynchronously triggered Reflections" do
