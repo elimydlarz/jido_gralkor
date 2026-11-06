@@ -171,7 +171,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   end
 
   describe "when the memory search tool runs with a usable query > while Search returns results" do
-    test "then the action result is sections, each a heading and its readable text, with memories in their writers' sections and entities last in an `Entities in <Destination> memory` section for each searched Destination" do
+    test "then the action result is sections, each a heading and its readable text, with entities last" do
       assert {:ok, %{sections: sections}} =
                run_search(%{query: "launch", destinations: ["observations", "global"]})
 
