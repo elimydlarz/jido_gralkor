@@ -26,7 +26,13 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   """
 
   describe "when the memory search formatter is called" do
-    test "then every memory is one bullet under the heading of its writer, its first line its main text and each other field on its own indented line" do
+    test "then it returns sections, each a heading and its own text" do
+      assert Presentation.sections(facts([fact("one", [%{lens: "notes"}])])) == [
+               %{heading: "Lens: notes", text: "- one"}
+             ]
+    end
+
+    test "and every memory is one bullet in the section of its writer, its first line its main text and each other field on its own indented line" do
       input = [
         result("first", [fact("first\nfact", [%{lens: "notes"}])], [], [
           episode("first   episode", %{lens: "notes"}),
@@ -34,34 +40,45 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
         ])
       ]
 
-      assert rendered(input) ==
-               "Reflection: lessons\n- a lesson\n  owner: Platform team\n\n" <>
-                 "Lens: notes\n- first fact\n- first episode"
+      assert Presentation.sections(input) == [
+               %{heading: "Lens: notes", text: "- first fact\n- first episode"},
+               %{heading: "Reflection: lessons", text: "- a lesson\n  owner: Platform team"}
+             ]
     end
 
-    test "and whole Reflection artefacts come first, then facts, then episodes" do
+    test "and Lens sections come first, then Reflection sections, then Source sections, each kind in first-appearance order" do
+      input =
+        facts([
+          fact("one", [%{writer: :direct}]),
+          fact("two", [%{reflection: "lessons"}]),
+          fact("three", [%{lens: "z"}]),
+          fact("four", [%{lens: "a"}]),
+          fact("five", [%{lens: "z"}])
+        ])
+
+      assert Enum.map(Presentation.sections(input), & &1.heading) == [
+               "Lens: z",
+               "Lens: a",
+               "Reflection: lessons",
+               "Source: direct"
+             ]
+
+      assert section_text(input, "Lens: z") == "- three\n- five"
+    end
+
+    test "and inside each section whole Reflection artefacts come first, then facts, then episodes, each in retrieval order" do
       input = [
-        result("first", [fact("a fact", [%{lens: "notes"}])], [], [
-          episode("an episode", %{lens: "notes"})
+        result("first", [fact("a fact", [%{reflection: "lessons"}])], [], [
+          %{content: "an episode", reflection: "lessons"}
         ]),
         result("second", [], [], [artefact("lessons", %{"lesson" => "an artefact"})])
       ]
 
-      assert rendered(input) ==
-               "Reflection: lessons\n- an artefact\n\nLens: notes\n- a fact\n- an episode"
+      assert section_text(input, "Reflection: lessons") ==
+               "- an artefact\n- a fact\n- an episode"
     end
 
-    test "and headings keep first-appearance order with retrieval order inside each heading" do
-      assert rendered(
-               facts([
-                 fact("one", [%{lens: "z"}]),
-                 fact("two", [%{lens: "a"}]),
-                 fact("three", [%{lens: "z"}])
-               ])
-             ) == "Lens: z\n- one\n- three\n\nLens: a\n- two"
-    end
-
-    test "and the same text appears once under one heading" do
+    test "and the same text appears once in one section" do
       input = [
         result("global", [fact("one", [%{lens: "notes"}])], [], [episode("one", %{lens: "notes"})])
       ]
@@ -69,17 +86,17 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       assert rendered(input) == "Lens: notes\n- one"
     end
 
-    test "and a memory whose whole text is another memory's first line under the same heading is left out beside it" do
+    test "and a memory whose whole text is another memory's first line in the same section is left out beside it" do
       generalisation =
         artefact("generalisations", %{
           "generalisations" => [%{"content" => "Use canaries", "level" => 2}]
         })
 
       extracted = fact("Use canaries", [%{reflection: "generalisations"}])
-      other_heading = fact("Use canaries", [%{lens: "notes"}])
+      other_section = fact("Use canaries", [%{lens: "notes"}])
 
-      assert rendered([result("global", [extracted, other_heading], [], [generalisation])]) ==
-               "Reflection: generalisations\n- Use canaries\n  level: 2\n\nLens: notes\n- Use canaries"
+      assert rendered([result("global", [extracted, other_section], [], [generalisation])]) ==
+               "Lens: notes\n- Use canaries\n\nReflection: generalisations\n- Use canaries\n  level: 2"
 
       assert rendered(
                [result("global", [extracted], [], [])] ++
@@ -88,13 +105,18 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
                "Reflection: generalisations\n- Use canaries\n  level: 2"
     end
 
-    test "and entities come last under an `Entities` heading" do
+    test "and entities follow every writer section, in one `Entities in <Destination> memory` section for each searched Destination that returned entities, in Destination order" do
       input = [
+        result("personal", [], [], []),
         result("global", [], [entity("Atlas")], [episode("an episode", %{lens: "notes"})]),
         result("second", [], [entity("Borealis")], [])
       ]
 
-      assert rendered(input) == "Lens: notes\n- an episode\n\nEntities\n- Atlas\n- Borealis"
+      assert Presentation.sections(input) == [
+               %{heading: "Lens: notes", text: "- an episode"},
+               %{heading: "Entities in global memory", text: "- Atlas"},
+               %{heading: "Entities in second memory", text: "- Borealis"}
+             ]
     end
 
     test "and nothing is labelled as a fact, an episode, or an artefact" do
@@ -112,7 +134,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       refute text =~ "Excerpt"
     end
 
-    test "and the formatter adds no record metadata such as a Destination, an artefact identifier, or a uuid" do
+    test "and the formatter adds no record metadata such as an artefact identifier or a uuid" do
       episode =
         artefact("lessons", %{"lesson" => "Use canaries", "level" => 1})
         |> Map.merge(%{uuid: "episode-uuid", group_id: "g_676c6f62616c", destination: "global"})
@@ -122,11 +144,12 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       text = rendered([result("global", [], [node], [episode])])
 
       assert text ==
-               "Reflection: lessons\n- lesson: Use canaries\n  level: 1\n\nEntities\n- Atlas: A rollout"
+               "Reflection: lessons\n- lesson: Use canaries\n  level: 1\n\n" <>
+                 "Entities in global memory\n- Atlas: A rollout"
 
       refute text =~ "artefact-id"
       refute text =~ "uuid"
-      refute text =~ "global"
+      refute text =~ "g_676c6f62616c"
     end
 
     test "and level and lineage appear only as fields the payload itself carries" do
@@ -151,9 +174,26 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   end
 
   describe "when the memory search formatter is called > while no memories are supplied" do
-    test "then the text explicitly states that no matching memory was found" do
-      assert rendered([]) == "Memory\nNo matching memory."
-      assert rendered([result("global", [], [], [])]) == "Memory\nNo matching memory."
+    test "then one section explicitly states that no matching memory was found" do
+      assert Presentation.sections([]) == [%{heading: "Memory", text: "No matching memory."}]
+
+      assert Presentation.sections([result("global", [], [], [])]) == [
+               %{heading: "Memory", text: "No matching memory."}
+             ]
+    end
+  end
+
+  describe "when the formatter's sections are presented as one text" do
+    test "then each section is its heading followed by its text on the next line" do
+      assert Presentation.text([%{heading: "Lens: notes", text: "- one\n- two"}]) ==
+               "Lens: notes\n- one\n- two"
+    end
+
+    test "and sections are separated by one blank line in section order" do
+      assert Presentation.text([
+               %{heading: "Lens: notes", text: "- one"},
+               %{heading: "Entities in global memory", text: "- Atlas"}
+             ]) == "Lens: notes\n- one\n\nEntities in global memory\n- Atlas"
     end
   end
 
