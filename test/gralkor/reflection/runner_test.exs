@@ -525,8 +525,10 @@ defmodule Gralkor.Reflection.RunnerTest do
     test "and the stored information is presented in the memory search format, including each generalisation's level and lineage" do
       prompt = built_in_prompt(default_inference_request())
 
-      {:ok, %{result: formatted}} =
-        JidoGralkor.MemorySearchPresentation.for_model(stored_generalisations(), 65_536)
+      formatted =
+        stored_generalisations()
+        |> JidoGralkor.MemorySearchPresentation.sections()
+        |> JidoGralkor.MemorySearchPresentation.text()
 
       assert stored_section(prompt) == formatted
 
