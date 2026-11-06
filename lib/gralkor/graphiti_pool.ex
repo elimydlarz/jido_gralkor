@@ -240,7 +240,7 @@ defmodule Gralkor.GraphitiPool do
   """
 
   @fact_rendering """
-  async def render_facts(g, edges, lens_names=(), lens_suffixes=(), excluded_suffixes=(), kept_episode_ids=None):
+  async def render_facts(g, edges, kept_episode_ids=None):
       from graphiti_core.nodes import EpisodicNode
       episode_ids = list(dict.fromkeys(
           episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
@@ -295,8 +295,6 @@ defmodule Gralkor.GraphitiPool do
               }
               for episode_id in (getattr(edge, "episodes", None) or [])
               if episode_id in episodes_by_id
-              and (not lens_names or (episodes_by_id[episode_id].source_description or "").endswith(lens_suffixes))
-              and not (excluded_suffixes and (episodes_by_id[episode_id].source_description or "").endswith(excluded_suffixes))
               and (kept_episode_ids is None or episode_id in kept_episode_ids)
           ]
           if sources:
@@ -529,9 +527,7 @@ defmodule Gralkor.GraphitiPool do
         labels = [text(label) for label in node_labels] if node_labels else None
         types = [text(edge_type) for edge_type in edge_types] if edge_types else None
         lens_names = [text(name) for name in lenses] if lenses else []
-        lens_suffixes = tuple(f' [lens: {name}]' for name in lens_names)
         excluded_names = [text(name) for name in excluded_lenses] if excluded_lenses else []
-        excluded_suffixes = tuple(f' [lens: {name}]' for name in excluded_names)
         supported_query_terms = [
           word
           for word in sanitize_falkor_fulltext_query(q).split()
