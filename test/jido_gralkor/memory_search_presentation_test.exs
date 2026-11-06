@@ -18,7 +18,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     problem_kind: job scheduling
     success: true
 
-  Entities
+  Entities in global memory
   - Atlas: A rollout
     owner: Platform
     region: eu-west
