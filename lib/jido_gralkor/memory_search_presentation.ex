@@ -113,7 +113,6 @@ defmodule JidoGralkor.MemorySearchPresentation do
 
     Enum.flat_map(artefacts, &artefact_memories/1) ++
       Enum.map(Enum.flat_map(results, &Map.get(&1, :facts, [])), &fact_memory/1) ++
-      Enum.map(Enum.flat_map(results, &Map.get(&1, :nodes, [])), &entity_memory/1) ++
       Enum.flat_map(episodes, &episode_memories/1)
   end
 
