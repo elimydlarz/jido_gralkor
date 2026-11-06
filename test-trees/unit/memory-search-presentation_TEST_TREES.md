@@ -88,7 +88,7 @@ when a section is limited
   while it is a direct or unknown Source section
     then its text never exceeds 6,000 characters
   while it is an Entities section
-    then its text never exceeds 4,000 characters
+    then its text never exceeds 6,000 characters
   while its memories total at most its limit
     then every memory is kept
     and it has no omission notice

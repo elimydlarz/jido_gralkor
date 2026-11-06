@@ -13,7 +13,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
 
   Each section has its own character limit, and no limit applies across sections:
   a Lens section's text stays within 12,000 characters, a Reflection's within
-  8,000, a Source's within 6,000, and an Entities section's within 4,000, all under
+  8,000, and a Source's and an Entities section's within 6,000, all under
   Jido AI's 16,384-character string limit. A section over its limit keeps its
   memories in order while they fit with its omission notice, omits the rest whole,
   and ends with the number it omitted.
@@ -45,7 +45,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
   @max_memory_chars 4_000
   @main_text_field "content"
   @no_memory %{heading: "Memory", text: "No matching memory."}
-  @limits %{lens: 12_000, reflection: 8_000, source: 6_000, entities: 4_000}
+  @limits %{lens: 12_000, reflection: 8_000, source: 6_000, entities: 6_000}
 
   @doc "The search results as sections: each Lens, Reflection, and Source, then each Destination's entities."
   @spec sections([Gralkor.Search.result()]) :: [section()]

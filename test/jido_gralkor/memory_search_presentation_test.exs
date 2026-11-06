@@ -727,12 +727,16 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   end
 
   describe "when a section is limited > while it is an Entities section" do
-    test "then its text never exceeds 4,000 characters" do
+    test "then its text never exceeds 6,000 characters" do
       nodes = for index <- 1..100, do: entity(long("#{index}", 200))
 
       text = section_text([result("global", [], nodes, [])], "Entities in global memory")
-      assert String.length(text) <= 4_000
-      assert String.length(text) > 3_000
+      assert String.length(text) <= 6_000
+      assert String.length(text) > 5_000
+
+      cut = section_text([result("global", [], [entity(long("long", 5_000))], [])], "Entities in global memory")
+      assert cut =~ "… (truncated)"
+      refute cut =~ "omitted"
     end
   end
 
