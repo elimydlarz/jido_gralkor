@@ -240,17 +240,12 @@ defmodule Gralkor.Reflection.Runner do
   def default_inference(request, run_step, opts)
       when is_function(run_step, 3) and is_list(opts) do
     # Prior memory reads exactly as `memory_search` presents it to an agent.
-    max_bytes =
-      Keyword.get(
-        opts,
-        :stored_information_max_bytes,
-        MemorySearchPresentation.default_max_bytes()
-      )
+    stored_information =
+      request.stored_information
+      |> MemorySearchPresentation.sections()
+      |> MemorySearchPresentation.text()
 
-    with {:ok, %{result: stored_information}} <-
-           MemorySearchPresentation.for_model(request.stored_information, max_bytes) do
-      run_default_inference(request, stored_information, run_step, opts)
-    end
+    run_default_inference(request, stored_information, run_step, opts)
   end
 
   defp run_default_inference(request, stored_information, run_step, opts) do
