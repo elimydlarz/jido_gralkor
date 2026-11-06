@@ -108,7 +108,11 @@ defmodule JidoGralkor.MemorySearchPresentation do
         end)
 
       notice = omission(length(texts) - length(kept))
-      %{heading: heading, text: if(kept == [], do: notice, else: bullets(kept) <> "\n\n" <> notice)}
+
+      %{
+        heading: heading,
+        text: if(kept == [], do: notice, else: bullets(kept) <> "\n\n" <> notice)
+      }
     end
   end
 

@@ -734,7 +734,12 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       assert String.length(text) <= 6_000
       assert String.length(text) > 5_000
 
-      cut = section_text([result("global", [], [entity(long("long", 5_000))], [])], "Entities in global memory")
+      cut =
+        section_text(
+          [result("global", [], [entity(long("long", 5_000))], [])],
+          "Entities in global memory"
+        )
+
       assert cut =~ "… (truncated)"
       refute cut =~ "omitted"
     end
