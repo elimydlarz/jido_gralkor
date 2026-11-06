@@ -927,6 +927,29 @@ defmodule Gralkor.Reflection.RunnerTest do
              end)
   end
 
+  defp script_step(directions, schema, answer) do
+    Jido.AI.Test.ReActScript.new(%{
+      user: """
+      #{directions}
+
+      Lensed representations available to this Reflection step:
+      []
+
+      Return only one JSON object satisfying this exact output contract:
+      #{Jason.encode!(schema)}
+
+      The quoted contract values are type declarations, not literal output
+      values. Emit actual JSON values of those types. In particular, an object
+      declaration such as "{ field: string }" requires a nested JSON object,
+      and an Array<...> declaration requires a JSON array; do not quote either.
+      """,
+      turns: [%{type: :answer, text: answer}]
+    })
+    |> Jido.AI.Test.ReActScript.register()
+
+    on_exit(fn -> Jido.AI.Test.ReActScript.clear_current_owner() end)
+  end
+
   defp built_in_config(request, opts) do
     test_pid = self()
 
