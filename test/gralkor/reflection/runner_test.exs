@@ -119,6 +119,45 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
   end
 
+  describe "when the Reflection Runner receives a valid Reflection and invocation > where a model resolver is supplied without a consumer inference function" do
+    test "then every step's built-in inference runs the model that resolver names" do
+      test_pid = self()
+
+      reflection = %Reflection{
+        name: "resolved-model",
+        outputs: [],
+        chain_of_thought: %ChainOfThought{
+          steps: [
+            %Step{label: "gather", directions: "Gather.", output: %{"facts" => "string"}},
+            %Step{
+              label: "conclude",
+              directions: "Conclude from {{facts}}.",
+              output: %{"answer" => "string"}
+            }
+          ]
+        }
+      }
+
+      script_step("Gather.", %{"facts" => "string"}, ~s({"facts":"known"}))
+      script_step("Conclude from known.", %{"answer" => "string"}, ~s({"answer":"ready"}))
+
+      resolver = fn ->
+        send(test_pid, :model_resolved)
+        %{provider: "openai", id: "gpt-6-luna"}
+      end
+
+      assert {:ok, %Artefact{payload: %{"answer" => "ready"}}} =
+               Runner.run(
+                 reflection,
+                 %{id: "resolved-model-run", operator_id: "operator-one", representations: []},
+                 model_resolver: resolver
+               )
+
+      assert_received :model_resolved
+      assert_received :model_resolved
+    end
+  end
+
   describe "where a step's directions reference earlier outputs" do
     test "then those values are interpolated from the shared output space" do
       assert {:ok, %Artefact{}} = run_successful_sequence()
