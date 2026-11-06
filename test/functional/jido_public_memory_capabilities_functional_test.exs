@@ -676,24 +676,24 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   end
 
   describe "when a consumer explicitly formats structured fact search results" do
-    test "then named Lens sources have headings of the form `Lens: <name>`" do
+    test "then named Lens sources have sections headed `Lens: <name>`" do
       assert rendered([fact("Use retries", [%{lens: "jira"}])]) ==
                "Lens: jira\n- Use retries"
     end
 
-    test "and named Reflection sources have headings of the form `Reflection: <name>`" do
+    test "and named Reflection sources have sections headed `Reflection: <name>`" do
       assert rendered([fact("Use canaries", [%{reflection: "lessons"}])]) ==
                "Reflection: lessons\n- Use canaries"
     end
 
-    test "and each source heading is followed by bullets containing its returned fact text" do
+    test "and each source's section holds bullets containing its returned fact text" do
       assert rendered([
                fact("First\ncontinued", [%{lens: "notes"}]),
                fact("Second", [%{lens: "notes"}])
              ]) == "Lens: notes\n- First continued\n- Second"
     end
 
-    test "and source groups retain first-appearance order" do
+    test "and source sections retain first-appearance order" do
       assert rendered([
                fact("one", [%{lens: "z"}]),
                fact("two", [%{lens: "a"}]),
@@ -701,94 +701,139 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
              ]) == "Lens: z\n- one\n- three\n\nLens: a\n- two"
     end
 
-    test "and facts retain retrieval order within each source group" do
+    test "and facts retain retrieval order within each source section" do
       assert rendered([
                fact("one", [%{lens: "z"}]),
                fact("two", [%{lens: "a"}]),
                fact("three", [%{lens: "z"}])
              ]) == "Lens: z\n- one\n- three\n\nLens: a\n- two"
+    end
+
+    test "and each searched Destination's entities follow every source section in an `Entities in <Destination> memory` section" do
+      results = [
+        %{
+          destination: "global",
+          facts: [fact("one", [%{lens: "notes"}])],
+          nodes: [%{name: "Atlas", summary: "A rollout", attributes: %{}}],
+          episodes: []
+        }
+      ]
+
+      assert Presentation.sections(results) == [
+               %{heading: "Lens: notes", text: "- one"},
+               %{heading: "Entities in global memory", text: "- Atlas: A rollout"}
+             ]
     end
   end
 
   describe "when a consumer explicitly formats structured fact search results > while a fact has several named sources" do
-    test "then the fact appears once under each distinct named source" do
+    test "then the fact appears once in each distinct named source's section" do
       assert rendered([fact("shared", [%{lens: "notes"}, %{reflection: "lessons"}])]) ==
                "Lens: notes\n- shared\n\nReflection: lessons\n- shared"
     end
   end
 
   describe "when a consumer explicitly formats structured fact search results > while a Lens and a Reflection share a name" do
-    test "then their facts remain in separate source groups" do
+    test "then their facts remain in separate source sections" do
       assert rendered([fact("one", [%{lens: "same"}]), fact("two", [%{reflection: "same"}])]) ==
                "Lens: same\n- one\n\nReflection: same\n- two"
     end
   end
 
   describe "when a consumer explicitly formats structured fact search results > while a fact has no named Lens or Reflection provenance" do
-    test "then the fact appears under `Source: unknown`" do
+    test "then the fact appears in the `Source: unknown` section" do
       assert rendered([fact("one", []), fact("two", [%{source_description: "legacy"}])]) ==
                "Source: unknown\n- one\n- two (source: legacy)"
     end
   end
 
   describe "when a consumer explicitly formats structured fact search results > while search returns no facts, entities, or episodes" do
-    test "then the text explicitly states that no matching memory was found" do
-      assert rendered([]) == "No matching memory."
+    test "then one section explicitly states that no matching memory was found" do
+      assert Presentation.sections([]) == [%{heading: "Memory", text: "No matching memory."}]
     end
   end
 
   describe "when memory search formats memories for the consuming agent" do
-    test "then the complete text including headings and omission notices stays within 16384 characters" do
+    test "then every section's text stays within its own character limit" do
       ingest_large_memories(5)
 
-      assert {:ok, %{result: text}} =
+      assert {:ok, %{sections: [%{heading: "Lens: observations", text: text}]}} =
                memory_search(%{query: "x", destinations: ["observations"]}, [])
 
-      assert text =~ "omitted (response limit)."
-      assert String.length(text) <= 16_384
+      assert text =~ "omitted (section limit)."
+      assert String.length(text) <= 12_000
     end
 
-    test "and the serialized success envelope fits the configured byte budget" do
-      assert :ok = ingest_memory("observations", String.duplicate("λ\n\"", 100))
-      assert :ok = ingest_memory("observations", "small")
+    test "and no section's text exceeds 16384 characters" do
+      ingest_large_memories(5)
 
-      result =
-        memory_search(%{query: "x", destinations: ["observations"]}, memory_search_max_bytes: 200)
+      assert {:ok, %{sections: sections}} =
+               memory_search(%{query: "x", destinations: ["observations"]}, [])
 
-      assert byte_size(Jido.AI.Turn.format_tool_result_content(result)) <= 200
+      assert Enum.all?(sections, &(String.length(&1.text) <= 16_384))
     end
 
     test "and every included memory retains its complete text" do
       content = "Exact λ text\nwith another line."
       assert :ok = ingest_memory("observations", content)
 
-      assert {:ok, %{result: text}} =
+      assert {:ok, %{sections: sections}} =
                memory_search(%{query: "x", destinations: ["observations"]}, [])
 
-      assert text ==
-               "Lens: observations\n- Exact λ text with another line. (source: functional)"
+      assert sections == [
+               %{
+                 heading: "Lens: observations",
+                 text: "- Exact λ text with another line. (source: functional)"
+               }
+             ]
     end
   end
 
-  describe "when memory search formats memories for the consuming agent > while a memory cannot fit within the response limits" do
-    test "then that whole memory is omitted while later fitting memories remain eligible" do
+  describe "when memory search formats memories for the consuming agent > while Lenses and Reflections both returned matching memory" do
+    test "then every one of those sources has a section holding its own memories" do
+      ingest_large_memories(5)
+      put_generalisation("Use canaries.", 1, [])
+
+      assert {:ok, %{sections: sections}} =
+               memory_search(%{query: "x", destinations: ["observations", "generalisations"]}, [])
+
+      assert %{text: lens} = Enum.find(sections, &(&1.heading == "Lens: observations"))
+      assert %{text: lessons} = Enum.find(sections, &(&1.heading == "Reflection: generalisations"))
+      assert lens =~ "omitted (section limit)."
+      assert lessons =~ "Use canaries."
+    end
+  end
+
+  describe "when memory search formats memories for the consuming agent > while a section's memories cannot all fit within its limit" do
+    test "then a whole memory is omitted while later fitting memories remain eligible" do
       ingest_large_memories(5)
       assert :ok = ingest_memory("observations", "later")
 
-      assert {:ok, %{result: text}} =
+      assert {:ok, %{sections: [%{text: text}]}} =
                memory_search(%{query: "x", destinations: ["observations"]}, [])
 
       assert text =~ "\n- later (source: functional)\n"
       refute text =~ "- 5 "
     end
 
-    test "and the text reports the omitted memory count and response-limit reason" do
+    test "and that section reports its own omitted memory count and section-limit reason" do
       ingest_large_memories(5)
 
-      assert {:ok, %{result: text}} =
+      assert {:ok, %{sections: [%{text: text}]}} =
                memory_search(%{query: "x", destinations: ["observations"]}, [])
 
-      assert text =~ ~r/\d+ more memor(y|ies) omitted \(response limit\)\.$/
+      assert text =~ ~r/\d+ more memor(y|ies) omitted \(section limit\)\.$/
+    end
+
+    test "but every other section keeps its memories" do
+      ingest_large_memories(5)
+      put_generalisation("Use canaries.", 1, [])
+
+      assert {:ok, %{sections: sections}} =
+               memory_search(%{query: "x", destinations: ["observations", "generalisations"]}, [])
+
+      assert %{text: lessons} = Enum.find(sections, &(&1.heading == "Reflection: generalisations"))
+      refute lessons =~ "omitted"
     end
   end
 
@@ -796,55 +841,37 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     test "then it is cut to 4,000 characters and marked as truncated" do
       assert :ok = ingest_memory("observations", String.duplicate("x", 17_000))
 
-      assert {:ok, %{result: text}} =
+      assert {:ok, %{sections: [%{text: text}]}} =
                memory_search(%{query: "x", destinations: ["observations"]}, [])
 
       assert text ==
-               "Lens: observations\n- " <>
-                 String.duplicate("x", 4_000) <> "… (truncated) (source: functional)"
-    end
-  end
-
-  describe "when memory search formats memories for the consuming agent > while the byte budget cannot hold an empty response with the required notice" do
-    test "then an explicit budget error is returned" do
-      assert {:error, {:memory_search_budget_too_small, %{max_bytes: 1, minimum_bytes: minimum}}} =
-               memory_search(%{query: "x"}, memory_search_max_bytes: 1)
-
-      assert minimum > 1
-    end
-  end
-
-  describe "when memory search formats memories for the consuming agent > if the byte budget is not a positive integer" do
-    test "then the action rejects the budget before searching memory" do
-      Application.put_env(:jido_gralkor, :destination_storage, RecordingSearchStorage)
-      Application.put_env(:jido_gralkor, :public_search_test_pid, self())
-      on_exit(fn -> Application.delete_env(:jido_gralkor, :public_search_test_pid) end)
-
-      for invalid <- [0, -1, nil, 1.5, "100"] do
-        assert_raise ArgumentError, ~r/memory_search_max_bytes.*positive integer/, fn ->
-          memory_search(%{query: "x"}, memory_search_max_bytes: invalid)
-        end
-      end
-
-      refute_received {:public_search, _, _, _, _}
+               "- " <> String.duplicate("x", 4_000) <> "… (truncated) (source: functional)"
     end
   end
 
   describe "when unmodified Jido AI 2.3.0 sends memory search output to the provider" do
-    test "then one decode of the tool envelope exposes the exact readable string returned by the action" do
+    test "then one decode of the tool envelope exposes every section's exact heading and readable text returned by the action" do
       assert :ok = ingest_memory("observations", "A precise fact with document_key and λ.")
       params = %{query: "x", destinations: ["observations"]}
-      assert {:ok, expected} = memory_search(params, [])
+      assert {:ok, %{sections: sections}} = memory_search(params, [])
       {wire, _} = provider_memory_result(params)
-      assert wire == %{"ok" => true, "result" => %{"result" => expected.result}}
+
+      assert wire == %{
+               "ok" => true,
+               "result" => %{
+                 "sections" =>
+                   Enum.map(sections, &%{"heading" => &1.heading, "text" => &1.text})
+               }
+             }
     end
 
-    test "and the tool result contains readable bullets rather than a JSON-encoded result list" do
+    test "and each section's text contains readable bullets rather than JSON-encoded memories" do
       assert :ok = ingest_memory("observations", "Use retries.")
       {wire, _} = provider_memory_result(%{query: "x", destinations: ["observations"]})
 
-      assert wire["result"]["result"] ==
-               "Lens: observations\n- Use retries. (source: functional)"
+      assert wire_sections(wire) == [
+               {"Lens: observations", "- Use retries. (source: functional)"}
+             ]
     end
   end
 
@@ -863,16 +890,13 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
           for(depth <- 1..11, do: String.duplicate(" ", 4 + 2 * depth) <> "history:") ++
           [String.duplicate(" ", 28) <> "document_key: ABC-123"]
 
-      assert wire["result"]["result"] ==
-               Enum.join(
-                 [
-                   "Reflection: generalisations",
-                   "- Use canaries for ABC-123.",
-                   "  level: 2",
-                   "  evolves_from:" | lineage
-                 ],
-                 "\n"
-               )
+      assert wire_sections(wire) == [
+               {"Reflection: generalisations",
+                Enum.join(
+                  ["- Use canaries for ABC-123.", "  level: 2", "  evolves_from:" | lineage],
+                  "\n"
+                )}
+             ]
 
       assert {:ok, [%{destination: "generalisations", episodes: [%{artefact: stored}]}]} =
                Client.search(%Gralkor.Search{
@@ -885,8 +909,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
-  describe "when unmodified Jido AI 2.3.0 sends memory search output to the provider > while more than 100 facts fit within the response limits" do
-    test "then the provider receives every formatted fact without a synthetic omission item" do
+  describe "when unmodified Jido AI 2.3.0 sends memory search output to the provider > while every section fits within its limit" do
+    test "then the provider receives every section's text whole, without a truncation marker" do
       names = Enum.map(1..6, &"transport-#{&1}")
       Application.put_env(:jido_gralkor, :destinations, Enum.map(names, &[name: &1]))
 
@@ -901,36 +925,37 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       for index <- 0..100,
           do: assert(:ok = ingest_memory(Enum.at(names, div(index, 20)), "record-#{index}"))
 
-      params = %{query: "x", destinations: names}
-      {wire, _} = provider_memory_result(params)
+      {wire, _} = provider_memory_result(%{query: "x", destinations: names})
 
-      facts =
-        Enum.map_join(Enum.with_index(names), "\n\n", fn {name, n} ->
-          "Lens: #{name}\n" <>
-            Enum.map_join(
-              (n * 20)..min(n * 20 + 19, 100),
-              "\n",
-              &"- record-#{&1} (source: functional)"
-            )
+      expected =
+        Enum.map(Enum.with_index(names), fn {name, n} ->
+          {"Lens: #{name}",
+           Enum.map_join(
+             (n * 20)..min(n * 20 + 19, 100),
+             "\n",
+             &"- record-#{&1} (source: functional)"
+           )}
         end)
 
-      assert wire["result"]["result"] == facts
+      assert wire_sections(wire) == expected
+      refute inspect(wire) =~ "truncated"
     end
   end
 
-  describe "when unmodified Jido AI 2.3.0 sends memory search output to the provider > while source memories exceed the response limits" do
-    test "then the provider receives an explicit omission notice instead of a sliced memory" do
+  describe "when unmodified Jido AI 2.3.0 sends memory search output to the provider > while a section's memories exceed its limit" do
+    test "then the provider receives that section's explicit omission notice instead of a sliced memory" do
       ingest_large_memories(5)
       assert :ok = ingest_memory("observations", "small")
       {wire, _} = provider_memory_result(%{query: "x", destinations: ["observations"]})
 
-      assert wire["result"]["result"] =~ "\n- small (source: functional)\n"
-      assert wire["result"]["result"] =~ ~r/omitted \(response limit\)\.$/
-      refute wire["result"]["result"] =~ "(truncated)"
+      [{_heading, text}] = wire_sections(wire)
+      assert text =~ "\n- small (source: functional)\n"
+      assert text =~ ~r/omitted \(section limit\)\.$/
+      refute text =~ "(truncated)"
     end
   end
 
-  defp provider_memory_result(params, max_bytes \\ 65_536) do
+  defp provider_memory_result(params) do
     jido = Jido.default_instance()
     start_supervised!({Jido, name: jido, otp_app: :jido_gralkor})
 
@@ -986,7 +1011,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     assert {:ok, "done"} =
              TransportMemoryAgent.ask_sync(agent, "Search memory",
-               tool_context: %{memory_search_max_bytes: max_bytes},
                llm_opts: [api_key: "test-provider-key"],
                req_http_options: [adapter: adapter]
              )
@@ -998,10 +1022,13 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   defp fact(text, sources), do: %{fact: text, sources: sources}
 
   defp rendered(facts) do
-    results = [%{destination: "global", facts: facts, nodes: [], episodes: []}]
-    assert {:ok, %{result: text}} = Presentation.for_model(results, 65_536)
-    text
+    [%{destination: "global", facts: facts, nodes: [], episodes: []}]
+    |> Presentation.sections()
+    |> Presentation.text()
   end
+
+  defp wire_sections(wire),
+    do: Enum.map(wire["result"]["sections"], &{&1["heading"], &1["text"]})
 
   defp ingest_large_memories(count) do
     for number <- 1..count do
