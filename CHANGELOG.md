@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- **A long entity was dropped instead of shown cut.** An `Entities in <Destination> memory` section's limit (4,000 characters) was smaller than one cut memory (4,000 characters plus `… (truncated)` and its bullet), so an entity long enough to be cut never fit and only its omission notice appeared. The Entities limit is now 6,000 characters, so any single memory fits.
+- **A section that kept no memory began with blank lines.** Its text is now just its omission notice.
 - **With an `:observer`, an exception in a step's ReAct stream surfaced as a `MatchError`.** Built-in inference reduced the observed stream with `ReAct.collect/3`, which wraps exceptions in `{:error, exception}`, and matched only `{:ok, result}`. It now reduces with `ReAct.collect_stream/1`, exactly as `ReAct.run/3` does, so a failure keeps its original type and stacktrace and the result is the same as without an observer.
 
 ## [16.0.0] - 2026-11-06
