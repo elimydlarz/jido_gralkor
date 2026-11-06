@@ -219,7 +219,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
         pruned -> field_lines(pruned)
       end
 
-    memory([@entities_heading], [first | fields], "")
+    memory([], [first | fields], "")
   end
 
   defp episode_memories(episode) do
