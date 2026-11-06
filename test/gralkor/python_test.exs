@@ -63,6 +63,12 @@ defmodule Gralkor.PythonTest do
       assert manifest =~ "OpenAI LLM, embedder, and reranker"
     end
 
+    test "and the packaged manifest keeps the Google provider package below the release that stopped installing httpx, which the graph library imports" do
+      manifest = File.read!(Path.expand("../../priv/python/pyproject.toml", __DIR__))
+
+      assert manifest =~ ~r/^\s*"google-genai<3",?\s*$/m
+    end
+
     test "and changing the packaged manifest triggers recompilation" do
       manifest_path = Path.expand("../../priv/python/pyproject.toml", __DIR__)
 
