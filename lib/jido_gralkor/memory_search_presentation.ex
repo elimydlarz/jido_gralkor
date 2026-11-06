@@ -327,25 +327,6 @@ defmodule JidoGralkor.MemorySearchPresentation do
       else: text
   end
 
-  defp output(memories, total) do
-    sections =
-      memories
-      |> group_by_heading()
-      |> Enum.map(fn {heading, texts} ->
-        heading <> "\n" <> Enum.map_join(texts, "\n", &"- #{&1}")
-      end)
-
-    sections =
-      case {total - length(memories), sections} do
-        {0, []} -> ["No matching memory."]
-        {0, sections} -> sections
-        {1, sections} -> sections ++ ["1 more memory omitted (response limit)."]
-        {omitted, sections} -> sections ++ ["#{omitted} more memories omitted (response limit)."]
-      end
-
-    %{result: Enum.join(sections, "\n\n")}
-  end
-
   defp group_by_heading(memories) do
     Enum.reduce(memories, [], fn {headings, text}, groups ->
       Enum.reduce(headings, groups, fn heading, groups ->
