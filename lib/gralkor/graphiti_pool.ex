@@ -660,7 +660,65 @@ defmodule Gralkor.GraphitiPool do
           )
           return episode_uuids, uuids(edge_records), uuids(node_records)
 
+        async def writer_scope():
+          kind = text(writer['kind'])
+          name = text(writer['name']) if writer.get('name') is not None else None
+          clause = WRITER_CLAUSES[kind]
+          episode_records, _, _ = await g.driver.execute_query(
+            f'''
+            MATCH (episode:Episodic)
+            WITH episode, coalesce(episode.source_description, '') AS description, coalesce(episode._gralkor_writer, '') AS marker
+            WHERE {clause} AND episode.uuid IS NOT NULL
+            RETURN episode.uuid AS uuid
+            ''',
+            lens_suffix=f' [lens: {name}]',
+            reflection_description=f'reflection:{name}',
+          )
+          episode_uuids = list(dict.fromkeys(
+            record['uuid'] for record in episode_records if record['uuid'] is not None
+          ))
+          edge_records, _, _ = await g.driver.execute_query(
+            '''
+            MATCH (:Entity)-[edge:RELATES_TO]->(:Entity)
+            WHERE any(id IN coalesce(edge.episodes, []) WHERE id IN $episode_uuids)
+              AND edge.uuid IS NOT NULL
+            RETURN edge.uuid AS uuid
+            ''',
+            episode_uuids=episode_uuids,
+          )
+          edge_uuids = list(dict.fromkeys(
+            record['uuid'] for record in edge_records if record['uuid'] is not None
+          ))
+          return episode_uuids, edge_uuids
+
+        async def search_writer():
+          episode_uuids, edge_uuids = await writer_scope()
+          if not (episode_uuids or edge_uuids):
+            return {"facts": [], "nodes": [], "episodes": []}
+          search_filter = LensSearchFilters(
+            node_labels=labels,
+            edge_types=types,
+            edge_uuids=edge_uuids,
+            node_uuids=[],
+            episode_uuids=episode_uuids,
+          )
+          results = await g.search_(q, config=config, search_filter=search_filter)
+          facts = await render_facts(
+            g, list(results.edges)[:fact_limit], kept_episode_ids=set(episode_uuids)
+          )
+          episodes = list(results.episodes)
+          if episodes:
+            await hydrate_episode_writers(getattr(g, 'driver', None), episodes)
+          episodes = (await completed_reflection_episodes(episodes))[:episode_limit]
+          return {
+            "facts": facts,
+            "nodes": [],
+            "episodes": [episode_result(e) for e in episodes],
+          }
+
         async def search_memory():
+          if writer:
+            return await search_writer()
           excluded = ([], [], [])
           if excluded_names:
             excluded = await exclusion_scope()
