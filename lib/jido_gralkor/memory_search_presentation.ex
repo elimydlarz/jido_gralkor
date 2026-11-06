@@ -52,7 +52,10 @@ defmodule JidoGralkor.MemorySearchPresentation do
   @doc "The sections as one text: each heading over its text, separated by blank lines."
   @spec text([section()]) :: String.t()
   def text(sections),
-    do: Enum.map_join(sections, "\n\n", fn %{heading: heading, text: text} -> heading <> "\n" <> text end)
+    do:
+      Enum.map_join(sections, "\n\n", fn %{heading: heading, text: text} ->
+        heading <> "\n" <> text
+      end)
 
   defp writer_sections(results) do
     results

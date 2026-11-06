@@ -1389,7 +1389,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     assert {:ok, %{sections: sections}} =
              MemorySearch.run(params, %{agent_id: operator_id, gralkor_runtime: agent})
 
-    facts_matching_text(agent, operator_id, params, JidoGralkor.MemorySearchPresentation.text(sections))
+    facts_matching_text(
+      agent,
+      operator_id,
+      params,
+      JidoGralkor.MemorySearchPresentation.text(sections)
+    )
   end
 
   defp agent_request(agent) do

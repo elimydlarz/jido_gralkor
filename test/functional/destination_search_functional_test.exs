@@ -589,6 +589,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       shared = Enum.find(facts, &(&1.fact == "amber shared lesson fact"))
 
       assert Enum.map(shared.sources, & &1.lens) == ["first-alpha"]
+
       refute Enum.any?(facts, fn fact -> Enum.any?(fact.sources, &(&1[:lens] == "first-beta")) end)
     end
 
@@ -1067,7 +1068,10 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
   describe "if search both selects and excludes Lenses" do
     test "then search fails before any Destination query is started" do
-      for {lenses, excluded_lenses} <- [{["first-alpha"], ["first-beta"]}, {["first-alpha"], ["first-alpha"]}] do
+      for {lenses, excluded_lenses} <- [
+            {["first-alpha"], ["first-beta"]},
+            {["first-alpha"], ["first-alpha"]}
+          ] do
         assert_raise ArgumentError, fn ->
           search(destinations: ["first"], lenses: lenses, excluded_lenses: excluded_lenses)
         end

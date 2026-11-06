@@ -2479,7 +2479,8 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert recorded["calls"] == 1
 
-      for field <- ~w(edge_uuids node_uuids episode_uuids excluded_edge_uuids excluded_node_uuids excluded_episode_uuids) do
+      for field <-
+            ~w(edge_uuids node_uuids episode_uuids excluded_edge_uuids excluded_node_uuids excluded_episode_uuids) do
         assert recorded[field] == nil
       end
 

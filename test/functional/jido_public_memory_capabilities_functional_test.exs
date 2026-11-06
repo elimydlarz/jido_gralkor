@@ -798,7 +798,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
                memory_search(%{query: "x", destinations: ["observations", "generalisations"]}, [])
 
       assert %{text: lens} = Enum.find(sections, &(&1.heading == "Lens: observations"))
-      assert %{text: lessons} = Enum.find(sections, &(&1.heading == "Reflection: generalisations"))
+
+      assert %{text: lessons} =
+               Enum.find(sections, &(&1.heading == "Reflection: generalisations"))
+
       assert lens =~ "omitted (section limit)."
       assert lessons =~ "Use canaries."
     end
@@ -832,7 +835,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert {:ok, %{sections: sections}} =
                memory_search(%{query: "x", destinations: ["observations", "generalisations"]}, [])
 
-      assert %{text: lessons} = Enum.find(sections, &(&1.heading == "Reflection: generalisations"))
+      assert %{text: lessons} =
+               Enum.find(sections, &(&1.heading == "Reflection: generalisations"))
+
       refute lessons =~ "omitted"
     end
   end
@@ -859,8 +864,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert wire == %{
                "ok" => true,
                "result" => %{
-                 "sections" =>
-                   Enum.map(sections, &%{"heading" => &1.heading, "text" => &1.text})
+                 "sections" => Enum.map(sections, &%{"heading" => &1.heading, "text" => &1.text})
                }
              }
     end

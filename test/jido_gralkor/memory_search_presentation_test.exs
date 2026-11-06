@@ -679,7 +679,10 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       input =
         facts(
           for(index <- 1..50, do: fact(long("lens #{index}", 200), [%{lens: "notes"}])) ++
-            for(index <- 1..35, do: fact(long("lesson #{index}", 200), [%{reflection: "lessons"}]))
+            for(
+              index <- 1..35,
+              do: fact(long("lesson #{index}", 200), [%{reflection: "lessons"}])
+            )
         )
 
       text = rendered(input)
@@ -710,7 +713,10 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
 
   describe "when a section is limited > while it is a direct or unknown Source section" do
     test "then its text never exceeds 6,000 characters" do
-      for {provenance, heading} <- [{%{writer: :direct}, "Source: direct"}, {%{}, "Source: unknown"}] do
+      for {provenance, heading} <- [
+            {%{writer: :direct}, "Source: direct"},
+            {%{}, "Source: unknown"}
+          ] do
         input = facts(for index <- 1..100, do: fact(long("#{index}", 200), [provenance]))
 
         text = section_text(input, heading)
@@ -781,14 +787,19 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       input =
         facts(
           for(index <- 1..100, do: fact(long("lens #{index}", 200), [%{lens: "notes"}])) ++
-            for(index <- 1..100, do: fact(long("lesson #{index}", 200), [%{reflection: "lessons"}]))
+            for(
+              index <- 1..100,
+              do: fact(long("lesson #{index}", 200), [%{reflection: "lessons"}])
+            )
         )
 
       lens = section_text(input, "Lens: notes")
       lessons = section_text(input, "Reflection: lessons")
 
       [_, lens_omitted] = Regex.run(~r/(\d+) more memories omitted \(section limit\)\.$/, lens)
-      [_, lesson_omitted] = Regex.run(~r/(\d+) more memories omitted \(section limit\)\.$/, lessons)
+
+      [_, lesson_omitted] =
+        Regex.run(~r/(\d+) more memories omitted \(section limit\)\.$/, lessons)
 
       assert String.to_integer(lens_omitted) ==
                100 - (lens |> String.split("\n\n") |> hd() |> String.split("\n") |> length())
