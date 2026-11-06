@@ -171,44 +171,44 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
   end
 
   describe "when the memory search tool runs with a usable query > while Search returns results" do
-    test "then the action result is readable text with memories under their writers and entities last" do
-      assert {:ok, %{result: text}} =
+    test "then the action result is sections, each a heading and its readable text, with memories in their writers' sections and entities last in an `Entities in <Destination> memory` section for each searched Destination" do
+      assert {:ok, %{sections: sections}} =
                run_search(%{query: "launch", destinations: ["observations", "global"]})
 
-      assert text ==
-               """
-               Lens: observations
-               - selected observations memory
-               - observations episode
-
-               Reflection: generalisations
-               - selected global memory
-               - global episode
-
-               Entities
-               - observations entity: an entity
-               - global entity: an entity\
-               """
+      assert sections == [
+               %{
+                 heading: "Lens: observations",
+                 text: "- selected observations memory\n- observations episode"
+               },
+               %{
+                 heading: "Reflection: generalisations",
+                 text: "- selected global memory\n- global episode"
+               },
+               %{
+                 heading: "Entities in observations memory",
+                 text: "- observations entity: an entity"
+               },
+               %{heading: "Entities in global memory", text: "- global entity: an entity"}
+             ]
     end
 
-    test "and each named originating Lens or Reflection is identified by its source heading" do
-      assert {:ok, %{result: text}} =
+    test "and each named originating Lens or Reflection is identified by its section heading" do
+      assert {:ok, %{sections: sections}} =
                run_search(%{query: "launch", destinations: ["observations", "global"]})
 
-      assert text =~ "Lens: observations\n"
-      assert text =~ "Reflection: generalisations\n"
+      headings = Enum.map(sections, & &1.heading)
+      assert "Lens: observations" in headings
+      assert "Reflection: generalisations" in headings
     end
-  end
 
-  describe "when the memory search tool runs with a usable query > while Search returns results > while the tool context supplies no byte budget" do
-    test "then the response fits within 65,536 bytes" do
+    test "and every section's text stays within 16,384 characters" do
       Application.put_env(:jido_gralkor, :destination_storage, LargeResultStorage)
 
-      assert {:ok, %{result: text} = result} =
+      assert {:ok, %{sections: sections}} =
                run_search(%{query: "launch", destinations: ["observations"]})
 
-      assert text =~ "omitted (response limit)."
-      assert byte_size(Jason.encode!(%{ok: true, result: result})) <= 65_536
+      assert Enum.any?(sections, &(&1.text =~ "omitted (section limit)."))
+      assert Enum.all?(sections, &(String.length(&1.text) <= 16_384))
     end
   end
 
