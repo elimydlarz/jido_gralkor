@@ -37,10 +37,7 @@ defmodule JidoGralkor.MemorySearchPresentation do
   never repeats its Lens marker, and one that only names a Reflection is left out.
 
   A memory is cut only past 4,000 characters, counting all of its lines, and says
-  so; the date and source follow the cut. The complete text fits
-  Jido AI's 16,384-character string limit and the supplied UTF-8 byte budget for
-  its serialized success envelope. Memories are retained or omitted whole, with
-  one notice giving the total omitted. Canonical search data is unchanged.
+  so; the date and source follow the cut. Canonical search data is unchanged.
   """
 
   @type section :: %{heading: String.t(), text: String.t()}
