@@ -2144,6 +2144,31 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     )
   end
 
+  defp stored_request(stored) do
+    %{
+      directions: "Use memory.",
+      output_schema: %{"artefact" => "string"},
+      representations: [],
+      stored_information: stored,
+      tools: [],
+      tool_context: %{},
+      operator_id: "operator-one"
+    }
+  end
+
+  defp step_call(request) do
+    parent = self()
+
+    call = fn prompt, config, _opts ->
+      send(parent, {:step_call, %{prompt: prompt, model: config.model}})
+      %{termination_reason: :final_answer, result: ~s({"artefact":"done"})}
+    end
+
+    assert {:ok, %{output: %{"artefact" => "done"}}} = Runner.default_inference(request, call)
+    assert_receive {:step_call, observed}
+    observed
+  end
+
   defp register_step(directions, representations, stored, schema, turns) do
     Jido.AI.Test.ReActScript.new(%{
       user: expected_step_prompt(directions, representations, stored, schema),
