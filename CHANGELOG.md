@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [16.0.1] - 2026-11-06
 
 ### Fixed
 - **A long entity was dropped instead of shown cut.** An `Entities in <Destination> memory` section's limit (4,000 characters) was smaller than one cut memory (4,000 characters plus `… (truncated)` and its bullet), so an entity long enough to be cut never fit and only its omission notice appeared. The Entities limit is now 6,000 characters, so any single memory fits.
