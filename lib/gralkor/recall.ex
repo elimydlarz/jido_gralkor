@@ -83,26 +83,29 @@ defmodule Gralkor.Recall do
         {:error, reason}
 
       {:ok, memories} when is_map(memories) ->
-        with {:ok, body, n_memories} <- present(memories) do
-          %{
-            block: wrap(body),
-            n_memories: n_memories,
-            search_ms: search_ms,
-            total_ms: System.monotonic_time(:millisecond) - t0
-          }
-        end
+        {body, n_memories} = present(group_id, memories)
+
+        %{
+          block: wrap(body),
+          n_memories: n_memories,
+          search_ms: search_ms,
+          total_ms: System.monotonic_time(:millisecond) - t0
+        }
     end
   end
 
-  defp present(%{facts: facts, nodes: nodes, episodes: episodes} = memories) do
+  defp present(group_id, %{facts: facts, nodes: nodes, episodes: episodes} = memories) do
     case length(facts) + length(nodes) + length(episodes) do
       0 ->
-        {:ok, @no_memories_body, 0}
+        {@no_memories_body, 0}
 
       n_memories ->
-        with {:ok, %{result: body}} <- MemorySearchPresentation.for_model([memories]) do
-          {:ok, body, n_memories}
-        end
+        body =
+          [Map.put(memories, :destination, group_id)]
+          |> MemorySearchPresentation.sections()
+          |> MemorySearchPresentation.text()
+
+        {body, n_memories}
     end
   end
 
