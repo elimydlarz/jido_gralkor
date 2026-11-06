@@ -509,7 +509,10 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert :ok = ingest_memory("shared-notes", "unselected")
 
       assert {:ok, %{result: text}} =
-               memory_search_text(%{query: "memory", destinations: ["observations", "decisions"]}, [])
+               memory_search_text(
+                 %{query: "memory", destinations: ["observations", "decisions"]},
+                 []
+               )
 
       assert text ==
                "Lens: observations\n- wanted (source: functional)\n\nLens: decisions\n- other (source: functional)"
