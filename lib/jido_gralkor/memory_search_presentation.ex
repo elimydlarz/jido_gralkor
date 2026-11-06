@@ -33,54 +33,78 @@ defmodule JidoGralkor.MemorySearchPresentation do
   one notice giving the total omitted. Canonical search data is unchanged.
   """
 
-  @type output :: %{result: String.t()}
-  @default_max_bytes 65_536
-  @max_chars 16_384
+  @type section :: %{heading: String.t(), text: String.t()}
+
   @max_memory_chars 4_000
-  @entities_heading "Entities"
   @main_text_field "content"
+  @no_memory %{heading: "Memory", text: "No matching memory."}
+  @limits %{lens: 12_000, reflection: 8_000, source: 6_000, entities: 4_000}
 
-  @spec validate_max_bytes!(term()) :: pos_integer()
-  def validate_max_bytes!(max_bytes) when is_integer(max_bytes) and max_bytes > 0, do: max_bytes
-
-  def validate_max_bytes!(max_bytes) do
-    raise ArgumentError,
-          "memory_search_max_bytes must be a positive integer, got: #{inspect(max_bytes)}"
-  end
-
-  @doc "The byte budget every model-facing presentation uses unless told otherwise."
-  @spec default_max_bytes() :: pos_integer()
-  def default_max_bytes, do: @default_max_bytes
-
-  @spec for_model([Gralkor.Search.result()], pos_integer()) :: {:ok, output()} | {:error, term()}
-  def for_model(results, max_bytes \\ @default_max_bytes) do
-    validate_max_bytes!(max_bytes)
-    memories = memories(results)
-    total = length(memories)
-    minimum_bytes = envelope_bytes(output([], total))
-    complete = output(memories, total)
-
-    cond do
-      fits?(complete, max_bytes) ->
-        {:ok, complete}
-
-      minimum_bytes > max_bytes ->
-        {:error,
-         {:memory_search_budget_too_small, %{max_bytes: max_bytes, minimum_bytes: minimum_bytes}}}
-
-      true ->
-        selected =
-          Enum.reduce(memories, [], fn memory, selected ->
-            candidate = selected ++ [memory]
-
-            if fits?(output(candidate, total), max_bytes),
-              do: candidate,
-              else: selected
-          end)
-
-        {:ok, output(selected, total)}
+  @doc "The search results as sections: each Lens, Reflection, and Source, then each Destination's entities."
+  @spec sections([Gralkor.Search.result()]) :: [section()]
+  def sections(results) do
+    case writer_sections(results) ++ entity_sections(results) do
+      [] -> [@no_memory]
+      sections -> sections
     end
   end
+
+  @doc "The sections as one text: each heading over its text, separated by blank lines."
+  @spec text([section()]) :: String.t()
+  def text(sections),
+    do: Enum.map_join(sections, "\n\n", fn %{heading: heading, text: text} -> heading <> "\n" <> text end)
+
+  defp writer_sections(results) do
+    results
+    |> memories()
+    |> group_by_heading()
+    |> Enum.sort_by(fn {heading, _texts} -> heading_kind_order(heading) end)
+    |> Enum.map(fn {heading, texts} -> section(heading, texts, heading_kind(heading)) end)
+  end
+
+  defp entity_sections(results) do
+    results
+    |> Enum.reject(&(Map.get(&1, :nodes, []) == []))
+    |> Enum.map(fn result ->
+      texts =
+        result.nodes
+        |> Enum.map(fn node -> node |> entity_memory() |> elem(1) end)
+        |> Enum.reduce([], &add_text(&2, &1))
+
+      section("Entities in #{result.destination} memory", texts, :entities)
+    end)
+  end
+
+  defp heading_kind("Lens: " <> _), do: :lens
+  defp heading_kind("Reflection: " <> _), do: :reflection
+  defp heading_kind(_source), do: :source
+
+  defp heading_kind_order(heading),
+    do: Enum.find_index([:lens, :reflection, :source], &(&1 == heading_kind(heading)))
+
+  defp section(heading, texts, kind) do
+    limit = Map.fetch!(@limits, kind)
+    complete = bullets(texts)
+
+    if String.length(complete) <= limit do
+      %{heading: heading, text: complete}
+    else
+      reserved = String.length("\n\n" <> omission(length(texts)))
+
+      kept =
+        Enum.reduce(texts, [], fn text, kept ->
+          candidate = kept ++ [text]
+          if String.length(bullets(candidate)) + reserved <= limit, do: candidate, else: kept
+        end)
+
+      %{heading: heading, text: bullets(kept) <> "\n\n" <> omission(length(texts) - length(kept))}
+    end
+  end
+
+  defp bullets(texts), do: Enum.map_join(texts, "\n", &"- #{&1}")
+
+  defp omission(1), do: "1 more memory omitted (section limit)."
+  defp omission(count), do: "#{count} more memories omitted (section limit)."
 
   # Each memory is `{headings, text}`; a fact with several sources has several headings.
   defp memories(results) do
