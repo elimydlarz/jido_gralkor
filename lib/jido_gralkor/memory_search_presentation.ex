@@ -404,9 +404,4 @@ defmodule JidoGralkor.MemorySearchPresentation do
 
   defp direct_heading(%{writer: :direct}), do: "Source: direct"
   defp direct_heading(_source), do: nil
-
-  defp fits?(output, max_bytes),
-    do: String.length(output.result) <= @max_chars and envelope_bytes(output) <= max_bytes
-
-  defp envelope_bytes(output), do: byte_size(Jason.encode!(%{ok: true, result: output}))
 end
