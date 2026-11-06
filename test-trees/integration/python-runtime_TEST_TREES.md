@@ -3,6 +3,7 @@ Integration: python-runtime (src: lib/gralkor/python.ex, priv/python/pyproject.t
 when the Python runtime initialises
   then the call blocks until the runtime is ready
   and the packaged manifest owns the graph library, embedded backend, and supported-provider packages
+  and the packaged manifest keeps the Google provider package below the release that stopped installing httpx, which the graph library imports
   and changing the packaged manifest triggers recompilation
   and a second initialisation in the same virtual machine short-circuits
   and the graph library imports successfully
