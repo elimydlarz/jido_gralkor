@@ -72,7 +72,7 @@ defmodule JidoGralkor.Actions.MemorySearch do
         end
 
       with {:ok, results} <- result,
-           do: MemorySearchPresentation.for_model(results, max_bytes)
+           do: {:ok, %{sections: MemorySearchPresentation.sections(results)}}
     end
   end
 end
