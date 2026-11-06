@@ -152,8 +152,8 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
 
   describe "when the memory search formatter is called > while no memories are supplied" do
     test "then the text explicitly states that no matching memory was found" do
-      assert rendered([]) == "No matching memory."
-      assert rendered([result("global", [], [], [])]) == "No matching memory."
+      assert rendered([]) == "Memory\nNo matching memory."
+      assert rendered([result("global", [], [], [])]) == "Memory\nNo matching memory."
     end
   end
 
@@ -318,7 +318,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
                  [%{entity("Atlas") | summary: "A rollout"}, entity("Borealis")],
                  []
                )
-             ]) == "Entities\n- Atlas: A rollout\n- Borealis"
+             ]) == "Entities in global memory\n- Atlas: A rollout\n- Borealis"
     end
 
     test "and each attribute is its own indented `key: value` line, not an inline bracket" do
@@ -329,7 +329,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       }
 
       assert rendered([result("global", [], [node], [])]) ==
-               "Entities\n- Atlas: A rollout\n  owner: Platform\n  region: eu-west\n  since: 2026-10-02"
+               "Entities in global memory\n- Atlas: A rollout\n  owner: Platform\n  region: eu-west\n  since: 2026-10-02"
     end
 
     test "and entities with different attributes each show all of their own" do
@@ -342,7 +342,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       }
 
       assert rendered([result("global", [], [atlas, borealis], [])]) ==
-               "Entities\n- Atlas: A rollout\n  owner: Platform\n- Borealis\n  tags: a, b\n  tier: 1"
+               "Entities in global memory\n- Atlas: A rollout\n  owner: Platform\n- Borealis\n  tags: a, b\n  tier: 1"
     end
 
     test "and internal `_gralkor` attributes are not shown" do
@@ -353,12 +353,12 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
       }
 
       assert rendered([result("global", [], [node], [])]) ==
-               "Entities\n- Atlas: A rollout\n  owner: Platform"
+               "Entities in global memory\n- Atlas: A rollout\n  owner: Platform"
 
       hidden_only = %{node | attributes: %{"_gralkor_lens" => "observations"}}
 
       assert rendered([result("global", [], [hidden_only], [])]) ==
-               "Entities\n- Atlas: A rollout"
+               "Entities in global memory\n- Atlas: A rollout"
     end
   end
 
@@ -527,7 +527,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
 
     test "and an empty payload presents nothing" do
       assert rendered([result("global", [], [], [artefact("lessons", %{})])]) ==
-               "No matching memory."
+               "Memory\nNo matching memory."
     end
   end
 
