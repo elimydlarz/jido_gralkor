@@ -297,6 +297,7 @@ defmodule Gralkor.GraphitiPool do
               if episode_id in episodes_by_id
               and (not lens_names or (episodes_by_id[episode_id].source_description or "").endswith(lens_suffixes))
               and not (excluded_suffixes and (episodes_by_id[episode_id].source_description or "").endswith(excluded_suffixes))
+              and (kept_episode_ids is None or episode_id in kept_episode_ids)
           ]
           if sources:
               fact["sources"] = sources
