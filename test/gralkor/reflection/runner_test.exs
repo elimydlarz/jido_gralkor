@@ -171,6 +171,35 @@ defmodule Gralkor.Reflection.RunnerTest do
                {:observed, {:step_finished, "decide"}}
              ]
     end
+
+    test "and every step's built-in inference tells the observer of its tool calls" do
+      reflection = %Reflection{
+        name: "tool-observed",
+        outputs: [],
+        chain_of_thought: %ChainOfThought{
+          steps: [
+            %Step{label: "look", directions: "Look it up.", output: %{"answer" => "string"}}
+          ]
+        }
+      }
+
+      script_tool_step("Look it up.", %{"answer" => "string"}, "deploys", ~s({"answer":"ready"}))
+
+      assert {:ok, %Artefact{payload: %{"answer" => "ready"}}} =
+               Gralkor.Reflection.Runner.run(
+                 reflection,
+                 %{id: "tool-observed-run", operator_id: "operator-one", representations: []},
+                 model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end,
+                 tools: [LookupTool],
+                 observer: observer(),
+                 type_matcher: fn "ready", "string" -> true end,
+                 artefact_id_for: fn _operator, _invocation, _name -> "tool-observed-artefact" end
+               )
+
+      assert_received {:observed, {:tool_started, %{name: "lookup", arguments: arguments}}}
+      assert arguments["query"] == "deploys"
+      assert_received {:observed, {:tool_completed, %{name: "lookup", ok?: true}}}
+    end
   end
 
   describe "when the Reflection Runner receives a valid Reflection and invocation > where an observer is supplied > when a step's output satisfies its contract" do
@@ -578,6 +607,46 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
   end
 
+  describe "when built-in inference is invoked for a step > where an observer is supplied > when the ReAct runtime starts a tool call" do
+    test "then the observer is told the call's identifier, tool name, and arguments" do
+      emit_through_built_in_inference(
+        react_event(:tool_started, data: %{arguments: %{"query" => "deploys"}})
+      )
+
+      assert_received {:observed,
+                       {:tool_started,
+                        %{id: "call-1", name: "lookup", arguments: %{"query" => "deploys"}}}}
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > where an observer is supplied > when the ReAct runtime completes a tool call" do
+    test "then the observer is told the call's identifier, tool name, duration, and whether it succeeded" do
+      emit_through_built_in_inference(
+        react_event(:tool_completed, data: %{result: {:ok, %{evidence: "x"}}, duration_ms: 12})
+      )
+
+      emit_through_built_in_inference(
+        react_event(:tool_completed, data: %{result: {:error, :timeout}, duration_ms: 30})
+      )
+
+      assert_received {:observed,
+                       {:tool_completed,
+                        %{id: "call-1", name: "lookup", duration_ms: 12, ok?: true}}}
+
+      assert_received {:observed,
+                       {:tool_completed,
+                        %{id: "call-1", name: "lookup", duration_ms: 30, ok?: false}}}
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > where an observer is supplied > when the ReAct runtime emits any other event" do
+    test "then the observer is told nothing" do
+      emit_through_built_in_inference(react_event(:llm_delta, data: %{delta: "thinking"}))
+
+      refute_received {:observed, _event}
+    end
+  end
+
   describe "when built-in inference is invoked for a step > if the ReAct runtime ends without a final answer" do
     test "then built-in inference returns its termination reason as an error" do
       request = default_inference_request()
@@ -981,6 +1050,66 @@ defmodule Gralkor.Reflection.RunnerTest do
              Runner.default_inference(request, fn _action, _args, _context ->
                %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
              end)
+  end
+
+  defp emit_through_built_in_inference(event) do
+    caller = fn _prompt, _config, opts ->
+      Keyword.fetch!(opts, :on_event).(event)
+      %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
+    end
+
+    assert {:ok, _} =
+             Gralkor.Reflection.Runner.default_inference(default_inference_request(), caller,
+               model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end,
+               observer: observer()
+             )
+  end
+
+  defp react_event(kind, fields) do
+    struct!(
+      Jido.AI.Runtime.Event,
+      Keyword.merge(
+        [
+          id: "event-1",
+          seq: 1,
+          at_ms: 0,
+          run_id: "run-1",
+          request_id: "request-1",
+          iteration: 1,
+          kind: kind,
+          tool_call_id: "call-1",
+          tool_name: "lookup",
+          data: %{}
+        ],
+        fields
+      )
+    )
+  end
+
+  defp script_tool_step(directions, schema, query, answer) do
+    Jido.AI.Test.ReActScript.new(%{
+      user: """
+      #{directions}
+
+      Lensed representations available to this Reflection step:
+      []
+
+      Return only one JSON object satisfying this exact output contract:
+      #{Jason.encode!(schema)}
+
+      The quoted contract values are type declarations, not literal output
+      values. Emit actual JSON values of those types. In particular, an object
+      declaration such as "{ field: string }" requires a nested JSON object,
+      and an Array<...> declaration requires a JSON array; do not quote either.
+      """,
+      turns: [
+        %{type: :tool_call, name: "lookup", arguments: %{"query" => query}},
+        %{type: :answer, text: answer}
+      ]
+    })
+    |> Jido.AI.Test.ReActScript.register()
+
+    on_exit(fn -> Jido.AI.Test.ReActScript.clear_current_owner() end)
   end
 
   defp script_step(directions, schema, answer) do
