@@ -2138,6 +2138,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     )
   end
 
+  defp expected_stored_section(stored_information) do
+    if Enum.all?(stored_information, &(&1.facts == [] and &1.nodes == [] and &1.episodes == [])) do
+      ""
+    else
+      {:ok, %{result: presented}} =
+        JidoGralkor.MemorySearchPresentation.for_model(stored_information, 65_536)
+
+      "\nRelated stored information available to this Reflection step:\n#{presented}\n"
+    end
+  end
+
   defp stored_request(stored) do
     %{
       directions: "Use memory.",
