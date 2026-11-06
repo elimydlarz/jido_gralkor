@@ -217,8 +217,6 @@ Reflection: erl
   lesson: Keep the jobs apart
   success: true
 
-3 more memories omitted (section limit).
-
 Source: direct conversation
 - user: Can we move the cutover? assistant: Sunday works. (valid from 2026-10-31; source: planning call)
 
@@ -245,6 +243,6 @@ Each section has its own character limit, and no limit applies across sections: 
 - `result_type: :artefacts` and `artefact_id` are gone: Reflection artefacts arrive whole in `episodes` as `artefact: %{id:, payload:}`; match the id there.
 - `max_results` is gone: limits are fixed per Destination (`Gralkor.Search.limits/0`).
 - Setting any removed field raises `ArgumentError` naming the field with this guidance.
-- `memory_search` lost its `lenses` parameter; keep `destinations`. Treat `action_result.result` as readable text; never `Jason.decode!/1` it.
+- `memory_search` lost its `lenses` parameter; keep `destinations`. Read `action_result.sections`, each `%{heading:, text:}`; treat each `text` as readable text and never `Jason.decode!/1` it.
 
-Jido AI 2.3.0 serializes the small action envelope containing the readable string. One decode of a model tool message yields `%{"ok" => true, "result" => %{"result" => text}}`. The formatter keeps that text below the released sanitizer's string limit, so nested payload depth, collection sizes, and domain-key redaction do not affect the presentation. No framework patch or fork is required.
+Jido AI 2.3.0 serializes the small action envelope containing the sections. One decode of a model tool message yields `%{"ok" => true, "result" => %{"sections" => [%{"heading" => heading, "text" => text}]}}`. Every section's text stays below the released sanitizer's 16,384-character string limit, so nested payload depth, collection sizes, and domain-key redaction do not affect the presentation. No framework patch or fork is required.
