@@ -108,7 +108,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       Application.put_env(:jido_gralkor, :destination_storage, SourceFactFixture)
 
       assert {:ok, %{result: "Source: direct conversation\n- direct fact"}} =
-               MemorySearch.run(%{query: "direct", destinations: ["personal"]}, %{
+               search_text(%{query: "direct", destinations: ["personal"]}, %{
                  agent_id: "operator-one",
                  gralkor_runtime: self()
                })
@@ -138,7 +138,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       search_context = Map.put(tool_context, :agent_id, mounted_agent.id)
 
       assert {:ok, %{result: result}} =
-               MemorySearch.run(
+               search_text(
                  %{query: "selected", destinations: ["decisions"]},
                  search_context
                )
@@ -147,7 +147,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                "Lens: decisions\n- selected decision memory (source: functional)"
 
       assert {:ok, %{result: unselected}} =
-               MemorySearch.run(%{query: "selected"}, search_context)
+               search_text(%{query: "selected"}, search_context)
 
       assert unselected =~ "Lens: observations\n- selected observation memory"
 
@@ -162,8 +162,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} = query(mounted_agent)
       memory_context = Map.put(tool_context, :agent_id, mounted_agent.id)
 
-      assert {:ok, %{result: "No matching memory."}} =
-               MemorySearch.run(
+      assert {:ok, %{result: "Memory\nNo matching memory."}} =
+               search_text(
                  %{query: "decision", destinations: ["decisions"]},
                  memory_context
                )
@@ -209,7 +209,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert tool_context.lens == "decisions"
 
       assert {:ok, %{result: result}} =
-               MemorySearch.run(
+               search_text(
                  %{query: "observation", destinations: ["observations"]},
                  Map.put(tool_context, :agent_id, mounted_agent.id)
                )
@@ -222,7 +222,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       Application.put_env(:jido_gralkor, :destination_storage, SourceFactFixture)
 
       assert {:ok, %{result: text}} =
-               MemorySearch.run(
+               search_text(
                  %{query: "provenance", destinations: ["observations", "generalisations"]},
                  mounted_search_context()
                )
@@ -256,7 +256,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       refute Map.has_key?(tool_context, :session_id)
 
       assert {:ok, %{result: result}} =
-               MemorySearch.run(
+               search_text(
                  %{query: "first-turn", destinations: ["observations"]},
                  Map.put(tool_context, :agent_id, fresh_agent.id)
                )
@@ -286,7 +286,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
 
       assert {:ok, %{result: result}} =
-               MemorySearch.run(%{query: "memory"}, mounted_search_context())
+               search_text(%{query: "memory"}, mounted_search_context())
 
       assert result ==
                "Lens: personal-chat\n- operator memory (source: functional)\n\nLens: shared-generalisations\n- global memory (source: functional)\n\nLens: observations\n- observation memory (source: functional)\n\nLens: decisions\n- decision memory (source: functional)"
@@ -1049,4 +1049,9 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
+
+  defp search_text(params, context) do
+    with {:ok, %{sections: sections}} <- MemorySearch.run(params, context),
+         do: {:ok, %{result: JidoGralkor.MemorySearchPresentation.text(sections)}}
+  end
 end
