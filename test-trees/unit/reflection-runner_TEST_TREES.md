@@ -10,6 +10,7 @@ when the Reflection Runner receives a valid Reflection and invocation
     then every step's built-in inference runs the model that resolver names
   where an observer is supplied
     then the observer is told each step's label as that step starts
+    and every step's built-in inference tells the observer of its tool calls
     when a step's output satisfies its contract
       then the observer is told that step's label as it finishes
     if a step fails
@@ -81,6 +82,13 @@ when built-in inference is invoked for a step
     then built-in inference returns its termination reason as an error
   if the stored information cannot be formatted
     then built-in inference returns the formatting error without calling the model
+  where an observer is supplied
+    when the ReAct runtime starts a tool call
+      then the observer is told the call's identifier, tool name, and arguments
+    when the ReAct runtime completes a tool call
+      then the observer is told the call's identifier, tool name, duration, and whether it succeeded
+    when the ReAct runtime emits any other event
+      then the observer is told nothing
 
 when a consumer inference function is supplied
   then it receives the stored information as the structured search results
