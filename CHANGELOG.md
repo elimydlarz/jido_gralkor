@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [15.0.1] - 2026-11-06
 
 ### Fixed
 - **A freshly built Python environment could not import the graph library.** graphiti-core 0.31.2 imports `httpx` without declaring it. openai has not installed `httpx` since 3.0.0 (2026-08-12), so only google-genai did, and google-genai 3.0.0 (2026-11-06) installs `httpx2` instead. A fresh resolution of `priv/python/pyproject.toml` therefore had no `httpx`, and boot failed at `import graphiti_core` with `ModuleNotFoundError: No module named 'httpx'`. Environments already in the PythonX cache were unaffected. The manifest now requires `google-genai<3`, which resolves the same packages as before google-genai 3.0.0 (google-genai 2.34.0, httpx 0.28.1, openai 3.46.0). The PythonX cache is keyed by the manifest, so upgrading builds a new environment on first boot.
