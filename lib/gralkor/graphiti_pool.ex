@@ -306,6 +306,23 @@ defmodule Gralkor.GraphitiPool do
       return rendered
   """
 
+  @writer_clauses """
+  LENS_EPISODE = "description ENDS WITH ']' AND description CONTAINS ' [lens: ' AND NOT description ENDS WITH ' [lens: ]'"
+  REFLECTION_EPISODE = "description STARTS WITH 'reflection:' AND size(description) > 11"
+  WRITER_CLAUSES = {
+      'lens': "marker <> 'direct' AND description ENDS WITH $lens_suffix",
+      'reflection': "marker <> 'direct' AND description = $reflection_description",
+      'direct': "marker = 'direct'",
+      'unknown': f"marker <> 'direct' AND NOT ({LENS_EPISODE}) AND NOT ({REFLECTION_EPISODE})",
+  }
+  WRITER_OF = (
+      "CASE WHEN marker = 'direct' THEN 'direct' "
+      f"WHEN {LENS_EPISODE} THEN 'lens:' + last(split(description, ' [lens: ')) "
+      f"WHEN {REFLECTION_EPISODE} THEN description "
+      "ELSE 'unknown' END"
+  )
+  """
+
   @upstream_failure_classification """
   def upstream_failure(error):
       import openai
