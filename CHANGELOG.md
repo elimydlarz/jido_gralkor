@@ -3,7 +3,7 @@
 ## [15.1.0] - 2026-11-06
 
 ### Added
-- **`Runner.run/3` takes an `:observer`.** A one-argument function the Runner calls as it works through the Chain of Thought: `{:step_started, label}` before a step's inference, `{:step_finished, label}` once its output satisfies the step's contract, and `{:step_failed, label}` when its inference fails or its output breaks the contract (including a final step missing the artefact). A consumer can record a run's progress step by step; without an observer nothing changes.
+- **`Runner.run/3` takes an `:observer`.** A one-argument function the Runner calls as it works through the Chain of Thought: `{:step_started, label}` before a step's inference, `{:step_finished, label}` once its output satisfies the step's contract, and `{:step_failed, label}` when its inference fails or its output breaks the contract (including a final step missing the artefact). During built-in inference it also tells the observer of each tool call: `{:tool_started, %{id:, name:, arguments:}}` when the ReAct runtime starts it, and `{:tool_completed, %{id:, name:, duration_ms:, ok?:}}` when it returns; with an observer, built-in inference streams ReAct's events and aggregates them with `ReAct.collect/3` instead of calling `ReAct.run/3`, returning the same result. A consumer can record a run's progress step by step; without an observer nothing changes.
 
 ## [15.0.2] - 2026-11-06
 
