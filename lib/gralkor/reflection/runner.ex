@@ -339,15 +339,11 @@ defmodule Gralkor.Reflection.Runner do
     )
   end
 
+  defp tell_tool_event(_observer, _event), do: :ok
+
   defp succeeded?({:ok, _value}), do: true
   defp succeeded?({:ok, _value, _effects}), do: true
   defp succeeded?(_result), do: false
-
-  defp tell_tool_event_placeholder do
-    :ok
-  end
-
-  defp tell_tool_event(_observer, _event), do: :ok
 
   defp serializable_representations(request) do
     request
