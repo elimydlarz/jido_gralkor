@@ -358,6 +358,25 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
                &(&1.facts == [] and &1.nodes == [] and &1.episodes == [])
              )
     end
+
+    test "and generalisation inference receives no related-stored-information heading" do
+      parent = self()
+
+      assert %{outcome: :delivered} =
+               reflect!(start_agent(), fn request ->
+                 Gralkor.Reflection.Runner.default_inference(request, fn prompt, _config, _opts ->
+                   send(parent, {:built_in_prompt, prompt})
+                   %{termination_reason: :final_answer, result: ~s({"captured":true})}
+                 end)
+
+                 output_for(request)
+               end)
+
+      assert_receive {:built_in_prompt, prompt}
+      assert prompt =~ "representation-one"
+      refute prompt =~ "Related stored information"
+      refute prompt =~ "No matching memory"
+    end
   end
 
   describe "if the packaged generalisation Reflection's default related-memory search fails" do
