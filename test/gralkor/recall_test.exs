@@ -39,8 +39,10 @@ defmodule Gralkor.RecallTest do
         ]
       }
 
-      assert {:ok, %{result: presented}} =
-               JidoGralkor.MemorySearchPresentation.for_model([memories], 65_536)
+      presented =
+        [Map.put(memories, :destination, "g")]
+        |> JidoGralkor.MemorySearchPresentation.sections()
+        |> JidoGralkor.MemorySearchPresentation.text()
 
       assert {:ok, block} =
                Recall.recall(
