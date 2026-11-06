@@ -147,7 +147,7 @@ defmodule Gralkor.Reflection.RunnerTest do
       end
 
       assert {:ok, %Artefact{payload: %{"answer" => "ready"}}} =
-               Runner.run(
+               Gralkor.Reflection.Runner.run(
                  reflection,
                  %{id: "resolved-model-run", operator_id: "operator-one", representations: []},
                  model_resolver: resolver
@@ -957,7 +957,7 @@ defmodule Gralkor.Reflection.RunnerTest do
       %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
     end
 
-    assert {:ok, _} = Runner.default_inference(request, caller, opts)
+    assert {:ok, _} = Gralkor.Reflection.Runner.default_inference(request, caller, opts)
     assert_receive {:built_in_config, config}
     config
   end
