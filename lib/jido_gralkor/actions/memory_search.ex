@@ -14,15 +14,13 @@ defmodule JidoGralkor.Actions.MemorySearch do
       (`tool_choice: memory_search`) where the LLM is required to
       invoke the tool but has nothing meaningful to search for.
 
-  Results are readable text: every memory is one bullet under the heading of the
-  Lens, Reflection, or direct source that wrote it, with entities last. A bullet's
-  first line is the memory's main text, and every other field it carries (such as
-  a generalisation's `level` and `evolves_from`, or an entity's attributes) follows
-  on its own indented line.
+  Results are `%{sections: [%{heading:, text:}]}`, one section for each Lens,
+  Reflection, or direct source that wrote matching memory, then an
+  `Entities in <Destination> memory` section for each Destination that returned
+  entities (`JidoGralkor.MemorySearchPresentation.sections/1`). Each section has its
+  own character limit, well under Jido's 16,384-character string limit, and counts
+  the memories it omits; no limit applies across sections.
   The structured search API remains available for consumers that format their own data.
-  The tool context's `:memory_search_max_bytes` defaults to 65,536 UTF-8 bytes for the
-  complete Jido success envelope. The text also stays within Jido's 16,384-character
-  string limit. Memories that do not fit are counted in an explicit omission notice.
   Errors propagate.
   """
 
