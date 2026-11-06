@@ -347,21 +347,17 @@ defmodule JidoGralkor.MemorySearchPresentation do
   end
 
   defp group_by_heading(memories) do
-    groups =
-      Enum.reduce(memories, [], fn {headings, text}, groups ->
-        Enum.reduce(headings, groups, fn heading, groups ->
-          case List.keyfind(groups, heading, 0) do
-            nil ->
-              groups ++ [{heading, [text]}]
+    Enum.reduce(memories, [], fn {headings, text}, groups ->
+      Enum.reduce(headings, groups, fn heading, groups ->
+        case List.keyfind(groups, heading, 0) do
+          nil ->
+            groups ++ [{heading, [text]}]
 
-            {^heading, texts} ->
-              List.keyreplace(groups, heading, 0, {heading, add_text(texts, text)})
-          end
-        end)
+          {^heading, texts} ->
+            List.keyreplace(groups, heading, 0, {heading, add_text(texts, text)})
+        end
       end)
-
-    {entities, writers} = Enum.split_with(groups, &(elem(&1, 0) == @entities_heading))
-    writers ++ entities
+    end)
   end
 
   # The same text appears once under one heading, and a memory that is only another
