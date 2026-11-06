@@ -605,7 +605,9 @@ defmodule Gralkor.Reflection.RunnerTest do
   describe "when built-in inference is invoked for a step > where an observer is supplied > when the ReAct runtime completes a tool call" do
     test "then the observer is told the call's identifier, tool name, duration, and whether it succeeded" do
       emit_through_built_in_inference(
-        react_event(:tool_completed, data: %{result: {:ok, %{evidence: "x"}}, duration_ms: 12})
+        react_event(:tool_completed,
+          data: %{result: {:ok, %{evidence: "x"}, []}, duration_ms: 12}
+        )
       )
 
       emit_through_built_in_inference(
