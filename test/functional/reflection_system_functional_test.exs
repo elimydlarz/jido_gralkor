@@ -2142,8 +2142,10 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     if Enum.all?(stored_information, &(&1.facts == [] and &1.nodes == [] and &1.episodes == [])) do
       ""
     else
-      {:ok, %{result: presented}} =
-        JidoGralkor.MemorySearchPresentation.for_model(stored_information, 65_536)
+      presented =
+        stored_information
+        |> JidoGralkor.MemorySearchPresentation.sections()
+        |> JidoGralkor.MemorySearchPresentation.text()
 
       "\nRelated stored information available to this Reflection step:\n#{presented}\n"
     end
