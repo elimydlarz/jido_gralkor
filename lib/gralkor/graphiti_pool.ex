@@ -738,18 +738,16 @@ defmodule Gralkor.GraphitiPool do
           "node_labels" => Keyword.get(opts, :node_labels),
           "edge_types" => Keyword.get(opts, :edge_types),
           "lenses" => Keyword.get(opts, :lenses),
-          "excluded_lenses" => Keyword.get(opts, :excluded_lenses),
-          "writer" => opts |> Keyword.get(:writer) |> writer_param()
+          "excluded_lenses" => Keyword.get(opts, :excluded_lenses)
         }
       )
 
-    %{"facts" => facts, "nodes" => nodes, "episodes" => episodes} = Pythonx.decode(raw)
+    %{"nodes" => nodes, "writers" => writers} = Pythonx.decode(raw)
 
     {:ok,
      %{
-       facts: Enum.map(facts, &atomize_keys/1),
-       nodes: Enum.map(nodes, &node_map/1),
-       episodes: Enum.map(episodes, &episode_map/1)
+       nodes: searched(nodes, &Enum.map(&1, fn node -> node_map(node) end)),
+       writers: writers |> Enum.map(&writer_result/1) |> Enum.sort_by(&writer_order(&1.writer))
      }}
   rescue
     e in Pythonx.Error -> python_failure(e, :search_memory)
@@ -758,40 +756,18 @@ defmodule Gralkor.GraphitiPool do
   @typedoc "Who wrote an episode: a Lens, a Reflection, a direct write, or no recorded authorship."
   @type writer :: {:lens, String.t()} | {:reflection, String.t()} | :direct | :unknown
 
-  @doc """
-  The writers whose episodes `group_id` holds: each Lens by name, then each
-  Reflection by name, then direct writes, then episodes without recorded
-  authorship. An episode's writer is classified exactly as `search_memory/5`'s
-  `:writer` option scopes it.
-  """
-  @spec writers(GenServer.server(), String.t()) :: {:ok, [writer()]} | {:error, term()}
-  def writers(server \\ __MODULE__, group_id) when is_binary(group_id) do
-    instance = __MODULE__.for(server, group_id)
+  defp searched(%{"error" => error}, _decode), do: {:error, error}
+  defp searched(found, decode), do: {:ok, decode.(found)}
 
-    {raw, _} =
-      Pythonx.eval(
-        """
-        import asyncio
-        #{@writer_clauses}
-        async def writers():
-          records, _, _ = await g.driver.execute_query(
-            f'''
-            MATCH (episode:Episodic)
-            WITH coalesce(episode.source_description, '') AS description, coalesce(episode._gralkor_writer, '') AS marker
-            RETURN DISTINCT {WRITER_OF} AS writer
-            '''
-          )
-          return [record['writer'] for record in records]
+  defp writer_result(%{"writer" => writer, "error" => error}),
+    do: %{writer: writer(writer), error: error}
 
-        asyncio._gralkor_run(writers())
-        """,
-        %{"g" => instance}
-      )
-
-    {:ok, raw |> Pythonx.decode() |> Enum.map(&writer/1) |> Enum.sort_by(&writer_order/1)}
-  rescue
-    e in Pythonx.Error -> python_failure(e, :writers)
-  end
+  defp writer_result(%{"writer" => writer, "facts" => facts, "episodes" => episodes}),
+    do: %{
+      writer: writer(writer),
+      facts: Enum.map(facts, &atomize_keys/1),
+      episodes: Enum.map(episodes, &episode_map/1)
+    }
 
   defp writer("direct"), do: :direct
   defp writer("unknown"), do: :unknown
@@ -802,10 +778,6 @@ defmodule Gralkor.GraphitiPool do
   defp writer_order({:reflection, name}), do: {1, name}
   defp writer_order(:direct), do: {2, ""}
   defp writer_order(:unknown), do: {3, ""}
-
-  defp writer_param(nil), do: nil
-  defp writer_param({kind, name}), do: %{"kind" => Atom.to_string(kind), "name" => name}
-  defp writer_param(kind) when kind in [:direct, :unknown], do: %{"kind" => Atom.to_string(kind)}
 
   defp episode_map(%{} = m) do
     episode = %{
