@@ -414,7 +414,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert :ok = ingest_memory("personal-chat", "other memory", "operator-two")
 
       assert {:ok, %{result: text}} =
-               memory_search(%{query: "memory", destinations: ["personal"]}, [])
+               memory_search_text(%{query: "memory", destinations: ["personal"]}, [])
 
       assert text ==
                "Lens: personal-chat\n- own memory (source: functional)"
@@ -426,7 +426,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       on_exit(fn -> Application.delete_env(:jido_gralkor, :public_search_test_pid) end)
 
       assert {:ok, %{result: "Lens: observations\n- matching stored fact"}} =
-               memory_search(%{query: "precise query", destinations: ["observations"]}, [])
+               memory_search_text(%{query: "precise query", destinations: ["observations"]}, [])
 
       assert_receive {:public_search, "observations", "operator-one", "precise query", opts}
       assert Keyword.fetch!(opts, :limits) == Gralkor.Search.limits()
@@ -439,17 +439,17 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert :ok = ingest_memory("decisions", "other")
 
       assert {:ok, %{result: text}} =
-               memory_search(%{query: "memory", destinations: ["observations"]}, [])
+               memory_search_text(%{query: "memory", destinations: ["observations"]}, [])
 
       assert text ==
                "Lens: observations\n- wanted (source: functional)"
     end
 
-    test "and the action returns one readable string with memories under named Lens or Reflection headings" do
+    test "and the action returns readable sections with memories under named Lens or Reflection headings" do
       assert :ok = ingest_memory("observations", "Payment retries need an idempotency key.")
 
       assert {:ok, %{result: text}} =
-               memory_search(%{query: "payment", destinations: ["observations"]}, [])
+               memory_search_text(%{query: "payment", destinations: ["observations"]}, [])
 
       assert text ==
                "Lens: observations\n- Payment retries need an idempotency key. (source: functional)"
@@ -460,20 +460,20 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       put_generalisation("Use canaries", 2, [])
 
       assert {:ok, %{result: text}} =
-               memory_search(
+               memory_search_text(
                  %{query: "rollout", destinations: ["observations", "generalisations"]},
                  []
                )
 
       assert text ==
-               "Reflection: generalisations\n- Use canaries\n  level: 2\n\nLens: observations\n- observed rollout (source: functional)"
+               "Lens: observations\n- observed rollout (source: functional)\n\nReflection: generalisations\n- Use canaries\n  level: 2"
     end
 
     test "and the presentation adds no artefact identifiers" do
       artefact = put_generalisation("Use canaries", 2, [%{"content" => "prior", "level" => 1}])
 
       assert {:ok, %{result: text}} =
-               memory_search(%{query: "canaries", destinations: ["generalisations"]}, [])
+               memory_search_text(%{query: "canaries", destinations: ["generalisations"]}, [])
 
       refute text =~ artefact.id
     end
@@ -482,7 +482,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       put_generalisation("Use canaries", 2, [%{"content" => "prior", "level" => 1}])
 
       assert {:ok, %{result: text}} =
-               memory_search(%{query: "canaries", destinations: ["generalisations"]}, [])
+               memory_search_text(%{query: "canaries", destinations: ["generalisations"]}, [])
 
       assert text ==
                "Reflection: generalisations\n- Use canaries\n  level: 2\n  evolves_from:\n" <>
@@ -495,7 +495,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       for lens <- ["personal-chat", "shared-notes", "observations", "decisions"],
           do: assert(:ok = ingest_memory(lens, lens <> " fact"))
 
-      assert {:ok, %{result: text}} = memory_search(%{query: "fact"}, [])
+      assert {:ok, %{result: text}} = memory_search_text(%{query: "fact"}, [])
 
       for lens <- ["personal-chat", "shared-notes", "observations", "decisions"],
           do: assert(text =~ "Lens: #{lens}\n- #{lens} fact")
@@ -509,7 +509,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert :ok = ingest_memory("shared-notes", "unselected")
 
       assert {:ok, %{result: text}} =
-               memory_search(%{query: "memory", destinations: ["observations", "decisions"]}, [])
+               memory_search_text(%{query: "memory", destinations: ["observations", "decisions"]}, [])
 
       assert text ==
                "Lens: observations\n- wanted (source: functional)\n\nLens: decisions\n- other (source: functional)"
@@ -549,11 +549,13 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       refute Map.has_key?(tool_context, :session_id)
 
-      assert {:ok, %{result: text}} =
+      assert {:ok, %{sections: sections}} =
                MemorySearch.run(
                  %{query: "memory", destinations: ["personal"]},
                  Map.put(tool_context, :agent_id, fresh_agent.id)
                )
+
+      text = Presentation.text(sections)
 
       assert text ==
                "Lens: personal-chat\n- current operator memory (source: functional)"
@@ -1082,6 +1084,11 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     pid
   end
 
+  defp memory_search_text(params, context_options) do
+    with {:ok, %{sections: sections}} <- memory_search(params, context_options),
+         do: {:ok, %{result: Presentation.text(sections)}}
+  end
+
   defp memory_search(params, context_options) do
     context =
       %{agent_id: "operator-one", agent_name: "Susu", gralkor_runtime: self()}
@@ -1262,8 +1269,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     assert_receive {:provider_tool_results, [_ | _] = tool_results}
 
     Enum.map_join(tool_results, "\n\n", fn %{"output" => output} ->
-      %{"ok" => true, "result" => %{"result" => text}} = Jason.decode!(output)
-      text
+      %{"ok" => true, "result" => %{"sections" => sections}} = Jason.decode!(output)
+      Enum.map_join(sections, "\n\n", &(&1["heading"] <> "\n" <> &1["text"]))
     end)
   end
 
