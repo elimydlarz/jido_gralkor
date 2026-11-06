@@ -158,6 +158,63 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
   end
 
+  describe "when the Reflection Runner receives a valid Reflection and invocation > where an observer is supplied" do
+    test "then the observer is told each step's label as that step starts" do
+      assert {:ok, %Artefact{}} = run_successful_sequence(observer: observer())
+
+      assert observed_sequence() == [
+               {:observed, {:step_started, "collect"}},
+               {:inference, "collect"},
+               {:observed, {:step_finished, "collect"}},
+               {:observed, {:step_started, "decide"}},
+               {:inference, "decide"},
+               {:observed, {:step_finished, "decide"}}
+             ]
+    end
+  end
+
+  describe "when the Reflection Runner receives a valid Reflection and invocation > where an observer is supplied > when a step's output satisfies its contract" do
+    test "then the observer is told that step's label as it finishes" do
+      assert {:ok, %Artefact{}} = run_successful_sequence(observer: observer())
+
+      sequence = observed_sequence()
+
+      assert Enum.find_index(sequence, &(&1 == {:observed, {:step_finished, "collect"}})) ==
+               Enum.find_index(sequence, &(&1 == {:inference, "collect"})) + 1
+    end
+  end
+
+  describe "when the Reflection Runner receives a valid Reflection and invocation > where an observer is supplied > if a step fails" do
+    test "then the observer is told that step's label as it fails" do
+      test_pid = self()
+
+      inference = fn
+        %{step: %{label: "collect"}} = request ->
+          send(test_pid, {:inference_request, request})
+          {:ok, output_for(request)}
+
+        %{step: %{label: "decide"}} = request ->
+          send(test_pid, {:inference_request, request})
+          {:error, :provider_down}
+      end
+
+      assert {:error, %{step: "decide", reason: :provider_down}} =
+               Runner.run(reflection(sequence_steps()), invocation(),
+                 inference: inference,
+                 observer: observer()
+               )
+
+      assert observed_sequence() == [
+               {:observed, {:step_started, "collect"}},
+               {:inference, "collect"},
+               {:observed, {:step_finished, "collect"}},
+               {:observed, {:step_started, "decide"}},
+               {:inference, "decide"},
+               {:observed, {:step_failed, "decide"}}
+             ]
+    end
+  end
+
   describe "where a step's directions reference earlier outputs" do
     test "then those values are interpolated from the shared output space" do
       assert {:ok, %Artefact{}} = run_successful_sequence()
@@ -1073,6 +1130,23 @@ defmodule Gralkor.Reflection.RunnerTest do
              end)
   end
 
+  defp observer do
+    test_pid = self()
+    fn event -> send(test_pid, {:observed, event}) end
+  end
+
+  defp observed_sequence(sequence \\ []) do
+    receive do
+      {:observed, event} ->
+        observed_sequence([{:observed, event} | sequence])
+
+      {:inference_request, %{step: %{label: label}}} ->
+        observed_sequence([{:inference, label} | sequence])
+    after
+      0 -> Enum.reverse(sequence)
+    end
+  end
+
   defp run_successful_sequence(opts \\ []) do
     test_pid = self()
 
@@ -1083,7 +1157,7 @@ defmodule Gralkor.Reflection.RunnerTest do
 
     runner_opts =
       opts
-      |> Keyword.take([:tools, :tool_context, :artefact_id_for, :type_matcher])
+      |> Keyword.take([:tools, :tool_context, :artefact_id_for, :type_matcher, :observer])
       |> Keyword.put(:inference, inference)
 
     runner_opts =
