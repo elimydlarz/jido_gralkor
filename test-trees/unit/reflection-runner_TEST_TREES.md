@@ -80,8 +80,6 @@ when built-in inference is invoked for a step
     then built-in inference returns the identified error
   if the ReAct runtime ends without a final answer
     then built-in inference returns its termination reason as an error
-  if the stored information cannot be formatted
-    then built-in inference returns the formatting error without calling the model
   where an observer is supplied
     when the ReAct runtime starts a tool call
       then the observer is told the call's identifier, tool name, and arguments
