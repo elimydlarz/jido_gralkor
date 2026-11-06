@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [16.1.0] - 2026-11-06
 
 ### Added
 - **Consumers set the per-Destination search limits.** `%Gralkor.Search{}` takes `limits: %{facts:, nodes:, episodes:}`, the most facts, nodes, and episodes each selected Destination returns. It defaults to `Gralkor.Search.limits/0` (20, 20, 5), so existing searches are unchanged. All three keys are required and each must be a positive integer; anything else raises `ArgumentError` naming `:limits` and the value before any Destination is searched. To raise one kind: `limits: %{Gralkor.Search.limits() | episodes: 10}`. The `max_results` removal guidance now points here.
