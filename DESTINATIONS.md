@@ -193,13 +193,18 @@ A Reflection-written episode carries its whole artefact as structured fields ins
 
 A Reflection episode appears only once its extraction has durably completed. Reflection payload keys and values retain their stored shape; Graphiti JSON object keys are strings. Only Reflection-provenanced episode bodies are decoded. Lens-authored documents, Jira records, and even text that happens to look like an artefact remain text in `content`. A malformed completed Reflection body returns `{:error, {:invalid_reflection_artefact, reflection_name}}`; search does not return a manufactured partial response. Private graph identities still require the explicit namespace migration described above.
 
-`Gralkor.Client.search/1,2` never applies model presentation or budgeting. Readable presentation is separate: call `JidoGralkor.MemorySearchPresentation.for_model/2` explicitly. `memory_search`, legacy `recall`, and the packaged generalisation Reflection's built-in inference prompt all use it; a consumer `:inference` function still receives the structured results.
+`Gralkor.Client.search/1,2` never applies model presentation or budgeting. Readable presentation is separate: call `JidoGralkor.MemorySearchPresentation.sections/1` explicitly. `memory_search`, legacy `recall`, and the packaged generalisation Reflection's built-in inference prompt all use it; a consumer `:inference` function still receives the structured results.
 
 ### Readable memory search
 
-`memory_search` and `recall` present memory the same way. For example:
+`memory_search` returns memory as sections, one string each; `recall` and the generalisation prompt join the same sections into one text. For example:
 
 ```text
+Lens: jira
+- Payment retries must use an idempotency key. (valid from 2026-10-30; source: PAY-142)
+- Settlement retried failed requests twice. (valid from 2026-10-02 to 2026-10-12; source: incident review)
+- PAY-142: settlement retries double-charged a customer when the worker restarted. (valid from 2026-10-30; source: PAY-142)
+
 Reflection: generalisations
 - Prefer small, reversible changes to Payments migrations. (valid from 2026-10-29)
   level: 2
@@ -212,33 +217,26 @@ Reflection: erl
   lesson: Keep the jobs apart
   success: true
 
-Lens: jira
-- Payment retries must use an idempotency key. (valid from 2026-10-30; source: PAY-142)
-- Settlement retried failed requests twice. (valid from 2026-10-02 to 2026-10-12; source: incident review)
-- PAY-142: settlement retries double-charged a customer when the worker restarted. (valid from 2026-10-30; source: PAY-142)
+3 more memories omitted (section limit).
 
 Source: direct conversation
 - user: Can we move the cutover? assistant: Sunday works. (valid from 2026-10-31; source: planning call)
 
-Entities
+Entities in global memory
 - settlement worker: Retries failed requests three times.
-
-3 more memories omitted (response limit).
 ```
 
-Every memory is one bullet under the heading of whoever wrote it: `Lens: <name>`, `Reflection: <name>`, `Source: direct conversation`, `Source: direct document`, `Source: direct structured record`, `Source: direct` for a direct source without a recorded kind, or `Source: unknown`. A fact with several named sources appears under each distinct source, and the same text appears once under one heading; a memory that is only another memory's first line under that heading, such as the fact extracted from a generalisation, is left out beside it. Entities have no single writer, so they come last under `Entities`: the first line is `name: summary`, or only the name, and each attribute follows on its own indented `key: value` line. An empty search produces `No matching memory.`
+Every memory is one bullet under the heading of whoever wrote it: `Lens: <name>`, `Reflection: <name>`, `Source: direct conversation`, `Source: direct document`, `Source: direct structured record`, `Source: direct` for a direct source without a recorded kind, or `Source: unknown`. A fact with several named sources appears under each distinct source, and the same text appears once under one heading; a memory that is only another memory's first line under that heading, such as the fact extracted from a generalisation, is left out beside it. Entities have no single writer, so they follow every writer section in one `Entities in <Destination> memory` section for each Destination that returned entities: the first line is `name: summary`, or only the name, and each attribute follows on its own indented `key: value` line. An empty search produces one `Memory` section saying `No matching memory.`
 
-Whole Reflection artefacts come first, then facts, then episodes. That order sets both the heading order and which memories survive the response limits.
+`Lens:` sections come first, then `Reflection:`, then `Source:`, each kind in first-appearance order. Inside a section, whole Reflection artefacts come first, then facts, then episodes.
 
 Reflection artefacts and structured-record episodes become readable text without any Reflection-specific code, and keep every field they carry. A payload object with exactly one key, such as `generalisations`, is presented as that key's value, once and only at the outer level, and each item of a top-level list is its own bullet. A bullet's first line is an object's `content` string, or else its first field in alphabetical order as `key: value`. Every other field follows on its own line, two spaces further in: fields that fit on one line (a plain value, or a comma-separated list of plain values) first, in alphabetical order, then nested fields in alphabetical order. A list containing an object becomes `key:` followed by one nested bullet per item, laid out the same way, and a nested object becomes `key:` followed by its own fields. Null, empty strings, empty lists, empty objects, and fields containing only those are left out. Record metadata such as uuids, artefact identifiers, and Destinations never appears. The lineage in `evolves_from` repeats each earlier generalisation's text; the formatter presents what the payload carries.
 
 The first line of a fact or episode ends with when it was true and where it came from: `(valid from <date>)`, or `(valid from <date> to <date>)` once it was invalidated or expired, then `; source: <description>`. The start is when it became true, or when it was recorded if that is missing, and an invalidated fact with no start shows `(valid until <date>)`. A fact drawn from several episodes lists each distinct source description once. A source description never repeats its Lens marker, and one that only names a Reflection is left out because the heading already says so. Any memory is cut only past 4,000 characters, counting all of its lines with their indentation, and `… (truncated)` then ends the last line kept; the dates and source still follow on the first line and do not count toward the cut.
 
-`JidoGralkor.MemorySearchPresentation.for_model(results, max_bytes)` is the explicit reusable formatter. It leaves the input unchanged and returns `{:ok, %{result: text}}`. Consumers can call the structured search API and choose their own formatter instead.
+`JidoGralkor.MemorySearchPresentation.sections(results)` is the explicit reusable formatter. It leaves the input unchanged and returns `[%{heading:, text:}]`; `text(sections)` joins them, each heading over its text, separated by blank lines. The `memory_search` action returns `{:ok, %{sections: sections}}`. Consumers can call the structured search API and choose their own formatter instead.
 
-The action uses `tool_context[:memory_search_max_bytes]`, defaulting to 65,536 UTF-8 bytes for the complete serialized Jido success envelope. Independently, the entire text, including headings and notices, fits within 16,384 characters. These limits retain or omit whole memories; later fitting memories remain eligible. When memories are omitted, the text ends with `N more memories omitted (response limit).` Each fact counts once regardless of how many headings it would occupy. This is a response budget, not pagination.
-
-If the byte budget cannot hold the required response notice, the formatter returns `{:error, {:memory_search_budget_too_small, %{max_bytes: limit, minimum_bytes: required}}}`. A non-positive or non-integer budget raises before search starts. The blank-query short circuit remains an explicit textual NON-RESULT, and errors remain `{:error, reason}`.
+Each section has its own character limit, and no limit applies across sections: a `Lens:` section's text stays within 12,000 characters, a `Reflection:` section's within 8,000, a `Source:` section's within 6,000, and an `Entities in … memory` section's within 4,000, so every section fits Jido AI's 16,384-character string limit. A section over its limit keeps its memories in order while they fit together with its omission notice, omits the rest whole (a later memory that still fits is kept), and ends with `N more memories omitted (section limit).` One section filling up never removes a memory from another. This is a per-section budget, not pagination. The blank-query short circuit remains an explicit textual NON-RESULT, and errors remain `{:error, reason}`.
 
 ### Migrating from 11.x search
 
