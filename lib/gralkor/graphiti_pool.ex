@@ -500,6 +500,7 @@ defmodule Gralkor.GraphitiPool do
 
         #{@episode_writer_hydration}
         #{@fact_rendering}
+        #{@writer_clauses}
         LensSearchFilters = search_utils._gralkor_search_filters
         if LensSearchFilters is None:
           raise RuntimeError('Gralkor search filters are not installed; start Gralkor.GraphitiPool first')
