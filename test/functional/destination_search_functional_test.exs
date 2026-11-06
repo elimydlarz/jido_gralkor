@@ -136,16 +136,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert [%{content: "amber seed", writer: :direct}] = episodes
     end
 
-    test "and each Destination contributes at most twenty facts, twenty nodes, and five episodes" do
-      start_native_graph() |> seed_lens_graph() |> seed_competing_direct_memory()
-
-      assert {:ok, [%{facts: facts, nodes: nodes, episodes: episodes}]} =
-               search(query: "amber", destinations: ["first"])
-
-      assert {length(facts), length(nodes), length(episodes)} == {20, 20, 5}
-      assert Search.limits() == %{facts: 20, nodes: 20, episodes: 5}
-    end
-
     test "and facts, nodes, and episodes each keep relevance order within their Destination" do
       Application.put_env(:jido_gralkor, :destination_search_responses, %{
         "first" =>
@@ -164,6 +154,33 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
       assert_receive {:destination_search, "first", _, _, opts}
       assert Keyword.fetch!(opts, :limits) == %{facts: 20, nodes: 20, episodes: 5}
+    end
+  end
+
+  describe "when a caller searches memory > where the caller supplies no limits" do
+    test "then each Destination contributes at most twenty facts, twenty nodes, and five episodes" do
+      start_native_graph() |> seed_lens_graph() |> seed_competing_direct_memory()
+
+      assert {:ok, [%{facts: facts, nodes: nodes, episodes: episodes}]} =
+               search(query: "amber", destinations: ["first"])
+
+      assert {length(facts), length(nodes), length(episodes)} == {20, 20, 5}
+      assert Search.limits() == %{facts: 20, nodes: 20, episodes: 5}
+    end
+  end
+
+  describe "when a caller searches memory > where the caller supplies limits for facts, nodes, and episodes" do
+    test "then each Destination contributes at most the supplied number of facts, nodes, and episodes" do
+      start_native_graph() |> seed_lens_graph() |> seed_competing_direct_memory()
+
+      assert {:ok, [%{facts: facts, nodes: nodes, episodes: episodes}]} =
+               search(
+                 query: "amber",
+                 destinations: ["first"],
+                 limits: %{facts: 25, nodes: 3, episodes: 8}
+               )
+
+      assert {length(facts), length(nodes), length(episodes)} == {25, 3, 8}
     end
   end
 
@@ -1066,6 +1083,26 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
+  describe "if search supplies limits that are not exactly a positive whole number for each of facts, nodes, and episodes" do
+    test "then search fails before any Destination query is started" do
+      for limits <- invalid_limits() do
+        assert_raise ArgumentError, fn ->
+          search(destinations: ["first"], limits: limits)
+        end
+
+        refute_receive {:destination_search, _, _, _, _}
+      end
+    end
+
+    test "and the error names the limits and the rejected value" do
+      for limits <- invalid_limits() do
+        error = assert_raise ArgumentError, fn -> search(limits: limits) end
+        assert error.message =~ ":limits"
+        assert error.message =~ inspect(limits)
+      end
+    end
+  end
+
   describe "if search both selects and excludes Lenses" do
     test "then search fails before any Destination query is started" do
       for {lenses, excluded_lenses} <- [
@@ -1104,7 +1141,20 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     [
       {:result_type, :facts, "every search now returns facts, nodes, and episodes"},
       {:artefact_id, "a-1", "episodes carrying artefact"},
-      {:max_results, 5, "limits are fixed per Destination"}
+      {:max_results, 5, "limits: %{facts:, nodes:, episodes:}"}
+    ]
+  end
+
+  defp invalid_limits do
+    [
+      nil,
+      [facts: 1, nodes: 1, episodes: 1],
+      %{facts: 1, nodes: 1},
+      %{facts: 1, nodes: 1, episodes: 1, edges: 1},
+      %{facts: 0, nodes: 1, episodes: 1},
+      %{facts: 1, nodes: -1, episodes: 1},
+      %{facts: 1, nodes: 1, episodes: 1.5},
+      %{facts: "20", nodes: 1, episodes: 1}
     ]
   end
 

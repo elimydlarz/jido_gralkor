@@ -6,7 +6,8 @@ defmodule Gralkor.Search do
   read (`destinations`, default every accessible registered Destination), the
   Lenses whose writes to read (`lenses`, default every writer) or to leave out
   (`excluded_lenses`, default none), and ontology
-  filters (`entity_types`, `edge_types`, default no filter). The packaged
+  filters (`entity_types`, `edge_types`, default no filter), and the
+  per-Destination result `limits` (default `limits/0`). The packaged
   `personal` Destination resolves only to the current `operator_id`'s graph.
 
   Every search returns everything relevant: one Graphiti search per selected
@@ -17,8 +18,12 @@ defmodule Gralkor.Search do
       %{destination: name, facts: [fact], nodes: [node], episodes: [episode]}
 
   Each kind keeps Graphiti's relevance order and is capped per Destination by
-  `limits/0`: twenty facts, twenty nodes, and five episodes (episodes are whole
-  source documents, so fewer are returned).
+  `limits`, a map of exactly `:facts`, `:nodes`, and `:episodes` to positive
+  integers. It defaults to `limits/0`: twenty facts, twenty nodes, and five
+  episodes (episodes are whole source documents, so fewer are returned). Any
+  other `limits` value raises `ArgumentError` before any Destination is
+  searched. To raise one kind and keep the rest, write
+  `limits: %{Gralkor.Search.limits() | episodes: 10}`.
 
   * A fact carries `fact`, its `created_at`, `valid_at`, `invalid_at`, and
     `expired_at` timestamps, its `relationship` name, its `source_node` and
@@ -129,6 +134,7 @@ defmodule Gralkor.Search do
     excluded_lenses: [],
     entity_types: [],
     edge_types: [],
+    limits: @limits,
     result_type: nil,
     artefact_id: nil,
     max_results: nil
@@ -149,13 +155,17 @@ defmodule Gralkor.Search do
           excluded_lenses: [String.t()],
           entity_types: [String.t()],
           edge_types: [String.t()],
+          limits: limits(),
           result_type: nil,
           artefact_id: nil,
           max_results: nil
         }
 
-  @doc "The fixed per-Destination result limits: twenty facts, twenty nodes, five episodes."
-  @spec limits() :: %{facts: pos_integer(), nodes: pos_integer(), episodes: pos_integer()}
+  @typedoc "The most facts, nodes, and episodes one Destination returns."
+  @type limits :: %{facts: pos_integer(), nodes: pos_integer(), episodes: pos_integer()}
+
+  @doc "The default per-Destination result limits: twenty facts, twenty nodes, five episodes."
+  @spec limits() :: limits()
   def limits, do: @limits
 
   @doc false

@@ -5,8 +5,13 @@ when a caller searches memory
   and the search returns one result per selected Destination in the selected Destination order
   and every Destination result names its Destination
   and every Destination result carries its relevant facts, its relevant nodes, and its relevant episodes together
-  and each Destination contributes at most twenty facts, twenty nodes, and five episodes
   and facts, nodes, and episodes each keep relevance order within their Destination
+
+  where the caller supplies no limits
+    then each Destination contributes at most twenty facts, twenty nodes, and five episodes
+
+  where the caller supplies limits for facts, nodes, and episodes
+    then each Destination contributes at most the supplied number of facts, nodes, and episodes
 
   where the Destination selector is omitted or empty
     then every accessible registered Destination is selected
@@ -104,6 +109,10 @@ if search supplies any Destination selection, Lens selection, or Lens exclusion 
   and no valid subset is searched
   and the error identifies whether the rejected selection was for Destinations, Lenses, or excluded Lenses
   and the error identifies the rejected value
+
+if search supplies limits that are not exactly a positive whole number for each of facts, nodes, and episodes
+  then search fails before any Destination query is started
+  and the error names the limits and the rejected value
 
 if search both selects and excludes Lenses
   then search fails before any Destination query is started

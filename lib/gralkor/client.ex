@@ -225,7 +225,7 @@ defmodule Gralkor.Client do
       |> put_search_option(:edge_types, request.edge_types)
       |> put_search_option(:lenses, lenses)
       |> put_search_option(:excluded_lenses, excluded_lenses)
-      |> Keyword.put(:limits, Search.limits())
+      |> Keyword.put(:limits, request.limits)
 
     destinations
     |> Enum.map(fn destination ->
@@ -262,8 +262,8 @@ defmodule Gralkor.Client do
       "Reflection artefacts arrive whole as episodes carrying artefact: %{id:, payload:}; " <>
         "remove artefact_id and match the artefact id in the returned episodes",
     max_results:
-      "limits are fixed per Destination (Gralkor.Search.limits/0: 20 facts, 20 nodes, 5 episodes); " <>
-        "remove max_results"
+      "set per-Destination limits with limits: %{facts:, nodes:, episodes:} " <>
+        "(default Gralkor.Search.limits/0: 20 facts, 20 nodes, 5 episodes); remove max_results"
   }
 
   defp validate_search_request!(%Search{} = request) do
@@ -278,7 +278,19 @@ defmodule Gralkor.Client do
 
     validate_type_filter!(:entity_types, request.entity_types)
     validate_type_filter!(:edge_types, request.edge_types)
+    validate_limits!(request.limits)
     validate_lens_selection_or_exclusion!(request.lenses, request.excluded_lenses)
+  end
+
+  defp validate_limits!(%{facts: facts, nodes: nodes, episodes: episodes} = limits)
+       when map_size(limits) == 3 and is_integer(facts) and facts > 0 and is_integer(nodes) and
+              nodes > 0 and is_integer(episodes) and episodes > 0,
+       do: :ok
+
+  defp validate_limits!(limits) do
+    raise ArgumentError,
+          "Gralkor.Search :limits must map exactly :facts, :nodes, and :episodes to " <>
+            "positive integers, got #{inspect(limits)}"
   end
 
   defp validate_lens_selection_or_exclusion!([_ | _] = lenses, [_ | _] = excluded_lenses) do

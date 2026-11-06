@@ -131,7 +131,7 @@ Each distinct Destination is searched once, concurrently, through one Graphiti `
  ]}
 ```
 
-Facts, nodes, and episodes each keep Graphiti's relevance order. Every Destination contributes at most twenty facts, twenty nodes, and five episodes (`Gralkor.Search.limits/0`); episodes are whole source documents, so fewer are returned. `entity_types` restricts nodes to those labels and restricts facts to edges whose source *and* target entities both carry one of them (Graphiti applies its label filter to both edge endpoints). `edge_types` restricts facts to those relationship names. Neither filter restricts episodes.
+Facts, nodes, and episodes each keep Graphiti's relevance order. Every Destination contributes at most the search's `limits`: by default twenty facts, twenty nodes, and five episodes (`Gralkor.Search.limits/0`); episodes are whole source documents, so fewer are returned. Supply `limits: %{facts:, nodes:, episodes:}` (all three, each a positive integer) to change them for that search, for example `%Gralkor.Search{operator_id: id, query: q, limits: %{Gralkor.Search.limits() | episodes: 10}}`; any other value raises `ArgumentError` before any Destination is searched. The limits apply to every Destination the search selects; to give Destinations different limits, search them separately with `destinations`. `entity_types` restricts nodes to those labels and restricts facts to edges whose source *and* target entities both carry one of them (Graphiti applies its label filter to both edge endpoints). `edge_types` restricts facts to those relationship names. Neither filter restricts episodes.
 
 ### Lens selection
 
@@ -241,7 +241,7 @@ Each section has its own character limit, and no limit applies across sections: 
 - `result_type` is gone: every search returns facts, nodes, and episodes per Destination. Replace `result.fact` / `result.node` / `result.episode` (one flat attributed list) with `result.facts` / `result.nodes` / `result.episodes` inside each Destination map.
 - `lenses` was removed in 12.0.0 and returned in 13.0.0 with the same meaning: only what the selected Lenses wrote, filtered before ranking. It now restricts facts, nodes, and episodes together.
 - `result_type: :artefacts` and `artefact_id` are gone: Reflection artefacts arrive whole in `episodes` as `artefact: %{id:, payload:}`; match the id there.
-- `max_results` is gone: limits are fixed per Destination (`Gralkor.Search.limits/0`).
+- `max_results` is gone: set per-Destination limits with `limits: %{facts:, nodes:, episodes:}` (default `Gralkor.Search.limits/0`).
 - Setting any removed field raises `ArgumentError` naming the field with this guidance.
 - `memory_search` lost its `lenses` parameter; keep `destinations`. Read `action_result.sections`, each `%{heading:, text:}`; treat each `text` as readable text and never `Jason.decode!/1` it.
 
