@@ -1,5 +1,11 @@
 # Changelog
 
+## [15.0.2] - 2026-11-06
+
+### Fixed
+- **`Runner.run/3` ignored `:model_resolver`.** Without a consumer `:inference` function, every step's built-in inference ran `GRALKOR_LLM_MODEL` whatever resolver the consumer passed, because `run/3` called `default_inference/1`, which forwards no options. `run/3` now passes `:model_resolver` to built-in inference; without one, `GRALKOR_LLM_MODEL` still applies.
+- **Steps were told "No matching memory." before they had searched.** Built-in inference always printed a "Related stored information available to this Reflection step" section, so every Reflection except the packaged generalisation one (the only Reflection that searches memory before inference) received "No matching memory." in its prompt, discouraging it from calling `memory_search`. The section now appears only when the stored information holds at least one fact, entity, or episode; with none (no search, or a search that found nothing) the prompt has no such section.
+
 ## [15.0.1] - 2026-11-06
 
 ### Fixed
