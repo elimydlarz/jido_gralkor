@@ -461,7 +461,6 @@ defmodule Gralkor.Reflection.RunnerTest do
       refute section =~ "artefact-one"
       refute section =~ ~s("level")
     end
-
   end
 
   describe "when built-in inference is invoked for a step > while the stored information holds no memory" do

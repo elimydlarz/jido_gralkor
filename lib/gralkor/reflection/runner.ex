@@ -9,7 +9,12 @@ defmodule Gralkor.Reflection.Runner do
   alias JidoGralkor.MemorySearchPresentation
 
   def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
-    inference = Keyword.get(opts, :inference, &default_inference/1)
+    inference =
+      Keyword.get_lazy(opts, :inference, fn ->
+        built_in = Keyword.take(opts, [:model_resolver])
+        &default_inference(&1, &Jido.AI.Reasoning.ReAct.run/3, built_in)
+      end)
+
     tool_executor = Keyword.get(opts, :tool_executor, &default_tool_executor/2)
     tools = Keyword.get(opts, :tools, [])
     tool_context = Keyword.get(opts, :tool_context, %{})
@@ -246,10 +251,7 @@ defmodule Gralkor.Reflection.Runner do
 
     Lensed representations available to this Reflection step:
     #{Jason.encode!(serializable_representations(request))}
-
-    Related stored information available to this Reflection step:
-    #{stored_information}
-
+    #{stored_section(request.stored_information, stored_information)}
     Return only one JSON object satisfying this exact output contract:
     #{Jason.encode!(request.output_schema)}
 
@@ -284,6 +286,17 @@ defmodule Gralkor.Reflection.Runner do
       %{termination_reason: termination_reason} -> {:error, termination_reason}
     end
   end
+
+  defp stored_section(results, presented) do
+    if Enum.any?(results, &holds_memory?/1) do
+      "\nRelated stored information available to this Reflection step:\n#{presented}\n"
+    else
+      ""
+    end
+  end
+
+  defp holds_memory?(result),
+    do: Enum.any?([:facts, :nodes, :episodes], &(Map.get(result, &1, []) != []))
 
   defp serializable_representations(request) do
     request
