@@ -308,9 +308,11 @@ defmodule Gralkor.Reflection.Runner do
   @doc false
   def observed_react(prompt, config, opts) do
     {on_event, opts} = Keyword.pop!(opts, :on_event)
-    events = prompt |> Jido.AI.Reasoning.ReAct.stream(config, opts) |> Stream.each(on_event)
-    {:ok, result} = Jido.AI.Reasoning.ReAct.collect(events, config, opts)
-    result
+
+    prompt
+    |> Jido.AI.Reasoning.ReAct.stream(config, opts)
+    |> Stream.each(on_event)
+    |> Jido.AI.Reasoning.ReAct.collect_stream()
   end
 
   defp event_observer(opts) do

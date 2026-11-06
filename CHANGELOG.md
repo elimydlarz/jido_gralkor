@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **With an `:observer`, an exception in a step's ReAct stream surfaced as a `MatchError`.** Built-in inference reduced the observed stream with `ReAct.collect/3`, which wraps exceptions in `{:error, exception}`, and matched only `{:ok, result}`. It now reduces with `ReAct.collect_stream/1`, exactly as `ReAct.run/3` does, so a failure keeps its original type and stacktrace and the result is the same as without an observer.
+
 ## [16.0.0] - 2026-11-06
 
 Memory search presents each Lens, Reflection, and source in its own section with its own limit, so one writer's memories can no longer take another's place. Before, every memory shared one response budget with Reflection artefacts placed first, so a Destination full of `erl` or `generalisations` artefacts could leave no room for anything a Lens wrote. The structured `Gralkor.Client.search/1,2` results are unchanged.

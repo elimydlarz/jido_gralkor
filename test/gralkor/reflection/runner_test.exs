@@ -241,6 +241,33 @@ defmodule Gralkor.Reflection.RunnerTest do
                {:inference, "decide"},
                {:observed, {:step_failed, "decide"}}
              ]
+
+      assert {:error, %{step: "collect", reason: {:unexpected_output, "extra"}}} =
+               Runner.run(reflection(sequence_steps()), invocation(),
+                 inference:
+                   inference_answering(%{"evidence" => "gathered evidence", "extra" => "x"}),
+                 observer: observer()
+               )
+
+      assert [
+               {:observed, {:step_started, "collect"}},
+               {:inference, "collect"},
+               {:observed, {:step_failed, "collect"}}
+             ] =
+               observed_sequence()
+
+      assert {:error, %{reason: :missing_artefact}} =
+               Runner.run(single_step_reflection(), invocation(),
+                 inference: inference_answering(%{}),
+                 observer: observer()
+               )
+
+      assert [
+               {:observed, {:step_started, "finish"}},
+               {:inference, "finish"},
+               {:observed, {:step_failed, "finish"}}
+             ] =
+               observed_sequence()
     end
   end
 
@@ -1242,6 +1269,15 @@ defmodule Gralkor.Reflection.RunnerTest do
              Runner.default_inference(request, fn _action, _args, _context ->
                %{termination_reason: :final_answer, result: ~s(["not","an","object"])}
              end)
+  end
+
+  defp inference_answering(output) do
+    test_pid = self()
+
+    fn request ->
+      send(test_pid, {:inference_request, request})
+      {:ok, %{output: output}}
+    end
   end
 
   defp observer do
