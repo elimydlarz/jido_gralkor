@@ -887,6 +887,84 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when a Chain of Thought step begins > where the Runner is given a model resolver" do
+    test "then built-in inference runs the model that resolver names" do
+      parent = self()
+      schema = %{"answer" => "string"}
+
+      register_step("Resolve the model.", [], [], schema, [answer_turn("ready")])
+
+      reflection = %Gralkor.Reflection{
+        name: "resolved-model",
+        outputs: [],
+        chain_of_thought: %Gralkor.Reflection.ChainOfThought{
+          steps: [
+            %Gralkor.Reflection.ChainOfThought.Step{
+              label: "resolve",
+              directions: "Resolve the model.",
+              output: schema
+            }
+          ]
+        }
+      }
+
+      resolver = fn ->
+        send(parent, :model_resolved)
+        %{provider: "openai", id: "gpt-6-luna"}
+      end
+
+      assert {:ok, %Gralkor.Artefact{payload: %{"answer" => "ready"}}} =
+               Runner.run(
+                 reflection,
+                 %{id: "resolved-model-run", operator_id: "operator-one", representations: []},
+                 model_resolver: resolver
+               )
+
+      assert_received :model_resolved
+    end
+  end
+
+  describe "when a Chain of Thought step begins > where the Runner is given no model resolver" do
+    test "then built-in inference runs Gralkor's configured LLM model" do
+      configured = Gralkor.Config.llm_model()
+      assert step_call(stored_request([])).model == "#{configured.provider}:#{configured.id}"
+    end
+  end
+
+  describe "when a Chain of Thought step begins > while the step's stored information holds memories" do
+    test "then built-in inference receives those memories under a related-stored-information heading" do
+      stored = [
+        %{
+          destination: "global",
+          facts: [],
+          nodes: [],
+          episodes: [%{content: "related evidence", lens: "observations"}]
+        }
+      ]
+
+      [_, section] =
+        String.split(
+          step_call(stored_request(stored)).prompt,
+          "Related stored information available to this Reflection step:\n",
+          parts: 2
+        )
+
+      assert section =~ "related evidence"
+    end
+  end
+
+  describe "when a Chain of Thought step begins > while the step's stored information holds no memory" do
+    test "then built-in inference receives no related-stored-information heading" do
+      for stored <- [[], [%{destination: "global", facts: [], nodes: [], episodes: []}]] do
+        prompt = step_call(stored_request(stored)).prompt
+
+        assert prompt =~ "Use memory."
+        refute prompt =~ "Related stored information"
+        refute prompt =~ "No matching memory"
+      end
+    end
+  end
+
   describe "when a Chain of Thought step begins > where the directions reference outputs from earlier steps" do
     test "then every referenced value is interpolated from the Chain of Thought's shared output space",
          context do
