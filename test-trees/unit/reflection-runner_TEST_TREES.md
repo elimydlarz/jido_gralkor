@@ -6,6 +6,8 @@ when the Reflection Runner receives a valid Reflection and invocation
   and completed representations retain exactly their identifier, Lens, content, and storage result
   and the request carries the supplied tools and tool context
   and only the current step is exposed to inference
+  where a model resolver is supplied without a consumer inference function
+    then every step's built-in inference runs the model that resolver names
 
 where a step's directions reference earlier outputs
   then those values are interpolated from the shared output space
@@ -53,12 +55,20 @@ when another Reflection runs
   then no related-memory search is issued
 
 when built-in inference is invoked for a step
-  then it runs the configured model through Jido's standalone ReAct runtime with the directions, exact output contract, representations, and stored information
-  and the stored information is presented in the memory search format, including each generalisation's level and lineage
-  and the stored information is not presented as JSON
+  then it runs through Jido's standalone ReAct runtime with the directions, exact output contract, and representations
   and the representations and output contract remain JSON
   and it supplies the host tools and a tool context whose operator identity comes from the invocation while every other supplied field remains unchanged
   and a final JSON object is returned as wrapped structured output
+  where a model resolver is supplied
+    then it runs the model that resolver names
+  where no model resolver is supplied
+    then it runs Gralkor's configured LLM model
+  while the stored information holds memories
+    then the stored information is presented under a related-stored-information heading
+    and the stored information is presented in the memory search format, including each generalisation's level and lineage
+    and the stored information is not presented as JSON
+  while the stored information holds no memory
+    then the prompt has no related-stored-information heading
   if the provider fails or returns invalid JSON or a non-object JSON value
     then built-in inference returns the identified error
   if the ReAct runtime ends without a final answer

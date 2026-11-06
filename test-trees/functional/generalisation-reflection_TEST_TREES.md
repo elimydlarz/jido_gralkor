@@ -13,6 +13,7 @@ when the packaged generalisation Reflection inspects a completed ingestion
 
 when the packaged generalisation Reflection's default related-memory search returns no stored information
   then generalisation inference still inspects every current representation
+  and generalisation inference receives no related-stored-information heading
 
 if the packaged generalisation Reflection's default related-memory search fails
   then the Reflection fails before generalisation inference begins and identifies the search failure

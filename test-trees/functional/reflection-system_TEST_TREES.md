@@ -131,6 +131,16 @@ when a Chain of Thought step begins
   and the current step is the only step exposed to inference
   and built-in inference tool context uses the invocation's operator identity while retaining every other supplied context value
 
+  where the Runner is given a model resolver
+    then built-in inference runs the model that resolver names
+  where the Runner is given no model resolver
+    then built-in inference runs Gralkor's configured LLM model
+
+  while the step's stored information holds memories
+    then built-in inference receives those memories under a related-stored-information heading
+  while the step's stored information holds no memory
+    then built-in inference receives no related-stored-information heading
+
   where the directions reference outputs from earlier steps
     then every referenced value is interpolated from the Chain of Thought's shared output space
 
