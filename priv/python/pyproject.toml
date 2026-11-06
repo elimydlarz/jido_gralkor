@@ -8,5 +8,9 @@ dependencies = [
   # clients are importable from this manifest alone. Naming a non-existent extra
   # makes uv warn on every resolve.
   "graphiti-core[falkordb,google-genai]==0.31.2",
-  "falkordblite"
+  "falkordblite",
+  # graphiti-core 0.31.2 imports `httpx` without declaring it, and neither
+  # openai 3 nor google-genai 3 installs it (both moved to `httpx2`), so
+  # google-genai stays below 3 to keep `httpx` installed.
+  "google-genai<3"
 ]
