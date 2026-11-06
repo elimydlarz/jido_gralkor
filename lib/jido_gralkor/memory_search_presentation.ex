@@ -1,12 +1,22 @@
 defmodule JidoGralkor.MemorySearchPresentation do
   @moduledoc """
-  Render structured search results as readable text for the consuming agent.
+  Render structured search results as readable sections for the consuming agent.
 
-  Every memory is one bullet under the heading of whoever wrote it:
-  `Lens: <name>`, `Reflection: <name>`, a direct source kind, or `Source: unknown`.
-  Entities have no single writer, so they come last under `Entities`. Whole
-  Reflection artefacts come first, then facts, then episodes, and that one order
-  sets both the heading order and which memories survive the response limits.
+  `sections/1` returns `%{heading:, text:}` sections. Every memory is one bullet in
+  the section of whoever wrote it: `Lens: <name>` sections first, then
+  `Reflection: <name>`, then a direct source kind or `Source: unknown`, each kind in
+  first-appearance order. Entities have no single writer, so they follow in one
+  `Entities in <Destination> memory` section for each Destination that returned
+  entities. Inside a section, whole Reflection artefacts come first, then facts,
+  then episodes. With nothing found there is one `Memory` section saying so.
+  `text/1` joins sections into one text, each heading over its text.
+
+  Each section has its own character limit, and no limit applies across sections:
+  a Lens section's text stays within 12,000 characters, a Reflection's within
+  8,000, a Source's within 6,000, and an Entities section's within 4,000, all under
+  Jido AI's 16,384-character string limit. A section over its limit keeps its
+  memories in order while they fit with its omission notice, omits the rest whole,
+  and ends with the number it omitted.
 
   A bullet's first line is the memory's main text: the fact text, `name: summary`
   for an entity, an object's `content` string, or else an object's first field
