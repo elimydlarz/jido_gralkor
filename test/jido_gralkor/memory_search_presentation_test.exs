@@ -741,10 +741,17 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   defp artefact(reflection, payload),
     do: %{reflection: reflection, artefact: %{id: "artefact-id", payload: payload}}
 
-  defp rendered(input) do
-    assert {:ok, %{result: text}} = Presentation.for_model(input, 65_536)
-    text
+  defp rendered(input), do: input |> Presentation.sections() |> Presentation.text()
+
+  defp section_text(input, heading) do
+    input |> Presentation.sections() |> Enum.find(&(&1.heading == heading)) |> Map.fetch!(:text)
   end
 
-  defp envelope_bytes(output), do: byte_size(Jason.encode!(%{ok: true, result: output}))
+  defp lens_facts(count, length) do
+    facts(
+      for index <- 1..count do
+        fact(String.pad_trailing("#{index}", length, "x"), [%{lens: "notes"}])
+      end
+    )
+  end
 end
