@@ -1,18 +1,34 @@
 Unit: memory-search-presentation (src: lib/jido_gralkor/memory_search_presentation.ex; unit: test/jido_gralkor/memory_search_presentation_test.exs)
 
 when the memory search formatter is called
-  then every memory is one bullet under the heading of its writer, its first line its main text and each other field on its own indented line
-  and whole Reflection artefacts come first, then facts, then episodes
-  and headings keep first-appearance order with retrieval order inside each heading
-  and the same text appears once under one heading
-  and a memory whose whole text is another memory's first line under the same heading is left out beside it
-  and entities come last under an `Entities` heading
+  then it returns an ordered list of sections, each a heading and its own text
+  and every memory is one bullet in the section of the writer whose result returned it, its first line its main text and each other field on its own indented line
+  and Lens sections come first, then Reflection sections, then direct and unknown Source sections, then one `Entities: <Destination>` section for each searched Destination
+  and writer sections keep first-appearance order
+  and Entities sections keep Destination order
+  and inside each section whole Reflection artefacts come first, then facts, then episodes, each in retrieval order
+  and the same text appears once in one section
+  and a memory whose whole text is another memory's first line in the same section is left out beside it
+  and a writer whose result returned no memory has no section
   and nothing is labelled as a fact, an episode, or an artefact
-  and the formatter adds no record metadata such as a Destination, an artefact identifier, or a uuid
+  and the formatter adds no record metadata such as an artefact identifier or a uuid
   and level and lineage appear only as fields the payload itself carries
   and the structured input remains unchanged
-  while no memories are supplied
-    then the text explicitly states that no matching memory was found
+  while a Destination's result returned no entities
+    then its Entities section explicitly states that no matching memory was found
+
+when the formatter's sections are presented as one text
+  then each section is its heading followed by its text on the next line
+  and sections are separated by one blank line in section order
+
+if a Destination could not be searched
+  then it has one `Destination: <name>` section stating that its memory could not be searched, naming the error, as a failure rather than an empty result
+
+if a writer's search failed
+  then its section states that it could not be searched, naming the error, as a failure rather than an empty result
+
+if a Destination's entity search failed
+  then its Entities section states that its entities could not be searched, naming the error, as a failure rather than an empty result
 
 when the formatter names a writer
   then a Lens uses a `Lens: <name>` heading
@@ -23,7 +39,7 @@ when the formatter names a writer
 when the formatter presents facts
   then each fact is one bullet with its complete text
   and repeated provenance for one source adds no duplicate bullet for that fact
-  and a fact with several named sources appears under each distinct source
+  and a fact returned for several writers appears in each of their sections
 
 when the formatter shows when a memory was true and where it came from
   then a fact or episode with a start date ends with `(valid from <date>)`
@@ -73,19 +89,22 @@ when one memory is longer than 4,000 characters
   and a memory of exactly 4,000 characters is not cut
   and its dates and source still follow the cut without counting toward it
 
-when formatted results must fit response limits
-  then an exact-fit response retains every memory
-  and a caller that supplies no byte budget gets the 65,536-byte default that every model-facing presentation shares
-  and headings and omission notices count towards the 16384-character ceiling
-  and UTF-8 bytes and JSON escaping count towards the complete-envelope byte budget
-  and a bullet that exceeds either limit is omitted whole while later fitting bullets remain eligible
-  and the omission notice gives the total omitted, each fact once regardless of its source count
-  while the budget cannot contain the empty response and required notice
-    then an explicit error reports the required minimum bytes
-  if the byte budget is not a positive integer
-    then an argument error identifies the invalid budget
-
-when the action validates a model byte budget before search
-  then a positive integer is returned unchanged
-  if the budget is not a positive integer
-    then an argument error identifies the invalid budget
+when a section is limited
+  then its limit never removes a memory from another section
+  and no limit applies across sections
+  while it is a Lens section
+    then its text never exceeds 12,000 characters
+  while it is a Reflection section
+    then its text never exceeds 8,000 characters
+  while it is a direct or unknown Source section
+    then its text never exceeds 6,000 characters
+  while it is an Entities section
+    then its text never exceeds 4,000 characters
+  while its memories total at most its limit
+    then every memory is kept
+    and it has no omission notice
+  while its memories total more than its limit
+    then memories are kept in order while they fit together with its omission notice
+    and a memory that would pass the limit is omitted whole
+    and a later memory that still fits is kept
+    and it ends with the number of its own memories omitted

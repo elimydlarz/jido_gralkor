@@ -60,41 +60,41 @@ when a consumer prepares the first ReAct iteration
 when a consumer prepares a later ReAct iteration
   then every request override is returned unchanged
 
-when a consumer explicitly formats structured fact search results
-  then named Lens sources have headings of the form `Lens: <name>`
-  and named Reflection sources have headings of the form `Reflection: <name>`
-  and each source heading is followed by bullets containing its returned fact text
-  and source groups retain first-appearance order
-  and facts retain retrieval order within each source group
-  while a fact has several named sources
-    then the fact appears once under each distinct named source
+when a consumer explicitly formats structured search results
+  then a Lens writer's section has a heading of the form `Lens: <name>`
+  and a Reflection writer's section has a heading of the form `Reflection: <name>`
+  and each section's text holds bullets containing its writer's returned memory text
+  and writer sections retain first-appearance order
+  and memories retain retrieval order within each section
+  and each searched Destination's entities follow every writer section under `Entities: <Destination>`
+  while a fact is returned for several writers
+    then the fact appears once in each of their sections
   while a Lens and a Reflection share a name
-    then their facts remain in separate source groups
-  while a fact has no named Lens or Reflection provenance
-    then the fact appears under `Source: unknown`
-  while search returns no facts, entities, or episodes
-    then the text explicitly states that no matching memory was found
+    then their memories remain in separate sections
+  while a writer has no named Lens or Reflection provenance
+    then its memories appear under `Source: unknown`
+  while a Destination's search returns no entities
+    then its Entities section explicitly states that no matching memory was found
 
 when memory search formats memories for the consuming agent
-  then the complete text including headings and omission notices stays within 16384 characters
-  and the serialized success envelope fits the configured byte budget
+  then every section's text stays within its own character limit
+  and no section's text exceeds 16384 characters
   and every included memory retains its complete text
-  while a memory cannot fit within the response limits
-    then that whole memory is omitted while later fitting memories remain eligible
-    and the text reports the omitted memory count and response-limit reason
+  while Lenses and Reflections in one Destination both wrote matching memory
+    then every one of those writers has a section holding its own memories
+  while a section's memories cannot all fit within its limit
+    then a whole memory is omitted while later fitting memories remain eligible
+    and that section reports its own omitted memory count and section-limit reason
+    but every other section keeps its memories
   while one memory is longer than 4,000 characters
     then it is cut to 4,000 characters and marked as truncated
-  while the byte budget cannot hold an empty response with the required notice
-    then an explicit budget error is returned
-  if the byte budget is not a positive integer
-    then the action rejects the budget before searching memory
 
 when unmodified Jido AI 2.3.0 sends memory search output to the provider
-  then one decode of the tool envelope exposes the exact readable string returned by the action
-  and the tool result contains readable bullets rather than a JSON-encoded result list
+  then one decode of the tool envelope exposes every section's exact heading and readable text returned by the action
+  and each section's text contains readable bullets rather than JSON-encoded memories
   while the canonical Reflection payload contains deep lineage or domain keys ending in `_key`
     then the provider receives deep lineage and `_key` fields unchanged
-  while more than 100 facts fit within the response limits
-    then the provider receives every formatted fact without a synthetic omission item
-  while source memories exceed the response limits
-    then the provider receives an explicit omission notice instead of a sliced memory
+  while every section fits within its limit
+    then the provider receives every section's text whole, without a truncation marker
+  while a section's memories exceed its limit
+    then the provider receives that section's explicit omission notice instead of a sliced memory

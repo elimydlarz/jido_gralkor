@@ -4,9 +4,16 @@ when a caller searches memory
   then every distinct selected Destination is searched concurrently
   and the search returns one result per selected Destination in the selected Destination order
   and every Destination result names its Destination
-  and every Destination result carries its relevant facts, its relevant nodes, and its relevant episodes together
-  and each Destination contributes at most twenty facts, twenty nodes, and five episodes
-  and facts, nodes, and episodes each keep relevance order within their Destination
+  and every Destination result carries its relevant nodes and one writer result for each writer whose episodes that Destination holds
+  and every writer result names its writer as a Lens, a Reflection, direct writes, or unknown authorship
+  and every writer result carries only that writer's relevant episodes and the relevant facts drawn from them
+  and the writers of one Destination are searched concurrently
+  and each writer contributes at most twenty facts and five episodes, so one writer's results never take another writer's places
+  and each Destination contributes at most twenty nodes
+  and facts and episodes each keep relevance order within their writer
+  and nodes keep relevance order within their Destination
+  while a Destination holds no episodes
+    then its result carries no writer results
 
   where the Destination selector is omitted or empty
     then every accessible registered Destination is selected
@@ -24,7 +31,8 @@ when a caller searches memory
 
   where one or more Lenses are supplied
   and no Lens is excluded
-    then only episodes written through any supplied Lens are returned
+    then writer results are returned only for supplied Lenses
+    and only episodes written through any supplied Lens are returned
     and only facts drawn from an episode written through any supplied Lens are returned
     and only entities mentioned by an episode written through any supplied Lens are returned
     but no result written directly, through another Lens, or through a Destination artefact output can contribute
@@ -37,10 +45,11 @@ when a caller searches memory
 
   where one or more Lenses are excluded
   and the Lens selector is omitted or empty
-    then no episode written through an excluded Lens is returned
+    then no writer result is returned for an excluded Lens
+    and no episode written through an excluded Lens is returned
     and no fact drawn only from episodes written through excluded Lenses is returned
     and no entity mentioned only by episodes written through excluded Lenses is returned
-    but a fact also drawn from an episode written by another writer is returned
+    but a fact also drawn from an episode written by another writer is returned in that writer's result
     and an entity also mentioned by an episode written by another writer is returned
     and results written directly, through another Lens, through a Destination artefact output, or without recorded authorship can contribute
     and excluded results cannot consume any per-Destination limit
@@ -61,7 +70,7 @@ where the selected Destinations include any shared Destination
 where the same Destination is selected more than once
   then that Destination is searched only once
 
-when a Destination result carries episodes
+when a writer result carries episodes
   then relevant stored episode content is returned
   and every episode written through a Lens identifies that originating Lens
   and every directly written episode retains content and source kind without Lens or Reflection authorship
@@ -71,7 +80,7 @@ when a Destination result carries episodes
   and every episode written through a Destination artefact output exposes its stable artefact identifier and payload as structured fields
   and a search for one word of an artefact's payload returns that artefact from a Graphiti Destination
 
-when a Destination result carries facts
+when a writer result carries facts
   then relevant relationships extracted in that Destination are returned as structured fact records
   and each fact retains originating episode identifiers, source kinds, and source descriptions
   and named Lens or Reflection provenance is exposed on each attributable fact source
@@ -91,8 +100,20 @@ where a caller filters by edge type
   then only facts carrying a selected ontology relationship type are returned
   but nodes and episodes are not restricted by relationship type
 
-if a selected Destination search fails
-  then the error is returned without manufacturing a partial memory response
+if a selected Destination cannot be searched
+  while another selected Destination can be searched
+    then that Destination's result carries its error in place of its nodes and writer results
+    and every other Destination's result is returned
+  while no selected Destination can be searched
+    then the search fails with each Destination's error
+
+if one writer's search fails
+  then that writer's result carries its error in place of its facts and episodes
+  and every other writer's result and the Destination's nodes are returned
+
+if a Destination's entity search fails
+  then that Destination's result carries the entity error in place of its nodes
+  and its writer results are returned
 
 if search supplies a field removed in 12.0.0
   then search fails before any Destination query is started

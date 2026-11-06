@@ -14,10 +14,10 @@ when the memory search tool runs with a usable query
   while the tool context has no Gralkor runtime target
     then Search uses the untargeted application compatibility boundary
   while Search returns results
-    then the action result is readable text with memories under their writers and entities last
-    and each named originating Lens or Reflection is identified by its source heading
-    while the tool context supplies no byte budget
-      then the response fits within 65,536 bytes
+    then the action result is an ordered list of sections, each a heading and its readable text
+    and memories are in their writers' sections and entities in one section for each Destination, last
+    and each named originating Lens or Reflection is identified by its section heading
+    and every section's text stays within 16,384 characters
   if Search fails
     then the failure reason is returned to the caller unchanged
 
