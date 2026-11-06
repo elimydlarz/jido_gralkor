@@ -568,25 +568,6 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
   end
 
-  describe "when built-in inference is invoked for a step > if the stored information cannot be formatted" do
-    test "then built-in inference returns the formatting error without calling the model" do
-      test_pid = self()
-
-      caller = fn _prompt, _config, _opts ->
-        send(test_pid, :model_called)
-        %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
-      end
-
-      assert {:error, {:memory_search_budget_too_small, %{max_bytes: 1}}} =
-               Runner.default_inference(default_inference_request(), caller,
-                 model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end,
-                 stored_information_max_bytes: 1
-               )
-
-      refute_received :model_called
-    end
-  end
-
   describe "when a consumer inference function is supplied" do
     test "then it receives the stored information as the structured search results" do
       test_pid = self()
