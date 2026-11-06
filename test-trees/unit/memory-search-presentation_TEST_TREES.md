@@ -3,7 +3,7 @@ Unit: memory-search-presentation (src: lib/jido_gralkor/memory_search_presentati
 when the memory search formatter is called
   then it returns sections, each a heading and its own text
   and every memory is one bullet in the section of its writer, its first line its main text and each other field on its own indented line
-  and writer sections keep first-appearance order
+  and Lens sections come first, then Reflection sections, then Source sections, each kind in first-appearance order
   and inside each section whole Reflection artefacts come first, then facts, then episodes, each in retrieval order
   and the same text appears once in one section
   and a memory whose whole text is another memory's first line in the same section is left out beside it
