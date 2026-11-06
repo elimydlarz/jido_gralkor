@@ -37,7 +37,7 @@ defmodule Gralkor.Search do
   `entity_types` restricts nodes to those labels and restricts facts to edges
   whose source and target entities both carry one of them. `edge_types`
   restricts facts to those relationship names. Neither filter restricts
-  episodes. Use `JidoGralkor.MemorySearchPresentation.for_model/2` explicitly
+  episodes. Use `JidoGralkor.MemorySearchPresentation.sections/1` explicitly
   for readable presentation.
 
   ## Lens selection
