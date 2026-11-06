@@ -7,7 +7,7 @@ when the memory search formatter is called
   and inside each section whole Reflection artefacts come first, then facts, then episodes, each in retrieval order
   and the same text appears once in one section
   and a memory whose whole text is another memory's first line in the same section is left out beside it
-  and entities follow every writer section, in one `Entities in <Destination> memory` section for each searched Destination, in Destination order
+  and entities follow every writer section, in one `Entities in <Destination> memory` section for each searched Destination that returned entities, in Destination order
   and nothing is labelled as a fact, an episode, or an artefact
   and the formatter adds no record metadata such as an artefact identifier or a uuid
   and level and lineage appear only as fields the payload itself carries
