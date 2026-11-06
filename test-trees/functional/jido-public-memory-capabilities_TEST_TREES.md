@@ -22,7 +22,7 @@ when an agent invokes memory search with a usable query
   then returned results are scoped to the current operator
   and the usable query is submitted to the one memory search for the current operator
   and returned results obey the optional `destinations` selector supplied for that invocation
-  and the action returns one readable string with memories under named Lens or Reflection headings
+  and the action returns readable sections with memories under named Lens or Reflection headings
   and relevant stored generalisations can contribute beside related ingested information
   and the presentation adds no artefact identifiers
   and a generalisation shows its level and each lineage snapshot as its own fields
