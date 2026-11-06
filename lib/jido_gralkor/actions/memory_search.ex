@@ -47,11 +47,6 @@ defmodule JidoGralkor.Actions.MemorySearch do
 
   @impl true
   def run(params, context) do
-    max_bytes =
-      context
-      |> Map.get(:memory_search_max_bytes, MemorySearchPresentation.default_max_bytes())
-      |> MemorySearchPresentation.validate_max_bytes!()
-
     query = params |> Map.get(:query, "") |> to_string()
 
     if String.trim(query) == "" do
