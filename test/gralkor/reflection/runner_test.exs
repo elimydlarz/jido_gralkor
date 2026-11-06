@@ -355,8 +355,46 @@ defmodule Gralkor.Reflection.RunnerTest do
   end
 
   describe "when built-in inference is invoked for a step" do
-    test "then it runs the configured model through Jido's standalone ReAct runtime with the directions, exact output contract, representations, and stored information" do
+    test "then it runs through Jido's standalone ReAct runtime with the directions, exact output contract, and representations" do
       prove_built_in_inference_request()
+    end
+
+    test "and the representations and output contract remain JSON" do
+      prove_representations_and_contract_json()
+    end
+
+    test "and it supplies the host tools and a tool context whose operator identity comes from the invocation while every other supplied field remains unchanged" do
+      prove_built_in_inference_context()
+    end
+
+    test "and a final JSON object is returned as wrapped structured output" do
+      prove_wrapped_structured_output()
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > where a model resolver is supplied" do
+    test "then it runs the model that resolver names" do
+      assert built_in_config(default_inference_request(),
+               model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end
+             ).model == "openai:runner-contract-model"
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > where no model resolver is supplied" do
+    test "then it runs Gralkor's configured LLM model" do
+      configured = Gralkor.Config.llm_model()
+
+      assert built_in_config(default_inference_request(), []).model ==
+               "#{configured.provider}:#{configured.id}"
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > while the stored information holds memories" do
+    test "then the stored information is presented under a related-stored-information heading" do
+      prompt = built_in_prompt(default_inference_request())
+
+      assert prompt =~ "Related stored information available to this Reflection step:\n"
+      assert stored_section(prompt) =~ "Gate every customer-impacting release behind a checkpoint"
     end
 
     test "and the stored information is presented in the memory search format, including each generalisation's level and lineage" do
@@ -385,40 +423,16 @@ defmodule Gralkor.Reflection.RunnerTest do
       refute section =~ ~s("level")
     end
 
-    test "and the representations and output contract remain JSON" do
-      prompt = built_in_prompt(default_inference_request())
+  end
 
-      assert prompt_json(
-               prompt,
-               "Lensed representations available to this Reflection step:",
-               nil
-             ) == [
-               %{
-                 "content" => "Deployment evidence.",
-                 "id" => "representation-one",
-                 "lens" => "observations",
-                 "result" => "ok"
-               }
-             ]
+  describe "when built-in inference is invoked for a step > while the stored information holds no memory" do
+    test "then the prompt has no related-stored-information heading" do
+      for stored <- [[], [%{destination: "generalisations", facts: [], nodes: [], episodes: []}]] do
+        prompt = built_in_prompt(%{default_inference_request() | stored_information: stored})
 
-      assert prompt_json(
-               prompt,
-               "Return only one JSON object satisfying this exact output contract:",
-               nil
-             ) == %{"answer" => "string"}
-    end
-
-    test "and it supplies the host tools and a tool context whose operator identity comes from the invocation while every other supplied field remains unchanged" do
-      prove_built_in_inference_context()
-    end
-
-    test "and a final JSON object is returned as wrapped structured output" do
-      request = default_inference_request()
-
-      assert {:ok, %{output: %{"answer" => "ready"}}} =
-               Runner.default_inference(request, fn _action, _args, _context ->
-                 %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
-               end)
+        refute prompt =~ "Related stored information"
+        refute prompt =~ "No matching memory"
+      end
     end
   end
 
@@ -840,6 +854,51 @@ defmodule Gralkor.Reflection.RunnerTest do
            ) == %{"answer" => "string"}
 
     refute prompt =~ "must not leak"
+  end
+
+  defp prove_representations_and_contract_json do
+    prompt = built_in_prompt(default_inference_request())
+
+    assert prompt_json(
+             prompt,
+             "Lensed representations available to this Reflection step:",
+             nil
+           ) == [
+             %{
+               "content" => "Deployment evidence.",
+               "id" => "representation-one",
+               "lens" => "observations",
+               "result" => "ok"
+             }
+           ]
+
+    assert prompt_json(
+             prompt,
+             "Return only one JSON object satisfying this exact output contract:",
+             nil
+           ) == %{"answer" => "string"}
+  end
+
+  defp prove_wrapped_structured_output do
+    request = default_inference_request()
+
+    assert {:ok, %{output: %{"answer" => "ready"}}} =
+             Runner.default_inference(request, fn _action, _args, _context ->
+               %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
+             end)
+  end
+
+  defp built_in_config(request, opts) do
+    test_pid = self()
+
+    caller = fn _prompt, config, _opts ->
+      send(test_pid, {:built_in_config, config})
+      %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
+    end
+
+    assert {:ok, _} = Runner.default_inference(request, caller, opts)
+    assert_receive {:built_in_config, config}
+    config
   end
 
   defp built_in_prompt(request) do
