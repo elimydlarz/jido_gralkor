@@ -8,6 +8,12 @@ when the Reflection Runner receives a valid Reflection and invocation
   and only the current step is exposed to inference
   where a model resolver is supplied without a consumer inference function
     then every step's built-in inference runs the model that resolver names
+  where an observer is supplied
+    then the observer is told each step's label as that step starts
+    when a step's output satisfies its contract
+      then the observer is told that step's label as it finishes
+    if a step fails
+      then the observer is told that step's label as it fails
 
 where a step's directions reference earlier outputs
   then those values are interpolated from the shared output space
