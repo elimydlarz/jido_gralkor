@@ -11,8 +11,12 @@ defmodule Gralkor.Reflection.Runner do
   def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
     inference =
       Keyword.get_lazy(opts, :inference, fn ->
-        built_in = Keyword.take(opts, [:model_resolver])
-        fn request -> default_inference(request, &Jido.AI.Reasoning.ReAct.run/3, built_in) end
+        built_in = Keyword.take(opts, [:model_resolver, :observer])
+
+        run_step =
+          if built_in[:observer], do: &observed_react/3, else: &Jido.AI.Reasoning.ReAct.run/3
+
+        fn request -> default_inference(request, run_step, built_in) end
       end)
 
     tool_executor = Keyword.get(opts, :tool_executor, &default_tool_executor/2)
@@ -282,7 +286,7 @@ defmodule Gralkor.Reflection.Runner do
              tool_max_retries: 0,
              tool_timeout_ms: 30_000
            },
-           context: context
+           [context: context] ++ event_observer(opts)
          ) do
       %{termination_reason: :final_answer, result: result} -> decode_final_output(%{text: result})
       %{termination_reason: :failed, result: reason} -> {:error, reason}
@@ -300,6 +304,42 @@ defmodule Gralkor.Reflection.Runner do
 
   defp holds_memory?(result),
     do: Enum.any?([:facts, :nodes, :episodes], &(Map.get(result, &1, []) != []))
+
+  @doc false
+  def observed_react(prompt, config, opts) do
+    {on_event, opts} = Keyword.pop!(opts, :on_event)
+    events = prompt |> Jido.AI.Reasoning.ReAct.stream(config, opts) |> Stream.each(on_event)
+    {:ok, result} = Jido.AI.Reasoning.ReAct.collect(events, config, opts)
+    result
+  end
+
+  defp event_observer(opts) do
+    case Keyword.fetch(opts, :observer) do
+      {:ok, observer} -> [on_event: &tell_tool_event(observer, &1)]
+      :error -> []
+    end
+  end
+
+  defp tell_tool_event(observer, %Jido.AI.Runtime.Event{kind: :tool_started} = event) do
+    observer.(
+      {:tool_started,
+       %{id: event.tool_call_id, name: event.tool_name, arguments: event.data[:arguments]}}
+    )
+  end
+
+  defp tell_tool_event(observer, %Jido.AI.Runtime.Event{kind: :tool_completed} = event) do
+    observer.(
+      {:tool_completed,
+       %{
+         id: event.tool_call_id,
+         name: event.tool_name,
+         duration_ms: event.data[:duration_ms],
+         ok?: match?({:ok, _}, event.data[:result])
+       }}
+    )
+  end
+
+  defp tell_tool_event(_observer, _event), do: :ok
 
   defp serializable_representations(request) do
     request
