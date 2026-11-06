@@ -2,8 +2,6 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
   use ExUnit.Case, async: true
   alias JidoGralkor.MemorySearchPresentation, as: Presentation
 
-  @omitted_one "1 more memory omitted (response limit)."
-
   @examples """
   Reflection: generalisations
   - For any potentially customer-impacting release activity, a mandatory reversible, limited-scope checkpoint must be used… (valid from 2026-10-02)
@@ -246,7 +244,7 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
                "Lens: notes\n- one"
     end
 
-    test "and a fact with several named sources appears under each distinct source" do
+    test "and a fact with several named sources appears in each distinct source's section" do
       assert rendered(facts([fact("one", [%{lens: "notes"}, %{reflection: "lessons"}])])) ==
                "Lens: notes\n- one\n\nReflection: lessons\n- one"
     end
@@ -665,108 +663,138 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     end
   end
 
-  describe "when formatted results must fit response limits" do
-    test "then an exact-fit response retains every memory" do
-      input = [
-        result("global", [fact("one", [%{lens: "notes"}])], [entity("Atlas")], [
-          episode("story", %{lens: "notes"})
-        ])
-      ]
+  describe "when a section is limited" do
+    test "then its limit never removes a memory from another section" do
+      input =
+        facts(
+          for(index <- 1..100, do: fact(long("lens #{index}", 200), [%{lens: "notes"}])) ++
+            [fact("a lesson", [%{reflection: "lessons"}])]
+        )
 
-      expected = %{result: "Lens: notes\n- one\n- story\n\nEntities\n- Atlas"}
-
-      assert Presentation.for_model(input, envelope_bytes(expected)) == {:ok, expected}
+      assert section_text(input, "Lens: notes") =~ "more memories omitted (section limit)."
+      assert section_text(input, "Reflection: lessons") == "- a lesson"
     end
 
-    test "and a caller that supplies no byte budget gets the 65,536-byte default that every model-facing presentation shares" do
-      assert Presentation.default_max_bytes() == 65_536
+    test "and no limit applies across sections" do
+      input =
+        facts(
+          for(index <- 1..50, do: fact(long("lens #{index}", 200), [%{lens: "notes"}])) ++
+            for(index <- 1..35, do: fact(long("lesson #{index}", 200), [%{reflection: "lessons"}]))
+        )
 
-      wide =
-        facts(for n <- 1..20, do: fact("#{n} " <> String.duplicate("λ", 1_500), [%{lens: "n"}]))
-
-      assert Presentation.for_model(wide) == Presentation.for_model(wide, 65_536)
-      refute Presentation.for_model(wide) == Presentation.for_model(wide, 16_384)
-    end
-
-    test "and headings and omission notices count towards the 16384-character ceiling" do
-      texts = for number <- 1..5, do: "#{number} " <> String.duplicate("x", 3_998)
-      memories = Enum.map(texts, &fact(&1, [%{lens: "notes"}]))
-
-      assert rendered(facts(memories)) ==
-               "Lens: notes\n" <>
-                 Enum.map_join(Enum.take(texts, 4), "\n", &("- " <> &1)) <>
-                 "\n\n" <> @omitted_one
-    end
-
-    test "and UTF-8 bytes and JSON escaping count towards the complete-envelope byte budget" do
-      input = facts([fact(String.duplicate("λ\"", 40), [%{lens: "notes"}])])
       text = rendered(input)
-      bytes = envelope_bytes(%{result: text})
-      assert Presentation.for_model(input, bytes) == {:ok, %{result: text}}
-      assert Presentation.for_model(input, bytes - 1) == {:ok, %{result: @omitted_one}}
+
+      assert String.length(text) > 16_384
+      refute text =~ "omitted"
+    end
+  end
+
+  describe "when a section is limited > while it is a Lens section" do
+    test "then its text never exceeds 12,000 characters" do
+      text = section_text(lens_facts(100, 200), "Lens: notes")
+      assert String.length(text) <= 12_000
+      assert String.length(text) > 11_000
+    end
+  end
+
+  describe "when a section is limited > while it is a Reflection section" do
+    test "then its text never exceeds 8,000 characters" do
+      input =
+        facts(for index <- 1..100, do: fact(long("#{index}", 200), [%{reflection: "lessons"}]))
+
+      text = section_text(input, "Reflection: lessons")
+      assert String.length(text) <= 8_000
+      assert String.length(text) > 7_000
+    end
+  end
+
+  describe "when a section is limited > while it is a direct or unknown Source section" do
+    test "then its text never exceeds 6,000 characters" do
+      for {provenance, heading} <- [{%{writer: :direct}, "Source: direct"}, {%{}, "Source: unknown"}] do
+        input = facts(for index <- 1..100, do: fact(long("#{index}", 200), [provenance]))
+
+        text = section_text(input, heading)
+        assert String.length(text) <= 6_000
+        assert String.length(text) > 5_000
+      end
+    end
+  end
+
+  describe "when a section is limited > while it is an Entities section" do
+    test "then its text never exceeds 4,000 characters" do
+      nodes = for index <- 1..100, do: entity(long("#{index}", 200))
+
+      text = section_text([result("global", [], nodes, [])], "Entities in global memory")
+      assert String.length(text) <= 4_000
+      assert String.length(text) > 3_000
+    end
+  end
+
+  describe "when a section is limited > while its memories total at most its limit" do
+    test "then every memory is kept" do
+      text = section_text(lens_facts(10, 100), "Lens: notes")
+      assert text |> String.split("\n") |> length() == 10
     end
 
-    test "and a bullet that exceeds either limit is omitted whole while later fitting bullets remain eligible" do
+    test "and it has no omission notice" do
+      refute section_text(lens_facts(10, 100), "Lens: notes") =~ "omitted"
+    end
+  end
+
+  describe "when a section is limited > while its memories total more than its limit" do
+    test "then memories are kept in order while they fit together with its omission notice" do
+      text = section_text(lens_facts(100, 200), "Lens: notes")
+      [bullets, notice] = String.split(text, "\n\n")
+
+      kept = String.split(bullets, "\n")
+      assert kept == Enum.map(1..length(kept), &("- " <> String.pad_trailing("#{&1}", 200, "x")))
+      assert notice == "#{100 - length(kept)} more memories omitted (section limit)."
+      assert String.length(text) <= 12_000
+    end
+
+    test "and a memory that would pass the limit is omitted whole" do
+      text = section_text(lens_facts(100, 200), "Lens: notes")
+      [bullets, _notice] = String.split(text, "\n\n")
+
+      for bullet <- String.split(bullets, "\n") do
+        assert String.length(bullet) == 202
+      end
+    end
+
+    test "and a later memory that still fits is kept" do
       input =
         facts([
-          fact(String.duplicate("x", 300), [%{lens: "notes"}]),
-          fact("small", [%{lens: "notes"}])
+          fact(long("a", 3_900), [%{lens: "notes"}]),
+          fact(long("b", 3_900), [%{lens: "notes"}]),
+          fact(long("c", 3_900), [%{lens: "notes"}]),
+          fact(long("too long", 500), [%{lens: "notes"}]),
+          fact("short", [%{lens: "notes"}])
         ])
 
-      expected = %{result: "Lens: notes\n- small\n\n" <> @omitted_one}
+      text = section_text(input, "Lens: notes")
 
-      assert Presentation.for_model(input, envelope_bytes(expected)) == {:ok, expected}
+      refute text =~ "too long"
+      assert text =~ "- short\n\n1 more memory omitted (section limit)."
     end
 
-    test "and the omission notice gives the total omitted, each fact once regardless of its source count" do
-      memories =
-        for number <- 1..6 do
-          fact("#{number} " <> String.duplicate("x", 3_998), [%{lens: "a"}, %{lens: "b"}])
-        end
+    test "and it ends with the number of its own memories omitted" do
+      input =
+        facts(
+          for(index <- 1..100, do: fact(long("lens #{index}", 200), [%{lens: "notes"}])) ++
+            for(index <- 1..100, do: fact(long("lesson #{index}", 200), [%{reflection: "lessons"}]))
+        )
 
-      text = rendered(facts(memories))
+      lens = section_text(input, "Lens: notes")
+      lessons = section_text(input, "Reflection: lessons")
 
-      assert String.ends_with?(text, "\n\n4 more memories omitted (response limit).")
-    end
-  end
+      [_, lens_omitted] = Regex.run(~r/(\d+) more memories omitted \(section limit\)\.$/, lens)
+      [_, lesson_omitted] = Regex.run(~r/(\d+) more memories omitted \(section limit\)\.$/, lessons)
 
-  describe "when formatted results must fit response limits > while the budget cannot contain the empty response and required notice" do
-    test "then an explicit error reports the required minimum bytes" do
-      input = facts([fact("one", [%{lens: "notes"}])])
-      minimum = envelope_bytes(%{result: @omitted_one})
+      assert String.to_integer(lens_omitted) ==
+               100 - (lens |> String.split("\n\n") |> hd() |> String.split("\n") |> length())
 
-      assert Presentation.for_model(input, 1) ==
-               {:error,
-                {:memory_search_budget_too_small, %{max_bytes: 1, minimum_bytes: minimum}}}
-    end
-  end
-
-  describe "when formatted results must fit response limits > if the byte budget is not a positive integer" do
-    test "then an argument error identifies the invalid budget" do
-      for invalid <- [0, -1, nil, "100", 1.5] do
-        assert_raise ArgumentError, ~r/memory_search_max_bytes.*positive integer/, fn ->
-          Presentation.for_model([], invalid)
-        end
-      end
-    end
-  end
-
-  describe "when the action validates a model byte budget before search" do
-    test "then a positive integer is returned unchanged" do
-      assert Presentation.validate_max_bytes!(1) == 1
-      assert Presentation.validate_max_bytes!(65_536) == 65_536
-    end
-  end
-
-  describe "when the action validates a model byte budget before search > if the budget is not a positive integer" do
-    test "then an argument error identifies the invalid budget" do
-      for invalid <- [0, -1, nil, "100", 1.5] do
-        error =
-          assert_raise ArgumentError, fn -> Presentation.validate_max_bytes!(invalid) end
-
-        assert error.message =~ "memory_search_max_bytes must be a positive integer"
-        assert error.message =~ inspect(invalid)
-      end
+      assert String.to_integer(lesson_omitted) ==
+               100 - (lessons |> String.split("\n\n") |> hd() |> String.split("\n") |> length())
     end
   end
 
@@ -787,11 +815,8 @@ defmodule JidoGralkor.MemorySearchPresentationTest do
     input |> Presentation.sections() |> Enum.find(&(&1.heading == heading)) |> Map.fetch!(:text)
   end
 
-  defp lens_facts(count, length) do
-    facts(
-      for index <- 1..count do
-        fact(String.pad_trailing("#{index}", length, "x"), [%{lens: "notes"}])
-      end
-    )
-  end
+  defp lens_facts(count, length),
+    do: facts(for index <- 1..count, do: fact(long("#{index}", length), [%{lens: "notes"}]))
+
+  defp long(text, length), do: String.pad_trailing(text, length, "x")
 end
