@@ -1386,11 +1386,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       )
 
   defp memory_search(agent, operator_id, params) do
-    assert {:ok, %{result: result}} =
+    assert {:ok, %{sections: sections}} =
              MemorySearch.run(params, %{agent_id: operator_id, gralkor_runtime: agent})
 
-    assert is_binary(result)
-    facts_matching_text(agent, operator_id, params, result)
+    facts_matching_text(agent, operator_id, params, JidoGralkor.MemorySearchPresentation.text(sections))
   end
 
   defp agent_request(agent) do
@@ -1445,10 +1444,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   defp decode_memory_search_result(%{
-         data: %{result: {:ok, %{result: results}, _effects}}
+         data: %{result: {:ok, %{sections: sections}, _effects}}
        }) do
-    assert is_binary(results)
-    results
+    JidoGralkor.MemorySearchPresentation.text(sections)
   end
 
   defp search_until(
@@ -1527,8 +1525,10 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                destinations: Map.get(params, :destinations, [])
              })
 
-    assert {:ok, %{result: ^text}} =
-             JidoGralkor.MemorySearchPresentation.for_model(results)
+    assert text ==
+             results
+             |> JidoGralkor.MemorySearchPresentation.sections()
+             |> JidoGralkor.MemorySearchPresentation.text()
 
     results
   end
