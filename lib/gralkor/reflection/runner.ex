@@ -47,6 +47,8 @@ defmodule Gralkor.Reflection.Runner do
          stored_information,
          opts
        ) do
+    observer = Keyword.get(opts, :observer, fn _event -> :ok end)
+
     result =
       Enum.reduce_while(reflection.chain_of_thought.steps, {:ok, %{}}, fn step, {:ok, outputs} ->
         directions = interpolate(step.directions, outputs)
@@ -68,20 +70,26 @@ defmodule Gralkor.Reflection.Runner do
 
         final_step? = step == List.last(reflection.chain_of_thought.steps)
 
+        observer.({:step_started, step.label})
+
         case infer_step(request, inference, tool_executor) do
           {:ok, output} ->
             case validate_output(output, step.output, Keyword.get(opts, :type_matcher)) do
               {:ok, normalized} ->
+                observer.({:step_finished, step.label})
                 {:cont, {:ok, Map.merge(outputs, normalized)}}
 
               {:error, {:missing_output, _}} when final_step? ->
+                observer.({:step_failed, step.label})
                 {:halt, {:error, %{reflection: reflection.name, reason: :missing_artefact}}}
 
               {:error, reason} ->
+                observer.({:step_failed, step.label})
                 {:halt, failure(reflection, step, reason)}
             end
 
           {:error, reason} ->
+            observer.({:step_failed, step.label})
             {:halt, failure(reflection, step, reason)}
         end
       end)
