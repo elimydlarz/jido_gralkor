@@ -1,34 +1,23 @@
 Unit: memory-search-presentation (src: lib/jido_gralkor/memory_search_presentation.ex; unit: test/jido_gralkor/memory_search_presentation_test.exs)
 
 when the memory search formatter is called
-  then it returns an ordered list of sections, each a heading and its own text
-  and every memory is one bullet in the section of the writer whose result returned it, its first line its main text and each other field on its own indented line
-  and Lens sections come first, then Reflection sections, then direct and unknown Source sections, then one `Entities: <Destination>` section for each searched Destination
+  then it returns sections, each a heading and its own text
+  and every memory is one bullet in the section of its writer, its first line its main text and each other field on its own indented line
   and writer sections keep first-appearance order
-  and Entities sections keep Destination order
   and inside each section whole Reflection artefacts come first, then facts, then episodes, each in retrieval order
   and the same text appears once in one section
   and a memory whose whole text is another memory's first line in the same section is left out beside it
-  and a writer whose result returned no memory has no section
+  and entities follow every writer section, in one `Entities in <Destination> memory` section for each searched Destination, in Destination order
   and nothing is labelled as a fact, an episode, or an artefact
   and the formatter adds no record metadata such as an artefact identifier or a uuid
   and level and lineage appear only as fields the payload itself carries
   and the structured input remains unchanged
-  while a Destination's result returned no entities
-    then its Entities section explicitly states that no matching memory was found
+  while no memories are supplied
+    then one section explicitly states that no matching memory was found
 
 when the formatter's sections are presented as one text
   then each section is its heading followed by its text on the next line
   and sections are separated by one blank line in section order
-
-if a Destination could not be searched
-  then it has one `Destination: <name>` section stating that its memory could not be searched, naming the error, as a failure rather than an empty result
-
-if a writer's search failed
-  then its section states that it could not be searched, naming the error, as a failure rather than an empty result
-
-if a Destination's entity search failed
-  then its Entities section states that its entities could not be searched, naming the error, as a failure rather than an empty result
 
 when the formatter names a writer
   then a Lens uses a `Lens: <name>` heading
@@ -39,7 +28,7 @@ when the formatter names a writer
 when the formatter presents facts
   then each fact is one bullet with its complete text
   and repeated provenance for one source adds no duplicate bullet for that fact
-  and a fact returned for several writers appears in each of their sections
+  and a fact with several named sources appears in each distinct source's section
 
 when the formatter shows when a memory was true and where it came from
   then a fact or episode with a start date ends with `(valid from <date>)`

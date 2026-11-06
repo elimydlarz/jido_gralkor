@@ -60,28 +60,28 @@ when a consumer prepares the first ReAct iteration
 when a consumer prepares a later ReAct iteration
   then every request override is returned unchanged
 
-when a consumer explicitly formats structured search results
-  then a Lens writer's section has a heading of the form `Lens: <name>`
-  and a Reflection writer's section has a heading of the form `Reflection: <name>`
-  and each section's text holds bullets containing its writer's returned memory text
-  and writer sections retain first-appearance order
-  and memories retain retrieval order within each section
-  and each searched Destination's entities follow every writer section under `Entities: <Destination>`
-  while a fact is returned for several writers
-    then the fact appears once in each of their sections
+when a consumer explicitly formats structured fact search results
+  then named Lens sources have sections headed `Lens: <name>`
+  and named Reflection sources have sections headed `Reflection: <name>`
+  and each source's section holds bullets containing its returned fact text
+  and source sections retain first-appearance order
+  and facts retain retrieval order within each source section
+  and each searched Destination's entities follow every source section in an `Entities in <Destination> memory` section
+  while a fact has several named sources
+    then the fact appears once in each distinct named source's section
   while a Lens and a Reflection share a name
-    then their memories remain in separate sections
-  while a writer has no named Lens or Reflection provenance
-    then its memories appear under `Source: unknown`
-  while a Destination's search returns no entities
-    then its Entities section explicitly states that no matching memory was found
+    then their facts remain in separate source sections
+  while a fact has no named Lens or Reflection provenance
+    then the fact appears in the `Source: unknown` section
+  while search returns no facts, entities, or episodes
+    then one section explicitly states that no matching memory was found
 
 when memory search formats memories for the consuming agent
   then every section's text stays within its own character limit
   and no section's text exceeds 16384 characters
   and every included memory retains its complete text
-  while Lenses and Reflections in one Destination both wrote matching memory
-    then every one of those writers has a section holding its own memories
+  while Lenses and Reflections both returned matching memory
+    then every one of those sources has a section holding its own memories
   while a section's memories cannot all fit within its limit
     then a whole memory is omitted while later fitting memories remain eligible
     and that section reports its own omitted memory count and section-limit reason
