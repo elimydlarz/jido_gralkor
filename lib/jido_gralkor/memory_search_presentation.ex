@@ -107,7 +107,8 @@ defmodule JidoGralkor.MemorySearchPresentation do
           if String.length(bullets(candidate)) + reserved <= limit, do: candidate, else: kept
         end)
 
-      %{heading: heading, text: bullets(kept) <> "\n\n" <> omission(length(texts) - length(kept))}
+      notice = omission(length(texts) - length(kept))
+      %{heading: heading, text: if(kept == [], do: notice, else: bullets(kept) <> "\n\n" <> notice)}
     end
   end
 
