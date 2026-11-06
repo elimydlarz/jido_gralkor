@@ -240,7 +240,7 @@ defmodule Gralkor.GraphitiPool do
   """
 
   @fact_rendering """
-  async def render_facts(g, edges, lens_names=(), lens_suffixes=(), excluded_suffixes=()):
+  async def render_facts(g, edges, lens_names=(), lens_suffixes=(), excluded_suffixes=(), kept_episode_ids=None):
       from graphiti_core.nodes import EpisodicNode
       episode_ids = list(dict.fromkeys(
           episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
