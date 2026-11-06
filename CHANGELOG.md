@@ -1,6 +1,14 @@
 # Changelog
 
-## [15.1.0] - 2026-11-06
+## [16.0.0] - 2026-11-06
+
+Memory search presents each Lens, Reflection, and source in its own section with its own limit, so one writer's memories can no longer take another's place. Before, every memory shared one response budget with Reflection artefacts placed first, so a Destination full of `erl` or `generalisations` artefacts could leave no room for anything a Lens wrote. The structured `Gralkor.Client.search/1,2` results are unchanged.
+
+### Changed
+- **Breaking:** `JidoGralkor.MemorySearchPresentation.for_model/2`, `default_max_bytes/0`, and `validate_max_bytes!/1` are removed. `sections/1` returns `[%{heading:, text:}]`: one section for each Lens (`Lens: <name>`), then each Reflection (`Reflection: <name>`), then each direct or unknown source (`Source: …`), each kind in first-appearance order, then one `Entities in <Destination> memory` section for each Destination that returned entities; nothing found is one `Memory` section saying `No matching memory.` `text/1` joins sections, each heading over its text, separated by blank lines. **Migrate:** replace `for_model(results, bytes)` with `results |> sections() |> text()` for one text, or use the sections directly.
+- **Breaking:** each section has its own character limit and none applies across sections: Lens 12,000, Reflection 8,000, Source 6,000, Entities 4,000, all within Jido AI's 16,384-character string limit. A section over its limit keeps its memories in order while they fit with its notice, omits the rest whole, and ends with `N more memories omitted (section limit).` The 65,536-byte response budget, the `memory_search_max_bytes` tool-context option, and the `{:memory_search_budget_too_small, …}` error are gone. **Migrate:** drop `memory_search_max_bytes` from tool contexts.
+- **Breaking:** the `memory_search` action returns `{:ok, %{sections: sections}}` instead of `{:ok, %{result: text}}`. The blank-query NON-RESULT is unchanged. **Migrate:** read `sections`, or join them with `MemorySearchPresentation.text/1`.
+- `recall/4` and the packaged generalisation Reflection's built-in inference present memory as the same sections joined into one text. Built-in inference can no longer fail to format stored information, so its formatting error is gone.
 
 ### Added
 - **`Runner.run/3` takes an `:observer`.** A one-argument function the Runner calls as it works through the Chain of Thought: `{:step_started, label}` before a step's inference, `{:step_finished, label}` once its output satisfies the step's contract, and `{:step_failed, label}` when its inference fails or its output breaks the contract (including a final step missing the artefact). During built-in inference it also tells the observer of each tool call: `{:tool_started, %{id:, name:, arguments:}}` when the ReAct runtime starts it, and `{:tool_completed, %{id:, name:, duration_ms:, ok?:}}` when it returns; with an observer, built-in inference streams ReAct's events and aggregates them with `ReAct.collect/3` instead of calling `ReAct.run/3`, returning the same result. A consumer can record a run's progress step by step; without an observer nothing changes.
