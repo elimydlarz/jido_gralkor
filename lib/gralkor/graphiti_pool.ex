@@ -540,9 +540,15 @@ defmodule Gralkor.GraphitiPool do
         if max(0, len(supported_query_terms) * 2 - 1) + 1 >= MAX_QUERY_LENGTH:
           q = ' '.join(supported_query_terms[:(MAX_QUERY_LENGTH - 1) // 2])
 
-        config = COMBINED_HYBRID_SEARCH_RRF.model_copy(deep=True)
-        config.community_config = None
-        config.limit = max(fact_limit, node_limit, episode_limit)
+        writer_config = COMBINED_HYBRID_SEARCH_RRF.model_copy(deep=True)
+        writer_config.community_config = None
+        writer_config.node_config = None
+        writer_config.limit = max(fact_limit, episode_limit)
+        node_config = COMBINED_HYBRID_SEARCH_RRF.model_copy(deep=True)
+        node_config.community_config = None
+        node_config.edge_config = None
+        node_config.episode_config = None
+        node_config.limit = node_limit
 
         def lens_episode(episode):
           source_description = episode.source_description or ''
