@@ -543,24 +543,24 @@ The physical encoding replaces the former lossy `-` and `/` to `_` normalisation
 
 **Error contracts.** Invalid configuration, invalid Lens requests, automatic plugin-capture failures, non-PID runtime targets, and unavailable targeted runtimes raise. Runtime-targeted operations never redirect to application compatibility configuration. Valid runtime-targeted `Gralkor.Client.ingest/2`, `replace/2`, `search/2`, `reflect/5`, and adapter operations return tagged success/error tuples; the ReAct search action propagates those errors. The asynchronous `memory_add` action logs background failures and still returns immediately, as described below.
 
-**Memory search results.** `Gralkor.Client.search/1,2` returns structured records for consumers that control their own presentation: one `%{destination:, facts:, nodes:, episodes:}` map per Destination. The `memory_search` action runs that one search and returns readable text in `{:ok, %{result: text}}`: every memory is one bullet under the heading of whoever wrote it (`Lens:`, `Reflection:`, or a direct source), with entities last under `Entities`. A bullet's first line is the memory's main text, and every other field the memory carries (a Reflection payload's fields, such as a generalisation's `level` and `evolves_from`, or an entity's attributes) follows on its own indented `key: value` line, with lists of objects as nested bullets. The first line of each fact and episode ends with when it was true and its source, as in `(valid from 2026-10-02 to 2026-10-12; source: incident review)`. A memory is cut only past 4,000 characters, counting all of its lines, and says so. The packaged generalisation Reflection's built-in inference presents its prior generalisations in this same format. The explicit `JidoGralkor.MemorySearchPresentation.for_model/2` formatter retains or omits memories whole within the 16,384-character text limit and `tool_context[:memory_search_max_bytes]` (65,536 bytes by default for the complete serialized envelope), with one notice giving the total omitted. It works with unmodified Jido AI 2.3.0. See [the schema, format, and consumer migration](DESTINATIONS.md#readable-memory-search).
+**Memory search results.** `Gralkor.Client.search/1,2` returns structured records for consumers that control their own presentation: one `%{destination:, facts:, nodes:, episodes:}` map per Destination. The `memory_search` action runs that one search and returns readable sections in `{:ok, %{sections: [%{heading:, text:}]}}`: every memory is one bullet in the section of whoever wrote it (`Lens:` sections first, then `Reflection:`, then a direct or unknown `Source:`), followed by an `Entities in <Destination> memory` section for each Destination that returned entities. A bullet's first line is the memory's main text, and every other field the memory carries (a Reflection payload's fields, such as a generalisation's `level` and `evolves_from`, or an entity's attributes) follows on its own indented `key: value` line, with lists of objects as nested bullets. The first line of each fact and episode ends with when it was true and its source, as in `(valid from 2026-10-02 to 2026-10-12; source: incident review)`. A memory is cut only past 4,000 characters, counting all of its lines, and says so. The packaged generalisation Reflection's built-in inference presents its prior generalisations in this same format. The explicit `JidoGralkor.MemorySearchPresentation.sections/1` formatter gives each section its own character limit (Lens 12,000, Reflection 8,000, Source 6,000, Entities 4,000), with no limit across sections; a section over its limit omits whole memories and ends with its own omission count. `text/1` joins sections into one text. It works with unmodified Jido AI 2.3.0. See [the schema, format, and consumer migration](DESTINATIONS.md#readable-memory-search).
 
-For example, the consuming agent receives text like:
+For example, the consuming agent receives these sections (each heading over its own text):
 
 ```text
-Reflection: generalisations
-- Begin Payments migrations with a reversible, limited-scope trial. (valid from 2026-10-29)
-
 Lens: jira
 - Payment retries must use an idempotency key. (valid from 2026-10-30; source: PAY-142)
 - Settlement retried failed requests twice. (valid from 2026-10-02 to 2026-10-12; source: incident review)
 - PAY-142: settlement retries double-charged a customer when the worker restarted. (valid from 2026-10-30; source: PAY-142)
 
-Entities
+Reflection: generalisations
+- Begin Payments migrations with a reversible, limited-scope trial. (valid from 2026-10-29)
+
+Entities in global memory
 - settlement worker: Retries failed requests three times.
 ```
 
-When memories are omitted to fit the response limit, the text ends with a notice such as `3 more memories omitted (response limit).` Treat `result` as readable text; do not JSON-decode it. For programmatic access, call `Gralkor.Client.search/1,2` and read each Destination's `facts`, `nodes`, and `episodes` directly.
+When a section omits memories to fit its limit, its text ends with a notice such as `3 more memories omitted (section limit).` Treat each section's `text` as readable text; do not JSON-decode it. For programmatic access, call `Gralkor.Client.search/1,2` and read each Destination's `facts`, `nodes`, and `episodes` directly.
 
 **`memory_add` is async.** The tool returns `"Ingesting."` immediately and does the storage call in a background `Task`. Graphiti's entity/edge extraction can take tens of seconds; you don't want the agent waiting. Failures are logged; best-effort storage is the contract.
 
