@@ -12,7 +12,7 @@ defmodule Gralkor.Reflection.Runner do
     inference =
       Keyword.get_lazy(opts, :inference, fn ->
         built_in = Keyword.take(opts, [:model_resolver])
-        &default_inference(&1, &Jido.AI.Reasoning.ReAct.run/3, built_in)
+        fn request -> default_inference(request, &Jido.AI.Reasoning.ReAct.run/3, built_in) end
       end)
 
     tool_executor = Keyword.get(opts, :tool_executor, &default_tool_executor/2)
