@@ -778,7 +778,8 @@ defmodule Gralkor.GraphitiPool do
           "node_labels" => Keyword.get(opts, :node_labels),
           "edge_types" => Keyword.get(opts, :edge_types),
           "lenses" => Keyword.get(opts, :lenses),
-          "excluded_lenses" => Keyword.get(opts, :excluded_lenses)
+          "excluded_lenses" => Keyword.get(opts, :excluded_lenses),
+          "writer" => opts |> Keyword.get(:writer) |> writer_param()
         }
       )
 
