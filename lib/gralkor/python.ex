@@ -33,7 +33,13 @@ defmodule Gralkor.Python do
   a model provider, so enough concurrent episode writes starved every other
   evaluation and crashed finished searches on that ping. `run_coroutine/2`
   submits the coroutine to the shared loop and waits in a `receive` for the
-  loop's completion message, sent with `pythonx.send_tagged_object`.
+  loop's completion message, sent with `pythonx.send_tagged_object`. A Python
+  exception from the coroutine, including the `TimeoutError` of an expired
+  graph operation deadline, raises `Pythonx.Error` in the caller. The deadline
+  is enforced on the loop, so it also cancels a coroutine whose caller exited.
+  `await_coroutine/2` returns the finished future instead, for a caller that
+  settles it in its own evaluation so its diagnostics reach the caller's
+  output devices.
 
   See `test-trees/integration/python-runtime_TEST_TREES.md`.
   """
