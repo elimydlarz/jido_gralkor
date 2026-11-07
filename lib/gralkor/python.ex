@@ -238,11 +238,8 @@ defmodule Gralkor.Python do
       })
 
     receive do
-      {:gralkor_coroutine_done, _signal} -> :ok
+      {:gralkor_coroutine_done, _signal} -> future
     end
-
-    {result, _} = Pythonx.eval("future.result()", %{"future" => future})
-    result
   end
 
   @doc """
