@@ -25,11 +25,15 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
       responses = Application.get_env(:jido_gralkor, :destination_search_responses, %{})
 
-      Map.get(
-        responses,
+      responses
+      |> Map.get(
         destination.name,
         {:ok, %{facts: ["#{destination.name}:#{query}"], nodes: [], episodes: []}}
       )
+      |> case do
+        {:exit, reason} -> exit(reason)
+        response -> response
+      end
     end
   end
 
@@ -1006,6 +1010,31 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       })
 
       assert {:error, :unavailable} = search(destinations: ["first", "second"])
+    end
+  end
+
+  describe "if a selected Destination search exits instead of returning" do
+    test "then the search returns an error naming that Destination and its exit reason" do
+      Application.put_env(:jido_gralkor, :destination_search_responses, %{
+        "second" => {:exit, :janitor_timeout}
+      })
+
+      assert {:error, {:destination_search_exited, "second", :janitor_timeout}} =
+               search(destinations: ["first", "second"])
+    end
+
+    test "and the caller does not exit" do
+      Application.put_env(:jido_gralkor, :destination_search_responses, %{
+        "second" => {:exit, :janitor_timeout}
+      })
+
+      test_pid = self()
+
+      {caller, monitor} =
+        spawn_monitor(fn -> send(test_pid, {:searched, search(destinations: ["first", "second"])}) end)
+
+      assert_receive {:searched, {:error, _reason}}
+      assert_receive {:DOWN, ^monitor, :process, ^caller, :normal}
     end
   end
 
