@@ -212,6 +212,19 @@ when a memory search is run for a group
 if running a memory search raises inside the graph library
   then an error carrying the raised exception is returned
 
+when a graph instance's indexes are built on FalkorDB
+  then its full-text indexes carry no stopword list
+  and an exact-match lookup for an indexed value that is a stopword returns its match instead of crashing FalkorDB
+  while a label's index already carries a stopword list
+    then every index on that label is dropped and recreated with the same fields and no stopword list
+    and the replacement is logged naming the label
+    and an exact-match lookup for a stopword value on that label returns its match
+  while every index already carries no stopword list
+    then no index is replaced
+  if a label carrying a stopword list also holds an index that is neither range nor full-text
+    then that label's indexes are left unchanged
+    and the failure is logged naming the label
+
 when an index and constraint rebuild is requested for the whole graph
   then every group the pool holds an instance for is rebuilt, each group being its own database
   and a group whose instance has never been created is left alone, its indices being built the moment it is
