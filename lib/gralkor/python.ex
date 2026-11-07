@@ -150,6 +150,7 @@ defmodule Gralkor.Python do
       import asyncio, concurrent.futures, threading
       asyncio._gralkor_deadline_seconds = deadline_ms / 1000
       if not hasattr(asyncio, '_gralkor_loop'):
+          import pythonx
           loop = asyncio.new_event_loop()
           started = threading.Event()
           def _run():
@@ -159,6 +160,26 @@ defmodule Gralkor.Python do
           threading.Thread(target=_run, daemon=True).start()
           started.wait()
           asyncio._gralkor_loop = loop
+          async def _gralkor_within_deadline(coro, seconds):
+              deadline = asyncio.timeout(seconds)
+              try:
+                  async with deadline:
+                      return await coro
+              except TimeoutError:
+                  if deadline.expired():
+                      raise TimeoutError(
+                          f'graph operation exceeded its {seconds}s deadline'
+                      ) from None
+                  raise
+          def _gralkor_submit(coro, caller):
+              future = asyncio.run_coroutine_threadsafe(
+                  _gralkor_within_deadline(coro, asyncio._gralkor_deadline_seconds), loop
+              )
+              future.add_done_callback(
+                  lambda _done: pythonx.send_tagged_object(caller, 'gralkor_coroutine_done', None)
+              )
+              return future
+          asyncio._gralkor_submit = _gralkor_submit
           def _gralkor_run(coro):
               future = asyncio.run_coroutine_threadsafe(coro, loop)
               try:
