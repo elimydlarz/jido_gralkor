@@ -838,7 +838,6 @@ defmodule Gralkor.GraphitiPool do
           Gralkor.Python.run_coroutine(
             """
             import asyncio
-            import sys
             from contextvars import ContextVar
             from datetime import datetime, timezone
             from uuid import uuid4
