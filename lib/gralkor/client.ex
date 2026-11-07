@@ -229,12 +229,14 @@ defmodule Gralkor.Client do
 
     destinations
     |> Enum.map(fn destination ->
-      Task.async(fn ->
-        {destination.name,
-         DestinationStorage.search(destination, request.operator_id, request.query, opts)}
+      Task.Supervisor.async_nolink(Gralkor.SearchSupervisor, fn ->
+        DestinationStorage.search(destination, request.operator_id, request.query, opts)
       end)
     end)
-    |> Task.await_many(:infinity)
+    |> Task.yield_many(:infinity)
+    |> Enum.zip_with(destinations, fn {_task, outcome}, destination ->
+      {destination.name, destination_outcome(destination.name, outcome)}
+    end)
     |> Enum.reduce_while({:ok, []}, fn
       {destination_name, {:ok, %{facts: facts, nodes: nodes, episodes: episodes}}},
       {:ok, results} ->
