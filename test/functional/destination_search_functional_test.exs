@@ -1031,7 +1031,9 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       test_pid = self()
 
       {caller, monitor} =
-        spawn_monitor(fn -> send(test_pid, {:searched, search(destinations: ["first", "second"])}) end)
+        spawn_monitor(fn ->
+          send(test_pid, {:searched, search(destinations: ["first", "second"])})
+        end)
 
       assert_receive {:searched, {:error, _reason}}
       assert_receive {:DOWN, ^monitor, :process, ^caller, :normal}

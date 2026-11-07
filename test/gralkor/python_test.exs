@@ -285,7 +285,10 @@ defmodule Gralkor.PythonTest do
           end)
         end
 
-      assert_eventually(fn -> promptly_eval("state['awaiting']", %{"state" => state}) end, awaiting)
+      assert_eventually(
+        fn -> promptly_eval("state['awaiting']", %{"state" => state}) end,
+        awaiting
+      )
 
       assert Pythonx.decode(promptly_eval("1 + 1", %{})) == 2
 
@@ -329,7 +332,8 @@ defmodule Gralkor.PythonTest do
           Python.run_coroutine("import asyncio\nasyncio.Event().wait()", %{})
         end
 
-      assert Exception.message(error) =~ "TimeoutError: graph operation exceeded its 0.1s deadline"
+      assert Exception.message(error) =~
+               "TimeoutError: graph operation exceeded its 0.1s deadline"
     end
 
     test "and the coroutine is cancelled" do
