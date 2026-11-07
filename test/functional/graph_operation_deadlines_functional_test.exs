@@ -144,8 +144,89 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
     end
   end
 
+  describe "while more episode writes are waiting on the graph or a model provider than the virtual machine has dirty CPU schedulers" do
+    test "then a memory search still returns its results without waiting for them" do
+      %{pool: pool} = start_waiting_writes()
+
+      assert {:ok, %{nodes: [%{name: "Ada"}]}} =
+               promptly(fn ->
+                 GraphitiPool.search_memory(pool, "deadlines", "backups", Gralkor.Search.limits())
+               end)
+    end
+
+    test "and each waiting write returns once its wait ends" do
+      %{graph: graph, writes: writes} = start_waiting_writes()
+
+      release(graph)
+
+      assert Task.await_many(writes, 5_000) == List.duplicate(:ok, length(writes))
+    end
+  end
+
   defp write(pool) do
     GraphitiPool.add_episode(pool, "deadlines", "A write.", "notes", nil, [])
+  end
+
+  defp start_waiting_writes do
+    {graph, _} =
+      Pythonx.eval(
+        """
+        import asyncio
+        from types import SimpleNamespace
+
+        class _GatedGraphiti:
+            def __init__(self):
+                self.gate = asyncio.Event()
+                self.waiting = 0
+                self.driver = None
+
+            async def add_episode(self, **kwargs):
+                self.waiting += 1
+                await self.gate.wait()
+
+            async def search_(self, query, config=None, search_filter=None):
+                return SimpleNamespace(
+                    edges=[],
+                    nodes=[SimpleNamespace(name='Ada', summary='Ada keeps the backups.', attributes={})],
+                    episodes=[],
+                )
+
+        _GatedGraphiti()
+        """,
+        %{}
+      )
+
+    on_exit(fn -> release(graph) end)
+
+    pool =
+      start_pool(
+        falkordb_spec: @remote,
+        construct_falkor_db: fn _spec, _socket_timeout -> :stub_falkor_db end,
+        construct_instance: fn _database, _shared, _group_id -> graph end,
+        graph_operation_deadline_ms: 60_000
+      )
+
+    waiting = :erlang.system_info(:dirty_cpu_schedulers) + 1
+    writes = for _ <- 1..waiting, do: Task.async(fn -> write(pool) end)
+
+    assert_eventually(fn -> promptly(fn -> graph_value(graph, "waiting") end) == waiting end)
+
+    %{graph: graph, pool: pool, writes: writes}
+  end
+
+  defp release(graph) do
+    Pythonx.eval("import asyncio\nasyncio._gralkor_loop.call_soon_threadsafe(graph.gate.set)", %{
+      "graph" => graph
+    })
+  end
+
+  defp promptly(operation) do
+    task = Task.async(operation)
+
+    case Task.yield(task, 2_000) do
+      {:ok, result} -> result
+      nil -> flunk("operation did not complete within 2s while writes were waiting")
+    end
   end
 
   defp start_runtime do
