@@ -239,6 +239,87 @@ defmodule Gralkor.GraphitiPool do
       return LensSearchFilters
   """
 
+  @index_building_without_stopwords """
+  def install_index_building_without_stopwords():
+      import re
+      import graphiti_core.graph_queries as graph_queries
+      import graphiti_core.driver.falkordb_driver as falkordb_driver
+      import graphiti_core.driver.falkordb.operations.graph_ops as falkor_graph_ops
+      from graphiti_core.driver.driver import GraphProvider
+      FalkorDriver = falkordb_driver.FalkorDriver
+      if hasattr(FalkorDriver.build_indices_and_constraints, '_gralkor_original'):
+          return
+
+      original_fulltext_indices = graph_queries.get_fulltext_indices
+      original_build = FalkorDriver.build_indices_and_constraints
+
+      def get_fulltext_indices(provider):
+          queries = original_fulltext_indices(provider)
+          if provider != GraphProvider.FALKORDB:
+              return queries
+          return [
+              re.sub(r'\\s*OPTIONS\\s*\\{.*\\}\\s*$', '', query, flags=re.S)
+              + ' OPTIONS {stopwords: []}'
+              for query in queries
+          ]
+
+      async def drop_index(driver, query):
+          try:
+              await driver.execute_query(query)
+          except Exception as error:
+              if 'no such index' not in str(error):
+                  raise
+
+      async def replace_stopword_indexes(driver):
+          result = await driver.execute_query(
+              'CALL db.indexes() YIELD label, types, stopwords, entitytype '
+              'RETURN label, types, stopwords, entitytype'
+          )
+          if not result:
+              return []
+          records, _, _ = result
+          replaced = []
+          for record in records:
+              if record['entitytype'] != 'NODE' or not record['stopwords']:
+                  continue
+              label = record['label']
+              types = record['types']
+              unsupported = sorted(
+                  field for field, kinds in types.items() if set(kinds) - {'RANGE', 'FULLTEXT'}
+              )
+              if unsupported:
+                  raise RuntimeError(
+                      f'cannot rebuild the {label} indexes without stopwords: '
+                      f'{", ".join(unsupported)} is neither a range nor a full-text index'
+                  )
+              range_fields = [field for field, kinds in types.items() if 'RANGE' in kinds]
+              fulltext_fields = [field for field, kinds in types.items() if 'FULLTEXT' in kinds]
+              for field in fulltext_fields:
+                  await drop_index(driver, f'DROP FULLTEXT INDEX FOR (n:{label}) ON (n.{field})')
+              for field in range_fields:
+                  await drop_index(driver, f'DROP INDEX FOR (n:{label}) ON (n.{field})')
+              if range_fields:
+                  fields = ', '.join(f'n.{field}' for field in range_fields)
+                  await driver.execute_query(f'CREATE INDEX FOR (n:{label}) ON ({fields})')
+              if fulltext_fields:
+                  fields = ', '.join(f'n.{field}' for field in fulltext_fields)
+                  await driver.execute_query(
+                      f'CREATE FULLTEXT INDEX FOR (n:{label}) ON ({fields}) OPTIONS {{stopwords: []}}'
+                  )
+              replaced.append(label)
+          return replaced
+
+      async def build_indices_and_constraints(self, delete_existing=False):
+          self._gralkor_replaced_stopword_indexes = await replace_stopword_indexes(self)
+          await original_build(self, delete_existing)
+
+      get_fulltext_indices._gralkor_original = original_fulltext_indices
+      build_indices_and_constraints._gralkor_original = original_build
+      for module in (graph_queries, falkordb_driver, falkor_graph_ops):
+          module.get_fulltext_indices = get_fulltext_indices
+      FalkorDriver.build_indices_and_constraints = build_indices_and_constraints
+  """
+
   @fact_rendering """
   async def render_facts(g, edges, lens_names=(), lens_suffixes=(), excluded_suffixes=()):
       from graphiti_core.nodes import EpisodicNode
