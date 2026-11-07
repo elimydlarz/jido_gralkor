@@ -1697,6 +1697,19 @@ defmodule Gralkor.GraphitiPool do
     e in Pythonx.Error -> raise RuntimeError, summarise_python_error(e)
   end
 
+  defp install_index_building_without_stopwords! do
+    Pythonx.eval(
+      """
+      #{@index_building_without_stopwords}
+      install_index_building_without_stopwords()
+      None
+      """,
+      %{}
+    )
+
+    :ok
+  end
+
   # A socket read timeout and an expired bridge deadline both surface here. A
   # deadlocked FalkorDB stays locked until it restarts, so retries also time out;
   # the log line is what makes that visible.
@@ -1741,12 +1754,23 @@ defmodule Gralkor.GraphitiPool do
   @doc false
   @spec initialise_instance(any()) :: :ok
   def initialise_instance(instance) do
-    Gralkor.Python.run_coroutine(
+    replaced =
       """
-      g.build_indices_and_constraints()
-      """,
-      %{"g" => instance}
-    )
+      async def initialise():
+          await g.build_indices_and_constraints()
+          driver = getattr(g, 'driver', None)
+          return list(getattr(driver, '_gralkor_replaced_stopword_indexes', None) or [])
+      initialise()
+      """
+      |> Gralkor.Python.run_coroutine(%{"g" => instance})
+      |> Pythonx.decode()
+
+    if replaced != [] do
+      Logger.warning(
+        "[gralkor] full-text indexes rebuilt without stopwords (FalkorDB #3348) — labels: " <>
+          Enum.join(replaced, ", ")
+      )
+    end
 
     :ok
   end
@@ -2104,6 +2128,7 @@ defmodule Gralkor.GraphitiPool do
     inference = inference_settings(opts)
     validate_native_models!(inference)
     install_search_filters!()
+    install_index_building_without_stopwords!()
 
     socket_timeout = falkordb_socket_timeout(falkordb_spec, opts)
     deadline_ms = graph_operation_deadline(opts)
