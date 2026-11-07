@@ -210,21 +210,7 @@ defmodule Gralkor.Python do
     e in Pythonx.Error -> {:error, {:install_async_runtime, Exception.message(e)}}
   end
 
-  @doc """
-  Evaluate `code`, whose final expression is a coroutine, run that coroutine on
-  the shared loop within the graph operation deadline, and return its result.
-
-  The interpreter is held only while Python runs: one evaluation creates the
-  coroutine and submits it, the calling process then waits in a `receive` for
-  the loop to signal completion, and a last evaluation reads the result. A
-  graph operation waiting on FalkorDB or a model provider therefore holds no
-  dirty CPU scheduler, which PythonX runs every evaluation and object release
-  on.
-
-  A Python exception raised by the coroutine, including the `TimeoutError` of an
-  expired deadline, raises `Pythonx.Error` in the caller. The deadline is
-  enforced on the loop, so the coroutine is cancelled even if the caller exits.
-  """
+  @doc false
   @spec run_coroutine(String.t(), %{optional(String.t()) => term()}) :: Pythonx.Object.t()
   def run_coroutine(code, globals) when is_binary(code) and is_map(globals) do
     future = await_coroutine(code, globals)
