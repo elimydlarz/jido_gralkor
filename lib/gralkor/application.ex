@@ -13,7 +13,11 @@ defmodule Gralkor.Application do
 
   @impl true
   def start(_type, _args) do
-    Supervisor.start_link(children(), strategy: :one_for_one, name: Gralkor.Supervisor)
+    Supervisor.start_link(
+      [{Task.Supervisor, name: Gralkor.SearchSupervisor} | children()],
+      strategy: :one_for_one,
+      name: Gralkor.Supervisor
+    )
   end
 
   @doc false
