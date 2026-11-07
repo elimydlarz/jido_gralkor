@@ -26,3 +26,7 @@ when a graph operation outlasts `:graph_operation_deadline_ms`
   and the outstanding graph work is cancelled
   and the timeout is logged with the stage it hit
   and the next graph operation still runs
+
+while more episode writes are waiting on the graph or a model provider than the virtual machine has dirty CPU schedulers
+  then a memory search still returns its results without waiting for them
+  and each waiting write returns once its wait ends
