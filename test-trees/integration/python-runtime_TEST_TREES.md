@@ -18,6 +18,18 @@ when the Python runtime initialises
   while orphan reaping is not requested
     then no orphaned-server sweep runs
 
+when a coroutine is run on the shared loop
+  then the caller receives the coroutine's result
+  while more coroutines are awaiting than the virtual machine has dirty CPU schedulers
+    then another interpreter call completes without waiting for them
+  if the coroutine raises
+    then the caller receives that Python error
+  if the coroutine outlasts the graph operation deadline
+    then the caller receives a timeout error naming the deadline
+    and the coroutine is cancelled
+  if the caller exits while the coroutine awaits
+    then the coroutine is still cancelled at the graph operation deadline
+
 if an initialisation step fails
   then initialisation stops with that reason
 
