@@ -361,50 +361,6 @@ defmodule Gralkor.PythonTest do
     end
   end
 
-  defp install_shared_loop(_context) do
-    :ok = Python.install_async_runtime()
-    on_exit(fn -> Python.install_async_runtime() end)
-    :ok
-  end
-
-  defp hanging_coroutine do
-    """
-    import asyncio
-    async def hang():
-        state['started'] = True
-        try:
-            await asyncio.Event().wait()
-        except asyncio.CancelledError:
-            state['cancelled'] = True
-            raise
-    hang()
-    """
-  end
-
-  defp promptly_eval(code, globals) do
-    task = Task.async(fn -> Pythonx.eval(code, globals) end)
-
-    case Task.yield(task, 2_000) do
-      {:ok, {result, _globals}} -> result
-      nil -> flunk("interpreter call did not complete within 2s: #{code}")
-    end
-  end
-
-  defp assert_eventually(read, expected, attempts \\ 100) do
-    case Pythonx.decode(read.()) do
-      ^expected ->
-        :ok
-
-      other when attempts > 1 ->
-        _ = other
-        Process.sleep(20)
-        assert_eventually(read, expected, attempts - 1)
-
-      other ->
-        flunk("expected #{inspect(expected)}, last read #{inspect(other)}")
-    end
-  end
-
   describe "if an initialisation step fails" do
     test "then initialisation stops with that reason" do
       first_provider = hd(Gralkor.GraphitiPool.supported_providers())
@@ -446,6 +402,51 @@ defmodule Gralkor.PythonTest do
     test "then an error identifies that provider without calling the interpreter" do
       assert {:error, {:unsupported_provider, :anthropic}} =
                Python.smoke_import_provider_clients(:anthropic)
+    end
+  end
+
+  defp install_shared_loop(_context) do
+    :ok = Python.install_async_runtime()
+    on_exit(fn -> Python.install_async_runtime() end)
+    :ok
+  end
+
+  defp hanging_coroutine do
+    """
+    import asyncio
+    async def hang():
+        state['started'] = True
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            state['cancelled'] = True
+            raise
+    hang()
+    """
+  end
+
+  defp promptly_eval(code, globals) do
+    task = Task.async(fn -> Pythonx.eval(code, globals) end)
+
+    case Task.yield(task, 2_000) do
+      {:ok, {result, _globals}} -> result
+      nil -> flunk("interpreter call did not complete within 2s: #{code}")
+    end
+  end
+
+  defp assert_eventually(read, expected, attempts \\ 100) do
+    actual = Pythonx.decode(read.())
+
+    cond do
+      actual == expected ->
+        :ok
+
+      attempts > 1 ->
+        Process.sleep(20)
+        assert_eventually(read, expected, attempts - 1)
+
+      true ->
+        flunk("expected #{inspect(expected)}, last read #{inspect(actual)}")
     end
   end
 end
