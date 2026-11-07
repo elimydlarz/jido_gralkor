@@ -60,6 +60,70 @@ defmodule Gralkor.Reflection.RunnerTest do
     def run(%{query: query}, _context), do: {:ok, %{evidence: query}}
   end
 
+  defmodule EvidenceTool do
+    use Jido.Action,
+      name: "lookup_evidence",
+      description: "Looks up stored evidence.",
+      schema: [query: [type: :string, required: true]]
+
+    @impl true
+    def run(%{query: query}, _context) do
+      send(:reflection_runner_test, {:tool_ran, query})
+      {:ok, %{evidence: "stored-evidence"}}
+    end
+  end
+
+  defmodule DroppingOpenAI do
+    def run(request) do
+      send(:reflection_runner_test, :model_call)
+      body = IO.iodata_to_binary(request.body)
+
+      cond do
+        not String.contains?(body, "stored-evidence") ->
+          {request,
+           response(%{
+             "type" => "function_call",
+             "id" => "fc-1",
+             "call_id" => "call-1",
+             "name" => "lookup_evidence",
+             "arguments" => ~s({"query":"deploys"}),
+             "status" => "completed"
+           })}
+
+        Agent.get_and_update(__MODULE__, &{&1, &1 - 1}) > 0 ->
+          {request, Req.TransportError.exception(reason: :closed)}
+
+        true ->
+          {request,
+           response(%{
+             "type" => "message",
+             "id" => "msg-1",
+             "role" => "assistant",
+             "status" => "completed",
+             "content" => [
+               %{"type" => "output_text", "text" => ~s({"answer":"ready"}), "annotations" => []}
+             ]
+           })}
+      end
+    end
+
+    defp response(output) do
+      Req.Response.new(
+        status: 200,
+        headers: [{"content-type", "application/json"}],
+        body:
+          Jason.encode!(%{
+            "id" => "resp-1",
+            "object" => "response",
+            "model" => "gpt-4.1",
+            "status" => "completed",
+            "output" => [output],
+            "usage" => %{"input_tokens" => 1, "output_tokens" => 1, "total_tokens" => 2}
+          })
+      )
+    end
+  end
+
   defmodule ProbeDestinationStorage do
     @behaviour Gralkor.Destination.Storage
 
@@ -522,6 +586,10 @@ defmodule Gralkor.Reflection.RunnerTest do
     test "and a final JSON object is returned as wrapped structured output" do
       prove_wrapped_structured_output()
     end
+
+    test "and each model call may produce up to 32,768 output tokens" do
+      assert built_in_config(default_inference_request(), []).max_tokens == 32_768
+    end
   end
 
   describe "when built-in inference is invoked for a step > where a model resolver is supplied" do
@@ -669,6 +737,131 @@ defmodule Gralkor.Reflection.RunnerTest do
                    %{termination_reason: termination_reason, result: nil}
                  end)
       end
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > if a model call's connection is closed, times out, or is refused before any HTTP status arrives" do
+    test "then that model call is made again after 1 second, then 2, then 4, at most three more times" do
+      substitute_retry_sleep()
+
+      for reason <- [:closed, :timeout, :econnrefused] do
+        assert {:error, _} =
+                 Runner.default_inference(
+                   default_inference_request(),
+                   failing_model_call(dropped_connection(reason))
+                 )
+
+        assert drain_messages() == [
+                 :model_call,
+                 {:retry_sleep, 1_000},
+                 :model_call,
+                 {:retry_sleep, 2_000},
+                 :model_call,
+                 {:retry_sleep, 4_000},
+                 :model_call
+               ]
+      end
+    end
+
+    test "and the model calls and tool calls that already finished in that step are not repeated" do
+      substitute_retry_sleep()
+
+      start_supervised!(%{
+        id: DroppingOpenAI,
+        start: {Agent, :start_link, [fn -> 4 end, [name: DroppingOpenAI]]}
+      })
+
+      caller = fn input, config, opts ->
+        Gralkor.Reflection.Runner.react(
+          input,
+          Map.merge(config, %{
+            req_http_options: [adapter: DroppingOpenAI],
+            llm_opts: [api_key: "runner-contract-key"]
+          }),
+          opts
+        )
+      end
+
+      assert {:ok, %{output: %{"answer" => "ready"}}} =
+               Runner.default_inference(
+                 %{default_inference_request() | tools: [EvidenceTool]},
+                 caller,
+                 model_resolver: fn -> %{provider: "openai", id: "gpt-4.1"} end
+               )
+
+      assert drain_messages() == [
+               :model_call,
+               {:tool_ran, "deploys"},
+               :model_call,
+               :model_call,
+               :model_call,
+               :model_call,
+               {:retry_sleep, 1_000},
+               :model_call
+             ]
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > if a model call's connection is closed, times out, or is refused before any HTTP status arrives > if the connection fails on every attempt" do
+    test "then built-in inference returns the connection error" do
+      substitute_retry_sleep()
+      error = dropped_connection(:closed)
+
+      assert {:error, ^error} =
+               Runner.default_inference(default_inference_request(), failing_model_call(error))
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > if a model call fails with an HTTP status" do
+    test "then built-in inference returns the error without calling the model again" do
+      substitute_retry_sleep()
+
+      for status <- [429, 500, 503] do
+        error =
+          ReqLLM.Error.API.Request.exception(reason: "HTTP #{status}", status: status, cause: nil)
+
+        assert {:error, ^error} =
+                 Runner.default_inference(default_inference_request(), failing_model_call(error))
+
+        assert drain_messages() == [:model_call]
+      end
+    end
+  end
+
+  defp dropped_connection(reason) do
+    ReqLLM.Error.API.Request.exception(
+      reason: Exception.message(Req.TransportError.exception(reason: reason)),
+      status: nil,
+      cause: Req.TransportError.exception(reason: reason)
+    )
+  end
+
+  defp failing_model_call(error) do
+    test_pid = self()
+
+    fn _input, _config, _opts ->
+      send(test_pid, :model_call)
+      %{termination_reason: :failed, result: error, trace: []}
+    end
+  end
+
+  defp substitute_retry_sleep do
+    test_pid = self()
+    previous = Application.get_env(:jido_gralkor, :reflection_retry_sleep)
+
+    Application.put_env(:jido_gralkor, :reflection_retry_sleep, fn ms ->
+      send(test_pid, {:retry_sleep, ms})
+    end)
+
+    on_exit(fn -> restore_application_env(:reflection_retry_sleep, previous) end)
+  end
+
+  defp drain_messages(messages \\ []) do
+    receive do
+      {:DOWN, _ref, :process, _pid, :normal} -> drain_messages(messages)
+      message -> drain_messages([message | messages])
+    after
+      0 -> Enum.reverse(messages)
     end
   end
 
@@ -1000,6 +1193,7 @@ defmodule Gralkor.Reflection.RunnerTest do
              tools: [SampleTool],
              streaming: false,
              max_iterations: 10,
+             max_tokens: 32_768,
              temperature: 0.7,
              tool_concurrency: 1,
              tool_max_retries: 0,

@@ -8,13 +8,15 @@ defmodule Gralkor.Reflection.Runner do
   alias Gralkor.Search
   alias JidoGralkor.MemorySearchPresentation
 
+  @max_output_tokens 32_768
+  @dropped_call_retry_delays_ms [1_000, 2_000, 4_000]
+
   def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
     inference =
       Keyword.get_lazy(opts, :inference, fn ->
         built_in = Keyword.take(opts, [:model_resolver, :observer])
 
-        run_step =
-          if built_in[:observer], do: &observed_react/3, else: &Jido.AI.Reasoning.ReAct.run/3
+        run_step = if built_in[:observer], do: &observed_react/3, else: &react/3
 
         fn request -> default_inference(request, run_step, built_in) end
       end)
@@ -235,7 +237,7 @@ defmodule Gralkor.Reflection.Runner do
   defp field(map, key), do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
 
   def default_inference(request),
-    do: default_inference(request, &Jido.AI.Reasoning.ReAct.run/3, [])
+    do: default_inference(request, &react/3, [])
 
   @doc false
   def default_inference(request, run_step) when is_function(run_step, 3),
@@ -274,25 +276,76 @@ defmodule Gralkor.Reflection.Runner do
 
     context = Map.put(request.tool_context, :operator_id, request.operator_id)
 
-    case run_step.(
-           prompt,
-           %{
-             model: model_spec,
-             tools: request.tools,
-             streaming: false,
-             max_iterations: 10,
-             temperature: 0.7,
-             tool_concurrency: 1,
-             tool_max_retries: 0,
-             tool_timeout_ms: 30_000
-           },
-           [context: context] ++ event_observer(opts)
-         ) do
+    config = %{
+      model: model_spec,
+      tools: request.tools,
+      streaming: false,
+      max_iterations: 10,
+      max_tokens: @max_output_tokens,
+      temperature: 0.7,
+      tool_concurrency: 1,
+      tool_max_retries: 0,
+      tool_timeout_ms: 30_000
+    }
+
+    react_opts = [context: context] ++ event_observer(opts)
+
+    case run_until_settled(run_step, prompt, config, react_opts, @dropped_call_retry_delays_ms) do
       %{termination_reason: :final_answer, result: result} -> decode_final_output(%{text: result})
       %{termination_reason: :failed, result: reason} -> {:error, reason}
       %{termination_reason: termination_reason} -> {:error, termination_reason}
     end
   end
+
+  defp run_until_settled(run_step, input, config, react_opts, delays) do
+    case {run_step.(input, config, react_opts), delays} do
+      {%{termination_reason: :failed, result: reason} = run, [delay | later_delays]} ->
+        if dropped_connection?(reason) do
+          Application.get_env(:jido_gralkor, :reflection_retry_sleep, &Process.sleep/1).(delay)
+          run_until_settled(run_step, resume_point(run, input), config, react_opts, later_delays)
+        else
+          run
+        end
+
+      {run, _delays} ->
+        run
+    end
+  end
+
+  defp dropped_connection?(%ReqLLM.Error.API.Request{
+         status: nil,
+         cause: %Req.TransportError{reason: reason}
+       }),
+       do: reason in [:closed, :timeout, :econnrefused]
+
+  defp dropped_connection?(_reason), do: false
+
+  defp resume_point(run, input) do
+    run.trace
+    |> Enum.reverse()
+    |> Enum.find_value(input, fn
+      %{kind: :checkpoint, data: %{reason: reason, token: token}} when reason != :terminal ->
+        {:checkpoint, token}
+
+      _event ->
+        nil
+    end)
+  end
+
+  @doc false
+  def react(input, config, opts) do
+    input
+    |> react_events(config, opts)
+    |> Jido.AI.Reasoning.ReAct.collect_stream()
+  end
+
+  defp react_events({:checkpoint, token}, config, opts) do
+    {:ok, %{events: events}} = Jido.AI.Reasoning.ReAct.continue(token, config, opts)
+    events
+  end
+
+  defp react_events(prompt, config, opts),
+    do: Jido.AI.Reasoning.ReAct.stream(prompt, config, opts)
 
   defp stored_section(results, presented) do
     if Enum.any?(results, &holds_memory?/1) do
@@ -306,11 +359,11 @@ defmodule Gralkor.Reflection.Runner do
     do: Enum.any?([:facts, :nodes, :episodes], &(Map.get(result, &1, []) != []))
 
   @doc false
-  def observed_react(prompt, config, opts) do
+  def observed_react(input, config, opts) do
     {on_event, opts} = Keyword.pop!(opts, :on_event)
 
-    prompt
-    |> Jido.AI.Reasoning.ReAct.stream(config, opts)
+    input
+    |> react_events(config, opts)
     |> Stream.each(on_event)
     |> Jido.AI.Reasoning.ReAct.collect_stream()
   end

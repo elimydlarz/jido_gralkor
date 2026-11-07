@@ -1235,12 +1235,12 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   # The real built-in inference and model, observed: each step's prompt is reported
-  # to the test before the unchanged Jido ReAct run sends it to the provider.
+  # to the test before the Runner's unchanged Jido ReAct run sends it to the provider.
   defp recording_built_in_inference(test_pid, prompt_ref) do
     fn request ->
       Gralkor.Reflection.Runner.default_inference(request, fn prompt, config, opts ->
         send(test_pid, {prompt_ref, prompt})
-        Jido.AI.Reasoning.ReAct.run(prompt, config, opts)
+        Gralkor.Reflection.Runner.react(prompt, config, opts)
       end)
     end
   end

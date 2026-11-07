@@ -66,6 +66,7 @@ when built-in inference is invoked for a step
   and the representations and output contract remain JSON
   and it supplies the host tools and a tool context whose operator identity comes from the invocation while every other supplied field remains unchanged
   and a final JSON object is returned as wrapped structured output
+  and each model call may produce up to 32,768 output tokens
   where a model resolver is supplied
     then it runs the model that resolver names
   where no model resolver is supplied
@@ -80,6 +81,13 @@ when built-in inference is invoked for a step
     then built-in inference returns the identified error
   if the ReAct runtime ends without a final answer
     then built-in inference returns its termination reason as an error
+  if a model call's connection is closed, times out, or is refused before any HTTP status arrives
+    then that model call is made again after 1 second, then 2, then 4, at most three more times
+    and the model calls and tool calls that already finished in that step are not repeated
+    if the connection fails on every attempt
+      then built-in inference returns the connection error
+  if a model call fails with an HTTP status
+    then built-in inference returns the error without calling the model again
   where an observer is supplied
     when the ReAct runtime starts a tool call
       then the observer is told the call's identifier, tool name, and arguments
