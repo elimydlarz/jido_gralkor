@@ -36,6 +36,8 @@ defmodule Gralkor.GraphitiPoolTest do
     Keyword.merge(defaults, opts)
   end
 
+  @index_listing "CALL db.indexes() YIELD label, types, stopwords RETURN label, types, stopwords"
+
   @search_filter_targets """
   import graphiti_core.search.search as search_module
   import graphiti_core.search.search_utils as search_utils
@@ -2011,6 +2013,105 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when a graph instance's indexes are built on FalkorDB" do
+    setup :start_real_embedded_pool
+
+    test "then its full-text indexes carry no stopword list", %{pid: pid} do
+      instance = GraphitiPool.for(pid, "fresh")
+
+      fulltext =
+        instance
+        |> graph_indexes()
+        |> Enum.filter(fn index -> Enum.any?(Map.values(index["types"]), &("FULLTEXT" in &1)) end)
+
+      assert Enum.sort(Enum.map(fulltext, & &1["label"])) ==
+               ["Community", "Entity", "Episodic", "RELATES_TO"]
+
+      assert Enum.all?(fulltext, &(&1["stopwords"] == []))
+    end
+
+    test "and an exact-match lookup for an indexed value that is a stopword returns its match instead of crashing FalkorDB",
+         %{pid: pid} do
+      instance = GraphitiPool.for(pid, "fresh")
+      graph_query(instance, "CREATE (:Episodic {uuid: 'the'})")
+
+      assert graph_query(
+               instance,
+               "MATCH (e:Episodic) WHERE e.uuid IN ['the'] RETURN e.uuid AS uuid"
+             ) ==
+               [%{"uuid" => "the"}]
+    end
+  end
+
+  describe "when a graph instance's indexes are built on FalkorDB > while a label's index already carries a stopword list" do
+    setup [:start_real_embedded_pool, :create_stopword_indexes]
+
+    test "then every index on that label is dropped and recreated with the same fields and no stopword list",
+         %{pid: pid} do
+      instance = GraphitiPool.for(pid, "stopwords")
+
+      episodic = Enum.find(graph_indexes(instance), &(&1["label"] == "Episodic"))
+
+      assert episodic["stopwords"] == []
+      assert "RANGE" in episodic["types"]["uuid"]
+      assert "RANGE" in episodic["types"]["custom"]
+      assert "FULLTEXT" in episodic["types"]["content"]
+      assert "FULLTEXT" in episodic["types"]["source"]
+      assert Enum.sort(episodic["types"]["group_id"]) == ["FULLTEXT", "RANGE"]
+    end
+
+    test "and the replacement is logged naming the label", %{pid: pid} do
+      log = capture_log(fn -> GraphitiPool.for(pid, "stopwords") end)
+
+      assert log =~ "[gralkor] full-text indexes rebuilt without stopwords"
+      assert log =~ "Episodic"
+    end
+
+    test "and an exact-match lookup for a stopword value on that label returns its match",
+         %{pid: pid} do
+      instance = GraphitiPool.for(pid, "stopwords")
+
+      assert graph_query(
+               instance,
+               "MATCH (e:Episodic) WHERE e.uuid IN ['the'] RETURN e.uuid AS uuid"
+             ) ==
+               [%{"uuid" => "the"}]
+    end
+  end
+
+  describe "when a graph instance's indexes are built on FalkorDB > while every index already carries no stopword list" do
+    setup :start_real_embedded_pool
+
+    test "then no index is replaced", %{pid: pid} do
+      GraphitiPool.for(pid, "fresh")
+
+      log = capture_log(fn -> assert {:ok, _} = GraphitiPool.build_indices(pid) end)
+
+      refute log =~ "rebuilt without stopwords"
+    end
+  end
+
+  describe "when a graph instance's indexes are built on FalkorDB > if a label carrying a stopword list also holds an index that is neither range nor full-text" do
+    setup [:start_real_embedded_pool, :create_stopword_indexes_beside_a_vector_index]
+
+    test "then that label's indexes are left unchanged", %{pid: pid} do
+      capture_log(fn -> GraphitiPool.for(pid, "stopwords") end)
+
+      episodic =
+        Enum.find(physical_graph_indexes(pid, "stopwords"), &(&1["label"] == "Episodic"))
+
+      assert episodic["stopwords"] == ["a", "the"]
+      assert "VECTOR" in episodic["types"]["embedding"]
+    end
+
+    test "and the failure is logged naming the label", %{pid: pid} do
+      log = capture_log(fn -> GraphitiPool.for(pid, "stopwords") end)
+
+      assert log =~ "build_indices_and_constraints failed (non-fatal)"
+      assert log =~ "Episodic"
+    end
+  end
+
   describe "when an index and constraint rebuild is requested for the whole graph" do
     test "then every group the pool holds an instance for is rebuilt, each group being its own database" do
       {instance, _} =
@@ -3034,6 +3135,21 @@ defmodule Gralkor.GraphitiPoolTest do
 
       %{pid: second} = start_pool([])
       assert wrapped_search_functions() == wrapped
+
+      GenServer.stop(first)
+      GenServer.stop(second)
+    end
+  end
+
+  describe "when the pool starts > and FalkorDB index building" do
+    test "and the graph library's FalkorDB index building is wrapped once, before any graph instance is built" do
+      %{pid: first} = start_pool([])
+      wrapped = wrapped_index_building()
+
+      assert [[_id, true], [_fulltext_id, true]] = wrapped
+
+      %{pid: second} = start_pool([])
+      assert wrapped_index_building() == wrapped
 
       GenServer.stop(first)
       GenServer.stop(second)
@@ -4428,4 +4544,105 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   defp eventually(_assertion, 0), do: false
+
+  defp wrapped_index_building do
+    {wrapped, _} =
+      Pythonx.eval(
+        """
+        import graphiti_core.driver.falkordb_driver as falkordb_driver
+        build = falkordb_driver.FalkorDriver.build_indices_and_constraints
+        fulltext = falkordb_driver.get_fulltext_indices
+        [
+            [id(build), hasattr(build, '_gralkor_original')],
+            [id(fulltext), hasattr(fulltext, '_gralkor_original')],
+        ]
+        """,
+        %{}
+      )
+
+    Pythonx.decode(wrapped)
+  end
+
+  defp start_real_embedded_pool(_context) do
+    data_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "gralkor_indexes_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+      )
+
+    {:ok, pid} =
+      GraphitiPool.start_link(
+        name: nil,
+        table: :"index_pool_#{System.unique_integer([:positive])}",
+        falkordb_spec: {:embedded, data_dir},
+        construct_shared_clients: fn _spec ->
+          %{llm_client: nil, embedder: nil, cross_encoder: nil}
+        end,
+        warmup: false,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0
+      )
+
+    on_exit(fn -> File.rm_rf!(data_dir) end)
+    on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+
+    %{pid: pid}
+  end
+
+  defp create_stopword_indexes(%{pid: pid}) do
+    physical_graph_query(pid, "stopwords", [
+      "CREATE INDEX FOR (n:Episodic) ON (n.uuid, n.group_id, n.custom)",
+      "CREATE FULLTEXT INDEX FOR (n:Episodic) ON (n.content, n.source, n.group_id) OPTIONS {stopwords: ['a', 'the']}",
+      "CREATE (:Episodic {uuid: 'the', content: 'the cat', source: 'notes', group_id: 'g'})"
+    ])
+
+    :ok
+  end
+
+  defp create_stopword_indexes_beside_a_vector_index(%{pid: pid}) do
+    physical_graph_query(pid, "stopwords", [
+      "CREATE INDEX FOR (n:Episodic) ON (n.uuid)",
+      "CREATE FULLTEXT INDEX FOR (n:Episodic) ON (n.content) OPTIONS {stopwords: ['a', 'the']}",
+      "CREATE VECTOR INDEX FOR (n:Episodic) ON (n.embedding) OPTIONS {dimension: 3, similarityFunction: 'euclidean'}"
+    ])
+
+    :ok
+  end
+
+  defp physical_graph_query(pid, logical_group_id, queries) do
+    Gralkor.Python.run_coroutine(
+      """
+      async def run_queries():
+          graph = database.select_graph(group_id.decode('utf-8'))
+          results = []
+          for query in queries:
+              result = await graph.query(query.decode('utf-8'))
+              header = [column[1] for column in result.header]
+              results.append([dict(zip(header, row)) for row in result.result_set])
+          return results
+      run_queries()
+      """,
+      %{
+        "database" => :sys.get_state(pid).falkor_db,
+        "group_id" => physical(logical_group_id),
+        "queries" => queries
+      }
+    )
+    |> Pythonx.decode()
+  end
+
+  defp physical_graph_indexes(pid, logical_group_id) do
+    [indexes] = physical_graph_query(pid, logical_group_id, [@index_listing])
+    indexes
+  end
+
+  defp graph_query(instance, query) do
+    {records, _header, _summary} =
+      "g.driver.execute_query(query.decode('utf-8'))"
+      |> Gralkor.Python.run_coroutine(%{"g" => instance, "query" => query})
+      |> Pythonx.decode()
+
+    records
+  end
+
+  defp graph_indexes(instance), do: graph_query(instance, @index_listing)
 end
