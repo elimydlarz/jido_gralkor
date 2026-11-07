@@ -376,10 +376,9 @@ defmodule Gralkor.GraphitiPool do
     instance = __MODULE__.for(server, group_id)
     edge_types = Keyword.get(opts, :edge_types)
 
-    {raw, _} =
-      Pythonx.eval(
+    raw =
+      Gralkor.Python.run_coroutine(
         """
-        import asyncio
         from graphiti_core.nodes import EpisodicNode
         from graphiti_core.search.search_filters import SearchFilters
 
@@ -396,7 +395,7 @@ defmodule Gralkor.GraphitiPool do
 
           return await render_facts(g, edges)
 
-        asyncio._gralkor_run(search_with_sources())
+        search_with_sources()
         """,
         %{
           "g" => instance,
@@ -483,10 +482,9 @@ defmodule Gralkor.GraphitiPool do
              is_list(opts) do
     instance = __MODULE__.for(server, group_id)
 
-    {raw, _} =
-      Pythonx.eval(
+    raw =
+      Gralkor.Python.run_coroutine(
         """
-        import asyncio
         from graphiti_core.driver.falkordb import STOPWORDS
         from graphiti_core.driver.falkordb.fulltext import (
           MAX_QUERY_LENGTH,
@@ -707,7 +705,7 @@ defmodule Gralkor.GraphitiPool do
             "episodes": [episode_result(e) for e in episodes],
           }
 
-        asyncio._gralkor_run(search_memory())
+        search_memory()
         """,
         %{
           "g" => instance,
@@ -836,10 +834,11 @@ defmodule Gralkor.GraphitiPool do
 
     result =
       with_episode_write_admission(server, uuid, fn ->
-        {raw, _} =
-          Pythonx.eval(
+        raw =
+          Gralkor.Python.run_coroutine(
             """
             import asyncio
+            import sys
             from contextvars import ContextVar
             from datetime import datetime, timezone
             from uuid import uuid4
@@ -1440,15 +1439,16 @@ defmodule Gralkor.GraphitiPool do
                     if token is not None:
                         guard.reset(token)
             #{@upstream_failure_classification}
-            try:
-                result = asyncio._gralkor_run(add_episode())
-            except BaseException as e:
-                print(f"[gralkor] add_episode failed: {type(e).__name__}: {(str(e).splitlines() or [''])[0]}", file=sys.stderr)
-                upstream = upstream_failure(e)
-                if upstream is None:
-                    raise
-                result = upstream
-            result
+            async def classified_add_episode():
+                try:
+                    return await add_episode()
+                except BaseException as e:
+                    print(f"[gralkor] add_episode failed: {type(e).__name__}: {(str(e).splitlines() or [''])[0]}", file=sys.stderr)
+                    upstream = upstream_failure(e)
+                    if upstream is None:
+                        raise
+                    return upstream
+            classified_add_episode()
             """,
             %{
               "g" => instance,
@@ -1523,17 +1523,17 @@ defmodule Gralkor.GraphitiPool do
       when is_binary(group_id) and is_binary(episode_uuid) do
     instance = __MODULE__.for(server, group_id)
 
-    Pythonx.eval(
+    Gralkor.Python.run_coroutine(
       """
-      import asyncio
       import sys
       uid = episode_uuid.decode('utf-8') if isinstance(episode_uuid, (bytes, bytearray)) else episode_uuid
-      try:
-          asyncio._gralkor_run(g.remove_episode(uid))
-      except BaseException as e:
-          print(f"[gralkor] remove_episode failed: {type(e).__name__}: {(str(e).splitlines() or [''])[0]}", file=sys.stderr)
-          raise
-      None
+      async def remove_episode():
+          try:
+              await g.remove_episode(uid)
+          except BaseException as e:
+              print(f"[gralkor] remove_episode failed: {type(e).__name__}: {(str(e).splitlines() or [''])[0]}", file=sys.stderr)
+              raise
+      remove_episode()
       """,
       %{"g" => instance, "episode_uuid" => episode_uuid}
     )
@@ -1570,12 +1570,13 @@ defmodule Gralkor.GraphitiPool do
   def build_communities(server \\ __MODULE__, group_id) when is_binary(group_id) do
     instance = __MODULE__.for(server, group_id)
 
-    {raw, _} =
-      Pythonx.eval(
+    raw =
+      Gralkor.Python.run_coroutine(
         """
-        import asyncio
-        nodes, edges = asyncio._gralkor_run(g.build_communities())
-        {"communities": len(nodes or []), "edges": len(edges or [])}
+        async def build_communities():
+          nodes, edges = await g.build_communities()
+          return {"communities": len(nodes or []), "edges": len(edges or [])}
+        build_communities()
         """,
         %{"g" => instance}
       )
@@ -1645,10 +1646,9 @@ defmodule Gralkor.GraphitiPool do
   @doc false
   @spec initialise_instance(any()) :: :ok
   def initialise_instance(instance) do
-    Pythonx.eval(
+    Gralkor.Python.run_coroutine(
       """
-      import asyncio
-      asyncio._gralkor_run(g.build_indices_and_constraints())
+      g.build_indices_and_constraints()
       """,
       %{"g" => instance}
     )
@@ -1948,10 +1948,9 @@ defmodule Gralkor.GraphitiPool do
       when is_binary(group_id) and is_binary(episode_uuid) do
     instance = __MODULE__.for(server, group_id)
 
-    {raw, _} =
-      Pythonx.eval(
+    raw =
+      Gralkor.Python.run_coroutine(
         """
-        import asyncio
         from graphiti_core.errors import NodeNotFoundError
         from graphiti_core.nodes import EpisodicNode
 
@@ -1987,7 +1986,7 @@ defmodule Gralkor.GraphitiPool do
                 'extraction_complete': extraction_complete,
             }
 
-        asyncio._gralkor_run(get_episode())
+        get_episode()
         """,
         %{"g" => instance, "episode_uuid" => episode_uuid}
       )
@@ -2489,9 +2488,8 @@ defmodule Gralkor.GraphitiPool do
   end
 
   defp default_close_falkor_db(falkor_db, {:embedded, _data_dir}) do
-    Pythonx.eval(
+    Gralkor.Python.run_coroutine(
       """
-      import asyncio
       async def close_embedded(database):
           client = database.client
           await client._client.aclose()
@@ -2499,7 +2497,7 @@ defmodule Gralkor.GraphitiPool do
           sync_client._async_managed = False
           sync_client._cleanup()
           client._async_managed = True
-      asyncio._gralkor_run(close_embedded(database))
+      close_embedded(database)
       """,
       %{"database" => falkor_db}
     )
@@ -2508,10 +2506,9 @@ defmodule Gralkor.GraphitiPool do
   end
 
   defp default_close_falkor_db(falkor_db, {:remote, _options}) do
-    Pythonx.eval(
+    Gralkor.Python.run_coroutine(
       """
-      import asyncio
-      asyncio._gralkor_run(database.aclose())
+      database.aclose()
       """,
       %{"database" => falkor_db}
     )
@@ -2844,10 +2841,9 @@ defmodule Gralkor.GraphitiPool do
   end
 
   defp warmup_search(instance) do
-    Pythonx.eval(
+    Gralkor.Python.run_coroutine(
       """
-      import asyncio
-      asyncio._gralkor_run(g.search('warmup', num_results=1))
+      g.search('warmup', num_results=1)
       """,
       %{"g" => instance}
     )
