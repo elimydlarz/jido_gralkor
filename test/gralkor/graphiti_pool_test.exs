@@ -4568,20 +4568,20 @@ defmodule Gralkor.GraphitiPoolTest do
         "gralkor_indexes_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
       )
 
-    {:ok, pid} =
-      GraphitiPool.start_link(
-        name: nil,
-        table: :"index_pool_#{System.unique_integer([:positive])}",
-        falkordb_spec: {:embedded, data_dir},
-        construct_shared_clients: fn _spec ->
-          %{llm_client: nil, embedder: nil, cross_encoder: nil}
-        end,
-        warmup: false,
-        install_loop_fn: &Gralkor.Python.install_async_runtime/0
-      )
-
     on_exit(fn -> File.rm_rf!(data_dir) end)
-    on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+
+    pid =
+      start_supervised!(
+        {GraphitiPool,
+         name: nil,
+         table: :"index_pool_#{System.unique_integer([:positive])}",
+         falkordb_spec: {:embedded, data_dir},
+         construct_shared_clients: fn _spec ->
+           %{llm_client: nil, embedder: nil, cross_encoder: nil}
+         end,
+         warmup: false,
+         install_loop_fn: &Gralkor.Python.install_async_runtime/0}
+      )
 
     %{pid: pid}
   end
