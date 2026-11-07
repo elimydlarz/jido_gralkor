@@ -7,6 +7,7 @@ when the pool starts
   then the shared asyncio runtime is installed, so the pool can be started on its own
   and the LLM client, the embedder, and the cross-encoder are each constructed once and shared by every graph instance for the pool's lifetime
   and the graph library's node and edge filter constructors and episode full-text search are wrapped once, before any search
+  and the graph library's FalkorDB index building is wrapped once, before any graph instance is built
   while every configured model spec names a supported inference provider
     then client construction proceeds using the configured model ids
     and the LLM client is built for the provider the LLM spec names
