@@ -834,8 +834,8 @@ defmodule Gralkor.GraphitiPool do
 
     result =
       with_episode_write_admission(server, uuid, fn ->
-        raw =
-          Gralkor.Python.run_coroutine(
+        future =
+          Gralkor.Python.await_coroutine(
             """
             import asyncio
             from contextvars import ContextVar
@@ -1437,17 +1437,7 @@ defmodule Gralkor.GraphitiPool do
                 finally:
                     if token is not None:
                         guard.reset(token)
-            #{@upstream_failure_classification}
-            async def classified_add_episode():
-                try:
-                    return await add_episode()
-                except BaseException as e:
-                    print(f"[gralkor] add_episode failed: {type(e).__name__}: {(str(e).splitlines() or [''])[0]}", file=sys.stderr)
-                    upstream = upstream_failure(e)
-                    if upstream is None:
-                        raise
-                    return upstream
-            classified_add_episode()
+            add_episode()
             """,
             %{
               "g" => instance,
@@ -1461,6 +1451,24 @@ defmodule Gralkor.GraphitiPool do
               "direct_writer" => direct_writer,
               "extraction_instructions" => extraction_instructions
             }
+          )
+
+        {raw, _} =
+          Pythonx.eval(
+            """
+            import sys
+            #{@upstream_failure_classification}
+            try:
+                result = future.result()
+            except BaseException as e:
+                print(f"[gralkor] add_episode failed: {type(e).__name__}: {(str(e).splitlines() or [''])[0]}", file=sys.stderr)
+                upstream = upstream_failure(e)
+                if upstream is None:
+                    raise
+                result = upstream
+            result
+            """,
+            %{"future" => future}
           )
 
         Pythonx.decode(raw)
@@ -1522,19 +1530,26 @@ defmodule Gralkor.GraphitiPool do
       when is_binary(group_id) and is_binary(episode_uuid) do
     instance = __MODULE__.for(server, group_id)
 
-    Gralkor.Python.run_coroutine(
+    future =
+      Gralkor.Python.await_coroutine(
+        """
+        uid = episode_uuid.decode('utf-8') if isinstance(episode_uuid, (bytes, bytearray)) else episode_uuid
+        g.remove_episode(uid)
+        """,
+        %{"g" => instance, "episode_uuid" => episode_uuid}
+      )
+
+    Pythonx.eval(
       """
       import sys
-      uid = episode_uuid.decode('utf-8') if isinstance(episode_uuid, (bytes, bytearray)) else episode_uuid
-      async def remove_episode():
-          try:
-              await g.remove_episode(uid)
-          except BaseException as e:
-              print(f"[gralkor] remove_episode failed: {type(e).__name__}: {(str(e).splitlines() or [''])[0]}", file=sys.stderr)
-              raise
-      remove_episode()
+      try:
+          future.result()
+      except BaseException as e:
+          print(f"[gralkor] remove_episode failed: {type(e).__name__}: {(str(e).splitlines() or [''])[0]}", file=sys.stderr)
+          raise
+      None
       """,
-      %{"g" => instance, "episode_uuid" => episode_uuid}
+      %{"future" => future}
     )
 
     :ok
