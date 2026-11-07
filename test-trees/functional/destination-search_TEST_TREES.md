@@ -99,6 +99,10 @@ where a caller filters by edge type
 if a selected Destination search fails
   then the error is returned without manufacturing a partial memory response
 
+if a selected Destination search exits instead of returning
+  then the search returns an error naming that Destination and its exit reason
+  and the caller does not exit
+
 if search supplies a field removed in 12.0.0
   then search fails before any Destination query is started
   and the error names the removed field
