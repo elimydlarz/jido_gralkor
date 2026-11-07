@@ -25,7 +25,17 @@ defmodule Gralkor.Python do
        through PythonX so any venv / import failure surfaces at boot rather
        than on the first real call.
 
-  See `test-trees/unit/python-runtime_TEST_TREES.md`.
+  Graph operations then run through `run_coroutine/2`, which holds the
+  interpreter only while Python runs. PythonX runs every evaluation and every
+  object release on a dirty CPU scheduler, and after each evaluation waits at
+  most five seconds for `Pythonx.Janitor`; an evaluation that blocked until a
+  graph operation finished held its scheduler for the whole wait on FalkorDB or
+  a model provider, so enough concurrent episode writes starved every other
+  evaluation and crashed finished searches on that ping. `run_coroutine/2`
+  submits the coroutine to the shared loop and waits in a `receive` for the
+  loop's completion message, sent with `pythonx.send_tagged_object`.
+
+  See `test-trees/integration/python-runtime_TEST_TREES.md`.
   """
 
   use GenServer
