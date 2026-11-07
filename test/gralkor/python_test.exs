@@ -243,6 +243,168 @@ defmodule Gralkor.PythonTest do
     end
   end
 
+  describe "when a coroutine is run on the shared loop" do
+    setup :install_shared_loop
+
+    test "then the caller receives the coroutine's result" do
+      result =
+        Python.run_coroutine(
+          """
+          async def add():
+              return 40 + left
+          add()
+          """,
+          %{"left" => 2}
+        )
+
+      assert Pythonx.decode(result) == 42
+    end
+  end
+
+  describe "when a coroutine is run on the shared loop > while more coroutines are awaiting than the virtual machine has dirty CPU schedulers" do
+    setup :install_shared_loop
+
+    test "then another interpreter call completes without waiting for them" do
+      {gate, _} = Pythonx.eval("import asyncio\nasyncio.Event()", %{})
+      {state, _} = Pythonx.eval("{'awaiting': 0}", %{})
+      awaiting = :erlang.system_info(:dirty_cpu_schedulers) + 1
+
+      waiters =
+        for _ <- 1..awaiting do
+          Task.async(fn ->
+            Python.run_coroutine(
+              """
+              async def await_gate():
+                  state['awaiting'] += 1
+                  await gate.wait()
+                  return 'released'
+              await_gate()
+              """,
+              %{"gate" => gate, "state" => state}
+            )
+          end)
+        end
+
+      assert_eventually(fn -> promptly_eval("state['awaiting']", %{"state" => state}) end, awaiting)
+
+      assert Pythonx.decode(promptly_eval("1 + 1", %{})) == 2
+
+      Pythonx.eval("import asyncio\nasyncio._gralkor_loop.call_soon_threadsafe(gate.set)", %{
+        "gate" => gate
+      })
+
+      assert waiters |> Task.await_many(5_000) |> Enum.map(&Pythonx.decode/1) ==
+               List.duplicate("released", awaiting)
+    end
+  end
+
+  describe "when a coroutine is run on the shared loop > if the coroutine raises" do
+    setup :install_shared_loop
+
+    test "then the caller receives that Python error" do
+      error =
+        assert_raise Pythonx.Error, fn ->
+          Python.run_coroutine(
+            """
+            async def fail():
+                raise ValueError('broken graph')
+            fail()
+            """,
+            %{}
+          )
+        end
+
+      assert Exception.message(error) =~ "ValueError: broken graph"
+    end
+  end
+
+  describe "when a coroutine is run on the shared loop > if the coroutine outlasts the graph operation deadline" do
+    setup :install_shared_loop
+
+    test "then the caller receives a timeout error naming the deadline" do
+      :ok = Python.install_async_runtime(100)
+
+      error =
+        assert_raise Pythonx.Error, fn ->
+          Python.run_coroutine("import asyncio\nasyncio.Event().wait()", %{})
+        end
+
+      assert Exception.message(error) =~ "TimeoutError: graph operation exceeded its 0.1s deadline"
+    end
+
+    test "and the coroutine is cancelled" do
+      :ok = Python.install_async_runtime(100)
+      {state, _} = Pythonx.eval("{'cancelled': False}", %{})
+
+      assert_raise Pythonx.Error, fn ->
+        Python.run_coroutine(hanging_coroutine(), %{"state" => state})
+      end
+
+      assert Pythonx.decode(promptly_eval("state['cancelled']", %{"state" => state}))
+    end
+  end
+
+  describe "when a coroutine is run on the shared loop > if the caller exits while the coroutine awaits" do
+    setup :install_shared_loop
+
+    test "then the coroutine is still cancelled at the graph operation deadline" do
+      :ok = Python.install_async_runtime(300)
+      {state, _} = Pythonx.eval("{'started': False, 'cancelled': False}", %{})
+
+      caller = spawn(fn -> Python.run_coroutine(hanging_coroutine(), %{"state" => state}) end)
+
+      assert_eventually(fn -> promptly_eval("state['started']", %{"state" => state}) end, true)
+      Process.exit(caller, :kill)
+      refute Pythonx.decode(promptly_eval("state['cancelled']", %{"state" => state}))
+
+      assert_eventually(fn -> promptly_eval("state['cancelled']", %{"state" => state}) end, true)
+    end
+  end
+
+  defp install_shared_loop(_context) do
+    :ok = Python.install_async_runtime()
+    on_exit(fn -> Python.install_async_runtime() end)
+    :ok
+  end
+
+  defp hanging_coroutine do
+    """
+    import asyncio
+    async def hang():
+        state['started'] = True
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            state['cancelled'] = True
+            raise
+    hang()
+    """
+  end
+
+  defp promptly_eval(code, globals) do
+    task = Task.async(fn -> Pythonx.eval(code, globals) end)
+
+    case Task.yield(task, 2_000) do
+      {:ok, {result, _globals}} -> result
+      nil -> flunk("interpreter call did not complete within 2s: #{code}")
+    end
+  end
+
+  defp assert_eventually(read, expected, attempts \\ 100) do
+    case Pythonx.decode(read.()) do
+      ^expected ->
+        :ok
+
+      other when attempts > 1 ->
+        _ = other
+        Process.sleep(20)
+        assert_eventually(read, expected, attempts - 1)
+
+      other ->
+        flunk("expected #{inspect(expected)}, last read #{inspect(other)}")
+    end
+  end
+
   describe "if an initialisation step fails" do
     test "then initialisation stops with that reason" do
       first_provider = hd(Gralkor.GraphitiPool.supported_providers())
