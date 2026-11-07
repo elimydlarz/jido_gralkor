@@ -3139,9 +3139,7 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(first)
       GenServer.stop(second)
     end
-  end
 
-  describe "when the pool starts > and FalkorDB index building" do
     test "and the graph library's FalkorDB index building is wrapped once, before any graph instance is built" do
       %{pid: first} = start_pool([])
       wrapped = wrapped_index_building()
