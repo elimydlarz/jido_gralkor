@@ -252,6 +252,11 @@ defmodule Gralkor.Client do
     end
   end
 
+  defp destination_outcome(_destination_name, {:ok, result}), do: result
+
+  defp destination_outcome(destination_name, {:exit, reason}),
+    do: {:error, {:destination_search_exited, destination_name, reason}}
+
   defp put_search_option(opts, _key, []), do: opts
   defp put_search_option(opts, _key, nil), do: opts
   defp put_search_option(opts, key, value), do: Keyword.put(opts, key, value)
