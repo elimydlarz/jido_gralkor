@@ -1,5 +1,14 @@
 # Changelog
 
+## [16.1.1] - 2026-11-07
+
+### Fixed
+- **Memory searches failed while episodes were being written.** Every graph operation ran as one `Pythonx.eval` that stayed inside PythonX's native code until the graph library finished: seconds for a search, a minute or more for an episode write waiting on its model provider. PythonX runs every evaluation and every object release on a dirty CPU scheduler (one per CPU), and after each evaluation waits at most five seconds for `Pythonx.Janitor`. Once concurrent episode writes held every dirty CPU scheduler (two on a 2-vCPU host), a search that had already finished crashed with `exited in: GenServer.call(Pythonx.Janitor, :ping, 5000) ** (EXIT) time out`. A graph operation now submits its coroutine to the shared asyncio loop and returns at once; the calling process waits in a `receive` until the loop reports completion, then reads the result, so a dirty CPU scheduler is held only while Python is running. `:graph_operation_deadline_ms` keeps its meaning: an expired deadline cancels the outstanding work and returns `{:error, :timeout}`. It is now enforced on the loop, so it also cancels work whose caller has exited.
+- **One Destination's crash took down the search's caller.** `Gralkor.Client.search/1,2` ran each Destination's search in a linked task, so a Destination search that exited instead of returning crashed the calling process, such as the agent running a `memory_search` tool call. Each Destination's search now runs unlinked under a new `Gralkor.SearchSupervisor`. One that exits makes the search return `{:error, {:destination_search_exited, destination_name, reason}}`, as any other Destination error already returned `{:error, reason}`, and the caller keeps running.
+
+### Changed
+- Requires `pythonx ~> 0.4.8` (was `~> 0.4`), the first release whose Python code can send messages to Elixir processes.
+
 ## [16.1.0] - 2026-11-06
 
 ### Added
