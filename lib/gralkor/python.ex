@@ -125,13 +125,14 @@ defmodule Gralkor.Python do
 
   @doc """
   Spin up a daemon-thread asyncio event loop and stash it on `asyncio` as
-  `_gralkor_loop` plus a `_gralkor_run(coro)` helper that submits onto it.
+  `_gralkor_loop`, plus two helpers that submit onto it: `_gralkor_submit(coro,
+  caller)`, which `run_coroutine/2` uses, and the blocking `_gralkor_run(coro)`.
 
-  `_gralkor_run` waits at most `deadline_ms`; on expiry it cancels the coroutine
-  and raises `TimeoutError`. Every call applies its own deadline, so a later
-  call can change it.
+  Both apply the graph operation deadline, `deadline_ms`: on expiry the
+  coroutine is cancelled and the caller receives `TimeoutError`. Every call
+  applies its own deadline, so a later call can change it.
 
-  Must run before any code that calls into graphiti via `asyncio._gralkor_run`.
+  Must run before any code that calls into graphiti through `run_coroutine/2`.
   The loop itself starts once per Pythonx interpreter.
 
   Why: Pythonx.eval creates a fresh event loop per `asyncio.run` call.
