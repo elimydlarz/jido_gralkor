@@ -217,6 +217,18 @@ defmodule Gralkor.Python do
   """
   @spec run_coroutine(String.t(), %{optional(String.t()) => term()}) :: Pythonx.Object.t()
   def run_coroutine(code, globals) when is_binary(code) and is_map(globals) do
+    future = await_coroutine(code, globals)
+    {result, _} = Pythonx.eval("future.result()", %{"future" => future})
+    result
+  end
+
+  @doc """
+  Like `run_coroutine/2`, but return the finished `concurrent.futures.Future`
+  instead of its result, so the caller can settle it in its own evaluation,
+  where anything it prints reaches the caller's output devices.
+  """
+  @spec await_coroutine(String.t(), %{optional(String.t()) => term()}) :: Pythonx.Object.t()
+  def await_coroutine(code, globals) when is_binary(code) and is_map(globals) do
     {coroutine, _} = Pythonx.eval(code, globals)
 
     {future, _} =
