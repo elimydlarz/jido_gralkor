@@ -173,7 +173,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     def search(destination, _operator_id, _query, opts) do
       test_pid = Application.fetch_env!(:jido_gralkor, :runtime_configuration_test_pid)
       send(test_pid, {:runtime_search, destination.name})
-      send(test_pid, {:runtime_search_lenses, destination.name, Keyword.get(opts, :lenses, [])})
+      send(test_pid, {:runtime_search_writers, destination.name, Keyword.get(opts, :writers, [])})
 
       {:ok, %{facts: [], nodes: [], episodes: []}}
     end
@@ -236,7 +236,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       send(
         test_pid,
-        {:blocked_runtime_search_lenses, destination.name, Keyword.get(opts, :lenses)}
+        {:blocked_runtime_search_writers, destination.name, Keyword.get(opts, :writers)}
       )
 
       send(test_pid, {:blocked_runtime_search, self(), destination})
@@ -944,7 +944,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       refute_receive {:blocked_runtime_search, _, _}
     end
 
-    test "and it resolves selected Lens names from that same snapshot" do
+    test "and it resolves the Lenses that included or excluded writers name from that same snapshot" do
       Application.put_env(:jido_gralkor, :destination_storage, RecordingDestinationStorage)
 
       agent_server =
@@ -960,11 +960,11 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         operator_id: "operator-one",
         query: "memory",
         destinations: ["project"],
-        lenses: ["observations"]
+        writers: ["lens:observations"]
       }
 
       assert {:ok, [%{destination: "project"}]} = Gralkor.Client.search(agent_server, request)
-      assert_receive {:runtime_search_lenses, "project", ["observations"]}
+      assert_receive {:runtime_search_writers, "project", ["lens:observations"]}
 
       assert :ok = JidoGralkor.Runtime.replace(agent_server, %{configuration | lenses: []})
 
@@ -972,14 +972,14 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         assert_raise ArgumentError, fn -> Gralkor.Client.search(agent_server, request) end
 
       assert error.message =~ "observations"
-      refute_receive {:runtime_search_lenses, _, _}
+      refute_receive {:runtime_search_writers, _, _}
 
       Application.put_env(:jido_gralkor, :destination_storage, BlockingSearchStorage)
       assert :ok = JidoGralkor.Runtime.replace(agent_server, configuration)
       search = Task.async(fn -> Gralkor.Client.search(agent_server, request) end)
 
       assert_receive {:blocked_runtime_search, blocked, %Gralkor.Destination{name: "project"}}
-      assert_receive {:blocked_runtime_search_lenses, "project", ["observations"]}
+      assert_receive {:blocked_runtime_search_writers, "project", ["lens:observations"]}
 
       assert :ok = JidoGralkor.Runtime.replace(agent_server, %{configuration | lenses: []})
       send(blocked, :continue_runtime_search)
