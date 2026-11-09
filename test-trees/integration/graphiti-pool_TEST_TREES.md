@@ -98,6 +98,8 @@ when a graph instance is requested for a group
 
 when an episode is added
   then its name combines the current millisecond timestamp with a positive monotonic unique integer, so concurrent writes remain distinguishable without claiming an episode UUID
+  and the episode records its one writer: its Lens, the Reflection its source description names, direct, or `unknown`
+  and every fact and entity the write touched records the writers of every episode it was drawn from or that mentions it, keeping writers recorded earlier
   while an embedded connection is configured
     while another episode addition is in progress
       then the graph library receives the episode only after the in-progress addition finishes
@@ -117,6 +119,7 @@ when an episode is added
     and no separate presentation-classification operation is invoked
   while an episode identifier is supplied
     then concurrent writes carrying the same identifier are serialised even when other remote writes remain concurrent
+    and writers are recorded only after durable extraction completion is recorded under the current claim
     when that identifier does not exist
       then one episode is created under that identifier through the normal extraction path
       and durable extraction completion is recorded after the normal path succeeds
@@ -220,6 +223,13 @@ when a graph instance's indexes are built on FalkorDB
   if a label carrying a stopword list also holds an index that is neither range nor full-text
     then that label's indexes are left unchanged
     and the failure is logged naming the label
+  while the graph holds episodes, facts, or entities without recorded writers
+    then each such episode records the writer its provenance names, or `unknown`
+    and each such fact and entity records the writers of its episodes
+    and the recording is logged naming the graph and how many episodes, facts, and entities it recorded
+  while every episode, fact, and entity already records its writers
+    then nothing is recorded
+    and nothing is logged
 
 when an index and constraint rebuild is requested for the whole graph
   then every group the pool holds an instance for is rebuilt, each group being its own database
