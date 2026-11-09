@@ -109,7 +109,7 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
     end
   end
 
-  describe "when in-memory Destination storage is searched with no Lenses" do
+  describe "when in-memory Destination storage is searched with no writer included" do
     test "then facts and episodes of the Destination are returned within their limits" do
       seed_writers()
 
@@ -134,32 +134,43 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
     end
   end
 
-  describe "when in-memory Destination storage is searched with Lenses" do
-    test "then only episodes written through a selected Lens are returned" do
+  describe "when in-memory Destination storage is searched with writers included" do
+    test "then only episodes written by an included writer are returned" do
       seed_writers()
-      assert {:ok, %{episodes: episodes}} = lens_search(["alpha"])
+      assert {:ok, %{episodes: episodes}} = writer_search(["lens:alpha"])
       assert Enum.map(episodes, & &1.content) == ["alpha one", "alpha two"]
       assert Enum.all?(episodes, &(&1.lens == "alpha"))
+
+      assert {:ok, %{episodes: [%{artefact: %{id: "review-id"}}]}} =
+               writer_search(["reflection:review"])
+
+      assert {:ok, %{episodes: [%{content: "direct one", writer: :direct}]}} =
+               writer_search(["direct"])
+
+      assert {:ok, %{episodes: [%{content: "old one"}]}} = writer_search(["unknown"])
+
+      assert {:ok, %{episodes: episodes}} = writer_search(["lens:*"])
+      assert Enum.map(episodes, & &1.content) == ["alpha one", "beta one", "alpha two"]
     end
 
     test "and only facts drawn from those episodes are returned" do
       seed_writers()
-      assert {:ok, %{facts: facts}} = lens_search(["alpha"])
+      assert {:ok, %{facts: facts}} = writer_search(["lens:alpha"])
       assert Enum.map(facts, & &1.fact) == ["alpha one", "alpha two"]
     end
 
     test "and no nodes are returned" do
       seed_writers()
-      assert {:ok, %{nodes: []}} = lens_search(["alpha"])
+      assert {:ok, %{nodes: []}} = writer_search(["lens:alpha"])
     end
 
-    test "but no direct write or Destination artefact contributes" do
+    test "but no episode by another writer contributes" do
       seed_writers()
-      assert {:ok, %{facts: facts, episodes: episodes}} = lens_search(["alpha"])
+      assert {:ok, %{facts: facts, episodes: episodes}} = writer_search(["lens:alpha"])
 
       refute Enum.any?(episodes, &Map.has_key?(&1, :artefact))
       refute Enum.any?(episodes, &(Map.get(&1, :writer) == :direct))
-      refute Enum.any?(facts, &(&1.fact == "direct one"))
+      refute Enum.any?(facts, &(&1.fact in ["direct one", "beta one", "old one"]))
     end
   end
 
@@ -183,15 +194,16 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
     end
 
     add_episode(%{content: "direct one", source_description: "manual", writer: :direct})
+    add_episode(%{content: "old one", source_description: "old"})
   end
 
   defp add_episode(episode),
     do: GenServer.call(Gralkor.Lens.Storage.InMemory, {:add, "observations", episode})
 
-  defp lens_search(lenses) do
+  defp writer_search(writers) do
     InMemory.search(%Destination{name: "observations"}, "operator-one", "q",
       limits: Gralkor.Search.limits(),
-      lenses: lenses
+      writers: writers
     )
   end
 
