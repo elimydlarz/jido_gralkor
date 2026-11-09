@@ -1678,7 +1678,8 @@ defmodule Gralkor.GraphitiPool do
   group this pool holds an instance for — rebuilding one group's database
   would leave every other group untouched. A group whose instance has not been
   created yet needs no rebuild: `initialise_instance/1` builds its indices the
-  moment it is.
+  moment it is. Each rebuild also records writers on every episode, fact, and
+  entity that lacks them.
   """
   @spec build_indices(GenServer.server()) :: {:ok, %{status: String.t()}} | {:error, term()}
   def build_indices(server \\ __MODULE__) do
