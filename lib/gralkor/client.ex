@@ -3,7 +3,7 @@ defmodule Gralkor.Client do
   Public entry point and adapter port for Gralkor memory.
 
   Named Lens operations use `ingest/1`; `search/1` reads registered Destinations
-  and may filter episode writers by Lens. Ingestion resolves a Lens and invokes
+  and may include or exclude writers. Ingestion resolves a Lens and invokes
   its ingestion process with a Lens-bound store. Lenses and Reflections reference
   first-class Destinations, each of which names one graph. Lenses select the
   ontology for their writes; Reflection Destination outputs select it for
