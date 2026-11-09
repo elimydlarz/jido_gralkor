@@ -39,15 +39,144 @@ defmodule Gralkor.GraphitiPool do
           return
       records, _, _ = await driver.execute_query(
           'MATCH (e:Episodic) WHERE e.uuid IN $uuids '
-          'RETURN e.uuid AS uuid, e._gralkor_writer AS writer',
+          'RETURN e.uuid AS uuid, e._gralkor_writer AS writer, e._gralkor_writers AS writers',
           uuids=[episode.uuid for episode in episodes],
       )
-      direct_ids = {record['uuid'] for record in records if record.get('writer') == 'direct'}
+      by_uuid = {record['uuid']: record for record in records}
       for episode in episodes:
-          if episode.uuid in direct_ids:
+          record = by_uuid.get(episode.uuid, {})
+          if record.get('writer') == 'direct':
               episode.__dict__['_gralkor_writer'] = 'direct'
           else:
               episode.__dict__.pop('_gralkor_writer', None)
+          episode.__dict__['_gralkor_writers'] = list(record.get('writers') or [])
+  """
+
+  # Every Episodic, RELATES_TO edge, and Entity node carries `_gralkor_writers`:
+  # an episode its one writer, an edge the writers of every episode in its
+  # `episodes`, and an entity the writers of every episode that MENTIONS it.
+  # graphiti saves nodes and edges by replacing their properties, so after each
+  # episode write the touched nodes and edges are recomputed from their
+  # episodes, which unions writers instead of overwriting them. Memory written
+  # before writers were recorded is tagged in place, in batches, when its graph
+  # instance is initialised; only elements lacking the property are touched.
+  @writer_recording """
+  def episode_writer(source_description, durable_writer=None):
+      description = source_description or ''
+      if durable_writer == 'direct' or description.endswith(' [gralkor: direct]'):
+          return 'direct'
+      marker = ' [lens: '
+      start = description.rfind(marker)
+      if start >= 0 and description.endswith(']') and description[start + len(marker):-1]:
+          return 'lens:' + description[start + len(marker):-1]
+      if description.startswith('reflection:') and description[len('reflection:'):]:
+          return description
+      return 'unknown'
+
+  GRALKOR_WRITER_UNION = '''
+  WITH gralkor_target, collect(
+    CASE WHEN gralkor_episode IS NULL THEN null
+    ELSE coalesce(gralkor_episode._gralkor_writers, ['unknown']) END
+  ) AS gralkor_lists
+  WITH gralkor_target, reduce(
+    gralkor_union = [], gralkor_writers IN gralkor_lists |
+    gralkor_union + [gralkor_writer IN gralkor_writers WHERE NOT gralkor_writer IN gralkor_union]
+  ) AS gralkor_writers
+  SET gralkor_target._gralkor_writers =
+    CASE WHEN size(gralkor_writers) = 0 THEN ['unknown'] ELSE gralkor_writers END
+  RETURN count(gralkor_target) AS tagged
+  '''
+
+  GRALKOR_EDGE_WRITERS = '''
+  WITH DISTINCT gralkor_target
+  UNWIND (
+    CASE WHEN size(coalesce(gralkor_target.episodes, [])) = 0 THEN [null]
+    ELSE gralkor_target.episodes END
+  ) AS gralkor_episode_uuid
+  OPTIONAL MATCH (gralkor_episode:Episodic {uuid: gralkor_episode_uuid})
+  ''' + GRALKOR_WRITER_UNION
+
+  GRALKOR_NODE_WRITERS = '''
+  WITH DISTINCT gralkor_target
+  OPTIONAL MATCH (gralkor_episode:Episodic)-[:MENTIONS]->(gralkor_target)
+  ''' + GRALKOR_WRITER_UNION
+
+  def records_writers(driver):
+      from graphiti_core.driver.driver import GraphProvider
+      return getattr(driver, 'provider', None) == GraphProvider.FALKORDB
+
+  async def record_writers(driver, episode_uuid, writer, nodes, edges):
+      if not records_writers(driver):
+          return
+      await driver.execute_query(
+          'MATCH (e:Episodic {uuid: $uuid}) SET e._gralkor_writers = [$writer] RETURN e.uuid AS uuid',
+          uuid=episode_uuid,
+          writer=writer,
+      )
+      edge_refs = [
+          {'uuid': edge.uuid, 'source': edge.source_node_uuid, 'target': edge.target_node_uuid}
+          for edge in edges
+      ]
+      if edge_refs:
+          await driver.execute_query(
+              '''
+              UNWIND $edges AS gralkor_ref
+              MATCH (:Entity {uuid: gralkor_ref.source})-[gralkor_target:RELATES_TO {uuid: gralkor_ref.uuid}]->(:Entity {uuid: gralkor_ref.target})
+              ''' + GRALKOR_EDGE_WRITERS,
+              edges=edge_refs,
+          )
+      node_uuids = list(dict.fromkeys(node.uuid for node in nodes))
+      if node_uuids:
+          await driver.execute_query(
+              '''
+              UNWIND $uuids AS gralkor_uuid
+              MATCH (gralkor_target:Entity {uuid: gralkor_uuid})
+              ''' + GRALKOR_NODE_WRITERS,
+              uuids=node_uuids,
+          )
+
+  async def tag_in_batches(driver, cypher):
+      tagged = 0
+      while True:
+          records, _, _ = await driver.execute_query(cypher, batch=5000)
+          count = records[0]['tagged'] if records else 0
+          if not count:
+              return tagged
+          tagged += count
+
+  async def backfill_writers(driver):
+      if not records_writers(driver):
+          return {'episodes': 0, 'facts': 0, 'entities': 0}
+      records, _, _ = await driver.execute_query(
+          'MATCH (e:Episodic) WHERE e._gralkor_writers IS NULL AND e.uuid IS NOT NULL '
+          'RETURN e.uuid AS uuid, e.source_description AS source_description, e._gralkor_writer AS writer'
+      )
+      rows = [
+          {'uuid': record['uuid'], 'writer': episode_writer(record['source_description'], record['writer'])}
+          for record in records
+      ]
+      for start in range(0, len(rows), 1000):
+          await driver.execute_query(
+              'UNWIND $rows AS row MATCH (e:Episodic {uuid: row.uuid}) SET e._gralkor_writers = [row.writer]',
+              rows=rows[start:start + 1000],
+          )
+      facts = await tag_in_batches(
+          driver,
+          '''
+          MATCH (:Entity)-[gralkor_target:RELATES_TO]->(:Entity)
+          WHERE gralkor_target._gralkor_writers IS NULL
+          WITH gralkor_target LIMIT $batch
+          ''' + GRALKOR_EDGE_WRITERS,
+      )
+      entities = await tag_in_batches(
+          driver,
+          '''
+          MATCH (gralkor_target:Entity)
+          WHERE gralkor_target._gralkor_writers IS NULL
+          WITH gralkor_target LIMIT $batch
+          ''' + GRALKOR_NODE_WRITERS,
+      )
+      return {'episodes': len(rows), 'facts': facts, 'entities': entities}
   """
 
   @pyproject_path Path.join([__DIR__, "..", "..", "priv", "python", "pyproject.toml"])
