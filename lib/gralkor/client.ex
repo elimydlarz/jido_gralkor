@@ -13,10 +13,10 @@ defmodule Gralkor.Client do
   without waiting for production and reports its terminal result through the
   supplied callback. With empty selectors, search runs every
   accessible registered Destination concurrently and returns episodes from
-  direct, Lens, and Reflection writers. Destination and Lens names are ORed within
-  their respective selectors and ANDed across them; Lens filters restrict
-  episodes, facts, and nodes before ranking, and Lens exclusions leave out what
-  the excluded Lenses alone wrote, also before ranking (see `Gralkor.Search`). Each
+  direct, Lens, and Reflection writers. Destinations and included writers are
+  each ORed and ANDed with each other; included writers restrict episodes,
+  facts, and nodes before ranking, and excluded writers leave out what only
+  they produced, also before ranking (see `Gralkor.Search`). Each
   result identifies its Destination and carries its facts, nodes, and episodes.
   Direct episodes retain their source without Lens or Reflection authorship;
   real Lens and Reflection records retain their named writer. Historical
