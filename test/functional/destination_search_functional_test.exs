@@ -306,7 +306,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert {:ok, [%{episodes: episodes}]} = writer_search(["lens:first-alpha"])
       assert [%{content: "amber alpha memory", lens: "first-alpha"}] = episodes
 
-      assert {:ok, [%{episodes: episodes}]} = writer_search(["lens:first-alpha", "lens:first-beta"])
+      assert {:ok, [%{episodes: episodes}]} =
+               writer_search(["lens:first-alpha", "lens:first-beta"])
 
       assert episode_contents(episodes) == ["amber alpha memory", "amber beta memory"]
 
@@ -526,7 +527,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     test "and entity and edge type filters further restrict the remaining results" do
       start_native_graph() |> seed_lens_graph() |> record_seeded_writers()
 
-      assert {:ok, [%{facts: facts}]} = exclusion_search(["lens:first-beta"], edge_types: ["OWNS"])
+      assert {:ok, [%{facts: facts}]} =
+               exclusion_search(["lens:first-beta"], edge_types: ["OWNS"])
 
       assert fact_texts(facts) == [
                "amber alpha project owns amber alpha lesson",
@@ -645,7 +647,11 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
       for {elapsed, {:ok, [%{facts: facts, episodes: episodes}]}} <- [included, excluded] do
         assert length(facts) == 50
-        assert Enum.all?(facts, fn fact -> Enum.all?(fact.sources, &(&1[:lens] == "first-alpha")) end)
+
+        assert Enum.all?(facts, fn fact ->
+                 Enum.all?(fact.sources, &(&1[:lens] == "first-alpha"))
+               end)
+
         assert [_ | _] = episodes
         assert Enum.all?(episodes, &(&1[:lens] == "first-alpha"))
         assert elapsed <= elem(unfiltered, 0) * 3 + 2_000
@@ -1581,7 +1587,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
   defp seed_unrecorded_memory(%{database: database} = graph) do
     create_existing_indexes(database)
 
-    artefact = Jason.encode!(%{id: "amber-review", payload: %{"lesson" => "amber artefact memory"}})
+    artefact =
+      Jason.encode!(%{id: "amber-review", payload: %{"lesson" => "amber artefact memory"}})
 
     Pythonx.eval(
       """

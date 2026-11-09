@@ -2459,9 +2459,15 @@ defmodule Gralkor.GraphitiPoolTest do
 
     test "and each admission is decided from the writers recorded on the edge, node, or episode itself, without a list of record identifiers",
          %{instance: instance} do
-      queries = filter_queries(%{"writers" => ["lens:alpha", "reflection:*"]}, "WriterSearchFilters")
+      queries =
+        filter_queries(%{"writers" => ["lens:alpha", "reflection:*"]}, "WriterSearchFilters")
 
-      for {kind, variable} <- [{"node", "n"}, {"falkor_node", "n"}, {"edge", "e"}, {"falkor_edge", "e"}] do
+      for {kind, variable} <- [
+            {"node", "n"},
+            {"falkor_node", "n"},
+            {"edge", "e"},
+            {"falkor_edge", "e"}
+          ] do
         assert Enum.any?(queries[kind]["queries"], &(&1 =~ "#{variable}._gralkor_writers"))
 
         assert queries[kind]["params"] == %{
@@ -2475,13 +2481,18 @@ defmodule Gralkor.GraphitiPoolTest do
       assert query["gralkor_writers"] == ["lens:alpha"]
       refute Enum.any?(Map.keys(query), &(&1 =~ "uuid"))
 
-      graph_query(instance, "MATCH (n:Entity {uuid: 'beta-node'}) SET n._gralkor_writers = ['lens:alpha']")
+      graph_query(
+        instance,
+        "MATCH (n:Entity {uuid: 'beta-node'}) SET n._gralkor_writers = ['lens:alpha']"
+      )
 
       assert writer_search(instance, %{"writers" => ["lens:alpha"]})["nodes"] ==
                ["alpha-node", "beta-node", "shared-node"]
     end
 
-    test "and every admission is applied inside its query, before its limit", %{instance: instance} do
+    test "and every admission is applied inside its query, before its limit", %{
+      instance: instance
+    } do
       found = writer_search(instance, %{"writers" => ["lens:alpha"]}, 1)
 
       assert [edge] = found["edges"]
@@ -2548,9 +2559,15 @@ defmodule Gralkor.GraphitiPoolTest do
 
     test "and each rejection is decided from the writers recorded on the edge, node, or episode itself, without a list of record identifiers",
          %{instance: instance} do
-      queries = filter_queries(%{"excluded_writers" => ["direct", "lens:*"]}, "WriterSearchFilters")
+      queries =
+        filter_queries(%{"excluded_writers" => ["direct", "lens:*"]}, "WriterSearchFilters")
 
-      for {kind, variable} <- [{"node", "n"}, {"falkor_node", "n"}, {"edge", "e"}, {"falkor_edge", "e"}] do
+      for {kind, variable} <- [
+            {"node", "n"},
+            {"falkor_node", "n"},
+            {"edge", "e"},
+            {"falkor_edge", "e"}
+          ] do
         assert Enum.any?(queries[kind]["queries"], &(&1 =~ "#{variable}._gralkor_writers"))
 
         assert queries[kind]["params"] == %{
@@ -2573,7 +2590,9 @@ defmodule Gralkor.GraphitiPoolTest do
                ["direct-edge", "shared-edge"]
     end
 
-    test "and every rejection is applied inside its query, before its limit", %{instance: instance} do
+    test "and every rejection is applied inside its query, before its limit", %{
+      instance: instance
+    } do
       found = writer_search(instance, %{"excluded_writers" => ["lens:beta", "direct"]}, 1)
 
       assert [edge] = found["edges"]
@@ -2644,7 +2663,11 @@ defmodule Gralkor.GraphitiPoolTest do
         }
     run()
     """
-    |> Gralkor.Python.run_coroutine(%{"g" => instance, "filter_kwargs" => filter_kwargs, "limit" => limit})
+    |> Gralkor.Python.run_coroutine(%{
+      "g" => instance,
+      "filter_kwargs" => filter_kwargs,
+      "limit" => limit
+    })
     |> Pythonx.decode()
   end
 

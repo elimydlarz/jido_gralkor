@@ -276,8 +276,7 @@ defmodule Gralkor.Client do
     max_results:
       "every Destination returns at most 50 facts, 20 nodes, and 15 episodes " <>
         "(Gralkor.Search.limits/0); remove max_results",
-    lenses:
-      "include writers instead: replace lenses: [\"name\"] with writers: [\"lens:name\"]",
+    lenses: "include writers instead: replace lenses: [\"name\"] with writers: [\"lens:name\"]",
     excluded_lenses:
       "exclude writers instead: replace excluded_lenses: [\"name\"] with " <>
         "excluded_writers: [\"lens:name\"]",
