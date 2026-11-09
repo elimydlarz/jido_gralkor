@@ -357,6 +357,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                   [relation],
                   None,
               )
+              from graphiti_core.graphiti import AddEpisodeResults
               return AddEpisodeResults(episode=episode, episodic_edges=[mention], nodes=[subject, detail], edges=[relation], communities=[], community_edges=[])
 
           async def search_(self, query, config=None, group_ids=None, search_filter=None):
@@ -742,6 +743,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                       [],
                       None,
                   )
+                  from graphiti_core.graphiti import AddEpisodeResults
                   return AddEpisodeResults(episode=episode, episodic_edges=[], nodes=[], edges=[], communities=[], community_edges=[])
 
               async def search_(self, query, config=None, group_ids=None, search_filter=None):
@@ -1122,6 +1124,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             self.extractions += 1
             episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
             await episode.save(self.driver)
+            from graphiti_core.graphiti import AddEpisodeResults
             return AddEpisodeResults(episode=episode, episodic_edges=[], nodes=[], edges=[], communities=[], community_edges=[])
 
         async def search_(self, query, config=None, group_ids=None, search_filter=None):
@@ -1289,6 +1292,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                           [relation],
                           None,
                       )
+                      from graphiti_core.graphiti import AddEpisodeResults
                       return AddEpisodeResults(episode=episode, episodic_edges=[mention], nodes=[left, right], edges=[relation], communities=[], community_edges=[])
 
                   await episode.save(self.driver)
@@ -1300,6 +1304,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                       [],
                       None,
                   )
+                  from graphiti_core.graphiti import AddEpisodeResults
                   return AddEpisodeResults(episode=episode, episodic_edges=[], nodes=[], edges=[], communities=[], community_edges=[])
 
           SharedClaimGraphitiContract()
