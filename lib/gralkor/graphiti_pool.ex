@@ -1526,7 +1526,7 @@ defmodule Gralkor.GraphitiPool do
 
                         try:
                             written = await g.add_episode(**kwargs)
-                            await record_writers(g.driver, writer, written)
+                            await record_writers(getattr(g, 'driver', None), writer, written)
                             await record_extraction_complete()
                             return 'created'
                         finally:
@@ -1546,7 +1546,7 @@ defmodule Gralkor.GraphitiPool do
 
                 try:
                     written = await g.add_episode(**kwargs)
-                    await record_writers(g.driver, writer, written)
+                    await record_writers(getattr(g, 'driver', None), writer, written)
                     return 'created'
                 finally:
                     if token is not None:
