@@ -4,11 +4,10 @@ defmodule Gralkor.Search do
 
   A search names the operator, the query, and optionally the Destinations to
   read (`destinations`, default every accessible registered Destination), the
-  Lenses whose writes to read (`lenses`, default every writer) or to leave out
-  (`excluded_lenses`, default none), and ontology
-  filters (`entity_types`, `edge_types`, default no filter), and the
-  per-Destination result `limits` (default `limits/0`). The packaged
-  `personal` Destination resolves only to the current `operator_id`'s graph.
+  writers whose memory to read (`writers`, default every writer) or to leave
+  out (`excluded_writers`, default none), and ontology filters (`entity_types`,
+  `edge_types`, default no filter). The packaged `personal` Destination
+  resolves only to the current `operator_id`'s graph.
 
   Every search returns everything relevant: one Graphiti search per selected
   Destination ranks that Destination's facts, nodes, and episodes together.
@@ -18,12 +17,7 @@ defmodule Gralkor.Search do
       %{destination: name, facts: [fact], nodes: [node], episodes: [episode]}
 
   Each kind keeps Graphiti's relevance order and is capped per Destination by
-  `limits`, a map of exactly `:facts`, `:nodes`, and `:episodes` to positive
-  integers. It defaults to `limits/0`: twenty facts, twenty nodes, and five
-  episodes (episodes are whole source documents, so fewer are returned). Any
-  other `limits` value raises `ArgumentError` before any Destination is
-  searched. To raise one kind and keep the rest, write
-  `limits: %{Gralkor.Search.limits() | episodes: 10}`.
+  `limits/0`: fifty facts, twenty nodes, and fifteen episodes.
 
   * A fact carries `fact`, its `created_at`, `valid_at`, `invalid_at`, and
     `expired_at` timestamps, its `relationship` name, its `source_node` and
@@ -45,57 +39,63 @@ defmodule Gralkor.Search do
   episodes. Use `JidoGralkor.MemorySearchPresentation.sections/1` explicitly
   for readable presentation.
 
-  ## Lens selection
+  ## Writers
 
-  `lenses` names registered Lenses (ORed). It neither adds nor narrows
-  Destinations: every selected Destination is still searched, and each returns
-  only what the selected Lenses wrote there:
+  Every episode is written by exactly one writer, every fact is produced by
+  the writers of every episode it was drawn from, and every entity by the
+  writers of every episode that mentions it. A writer is named as:
 
-  * episodes whose writer is a selected Lens;
-  * facts drawn from such an episode; each fact's `sources` keep only
-    selected-Lens episodes;
-  * nodes mentioned by such an episode.
+  * `"lens:<name>"` — the Lens of that name;
+  * `"reflection:<name>"` — the Reflection of that name, whose output is stored
+    in memory;
+  * `"direct"` — direct capture and direct memory addition;
+  * `"unknown"` — memory whose writer could not be determined;
+  * `"lens:*"` — every Lens;
+  * `"reflection:*"` — every Reflection.
 
-  Direct writes, other Lenses, and Reflection artefacts never contribute. On
-  Graphiti every restriction is applied inside the graph queries, before
-  ranking and the per-Destination limits, so other writers cannot crowd a
-  Lens's results out. `entity_types` and `edge_types` restrict the Lens's
-  results further. An unknown, blank, or non-list Lens selection raises
-  `ArgumentError` before any Destination is searched.
+  Writers neither add nor narrow Destinations: every selected Destination is
+  still searched.
 
-  ## Lens exclusion
+  `writers` keeps only what an included writer produced: episodes it wrote,
+  facts drawn from such an episode (each fact's `sources` keep only included
+  writers' episodes), and entities such an episode mentions.
 
-  `excluded_lenses` names registered Lenses whose writes to leave out while
-  keeping every other writer. Like `lenses`, it neither adds nor narrows
-  Destinations; each excluded Lens's own Destination is still searched. Within
-  each Destination:
+  `excluded_writers` leaves out episodes an excluded writer wrote, and facts
+  and entities produced only by excluded writers; a fact or entity another
+  writer also produced stays, and fact `sources` omit excluded writers'
+  episodes. Supplied together, a result is returned only when an included
+  writer produced it and a writer that is not excluded produced it.
 
-  * episodes whose writer is an excluded Lens are left out;
-  * a fact is left out only when every episode it was drawn from is such an
-    episode; a fact another writer also produced stays, and its `sources` omit
-    the excluded episodes;
-  * a node is left out only when every episode mentioning it is such an
-    episode, so entities other writers also mention stay.
+  On Graphiti every writer restriction is decided from the writers recorded on
+  each episode, fact, and entity, inside the graph queries before ranking and
+  the per-Destination limits, so other writers cannot crowd a writer's results
+  out and a filtered search takes about as long as an unfiltered one. Memory
+  written before writers were recorded is given its writers, from its
+  episodes' provenance, the first time its Destination is used.
 
-  Direct writes, other Lenses, Reflection artefacts, and historical unmarked
-  episodes remain. On Graphiti the exclusions are applied inside the graph
-  queries, before ranking and the per-Destination limits, so an excluded Lens
-  cannot take a result place. `entity_types` and `edge_types` restrict what
-  remains. Supplying both `lenses` and `excluded_lenses` raises
-  `ArgumentError`, as does an unknown, blank, or non-list exclusion, before any
-  Destination is searched.
+  Each writer must be `"direct"`, `"unknown"`, `"lens:*"`, `"reflection:*"`,
+  `"lens:"` naming a registered Lens, or `"reflection:"` with a non-blank name;
+  anything else raises `ArgumentError`, naming whether it was included or
+  excluded and the value, before any Destination is searched.
 
-  ## Removed in 12.0.0
+  ## Removed fields
 
-  `result_type`, `artefact_id`, and `max_results` remain struct keys only so
-  that supplying one fails loudly: `Gralkor.Client.search/1,2` raises
-  `ArgumentError` with migration guidance when any of them is set. (`lenses`,
-  removed in 12.0.0, returned in 13.0.0.)
+  `result_type`, `artefact_id`, and `max_results` (removed in 12.0.0) and
+  `lenses`, `excluded_lenses`, and `limits` (removed in 17.0.0) remain struct
+  keys only so that supplying one fails loudly: `Gralkor.Client.search/1,2`
+  raises `ArgumentError` with migration guidance when any of them is set.
   """
 
-  @limits %{facts: 20, nodes: 20, episodes: 5}
+  @limits %{facts: 50, nodes: 20, episodes: 15}
 
-  @removed_fields [:result_type, :artefact_id, :max_results]
+  @removed_fields %{
+    result_type: "12.0.0",
+    artefact_id: "12.0.0",
+    max_results: "12.0.0",
+    lenses: "17.0.0",
+    excluded_lenses: "17.0.0",
+    limits: "17.0.0"
+  }
 
   @type fact :: %{
           required(:fact) => String.t(),
@@ -130,41 +130,44 @@ defmodule Gralkor.Search do
     :operator_id,
     :query,
     destinations: [],
-    lenses: [],
-    excluded_lenses: [],
+    writers: [],
+    excluded_writers: [],
     entity_types: [],
     edge_types: [],
-    limits: @limits,
     result_type: nil,
     artefact_id: nil,
-    max_results: nil
+    max_results: nil,
+    lenses: nil,
+    excluded_lenses: nil,
+    limits: nil
   ]
 
   @typedoc """
   One search request. Empty `destinations` means every accessible registered
-  Destination; empty `lenses` means every writer; empty `excluded_lenses`
-  means nothing is excluded, and `lenses` and `excluded_lenses` cannot both be
-  non-empty; empty `entity_types` and
-  `edge_types` mean no filter. The removed keys must stay `nil`.
+  Destination; empty `writers` means every writer; empty `excluded_writers`
+  means nothing is excluded; empty `entity_types` and `edge_types` mean no
+  filter. The removed keys must stay `nil`.
   """
   @type t :: %__MODULE__{
           operator_id: String.t(),
           query: String.t(),
           destinations: [String.t()],
-          lenses: [String.t()],
-          excluded_lenses: [String.t()],
+          writers: [String.t()],
+          excluded_writers: [String.t()],
           entity_types: [String.t()],
           edge_types: [String.t()],
-          limits: limits(),
           result_type: nil,
           artefact_id: nil,
-          max_results: nil
+          max_results: nil,
+          lenses: nil,
+          excluded_lenses: nil,
+          limits: nil
         }
 
   @typedoc "The most facts, nodes, and episodes one Destination returns."
   @type limits :: %{facts: pos_integer(), nodes: pos_integer(), episodes: pos_integer()}
 
-  @doc "The default per-Destination result limits: twenty facts, twenty nodes, five episodes."
+  @doc "The per-Destination result limits: fifty facts, twenty nodes, fifteen episodes."
   @spec limits() :: limits()
   def limits, do: @limits
 
