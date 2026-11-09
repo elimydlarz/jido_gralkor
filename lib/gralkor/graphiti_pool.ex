@@ -105,17 +105,17 @@ defmodule Gralkor.GraphitiPool do
       from graphiti_core.driver.driver import GraphProvider
       return getattr(driver, 'provider', None) == GraphProvider.FALKORDB
 
-  async def record_writers(driver, episode_uuid, writer, nodes, edges):
+  async def record_writers(driver, writer, written):
       if not records_writers(driver):
           return
       await driver.execute_query(
           'MATCH (e:Episodic {uuid: $uuid}) SET e._gralkor_writers = [$writer] RETURN e.uuid AS uuid',
-          uuid=episode_uuid,
+          uuid=written.episode.uuid,
           writer=writer,
       )
       edge_refs = [
           {'uuid': edge.uuid, 'source': edge.source_node_uuid, 'target': edge.target_node_uuid}
-          for edge in edges
+          for edge in written.edges
       ]
       if edge_refs:
           await driver.execute_query(
@@ -125,7 +125,7 @@ defmodule Gralkor.GraphitiPool do
               ''' + GRALKOR_EDGE_WRITERS,
               edges=edge_refs,
           )
-      node_uuids = list(dict.fromkeys(node.uuid for node in nodes))
+      node_uuids = list(dict.fromkeys(node.uuid for node in written.nodes))
       if node_uuids:
           await driver.execute_query(
               '''
