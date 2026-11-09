@@ -38,12 +38,9 @@ defmodule JidoGralkor.Runtime do
 
   def lenses!(owner, names), do: fetch_definitions!(owner, :lenses, names)
 
-  def resolve_search!(owner, lens_names, destination_names) do
-    {lenses, destinations, []} = resolve_search!(owner, lens_names, destination_names, [])
-    {lenses, destinations}
-  end
-
-  def resolve_search!(owner, lens_names, destination_names, excluded_lens_names) do
+  def resolve_search!(owner, writers, destination_names, excluded_writers) do
+    lens_names = Gralkor.Client.writer_lens_names(writers)
+    excluded_lens_names = Gralkor.Client.writer_lens_names(excluded_writers)
     Enum.each(lens_names, &reject_retired_selection!(:lenses, &1))
     Enum.each(excluded_lens_names, &reject_retired_selection!(:lenses, &1))
     Enum.each(destination_names, &reject_retired_selection!(:destinations, &1))
