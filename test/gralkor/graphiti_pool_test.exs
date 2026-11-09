@@ -2707,11 +2707,8 @@ defmodule Gralkor.GraphitiPoolTest do
       Pythonx.eval(
         """
         from datetime import datetime, timezone
+        from graphiti_core.driver.driver import GraphProvider
         from graphiti_core.nodes import EpisodeType
-
-        def _text(value):
-            return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
-
 
         class _Episode:
             def __init__(self, uuid, source, source_description, content=""):
@@ -2725,6 +2722,8 @@ defmodule Gralkor.GraphitiPoolTest do
                 return [driver.episodes[uuid] for uuid in uuids]
 
         class _EntityDriver:
+            provider = GraphProvider.FALKORDB
+
             def __init__(self, recorded):
                 self.graph_operations_interface = _GraphOperations()
                 self.recorded = recorded
@@ -2738,19 +2737,12 @@ defmodule Gralkor.GraphitiPoolTest do
                     "parse-fn": "parse/1",
                     "render-fn": "render/2",
                 }
+                self.writers = {"episode-1": ["direct"], "lens-episode": ["lens:alpha"]}
                 self._gralkor_completed_episode_uuids = {"complete"}
 
-            def lens_records(self, key, query, params):
-                self.recorded["lens_queries"].append({"query": query, **params})
-                return ([{"uuid": uuid} for uuid in scope.get(key, [])], None, None)
-
             async def execute_query(self, query, **params):
-                if "RELATES_TO" in query:
-                    return self.lens_records("edges", query, params)
-                if "MENTIONS" in query:
-                    return self.lens_records("mentioned", query, params)
-                if "ENDS WITH" in query:
-                    return self.lens_records("episodes", query, params)
+                if "_gralkor_writers AS writers" in query:
+                    return ([{"uuid": uuid, "writer": None, "writers": self.writers.get(uuid)} for uuid in params["uuids"]], None, None)
                 if "_gralkor_extraction_complete" in query:
                     return ([{"uuid": uuid} for uuid in params["uuids"] if uuid in self._gralkor_completed_episode_uuids], None, None)
                 return ([{"uuid": uuid, "name": self.entities[uuid]} for uuid in params["uuids"] if uuid in self.entities], None, None)
@@ -2765,7 +2757,7 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.valid_at = datetime(2024, 1, 2, tzinfo=timezone.utc)
                 self.invalid_at = None
                 self.expired_at = None
-                self.episodes = ["episode-1", "lens-episode"] if scope is not None else ["episode-1"]
+                self.episodes = ["episode-1", "lens-episode"] if two_writers else ["episode-1"]
 
         class _Node:
             def __init__(self, name, summary, attributes):
@@ -2781,7 +2773,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
         class _FakeGraphiti:
             def __init__(self):
-                self.recorded = {"calls": 0, "lens_queries": []}
+                self.recorded = {"calls": 0}
                 self.driver = _EntityDriver(self.recorded)
 
             async def search_(self, query, config=None, group_ids=None, search_filter=None):
@@ -2832,7 +2824,7 @@ defmodule Gralkor.GraphitiPoolTest do
           "with_edges" => Keyword.get(options, :edges, true),
           "with_nodes" => Keyword.get(options, :nodes, true),
           "with_reflections" => Keyword.get(options, :reflections, false),
-          "lens_scope" => Keyword.get(options, :lens_scope)
+          "two_writers" => Keyword.get(options, :two_writers, false)
         }
       )
 
