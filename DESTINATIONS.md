@@ -239,9 +239,10 @@ Each section has its own character limit, and no limit applies across sections: 
 ### Migrating from 11.x search
 
 - `result_type` is gone: every search returns facts, nodes, and episodes per Destination. Replace `result.fact` / `result.node` / `result.episode` (one flat attributed list) with `result.facts` / `result.nodes` / `result.episodes` inside each Destination map.
-- `lenses` was removed in 12.0.0 and returned in 13.0.0 with the same meaning: only what the selected Lenses wrote, filtered before ranking. It now restricts facts, nodes, and episodes together.
+- `lenses` was removed in 12.0.0, returned in 13.0.0, and was removed again in 17.0.0 with `excluded_lenses`: include `writers: ["lens:<name>"]` or exclude `excluded_writers: ["lens:<name>"]` instead (see Writers above).
 - `result_type: :artefacts` and `artefact_id` are gone: Reflection artefacts arrive whole in `episodes` as `artefact: %{id:, payload:}`; match the id there.
 - `max_results` is gone: every Destination returns at most 50 facts, 20 nodes, and 15 episodes (`Gralkor.Search.limits/0`).
+- `limits` (added in 16.1.0) was removed in 17.0.0: every Destination returns at most 50 facts, 20 nodes, and 15 episodes.
 - Setting any removed field raises `ArgumentError` naming the field with this guidance.
 - `memory_search` lost its `lenses` parameter; keep `destinations`. Read `action_result.sections`, each `%{heading:, text:}`; treat each `text` as readable text and never `Jason.decode!/1` it.
 
