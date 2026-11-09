@@ -954,12 +954,15 @@ defmodule Gralkor.GraphitiPool do
             from graphiti_core.errors import NodeNotFoundError
             import graphiti_core.graphiti as graphiti_module
             from graphiti_core.nodes import EpisodeType, EpisodicNode
+
+            #{@writer_recording}
             c = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
             s = source.decode('utf-8') if isinstance(source, (bytes, bytearray)) else source
             n = name.decode('utf-8') if isinstance(name, (bytes, bytearray)) else name
             gid = group.decode('utf-8') if isinstance(group, (bytes, bytearray)) else group
             sk = source_kind.decode('utf-8') if isinstance(source_kind, (bytes, bytearray)) else source_kind
             instructions = extraction_instructions.decode('utf-8') if isinstance(extraction_instructions, (bytes, bytearray)) else extraction_instructions
+            writer = episode_writer(s, 'direct' if direct_writer else None)
             episode_type = {
               'conversation': EpisodeType.message,
               'structured_record': EpisodeType.json,
@@ -1522,7 +1525,8 @@ defmodule Gralkor.GraphitiPool do
                         ))
 
                         try:
-                            await g.add_episode(**kwargs)
+                            written = await g.add_episode(**kwargs)
+                            await record_writers(g.driver, writer, written)
                             await record_extraction_complete()
                             return 'created'
                         finally:
@@ -1541,7 +1545,8 @@ defmodule Gralkor.GraphitiPool do
                     )
 
                 try:
-                    await g.add_episode(**kwargs)
+                    written = await g.add_episode(**kwargs)
+                    await record_writers(g.driver, writer, written)
                     return 'created'
                 finally:
                     if token is not None:
