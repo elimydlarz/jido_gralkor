@@ -513,9 +513,7 @@ defmodule Gralkor.GraphitiPool do
                   "_gralkor_writer": getattr(episodes_by_id[episode_id], '_gralkor_writer', None),
               }
               for episode_id in (getattr(edge, "episodes", None) or [])
-              if episode_id in episodes_by_id
-              and (not lens_names or (episodes_by_id[episode_id].source_description or "").endswith(lens_suffixes))
-              and not (excluded_suffixes and (episodes_by_id[episode_id].source_description or "").endswith(excluded_suffixes))
+              if episode_id in episodes_by_id and admitted(episodes_by_id[episode_id])
           ]
           if sources:
               fact["sources"] = sources
