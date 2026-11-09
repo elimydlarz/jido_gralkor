@@ -274,15 +274,23 @@ defmodule Gralkor.Client do
       "Reflection artefacts arrive whole as episodes carrying artefact: %{id:, payload:}; " <>
         "remove artefact_id and match the artefact id in the returned episodes",
     max_results:
-      "set per-Destination limits with limits: %{facts:, nodes:, episodes:} " <>
-        "(default Gralkor.Search.limits/0: 20 facts, 20 nodes, 5 episodes); remove max_results"
+      "every Destination returns at most 50 facts, 20 nodes, and 15 episodes " <>
+        "(Gralkor.Search.limits/0); remove max_results",
+    lenses:
+      "include writers instead: replace lenses: [\"name\"] with writers: [\"lens:name\"]",
+    excluded_lenses:
+      "exclude writers instead: replace excluded_lenses: [\"name\"] with " <>
+        "excluded_writers: [\"lens:name\"]",
+    limits:
+      "every Destination returns at most 50 facts, 20 nodes, and 15 episodes " <>
+        "(Gralkor.Search.limits/0); remove limits"
   }
 
   defp validate_search_request!(%Search{} = request) do
-    Enum.each(Search.removed_fields(), fn field ->
+    Enum.each(Search.removed_fields(), fn {field, version} ->
       unless is_nil(Map.fetch!(request, field)) do
         raise ArgumentError,
-              "Gralkor.Search field #{inspect(field)} was removed in 12.0.0 " <>
+              "Gralkor.Search field #{inspect(field)} was removed in #{version} " <>
                 "(got #{inspect(Map.fetch!(request, field))}): " <>
                 Map.fetch!(@removed_search_guidance, field)
       end
@@ -290,29 +298,72 @@ defmodule Gralkor.Client do
 
     validate_type_filter!(:entity_types, request.entity_types)
     validate_type_filter!(:edge_types, request.edge_types)
-    validate_limits!(request.limits)
-    validate_lens_selection_or_exclusion!(request.lenses, request.excluded_lenses)
   end
 
-  defp validate_limits!(%{facts: facts, nodes: nodes, episodes: episodes} = limits)
-       when map_size(limits) == 3 and is_integer(facts) and facts > 0 and is_integer(nodes) and
-              nodes > 0 and is_integer(episodes) and episodes > 0,
-       do: :ok
+  @writer_selectors ["direct", "unknown", "lens:*", "reflection:*"]
 
-  defp validate_limits!(limits) do
+  defp validate_writers!(kind, writers) when is_list(writers) do
+    Enum.each(writers, &validate_writer!(kind, &1))
+  end
+
+  defp validate_writers!(kind, writers) do
     raise ArgumentError,
-          "Gralkor.Search :limits must map exactly :facts, :nodes, and :episodes to " <>
-            "positive integers, got #{inspect(limits)}"
+          "search #{kind} writers must be a list, got #{inspect(writers)}"
   end
 
-  defp validate_lens_selection_or_exclusion!([_ | _] = lenses, [_ | _] = excluded_lenses) do
-    raise ArgumentError,
-          "Gralkor.Search cannot both select Lenses (:lenses #{inspect(lenses)}) and " <>
-            "exclude Lenses (:excluded_lenses #{inspect(excluded_lenses)}); a Lens selection " <>
-            "already leaves out every other writer, so supply only one of them"
+  defp validate_writer!(_kind, writer) when writer in @writer_selectors, do: :ok
+
+  defp validate_writer!(kind, "lens:" <> name = writer) do
+    if String.trim(name) == "", do: reject_writer!(kind, writer, "no Lens is named")
   end
 
-  defp validate_lens_selection_or_exclusion!(_lenses, _excluded_lenses), do: :ok
+  defp validate_writer!(kind, "reflection:" <> name = writer) do
+    if String.trim(name) == "", do: reject_writer!(kind, writer, "no Reflection is named")
+  end
+
+  defp validate_writer!(kind, writer) do
+    reject_writer!(
+      kind,
+      writer,
+      "a writer is \"direct\", \"unknown\", \"lens:*\", \"reflection:*\", " <>
+        "\"lens:<registered Lens>\", or \"reflection:<name>\""
+    )
+  end
+
+  defp reject_writer!(kind, writer, reason) do
+    raise ArgumentError, "invalid #{kind} writer #{inspect(writer)}: #{reason}"
+  end
+
+  defp resolve_writers!(kind, writers, lens) do
+    validate_writers!(kind, writers)
+
+    writers
+    |> Enum.map(fn
+      "lens:*" = writer ->
+        writer
+
+      "lens:" <> name = writer ->
+        case resolve_lens(kind, writer, name, lens) do
+          %Lens{name: resolved} -> "lens:" <> resolved
+          nil -> reject_writer!(kind, writer, "unknown Lens #{inspect(name)}")
+        end
+
+      writer ->
+        writer
+    end)
+    |> Enum.uniq()
+  end
+
+  defp resolve_lens(kind, writer, name, lens) do
+    lens.(name)
+  rescue
+    error in ArgumentError -> reject_writer!(kind, writer, Exception.message(error))
+  end
+
+  @doc false
+  def writer_lens_names(writers) when is_list(writers) do
+    for "lens:" <> name <- writers, name != "*", do: name
+  end
 
   defp validate_type_filter!(field, values) when is_list(values) do
     Enum.each(values, fn
