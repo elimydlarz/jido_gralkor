@@ -1787,7 +1787,7 @@ defmodule Gralkor.GraphitiPool do
   @doc false
   @spec initialise_instance(any()) :: :ok
   def initialise_instance(instance) do
-    %{"replaced" => replaced, "tagged" => tagged} =
+    %{"replaced" => replaced, "tagged" => tagged, "graph" => graph} =
       """
       #{@writer_recording}
       async def initialise():
@@ -1796,6 +1796,7 @@ defmodule Gralkor.GraphitiPool do
           return {
               'replaced': list(getattr(driver, '_gralkor_replaced_stopword_indexes', None) or []),
               'tagged': await backfill_writers(driver),
+              'graph': str(getattr(driver, '_database', None)),
           }
       initialise()
       """
@@ -1814,7 +1815,7 @@ defmodule Gralkor.GraphitiPool do
     if episodes + facts + entities > 0 do
       Logger.info(
         "[gralkor] recorded writers for memory written before writers were recorded — " <>
-          "episodes: #{episodes}, facts: #{facts}, entities: #{entities}"
+          "graph: #{graph} episodes: #{episodes} facts: #{facts} entities: #{entities}"
       )
     end
 
