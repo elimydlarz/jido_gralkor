@@ -236,7 +236,7 @@ defmodule JidoGralkor.Actions.MemorySearchTest do
                "Use the returned memories"
     end
 
-    test "and it offers a Destination selector but no Lens selector" do
+    test "and it offers a Destination selector but no writer selection" do
       schema = MemorySearch.__action_metadata__().schema
       assert Keyword.has_key?(schema, :destinations)
       refute Keyword.has_key?(schema, :lenses)
