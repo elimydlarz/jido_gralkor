@@ -782,117 +782,19 @@ defmodule Gralkor.GraphitiPool do
             result['source_kind'] = {'message': 'conversation', 'text': 'document', 'json': 'structured_record'}.get(source.value)
           return result
 
-        async def lens_scope():
-          def uuids(records):
-            return list(dict.fromkeys(
-              record['uuid'] for record in records if record['uuid'] is not None
-            ))
-
-          episode_records, _, _ = await g.driver.execute_query(
-            '''
-            MATCH (episode:Episodic)
-            WHERE any(suffix IN $lens_suffixes WHERE episode.source_description ENDS WITH suffix)
-              AND episode.uuid IS NOT NULL
-            RETURN episode.uuid AS uuid
-            ''',
-            lens_suffixes=list(lens_suffixes),
-          )
-          episode_uuids = uuids(episode_records)
-          edge_records, _, _ = await g.driver.execute_query(
-            '''
-            MATCH (:Entity)-[edge:RELATES_TO]->(:Entity)
-            WHERE any(id IN coalesce(edge.episodes, []) WHERE id IN $episode_uuids)
-              AND edge.uuid IS NOT NULL
-            RETURN edge.uuid AS uuid
-            ''',
-            episode_uuids=episode_uuids,
-          )
-          mentioned_records, _, _ = await g.driver.execute_query(
-            '''
-            MATCH (episode:Episodic)-[:MENTIONS]->(node:Entity)
-            WHERE episode.uuid IN $episode_uuids AND node.uuid IS NOT NULL
-            RETURN node.uuid AS uuid
-            ''',
-            episode_uuids=episode_uuids,
-          )
-          return (
-            episode_uuids,
-            uuids(edge_records),
-            uuids(mentioned_records),
-          )
-
-        async def exclusion_scope():
-          def uuids(records):
-            return list(dict.fromkeys(
-              record['uuid'] for record in records if record['uuid'] is not None
-            ))
-
-          episode_records, _, _ = await g.driver.execute_query(
-            '''
-            MATCH (episode:Episodic)
-            WHERE any(suffix IN $excluded_suffixes WHERE episode.source_description ENDS WITH suffix)
-              AND episode.uuid IS NOT NULL
-            RETURN episode.uuid AS uuid
-            ''',
-            excluded_suffixes=list(excluded_suffixes),
-          )
-          episode_uuids = uuids(episode_records)
-          if not episode_uuids:
-            return [], [], []
-          edge_records, _, _ = await g.driver.execute_query(
-            '''
-            MATCH (:Entity)-[edge:RELATES_TO]->(:Entity)
-            WHERE size(coalesce(edge.episodes, [])) > 0
-              AND all(id IN edge.episodes WHERE id IN $excluded_episode_uuids)
-              AND edge.uuid IS NOT NULL
-            RETURN edge.uuid AS uuid
-            ''',
-            excluded_episode_uuids=episode_uuids,
-          )
-          node_records, _, _ = await g.driver.execute_query(
-            '''
-            MATCH (excluded:Episodic)-[:MENTIONS]->(node:Entity)
-            WHERE excluded.uuid IN $excluded_episode_uuids AND node.uuid IS NOT NULL
-            WITH DISTINCT node
-            OPTIONAL MATCH (kept:Episodic)-[:MENTIONS]->(node)
-            WHERE NOT kept.uuid IN $excluded_episode_uuids
-            WITH node, count(kept) AS kept_mentions
-            WHERE kept_mentions = 0
-            RETURN node.uuid AS uuid
-            ''',
-            excluded_episode_uuids=episode_uuids,
-          )
-          return episode_uuids, uuids(edge_records), uuids(node_records)
-
         async def search_memory():
-          excluded = ([], [], [])
-          if excluded_names:
-            excluded = await exclusion_scope()
-          if lens_names:
-            episode_uuids, edge_uuids, node_uuids = await lens_scope()
-            if not (episode_uuids or edge_uuids or node_uuids):
-              return {"facts": [], "nodes": [], "episodes": []}
-            search_filter = LensSearchFilters(
+          if included_writers or rejected_writers:
+            search_filter = WriterSearchFilters(
               node_labels=labels,
               edge_types=types,
-              edge_uuids=edge_uuids,
-              node_uuids=node_uuids,
-              episode_uuids=episode_uuids,
-            )
-          elif any(excluded):
-            excluded_episode_uuids, excluded_edge_uuids, excluded_node_uuids = excluded
-            search_filter = LensSearchFilters(
-              node_labels=labels,
-              edge_types=types,
-              excluded_edge_uuids=excluded_edge_uuids,
-              excluded_node_uuids=excluded_node_uuids,
-              excluded_episode_uuids=excluded_episode_uuids,
+              writers=included_writers or None,
+              excluded_writers=rejected_writers or None,
             )
           else:
             search_filter = SearchFilters(node_labels=labels, edge_types=types)
           results = await g.search_(q, config=config, search_filter=search_filter)
           facts = await render_facts(
-            g, list(results.edges)[:fact_limit], lens_names, lens_suffixes, excluded_suffixes
+            g, list(results.edges)[:fact_limit], included_writers, rejected_writers
           )
           nodes = [
             {
@@ -922,8 +824,8 @@ defmodule Gralkor.GraphitiPool do
           "episode_limit" => limits.episodes,
           "node_labels" => Keyword.get(opts, :node_labels),
           "edge_types" => Keyword.get(opts, :edge_types),
-          "lenses" => Keyword.get(opts, :lenses),
-          "excluded_lenses" => Keyword.get(opts, :excluded_lenses)
+          "writers" => Keyword.get(opts, :writers),
+          "excluded_writers" => Keyword.get(opts, :excluded_writers)
         }
       )
 
