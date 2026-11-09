@@ -101,8 +101,8 @@ Gralkor.Client.search(agent_server, %Gralkor.Search{
   operator_id: operator_id,
   query: "what changed the parser",
   destinations: ["code"],                  # default: every accessible registered Destination
-  lenses: ["commits"],                     # default: every writer
-  # excluded_lenses: ["commits"],          # default: none; cannot be combined with lenses
+  writers: ["lens:commits"],               # default: every writer
+  excluded_writers: ["unknown"],           # default: none
   entity_types: ["Commit", "Function"],    # default: no filter
   edge_types: ["CHANGES"]                  # default: no filter
 })
@@ -131,34 +131,34 @@ Each distinct Destination is searched once, concurrently, through one Graphiti `
  ]}
 ```
 
-Facts, nodes, and episodes each keep Graphiti's relevance order. Every Destination contributes at most the search's `limits`: by default twenty facts, twenty nodes, and five episodes (`Gralkor.Search.limits/0`); episodes are whole source documents, so fewer are returned. Supply `limits: %{facts:, nodes:, episodes:}` (all three, each a positive integer) to change them for that search, for example `%Gralkor.Search{operator_id: id, query: q, limits: %{Gralkor.Search.limits() | episodes: 10}}`; any other value raises `ArgumentError` before any Destination is searched. The limits apply to every Destination the search selects; to give Destinations different limits, search them separately with `destinations`. `entity_types` restricts nodes to those labels and restricts facts to edges whose source *and* target entities both carry one of them (Graphiti applies its label filter to both edge endpoints). `edge_types` restricts facts to those relationship names. Neither filter restricts episodes.
+Facts, nodes, and episodes each keep Graphiti's relevance order. Every Destination contributes at most fifty facts, twenty nodes, and fifteen episodes (`Gralkor.Search.limits/0`); episodes are whole source documents, so fewer are returned. `entity_types` restricts nodes to those labels and restricts facts to edges whose source *and* target entities both carry one of them (Graphiti applies its label filter to both edge endpoints). `edge_types` restricts facts to those relationship names. Neither filter restricts episodes.
 
-### Lens selection
+### Writers
 
-`lenses` names registered Lenses (ORed) and narrows what each selected Destination returns to what those Lenses wrote there; it never adds or removes Destinations, so a Lens selector without `destinations` still searches every accessible registered Destination. Within each Destination:
+Every episode is written by exactly one writer, every fact is produced by the writers of every episode it was drawn from, and every entity by the writers of every episode that mentions it. A search names writers as:
 
-- episodes: only those whose source description ends with a selected Lens's ` [lens: <name>]` marker (a durable direct write never matches);
-- facts: only edges drawn from such an episode; each fact's `sources` keep only selected-Lens episodes;
-- nodes: only entities mentioned (`MENTIONS`) by such an episode.
+- `lens:<name>` — the registered Lens of that name (resolved from the agent's runtime for `search/2`);
+- `reflection:<name>` — the Reflection of that name, whose Destination output stored the memory (any non-blank name; consumer Reflections are not registered in jido_gralkor);
+- `direct` — direct capture and `memory_add`;
+- `unknown` — memory whose writer could not be determined, such as historical unmarked episodes;
+- `lens:*` — every Lens; `reflection:*` — every Reflection.
 
-Direct writes, other Lenses, Reflection artefacts, and historical `operator`-labelled episodes never contribute (the retired `operator` Lens cannot be selected). `entity_types` and `edge_types` restrict the Lens's results further. On FalkorDB every restriction is part of the graph queries, applied before ranking and the per-Destination caps, so other writers cannot consume a Lens's twenty facts, twenty nodes, or five episodes: facts through graphiti-core's `SearchFilters.edge_uuids`; nodes and episodes through filters Gralkor adds to graphiti-core 0.31.2's node searches and FalkorDB episode full-text query, which have none of their own. A Lens that has written nothing to a Destination returns empty facts, nodes, and episodes there without a Graphiti search. An unknown, blank, or non-list Lens selection raises `ArgumentError` before any Destination is searched; runtime-targeted search resolves Lens names from the agent's runtime snapshot.
+`writers` and `excluded_writers` never add or remove Destinations: every selected Destination is still searched, including each named Lens's own. Within each Destination:
 
-### Lens exclusion
+- `writers` keeps only episodes an included writer wrote, facts drawn from such an episode, and entities such an episode mentions; each fact's `sources` keep only included writers' episodes.
+- `excluded_writers` leaves out episodes an excluded writer wrote, and facts and entities produced only by excluded writers; a fact or entity another writer also produced stays, so cross-source relationships survive, and its `sources` omit excluded writers' episodes.
+- Together, a result is returned only when an included writer produced it and a writer that is not excluded produced it.
 
-`excluded_lenses` names registered Lenses whose writes to leave out while keeping everything else. Like `lenses`, it never adds or removes Destinations: every selected Destination is still searched, including each excluded Lens's own. Within each Destination:
+`entity_types` and `edge_types` restrict what remains. A writer named more than once is applied once. Anything other than the forms above raises `ArgumentError` before any Destination is searched, saying whether the writer was included or excluded and naming the value.
 
-- episodes: those whose source description ends with an excluded Lens's ` [lens: <name>]` marker are left out;
-- facts: an edge is left out only when every episode it was drawn from is such an episode; an edge another writer's episode also produced stays, and its `sources` omit the excluded episodes;
-- nodes: an entity is left out only when every episode mentioning it is such an episode; an entity another writer's episode also mentions stays, so cross-source relationships survive.
-
-Direct writes and capture, other Lenses, Reflection artefacts, and historical unmarked episodes all remain. On FalkorDB the exclusions are `NOT … IN` filters inside the same graph queries, applied before ranking and the per-Destination caps, so an excluded Lens's volume cannot take any of the twenty facts, twenty nodes, or five episodes. `entity_types` and `edge_types` restrict what remains. Supplying both `lenses` and `excluded_lenses` raises `ArgumentError` before any Destination is searched: a selection already leaves out every other writer. An unknown, blank, or non-list exclusion raises `ArgumentError` naming the excluded Lens; runtime-targeted search resolves excluded names from the agent's runtime snapshot.
+Every episode, `RELATES_TO` edge, and `Entity` records its writers in `_gralkor_writers` when it is written; a later episode that adds to an existing fact or mentions an existing entity adds its writer. On FalkorDB the writer checks are part of graphiti's node, edge, and episode full-text queries (Gralkor wraps them once at pool start after a pinned-signature check), applied to each record's own writers before ranking and the per-Destination limits, so other writers cannot take a result place, and a filtered search takes about as long as an unfiltered one however much a writer produced. Memory written before writers were recorded is given them, from its episodes' provenance, the first time its graph instance is built.
 
 ```elixir
 # General recall without the high-volume commit history the "code-changes" Lens writes to global.
 Gralkor.Client.search(agent_server, %Gralkor.Search{
   operator_id: operator_id,
   query: "who owns the settlement worker",
-  excluded_lenses: ["code-changes"]
+  excluded_writers: ["lens:code-changes"]
 })
 ```
 
@@ -241,7 +241,7 @@ Each section has its own character limit, and no limit applies across sections: 
 - `result_type` is gone: every search returns facts, nodes, and episodes per Destination. Replace `result.fact` / `result.node` / `result.episode` (one flat attributed list) with `result.facts` / `result.nodes` / `result.episodes` inside each Destination map.
 - `lenses` was removed in 12.0.0 and returned in 13.0.0 with the same meaning: only what the selected Lenses wrote, filtered before ranking. It now restricts facts, nodes, and episodes together.
 - `result_type: :artefacts` and `artefact_id` are gone: Reflection artefacts arrive whole in `episodes` as `artefact: %{id:, payload:}`; match the id there.
-- `max_results` is gone: set per-Destination limits with `limits: %{facts:, nodes:, episodes:}` (default `Gralkor.Search.limits/0`).
+- `max_results` is gone: every Destination returns at most 50 facts, 20 nodes, and 15 episodes (`Gralkor.Search.limits/0`).
 - Setting any removed field raises `ArgumentError` naming the field with this guidance.
 - `memory_search` lost its `lenses` parameter; keep `destinations`. Read `action_result.sections`, each `%{heading:, text:}`; treat each `text` as readable text and never `Jason.decode!/1` it.
 
