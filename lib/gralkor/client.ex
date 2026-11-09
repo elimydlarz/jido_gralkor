@@ -407,65 +407,6 @@ defmodule Gralkor.Client do
   defp validate_destination_names!(names),
     do: raise(ArgumentError, "search destinations must be a list, got #{inspect(names)}")
 
-  defp resolve_search_lenses!(names) do
-    validate_lens_names!(names)
-
-    names
-    |> Enum.map(&lens!(&1).name)
-    |> Enum.uniq()
-  end
-
-  defp validate_lens_names!(names) when is_list(names) do
-    Enum.each(names, fn
-      name when is_binary(name) ->
-        if String.trim(name) == "" do
-          raise ArgumentError, "invalid Lens name #{inspect(name)}"
-        end
-
-      name ->
-        raise ArgumentError, "invalid Lens name #{inspect(name)}"
-    end)
-  end
-
-  defp validate_lens_names!(names),
-    do: raise(ArgumentError, "search lenses must be a list, got #{inspect(names)}")
-
-  defp resolve_excluded_search_lenses!(names) do
-    validate_excluded_lens_names!(names)
-    registered = Enum.map(registered_lenses!(), &Keyword.get(&1, :name))
-
-    Enum.each(names, fn name ->
-      cond do
-        name in registered ->
-          :ok
-
-        name in ["operator", "default"] ->
-          raise ArgumentError,
-                "excluded Lens #{inspect(name)} was retired; use \"personal-chat\" instead"
-
-        true ->
-          raise ArgumentError, "unknown excluded Lens #{inspect(name)}"
-      end
-    end)
-
-    Enum.uniq(names)
-  end
-
-  defp validate_excluded_lens_names!(names) when is_list(names) do
-    Enum.each(names, fn
-      name when is_binary(name) ->
-        if String.trim(name) == "" do
-          raise ArgumentError, "invalid excluded Lens name #{inspect(name)}"
-        end
-
-      name ->
-        raise ArgumentError, "invalid excluded Lens name #{inspect(name)}"
-    end)
-  end
-
-  defp validate_excluded_lens_names!(names),
-    do: raise(ArgumentError, "search excluded Lenses must be a list, got #{inspect(names)}")
-
   @spec lens!(String.t()) :: Lens.t()
   def lens!(name) do
     lenses = registered_lenses!()
