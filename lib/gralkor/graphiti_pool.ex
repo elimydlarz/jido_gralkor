@@ -253,12 +253,30 @@ defmodule Gralkor.GraphitiPool do
       if not isinstance(episode_return, str):
           unsupported('graphiti_core.search.search_utils.EPISODIC_NODE_RETURN', [], 'no such query')
 
-      class LensSearchFilters(SearchFilters):
-          node_uuids: list[str] | None = None
-          episode_uuids: list[str] | None = None
-          excluded_node_uuids: list[str] | None = None
-          excluded_edge_uuids: list[str] | None = None
-          excluded_episode_uuids: list[str] | None = None
+      class WriterSearchFilters(SearchFilters):
+          writers: list[str] | None = None
+          excluded_writers: list[str] | None = None
+
+      def writer_clauses(variable, filters):
+          clauses = []
+          params = {}
+          for field, excluded in (('writers', False), ('excluded_writers', True)):
+              selected = getattr(filters, field, None)
+              if not selected:
+                  continue
+              names = f'gralkor_{field}'
+              prefixes = f'gralkor_{field}_prefixes'
+              named = (
+                  f'(gralkor_writer IN ${names} OR '
+                  f'any(gralkor_prefix IN ${prefixes} WHERE gralkor_writer STARTS WITH gralkor_prefix))'
+              )
+              clauses.append(
+                  f"any(gralkor_writer IN coalesce({variable}._gralkor_writers, ['unknown']) "
+                  f"WHERE {'NOT ' if excluded else ''}{named})"
+              )
+              params[names] = [writer for writer in selected if not writer.endswith(':*')]
+              params[prefixes] = [writer[:-1] for writer in selected if writer.endswith(':*')]
+          return clauses, params
 
       def label_disjunction(queries, filters, provider):
           labels = list(filters.node_labels or [])
