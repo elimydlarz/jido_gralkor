@@ -739,6 +739,16 @@ defmodule JidoGralkor.Runtime do
     end
   end
 
+  defp fetch_writer_lenses(definitions, kind, names) do
+    case fetch_definitions(definitions.lenses, :lenses, names) do
+      {:error, {:unknown_definition, :lenses, name}} ->
+        {:error, {:unknown_lens_writer, kind, "lens:" <> name}}
+
+      resolved ->
+        resolved
+    end
+  end
+
   defp resolve_search_destinations(definitions, []) do
     {:ok, definitions.destination_list}
   end
