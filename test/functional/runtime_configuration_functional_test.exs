@@ -974,6 +974,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       exclusion = %Gralkor.Search{request | writers: [], excluded_writers: ["lens:observations"]}
       assert {:ok, [%{destination: "project"}]} = Gralkor.Client.search(agent_server, exclusion)
+      assert_receive {:runtime_search_writers, "project", []}
       assert_receive {:runtime_search_excluded_writers, "project", ["lens:observations"]}
 
       assert :ok = JidoGralkor.Runtime.replace(agent_server, %{configuration | lenses: []})
