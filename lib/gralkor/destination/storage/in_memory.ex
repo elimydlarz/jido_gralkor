@@ -6,6 +6,7 @@ defmodule Gralkor.Destination.Storage.InMemory do
 
   alias Gralkor.Destination
   alias Gralkor.Lens.Storage.InMemory, as: LensStorage
+  alias Gralkor.Search
 
   def start_link(opts \\ []),
     do: Agent.start_link(fn -> %{} end, name: Keyword.get(opts, :name, __MODULE__))
