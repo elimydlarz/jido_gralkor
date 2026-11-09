@@ -325,7 +325,7 @@ defmodule Gralkor.GraphitiPool do
               fuzzy_query = fulltext_query(query, group_ids, driver)
               if fuzzy_query == '':
                   return []
-              uuid_filter = ''.join(f' AND {clause}' for clause in clauses)
+              writer_filter = "".join(f" AND {clause}" for clause in clauses)
               group_filter = ''
               if group_ids is not None:
                   group_filter = '\\nAND e.group_id IN $group_ids'
@@ -335,7 +335,7 @@ defmodule Gralkor.GraphitiPool do
                   + '\\nYIELD node AS episode, score'
                   + '\\nMATCH (e:Episodic)'
                   + '\\nWHERE e.uuid = episode.uuid'
-                  + uuid_filter
+                  + writer_filter
                   + group_filter
                   + '\\nRETURN\\n'
                   + episode_return
