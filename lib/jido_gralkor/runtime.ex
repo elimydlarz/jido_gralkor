@@ -143,9 +143,10 @@ defmodule JidoGralkor.Runtime do
         state
       ) do
     reply =
-      with {:ok, lenses} <- fetch_definitions(state.definitions.lenses, :lenses, lens_names),
+      with {:ok, lenses} <-
+             fetch_definitions(state.definitions.lenses, :included_writers, lens_names),
            {:ok, excluded_lenses} <-
-             fetch_definitions(state.definitions.lenses, :excluded_lenses, excluded_lens_names),
+             fetch_definitions(state.definitions.lenses, :excluded_writers, excluded_lens_names),
            {:ok, destinations} <-
              resolve_search_destinations(state.definitions, destination_names) do
         {:ok, {lenses, destinations, excluded_lenses}}
