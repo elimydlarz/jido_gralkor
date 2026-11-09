@@ -706,8 +706,8 @@ defmodule Gralkor.GraphitiPool do
 
         #{@episode_writer_hydration}
         #{@fact_rendering}
-        LensSearchFilters = search_utils._gralkor_search_filters
-        if LensSearchFilters is None:
+        WriterSearchFilters = search_utils._gralkor_search_filters
+        if WriterSearchFilters is None:
           raise RuntimeError('Gralkor search filters are not installed; start Gralkor.GraphitiPool first')
 
         def text(value):
@@ -716,10 +716,8 @@ defmodule Gralkor.GraphitiPool do
         q = text(query)
         labels = [text(label) for label in node_labels] if node_labels else None
         types = [text(edge_type) for edge_type in edge_types] if edge_types else None
-        lens_names = [text(name) for name in lenses] if lenses else []
-        lens_suffixes = tuple(f' [lens: {name}]' for name in lens_names)
-        excluded_names = [text(name) for name in excluded_lenses] if excluded_lenses else []
-        excluded_suffixes = tuple(f' [lens: {name}]' for name in excluded_names)
+        included_writers = [text(writer) for writer in writers] if writers else []
+        rejected_writers = [text(writer) for writer in excluded_writers] if excluded_writers else []
         supported_query_terms = [
           word
           for word in sanitize_falkor_fulltext_query(q).split()
