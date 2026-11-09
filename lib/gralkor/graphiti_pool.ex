@@ -79,8 +79,8 @@ defmodule Gralkor.GraphitiPool do
     ELSE coalesce(gralkor_episode._gralkor_writers, ['unknown']) END
   ) AS gralkor_lists
   WITH gralkor_target, reduce(
-    gralkor_union = [], gralkor_writers IN gralkor_lists |
-    gralkor_union + [gralkor_writer IN gralkor_writers WHERE NOT gralkor_writer IN gralkor_union]
+    gralkor_union = [], gralkor_list IN gralkor_lists |
+    gralkor_union + [gralkor_writer IN gralkor_list WHERE NOT gralkor_writer IN gralkor_union]
   ) AS gralkor_writers
   SET gralkor_target._gralkor_writers =
     CASE WHEN size(gralkor_writers) = 0 THEN ['unknown'] ELSE gralkor_writers END
