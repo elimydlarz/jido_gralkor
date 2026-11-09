@@ -164,7 +164,7 @@ defmodule Gralkor.GraphitiPoolTest do
 
   # Drives the episode full-text search a started pool installed, and
   # graphiti's own, against a driver that records the Cypher it is sent.
-  defp episode_fulltext_queries(episode_uuids, filter_field \\ "episode_uuids") do
+  defp episode_fulltext_queries(filter_kwargs) do
     %{pid: pid} = start_pool(install_loop_fn: &Gralkor.Python.install_async_runtime/0)
 
     {recorded, _} =
@@ -189,14 +189,15 @@ defmodule Gralkor.GraphitiPoolTest do
                   self.recorded.append({'cypher': cypher, **params})
                   return ([], None, None)
 
-          uuids = None if episode_uuids is None else [
-              uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
-              for uuid in episode_uuids
-          ]
+          def text(value):
+              return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
           filters = (
               SearchFilters()
-              if uuids is None
-              else search_utils._gralkor_search_filters(**{filter_field.decode('utf-8'): uuids})
+              if filter_kwargs is None
+              else search_utils._gralkor_search_filters(**{
+                  text(key): [text(writer) for writer in writers]
+                  for key, writers in filter_kwargs.items()
+              })
           )
           wrapped = _RecordingDriver()
           own = _RecordingDriver()
@@ -204,7 +205,7 @@ defmodule Gralkor.GraphitiPoolTest do
           asyncio._gralkor_run(search_utils.episode_fulltext_search(own, 'amber notes', SearchFilters(), None, 5))
           {'wrapped': wrapped.recorded, 'own': own.recorded}
           """,
-        %{"episode_uuids" => episode_uuids, "filter_field" => filter_field}
+        %{"filter_kwargs" => filter_kwargs}
       )
 
     GenServer.stop(pid)
@@ -2711,11 +2712,6 @@ defmodule Gralkor.GraphitiPoolTest do
         def _text(value):
             return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
 
-        scope = (
-            None
-            if lens_scope is None
-            else {_text(key): [_text(uuid) for uuid in uuids] for key, uuids in lens_scope.items()}
-        )
 
         class _Episode:
             def __init__(self, uuid, source, source_description, content=""):
