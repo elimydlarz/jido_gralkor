@@ -183,27 +183,23 @@ when a memory search is run for a group
       and its edge filter admits an edge whose source and target each carry any one of them
   while edge types are supplied
     then the single search's filter carries those relationship types
-  while neither node labels, edge types, selected Lenses, nor excluded Lenses are supplied
+  while neither node labels, edge types, included writers, nor excluded writers are supplied
     then the single search's filter leaves every node and edge eligible
     and the graph library's own node and episode queries are issued unchanged
-  while Lenses are supplied
-    then the single search's filter admits only edges drawn from an episode whose source description names a supplied Lens
-    and the single search's filter admits only nodes mentioned by such an episode
-    and the single search's filter admits only episodes whose source description names a supplied Lens
-    and the episode restriction is applied inside the full-text query, before its limit
-    and each rendered fact's sources include only episodes whose source description names a supplied Lens
-    while nothing in the group was written by a supplied Lens
-      then the graph library is not searched
-      and no facts, nodes, or episodes are returned
-  while excluded Lenses are supplied
-    then the single search's filter rejects episodes whose source description names an excluded Lens
-    and the single search's filter rejects edges drawn only from such episodes
-    and the single search's filter rejects nodes mentioned only by such episodes
-    and the graph library's node and edge queries apply those rejections before their limits
-    and the episode rejection is applied inside the full-text query, before its limit
-    and each rendered fact's sources omit episodes whose source description names an excluded Lens
-    while nothing in the group was written by an excluded Lens
-      then the single search's filter leaves every node, edge, and episode eligible
+  while writers are included
+    then the single search's filter admits only edges produced by an included writer
+    and the single search's filter admits only nodes produced by an included writer
+    and the single search's filter admits only episodes written by an included writer
+    and each admission is decided from the writers recorded on the edge, node, or episode itself, without a list of record identifiers
+    and every admission is applied inside its query, before its limit
+    and each rendered fact's sources include only episodes written by an included writer
+  while writers are excluded
+    then the single search's filter rejects episodes written by an excluded writer
+    and the single search's filter rejects edges produced only by excluded writers
+    and the single search's filter rejects nodes produced only by excluded writers
+    and each rejection is decided from the writers recorded on the edge, node, or episode itself, without a list of record identifiers
+    and every rejection is applied inside its query, before its limit
+    and each rendered fact's sources omit episodes written by an excluded writer
   when the query exceeds the graph library's full-text limit
     then the graph library receives a bounded non-empty query containing the earliest supported terms
   when a returned Reflection episode lacks its durable extraction-completion marker

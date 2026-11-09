@@ -96,12 +96,12 @@ when a configured ontology declares another entity kind
 when search definitions are resolved from an active runtime
   then later replacement does not mutate the returned definitions
   while no Destination names are supplied
-    then every accessible Destination and every selected Lens resolve from one snapshot
-  while Destination and Lens names are supplied
+    then every accessible Destination and every Lens an included writer names resolve from one snapshot
+  while Destination names and included Lens writers are supplied
     then those definitions resolve from one snapshot in first-selected order without duplicates
-  while excluded Lens names are supplied
-    then the excluded Lens definitions resolve from the same snapshot without duplicates
-  if any selected or excluded name is unknown
+  while excluded Lens writers are supplied
+    then the Lens definitions the excluded writers name resolve from the same snapshot without duplicates
+  if any Destination or Lens that a Destination name or an included or excluded writer names is unknown
     then resolution fails without returning a partial result
 
 when a runtime-targeted call receives a live owning AgentServer PID

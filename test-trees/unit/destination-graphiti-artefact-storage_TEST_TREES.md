@@ -23,5 +23,5 @@ if the episode boundary fails during an artefact write or lookup
   then Destination storage returns that failure unchanged
 
 when Graphiti Destination storage searches a Destination
-  then the pool is asked for the Destination's group with the limits, entity types as node labels, edge types, selected Lenses, and excluded Lenses
+  then the pool is asked for the Destination's group with the limits, entity types as node labels, edge types, included writers, and excluded writers
   and an absent selector is forwarded as nil

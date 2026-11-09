@@ -16,12 +16,12 @@ when in-memory Destination storage receives an existing artefact identifier with
 when in-memory Destination storage looks up an absent artefact identifier
   then lookup reports not found
 
-when in-memory Destination storage is searched with no Lenses
+when in-memory Destination storage is searched with no writer included
   then facts and episodes of the Destination are returned within their limits
   and no nodes are returned because this backend extracts no entities
 
-when in-memory Destination storage is searched with Lenses
-  then only episodes written through a selected Lens are returned
+when in-memory Destination storage is searched with writers included
+  then only episodes written by an included writer are returned
   and only facts drawn from those episodes are returned
   and no nodes are returned
-  but no direct write or Destination artefact contributes
+  but no episode by another writer contributes

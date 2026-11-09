@@ -7,54 +7,69 @@ when a caller searches memory
   and every Destination result carries its relevant facts, its relevant nodes, and its relevant episodes together
   and facts, nodes, and episodes each keep relevance order within their Destination
 
-  where the caller supplies no limits
-    then each Destination contributes at most twenty facts, twenty nodes, and five episodes
-
-  where the caller supplies limits for facts, nodes, and episodes
-    then each Destination contributes at most the supplied number of facts, nodes, and episodes
+  and each Destination contributes at most fifty facts, twenty nodes, and fifteen episodes
 
   where the Destination selector is omitted or empty
     then every accessible registered Destination is selected
     and results follow the order `personal`, `global`, `generalisations`, then application Destinations
-    and a Lens selector does not narrow the search to that Lens's Destination
+    and including or excluding a Lens writer does not narrow the search to that Lens's Destination
 
   where one or more Destinations are supplied
     then results from any supplied Destination can contribute
     but no result from another Destination can contribute
-    and a Lens selector does not add that Lens's Destination to the supplied Destinations
+    and including a Lens writer does not add that Lens's Destination to the supplied Destinations
 
-  where the Lens selector is omitted or empty
-  and no Lens is excluded
-    then results written directly or by every Lens or Destination artefact output can contribute
+  where no writer is included or excluded
+    then results from every writer can contribute
 
-  where one or more Lenses are supplied
-  and no Lens is excluded
-    then only episodes written through any supplied Lens are returned
-    and only facts drawn from an episode written through any supplied Lens are returned
-    and only entities mentioned by an episode written through any supplied Lens are returned
-    but no result written directly, through another Lens, or through a Destination artefact output can contribute
+  where one or more writers are included
+    then only episodes written by an included writer are returned
+    and only facts drawn from an episode written by an included writer are returned
+    and only entities mentioned by an episode written by an included writer are returned
     and results from other writers cannot consume any per-Destination limit
-    and each returned fact's sources name only supplied Lenses
-    and entity and edge type filters further restrict the supplied Lenses' results
-    and a Lens supplied more than once is applied once
+    and each returned fact's sources name only included writers
+    and entity and edge type filters further restrict the included writers' results
+    and a writer included more than once is applied once
     while the search is made through an agent's runtime
-      then Lens names resolve from that runtime's configuration
+      then the Lenses that included writers name resolve from that runtime's configuration
 
-  where one or more Lenses are excluded
-  and the Lens selector is omitted or empty
-    then no episode written through an excluded Lens is returned
-    and no fact drawn only from episodes written through excluded Lenses is returned
-    and no entity mentioned only by episodes written through excluded Lenses is returned
-    but a fact also drawn from an episode written by another writer is returned
-    and an entity also mentioned by an episode written by another writer is returned
-    and results written directly, through another Lens, through a Destination artefact output, or without recorded authorship can contribute
+  where one or more writers are excluded
+    then no episode written by an excluded writer is returned
+    and no fact drawn only from episodes written by excluded writers is returned
+    and no entity mentioned only by episodes written by excluded writers is returned
+    but a fact also drawn from an episode by a writer that is not excluded is returned
+    and an entity also mentioned by an episode by a writer that is not excluded is returned
     and excluded results cannot consume any per-Destination limit
-    and each returned fact's sources name no excluded Lens
+    and each returned fact's sources name no excluded writer
     and entity and edge type filters further restrict the remaining results
-    and each excluded Lens's Destination is still searched
-    and a Lens excluded more than once is applied once
+    and each excluded Lens writer's Destination is still searched
+    and a writer excluded more than once is applied once
+    where writers are also included
+      then a result is returned only when an included writer produced it and a writer that is not excluded produced it
     while the search is made through an agent's runtime
-      then excluded Lens names resolve from that runtime's configuration
+      then the Lenses that excluded writers name resolve from that runtime's configuration
+
+  where one or more writers are included or excluded
+    then the search takes about as long as an unfiltered search of the same Destinations, however many results those writers produced
+
+when a search names a writer
+  then `lens:<name>` names the Lens of that name
+  and `reflection:<name>` names the Reflection of that name, whose output is stored in memory
+  and `direct` names direct capture and direct memory addition
+  and `unknown` names memory whose writer could not be determined
+  and `lens:*` names every Lens
+  and `reflection:*` names every Reflection
+
+when memory is written to a Destination
+  then each episode is written by exactly one writer: the Lens it was ingested through, the Reflection whose output it stores, or direct capture or addition
+  and each fact is produced by the writer of every episode it was drawn from
+  and each entity is produced by the writer of every episode that mentions it
+
+while a Destination holds memory written before its writers were recorded
+  when that Destination is first searched or written
+    then each of its episodes, facts, and entities is produced by the writers its episodes' provenance records
+    and an episode whose writer cannot be determined is written by `unknown`
+    and later searches by writer return that memory as they return memory written since
 
 where the selected Destinations include `personal`
   then only the current operator's `personal/<operator id>` graph is searched
@@ -103,21 +118,18 @@ if a selected Destination search exits instead of returning
   then the search returns an error naming that Destination and its exit reason
   and the caller does not exit
 
-if search supplies a field removed in 12.0.0
+if search supplies a field removed in 12.0.0 or 17.0.0
   then search fails before any Destination query is started
   and the error names the removed field
   and the error gives migration guidance for that field
 
-if search supplies any Destination selection, Lens selection, or Lens exclusion that is not a list of registered non-blank names
+if search supplies a Destination selection that is not a list of registered non-blank names
   then search fails before any Destination query is started
   and no valid subset is searched
-  and the error identifies whether the rejected selection was for Destinations, Lenses, or excluded Lenses
+  and the error identifies the rejected Destination selection and its rejected value
+
+if search includes or excludes anything but `direct`, `unknown`, `lens:*`, `reflection:*`, `lens:` naming a registered Lens, or `reflection:` with a non-blank name
+  then search fails before any Destination query is started
+  and no valid subset is searched
+  and the error says whether the rejected writer was included or excluded
   and the error identifies the rejected value
-
-if search supplies limits that are not exactly a positive whole number for each of facts, nodes, and episodes
-  then search fails before any Destination query is started
-  and the error names the limits and the rejected value
-
-if search both selects and excludes Lenses
-  then search fails before any Destination query is started
-  and the error names both the Lens selection and the Lens exclusion

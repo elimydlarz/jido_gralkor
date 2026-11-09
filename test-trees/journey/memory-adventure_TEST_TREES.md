@@ -51,10 +51,10 @@ when the agent searches with a Destination selector
   and no memory from an unselected Destination is returned
   and a subsequent selector-free search returns relevant memory from a Destination omitted by the earlier Destination selector
 
-when the Journey consumer searches with a Lens selector
-  then only episodes written through the selected Lens are returned
+when the Journey consumer searches including one Lens as a writer
+  then only episodes written through that Lens are returned
   and no episode written directly, through another Lens, or by a Reflection is returned
-  and a subsequent Lens-free search returns the memory written directly or through the other Lenses
+  and a subsequent search including no writer returns the memory written directly or through the other Lenses
 
 when the Journey ingests conversation, document, and structured-record episodes
   then every retrieved conversation fact identifies every originating episode
