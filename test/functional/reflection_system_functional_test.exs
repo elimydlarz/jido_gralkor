@@ -543,7 +543,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                )
 
       assert_receive {:related_memory_search, "generalisations", "operator-one",
-                      "fact one\nfact two", [limits: %{facts: 20, nodes: 20, episodes: 5}]}
+                      "fact one\nfact two", [limits: %{facts: 50, nodes: 20, episodes: 15}]}
 
       assert_receive {:generalisation_callback,
                       %{
