@@ -929,11 +929,11 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert :ok =
                JidoGralkor.Runtime.replace(agent_server, ingestion_configuration("replacement"))
 
-      assert {_lenses, [%Gralkor.Destination{name: "replacement"}]} =
-               JidoGralkor.Runtime.resolve_search!(agent_server, [], ["replacement"])
+      assert {_lenses, [%Gralkor.Destination{name: "replacement"}], []} =
+               JidoGralkor.Runtime.resolve_search!(agent_server, [], ["replacement"], [])
 
       assert_raise ArgumentError, fn ->
-        JidoGralkor.Runtime.resolve_search!(agent_server, [], ["project"])
+        JidoGralkor.Runtime.resolve_search!(agent_server, [], ["project"], [])
       end
 
       send(first_search, :continue_runtime_search)
