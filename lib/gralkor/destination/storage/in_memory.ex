@@ -46,45 +46,34 @@ defmodule Gralkor.Destination.Storage.InMemory do
   @impl true
   def search(destination, operator_id, _query, opts) do
     limits = Keyword.fetch!(opts, :limits)
-    graph_id = Destination.graph_id(destination, operator_id)
+    included = Keyword.get(opts, :writers, [])
+    excluded = Keyword.get(opts, :excluded_writers, [])
+    admitted? = &Search.admitted?([&1], included, excluded)
 
-    case Keyword.get(opts, :lenses, []) do
-      [] ->
-        excluded_lenses = Keyword.get(opts, :excluded_lenses, [])
+    episodes =
+      destination
+      |> Destination.graph_id(operator_id)
+      |> LensStorage.episodes()
+      |> Enum.filter(&admitted?.(writer(&1)))
 
-        episodes =
-          graph_id
-          |> LensStorage.episodes()
-          |> Enum.reject(&(Map.get(&1, :lens) in excluded_lenses))
-
-        {:ok,
-         %{
-           facts: episodes |> Enum.take(limits.facts) |> Enum.map(&fact/1),
-           nodes: [],
-           episodes: episodes(destination, operator_id, episodes, limits.episodes)
-         }}
-
-      lenses ->
-        lens_search(graph_id, lenses, limits)
-    end
-  end
-
-  # Excluded Lenses (above) leave out their episodes and the facts this backend
-  # derives from them; everything else remains.
-  #
-  # Only what the selected Lenses wrote: their episodes and the facts this
-  # backend derives from them. Direct writes and Destination artefacts never
-  # match a Lens. This backend extracts no entities, so it returns no nodes.
-  defp lens_search(graph_id, lenses, limits) do
-    episodes = graph_id |> LensStorage.episodes() |> Enum.filter(&(Map.get(&1, :lens) in lenses))
+    reflection_episodes =
+      destination
+      |> reflection_episodes(operator_id)
+      |> Enum.filter(&admitted?.("reflection:" <> &1.reflection))
 
     {:ok,
      %{
        facts: episodes |> Enum.take(limits.facts) |> Enum.map(&fact/1),
        nodes: [],
-       episodes: episodes |> Enum.take(limits.episodes) |> Enum.map(&episode_result/1)
+       episodes:
+         Enum.take(reflection_episodes ++ Enum.map(episodes, &episode_result/1), limits.episodes)
      }}
   end
+
+  defp writer(%{lens: lens}), do: "lens:" <> lens
+  defp writer(%{writer: :direct}), do: "direct"
+  defp writer(%{reflection: reflection}), do: "reflection:" <> reflection
+  defp writer(_episode), do: "unknown"
 
   defp episode_result(episode),
     do:
