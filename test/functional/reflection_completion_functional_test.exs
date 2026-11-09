@@ -1212,7 +1212,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                           ''',
                           uuid=kwargs['uuid'],
                       )
-                      return
+                      from graphiti_core.graphiti import AddEpisodeResults
+                      return AddEpisodeResults(episode=episode, episodic_edges=[], nodes=[], edges=[], communities=[], community_edges=[])
 
                   if (
                       kwargs['uuid'] == 'embedded-stolen-claim'

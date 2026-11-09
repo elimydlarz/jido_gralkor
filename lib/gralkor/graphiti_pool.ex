@@ -1526,8 +1526,8 @@ defmodule Gralkor.GraphitiPool do
 
                         try:
                             written = await g.add_episode(**kwargs)
-                            await record_writers(getattr(g, 'driver', None), writer, written)
                             await record_extraction_complete()
+                            await record_writers(getattr(g, 'driver', None), writer, written)
                             return 'created'
                         finally:
                             guard.reset(token)
