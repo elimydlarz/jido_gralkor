@@ -359,8 +359,8 @@ defmodule Gralkor.GraphitiPool do
       search_utils._gralkor_search_filter_originals = [
           (module, name, function) for module, name, function, _kind in originals
       ]
-      search_utils._gralkor_search_filters = LensSearchFilters
-      return LensSearchFilters
+      search_utils._gralkor_search_filters = WriterSearchFilters
+      return WriterSearchFilters
   """
 
   @index_building_without_stopwords """
