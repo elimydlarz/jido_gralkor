@@ -2395,18 +2395,15 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a memory search is run for a group > while neither node labels, edge types, selected Lenses, nor excluded Lenses are supplied" do
+  describe "when a memory search is run for a group > while neither node labels, edge types, included writers, nor excluded writers are supplied" do
     test "then the single search's filter leaves every node and edge eligible" do
       {_results, recorded} = memory_search_result()
+      assert recorded["filter_class"] == "SearchFilters"
       assert recorded["node_labels"] == nil
       assert recorded["edge_types"] == nil
       assert recorded["edge_uuids"] == nil
-      assert recorded["node_uuids"] == nil
-      assert recorded["episode_uuids"] == nil
-      assert recorded["excluded_edge_uuids"] == nil
-      assert recorded["excluded_node_uuids"] == nil
-      assert recorded["excluded_episode_uuids"] == nil
-      assert recorded["lens_queries"] == []
+      assert recorded["writers"] == nil
+      assert recorded["excluded_writers"] == nil
     end
 
     test "and the graph library's own node and episode queries are issued unchanged" do
@@ -2425,180 +2422,229 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a memory search is run for a group > while Lenses are supplied" do
-    test "then the single search's filter admits only edges drawn from an episode whose source description names a supplied Lens" do
-      {_results, recorded} =
-        memory_search_result(lens_scope: lens_scope(), opts: [lenses: ["alpha"]])
+  describe "when a memory search is run for a group > while writers are included" do
+    setup [:start_real_embedded_pool, :seed_writer_graph]
 
-      assert recorded["edge_uuids"] == ["alpha-edge"]
-
-      assert %{"episode_uuids" => ["lens-episode"]} = lens_query(recorded, "RELATES_TO")
-
-      assert %{"lens_suffixes" => [" [lens: alpha]"]} = lens_query(recorded, "ENDS WITH")
-    end
-
-    test "and the single search's filter admits only nodes mentioned by such an episode" do
-      {_results, recorded} =
-        memory_search_result(lens_scope: lens_scope(), opts: [lenses: ["alpha"]])
-
-      assert recorded["node_uuids"] == ["mentioned-node"]
-      assert %{"episode_uuids" => ["lens-episode"]} = lens_query(recorded, "MENTIONS")
-    end
-
-    test "and the single search's filter admits only episodes whose source description names a supplied Lens" do
-      {_results, recorded} =
-        memory_search_result(lens_scope: lens_scope(), opts: [lenses: ["alpha"]])
-
-      assert recorded["episode_uuids"] == ["lens-episode"]
-      assert %{"lens_suffixes" => [" [lens: alpha]"]} = lens_query(recorded, "ENDS WITH")
-    end
-
-    test "and the episode restriction is applied inside the full-text query, before its limit" do
-      %{"wrapped" => [query]} = episode_fulltext_queries(["lens-episode"])
-
-      restriction = :binary.match(query["cypher"], "e.uuid IN $gralkor_episode_uuids")
-      limit = :binary.match(query["cypher"], "LIMIT $limit")
-
-      assert {restriction_at, _} = restriction
-      assert {limit_at, _} = limit
-      assert restriction_at < limit_at
-      assert query["cypher"] =~ "db.idx.fulltext.queryNodes"
-      assert query["query"] == "amber notes"
-      assert query["gralkor_episode_uuids"] == ["lens-episode"]
-      assert query["limit"] == 5
-    end
-
-    test "and each rendered fact's sources include only episodes whose source description names a supplied Lens" do
-      {%{facts: [fact | _]}, _recorded} =
-        memory_search_result(lens_scope: lens_scope(), opts: [lenses: ["alpha"]])
-
-      assert [%{id: "lens-episode", source_description: "notes [lens: alpha]"}] = fact.sources
-    end
-  end
-
-  describe "when a memory search is run for a group > while Lenses are supplied > while nothing in the group was written by a supplied Lens" do
-    test "then the graph library is not searched" do
-      {_results, recorded} =
-        memory_search_result(lens_scope: %{}, opts: [lenses: ["silent"]])
-
-      assert recorded["calls"] == 0
-
-      {_results, recorded} =
-        memory_search_result(lens_scope: %{"mentioned" => [nil]}, opts: [lenses: ["silent"]])
-
-      assert recorded["calls"] == 0
-    end
-
-    test "and no facts, nodes, or episodes are returned" do
-      {results, _recorded} =
-        memory_search_result(lens_scope: %{}, opts: [lenses: ["silent"]])
-
-      assert results == %{facts: [], nodes: [], episodes: []}
-    end
-  end
-
-  describe "when a memory search is run for a group > while excluded Lenses are supplied" do
-    test "then the single search's filter rejects episodes whose source description names an excluded Lens" do
-      {_results, recorded} =
-        memory_search_result(lens_scope: lens_scope(), opts: [excluded_lenses: ["alpha"]])
-
-      assert recorded["calls"] == 1
-      assert recorded["excluded_episode_uuids"] == ["lens-episode"]
-      assert recorded["episode_uuids"] == nil
-      assert %{"excluded_suffixes" => [" [lens: alpha]"]} = lens_query(recorded, "ENDS WITH")
-    end
-
-    test "and the single search's filter rejects edges drawn only from such episodes" do
-      {_results, recorded} =
-        memory_search_result(lens_scope: lens_scope(), opts: [excluded_lenses: ["alpha"]])
-
-      assert recorded["excluded_edge_uuids"] == ["alpha-edge"]
+    test "then the single search's filter admits only edges produced by an included writer",
+         %{instance: instance} do
+      {_results, recorded} = memory_search_result(opts: [writers: ["lens:alpha", "direct"]])
+      assert recorded["filter_class"] == "WriterSearchFilters"
+      assert recorded["writers"] == ["lens:alpha", "direct"]
       assert recorded["edge_uuids"] == nil
 
-      edge_query = lens_query(recorded, "RELATES_TO")
-      assert edge_query["excluded_episode_uuids"] == ["lens-episode"]
-      assert edge_query["query"] =~ "all(id IN edge.episodes WHERE id IN $excluded_episode_uuids)"
+      assert writer_search(instance, %{"writers" => ["lens:alpha"]})["edges"] ==
+               ["alpha-edge", "shared-edge"]
+
+      assert writer_search(instance, %{"writers" => ["lens:*"]})["edges"] ==
+               ["alpha-edge", "beta-edge", "shared-edge"]
     end
 
-    test "and the single search's filter rejects nodes mentioned only by such episodes" do
-      {_results, recorded} =
-        memory_search_result(lens_scope: lens_scope(), opts: [excluded_lenses: ["alpha"]])
+    test "and the single search's filter admits only nodes produced by an included writer",
+         %{instance: instance} do
+      assert writer_search(instance, %{"writers" => ["lens:alpha"]})["nodes"] ==
+               ["alpha-node", "shared-node"]
 
-      assert recorded["excluded_node_uuids"] == ["mentioned-node"]
-      assert recorded["node_uuids"] == nil
-
-      node_query = lens_query(recorded, "MENTIONS")
-      assert node_query["excluded_episode_uuids"] == ["lens-episode"]
-      assert node_query["query"] =~ "NOT kept.uuid IN $excluded_episode_uuids"
+      assert writer_search(instance, %{"writers" => ["direct", "lens:beta"]})["nodes"] ==
+               ["beta-node", "direct-node", "shared-node"]
     end
 
-    test "and the graph library's node and edge queries apply those rejections before their limits" do
-      queries =
-        filter_queries(
-          %{"excluded_node_uuids" => ["node-1"], "excluded_edge_uuids" => ["edge-1"]},
-          "LensSearchFilters"
-        )
+    test "and the single search's filter admits only episodes written by an included writer",
+         %{instance: instance} do
+      assert writer_search(instance, %{"writers" => ["lens:alpha"]})["episodes"] == ["alpha-ep"]
 
-      for kind <- ["node", "falkor_node"] do
-        assert "NOT n.uuid IN $gralkor_excluded_node_uuids" in queries[kind]["queries"]
-        assert queries[kind]["params"]["gralkor_excluded_node_uuids"] == ["node-1"]
+      assert writer_search(instance, %{"writers" => ["reflection:*", "direct"]})["episodes"] ==
+               ["direct-ep", "review-ep"]
+    end
+
+    test "and each admission is decided from the writers recorded on the edge, node, or episode itself, without a list of record identifiers",
+         %{instance: instance} do
+      queries = filter_queries(%{"writers" => ["lens:alpha", "reflection:*"]}, "WriterSearchFilters")
+
+      for {kind, variable} <- [{"node", "n"}, {"falkor_node", "n"}, {"edge", "e"}, {"falkor_edge", "e"}] do
+        assert Enum.any?(queries[kind]["queries"], &(&1 =~ "#{variable}._gralkor_writers"))
+
+        assert queries[kind]["params"] == %{
+                 "gralkor_writers" => ["lens:alpha"],
+                 "gralkor_writers_prefixes" => ["reflection:"]
+               }
       end
 
-      for kind <- ["edge", "falkor_edge"] do
-        assert "NOT e.uuid IN $gralkor_excluded_edge_uuids" in queries[kind]["queries"]
-        assert queries[kind]["params"]["gralkor_excluded_edge_uuids"] == ["edge-1"]
-      end
+      %{"wrapped" => [query]} = episode_fulltext_queries(%{"writers" => ["lens:alpha"]})
+      assert query["cypher"] =~ "e._gralkor_writers"
+      assert query["gralkor_writers"] == ["lens:alpha"]
+      refute Enum.any?(Map.keys(query), &(&1 =~ "uuid"))
+
+      graph_query(instance, "MATCH (n:Entity {uuid: 'beta-node'}) SET n._gralkor_writers = ['lens:alpha']")
+
+      assert writer_search(instance, %{"writers" => ["lens:alpha"]})["nodes"] ==
+               ["alpha-node", "beta-node", "shared-node"]
     end
 
-    test "and the episode rejection is applied inside the full-text query, before its limit" do
-      %{"wrapped" => [query]} =
-        episode_fulltext_queries(["lens-episode"], "excluded_episode_uuids")
+    test "and every admission is applied inside its query, before its limit", %{instance: instance} do
+      found = writer_search(instance, %{"writers" => ["lens:alpha"]}, 1)
 
-      assert {rejection_at, _} =
-               :binary.match(query["cypher"], "NOT e.uuid IN $gralkor_excluded_episode_uuids")
+      assert [edge] = found["edges"]
+      assert edge in ["alpha-edge", "shared-edge"]
+      assert [node] = found["nodes"]
+      assert node in ["alpha-node", "shared-node"]
+      assert found["episodes"] == ["alpha-ep"]
 
+      %{"wrapped" => [query]} = episode_fulltext_queries(%{"writers" => ["lens:alpha"]})
+      assert {admission_at, _} = :binary.match(query["cypher"], "e._gralkor_writers")
       assert {limit_at, _} = :binary.match(query["cypher"], "LIMIT $limit")
-      assert rejection_at < limit_at
-      refute query["cypher"] =~ "$gralkor_episode_uuids"
+      assert admission_at < limit_at
       assert query["cypher"] =~ "db.idx.fulltext.queryNodes"
-      assert query["gralkor_excluded_episode_uuids"] == ["lens-episode"]
       assert query["limit"] == 5
     end
 
-    test "and each rendered fact's sources omit episodes whose source description names an excluded Lens" do
+    test "and each rendered fact's sources include only episodes written by an included writer" do
       {%{facts: [fact | _]}, _recorded} =
-        memory_search_result(lens_scope: lens_scope(), opts: [excluded_lenses: ["alpha"]])
+        memory_search_result(two_writers: true, opts: [writers: ["lens:alpha"]])
+
+      assert [%{id: "lens-episode", source_description: "notes [lens: alpha]"}] = fact.sources
+
+      {%{facts: [fact | _]}, _recorded} =
+        memory_search_result(two_writers: true, opts: [writers: ["lens:*", "direct"]])
+
+      assert Enum.map(fact.sources, & &1.id) == ["episode-1", "lens-episode"]
+    end
+  end
+
+  describe "when a memory search is run for a group > while writers are excluded" do
+    setup [:start_real_embedded_pool, :seed_writer_graph]
+
+    test "then the single search's filter rejects episodes written by an excluded writer",
+         %{instance: instance} do
+      {_results, recorded} = memory_search_result(opts: [excluded_writers: ["lens:alpha"]])
+      assert recorded["filter_class"] == "WriterSearchFilters"
+      assert recorded["excluded_writers"] == ["lens:alpha"]
+      assert recorded["writers"] == nil
+
+      assert writer_search(instance, %{"excluded_writers" => ["lens:alpha"]})["episodes"] ==
+               ["beta-ep", "direct-ep", "review-ep"]
+
+      assert writer_search(instance, %{"excluded_writers" => ["lens:*", "reflection:review"]})[
+               "episodes"
+             ] == ["direct-ep"]
+    end
+
+    test "and the single search's filter rejects edges produced only by excluded writers",
+         %{instance: instance} do
+      assert writer_search(instance, %{"excluded_writers" => ["lens:alpha"]})["edges"] ==
+               ["beta-edge", "direct-edge", "shared-edge"]
+
+      assert writer_search(instance, %{"excluded_writers" => ["lens:alpha", "direct"]})["edges"] ==
+               ["beta-edge"]
+    end
+
+    test "and the single search's filter rejects nodes produced only by excluded writers",
+         %{instance: instance} do
+      assert writer_search(instance, %{"excluded_writers" => ["lens:alpha"]})["nodes"] ==
+               ["beta-node", "direct-node", "shared-node"]
+
+      assert writer_search(instance, %{"excluded_writers" => ["lens:*", "direct"]})["nodes"] == []
+    end
+
+    test "and each rejection is decided from the writers recorded on the edge, node, or episode itself, without a list of record identifiers",
+         %{instance: instance} do
+      queries = filter_queries(%{"excluded_writers" => ["direct", "lens:*"]}, "WriterSearchFilters")
+
+      for {kind, variable} <- [{"node", "n"}, {"falkor_node", "n"}, {"edge", "e"}, {"falkor_edge", "e"}] do
+        assert Enum.any?(queries[kind]["queries"], &(&1 =~ "#{variable}._gralkor_writers"))
+
+        assert queries[kind]["params"] == %{
+                 "gralkor_excluded_writers" => ["direct"],
+                 "gralkor_excluded_writers_prefixes" => ["lens:"]
+               }
+      end
+
+      %{"wrapped" => [query]} = episode_fulltext_queries(%{"excluded_writers" => ["lens:alpha"]})
+      assert query["cypher"] =~ "e._gralkor_writers"
+      assert query["gralkor_excluded_writers"] == ["lens:alpha"]
+      refute Enum.any?(Map.keys(query), &(&1 =~ "uuid"))
+
+      graph_query(
+        instance,
+        "MATCH ()-[e:RELATES_TO {uuid: 'beta-edge'}]->() SET e._gralkor_writers = ['lens:alpha']"
+      )
+
+      assert writer_search(instance, %{"excluded_writers" => ["lens:alpha"]})["edges"] ==
+               ["direct-edge", "shared-edge"]
+    end
+
+    test "and every rejection is applied inside its query, before its limit", %{instance: instance} do
+      found = writer_search(instance, %{"excluded_writers" => ["lens:beta", "direct"]}, 1)
+
+      assert [edge] = found["edges"]
+      assert edge in ["alpha-edge", "shared-edge"]
+      assert [node] = found["nodes"]
+      assert node in ["alpha-node", "shared-node"]
+      assert [episode] = found["episodes"]
+      assert episode in ["alpha-ep", "review-ep"]
+
+      %{"wrapped" => [query]} = episode_fulltext_queries(%{"excluded_writers" => ["lens:alpha"]})
+      assert {rejection_at, _} = :binary.match(query["cypher"], "e._gralkor_writers")
+      assert {limit_at, _} = :binary.match(query["cypher"], "LIMIT $limit")
+      assert rejection_at < limit_at
+      assert query["limit"] == 5
+    end
+
+    test "and each rendered fact's sources omit episodes written by an excluded writer" do
+      {%{facts: [fact | _]}, _recorded} =
+        memory_search_result(two_writers: true, opts: [excluded_writers: ["lens:alpha"]])
 
       assert [%{id: "episode-1", source_description: "git log"}] = fact.sources
     end
   end
 
-  describe "when a memory search is run for a group > while excluded Lenses are supplied > while nothing in the group was written by an excluded Lens" do
-    test "then the single search's filter leaves every node, edge, and episode eligible" do
-      {results, recorded} =
-        memory_search_result(lens_scope: %{}, opts: [excluded_lenses: ["silent"]])
+  # One group's graph whose every record carries its recorded writers. The
+  # Lens `beta` and direct records match the query more strongly than any
+  # `alpha` record does.
+  defp seed_writer_graph(%{pid: pid}) do
+    instance = GraphitiPool.for(pid, "writers")
 
-      assert recorded["calls"] == 1
+    graph_query(instance, """
+    CREATE (alpha:Episodic {uuid: 'alpha-ep', name: 'alpha', group_id: 'g', source: 'text', source_description: 'notes [lens: alpha]', content: 'amber alpha', entity_edges: [], created_at: '2026-01-01T00:00:00Z', valid_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['lens:alpha']}),
+           (:Episodic {uuid: 'beta-ep', name: 'beta', group_id: 'g', source: 'text', source_description: 'notes [lens: beta]', content: 'amber amber amber beta', entity_edges: [], created_at: '2026-01-01T00:00:00Z', valid_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['lens:beta']}),
+           (:Episodic {uuid: 'direct-ep', name: 'direct', group_id: 'g', source: 'text', source_description: 'manual', content: 'amber amber amber direct', entity_edges: [], created_at: '2026-01-01T00:00:00Z', valid_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['direct']}),
+           (:Episodic {uuid: 'review-ep', name: 'review', group_id: 'g', source: 'json', source_description: 'reflection:review', content: 'amber review', entity_edges: [], created_at: '2026-01-01T00:00:00Z', valid_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['reflection:review']}),
+           (a:Entity {uuid: 'alpha-node', name: 'amber alpha', group_id: 'g', summary: 'amber', created_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['lens:alpha']}),
+           (s:Entity {uuid: 'shared-node', name: 'amber shared', group_id: 'g', summary: 'amber', created_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['lens:alpha', 'direct']}),
+           (b:Entity {uuid: 'beta-node', name: 'amber amber amber beta', group_id: 'g', summary: 'amber amber amber', created_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['lens:beta']}),
+           (d:Entity {uuid: 'direct-node', name: 'amber amber amber direct', group_id: 'g', summary: 'amber amber amber', created_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['direct']}),
+           (a)-[:RELATES_TO {uuid: 'alpha-edge', name: 'OWNS', fact: 'amber alpha', group_id: 'g', episodes: ['alpha-ep'], created_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['lens:alpha']}]->(s),
+           (s)-[:RELATES_TO {uuid: 'shared-edge', name: 'OWNS', fact: 'amber shared', group_id: 'g', episodes: ['alpha-ep', 'direct-ep'], created_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['lens:alpha', 'direct']}]->(a),
+           (b)-[:RELATES_TO {uuid: 'beta-edge', name: 'OWNS', fact: 'amber amber amber beta', group_id: 'g', episodes: ['beta-ep'], created_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['lens:beta']}]->(b),
+           (d)-[:RELATES_TO {uuid: 'direct-edge', name: 'OWNS', fact: 'amber amber amber direct', group_id: 'g', episodes: ['direct-ep'], created_at: '2026-01-01T00:00:00Z', _gralkor_writers: ['direct']}]->(d)
+    """)
 
-      for field <-
-            ~w(edge_uuids node_uuids episode_uuids excluded_edge_uuids excluded_node_uuids excluded_episode_uuids) do
-        assert recorded[field] == nil
-      end
-
-      assert length(results.episodes) == 3
-    end
+    %{instance: instance}
   end
 
-  defp lens_scope do
-    %{
-      "episodes" => ["lens-episode"],
-      "edges" => ["alpha-edge"],
-      "mentioned" => ["mentioned-node"]
-    }
-  end
-
-  defp lens_query(recorded, marker) do
-    Enum.find(recorded["lens_queries"], &String.contains?(&1["query"], marker))
+  # Runs the graph library's own node, edge, and episode full-text searches,
+  # as a started pool wraps them, against the group's real graph.
+  defp writer_search(instance, filter_kwargs, limit \\ 10) do
+    """
+    import graphiti_core.search.search as search_module
+    import graphiti_core.search.search_utils as search_utils
+    def text(value):
+        return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
+    filters = search_utils._gralkor_search_filters(**{
+        text(key): [text(writer) for writer in writers] for key, writers in filter_kwargs.items()
+    })
+    async def run():
+        edges = await search_utils.edge_fulltext_search(g.driver, 'amber', filters, None, limit)
+        nodes = await search_utils.node_fulltext_search(g.driver, 'amber', filters, None, limit)
+        episodes = await search_module.episode_fulltext_search(g.driver, 'amber', filters, None, limit)
+        return {
+            'edges': sorted(edge.uuid for edge in edges),
+            'nodes': sorted(node.uuid for node in nodes),
+            'episodes': sorted(episode.uuid for episode in episodes),
+        }
+    run()
+    """
+    |> Gralkor.Python.run_coroutine(%{"g" => instance, "filter_kwargs" => filter_kwargs, "limit" => limit})
+    |> Pythonx.decode()
   end
 
   describe "when a memory search is run for a group > when the query exceeds the graph library's full-text limit" do
