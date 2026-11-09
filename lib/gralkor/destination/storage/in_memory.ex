@@ -91,29 +91,20 @@ defmodule Gralkor.Destination.Storage.InMemory do
     }
   end
 
-  defp episodes(destination, operator_id, lens_episodes, limit) do
-    reflection_episodes =
-      if Process.whereis(__MODULE__) do
-        destination
-        |> artefact_entries(operator_id)
-        |> Enum.map(fn %{artefact: artefact, reflection: reflection} ->
-          %{
-            artefact: Map.from_struct(artefact),
-            source_description: "reflection:#{reflection}",
-            reflection: reflection
-          }
-        end)
-      else
-        []
-      end
-
-    lens_episodes =
-      Enum.map(
-        lens_episodes,
-        &Map.take(&1, [:content, :source_kind, :lens, :reflection, :writer, :source_description])
-      )
-
-    Enum.take(reflection_episodes ++ lens_episodes, limit)
+  defp reflection_episodes(destination, operator_id) do
+    if Process.whereis(__MODULE__) do
+      destination
+      |> artefact_entries(operator_id)
+      |> Enum.map(fn %{artefact: artefact, reflection: reflection} ->
+        %{
+          artefact: Map.from_struct(artefact),
+          source_description: "reflection:#{reflection}",
+          reflection: reflection
+        }
+      end)
+    else
+      []
+    end
   end
 
   defp artefact_entries(destination, operator_id) do
