@@ -576,8 +576,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when the Journey consumer searches with a Lens selector" do
-    test "then only episodes written through the selected Lens are returned",
+  describe "when the Journey consumer searches including one Lens as a writer" do
+    test "then only episodes written through that Lens are returned",
          %{adventure: adventure} do
       episodes = lens_episodes(adventure.work_notes_lens_search)
 
@@ -599,7 +599,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       end
     end
 
-    test "and a subsequent Lens-free search returns the memory written directly or through the other Lenses",
+    test "and a subsequent search including no writer returns the memory written directly or through the other Lenses",
          %{adventure: adventure} do
       episodes = lens_episodes(adventure.lens_free_search)
 
@@ -1077,14 +1077,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     lens_query = "Backup Vacuum 02:00 Juniper Muscat Cedar Amman Harbor Thursday"
 
     work_notes_lens_search =
-      lens_search_until(agent, ["work-notes"], lens_query, fn results ->
+      writer_search_until(agent, ["lens:work-notes"], lens_query, fn results ->
         results
         |> lens_episodes()
         |> Enum.any?(&(&1 |> episode_content() |> String.contains?("Vacuum")))
       end)
 
     lens_free_search =
-      lens_search_until(agent, [], "Juniper Muscat Harbor Thursday", fn results ->
+      writer_search_until(agent, [], "Juniper Muscat Harbor Thursday", fn results ->
         episodes = lens_episodes(results)
 
         Enum.any?(episodes, &(&1 |> episode_content() |> String.contains?("Juniper"))) and
@@ -1340,22 +1340,22 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   end
 
   # Searches operator one's `personal` Destination through `Gralkor.Client.search/2`
-  # with a Lens selector (MemorySearch has none), retrying until `predicate`
-  # holds or attempts run out.
-  defp lens_search_until(agent, lenses, query, predicate, attempts \\ 60) do
+  # including the given writers (MemorySearch has no writer selection), retrying
+  # until `predicate` holds or attempts run out.
+  defp writer_search_until(agent, writers, query, predicate, attempts \\ 60) do
     assert {:ok, results} =
              Client.search(agent, %Search{
                operator_id: @operator_one,
                query: query,
                destinations: ["personal"],
-               lenses: lenses
+               writers: writers
              })
 
     if predicate.(results) or attempts <= 1 do
       results
     else
       Process.sleep(1_000)
-      lens_search_until(agent, lenses, query, predicate, attempts - 1)
+      writer_search_until(agent, writers, query, predicate, attempts - 1)
     end
   end
 
