@@ -139,7 +139,7 @@ defmodule Gralkor.GraphitiPoolTest do
           }
           cls = (
               search_utils._gralkor_search_filters
-              if text(filter_class) == 'LensSearchFilters'
+              if text(filter_class) == 'WriterSearchFilters'
               else search_filters.SearchFilters
           )
           filters = cls(**kwargs)
