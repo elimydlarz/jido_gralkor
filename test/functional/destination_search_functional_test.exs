@@ -643,8 +643,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       included = timed_search(writers: ["lens:first-alpha"])
       excluded = timed_search(excluded_writers: ["direct"])
 
-      IO.inspect({elem(unfiltered, 0), elem(included, 0), elem(excluded, 0)}, label: "PERF")
-
       for {elapsed, {:ok, [%{facts: facts, episodes: episodes}]}} <- [included, excluded] do
         assert length(facts) == 50
         assert Enum.all?(facts, fn fact -> Enum.all?(fact.sources, &(&1[:lens] == "first-alpha")) end)
