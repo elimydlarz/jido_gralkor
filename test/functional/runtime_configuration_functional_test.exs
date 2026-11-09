@@ -175,6 +175,12 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       send(test_pid, {:runtime_search, destination.name})
       send(test_pid, {:runtime_search_writers, destination.name, Keyword.get(opts, :writers, [])})
 
+      send(
+        test_pid,
+        {:runtime_search_excluded_writers, destination.name,
+         Keyword.get(opts, :excluded_writers, [])}
+      )
+
       {:ok, %{facts: [], nodes: [], episodes: []}}
     end
 
@@ -966,7 +972,15 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert {:ok, [%{destination: "project"}]} = Gralkor.Client.search(agent_server, request)
       assert_receive {:runtime_search_writers, "project", ["lens:observations"]}
 
+      exclusion = %Gralkor.Search{request | writers: [], excluded_writers: ["lens:observations"]}
+      assert {:ok, [%{destination: "project"}]} = Gralkor.Client.search(agent_server, exclusion)
+      assert_receive {:runtime_search_excluded_writers, "project", ["lens:observations"]}
+
       assert :ok = JidoGralkor.Runtime.replace(agent_server, %{configuration | lenses: []})
+
+      assert_raise ArgumentError, ~r/observations/, fn ->
+        Gralkor.Client.search(agent_server, exclusion)
+      end
 
       error =
         assert_raise ArgumentError, fn -> Gralkor.Client.search(agent_server, request) end
