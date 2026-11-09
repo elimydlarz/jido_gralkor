@@ -1787,12 +1787,16 @@ defmodule Gralkor.GraphitiPool do
   @doc false
   @spec initialise_instance(any()) :: :ok
   def initialise_instance(instance) do
-    replaced =
+    %{"replaced" => replaced, "tagged" => tagged} =
       """
+      #{@writer_recording}
       async def initialise():
           await g.build_indices_and_constraints()
           driver = getattr(g, 'driver', None)
-          return list(getattr(driver, '_gralkor_replaced_stopword_indexes', None) or [])
+          return {
+              'replaced': list(getattr(driver, '_gralkor_replaced_stopword_indexes', None) or []),
+              'tagged': await backfill_writers(driver),
+          }
       initialise()
       """
       |> Gralkor.Python.run_coroutine(%{"g" => instance})
@@ -1802,6 +1806,15 @@ defmodule Gralkor.GraphitiPool do
       Logger.warning(
         "[gralkor] full-text indexes rebuilt without stopwords (FalkorDB #3348) — labels: " <>
           Enum.join(replaced, ", ")
+      )
+    end
+
+    %{"episodes" => episodes, "facts" => facts, "entities" => entities} = tagged
+
+    if episodes + facts + entities > 0 do
+      Logger.info(
+        "[gralkor] recorded writers for memory written before writers were recorded — " <>
+          "episodes: #{episodes}, facts: #{facts}, entities: #{entities}"
       )
     end
 
