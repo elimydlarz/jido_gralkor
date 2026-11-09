@@ -445,8 +445,22 @@ defmodule Gralkor.GraphitiPool do
   """
 
   @fact_rendering """
-  async def render_facts(g, edges, lens_names=(), lens_suffixes=(), excluded_suffixes=()):
+  async def render_facts(g, edges, writers=(), excluded_writers=()):
       from graphiti_core.nodes import EpisodicNode
+
+      def named(writer, selected):
+          return any(
+              writer.startswith(selector[:-1]) if selector.endswith(':*') else writer == selector
+              for selector in selected
+          )
+
+      def admitted(episode):
+          produced = getattr(episode, '_gralkor_writers', None) or ['unknown']
+          return (
+              (not writers or any(named(writer, writers) for writer in produced))
+              and (not excluded_writers or any(not named(writer, excluded_writers) for writer in produced))
+          )
+
       episode_ids = list(dict.fromkeys(
           episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
       ))
