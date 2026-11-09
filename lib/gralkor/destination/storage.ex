@@ -11,11 +11,11 @@ defmodule Gralkor.Destination.Storage do
   Searches one Destination for facts, nodes, and episodes together.
 
   Options: `:limits` (`%{facts:, nodes:, episodes:}`, required), `:entity_types`,
-  `:edge_types`, `:lenses`, and `:excluded_lenses` (optional lists). Selected
-  `:lenses` restrict every kind to what those Lenses wrote before ranking and
-  limits; `:excluded_lenses` leave out, before ranking and limits, the
-  excluded Lenses' episodes, facts drawn only from them, and entities only
-  they mention.
+  `:edge_types`, `:writers`, and `:excluded_writers` (optional lists of writer
+  names, see `Gralkor.Search`). Included `:writers` restrict every kind to
+  what those writers produced before ranking and limits; `:excluded_writers`
+  leave out, before ranking and limits, the excluded writers' episodes and the
+  facts and entities only they produced.
   """
   @callback search(
               Destination.t(),
