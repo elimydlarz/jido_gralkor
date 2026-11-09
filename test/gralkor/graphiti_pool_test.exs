@@ -784,6 +784,48 @@ defmodule Gralkor.GraphitiPoolTest do
       GenServer.stop(pid)
       assert_independent_pool_admission()
     end
+
+    test "and writers are recorded only after durable extraction completion is recorded under the current claim" do
+      %{pid: pid, g: g} = start_writer_recording_pool()
+
+      plan_extraction(g, ["kept-entity"], [])
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "writers", "kept", "notes", nil,
+                 lens: "alpha",
+                 uuid: "kept-episode"
+               )
+
+      assert {:ok, %{"extraction_complete" => true}} =
+               GraphitiPool.get_episode(pid, "writers", "kept-episode")
+
+      plan_extraction(g, ["stolen-entity"], [], steal_claim: true)
+
+      capture_io(:stderr, fn ->
+        assert {:error, {:python, message}} =
+                 GraphitiPool.add_episode(pid, "writers", "stolen", "notes", nil,
+                   lens: "alpha",
+                   uuid: "stolen-episode"
+                 )
+
+        assert message =~ "episode claim lost before completion"
+      end)
+
+      assert {:ok, %{"extraction_complete" => false}} =
+               GraphitiPool.get_episode(pid, "writers", "stolen-episode")
+
+      assert recorded_writers(
+               g,
+               "MATCH (e:Episodic) RETURN e.uuid AS key, e._gralkor_writers AS writers"
+             ) ==
+               %{"kept-episode" => ["lens:alpha"], "stolen-episode" => nil}
+
+      assert recorded_writers(
+               g,
+               "MATCH (n:Entity) RETURN n.uuid AS key, n._gralkor_writers AS writers"
+             ) ==
+               %{"kept-entity" => ["lens:alpha"], "stolen-entity" => nil}
+    end
   end
 
   defp assert_independent_pool_admission do
@@ -1177,6 +1219,68 @@ defmodule Gralkor.GraphitiPoolTest do
       refute first == second
 
       GenServer.stop(pid)
+    end
+
+    test "and the episode records its one writer: its Lens, the Reflection its source description names, direct, or `unknown`" do
+      %{pid: pid, g: g} = start_writer_recording_pool()
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "writers", "lens memory", "notes", nil,
+                 lens: "alpha"
+               )
+
+      assert :ok =
+               GraphitiPool.add_episode(
+                 pid,
+                 "writers",
+                 "reflection memory",
+                 "reflection:review",
+                 nil
+               )
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "writers", "direct memory", "manual", nil,
+                 writer: :direct
+               )
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "writers", "unattributed memory", "old notes", nil)
+
+      assert recorded_writers(
+               g,
+               "MATCH (e:Episodic) RETURN e.content AS key, e._gralkor_writers AS writers"
+             ) ==
+               %{
+                 "lens memory" => ["lens:alpha"],
+                 "reflection memory" => ["reflection:review"],
+                 "direct memory" => ["direct"],
+                 "unattributed memory" => ["unknown"]
+               }
+    end
+
+    test "and every fact and entity the write touched records the writers of every episode it was drawn from or that mentions it, keeping writers recorded earlier" do
+      %{pid: pid, g: g} = start_writer_recording_pool()
+
+      plan_extraction(g, ["lesson", "project"], [["learns", "lesson", "project"]])
+      assert :ok = GraphitiPool.add_episode(pid, "writers", "first", "notes", nil, lens: "alpha")
+      plan_extraction(g, ["lesson"], [["learns", "lesson", "project"]])
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "writers", "second", "manual", nil, writer: :direct)
+
+      plan_extraction(g, ["lesson"], [])
+      assert :ok = GraphitiPool.add_episode(pid, "writers", "third", "notes", nil, lens: "alpha")
+
+      assert recorded_writers(
+               g,
+               "MATCH ()-[e:RELATES_TO]->() RETURN e.uuid AS key, e._gralkor_writers AS writers"
+             ) == %{"learns" => ["lens:alpha", "direct"]}
+
+      assert recorded_writers(
+               g,
+               "MATCH (n:Entity) RETURN n.uuid AS key, n._gralkor_writers AS writers"
+             ) ==
+               %{"lesson" => ["lens:alpha", "direct"], "project" => ["lens:alpha"]}
     end
   end
 
@@ -2110,6 +2214,90 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert log =~ "build_indices_and_constraints failed (non-fatal)"
       assert log =~ "Episodic"
+    end
+  end
+
+  describe "when a graph instance's indexes are built on FalkorDB > while the graph holds episodes, facts, or entities without recorded writers" do
+    setup [:start_real_embedded_pool, :seed_unrecorded_writer_graph]
+
+    test "then each such episode records the writer its provenance names, or `unknown`", %{
+      pid: pid
+    } do
+      instance = capture_log_result(fn -> GraphitiPool.for(pid, "history") end)
+
+      assert recorded_writers(
+               instance,
+               "MATCH (e:Episodic) RETURN e.uuid AS key, e._gralkor_writers AS writers"
+             ) == %{
+               "lens-ep" => ["lens:alpha"],
+               "durable-direct-ep" => ["direct"],
+               "described-direct-ep" => ["direct"],
+               "reflection-ep" => ["reflection:review"],
+               "unknown-ep" => ["unknown"]
+             }
+    end
+
+    test "and each such fact and entity records the writers of its episodes", %{pid: pid} do
+      instance = capture_log_result(fn -> GraphitiPool.for(pid, "history") end)
+
+      assert recorded_writers(
+               instance,
+               "MATCH ()-[e:RELATES_TO]->() RETURN e.uuid AS key, e._gralkor_writers AS writers"
+             ) == %{
+               "shared-edge" => ["lens:alpha", "direct"],
+               "reflection-edge" => ["reflection:review"],
+               "orphan-edge" => ["unknown"]
+             }
+
+      assert recorded_writers(
+               instance,
+               "MATCH (n:Entity) RETURN n.uuid AS key, n._gralkor_writers AS writers"
+             ) == %{
+               "shared-node" => ["lens:alpha", "reflection:review"],
+               "direct-node" => ["direct"],
+               "orphan-node" => ["unknown"]
+             }
+    end
+
+    test "and the recording is logged naming the graph and how many episodes, facts, and entities it recorded",
+         %{pid: pid} do
+      log = capture_log(fn -> GraphitiPool.for(pid, "history") end)
+
+      assert log =~
+               "[gralkor] recorded writers for memory written before writers were recorded — " <>
+                 "graph: #{physical("history")} episodes: 5 facts: 3 entities: 3"
+    end
+  end
+
+  describe "when a graph instance's indexes are built on FalkorDB > while every episode, fact, and entity already records its writers" do
+    setup [:start_real_embedded_pool, :seed_recorded_writer_graph]
+
+    test "then nothing is recorded", %{pid: pid} do
+      instance = capture_log_result(fn -> GraphitiPool.for(pid, "recorded") end)
+      capture_log(fn -> assert {:ok, _} = GraphitiPool.build_indices(pid) end)
+
+      assert recorded_writers(
+               instance,
+               "MATCH (e:Episodic) RETURN e.uuid AS key, e._gralkor_writers AS writers"
+             ) == %{"lens-ep" => ["direct"]}
+
+      assert recorded_writers(
+               instance,
+               "MATCH ()-[e:RELATES_TO]->() RETURN e.uuid AS key, e._gralkor_writers AS writers"
+             ) == %{"edge" => ["reflection:review"]}
+
+      assert recorded_writers(
+               instance,
+               "MATCH (n:Entity) RETURN n.uuid AS key, n._gralkor_writers AS writers"
+             ) == %{"node" => ["unknown"]}
+    end
+
+    test "and nothing is logged", %{pid: pid} do
+      log = capture_log(fn -> GraphitiPool.for(pid, "recorded") end)
+      refute log =~ "recorded writers"
+
+      log = capture_log(fn -> assert {:ok, _} = GraphitiPool.build_indices(pid) end)
+      refute log =~ "recorded writers"
     end
   end
 
@@ -4614,6 +4802,185 @@ defmodule Gralkor.GraphitiPoolTest do
       )
 
     Pythonx.decode(wrapped)
+  end
+
+  # Memory written before writers were recorded, in the `history` group's
+  # database before its graph instance exists.
+  defp seed_unrecorded_writer_graph(%{pid: pid}) do
+    physical_graph_query(pid, "history", [
+      """
+      CREATE (lens:Episodic {uuid: 'lens-ep', source_description: 'notes [lens: alpha]', content: 'a'}),
+             (durable:Episodic {uuid: 'durable-direct-ep', source_description: 'manual', content: 'b', _gralkor_writer: 'direct'}),
+             (described:Episodic {uuid: 'described-direct-ep', source_description: 'captured [gralkor: direct]', content: 'c'}),
+             (reflection:Episodic {uuid: 'reflection-ep', source_description: 'reflection:review', content: 'd'}),
+             (:Episodic {uuid: 'unknown-ep', source_description: 'old notes', content: 'e'}),
+             (shared:Entity {uuid: 'shared-node', name: 'shared'}),
+             (direct:Entity {uuid: 'direct-node', name: 'direct'}),
+             (orphan:Entity {uuid: 'orphan-node', name: 'orphan'}),
+             (lens)-[:MENTIONS]->(shared),
+             (reflection)-[:MENTIONS]->(shared),
+             (durable)-[:MENTIONS]->(direct),
+             (shared)-[:RELATES_TO {uuid: 'shared-edge', episodes: ['lens-ep', 'described-direct-ep']}]->(direct),
+             (direct)-[:RELATES_TO {uuid: 'reflection-edge', episodes: ['reflection-ep', 'deleted-ep']}]->(shared),
+             (orphan)-[:RELATES_TO {uuid: 'orphan-edge', episodes: []}]->(orphan)
+      """
+    ])
+
+    :ok
+  end
+
+  # Memory whose writers are already recorded, deliberately unlike what its
+  # provenance would name, in the `recorded` group's database.
+  defp seed_recorded_writer_graph(%{pid: pid}) do
+    physical_graph_query(pid, "recorded", [
+      """
+      CREATE (lens:Episodic {uuid: 'lens-ep', source_description: 'notes [lens: alpha]', content: 'a', _gralkor_writers: ['direct']}),
+             (node:Entity {uuid: 'node', name: 'node', _gralkor_writers: ['unknown']}),
+             (lens)-[:MENTIONS]->(node),
+             (node)-[:RELATES_TO {uuid: 'edge', episodes: ['lens-ep'], _gralkor_writers: ['reflection:review']}]->(node)
+      """
+    ])
+
+    :ok
+  end
+
+  defp capture_log_result(fun) do
+    parent = self()
+    capture_log(fn -> send(parent, {:captured_result, fun.()}) end)
+    assert_received {:captured_result, result}
+    result
+  end
+
+  defp recorded_writers(instance, query) do
+    instance
+    |> graph_query(query)
+    |> Map.new(&{&1["key"], &1["writers"]})
+  end
+
+  # A pool over a real embedded FalkorDB whose graph instances stand in for
+  # the graph library's extraction: each episode write saves the planned
+  # entities, mentions, and facts through the graph library's own bulk save,
+  # every fact carrying every episode that has drawn it so far.
+  defp start_writer_recording_pool do
+    data_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "gralkor_writers_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+      )
+
+    on_exit(fn -> File.rm_rf!(data_dir) end)
+    test_pid = self()
+
+    pid =
+      start_supervised!(
+        {GraphitiPool,
+         name: nil,
+         table: :"writer_pool_#{System.unique_integer([:positive])}",
+         falkordb_spec: {:embedded, data_dir},
+         construct_shared_clients: fn _spec ->
+           %{llm_client: nil, embedder: nil, cross_encoder: nil}
+         end,
+         construct_instance: fn falkor_db, _shared, group_id ->
+           {g, _} =
+             Pythonx.eval(
+               """
+               from graphiti_core.driver.falkordb_driver import FalkorDriver
+
+               class _WriterRecordingGraphiti:
+                   def __init__(self, falkor_db, group_id):
+                       self.driver = FalkorDriver(falkor_db=falkor_db, database=group_id)
+                       self.group_id = group_id
+                       self.plan = {'entities': [], 'edges': [], 'steal_claim': False}
+                       self.edge_episodes = {}
+
+                   async def add_episode(self, **kwargs):
+                       from datetime import datetime, timezone
+                       from graphiti_core.edges import EntityEdge, EpisodicEdge
+                       from graphiti_core.graphiti import AddEpisodeResults, add_nodes_and_edges_bulk
+                       from graphiti_core.nodes import EntityNode, EpisodicNode
+                       now = datetime.now(timezone.utc)
+                       if 'uuid' in kwargs:
+                           episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
+                       else:
+                           episode = EpisodicNode(
+                               name=kwargs['name'],
+                               group_id=self.group_id,
+                               labels=[],
+                               source=kwargs['source'],
+                               content=kwargs['episode_body'],
+                               source_description=kwargs['source_description'],
+                               created_at=now,
+                               valid_at=kwargs['reference_time'],
+                           )
+                       nodes = [
+                           EntityNode(uuid=name, name=name, group_id=self.group_id, labels=['Entity'],
+                                      created_at=now, name_embedding=[0.1, 0.2, 0.3])
+                           for name in self.plan['entities']
+                       ]
+                       mentions = [
+                           EpisodicEdge(uuid=f'{episode.uuid}-{node.uuid}', group_id=self.group_id,
+                                        source_node_uuid=episode.uuid, target_node_uuid=node.uuid,
+                                        created_at=now)
+                           for node in nodes
+                       ]
+                       edges = []
+                       for uuid, source, target in self.plan['edges']:
+                           self.edge_episodes[uuid] = self.edge_episodes.get(uuid, []) + [episode.uuid]
+                           edges.append(EntityEdge(
+                               uuid=uuid, group_id=self.group_id, source_node_uuid=source,
+                               target_node_uuid=target, created_at=now, name='RELATES', fact=uuid,
+                               fact_embedding=[0.1, 0.2, 0.3], episodes=self.edge_episodes[uuid],
+                           ))
+                       await add_nodes_and_edges_bulk(self.driver, [episode], mentions, nodes, edges, None)
+                       if self.plan['steal_claim']:
+                           await self.driver.execute_query(
+                               '''
+                               MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
+                               SET c.owner = 'replacement-owner', c.generation = c.generation + 1
+                               RETURN c.generation AS generation
+                               ''',
+                               uuid=episode.uuid,
+                           )
+                       return AddEpisodeResults(
+                           episode=episode, episodic_edges=mentions, nodes=nodes, edges=edges,
+                           communities=[], community_edges=[],
+                       )
+
+               _WriterRecordingGraphiti(falkor_db, group_id.decode('utf-8'))
+               """,
+               %{"falkor_db" => falkor_db, "group_id" => group_id}
+             )
+
+           send(test_pid, {:writer_recording_instance, g})
+           g
+         end,
+         initialise_instance: fn _instance -> :ok end,
+         warmup: false,
+         install_loop_fn: &Gralkor.Python.install_async_runtime/0}
+      )
+
+    g = GraphitiPool.for(pid, "writers")
+    assert_received {:writer_recording_instance, ^g}
+    %{pid: pid, g: g}
+  end
+
+  defp plan_extraction(g, entities, edges, opts \\ []) do
+    Pythonx.eval(
+      """
+      import json
+      g.plan = json.loads(plan.decode('utf-8'))
+      None
+      """,
+      %{
+        "g" => g,
+        "plan" =>
+          Jason.encode!(%{
+            entities: entities,
+            edges: edges,
+            steal_claim: Keyword.get(opts, :steal_claim, false)
+          })
+      }
+    )
   end
 
   defp start_real_embedded_pool(_context) do
