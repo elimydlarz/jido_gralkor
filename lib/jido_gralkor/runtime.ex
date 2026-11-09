@@ -49,8 +49,15 @@ defmodule JidoGralkor.Runtime do
            owner,
            {:resolve_search, lens_names, destination_names, excluded_lens_names}
          ) do
-      {:ok, resolved} -> resolved
-      {:error, reason} -> raise ArgumentError, inspect(reason)
+      {:ok, resolved} ->
+        resolved
+
+      {:error, {:unknown_lens_writer, kind, writer}} ->
+        raise ArgumentError,
+              "invalid #{kind} writer #{inspect(writer)}: unknown Lens in this agent's runtime"
+
+      {:error, reason} ->
+        raise ArgumentError, inspect(reason)
     end
   end
 
