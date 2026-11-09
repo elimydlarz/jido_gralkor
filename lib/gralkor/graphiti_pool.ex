@@ -298,55 +298,34 @@ defmodule Gralkor.GraphitiPool do
               )
           return rewritten
 
-      def node_constructor(original):
+      def filter_constructor(original, variable):
           def constructed(filters, provider):
               queries, params = original(filters, provider)
               queries = label_disjunction(list(queries), filters, provider)
-              node_uuids = getattr(filters, 'node_uuids', None)
-              if node_uuids is not None:
-                  queries = queries + ['n.uuid IN $gralkor_node_uuids']
-                  params = {**params, 'gralkor_node_uuids': list(node_uuids)}
-              excluded_node_uuids = getattr(filters, 'excluded_node_uuids', None)
-              if excluded_node_uuids is not None:
-                  queries = queries + ['NOT n.uuid IN $gralkor_excluded_node_uuids']
-                  params = {**params, 'gralkor_excluded_node_uuids': list(excluded_node_uuids)}
-              return queries, params
+              clauses, writer_params = writer_clauses(variable, filters)
+              return queries + clauses, {**params, **writer_params}
           constructed._gralkor_original = original
           return constructed
 
+      def node_constructor(original):
+          return filter_constructor(original, 'n')
+
       def edge_constructor(original):
-          def constructed(filters, provider):
-              queries, params = original(filters, provider)
-              queries = label_disjunction(list(queries), filters, provider)
-              excluded_edge_uuids = getattr(filters, 'excluded_edge_uuids', None)
-              if excluded_edge_uuids is not None:
-                  queries = queries + ['NOT e.uuid IN $gralkor_excluded_edge_uuids']
-                  params = {**params, 'gralkor_excluded_edge_uuids': list(excluded_edge_uuids)}
-              return queries, params
-          constructed._gralkor_original = original
-          return constructed
+          return filter_constructor(original, 'e')
 
       def episode_search(original):
           async def episode_fulltext_search(driver, query, _search_filter, group_ids=None, limit=search_utils.RELEVANT_SCHEMA_LIMIT):
-              episode_uuids = getattr(_search_filter, 'episode_uuids', None)
-              excluded_episode_uuids = getattr(_search_filter, 'excluded_episode_uuids', None)
-              if episode_uuids is None and excluded_episode_uuids is None:
+              clauses, params = writer_clauses('e', _search_filter)
+              if not clauses:
                   return await original(driver, query, _search_filter, group_ids, limit)
               if driver.search_interface or driver.provider != GraphProvider.FALKORDB:
                   raise RuntimeError(
-                      f'Gralkor Lens search filters support only FalkorDB, not {driver.provider}'
+                      f'Gralkor writer search filters support only FalkorDB, not {driver.provider}'
                   )
               fuzzy_query = fulltext_query(query, group_ids, driver)
               if fuzzy_query == '':
                   return []
-              params = {}
-              uuid_filter = ''
-              if episode_uuids is not None:
-                  uuid_filter += ' AND e.uuid IN $gralkor_episode_uuids'
-                  params['gralkor_episode_uuids'] = list(episode_uuids)
-              if excluded_episode_uuids is not None:
-                  uuid_filter += ' AND NOT e.uuid IN $gralkor_excluded_episode_uuids'
-                  params['gralkor_excluded_episode_uuids'] = list(excluded_episode_uuids)
+              uuid_filter = ''.join(f' AND {clause}' for clause in clauses)
               group_filter = ''
               if group_ids is not None:
                   group_filter = '\\nAND e.group_id IN $group_ids'
