@@ -1,5 +1,23 @@
 # Changelog
 
+## [17.0.0] - 2026-11-09
+
+Search filters memory by the writer that produced it. Every episode, fact, and entity now records its writers, and a search includes or excludes writers by a constant check on each record, so a filtered search takes about as long as an unfiltered one.
+
+### Breaking
+- **`lenses`, `excluded_lenses`, and `limits` are removed from `%Gralkor.Search{}`.** Supplying one raises `ArgumentError` naming the field, before any Destination is searched. **Migrate:** replace `lenses: ["name"]` with `writers: ["lens:name"]`, and `excluded_lenses: ["name"]` with `excluded_writers: ["lens:name"]`. Remove `limits`: every Destination now returns at most 50 facts, 20 nodes, and 15 episodes (`Gralkor.Search.limits/0`, which was 20, 20, and 5).
+- Including and excluding writers in one search is now allowed (it raised before). A result is returned only when an included writer produced it and a writer that is not excluded produced it.
+- An invalid writer raises `ArgumentError` saying whether it was included or excluded and naming the value. The old Lens selection messages (`unknown Lens`, `unknown excluded Lens`, `search lenses must be a list`) are gone.
+
+### Fixed
+- **Lens-filtered search timed out on large graphs.** A Lens filter first collected the uuids of every fact and entity the Lens's episodes produced. It then passed them into graphiti's queries as `e.uuid IN $edge_uuids` and `n.uuid IN $node_uuids` (and `NOT … IN` for exclusion), and FalkorDB checks such a list one item at a time for every row it scans. On dev Phil's `global` graph (28,465 facts, 2,496 episodes, 241 `code-changes` episodes producing 8,484 facts) the fact query with the 8,484-uuid list ran for more than 110 seconds before FalkorDB's timeout; the same scan without the list takes 50 ms, and listing the Lens's episodes takes 0.55 s. Filters now check the writers recorded on each record, which costs the same for every row however much a writer produced. On a test graph of 15,000 facts, 3,000 entities, and 600 episodes, a search including one Lens took 38 ms, excluding direct writes took 43 ms, and the unfiltered search took 48 ms. The pre-search scans that collected those uuids are gone.
+
+### Added
+- **Writers.** A search names writers as `lens:<Lens name>`, `reflection:<Reflection name>` (memory stored by that Reflection's Destination output), `direct` (direct capture and `memory_add`), `unknown` (memory whose writer cannot be determined), `lens:*` (every Lens), and `reflection:*` (every Reflection). A Lens name must be registered (resolved from the agent's runtime for `search/2`); a Reflection name only needs to be non-blank.
+- **`writers` and `excluded_writers` on `%Gralkor.Search{}`.** `writers` keeps only episodes an included writer wrote, facts drawn from such an episode, and entities such an episode mentions. `excluded_writers` leaves out episodes an excluded writer wrote, and facts and entities only excluded writers produced. Fact `sources` keep only episodes by writers the search admits. Neither adds nor narrows Destinations, and both run inside the graph queries before the per-Destination limits.
+- **Writers are recorded on every write.** Every `Episodic`, `RELATES_TO` edge, and `Entity` in a Graphiti graph carries `_gralkor_writers`: an episode its one writer, a fact the writers of every episode it was drawn from, and an entity the writers of every episode that mentions it. After each episode write (Lens ingestion, capture, `memory_add`, and Reflection delivery) the facts and entities it touched are recomputed from their episodes, so a later writer is added and never replaces an earlier one.
+- **Memory written before writers were recorded is given its writers.** The first time each graph's instance is built after upgrading (on first use, or through `build_indices`), every episode, fact, and entity without recorded writers is given them. An episode's writer comes from its provenance: a ` [lens: NAME]` source description is `lens:NAME`, a durable direct marker or a ` [gralkor: direct]` description is `direct`, a `reflection:NAME` description is `reflection:NAME`, and anything else is `unknown`. Facts and entities then take their episodes' writers. It runs inside FalkorDB in batches (dev's `global` graph shape took under 250 ms on a laptop), touches only records without writers, and logs `[gralkor] recorded writers for memory written before writers were recorded — graph: … episodes: N facts: N entities: N` when it records any.
+
 ## [16.1.1] - 2026-11-07
 
 ### Fixed
