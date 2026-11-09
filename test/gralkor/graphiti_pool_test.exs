@@ -2793,11 +2793,9 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.recorded["node_labels"] = search_filter.node_labels
                 self.recorded["edge_types"] = search_filter.edge_types
                 self.recorded["edge_uuids"] = search_filter.edge_uuids
-                self.recorded["node_uuids"] = getattr(search_filter, "node_uuids", None)
-                self.recorded["episode_uuids"] = getattr(search_filter, "episode_uuids", None)
-                self.recorded["excluded_edge_uuids"] = getattr(search_filter, "excluded_edge_uuids", None)
-                self.recorded["excluded_node_uuids"] = getattr(search_filter, "excluded_node_uuids", None)
-                self.recorded["excluded_episode_uuids"] = getattr(search_filter, "excluded_episode_uuids", None)
+                self.recorded["filter_class"] = type(search_filter).__name__
+                self.recorded["writers"] = getattr(search_filter, "writers", None)
+                self.recorded["excluded_writers"] = getattr(search_filter, "excluded_writers", None)
                 edges = [
                     _Edge("commit-1 changes parse", "CHANGES", "commit-1", "parse-fn"),
                     _Edge("commit-2 changes render", "CHANGES", "commit-2", "render-fn"),
