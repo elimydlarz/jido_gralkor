@@ -594,8 +594,16 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
                "amber shared lesson fact"
              ]
 
-      assert {:ok, [%{facts: [], nodes: [], episodes: []}]} =
+      assert {:ok, [%{facts: [shared], nodes: [], episodes: []}]} =
                writer_search(["lens:first-beta"], excluded_writers: ["lens:first-beta"])
+
+      assert shared.fact == "amber shared lesson fact"
+      refute Map.has_key?(shared, :sources)
+
+      assert {:ok, [%{facts: [], nodes: [], episodes: []}]} =
+               writer_search(["lens:first-beta"],
+                 excluded_writers: ["lens:first-beta", "lens:first-alpha"]
+               )
     end
   end
 
@@ -634,6 +642,8 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       unfiltered = timed_search([])
       included = timed_search(writers: ["lens:first-alpha"])
       excluded = timed_search(excluded_writers: ["direct"])
+
+      IO.inspect({elem(unfiltered, 0), elem(included, 0), elem(excluded, 0)}, label: "PERF")
 
       for {elapsed, {:ok, [%{facts: facts, episodes: episodes}]}} <- [included, excluded] do
         assert length(facts) == 50
@@ -1268,7 +1278,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
-  defp search(overrides \\ []) do
+  defp search(overrides) do
     Client.search(
       struct!(
         Search,
@@ -1726,6 +1736,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
               if name == 'SummarizedEntities': return {'summaries': []}
               if name == 'NodeResolutions': return {'entity_resolutions': []}
               if name == 'EdgeDuplicate': return {'duplicate_facts': [], 'contradicted_facts': []}
+              if name == 'EdgeTimestamps': return {'valid_at': None, 'invalid_at': None}
               raise AssertionError('unexpected external inference: ' + name)
           async def create(*args, **kwargs): return [0.1, 0.2, 0.3]
           async def create_batch(values): return [[0.1, 0.2, 0.3] for _ in values]
