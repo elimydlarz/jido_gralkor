@@ -173,4 +173,19 @@ defmodule Gralkor.Search do
 
   @doc false
   def removed_fields, do: @removed_fields
+
+  @doc false
+  @spec admitted?([String.t()], [String.t()], [String.t()]) :: boolean()
+  def admitted?(produced_by, included, excluded) do
+    (included == [] or Enum.any?(produced_by, &named?(&1, included))) and
+      (excluded == [] or Enum.any?(produced_by, &(not named?(&1, excluded))))
+  end
+
+  defp named?(writer, selectors) do
+    Enum.any?(selectors, fn
+      "lens:*" -> String.starts_with?(writer, "lens:")
+      "reflection:*" -> String.starts_with?(writer, "reflection:")
+      selector -> selector == writer
+    end)
+  end
 end
