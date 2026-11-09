@@ -188,21 +188,19 @@ defmodule Gralkor.GraphitiPool do
                             [_, version] -> version
                           end)
 
-  # graphiti-core 0.31.2's SearchFilters restricts edges by uuid but has no
-  # node or episode uuid filter, its episode full-text search ignores the
-  # filter entirely, and it renders several node labels as the label
-  # expression `n:A|B`, which FalkorDB rejects. Pool start wraps graphiti's
-  # filter constructors and episode full-text search once, before any search:
+  # graphiti-core 0.31.2's SearchFilters has no writer filter, its episode
+  # full-text search ignores the filter entirely, and it renders several node
+  # labels as the label expression `n:A|B`, which FalkorDB rejects. Pool start
+  # wraps graphiti's filter constructors and episode full-text search once,
+  # before any search:
   #
   # * several node labels become `(n:A OR n:B)` for FalkorDB;
-  # * a `LensSearchFilters` carrying `node_uuids` adds `n.uuid IN …` to every
-  #   node search, and one carrying `excluded_node_uuids` adds
-  #   `NOT n.uuid IN …`;
-  # * one carrying `excluded_edge_uuids` adds `NOT e.uuid IN …` to every edge
-  #   search (graphiti's own `edge_uuids` admits edges);
-  # * one carrying `episode_uuids` or `excluded_episode_uuids` runs the FalkorDB
-  #   episode full-text query with `e.uuid IN …` or `NOT e.uuid IN …` before
-  #   its limit.
+  # * a `WriterSearchFilters` carrying `writers` adds to every node, edge, and
+  #   FalkorDB episode full-text query a per-row check that a writer recorded
+  #   in the record's own `_gralkor_writers` is included, and one carrying
+  #   `excluded_writers` a check that a recorded writer is not excluded, each
+  #   before its query's limit. Only the requested writer names and `lens:` or
+  #   `reflection:` prefixes are passed, never record identifiers.
   #
   # Without those fields every query is graphiti's own. These are graphiti
   # internals, so each wrapped or reused function is checked for its pinned
