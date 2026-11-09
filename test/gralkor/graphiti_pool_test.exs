@@ -4860,7 +4860,9 @@ defmodule Gralkor.GraphitiPoolTest do
   # A pool over a real embedded FalkorDB whose graph instances stand in for
   # the graph library's extraction: each episode write saves the planned
   # entities, mentions, and facts through the graph library's own bulk save,
-  # every fact carrying every episode that has drawn it so far.
+  # every fact carrying every episode that has drawn it so far. A planned
+  # stolen claim writes the episode and its entities straight into the graph, then hands the
+  # claim to another owner before durable extraction completion is recorded.
   defp start_writer_recording_pool do
     data_dir =
       Path.join(
@@ -4931,8 +4933,27 @@ defmodule Gralkor.GraphitiPoolTest do
                                target_node_uuid=target, created_at=now, name='RELATES', fact=uuid,
                                fact_embedding=[0.1, 0.2, 0.3], episodes=self.edge_episodes[uuid],
                            ))
-                       await add_nodes_and_edges_bulk(self.driver, [episode], mentions, nodes, edges, None)
                        if self.plan['steal_claim']:
+                           await self.driver.execute_query(
+                               '''
+                               MERGE (e:Episodic {uuid: $uuid})
+                               SET e.group_id = $group_id, e.content = $content, e.source = 'text',
+                                   e.source_description = $source_description, e.name = $uuid,
+                                   e.entity_edges = [], e.created_at = $now, e.valid_at = $now
+                               WITH e
+                               UNWIND $entities AS entity
+                               MERGE (n:Entity {uuid: entity})
+                               SET n.name = entity, n.group_id = $group_id
+                               MERGE (e)-[:MENTIONS {uuid: $uuid + '-' + entity}]->(n)
+                               RETURN count(n) AS mentioned
+                               ''',
+                               uuid=episode.uuid,
+                               group_id=self.group_id,
+                               content=episode.content,
+                               source_description=episode.source_description,
+                               now=now.isoformat(),
+                               entities=[node.uuid for node in nodes],
+                           )
                            await self.driver.execute_query(
                                '''
                                MATCH (c:_GralkorEpisodeClaim {uuid: $uuid})
@@ -4941,6 +4962,8 @@ defmodule Gralkor.GraphitiPoolTest do
                                ''',
                                uuid=episode.uuid,
                            )
+                       else:
+                           await add_nodes_and_edges_bulk(self.driver, [episode], mentions, nodes, edges, None)
                        return AddEpisodeResults(
                            episode=episode, episodic_edges=mentions, nodes=nodes, edges=edges,
                            communities=[], community_edges=[],
