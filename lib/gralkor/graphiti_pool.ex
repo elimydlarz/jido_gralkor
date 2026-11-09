@@ -657,26 +657,18 @@ defmodule Gralkor.GraphitiPool do
 
     * `:node_labels` — optional `[String.t()]` entity-type labels.
     * `:edge_types` — optional `[String.t()]` relationship names.
-    * `:lenses` — optional `[String.t()]` Lens names. Episodes are restricted
-      to those whose source description ends with a selected ` [lens: NAME]`
-      marker (never a durable direct write); edges to those drawn from such an
-      episode; nodes to those such an episode `MENTIONS`. Edges use
-      `SearchFilters.edge_uuids`; nodes and episodes use the `node_uuids` and
-      `episode_uuids` that `install_lens_search_filters` adds to graphiti's
-      node and FalkorDB episode full-text queries, so every restriction applies
-      before ranking and limits. Fact sources keep only selected-Lens episodes.
-      When nothing in the group matches, no graph search runs and every kind
-      is empty.
-    * `:excluded_lenses` — optional `[String.t()]` Lens names whose writes are
-      left out, with every other writer kept. Episodes whose source description
-      ends with an excluded ` [lens: NAME]` marker are rejected; so are edges
-      whose every originating episode is such an episode, and nodes mentioned
-      only by such episodes. An edge or node another writer's episode also
-      supports stays, and fact sources omit the excluded episodes. The
-      rejections are `NOT … IN` filters added to graphiti's node, edge, and
-      FalkorDB episode full-text queries, so they apply before ranking and
-      limits. When the group holds nothing an excluded Lens wrote, the search
-      runs unfiltered.
+    * `:writers` — optional `[String.t()]` writer names (`lens:NAME`,
+      `reflection:NAME`, `direct`, `unknown`, `lens:*`, `reflection:*`). Edges,
+      nodes, and episodes are admitted only when a writer recorded in their own
+      `_gralkor_writers` is included; fact sources keep only included writers'
+      episodes.
+    * `:excluded_writers` — optional `[String.t()]` writer names. Episodes an
+      excluded writer wrote, and edges and nodes only excluded writers
+      produced, are rejected; fact sources omit excluded writers' episodes.
+
+  Both are per-row checks the installed `WriterSearchFilters` adds to
+  graphiti's node, edge, and FalkorDB episode full-text queries, before their
+  limits, and only the requested writer names are passed to them.
   """
   @spec search_memory(
           GenServer.server(),
