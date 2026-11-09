@@ -191,41 +191,46 @@ defmodule Gralkor.Client do
   def search(%Search{} = request) do
     _ = registered_lenses!()
     validate_search_request!(request)
-    lenses = resolve_search_lenses!(request.lenses)
-    excluded_lenses = resolve_excluded_search_lenses!(request.excluded_lenses)
+    writers = resolve_writers!(:included, request.writers, &lens!/1)
+    excluded_writers = resolve_writers!(:excluded, request.excluded_writers, &lens!/1)
     destinations = resolve_search_destinations!(request.destinations)
-    search_resolved(request, lenses, excluded_lenses, destinations)
+    search_resolved(request, writers, excluded_writers, destinations)
   end
 
   @spec search(runtime_owner(), Search.t()) ::
           {:ok, [search_result()]} | {:error, term()}
   def search(runtime_owner, %Search{} = request) do
     validate_search_request!(request)
-    validate_lens_names!(request.lenses)
-    validate_excluded_lens_names!(request.excluded_lenses)
+    validate_writers!(:included, request.writers)
+    validate_writers!(:excluded, request.excluded_writers)
     validate_destination_names!(request.destinations)
 
-    {resolved_lenses, destinations, resolved_excluded_lenses} =
+    {lenses, destinations, excluded_lenses} =
       Runtime.resolve_search!(
         runtime_owner,
-        request.lenses,
+        request.writers,
         request.destinations,
-        request.excluded_lenses
+        request.excluded_writers
       )
 
-    lenses = resolved_lenses |> Enum.map(& &1.name) |> Enum.uniq()
-    excluded_lenses = resolved_excluded_lenses |> Enum.map(& &1.name) |> Enum.uniq()
-    search_resolved(request, lenses, excluded_lenses, destinations)
+    writers = resolve_writers!(:included, request.writers, &resolved_lens!(lenses, &1))
+
+    excluded_writers =
+      resolve_writers!(:excluded, request.excluded_writers, &resolved_lens!(excluded_lenses, &1))
+
+    search_resolved(request, writers, excluded_writers, destinations)
   end
 
-  defp search_resolved(request, lenses, excluded_lenses, destinations) do
+  defp resolved_lens!(lenses, name), do: Enum.find(lenses, &(&1.name == name))
+
+  defp search_resolved(request, writers, excluded_writers, destinations) do
     opts =
       []
       |> put_search_option(:entity_types, request.entity_types)
       |> put_search_option(:edge_types, request.edge_types)
-      |> put_search_option(:lenses, lenses)
-      |> put_search_option(:excluded_lenses, excluded_lenses)
-      |> Keyword.put(:limits, request.limits)
+      |> put_search_option(:writers, writers)
+      |> put_search_option(:excluded_writers, excluded_writers)
+      |> Keyword.put(:limits, Search.limits())
 
     destinations
     |> Enum.map(fn destination ->
