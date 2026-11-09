@@ -1468,9 +1468,6 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     graph
   end
 
-  defp seed_first_episode(episode),
-    do: GenServer.call(Gralkor.Lens.Storage.InMemory, {:add, "first", episode})
-
   # One Destination holding memory from every writer: two appending Lenses
   # (each episode mentioning its own entities), a direct write, and a Reflection
   # artefact. `shared` is drawn from both Lenses' episodes.
