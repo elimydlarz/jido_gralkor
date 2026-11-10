@@ -372,6 +372,69 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
     graph
   end
 
+  # A real FalkorDB client capped at one connection. The first write takes that
+  # connection from the client's own pool and keeps it until the test releases
+  # it; every later write needs a connection for a PING, which the server answers.
+  defp start_connection_holding_pool(socket_timeout_ms) do
+    parent = self()
+
+    pool =
+      start_pool(
+        falkordb_spec: {:remote, host: "127.0.0.1", port: silent_server_port()},
+        remote_falkordb_socket_timeout_ms: socket_timeout_ms,
+        remote_falkordb_max_connections: 1,
+        graph_operation_deadline_ms: 60_000,
+        construct_instance: fn database, _shared, _group_id ->
+          graph = connection_holding_graph(database)
+          send(parent, {:connection_holding_graph, graph})
+          graph
+        end
+      )
+
+    graph =
+      Task.async(fn -> GraphitiPool.add_episode(pool, "holding", "warm", "notes", nil, []) end)
+      |> then(fn _first_write ->
+        assert_receive {:connection_holding_graph, graph}, 5_000
+        graph
+      end)
+
+    on_exit(fn -> release(graph) end)
+
+    %{pool: pool, graph: graph}
+  end
+
+  defp connection_holding_graph(database) do
+    {graph, _} =
+      Pythonx.eval(
+        """
+        import asyncio
+
+        class _ConnectionHoldingGraphiti:
+            def __init__(self):
+                self.gate = asyncio.Event()
+                self.holding = False
+                self.connection = database.connection
+
+            async def add_episode(self, **kwargs):
+                if self.holding:
+                    await self.connection.ping()
+                    return
+                self.holding = True
+                pool = self.connection.connection_pool
+                held = await pool.get_connection()
+                try:
+                    await self.gate.wait()
+                finally:
+                    await pool.release(held)
+
+        _ConnectionHoldingGraphiti()
+        """,
+        %{"database" => database}
+      )
+
+    graph
+  end
+
   # Answers the connection handshake as a live server would, then never replies
   # to a graph command, as a deadlocked FalkorDB does.
   defp silent_server_port do
