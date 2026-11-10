@@ -12,18 +12,16 @@ defmodule JidoGralkor.RuntimeTest do
       assert Runtime.destination!(self(), "reviews").name == "reviews"
     end
 
-    test "and the packaged Destinations, personal-chat Lens, and Reflections are available beside consumer definitions" do
+    test "and the packaged Destinations and personal-chat Lens are available beside consumer definitions" do
       start_runtime(reflection_configuration())
 
       assert Enum.map(Runtime.destinations(self()), & &1.name) == [
                "personal",
                "global",
-               "generalisations",
                "reviews"
              ]
 
       assert Runtime.lens!(self(), "personal-chat").name == "personal-chat"
-      assert Runtime.reflection!(self(), "generalisations").name == "generalisations"
       assert Runtime.reflection!(self(), "review").name == "review"
     end
 
@@ -186,7 +184,7 @@ defmodule JidoGralkor.RuntimeTest do
       start_runtime(reflection_configuration())
       assert :ok = Runtime.replace(self(), replacement_configuration("new"))
       assert Runtime.destination!(self(), "personal").name == "personal"
-      assert Runtime.reflection!(self(), "generalisations").name == "generalisations"
+      assert Runtime.lens!(self(), "personal-chat").name == "personal-chat"
     end
 
     test "and another owner's runtime remains unchanged" do
@@ -201,7 +199,6 @@ defmodule JidoGralkor.RuntimeTest do
         {Runtime,
          owner: owner,
          configuration: reflection_configuration(),
-         packaged_reflections: fn -> [packaged_reflection()] end,
          parse_chain_of_thought: fn _ -> {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}} end},
         id: :other_runtime
       )
@@ -255,7 +252,6 @@ defmodule JidoGralkor.RuntimeTest do
       assert Enum.map(destinations, & &1.name) == [
                "personal",
                "global",
-               "generalisations",
                "reviews"
              ]
     end
@@ -297,7 +293,6 @@ defmodule JidoGralkor.RuntimeTest do
       assert Enum.map(destinations, & &1.name) == [
                "personal",
                "global",
-               "generalisations",
                "reviews"
              ]
 
@@ -307,7 +302,6 @@ defmodule JidoGralkor.RuntimeTest do
       assert Enum.map(current_destinations, & &1.name) == [
                "personal",
                "global",
-               "generalisations",
                "new"
              ]
     end
@@ -1144,7 +1138,6 @@ defmodule JidoGralkor.RuntimeTest do
        [
          owner: self(),
          configuration: configuration,
-         packaged_reflections: fn -> [packaged_reflection()] end,
          parse_chain_of_thought: fn _configuration ->
            {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}}
          end
@@ -1168,7 +1161,6 @@ defmodule JidoGralkor.RuntimeTest do
        [
          owner: owner,
          configuration: reflection_configuration(),
-         packaged_reflections: fn -> [packaged_reflection()] end,
          parse_chain_of_thought: fn _configuration ->
            {:ok, %Gralkor.Reflection.ChainOfThought{steps: []}}
          end
@@ -1195,14 +1187,6 @@ defmodule JidoGralkor.RuntimeTest do
         {key, value} -> Application.put_env(:jido_gralkor, key, value)
       end)
     end)
-  end
-
-  defp packaged_reflection do
-    %{
-      name: "generalisations",
-      outputs: [%{kind: :destination, destination: "generalisations"}],
-      chain_of_thought: %{steps: []}
-    }
   end
 
   defp reflection_configuration do

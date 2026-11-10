@@ -101,20 +101,13 @@ defmodule JidoGralkor.RuntimeValidationTest do
 
   describe "if a consumer definition uses a name reserved by a package-owned definition" do
     test "then validation identifies its collection and reserved name" do
-      for name <- ["personal", "global", "generalisations"] do
+      for name <- ["personal", "global"] do
         assert {:error, {:reserved_definition_name, :destinations, ^name}} =
                  validate(Map.put(config(), :destinations, [[name: name]]))
       end
 
       assert {:error, {:reserved_definition_name, :lenses, "personal-chat"}} =
                validate(Map.put(config(), :lenses, [[name: "personal-chat"]]))
-
-      assert {:error, {:reserved_definition_name, :reflections, "packaged"}} =
-               validate(
-                 Map.put(config(), :reflections, [
-                   [name: "packaged", outputs: [], chain_of_thought: [steps: []]]
-                 ])
-               )
     end
   end
 
@@ -403,7 +396,6 @@ defmodule JidoGralkor.RuntimeValidationTest do
   defp validate(configuration),
     do:
       Runtime.validate(configuration,
-        packaged_reflections: &packaged_reflections/0,
         parse_chain_of_thought: &parse_chain_of_thought/1
       )
 
@@ -432,23 +424,10 @@ defmodule JidoGralkor.RuntimeValidationTest do
     }
   end
 
-  defp packaged_reflections do
-    [
-      [
-        name: "packaged",
-        outputs: [[kind: :destination, destination: "memory", ontology: Gralkor.DefaultOntology]],
-        chain_of_thought: [
-          steps: [[label: "inspect", directions: "Inspect.", output: %{"summary" => "string"}]]
-        ]
-      ]
-    ]
-  end
-
   defp start_runtime(configuration) do
     Runtime.start_link(
       owner: self(),
       configuration: configuration,
-      packaged_reflections: fn -> [] end,
       parse_chain_of_thought: &parse_chain_of_thought/1
     )
   end
